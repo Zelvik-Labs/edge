@@ -42,6 +42,9 @@ CLI 为 `CloudSidra-Edge`（start / stop / status / upgrade / xdp / ntp）。
 - [版本号](docs/versioning.md)
 - [版本来源清单](VERSION-MANIFEST.toml)
 - [基线说明](ORIGIN.md)
+- [CloudSidra 控制面集成计划](docs/cloudsidra-control-plane-plan.md)
+- [CloudSidra 控制面 Todo](tasks/cloudsidra-todo.md)
+- [Cursor 规则](CURSOR.md)
 - [0.1.0](release-notes/v0.1.0.md)
 - [1.2.2](release-notes/v1.2.2.md)
 
