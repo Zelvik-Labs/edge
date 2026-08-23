@@ -1322,18 +1322,18 @@ detect_asset_name() {
             elif ! cpu_has_flag sse4_2; then
                 die "x86_64 CPU without SSE4.2 is not supported by official release assets"
             elif cpu_has_flag avx512f; then
-                printf 'cloud-node-rust-linux-x64-v4-avx512.tar.gz\n'
+                printf 'CloudSidra-Edge-linux-x64-v4-avx512.tar.gz\n'
             elif cpu_has_flag avx2; then
-                printf 'cloud-node-rust-linux-x64-v3-avx2.tar.gz\n'
+                printf 'CloudSidra-Edge-linux-x64-v3-avx2.tar.gz\n'
             else
-                printf 'cloud-node-rust-linux-x64-v2-sse4.2.tar.gz\n'
+                printf 'CloudSidra-Edge-linux-x64-v2-sse4.2.tar.gz\n'
             fi
             ;;
         aarch64|arm64)
             if [ -r /proc/cpuinfo ] && grep -qi 'neoverse-n1' /proc/cpuinfo; then
-                printf 'cloud-node-rust-linux-arm64-neoverse-n1.tar.gz\n'
+                printf 'CloudSidra-Edge-linux-arm64-neoverse-n1.tar.gz\n'
             else
-                printf 'cloud-node-rust-linux-arm64-generic.tar.gz\n'
+                printf 'CloudSidra-Edge-linux-arm64-generic.tar.gz\n'
             fi
             ;;
         *)
