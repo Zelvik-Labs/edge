@@ -8,20 +8,20 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use cloud_node_rust::api_config::{AccessLogPipelineConfig, ApiConfig};
-use cloud_node_rust::config::ConfigStore;
-use cloud_node_rust::config_models::{
+use cloudsidra_edge::api_config::{AccessLogPipelineConfig, ApiConfig};
+use cloudsidra_edge::config::ConfigStore;
+use cloudsidra_edge::config_models::{
     FlexibleAddr, GlobalHTTPAllConfig, HTTPConfig, HTTPFirewallInboundConfig, HTTPFirewallPolicy,
     HTTPFirewallRef, HTTPFirewallRule, HTTPFirewallRuleGroup, HTTPFirewallRuleSet,
     NetworkAddressConfig, OriginConfig, OriginTlsSecurityVerifyMode, ProxyProtocolConfig,
     ReverseProxyConfig, SchedulingConfig, ServerConfig, ServerNameConfig, UAMConfig,
     WAFCaptchaOptions, WAFJSCookieOptions, WebConfig,
 };
-use cloud_node_rust::firewall::state::WafStateManager;
-use cloud_node_rust::firewall::verifier::WafVerifier;
-use cloud_node_rust::lb_factory;
-use cloud_node_rust::proxy::EdgeProxy;
-use cloud_node_rust::ssl::DynamicCertSelector;
+use cloudsidra_edge::firewall::state::WafStateManager;
+use cloudsidra_edge::firewall::verifier::WafVerifier;
+use cloudsidra_edge::lb_factory;
+use cloudsidra_edge::proxy::EdgeProxy;
+use cloudsidra_edge::ssl::DynamicCertSelector;
 use pingora_core::server::Server;
 use pingora_core::server::configuration::ServerConf;
 use serde_json::{Value, json};
@@ -140,7 +140,7 @@ fn main() -> anyhow::Result<()> {
     let key_life = env_i32("LOCAL_UAM_KEY_LIFE", 3600);
     let pow_difficulty = env_u8("LOCAL_UAM_POW_DIFFICULTY", 5);
 
-    cloud_node_rust::utils::time::init_local_timezone();
+    cloudsidra_edge::utils::time::init_local_timezone();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -159,12 +159,12 @@ fn main() -> anyhow::Result<()> {
         proxy_port,
         key_life,
     ));
-    cloud_node_rust::metrics::init_http_dimension_worker(10_000);
-    cloud_node_rust::proxy::start_request_limit_cleanup_task();
+    cloudsidra_edge::metrics::init_http_dimension_worker(10_000);
+    cloudsidra_edge::proxy::start_request_limit_cleanup_task();
 
     let config_store = Arc::new(ConfigStore::new());
     let waf_state = Arc::new(WafStateManager::new());
-    cloud_node_rust::firewall::state::start_gc_task(waf_state.clone());
+    cloudsidra_edge::firewall::state::start_gc_task(waf_state.clone());
 
     let api_config = Arc::new(ApiConfig {
         rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
@@ -818,7 +818,7 @@ fn cookie_value<'a>(cookies: &'a str, name: &str) -> Option<&'a str> {
 fn init_logging() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         EnvFilter::new(
-            "info,cloud_node_rust::proxy=debug,cloud_node_rust::http_proxy_manager=debug",
+            "info,cloudsidra_edge::proxy=debug,cloudsidra_edge::http_proxy_manager=debug",
         )
     });
     let _ = tracing_subscriber::fmt()

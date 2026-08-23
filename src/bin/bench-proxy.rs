@@ -17,7 +17,7 @@ use pingora_proxy::{ProxyHttp, Session};
 use std::sync::LazyLock as Lazy;
 use std::time::Duration;
 
-use cloud_node_rust::cache_manager::CACHE;
+use cloudsidra_edge::cache_manager::CACHE;
 use pingora_cache::CacheKey;
 
 static CACHE_LOCK: Lazy<CacheLock> =
@@ -83,7 +83,7 @@ fn main() {
     let mut conf = ServerConf::default();
     conf.threads = num_cpus::get();
     conf.upstream_keepalive_pool_size =
-        cloud_node_rust::memory_governor::MEMORY_GOVERNOR.pingora_keepalive_pool_size(conf.threads);
+        cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.pingora_keepalive_pool_size(conf.threads);
 
     let mut server = Server::new_with_opt_and_conf(None, conf);
     server.bootstrap();

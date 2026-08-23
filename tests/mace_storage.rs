@@ -1,8 +1,8 @@
-use cloud_node_rust::metrics::storage::{
+use cloudsidra_edge::metrics::storage::{
     apply_node_period_deltas, apply_server_period_update, fold_counter_deltas, MetricStorage,
     NODE_PERIOD_BYTES, SERVER_PERIOD_BYTES,
 };
-use cloud_node_rust::rpc::metrics::ServerMetricUpdate;
+use cloudsidra_edge::rpc::metrics::ServerMetricUpdate;
 
 fn sample_update() -> ServerMetricUpdate {
     ServerMetricUpdate {

@@ -2,11 +2,11 @@
 //! These tests verify bounded structures and document structural gaps where
 //! governor budgets exist but are not yet wired to every runtime cache.
 
-use cloud_node_rust::firewall::matcher::evaluate_operator;
-use cloud_node_rust::memory_governor::MEMORY_GOVERNOR;
-use cloud_node_rust::metrics::aggregator::{AggregationKey, MetricAggregator};
-use cloud_node_rust::metrics::daily::DailyDomainTracker;
-use cloud_node_rust::metrics::top_ip::TopIpTracker;
+use cloudsidra_edge::firewall::matcher::evaluate_operator;
+use cloudsidra_edge::memory_governor::MEMORY_GOVERNOR;
+use cloudsidra_edge::metrics::aggregator::{AggregationKey, MetricAggregator};
+use cloudsidra_edge::metrics::daily::DailyDomainTracker;
+use cloudsidra_edge::metrics::top_ip::TopIpTracker;
 use std::collections::BTreeMap;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -14,7 +14,7 @@ use std::sync::Arc;
 const IP_REPORT_CHANNEL_CAPACITY: usize = 1000;
 const RPC_STREAM_CHANNEL_CAPACITY: usize = 100;
 
-fn governor_snapshot() -> cloud_node_rust::memory_governor::GovernorSnapshot {
+fn governor_snapshot() -> cloudsidra_edge::memory_governor::GovernorSnapshot {
     MEMORY_GOVERNOR.snapshot(MEMORY_GOVERNOR.pingora_worker_threads())
 }
 
@@ -78,7 +78,7 @@ fn ip_report_channel_depth_is_conservative_relative_to_governor_budget() {
 fn metric_aggregator_flush_empties_in_memory_store() {
     let aggregator = MetricAggregator::new();
     let key = AggregationKey {
-        category: Arc::from(cloud_node_rust::metrics::METRIC_CATEGORY_HTTP),
+        category: Arc::from(cloudsidra_edge::metrics::METRIC_CATEGORY_HTTP),
         server_id: 1,
         country: Arc::from(""),
         country_id: 0,
@@ -111,7 +111,7 @@ fn metric_stat_aggregator_with_samples_flush_drains_all_state() {
     let mut attrs = BTreeMap::new();
     attrs.insert("requestId".to_string(), "1".to_string());
     let key = AggregationKey {
-        category: Arc::from(cloud_node_rust::metrics::METRIC_CATEGORY_HTTP),
+        category: Arc::from(cloudsidra_edge::metrics::METRIC_CATEGORY_HTTP),
         server_id: 42,
         country: Arc::from(""),
         country_id: 0,

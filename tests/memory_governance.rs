@@ -1,7 +1,7 @@
-use cloud_node_rust::memory_governor::{
+use cloudsidra_edge::memory_governor::{
     AdmissionClass, MEMORY_GOVERNOR, MemoryPressureLevel, reported_memory_totals,
 };
-use cloud_node_rust::memory_plan::current_memory_plan;
+use cloudsidra_edge::memory_plan::current_memory_plan;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Barrier};
 use std::thread;
@@ -16,7 +16,7 @@ impl Drop for ActiveGuard {
     }
 }
 
-fn assert_budget_fields_within_available(snapshot: &cloud_node_rust::memory_governor::GovernorSnapshot) {
+fn assert_budget_fields_within_available(snapshot: &cloudsidra_edge::memory_governor::GovernorSnapshot) {
     let available = snapshot.memory_available_bytes.max(1);
     let budgets = [
         ("connection", snapshot.connection_budget_bytes),

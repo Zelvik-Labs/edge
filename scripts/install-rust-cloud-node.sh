@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${REPO:-CloudSidra/edge}"
+REPO="${REPO:-CloudSidra/CloudSidra-Edge}"
 VERSION="${VERSION:-latest}"
-SERVICE_NAME="${SERVICE_NAME:-cloud-node}"
+SERVICE_NAME="${SERVICE_NAME:-CloudSidra-Edge}"
 BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/cloud-node-rust-migration}"
 INSTALL_DIR="${INSTALL_DIR:-}"
 INSTALL_BINARY="${INSTALL_BINARY:-}"
@@ -43,8 +43,8 @@ Usage:
   sudo scripts/install-rust-cloud-node.sh --restore
 
 Run directly from GitHub:
-  curl -fsSL https://raw.githubusercontent.com/CloudSidra/edge/main/scripts/install-rust-cloud-node.sh | sudo bash
-  curl -fsSL https://raw.githubusercontent.com/CloudSidra/edge/main/scripts/install-rust-cloud-node.sh | sudo bash -s -- --fresh --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret --geoip
+  curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-rust-cloud-node.sh | sudo bash
+  curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-rust-cloud-node.sh | sudo bash -s -- --fresh --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret --geoip
 
 Options:
   --install              Install, migrate, or upgrade to the Rust release.

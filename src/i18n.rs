@@ -241,12 +241,12 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ("upgrade.proceed", "Proceed with upgrade?", "继续升级？"),
     (
         "upgrade.service_stopped",
-        "cloud-node.service is installed but not active; leaving it stopped.",
-        "cloud-node.service 已安装但未运行，将保持停止状态。",
+        "CloudSidra-Edge.service is installed but not active; leaving it stopped.",
+        "CloudSidra-Edge.service 已安装但未运行，将保持停止状态。",
     ),
     (
         "upgrade.restarting",
-        "Restarting CloudNode with upgraded binary...",
+        "Restarting CloudSidra-Edge with upgraded binary...",
         "正在使用升级后的二进制重启 CloudNode...",
     ),
     (

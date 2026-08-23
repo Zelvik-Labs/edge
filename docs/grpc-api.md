@@ -367,7 +367,7 @@
 
 ## 8. 运行时内部 API（RKE2 pod 间，不是控制面 gRPC）
 
-RKE2 模式启用 pod 内部 HTTP API，默认监听 `0.0.0.0:19090`，通过 `CLOUD_NODE_CLUSTER_INTERNAL_TOKEN` 鉴权，Headless Service 暴露给同 namespace 内其他 cloud-node pod。
+RKE2 模式启用 pod 内部 HTTP API，默认监听 `0.0.0.0:19090`，通过 `CLOUD_NODE_CLUSTER_INTERNAL_TOKEN` 鉴权，Headless Service 暴露给同 namespace 内其他 CloudSidra-Edge pod。
 
 - `GET /internal/v1/health`：健康检查，Kubernetes probe 使用。
 - `POST /internal/v1/purge`：Leader 将 cache purge fanout 到其他 pod。

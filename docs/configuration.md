@@ -34,9 +34,9 @@ relay:
 可使用内置命令交互或非交互调整零拷贝：
 
 ```bash
-cloud-node zerocopy
-cloud-node zerocopy --enable --yes
-cloud-node zerocopy --disable --yes
+CloudSidra-Edge zerocopy
+CloudSidra-Edge zerocopy --enable --yes
+CloudSidra-Edge zerocopy --disable --yes
 ```
 
 修改后需要重启正在运行的节点进程，已有连接不会切换 relay 模式。
@@ -129,14 +129,14 @@ xdp:
 
 ### `enableReadingOriginAsync`
 
-控制面缓存规则里的 `enableReadingOriginAsync` 字段目前在 cloud-node 中可以被接收和解析，但不会按单条 `cacheRef` 独立生效。
+控制面缓存规则里的 `enableReadingOriginAsync` 字段目前在 CloudSidra-Edge 中可以被接收和解析，但不会按单条 `cacheRef` 独立生效。
 
-cloud-node 的 HTTP 缓存写入由 Pingora cache 状态机接管。Pingora 的默认行为取决于底层 cache storage 是否支持 `support_streaming_partial_write()`：
+CloudSidra-Edge 的 HTTP 缓存写入由 Pingora cache 状态机接管。Pingora 的默认行为取决于底层 cache storage 是否支持 `support_streaming_partial_write()`：
 
 - 支持时，缓存 miss 的响应一旦判定可缓存，Pingora 会把源站读取和客户端写出解耦；客户端中断连接后，状态机会忽略 downstream error，继续读取源站并填充缓存。
 - 不支持时，客户端中断通常会结束当前代理链路，不会继续为了缓存单独读完整个源站响应。
 
-因此当前 cloud-node 中该能力是 storage 级别的统一行为，不是 `enableReadingOriginAsync` 可单独开启或关闭的规则级行为。严格按单条缓存规则控制该字段，需要后续改造 Pingora cache/代理状态机或在 cloud-node 中实现独立的响应体读取与缓存写入路径。
+因此当前 CloudSidra-Edge 中该能力是 storage 级别的统一行为，不是 `enableReadingOriginAsync` 可单独开启或关闭的规则级行为。严格按单条缓存规则控制该字段，需要后续改造 Pingora cache/代理状态机或在 CloudSidra-Edge 中实现独立的响应体读取与缓存写入路径。
 
 ## 访问日志配置
 
@@ -195,7 +195,7 @@ sysctl -w net.ipv4.tcp_congestion_control=bbr
 验证本地 `configs/api_node.yaml`：
 
 ```bash
-cloud-node test
+CloudSidra-Edge test
 ```
 
 该命令只验证本地 API 配置是否能解析，不代表控制面连接一定成功。

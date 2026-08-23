@@ -1,5 +1,5 @@
-use cloud_node_rust::metrics::storage::{CacheMetaUpsert, MetricStorage};
-use cloud_node_rust::rpc::metrics::ServerMetricUpdate;
+use cloudsidra_edge::metrics::storage::{CacheMetaUpsert, MetricStorage};
+use cloudsidra_edge::rpc::metrics::ServerMetricUpdate;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use std::hint::black_box;
 use std::path::PathBuf;

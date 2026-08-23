@@ -1,4 +1,4 @@
-use cloud_node_rust::metrics::storage::MetricStorage;
+use cloudsidra_edge::metrics::storage::MetricStorage;
 use serde::Serialize;
 use std::env;
 use std::path::PathBuf;

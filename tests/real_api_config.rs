@@ -1,14 +1,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use cloud_node_rust::api_config::ApiConfig;
-use cloud_node_rust::config::ConfigStore;
-use cloud_node_rust::firewall::state::WafStateManager;
-use cloud_node_rust::health_manager::GlobalHealthManager;
-use cloud_node_rust::pb;
-use cloud_node_rust::rpc::client::RpcClient;
-use cloud_node_rust::rpc::node::{fetch_and_apply_config, report_node_online_once};
-use cloud_node_rust::ssl::DynamicCertSelector;
+use cloudsidra_edge::api_config::ApiConfig;
+use cloudsidra_edge::config::ConfigStore;
+use cloudsidra_edge::firewall::state::WafStateManager;
+use cloudsidra_edge::health_manager::GlobalHealthManager;
+use cloudsidra_edge::pb;
+use cloudsidra_edge::rpc::client::RpcClient;
+use cloudsidra_edge::rpc::node::{fetch_and_apply_config, report_node_online_once};
+use cloudsidra_edge::ssl::DynamicCertSelector;
 use std::io::Read;
 
 fn real_api_config_from_env() -> anyhow::Result<Option<ApiConfig>> {
@@ -309,7 +309,7 @@ async fn real_api_consume_prefix_purge_cache_tasks_once() -> anyhow::Result<()> 
 
     let mut consumed = Vec::new();
     for task_id in task_ids {
-        let ok = cloud_node_rust::rpc::cache::sync_cache_tasks(
+        let ok = cloudsidra_edge::rpc::cache::sync_cache_tasks(
             client.channel(),
             &api_config,
             &config_store,
@@ -377,7 +377,7 @@ async fn real_api_config_can_be_fetched_parsed_and_applied() -> anyhow::Result<(
     );
 
     let node_json = decode_node_json(direct_resp).await?;
-    let parsed: cloud_node_rust::config_models::NodeConfigPayload =
+    let parsed: cloudsidra_edge::config_models::NodeConfigPayload =
         serde_json::from_slice(&node_json)?;
     assert!(
         parsed.id.unwrap_or(0) > 0 || parsed.node_id.as_deref().is_some_and(|id| !id.is_empty()),
@@ -450,7 +450,7 @@ async fn real_api_config_can_be_fetched_parsed_and_applied() -> anyhow::Result<(
 
     let stream_result = tokio::time::timeout(
         Duration::from_secs(hold_secs + 20),
-        cloud_node_rust::rpc::stream::probe_node_stream(
+        cloudsidra_edge::rpc::stream::probe_node_stream(
             &api_config,
             Arc::new(config_store.clone()),
             Duration::from_secs(hold_secs),
@@ -548,7 +548,7 @@ async fn real_api_grpc_documentation_snapshot() -> anyhow::Result<()> {
     });
     let node_json = decode_node_json(raw_config_resp).await?;
     let node_json_value: serde_json::Value = serde_json::from_slice(&node_json)?;
-    let payload: cloud_node_rust::config_models::NodeConfigPayload =
+    let payload: cloudsidra_edge::config_models::NodeConfigPayload =
         serde_json::from_slice(&node_json)?;
     let numeric_node_id = payload.id.unwrap_or(0);
     let first_server = payload.servers.iter().find_map(|server| {

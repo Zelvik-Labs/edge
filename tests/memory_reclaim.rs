@@ -1,5 +1,5 @@
-use cloud_node_rust::memory_governor::{MemoryPressureLevel, MEMORY_GOVERNOR};
-use cloud_node_rust::memory_reclaim::reclaim_for_level;
+use cloudsidra_edge::memory_governor::{MemoryPressureLevel, MEMORY_GOVERNOR};
+use cloudsidra_edge::memory_reclaim::reclaim_for_level;
 
 #[test]
 fn reclaim_for_normal_pressure_is_noop() {
@@ -24,8 +24,8 @@ fn small_machine_cache_budget_floor_is_below_default() {
 #[test]
 fn bounded_regex_cache_compiles_and_reclaims() {
     let pattern = "^reclaim-regex-test$";
-    assert!(cloud_node_rust::bounded_regex_cache::get_or_compile(pattern).is_some());
-    cloud_node_rust::bounded_regex_cache::reclaim_all();
-    assert_eq!(cloud_node_rust::bounded_regex_cache::entry_count(), 0);
-    assert!(cloud_node_rust::bounded_regex_cache::get_or_compile(pattern).is_some());
+    assert!(cloudsidra_edge::bounded_regex_cache::get_or_compile(pattern).is_some());
+    cloudsidra_edge::bounded_regex_cache::reclaim_all();
+    assert_eq!(cloudsidra_edge::bounded_regex_cache::entry_count(), 0);
+    assert!(cloudsidra_edge::bounded_regex_cache::get_or_compile(pattern).is_some());
 }

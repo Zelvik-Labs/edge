@@ -1,5 +1,5 @@
-use cloud_node_rust::config_models::{HTTPHeaderConfig, HTTPHeaderPolicy};
-use cloud_node_rust::headers::apply_response_header_policy_to_map;
+use cloudsidra_edge::config_models::{HTTPHeaderConfig, HTTPHeaderPolicy};
+use cloudsidra_edge::headers::apply_response_header_policy_to_map;
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::collections::HashMap;
 use std::hint::black_box;
