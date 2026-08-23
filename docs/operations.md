@@ -196,7 +196,7 @@ curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scr
 安装指定版本：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-rust-cloud-node.sh | sudo bash -s -- --version v1.2.2 --yes
+curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-rust-cloud-node.sh | sudo bash -s -- --version v0.1.0 --yes
 ```
 
 ## 1.1.2 说明

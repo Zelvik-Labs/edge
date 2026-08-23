@@ -1,6 +1,6 @@
 # CloudSidra-Edge
 
-CloudSidra-Edge 是 **CloudSidra** 产品线里的边缘数据面。代码以 [`cloud-node-rust` v1.2.2](https://github.com/Zypixh/cloud-node-rust) 为基线一次性导入，上游仓库继续独立维护、本仓库不回写。
+CloudSidra-Edge 是 **CloudSidra** 产品线里的边缘数据面。当前产品版本为 **`0.1.0`**；代码以 [`cloud-node-rust` v1.2.2](https://github.com/Zypixh/cloud-node-rust) 为基线一次性导入，上游版本只是来源信息，不是 CloudSidra 的产品版本。
 
 后续模块（API、Admin、User、Portal、权威 DNS）都叫 **CloudSidra-***，见 [产品线](docs/series.md)。它们不会塞进本仓库。
 
@@ -40,7 +40,9 @@ CLI 为 `CloudSidra-Edge`（start / stop / status / upgrade / xdp / ntp）。
 - [运维](docs/operations.md)
 - [gRPC](docs/grpc-api.md)
 - [版本号](docs/versioning.md)
+- [版本来源清单](VERSION-MANIFEST.toml)
 - [基线说明](ORIGIN.md)
+- [0.1.0](release-notes/v0.1.0.md)
 - [1.2.2](release-notes/v1.2.2.md)
 
 ## 开源协议

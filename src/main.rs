@@ -3152,7 +3152,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
 
     init_logging(&node_paths);
 
-    info!("Starting CloudNode Rust v{}...", env!("CARGO_PKG_VERSION"));
+    info!("Starting CloudSidra-Edge v{}...", env!("CARGO_PKG_VERSION"));
 
     #[cfg(target_family = "unix")]
     {

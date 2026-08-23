@@ -1,8 +1,17 @@
 [package]
 name = "cloudsidra-edge"
-version = "1.2.2"
+version = "0.1.0"
 edition = "2024"
 rust-version = "1.97.1"
+description = "CloudSidra Edge CDN and global traffic data plane"
+
+[package.metadata.cloudsidra]
+product = "CloudSidra-Edge"
+version_scheme = "product-semver"
+upstream_project = "cloud-node-rust"
+upstream_version = "1.2.2"
+upstream_commit = "631e5c76cc5605e748dc0230ffc019053b852f80"
+compatibility_lineage = "cloud-node-rust-v1"
 
 [[bin]]
 name = "CloudSidra-Edge"

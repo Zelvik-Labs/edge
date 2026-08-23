@@ -55,7 +55,7 @@ Options:
   --restore-backup DIR   Restore from this backup dir. Default: latest backup.
   --list-backups         List available backup dirs and exit.
   --repo OWNER/REPO       GitHub repo. Default: CloudSidra/edge
-  --version VERSION      Release tag, for example v1.2.2. Default: latest
+  --version VERSION      Release tag, for example v0.1.0. Default: latest
   --service NAME         systemd service name. Default: cloud-node
   --install-dir DIR      Runtime working directory. Default: existing runtime dir, or /opt/cloud-node-rust
   --install-binary PATH  Installed Rust binary path. Default: INSTALL_DIR/cloud-node-rust

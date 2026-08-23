@@ -1,6 +1,6 @@
 # CloudSidra-Edge 文档
 
-文档描述 **v1.2.2 基线**。产品线见 [series.md](series.md)。CLI 为 `CloudSidra-Edge`。
+文档描述 **CloudSidra-Edge `0.1.0` 产品版本**，其代码来源为 `cloud-node-rust 1.2.2` 基线。产品线见 [series.md](series.md)。CLI 为 `CloudSidra-Edge`。
 
 ## 文档目录
 

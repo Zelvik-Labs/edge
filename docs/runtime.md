@@ -73,9 +73,9 @@ CloudSidra-Edge upgrade
 
 ```bash
 CloudSidra-Edge upgrade --yes
-CloudSidra-Edge upgrade --version v1.2.2 --yes
+CloudSidra-Edge upgrade --version v0.1.0 --yes
 CloudSidra-Edge upgrade --version latest --github-mirror https://gh-proxy.example --yes
-CloudSidra-Edge upgrade --version v1.2.2 --github-base-url https://github.example.com --repo CloudSidra/CloudSidra-Edge --yes
+CloudSidra-Edge upgrade --version v0.1.0 --github-base-url https://github.example.com --repo CloudSidra/CloudSidra-Edge --yes
 ```
 
 常用参数：
