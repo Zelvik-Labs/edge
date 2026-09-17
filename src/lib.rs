@@ -53,6 +53,8 @@ pub mod resource_budget;
 pub mod rewrite;
 pub mod routing;
 pub mod rpc;
+#[cfg(feature = "node-control")]
+pub mod node_control;
 pub mod runtime_mode;
 pub mod special_defense;
 pub mod ssl;

@@ -1,0 +1,56 @@
+# Edge is the ONLY component that accepts public traffic. The public Service
+# (LoadBalancer) is the entry point; on the data-plane node traffic is already
+# load-balanced. This policy:
+#  * allows public ingress on 80/443 (TCP + UDP) and the internal control port,
+#  * allows egress only to the origin (any) and the API control plane.
+# Default-deny cross-namespace ingress elsewhere still applies.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "cloudsidra-edge.fullname" . }}
+  labels:
+    {{- include "cloudsidra-edge.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "cloudsidra-edge.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+        - protocol: UDP
+          port: 443
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "cloudsidra-edge.selectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 19090
+    {{- if .Values.ingressEnabledFromControlPlane }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cloudsidra
+      ports:
+        - protocol: TCP
+          port: 19090
+    {{- end }}
+  egress:
+    # Origin fetch (public internet). Managed by egress gateway/allowlist.
+    - {}
+    # To reach the API control plane for config sync and log upload.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cloudsidra
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 9090

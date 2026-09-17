@@ -1,10 +1,14 @@
 # CloudSidra-Edge 文档
 
+> 当前文档正在从平铺文件迁移到 `architecture/`、`cache/`、`protocol/`、`security/`、`operations/` 和 `upstream/` 分组。旧文件暂保留为兼容入口。
+
 文档描述 **CloudSidra-Edge `0.1.0` 产品版本**，其代码来源为 `cloud-node-rust 1.2.2` 基线。产品线见 [series.md](series.md)。CLI 为 `CloudSidra-Edge`。
 
 ## 文档目录
 
-- [产品线](series.md)
+- [架构文档](architecture/README.md)
+- [缓存规则](cache/rules.md)
+- [产品线（兼容入口）](series.md)
 - [架构概览](architecture.md)
 - [运行时说明](runtime.md)
 - [功能说明](features.md)
@@ -16,7 +20,10 @@
 - [部署与运维](operations.md)
 - [RKE2 部署文档](rke2-deployment.md)
 - [gRPC API](grpc-api.md)
+- [NodeControl 对照（E-01）](node-control-mapping.md)
 - [版本号规划](versioning.md)
+- [控制面集成计划](cloudsidra-control-plane-plan.md)
+- 上游来源：[`ORIGIN.md`](../ORIGIN.md)、[`VERSION-MANIFEST.toml`](../VERSION-MANIFEST.toml)
 
 ## 阅读顺序
 

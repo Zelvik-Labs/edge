@@ -1,0 +1,40 @@
+{{- if .Values.workload.daemonSet }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "cloudsidra-edge.fullname" . }}
+  labels:
+    {{- include "cloudsidra-edge.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "cloudsidra-edge.selectorLabels" . | nindent 6 }}
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "cloudsidra-edge.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- include "cloudsidra-edge.podSpec" . | nindent 6 }}
+{{- else }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cloudsidra-edge.fullname" . }}
+  labels:
+    {{- include "cloudsidra-edge.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.workload.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "cloudsidra-edge.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cloudsidra-edge.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- include "cloudsidra-edge.podSpec" . | nindent 6 }}
+{{- end }}

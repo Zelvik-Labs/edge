@@ -56,5 +56,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .build_server(false)
             .compile_protos(&protos, &includes)?;
     }
+
+    let node_control_proto = "proto/cloudsidra/node_control.proto";
+    if std::path::Path::new(node_control_proto).exists() {
+        println!("cargo:rerun-if-changed={}", node_control_proto);
+        tonic_prost_build::configure()
+            .build_client(true)
+            .build_server(true)
+            .compile_protos(&[node_control_proto], &["proto/cloudsidra"])?;
+    }
     Ok(())
 }

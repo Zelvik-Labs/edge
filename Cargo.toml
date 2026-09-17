@@ -13,6 +13,12 @@ upstream_version = "1.2.2"
 upstream_commit = "631e5c76cc5605e748dc0230ffc019053b852f80"
 compatibility_lineage = "cloud-node-rust-v1"
 
+[features]
+default = ["node-control"]
+# NodeControl client/types and apply/patch skeleton. Does not replace
+# pb.NodeService.findCurrentNodeConfig during the migration window.
+node-control = []
+
 [[bin]]
 name = "CloudSidra-Edge"
 path = "src/main.rs"

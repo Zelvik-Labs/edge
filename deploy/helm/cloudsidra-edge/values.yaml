@@ -1,0 +1,144 @@
+# CloudSidra-Edge Helm values. Defaults assume a per-region Deployment in the
+# data plane; the K3s/RKE2 profile switches to DaemonSet and storage class,
+# load balancer and node-label differences.
+image:
+  repository: ghcr.io/cloudsidra/cloudsidra-edge
+  tag: "2026.1.08.0"
+  pullPolicy: IfNotPresent
+
+# DaemonSet = one pod per node (per-node cache); Deployment = per-region pool.
+workload:
+  kind: Deployment
+  daemonSet: false
+  replicas: 3
+  # Use a DaemonSet when each node should hold local cache (cache shards).
+  # Set kind: DaemonSet via profile or values; replicas is ignored then.
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+
+# RKE2/K3s differences (storageClass, load balancer, node labels) live here.
+cluster:
+  type: rke2
+  namespace: cloudsidra-edge
+  name: edge-region-01
+
+runtime:
+  mode: standalone   # rke2 mode is set by the profile when in-cluster
+
+# Cache shards. Storage class differs RKE2 (longhorn) vs K3s (local-path).
+storage:
+  storageClass: longhorn
+  cache:
+    localMetaDir: /var/lib/cloudsidra/edge/cache-meta
+    maxFastL1Bytes: 0
+    sharedMaxBytes: 15TiB
+    minFreeBytes: 500GiB
+    ignoreControlPlaneStorageOptions: true
+    shardStrategy: hash_mod
+    shards:
+      - id: shard-00
+        path: /cache-shards/shard-00
+        weight: 1
+        replicas: 2
+
+xdp:
+  enabled: false
+
+# Public service. Edge must expose TCP/UDP 443, 80. `externalTrafficPolicy: Local`
+# preserves source IP. RKE2 (MetalLB/kube-vip) vs K3s (servicelb) LB is
+# encapsulated in the profile.
+service:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  annotations: {}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: https
+      protocol: TCP
+    - name: quic
+      port: 443
+      targetPort: quic
+      protocol: UDP
+  nodePort:
+    http: ""
+    https: ""
+    quic: ""
+
+# Internal headless service for leader election / pod discovery.
+internalService:
+  enabled: true
+  port: 19090
+
+# K3s/RKE2 profile differences are encapsulated here (see profiles dir).
+# Whether the API control plane may reach the Edge internal control port.
+ingressEnabledFromControlPlane: true
+
+# Whether to render a placeholder Secret (production profile: set false and use
+# External Secrets / Vault-KMS).
+secret:
+  create: true
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+  runAsUser: 10001
+  runAsGroup: 10001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    add: ["NET_BIND_SERVICE", "NET_RAW", "NET_ADMIN"]
+    drop: ["ALL"]
+
+resources:
+  requests:
+    cpu: "2"
+    memory: 4Gi
+  limits:
+    cpu: "8"
+    memory: 16Gi
+
+autoscaling:
+  enabled: false
+  minReplicas: 3
+  maxReplicas: 12
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+probes:
+  startup:
+    path: /internal/v1/health
+    port: internal
+    periodSeconds: 5
+    failureThreshold: 30
+  readiness:
+    path: /internal/v1/health
+    port: internal
+    periodSeconds: 5
+    failureThreshold: 3
+  liveness:
+    path: /internal/v1/health
+    port: internal
+    periodSeconds: 10
+    failureThreshold: 6
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
