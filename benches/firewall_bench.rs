@@ -1,4 +1,4 @@
-use cloudsidra_edge::firewall::matcher::evaluate_operator;
+use cloud_node_rust::firewall::matcher::evaluate_operator;
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 

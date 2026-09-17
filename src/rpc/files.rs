@@ -130,18 +130,33 @@ async fn download_file(
         .as_ref()
         .map(|file| file.size)
         .filter(|size| *size > 0)
-        .ok_or_else(|| anyhow::anyhow!("IP library artifact has no valid size"))? as u64;
+        .ok_or_else(|| anyhow::anyhow!("IP library artifact has no valid size"))?
+        as u64;
     let max_bytes = crate::memory_governor::MEMORY_GOVERNOR
         .snapshot(crate::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads())
         .cardinality_state_budget_bytes
-        .min(512 * 1024 * 1024)
-        .max(16 * 1024 * 1024);
+        .clamp(16 * 1024 * 1024, 512 * 1024 * 1024);
     anyhow::ensure!(
         expected_size <= max_bytes,
         "IP library size {} exceeds node budget {}",
         expected_size,
         max_bytes
     );
+
+    // EN-16: enroll the artifact footprint in the node disk ledger before
+    // writing. Rejection is explicit; a failed download releases the
+    // reservation, a successful install reports the durable footprint.
+    let _disk_permit = crate::memory_governor::MEMORY_GOVERNOR
+        .try_reserve_disk(
+            crate::memory_governor::DiskLedgerClass::ConfigArtifacts,
+            expected_size,
+        )
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "IP library size {} rejected by node disk ledger",
+                expected_size
+            )
+        })?;
 
     let mut chunk_client = client.file_chunk_service();
     let resp = chunk_client
@@ -211,6 +226,10 @@ async fn download_file(
         drop(file);
         validate_city_database(&tmp_path)?;
         install_city_database(&tmp_path, target_path).await?;
+        crate::memory_governor::MEMORY_GOVERNOR.report_disk_committed(
+            crate::memory_governor::DiskLedgerClass::ConfigArtifacts,
+            expected_size,
+        );
         Ok::<InstalledArtifact, anyhow::Error>(InstalledArtifact {
             size: written,
             sha256: hex::encode(digest.finalize()),

@@ -1,5 +1,4 @@
 use parking_lot::RwLock;
-use std::io::Read;
 use std::sync::Arc;
 use std::sync::LazyLock as Lazy;
 use std::time::Duration;
@@ -31,6 +30,22 @@ static LAST_WAF_HASH: Lazy<RwLock<String>> = Lazy::new(|| RwLock::new(String::ne
 static LAST_GLOBAL_CONFIG_HASH: Lazy<RwLock<String>> = Lazy::new(|| RwLock::new(String::new()));
 static CONNECTED_API_NODE_UNSUPPORTED_LOGGED: AtomicBool = AtomicBool::new(false);
 static ENABLED_FEATURES_UNSUPPORTED_LOGGED: AtomicBool = AtomicBool::new(false);
+
+pub struct FetchConfigArgs<'a, F>
+where
+    F: FnMut(Request<()>) -> Result<Request<()>, Status> + Send + 'static,
+{
+    pub client: &'a mut pb::node_service_client::NodeServiceClient<
+        tonic::service::interceptor::InterceptedService<Channel, F>,
+    >,
+    pub config_store: &'a ConfigStore,
+    pub api_config: &'a ApiConfig,
+    pub health_manager: &'a crate::health_manager::GlobalHealthManager,
+    pub cert_selector: &'a crate::ssl::DynamicCertSelector,
+    pub waf_state: &'a crate::firewall::state::WafStateManager,
+    pub task_version: &'a mut i64,
+    pub config_version: &'a mut i64,
+}
 
 fn build_version_code() -> u32 {
     env!("CARGO_PKG_VERSION")
@@ -86,9 +101,9 @@ fn dedup_ssl_certs(
             by_id.insert(key, cert);
             continue;
         }
-        if !by_id.contains_key(&cert.id) {
+        if let std::collections::hash_map::Entry::Vacant(e) = by_id.entry(cert.id) {
             order.push(cert.id);
-            by_id.insert(cert.id, cert);
+            e.insert(cert);
             continue;
         }
         let replace = by_id
@@ -122,7 +137,7 @@ fn cert_has_data_map_ref(cert: &crate::config_models::SSLCertConfig) -> bool {
 fn collect_enabled_ssl_certs(
     global_certs: &[crate::config_models::SSLCertConfig],
     global_policy: Option<&crate::config_models::SSLPolicyConfig>,
-    servers: &[crate::config_models::ServerConfig],
+    servers: &[Arc<crate::config_models::ServerConfig>],
 ) -> Vec<crate::config_models::SSLCertConfig> {
     let mut certs = Vec::new();
     certs.extend(global_certs.iter().cloned());
@@ -161,13 +176,10 @@ fn log_raw_json_hints(label: &str, raw: &[u8]) {
 }
 
 fn parse_i64_keyed_map<T>(
-    raw: &std::collections::HashMap<String, T>,
-) -> std::collections::HashMap<i64, T>
-where
-    T: Clone,
-{
-    raw.iter()
-        .filter_map(|(key, value)| key.parse::<i64>().ok().map(|id| (id, value.clone())))
+    raw: std::collections::HashMap<String, T>,
+) -> std::collections::HashMap<i64, T> {
+    raw.into_iter()
+        .filter_map(|(key, value)| key.parse::<i64>().ok().map(|id| (id, value)))
         .collect()
 }
 
@@ -250,16 +262,16 @@ pub async fn start_config_syncer(
 
         let mut node_service = client.node_service();
 
-        let config_synced = fetch_and_apply_config(
-            &mut node_service,
-            &config_store,
-            &api_config,
-            &health_manager,
-            &cert_selector,
-            waf_state.as_ref(),
-            &mut task_version,
-            &mut config_version,
-        )
+        let config_synced = fetch_and_apply_config(FetchConfigArgs {
+            client: &mut node_service,
+            config_store: &config_store,
+            api_config: &api_config,
+            health_manager: &health_manager,
+            cert_selector: &cert_selector,
+            waf_state: waf_state.as_ref(),
+            task_version: &mut task_version,
+            config_version: &mut config_version,
+        })
         .await;
 
         if config_synced {
@@ -301,19 +313,34 @@ pub async fn start_config_syncer(
     }
 }
 
-fn log_global_settings(
-    payload: &crate::config_models::NodeConfigPayload,
-    server_name: &str,
+struct GlobalSettingsLogArgs<'a> {
+    payload: &'a crate::config_models::NodeConfigPayload,
+    server_name: &'a str,
     force_ln: bool,
-    ln_method: &str,
+    ln_method: &'a str,
     supports_low_version_http: bool,
     match_cert_from_all_servers: bool,
     enable_server_addr_variable: bool,
     request_origins_with_encodings: bool,
     xff_max_addresses: i32,
     allow_lan_ip: bool,
-    grpc_policy: &Option<crate::config_models::GRPCConfig>,
-) {
+    grpc_policy: &'a Option<crate::config_models::GRPCConfig>,
+}
+
+fn log_global_settings(args: GlobalSettingsLogArgs<'_>) {
+    let GlobalSettingsLogArgs {
+        payload,
+        server_name,
+        force_ln,
+        ln_method,
+        supports_low_version_http,
+        match_cert_from_all_servers,
+        enable_server_addr_variable,
+        request_origins_with_encodings,
+        xff_max_addresses,
+        allow_lan_ip,
+        grpc_policy,
+    } = args;
     let global_settings_hash_input = format!(
         "{:?}-{:?}-{:?}",
         payload.global_server_config, payload.is_on, payload.enable_ip_lists
@@ -360,42 +387,41 @@ fn log_global_settings(
         );
         debug!("  - XFF Max Addresses: {}", xff_max_addresses);
 
-        if let Some(gp) = grpc_policy {
-            if gp.is_on {
-                let r_size = gp
-                    .max_receive_message_size
-                    .as_ref()
-                    .map(|s| format!("{} {}", s.count, s.unit))
-                    .unwrap_or_else(|| "2 MiB".to_string());
-                let s_size = gp
-                    .max_send_message_size
-                    .as_ref()
-                    .map(|s| format!("{} {}", s.count, s.unit))
-                    .unwrap_or_else(|| "2 MiB".to_string());
-                debug!(
-                    "  - gRPC Proxy: ENABLED (Max Message: Recv={}, Send={})",
-                    r_size, s_size
-                );
-            }
+        if let Some(gp) = grpc_policy
+            && gp.is_on
+        {
+            let r_size = gp
+                .max_receive_message_size
+                .as_ref()
+                .map(|s| format!("{} {}", s.count, s.unit))
+                .unwrap_or_else(|| "2 MiB".to_string());
+            let s_size = gp
+                .max_send_message_size
+                .as_ref()
+                .map(|s| format!("{} {}", s.count, s.unit))
+                .unwrap_or_else(|| "2 MiB".to_string());
+            debug!(
+                "  - gRPC Proxy: ENABLED (Max Message: Recv={}, Send={})",
+                r_size, s_size
+            );
         }
     }
 }
 
-pub async fn fetch_and_apply_config<F>(
-    client: &mut pb::node_service_client::NodeServiceClient<
-        tonic::service::interceptor::InterceptedService<Channel, F>,
-    >,
-    config_store: &ConfigStore,
-    api_config: &ApiConfig,
-    health_manager: &crate::health_manager::GlobalHealthManager,
-    cert_selector: &crate::ssl::DynamicCertSelector,
-    waf_state: &crate::firewall::state::WafStateManager,
-    task_version: &mut i64,
-    config_version: &mut i64,
-) -> bool
+pub async fn fetch_and_apply_config<F>(args: FetchConfigArgs<'_, F>) -> bool
 where
     F: FnMut(Request<()>) -> Result<Request<()>, Status> + Send + 'static,
 {
+    let FetchConfigArgs {
+        client,
+        config_store,
+        api_config,
+        health_manager,
+        cert_selector,
+        waf_state,
+        task_version,
+        config_version,
+    } = args;
     let current_id = config_store.get_node_id().await;
     let fetch_version = if current_id == 0 { -1 } else { *config_version };
 
@@ -436,36 +462,65 @@ where
                     return false;
                 }
             } else {
+                let node_json = config_resp.node_json;
+                let is_compressed = config_resp.is_compressed;
                 debug!(
                     "RPC_NODE: Received node_json ({} bytes, compressed={}).",
-                    config_resp.node_json.len(),
-                    config_resp.is_compressed
+                    node_json.len(),
+                    is_compressed
                 );
-                let mut node_json = config_resp.node_json;
 
-                if config_resp.is_compressed {
+                // Gate the decode on the governor's decode budget: the parsed
+                // payload allocates several times the input size, so decoding
+                // must be admitted like the materialization that follows it.
+                // A rejected decode keeps the previous generation serving.
+                let decode_budget =
+                    crate::config_apply::ConfigApplyLimits::from_governor().decode_budget_bytes();
+                let parsed = if is_compressed {
                     let compressed = node_json;
-                    let decoded = tokio::task::spawn_blocking(move || {
-                        let mut decompressor = brotli::Decompressor::new(&compressed[..], 4096);
-                        let mut decoded = Vec::new();
-                        decompressor.read_to_end(&mut decoded).map(|_| decoded)
+                    tokio::task::spawn_blocking(move || {
+                        let decompressor = brotli::Decompressor::new(&compressed[..], 4096);
+                        crate::config_apply::parse_node_config_from_reader_budgeted(
+                            decompressor,
+                            decode_budget,
+                        )
                     })
-                    .await;
-                    match decoded {
-                        Ok(Ok(decoded)) => node_json = decoded,
-                        Ok(Err(e)) => {
-                            warn!("Failed to decompress node_json: {}", e);
-                            return false;
-                        }
-                        Err(e) => {
-                            warn!("Failed to join node_json decompression task: {}", e);
-                            return false;
-                        }
+                    .await
+                } else {
+                    if node_json.len() <= 4 * 1024 * 1024 {
+                        log_raw_json_hints("node_json", &node_json);
                     }
-                }
+                    if node_json.len() as u64 > decode_budget {
+                        warn!(
+                            "RPC_NODE: node_json ({} bytes) exceeds the decode budget ({} bytes) under memory pressure — keeping the current configuration",
+                            node_json.len(),
+                            decode_budget
+                        );
+                        return false;
+                    }
+                    let json = node_json;
+                    tokio::task::spawn_blocking(move || {
+                        crate::config_apply::parse_node_config_json(&json)
+                    })
+                    .await
+                };
+                let (mut payload, current_hash, decoded_bytes) = match parsed {
+                    Ok(Ok(parsed)) => parsed,
+                    Ok(Err(e)) => {
+                        warn!("Failed to parse node_json: {}", e);
+                        return false;
+                    }
+                    Err(e) => {
+                        warn!("Failed to join node_json parse task: {}", e);
+                        return false;
+                    }
+                };
+                debug!(
+                    "RPC_NODE: Decoded node config ({} bytes, hash={}).",
+                    decoded_bytes, current_hash
+                );
 
                 // Check content hash to avoid redundant reloads
-                let current_hash = format!("{:x}", md5_legacy::compute(&node_json));
                 let mut should_reload = true;
                 {
                     let last_hash = LAST_CONFIG_HASH.read();
@@ -485,900 +540,740 @@ where
                 }
 
                 if should_reload {
-                    log_raw_json_hints("node_json", &node_json);
-                    match serde_json::from_slice::<crate::config_models::NodeConfigPayload>(
-                        &node_json,
-                    ) {
-                        Ok(mut payload) => {
-                            // The config version reported to the control panel MUST come
-                            // from payload.version (the edgeNodes.version DB column),
-                            // NOT from the RPC timestamp. The admin UI compares
-                            // status.configVersion == node.Version to decide "在线" vs "同步中".
-                            let payload_config_version = payload.version.unwrap_or(0);
-                            // For the next FindCurrentNodeConfig request parameter, use
-                            // rpc_cursor if available, otherwise the payload version.
-                            let next_config_cursor = if rpc_cursor > 0 {
-                                rpc_cursor
-                            } else if payload_config_version > 0 {
-                                payload_config_version
-                            } else {
-                                *config_version
-                            };
-                            let numeric_id = payload.id.unwrap_or(0);
-                            let mut payload_servers = payload.servers.clone();
+                    // The config version reported to the control panel MUST come
+                    // from payload.version (the edgeNodes.version DB column),
+                    // NOT from the RPC timestamp. The admin UI compares
+                    // status.configVersion == node.Version to decide "在线" vs "同步中".
+                    let payload_config_version = payload.version.unwrap_or(0);
+                    // For the next FindCurrentNodeConfig request parameter, use
+                    // rpc_cursor if available, otherwise the payload version.
+                    let next_config_cursor = if rpc_cursor > 0 {
+                        rpc_cursor
+                    } else if payload_config_version > 0 {
+                        payload_config_version
+                    } else {
+                        *config_version
+                    };
+                    let numeric_id = payload.id.unwrap_or(0);
+                    let mut payload_servers = std::mem::take(&mut payload.servers);
 
+                    debug!(
+                        "Successfully parsed NodeConfigPayload. Numeric ID: {}, Server count: {}",
+                        numeric_id,
+                        payload_servers.len()
+                    );
+                    if let Some(gsc) = &payload.global_server_config {
+                        debug!("RPC_NODE: Found GlobalServerConfig: {:?}", gsc);
+                    }
+                    let kernel_filter = crate::firewall::kernel::build_filter(
+                        payload.kernel_firewall_mode.as_deref(),
+                    )
+                    .await;
+
+                    for cp in &payload.http_cache_policies {
+                        debug!(
+                            "RPC_NODE: Loaded Global Cache Policy: {} (ID: {}, Type: {})",
+                            cp.name, cp.id, cp.r#type
+                        );
+
+                        if let Some(max_item_size) = &cp.max_item_size {
+                            let size = crate::config_models::SizeCapacity::from_json(max_item_size);
+                            debug!("  - Max Item Size: {} {}", size.count, size.unit);
+                        }
+
+                        for (idx, r) in cp.cache_refs.iter().enumerate() {
+                            if !r.is_on {
+                                continue;
+                            }
                             debug!(
-                                "Successfully parsed NodeConfigPayload. Numeric ID: {}, Server count: {}",
-                                numeric_id,
-                                payload.servers.len()
+                                "RPC_NODE_CACHE_REF_DUMP policy_id={} policy_name={} rule_index={} rule={}",
+                                cp.id,
+                                cp.name,
+                                idx + 1,
+                                serde_json::to_string(r).unwrap_or_default()
                             );
-                            if let Some(gsc) = &payload.global_server_config {
-                                debug!("RPC_NODE: Found GlobalServerConfig: {:?}", gsc);
-                            }
-                            let kernel_filter = crate::firewall::kernel::build_filter(
-                                payload.kernel_firewall_mode.as_deref(),
-                            )
-                            .await;
+                            debug!("  -> Rule #{}", idx + 1);
 
-                            for cp in &payload.http_cache_policies {
-                                debug!(
-                                    "RPC_NODE: Loaded Global Cache Policy: {} (ID: {}, Type: {})",
-                                    cp.name, cp.id, cp.r#type
-                                );
-
-                                if let Some(max_item_size) = &cp.max_item_size {
-                                    let size = crate::config_models::SizeCapacity::from_json(
-                                        max_item_size,
-                                    );
-                                    debug!("  - Max Item Size: {} {}", size.count, size.unit);
-                                }
-
-                                for (idx, r) in cp.cache_refs.iter().enumerate() {
-                                    if !r.is_on {
-                                        continue;
-                                    }
-                                    info!(
-                                        "RPC_NODE_CACHE_REF_DUMP policy_id={} policy_name={} rule_index={} rule={}",
-                                        cp.id,
-                                        cp.name,
-                                        idx + 1,
-                                        serde_json::to_string(r).unwrap_or_default()
-                                    );
-                                    debug!("  -> Rule #{}", idx + 1);
-
-                                    // 1. Conditions / Extensions
-                                    if let Some(cond) = &r.simple_cond {
-                                        if cond.operator == "fileExt" {
-                                            debug!("     - File Extensions: {}", cond.value);
-                                        } else {
-                                            debug!(
-                                                "     - Condition: {} {} {}",
-                                                cond.param, cond.operator, cond.value
-                                            );
-                                        }
-                                    } else if let Some(conds) = &r.conds {
-                                        debug!(
-                                            "     - Complex Conditions: {} groups",
-                                            conds.groups.len()
-                                        );
-                                    } else {
-                                        debug!("     - Condition: Match All");
-                                    }
-
-                                    // 2. Cache Time
-                                    let life_seconds = r
-                                        .life
-                                        .as_ref()
-                                        .map(crate::config_models::parse_life_to_seconds)
-                                        .unwrap_or(3600);
-                                    let life_desc = if life_seconds >= 86400 {
-                                        format!("{} days", life_seconds / 86400)
-                                    } else if life_seconds >= 3600 {
-                                        format!("{} hours", life_seconds / 3600)
-                                    } else {
-                                        format!("{} minutes", life_seconds / 60)
-                                    };
-                                    debug!("     - Cache Duration: {}", life_desc);
-
-                                    // 3. Key / Ignore URI Params
-                                    if let Some(key) = &r.key {
-                                        if !key.contains("${args}") && !key.contains("${arg:") {
-                                            debug!("     - Ignore URI Parameters: Yes");
-                                        } else {
-                                            debug!("     - Cache Key: {}", key);
-                                        }
-                                    }
-
-                                    // 4. Size Range
-                                    let min_bytes = r
-                                        .min_size
-                                        .as_ref()
-                                        .map(|v| {
-                                            crate::config_models::SizeCapacity::from_json(v)
-                                                .to_bytes()
-                                        })
-                                        .unwrap_or(0);
-                                    let max_bytes = r
-                                        .max_size
-                                        .as_ref()
-                                        .map(|v| {
-                                            crate::config_models::SizeCapacity::from_json(v)
-                                                .to_bytes()
-                                        })
-                                        .unwrap_or(0);
-                                    let min_desc = if min_bytes >= 1024 * 1024 {
-                                        format!("{} MB", min_bytes / (1024 * 1024))
-                                    } else {
-                                        format!("{} KB", min_bytes / 1024)
-                                    };
-                                    let max_desc = if max_bytes > 0 {
-                                        format!("{} MB", max_bytes / (1024 * 1024))
-                                    } else {
-                                        "Unlimited".to_string()
-                                    };
-                                    debug!("     - Size Range: {} - {}", min_desc, max_desc);
-
-                                    // 5. Partial Cache
+                            // 1. Conditions / Extensions
+                            if let Some(cond) = &r.simple_cond {
+                                if cond.operator == "fileExt" {
+                                    debug!("     - File Extensions: {}", cond.value);
+                                } else {
                                     debug!(
-                                        "     - Partial Caching (分片缓存): {}",
-                                        if r.allow_partial_content {
-                                            "Enabled"
-                                        } else {
-                                            "Disabled"
-                                        }
+                                        "     - Condition: {} {} {}",
+                                        cond.param, cond.operator, cond.value
                                     );
                                 }
+                            } else if let Some(conds) = &r.conds {
+                                debug!("     - Complex Conditions: {} groups", conds.groups.len());
+                            } else {
+                                debug!("     - Condition: Match All");
                             }
 
-                            // WAF Configuration Hashing and Logging
-                            let current_waf_hash = format!(
-                                "{:x}",
-                                md5_legacy::compute(
-                                    serde_json::to_string(&(
-                                        payload.http_firewall_policies.clone(),
-                                        payload.waf_actions.clone()
-                                    ))
-                                    .unwrap_or_default()
-                                )
-                            );
-                            let mut waf_changed = false;
-                            {
-                                let mut last_waf_hash = LAST_WAF_HASH.write();
-                                if *last_waf_hash != current_waf_hash {
-                                    *last_waf_hash = current_waf_hash;
-                                    waf_changed = true;
-                                }
-                            }
+                            // 2. Cache Time
+                            let life_seconds = r
+                                .life
+                                .as_ref()
+                                .map(crate::config_models::parse_life_to_seconds)
+                                .unwrap_or(3600);
+                            let life_desc = if life_seconds >= 86400 {
+                                format!("{} days", life_seconds / 86400)
+                            } else if life_seconds >= 3600 {
+                                format!("{} hours", life_seconds / 3600)
+                            } else {
+                                format!("{} minutes", life_seconds / 60)
+                            };
+                            debug!("     - Cache Duration: {}", life_desc);
 
-                            if waf_changed {
-                                for wp in &payload.http_firewall_policies {
-                                    debug!(
-                                        "RPC_NODE: Loaded Global WAF Policy: {} (ID: {}, Mode: {}, IsOn: {})",
-                                        wp.name, wp.id, wp.mode, wp.is_on
-                                    );
-                                    if let Some(inbound) = &wp.inbound {
-                                        if !inbound.is_on {
-                                            debug!("  - Inbound filtering: Disabled");
-                                            continue;
-                                        }
-                                        for group in &inbound.groups {
-                                            if !group.is_on {
-                                                continue;
-                                            }
-                                            for set in &group.sets {
-                                                if !set.is_on {
-                                                    continue;
-                                                }
-                                                let mut set_desc = format!(
-                                                    "  -> Rule Set: {} (Connector: {})",
-                                                    set.name, set.connector
-                                                );
-                                                if set.ignore_local {
-                                                    set_desc.push_str(", IgnoreLocal: Yes");
-                                                }
-                                                if set.ignore_search_engine {
-                                                    set_desc.push_str(", IgnoreSearchEngine: Yes");
-                                                }
-
-                                                let actions: Vec<String> = set
-                                                    .actions
-                                                    .iter()
-                                                    .filter_map(|a| {
-                                                        a.get("code")
-                                                            .and_then(|v| v.as_str())
-                                                            .map(|s| s.to_string())
-                                                    })
-                                                    .collect();
-                                                if !actions.is_empty() {
-                                                    set_desc.push_str(&format!(
-                                                        ", Actions: [{}]",
-                                                        actions.join(", ")
-                                                    ));
-                                                }
-                                                debug!("{}", set_desc);
-
-                                                for rule in &set.rules {
-                                                    let op = if rule.is_reverse {
-                                                        format!("NOT {}", rule.operator)
-                                                    } else {
-                                                        rule.operator.clone()
-                                                    };
-                                                    let case = if rule.is_case_insensitive {
-                                                        " (Case-Insensitive)"
-                                                    } else {
-                                                        ""
-                                                    };
-
-                                                    // Handle variable parameters (e.g., ${header:User-Agent})
-                                                    let mut param = rule.param.clone();
-                                                    if let Some(opts) = &rule.checkpoint_options {
-                                                        if let Some(key) = opts
-                                                            .get("name")
-                                                            .and_then(|v| v.as_str())
-                                                        {
-                                                            param = format!("{}:{}", param, key);
-                                                        }
-                                                    }
-
-                                                    let val_display = if rule.value.is_empty() {
-                                                        "[empty]".to_string()
-                                                    } else {
-                                                        format!(
-                                                            "\"{}\"",
-                                                            rule.value.replace("\n", " | ")
-                                                        )
-                                                    };
-
-                                                    debug!(
-                                                        "     - Rule: {} {} {}{}",
-                                                        param, op, val_display, case
-                                                    );
-                                                }
-                                            }
-                                        }
-                                    }
+                            // 3. Key / Ignore URI Params
+                            if let Some(key) = &r.key {
+                                if !key.contains("${args}") && !key.contains("${arg:") {
+                                    debug!("     - Ignore URI Parameters: Yes");
+                                } else {
+                                    debug!("     - Cache Key: {}", key);
                                 }
                             }
 
-                            let mut new_servers = std::collections::HashMap::new();
-                            let mut new_routes = std::collections::HashMap::new();
-
-                            // 2. Restore from DataMap if exists
-                            let has_data_map_refs =
-                                payload.ssl_certs.iter().any(cert_has_data_map_ref)
-                                    || payload.ssl_policy.as_ref().is_some_and(|policy| {
-                                        policy.certs.iter().any(cert_has_data_map_ref)
-                                    })
-                                    || payload_servers.iter().any(|server| {
-                                        server
-                                            .https
-                                            .as_ref()
-                                            .and_then(|https| https.ssl_policy.as_ref())
-                                            .is_some_and(|policy| {
-                                                policy.certs.iter().any(cert_has_data_map_ref)
-                                            })
-                                    });
-
-                            if let Some(dm) = &payload.data_map {
-                                tracing::debug!(
-                                    "RPC_NODE: DataMap found with {} entries. Restoring certificates...",
-                                    dm.len()
-                                );
-                                let mut restored_count = 0;
-                                let mut restore_cert =
-                                    |cert: &mut crate::config_models::SSLCertConfig| {
-                                        use base64::{Engine as _, engine::general_purpose};
-                                        fn value_to_ref_string(
-                                            value: &serde_json::Value,
-                                        ) -> Option<String>
-                                        {
-                                            fn decode_ref_candidate(raw: &str) -> Option<String> {
-                                                let encoded =
-                                                    raw.strip_prefix("base64:").unwrap_or(raw);
-                                                general_purpose::STANDARD
-                                                    .decode(encoded.trim())
-                                                    .or_else(|_| {
-                                                        general_purpose::STANDARD_NO_PAD
-                                                            .decode(encoded.trim())
-                                                    })
-                                                    .ok()
-                                                    .map(|decoded| {
-                                                        String::from_utf8_lossy(&decoded)
-                                                            .to_string()
-                                                    })
-                                            }
-
-                                            match value {
-                                                serde_json::Value::String(s) => {
-                                                    if s.contains("GOEDGE_DATA_MAP:")
-                                                        || s.contains("_DATA_MAP:")
-                                                    {
-                                                        return Some(s.clone());
-                                                    }
-                                                    if let Some(decoded) = decode_ref_candidate(s) {
-                                                        if decoded.contains("GOEDGE_DATA_MAP:")
-                                                            || decoded.contains("_DATA_MAP:")
-                                                        {
-                                                            return Some(decoded);
-                                                        }
-                                                    }
-                                                    Some(s.clone())
-                                                }
-                                                serde_json::Value::Array(items) => {
-                                                    let mut bytes = Vec::with_capacity(items.len());
-                                                    for item in items {
-                                                        let byte = item.as_u64()?;
-                                                        if byte > u8::MAX as u64 {
-                                                            return None;
-                                                        }
-                                                        bytes.push(byte as u8);
-                                                    }
-                                                    Some(
-                                                        String::from_utf8_lossy(&bytes).to_string(),
-                                                    )
-                                                }
-                                                _ => None,
-                                            }
-                                        }
-                                        let mut process_field =
-                                            |val: &mut Option<serde_json::Value>| {
-                                                if let Some(current) = val {
-                                                    let Some(raw_ref) =
-                                                        value_to_ref_string(current)
-                                                    else {
-                                                        return;
-                                                    };
-
-                                                    if raw_ref.contains("GOEDGE_DATA_MAP:")
-                                                        || raw_ref.contains("_DATA_MAP:")
-                                                    {
-                                                        if let Some(real_val) = dm.get(&raw_ref) {
-                                                            *val = Some(real_val.clone());
-                                                            restored_count += 1;
-                                                        } else {
-                                                            tracing::warn!(
-                                                                "RPC_NODE: DataMap reference {} not found in map",
-                                                                raw_ref
-                                                            );
-                                                        }
-                                                    }
-                                                }
-                                            };
-                                        process_field(&mut cert.cert_data_json);
-                                        process_field(&mut cert.key_data_json);
-                                    };
-
-                                for cert in &mut payload.ssl_certs {
-                                    restore_cert(cert);
-                                }
-                                if let Some(policy) = &mut payload.ssl_policy {
-                                    for cert in &mut policy.certs {
-                                        restore_cert(cert);
-                                    }
-                                }
-                                for server in &mut payload_servers {
-                                    if let Some(https) = &mut server.https
-                                        && let Some(policy) = &mut https.ssl_policy
-                                    {
-                                        for cert in &mut policy.certs {
-                                            restore_cert(cert);
-                                        }
-                                    }
-                                    if let Some(rp) = &mut server.reverse_proxy {
-                                        for origin in rp
-                                            .primary_origins
-                                            .iter_mut()
-                                            .chain(rp.backup_origins.iter_mut())
-                                        {
-                                            if let Some(cert) = &mut origin.cert {
-                                                restore_cert(cert);
-                                            }
-                                        }
-                                    }
-                                }
-                                tracing::debug!(
-                                    "RPC_NODE: Restored {} fields from DataMap",
-                                    restored_count
-                                );
-                            } else if has_data_map_refs {
-                                tracing::warn!(
-                                    "RPC_NODE: DataMap references found but NO DataMap in payload. Certificates will fail to parse."
-                                );
-                            }
-
-                            let node_level = payload.level;
-                            let parent_nodes: std::collections::HashMap<
-                                i64,
-                                Vec<crate::config_models::ParentNodeConfig>,
-                            > = payload
-                                .parent_nodes
-                                .iter()
-                                .filter_map(|(k, v)| {
-                                    k.parse::<i64>().ok().map(|id| (id, v.clone()))
+                            // 4. Size Range
+                            let min_bytes = r
+                                .min_size
+                                .as_ref()
+                                .map(|v| {
+                                    crate::config_models::SizeCapacity::from_json(v).to_bytes()
                                 })
-                                .collect();
-                            let tiered_origin_bypass = config_store.is_tiered_origin_bypass().await;
-                            let mut new_id_to_lb = std::collections::HashMap::new();
-
-                            // Pre-extract Global Settings needed during LB construction
-                            let mut allow_lan_ip = false;
-                            let mut force_ln = false;
-                            let mut ln_method = "random".to_string();
-                            let mut supports_low_version_http = false;
-                            let mut match_cert_from_all_servers = false;
-                            let mut server_name = String::new();
-                            let mut enable_server_addr_variable = false;
-                            let mut request_origins_with_encodings = false;
-                            let mut xff_max_addresses = 0;
-                            let mut match_domain_strictly = false;
-                            let mut node_ip_show_page = false;
-                            let mut node_ip_page_html = String::new();
-                            let mut domain_mismatch_action = None;
-
-                            if let Some(gsc) = &payload.global_server_config {
-                                if let Some(http_all) = &gsc.http_all {
-                                    allow_lan_ip = http_all.allow_lan_ip;
-                                    force_ln = http_all.force_ln_request;
-                                    ln_method = http_all.ln_request_scheduling_method.clone();
-                                    supports_low_version_http = http_all.supports_low_version_http;
-                                    match_cert_from_all_servers =
-                                        http_all.match_cert_from_all_servers;
-                                    server_name = http_all.server_name.clone();
-                                    enable_server_addr_variable =
-                                        http_all.enable_server_addr_variable;
-                                    request_origins_with_encodings =
-                                        http_all.request_origins_with_encodings;
-                                    xff_max_addresses = http_all.xff_max_addresses;
-                                    match_domain_strictly = http_all.match_domain_strictly;
-                                    node_ip_show_page = http_all.node_ip_show_page;
-                                    node_ip_page_html = http_all.node_ip_page_html.clone();
-                                    domain_mismatch_action =
-                                        http_all.domain_mismatch_action.clone();
-                                }
-                            }
-                            let mut global_http_config = payload
-                                .global_server_config
+                                .unwrap_or(0);
+                            let max_bytes = r
+                                .max_size
                                 .as_ref()
-                                .and_then(|g| g.http_all.clone());
-                            if let Some(product_name) = payload
-                                .product_config
-                                .as_ref()
-                                .map(|config| config.name.trim())
-                                .filter(|name| !name.is_empty())
-                            {
-                                global_http_config
-                                    .get_or_insert_with(Default::default)
-                                    .product_name = product_name.to_string();
-                            }
+                                .map(|v| {
+                                    crate::config_models::SizeCapacity::from_json(v).to_bytes()
+                                })
+                                .unwrap_or(0);
+                            let min_desc = if min_bytes >= 1024 * 1024 {
+                                format!("{} MB", min_bytes / (1024 * 1024))
+                            } else {
+                                format!("{} KB", min_bytes / 1024)
+                            };
+                            let max_desc = if max_bytes > 0 {
+                                format!("{} MB", max_bytes / (1024 * 1024))
+                            } else {
+                                "Unlimited".to_string()
+                            };
+                            debug!("     - Size Range: {} - {}", min_desc, max_desc);
 
-                            for server in &payload_servers {
-                                server.compile_url_patterns();
-                                if let Some(web) = &server.web
-                                    && let Some(cache) = &web.cache
-                                {
-                                    for (idx, cache_ref) in cache.cache_refs.iter().enumerate() {
-                                        info!(
-                                            "RPC_NODE_SERVER_CACHE_REF_DUMP server_id={} names={:?} rule_index={} rule={}",
-                                            server.numeric_id(),
-                                            crate::rpc::utils::server_runtime_names(server),
-                                            idx + 1,
-                                            serde_json::to_string(cache_ref).unwrap_or_default()
-                                        );
-                                    }
-                                    if let Some(policy) = &cache.cache_policy {
-                                        for (idx, cache_ref) in policy.cache_refs.iter().enumerate()
-                                        {
-                                            info!(
-                                                "RPC_NODE_SERVER_POLICY_CACHE_REF_DUMP server_id={} policy_id={} policy_name={} names={:?} rule_index={} rule={}",
-                                                server.numeric_id(),
-                                                policy.id,
-                                                policy.name,
-                                                crate::rpc::utils::server_runtime_names(server),
-                                                idx + 1,
-                                                serde_json::to_string(cache_ref)
-                                                    .unwrap_or_default()
-                                            );
-                                        }
-                                    }
+                            // 5. Partial Cache
+                            debug!(
+                                "     - Partial Caching (分片缓存): {}",
+                                if r.allow_partial_content {
+                                    "Enabled"
+                                } else {
+                                    "Disabled"
                                 }
-                            }
+                            );
+                        }
+                    }
 
-                            let mut loaded_domain_names = std::collections::BTreeSet::new();
-                            let mut port_only_server_count = 0usize;
+                    // WAF Configuration Hashing and Logging
+                    let current_waf_hash = crate::config_apply::hash_waf_snapshot(
+                        &payload.http_firewall_policies,
+                        &payload.waf_actions,
+                    );
+                    let mut waf_changed = false;
+                    {
+                        let mut last_waf_hash = LAST_WAF_HASH.write();
+                        if *last_waf_hash != current_waf_hash {
+                            *last_waf_hash = current_waf_hash;
+                            waf_changed = true;
+                        }
+                    }
 
-                            for server in &payload_servers {
-                                if !server.is_on {
-                                    debug!(
-                                        "RPC_NODE: Skipping server {} because it is OFF",
-                                        server.numeric_id()
-                                    );
+                    if waf_changed {
+                        for wp in &payload.http_firewall_policies {
+                            debug!(
+                                "RPC_NODE: Loaded Global WAF Policy: {} (ID: {}, Mode: {}, IsOn: {})",
+                                wp.name, wp.id, wp.mode, wp.is_on
+                            );
+                            if let Some(inbound) = &wp.inbound {
+                                if !inbound.is_on {
+                                    debug!("  - Inbound filtering: Disabled");
                                     continue;
                                 }
-
-                                if server.is_sni_passthrough() {
-                                    match serde_json::to_string(server) {
-                                        Ok(raw) => debug!(
-                                            "RPC_NODE: SNI passthrough server loaded. id={} names={:?} raw_json={}",
-                                            server.numeric_id(),
-                                            crate::rpc::utils::server_runtime_names(server),
-                                            raw
-                                        ),
-                                        Err(err) => warn!(
-                                            "RPC_NODE: Failed to serialize SNI passthrough server {} for debug logging: {}",
-                                            server.numeric_id(),
-                                            err
-                                        ),
+                                for group in &inbound.groups {
+                                    if !group.is_on {
+                                        continue;
                                     }
-                                }
-
-                                let server_id = server.numeric_id();
-                                let names = crate::rpc::utils::server_runtime_names(server);
-                                let (lb_arc, has_hc) = match &server.reverse_proxy {
-                                    Some(rp_cfg) => {
-                                        match crate::lb_factory::build_lb_blocking_with_global_http(
-                                            server_id,
-                                            rp_cfg.clone(),
-                                            node_level,
-                                            Arc::new(parent_nodes.clone()),
-                                            tiered_origin_bypass,
-                                            allow_lan_ip,
-                                            payload
-                                                .global_server_config
-                                                .as_ref()
-                                                .and_then(|g| g.http_all.clone()),
-                                        )
-                                        .await
-                                        {
-                                            Ok(result) => result,
-                                            Err(err) => {
-                                                warn!(
-                                                    "RPC_NODE: failed to build LB for server {}: {}. Using fallback dummy LB.",
-                                                    server_id, err
-                                                );
-                                                crate::rpc::utils::fallback_runtime_lb()
-                                            }
+                                    for set in &group.sets {
+                                        if !set.is_on {
+                                            continue;
                                         }
-                                    }
-                                    None => crate::rpc::utils::fallback_runtime_lb(),
-                                };
-                                let server_id = server.numeric_id();
-                                if server_id > 0 {
-                                    new_id_to_lb.insert(server_id, lb_arc.clone());
-                                    if has_hc {
-                                        health_manager.register(
-                                            server_id,
-                                            lb_arc.clone(),
-                                            std::time::Duration::from_secs(30),
+                                        let mut set_desc = format!(
+                                            "  -> Rule Set: {} (Connector: {})",
+                                            set.name, set.connector
                                         );
-                                    }
-                                }
-
-                                if names.is_empty() {
-                                    port_only_server_count += 1;
-                                    if server.http.is_some() || server.https.is_some() {
-                                        warn!(
-                                            "RPC_NODE: HTTP/HTTPS Server {} has NO server names, only routable via direct port",
-                                            server.numeric_id()
-                                        );
-                                    } else {
-                                        debug!(
-                                            "RPC_NODE: L4 Server {} initialized without names (Port-based routing)",
-                                            server.numeric_id()
-                                        );
-                                    }
-                                    new_servers.insert(
-                                        format!("__id_{}", server.numeric_id()),
-                                        Arc::new(server.clone()),
-                                    );
-                                    new_routes.insert(
-                                        format!("__id_{}", server.numeric_id()),
-                                        lb_arc.clone(),
-                                    );
-                                } else {
-                                    debug!(
-                                        "RPC_NODE: Server {} has names: {:?}",
-                                        server.numeric_id(),
-                                        names
-                                    );
-                                    for name in names {
-                                        loaded_domain_names.insert(name.clone());
-                                        if let Some(existing) = new_servers.get(&name) {
-                                            warn!(
-                                                "RPC_NODE: Host mapping overwrite detected for {}. existing_server_id={} existing_description={:?} new_server_id={} new_description={:?}",
-                                                name,
-                                                existing.numeric_id(),
-                                                existing.description,
-                                                server.numeric_id(),
-                                                server.description
-                                            );
+                                        if set.ignore_local {
+                                            set_desc.push_str(", IgnoreLocal: Yes");
                                         }
-                                        new_servers.insert(name.clone(), Arc::new(server.clone()));
-                                        new_routes.insert(name.clone(), lb_arc.clone());
-                                    }
-                                }
-
-                                if let Some(https) = &server.https {
-                                    if https.is_on {
-                                        debug!(
-                                            "RPC_NODE: Server {} has HTTPS ON (Listen count: {})",
-                                            server.numeric_id(),
-                                            https.listen.len()
-                                        );
-                                    } else {
-                                        debug!(
-                                            "RPC_NODE: Server {} has HTTPS config but is_on is false",
-                                            server.numeric_id()
-                                        );
-                                    }
-                                } else {
-                                    debug!(
-                                        "RPC_NODE: Server {} has NO HTTPS config",
-                                        server.numeric_id()
-                                    );
-                                }
-
-                                if let Some(http) = &server.http {
-                                    if http.is_on {
-                                        debug!(
-                                            "RPC_NODE: Server {} has HTTP ON (Listen count: {})",
-                                            server.numeric_id(),
-                                            http.listen.len()
-                                        );
-                                    } else {
-                                        debug!(
-                                            "RPC_NODE: Server {} has HTTP config but is_on is false",
-                                            server.numeric_id()
-                                        );
-                                    }
-                                } else {
-                                    debug!(
-                                        "RPC_NODE: Server {} has NO HTTP config",
-                                        server.numeric_id()
-                                    );
-                                }
-                            }
-
-                            let loaded_domain_count = loaded_domain_names.len();
-                            if loaded_domain_names.is_empty() {
-                                debug!(
-                                    "RPC_NODE: Loaded 0 named domains. Port-only servers: {}",
-                                    port_only_server_count
-                                );
-                            } else {
-                                let loaded_names: Vec<_> =
-                                    loaded_domain_names.into_iter().collect();
-                                debug!(
-                                    "RPC_NODE: Loaded {} named domains. Port-only servers: {}",
-                                    loaded_names.len(),
-                                    port_only_server_count
-                                );
-                                for chunk in loaded_names.chunks(20) {
-                                    debug!("RPC_NODE: Domains => {}", chunk.join(", "));
-                                }
-                            }
-
-                            debug!(
-                                "RPC_NODE: Loaded global custom pages: {}. Global page policies: {}",
-                                payload.global_pages.len(),
-                                payload.http_pages_policies.len()
-                            );
-
-                            let all_certs = collect_enabled_ssl_certs(
-                                &payload.ssl_certs,
-                                payload.ssl_policy.as_ref(),
-                                &payload_servers,
-                            );
-                            tracing::debug!(
-                                "Received {} active certificates from RPC",
-                                all_certs.len()
-                            );
-
-                            // 4. gRPC Policy
-                            let node_cluster_id =
-                                payload.node_cluster.as_ref().map(|c| c.id).unwrap_or(0);
-                            let grpc_policy = payload
-                                .grpc_policies
-                                .get(&node_cluster_id.to_string())
-                                .or_else(|| payload.grpc_policies.get("0"))
-                                .or_else(|| payload.grpc_policies.values().next())
-                                .cloned()
-                                .or_else(|| payload.primary_grpc_policy.clone());
-
-                            // --- GLOBAL SETTINGS LOGGING ---
-                            log_global_settings(
-                                &payload,
-                                &server_name,
-                                force_ln,
-                                &ln_method,
-                                supports_low_version_http,
-                                match_cert_from_all_servers,
-                                enable_server_addr_variable,
-                                request_origins_with_encodings,
-                                xff_max_addresses,
-                                allow_lan_ip,
-                                &grpc_policy,
-                            );
-
-                            let mut new_parent_routes = std::collections::HashMap::new();
-                            for (cluster_id, nodes) in &parent_nodes {
-                                let lb = crate::lb_factory::build_parent_lb(
-                                    *cluster_id,
-                                    nodes,
-                                    allow_lan_ip,
-                                );
-                                new_parent_routes.insert(*cluster_id, lb);
-                            }
-
-                            let deleted_contents = config_store.get_deleted_contents().await;
-                            config_store
-                                .update_config(
-                                    numeric_id,
-                                    payload_config_version,
-                                    payload.node_region.as_ref().map(|r| r.id).unwrap_or(0),
-                                    node_cluster_id,
-                                    payload_servers.clone().into_iter().map(Arc::new).collect(),
-                                    new_servers,
-                                    new_routes,
-                                    new_id_to_lb,
-                                    deleted_contents,
-                                    payload.global_pages.clone(),
-                                    payload.metric_items.clone(),
-                                    payload.ssl_certs.clone(),
-                                    payload.ssl_policy.clone(),
-                                    payload.updating_server_list_id,
-                                    node_level,
-                                    payload.is_on,
-                                    payload.enable_ip_lists,
-                                    parent_nodes,
-                                    tiered_origin_bypass,
-                                    force_ln,
-                                    ln_method,
-                                    new_parent_routes,
-                                    grpc_policy,
-                                    supports_low_version_http,
-                                    match_cert_from_all_servers,
-                                    server_name,
-                                    enable_server_addr_variable,
-                                    request_origins_with_encodings,
-                                    xff_max_addresses,
-                                    allow_lan_ip,
-                                    match_domain_strictly,
-                                    node_ip_show_page,
-                                    node_ip_page_html,
-                                    domain_mismatch_action,
-                                    global_http_config,
-                                    payload
-                                        .http_cache_policies
-                                        .iter()
-                                        .map(|p| Arc::new(p.clone()))
-                                        .collect(),
-                                    payload.http_firewall_policies.clone(),
-                                    payload.waf_actions.clone(),
-                                    parse_i64_keyed_map(&payload.uam_policies),
-                                    parse_i64_keyed_map(&payload.http_cc_policies),
-                                    parse_i64_keyed_map(&payload.http3_policies),
-                                    parse_i64_keyed_map(&payload.http_pages_policies),
-                                    parse_i64_keyed_map(&payload.webp_image_policies),
-                                    payload.toa.clone(),
-                                    payload
-                                        .global_server_config
-                                        .as_ref()
-                                        .and_then(|g| g.http_access_log.clone()),
-                                )
-                                .await;
-                            *config_version = next_config_cursor;
-                            {
-                                let mut last_hash = LAST_CONFIG_HASH.write();
-                                *last_hash = current_hash;
-                            }
-                            if kernel_filter.available() {
-                                waf_state.set_kernel_filter(kernel_filter);
-                            }
-                            for cache_policy in &payload.http_cache_policies {
-                                crate::cache_manager::CACHE
-                                    .storage
-                                    .apply_policy(cache_policy)
-                                    .await;
-                            }
-                            crate::ssl::sync_certs(cert_selector, &all_certs).await;
-                            crate::logging::set_numeric_node_id(numeric_id);
-                            config_store.set_global_stat_upload(
-                                payload
-                                    .global_server_config
-                                    .as_ref()
-                                    .and_then(|g| g.stat.as_ref())
-                                    .map(|stat| stat.upload.clone()),
-                            );
-
-                            info!(
-                                "RPC_NODE: Applied config version={} node_id={} servers={} domains={} port_only={} cache_policies={} waf_policies={} pages={}",
-                                payload_config_version,
-                                numeric_id,
-                                payload_servers.len(),
-                                loaded_domain_count,
-                                port_only_server_count,
-                                payload.http_cache_policies.len(),
-                                payload.http_firewall_policies.len(),
-                                payload.global_pages.len() + payload.http_pages_policies.len()
-                            );
-
-                            if let Err(err) =
-                                report_node_online_once(config_store, api_config).await
-                            {
-                                debug!("RPC_NODE: immediate online status report failed: {}", err);
-                            }
-
-                            if payload.toa.as_ref().map(|toa| toa.is_on).unwrap_or(false) {
-                                let toa_config = payload.toa.clone();
-                                tokio::spawn(async move {
-                                    if let Err(err) =
-                                        crate::toa::maybe_prepare_runtime(toa_config).await
-                                    {
-                                        warn!(
-                                            "Failed to auto-prepare TOA runtime after config sync: {}",
-                                            err
-                                        );
-                                    }
-                                });
-                            }
-
-                            let _ = sync_active_plans(api_config, config_store).await;
-                            // Fetch enabled features for management-plane reporting
-                            if numeric_id > 0 {
-                                if let Ok(shared) = SharedRpcClient::get(api_config).await {
-                                    let client = shared.as_rpc_client();
-                                    let mut service = client.node_service_with_type();
-                                    match crate::rpc::track_rpc(
-                                        service.find_enabled_node_config_info(
-                                            pb::FindEnabledNodeConfigInfoRequest {
-                                                node_id: numeric_id,
-                                            },
-                                        ),
-                                    )
-                                    .await
-                                    {
-                                        Ok(resp) => {
-                                            let info = resp.into_inner();
-                                            debug!(
-                                                "Node enabled features: DNS={} Cache={} Thresholds={} SSH={} Sys={} DDoS={} Sched={} AccessLog={}",
-                                                info.has_dns_info,
-                                                info.has_cache_info,
-                                                info.has_thresholds,
-                                                info.has_ssh,
-                                                info.has_system_settings,
-                                                info.has_d_do_s_protection,
-                                                info.has_schedule_settings,
-                                                info.has_access_log_settings
-                                            );
-                                            config_store.set_enabled_features(
-                                                info.has_dns_info,
-                                                info.has_cache_info,
-                                                info.has_thresholds,
-                                                info.has_ssh,
-                                                info.has_system_settings,
-                                                info.has_d_do_s_protection,
-                                                info.has_schedule_settings,
-                                                info.has_access_log_settings,
-                                            );
+                                        if set.ignore_search_engine {
+                                            set_desc.push_str(", IgnoreSearchEngine: Yes");
                                         }
-                                        Err(e) if is_unsupported_node_type_error(&e) => {
-                                            if !ENABLED_FEATURES_UNSUPPORTED_LOGGED
-                                                .swap(true, Ordering::Relaxed)
+
+                                        let actions: Vec<String> = set
+                                            .actions
+                                            .iter()
+                                            .filter_map(|a| {
+                                                a.get("code")
+                                                    .and_then(|v| v.as_str())
+                                                    .map(|s| s.to_string())
+                                            })
+                                            .collect();
+                                        if !actions.is_empty() {
+                                            set_desc.push_str(&format!(
+                                                ", Actions: [{}]",
+                                                actions.join(", ")
+                                            ));
+                                        }
+                                        debug!("{}", set_desc);
+
+                                        for rule in &set.rules {
+                                            let op = if rule.is_reverse {
+                                                format!("NOT {}", rule.operator)
+                                            } else {
+                                                rule.operator.clone()
+                                            };
+                                            let case = if rule.is_case_insensitive {
+                                                " (Case-Insensitive)"
+                                            } else {
+                                                ""
+                                            };
+
+                                            // Handle variable parameters (e.g., ${header:User-Agent})
+                                            let mut param = rule.param.clone();
+                                            if let Some(opts) = &rule.checkpoint_options
+                                                && let Some(key) =
+                                                    opts.get("name").and_then(|v| v.as_str())
                                             {
-                                                debug!(
-                                                    "Enabled feature sync is not supported by this API node for node credentials: {}",
-                                                    e
-                                                );
+                                                param = format!("{}:{}", param, key);
                                             }
+
+                                            let val_display = if rule.value.is_empty() {
+                                                "[empty]".to_string()
+                                            } else {
+                                                format!("\"{}\"", rule.value.replace("\n", " | "))
+                                            };
+
+                                            debug!(
+                                                "     - Rule: {} {} {}{}",
+                                                param, op, val_display, case
+                                            );
                                         }
-                                        Err(e) => debug!("Failed to fetch enabled features: {}", e),
                                     }
                                 }
                             }
                         }
-                        Err(e) => {
-                            warn!("Error parsing NodeConfigPayload: {}", e);
-                            return false;
+                    }
+
+                    let has_data_map_refs = payload.ssl_certs.iter().any(cert_has_data_map_ref)
+                        || payload
+                            .ssl_policy
+                            .as_ref()
+                            .is_some_and(|policy| policy.certs.iter().any(cert_has_data_map_ref))
+                        || payload_servers.iter().any(|server| {
+                            server
+                                .https
+                                .as_ref()
+                                .and_then(|https| https.ssl_policy.as_ref())
+                                .is_some_and(|policy| {
+                                    policy.certs.iter().any(cert_has_data_map_ref)
+                                })
+                        });
+
+                    if let Some(dm) = &payload.data_map {
+                        tracing::debug!(
+                            "RPC_NODE: DataMap found with {} entries. Restoring certificates...",
+                            dm.len()
+                        );
+                        let mut restored_count = 0;
+                        let mut restore_cert = |cert: &mut crate::config_models::SSLCertConfig| {
+                            use base64::{Engine as _, engine::general_purpose};
+                            fn value_to_ref_string(value: &serde_json::Value) -> Option<String> {
+                                fn decode_ref_candidate(raw: &str) -> Option<String> {
+                                    let encoded = raw.strip_prefix("base64:").unwrap_or(raw);
+                                    general_purpose::STANDARD
+                                        .decode(encoded.trim())
+                                        .or_else(|_| {
+                                            general_purpose::STANDARD_NO_PAD.decode(encoded.trim())
+                                        })
+                                        .ok()
+                                        .map(|decoded| {
+                                            String::from_utf8_lossy(&decoded).to_string()
+                                        })
+                                }
+
+                                match value {
+                                    serde_json::Value::String(s) => {
+                                        if s.contains("GOEDGE_DATA_MAP:")
+                                            || s.contains("_DATA_MAP:")
+                                        {
+                                            return Some(s.clone());
+                                        }
+                                        if let Some(decoded) = decode_ref_candidate(s)
+                                            && (decoded.contains("GOEDGE_DATA_MAP:")
+                                                || decoded.contains("_DATA_MAP:"))
+                                        {
+                                            return Some(decoded);
+                                        }
+                                        Some(s.clone())
+                                    }
+                                    serde_json::Value::Array(items) => {
+                                        let mut bytes = Vec::with_capacity(items.len());
+                                        for item in items {
+                                            let byte = item.as_u64()?;
+                                            if byte > u8::MAX as u64 {
+                                                return None;
+                                            }
+                                            bytes.push(byte as u8);
+                                        }
+                                        Some(String::from_utf8_lossy(&bytes).to_string())
+                                    }
+                                    _ => None,
+                                }
+                            }
+                            let mut process_field = |val: &mut Option<serde_json::Value>| {
+                                if let Some(current) = val {
+                                    let Some(raw_ref) = value_to_ref_string(current) else {
+                                        return;
+                                    };
+
+                                    if raw_ref.contains("GOEDGE_DATA_MAP:")
+                                        || raw_ref.contains("_DATA_MAP:")
+                                    {
+                                        if let Some(real_val) = dm.get(&raw_ref) {
+                                            *val = Some(real_val.clone());
+                                            restored_count += 1;
+                                        } else {
+                                            tracing::warn!(
+                                                "RPC_NODE: DataMap reference {} not found in map",
+                                                raw_ref
+                                            );
+                                        }
+                                    }
+                                }
+                            };
+                            process_field(&mut cert.cert_data_json);
+                            process_field(&mut cert.key_data_json);
+                        };
+
+                        for cert in &mut payload.ssl_certs {
+                            restore_cert(cert);
+                        }
+                        if let Some(policy) = &mut payload.ssl_policy {
+                            for cert in &mut policy.certs {
+                                restore_cert(cert);
+                            }
+                        }
+                        for server in &mut payload_servers {
+                            if let Some(https) = &mut server.https
+                                && let Some(policy) = &mut https.ssl_policy
+                            {
+                                for cert in &mut policy.certs {
+                                    restore_cert(cert);
+                                }
+                            }
+                            if let Some(rp) = &mut server.reverse_proxy {
+                                for origin in rp
+                                    .primary_origins
+                                    .iter_mut()
+                                    .chain(rp.backup_origins.iter_mut())
+                                {
+                                    if let Some(cert) = &mut origin.cert {
+                                        restore_cert(cert);
+                                    }
+                                }
+                            }
+                        }
+                        tracing::debug!(
+                            "RPC_NODE: Restored {} fields from DataMap",
+                            restored_count
+                        );
+                    } else if has_data_map_refs {
+                        tracing::warn!(
+                            "RPC_NODE: DataMap references found but NO DataMap in payload. Certificates will fail to parse."
+                        );
+                    }
+
+                    let node_level = payload.level;
+                    let parent_nodes = Arc::new(
+                        std::mem::take(&mut payload.parent_nodes)
+                            .into_iter()
+                            .filter_map(|(k, v)| k.parse::<i64>().ok().map(|id| (id, v)))
+                            .collect::<std::collections::HashMap<_, _>>(),
+                    );
+                    let tiered_origin_bypass = config_store.is_tiered_origin_bypass().await;
+
+                    // Pre-extract Global Settings needed during LB construction
+                    let mut allow_lan_ip = false;
+                    let mut force_ln = false;
+                    let mut ln_method = "random".to_string();
+                    let mut supports_low_version_http = false;
+                    let mut match_cert_from_all_servers = false;
+                    let mut server_name = String::new();
+                    let mut enable_server_addr_variable = false;
+                    let mut request_origins_with_encodings = false;
+                    let mut xff_max_addresses = 0;
+                    let mut match_domain_strictly = false;
+                    let mut node_ip_show_page = false;
+                    let mut node_ip_page_html = String::new();
+                    let mut domain_mismatch_action = None;
+
+                    if let Some(gsc) = &payload.global_server_config
+                        && let Some(http_all) = &gsc.http_all
+                    {
+                        allow_lan_ip = http_all.allow_lan_ip;
+                        force_ln = http_all.force_ln_request;
+                        ln_method = http_all.ln_request_scheduling_method.clone();
+                        supports_low_version_http = http_all.supports_low_version_http;
+                        match_cert_from_all_servers = http_all.match_cert_from_all_servers;
+                        server_name = http_all.server_name.clone();
+                        enable_server_addr_variable = http_all.enable_server_addr_variable;
+                        request_origins_with_encodings = http_all.request_origins_with_encodings;
+                        xff_max_addresses = http_all.xff_max_addresses;
+                        match_domain_strictly = http_all.match_domain_strictly;
+                        node_ip_show_page = http_all.node_ip_show_page;
+                        node_ip_page_html = http_all.node_ip_page_html.clone();
+                        domain_mismatch_action = http_all.domain_mismatch_action.clone();
+                    }
+                    let mut global_http_config = payload
+                        .global_server_config
+                        .as_ref()
+                        .and_then(|g| g.http_all.clone());
+                    if let Some(product_name) = payload
+                        .product_config
+                        .as_ref()
+                        .map(|config| config.name.trim())
+                        .filter(|name| !name.is_empty())
+                    {
+                        global_http_config
+                            .get_or_insert_with(Default::default)
+                            .product_name = product_name.to_string();
+                    }
+
+                    for server in &payload_servers {
+                        server.compile_url_patterns();
+                        if let Some(web) = &server.web
+                            && let Some(cache) = &web.cache
+                        {
+                            for (idx, cache_ref) in cache.cache_refs.iter().enumerate() {
+                                debug!(
+                                    "RPC_NODE_SERVER_CACHE_REF_DUMP server_id={} names={:?} rule_index={} rule={}",
+                                    server.numeric_id(),
+                                    crate::rpc::utils::server_runtime_names(server),
+                                    idx + 1,
+                                    serde_json::to_string(cache_ref).unwrap_or_default()
+                                );
+                            }
+                            if let Some(policy) = &cache.cache_policy {
+                                for (idx, cache_ref) in policy.cache_refs.iter().enumerate() {
+                                    debug!(
+                                        "RPC_NODE_SERVER_POLICY_CACHE_REF_DUMP server_id={} policy_id={} policy_name={} names={:?} rule_index={} rule={}",
+                                        server.numeric_id(),
+                                        policy.id,
+                                        policy.name,
+                                        crate::rpc::utils::server_runtime_names(server),
+                                        idx + 1,
+                                        serde_json::to_string(cache_ref).unwrap_or_default()
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    let apply_limits = crate::config_apply::ConfigApplyLimits::from_governor();
+                    let global_http_arc = global_http_config.clone().map(Arc::new);
+                    // Materialize the new generation first and only publish it
+                    // once built. Releasing the installed generation up front
+                    // opens an empty-route window for every new request during
+                    // the whole materialization.
+                    let mut runtime_maps = crate::config_apply::materialize_runtime_servers(
+                        crate::config_apply::MaterializeRuntimeServersArgs {
+                            servers: payload_servers,
+                            health_manager,
+                            node_level,
+                            parent_nodes: Arc::clone(&parent_nodes),
+                            tiered_origin_bypass,
+                            allow_lan: allow_lan_ip,
+                            global_http: global_http_arc,
+                            limits: apply_limits,
+                        },
+                    )
+                    .await;
+                    runtime_maps.stats.json_bytes = decoded_bytes;
+                    if !runtime_maps.stats.admitted {
+                        // Governor refused admission: keep the previous
+                        // generation serving and retry the sync later. The
+                        // config cursor is intentionally not advanced so the
+                        // next poll re-fetches this payload.
+                        warn!(
+                            "RPC_NODE: Config apply deferred by memory governor (retries={}); keeping previous generation",
+                            runtime_maps.stats.admission_retries
+                        );
+                        return false;
+                    }
+
+                    let mut loaded_domain_names = std::collections::BTreeSet::new();
+                    let mut port_only_server_count = 0usize;
+                    for server in &runtime_maps.all_servers {
+                        if !server.is_on {
+                            debug!(
+                                "RPC_NODE: Skipping server {} because it is OFF",
+                                server.numeric_id()
+                            );
+                            continue;
+                        }
+                        if server.is_sni_passthrough() {
+                            debug!(
+                                "RPC_NODE: SNI passthrough server loaded. id={} names={:?}",
+                                server.numeric_id(),
+                                crate::rpc::utils::server_runtime_names(server)
+                            );
+                        }
+                        let names = crate::rpc::utils::server_runtime_names(server);
+                        if names.is_empty() {
+                            port_only_server_count += 1;
+                        } else {
+                            loaded_domain_names.extend(names);
+                        }
+                    }
+
+                    let loaded_domain_count = loaded_domain_names.len();
+                    if loaded_domain_names.is_empty() {
+                        debug!(
+                            "RPC_NODE: Loaded 0 named domains. Port-only servers: {}",
+                            port_only_server_count
+                        );
+                    } else {
+                        let loaded_names: Vec<_> = loaded_domain_names.into_iter().collect();
+                        debug!(
+                            "RPC_NODE: Loaded {} named domains. Port-only servers: {}",
+                            loaded_names.len(),
+                            port_only_server_count
+                        );
+                        for chunk in loaded_names.chunks(20) {
+                            debug!("RPC_NODE: Domains => {}", chunk.join(", "));
+                        }
+                    }
+
+                    debug!(
+                        "RPC_NODE: Loaded global custom pages: {}. Global page policies: {}",
+                        payload.global_pages.len(),
+                        payload.http_pages_policies.len()
+                    );
+
+                    let all_certs = collect_enabled_ssl_certs(
+                        &payload.ssl_certs,
+                        payload.ssl_policy.as_ref(),
+                        &runtime_maps.all_servers,
+                    );
+                    tracing::debug!("Received {} active certificates from RPC", all_certs.len());
+
+                    // 4. gRPC Policy
+                    let node_cluster_id = payload.node_cluster.as_ref().map(|c| c.id).unwrap_or(0);
+                    let grpc_policy = payload
+                        .grpc_policies
+                        .get(&node_cluster_id.to_string())
+                        .or_else(|| payload.grpc_policies.get("0"))
+                        .or_else(|| payload.grpc_policies.values().next())
+                        .cloned()
+                        .or_else(|| payload.primary_grpc_policy.clone());
+
+                    // --- GLOBAL SETTINGS LOGGING ---
+                    log_global_settings(GlobalSettingsLogArgs {
+                        payload: &payload,
+                        server_name: &server_name,
+                        force_ln,
+                        ln_method: &ln_method,
+                        supports_low_version_http,
+                        match_cert_from_all_servers,
+                        enable_server_addr_variable,
+                        request_origins_with_encodings,
+                        xff_max_addresses,
+                        allow_lan_ip,
+                        grpc_policy: &grpc_policy,
+                    });
+
+                    let mut new_parent_routes = std::collections::HashMap::new();
+                    for (cluster_id, nodes) in parent_nodes.iter() {
+                        let lb =
+                            crate::lb_factory::build_parent_lb(*cluster_id, nodes, allow_lan_ip);
+                        new_parent_routes.insert(*cluster_id, lb);
+                    }
+
+                    let cache_policies: Vec<std::sync::Arc<crate::config_models::HTTPCachePolicy>> =
+                        std::mem::take(&mut payload.http_cache_policies)
+                            .into_iter()
+                            .map(std::sync::Arc::new)
+                            .collect();
+                    let firewall_policies = std::mem::take(&mut payload.http_firewall_policies);
+                    let waf_actions = std::mem::take(&mut payload.waf_actions);
+                    let cache_policy_count = cache_policies.len();
+                    let waf_policy_count = firewall_policies.len();
+                    let page_count = payload.global_pages.len() + payload.http_pages_policies.len();
+                    let deleted_contents = config_store.get_deleted_contents().await;
+                    config_store
+                        .update_config(
+                            numeric_id,
+                            payload_config_version,
+                            payload.node_region.as_ref().map(|r| r.id).unwrap_or(0),
+                            node_cluster_id,
+                            runtime_maps.all_servers,
+                            runtime_maps.servers,
+                            runtime_maps.routes,
+                            runtime_maps.id_to_lb,
+                            deleted_contents,
+                            std::mem::take(&mut payload.global_pages),
+                            std::mem::take(&mut payload.metric_items),
+                            std::mem::take(&mut payload.ssl_certs),
+                            payload.ssl_policy.take(),
+                            payload.updating_server_list_id,
+                            node_level,
+                            payload.is_on,
+                            payload.enable_ip_lists,
+                            (*parent_nodes).clone(),
+                            tiered_origin_bypass,
+                            force_ln,
+                            ln_method,
+                            new_parent_routes,
+                            grpc_policy,
+                            supports_low_version_http,
+                            match_cert_from_all_servers,
+                            server_name,
+                            enable_server_addr_variable,
+                            request_origins_with_encodings,
+                            xff_max_addresses,
+                            allow_lan_ip,
+                            match_domain_strictly,
+                            node_ip_show_page,
+                            node_ip_page_html,
+                            domain_mismatch_action,
+                            global_http_config,
+                            cache_policies.clone(),
+                            firewall_policies,
+                            waf_actions,
+                            parse_i64_keyed_map(std::mem::take(&mut payload.uam_policies)),
+                            parse_i64_keyed_map(std::mem::take(&mut payload.http_cc_policies)),
+                            parse_i64_keyed_map(std::mem::take(&mut payload.http3_policies)),
+                            parse_i64_keyed_map(std::mem::take(&mut payload.http_pages_policies)),
+                            parse_i64_keyed_map(std::mem::take(&mut payload.webp_image_policies)),
+                            payload.toa.clone(),
+                            payload
+                                .global_server_config
+                                .as_ref()
+                                .and_then(|g| g.http_access_log.clone()),
+                        )
+                        .await;
+                    crate::config_apply::record_installed_config_bytes(
+                        runtime_maps.stats.json_bytes,
+                    );
+                    *config_version = next_config_cursor;
+                    {
+                        let mut last_hash = LAST_CONFIG_HASH.write();
+                        *last_hash = current_hash;
+                    }
+                    if kernel_filter.available() {
+                        waf_state.set_kernel_filter(kernel_filter);
+                    }
+                    for cache_policy in &cache_policies {
+                        crate::cache_manager::CACHE
+                            .storage
+                            .apply_policy(cache_policy)
+                            .await;
+                    }
+                    crate::ssl::sync_certs(cert_selector, &all_certs).await;
+                    crate::logging::set_numeric_node_id(numeric_id);
+                    config_store.set_global_stat_upload(
+                        payload
+                            .global_server_config
+                            .as_ref()
+                            .and_then(|g| g.stat.as_ref())
+                            .map(|stat| stat.upload.clone()),
+                    );
+
+                    info!(
+                        "RPC_NODE: Applied config version={} node_id={} servers={} domains={} port_only={} cache_policies={} waf_policies={} pages={}",
+                        payload_config_version,
+                        numeric_id,
+                        runtime_maps.stats.servers_in,
+                        loaded_domain_count,
+                        port_only_server_count,
+                        cache_policy_count,
+                        waf_policy_count,
+                        page_count
+                    );
+
+                    if let Err(err) = report_node_online_once(config_store, api_config).await {
+                        debug!("RPC_NODE: immediate online status report failed: {}", err);
+                    }
+
+                    if payload.toa.as_ref().map(|toa| toa.is_on).unwrap_or(false) {
+                        let toa_config = payload.toa.clone();
+                        tokio::spawn(async move {
+                            if let Err(err) = crate::toa::maybe_prepare_runtime(toa_config).await {
+                                warn!(
+                                    "Failed to auto-prepare TOA runtime after config sync: {}",
+                                    err
+                                );
+                            }
+                        });
+                    }
+
+                    let _ = sync_active_plans(api_config, config_store).await;
+                    // Fetch enabled features for management-plane reporting
+                    if numeric_id > 0
+                        && let Ok(shared) = SharedRpcClient::get(api_config).await
+                    {
+                        let client = shared.as_rpc_client();
+                        let mut service = client.node_service_with_type();
+                        match crate::rpc::track_rpc(service.find_enabled_node_config_info(
+                            pb::FindEnabledNodeConfigInfoRequest {
+                                node_id: numeric_id,
+                            },
+                        ))
+                        .await
+                        {
+                            Ok(resp) => {
+                                let info = resp.into_inner();
+                                debug!(
+                                    "Node enabled features: DNS={} Cache={} Thresholds={} SSH={} Sys={} DDoS={} Sched={} AccessLog={}",
+                                    info.has_dns_info,
+                                    info.has_cache_info,
+                                    info.has_thresholds,
+                                    info.has_ssh,
+                                    info.has_system_settings,
+                                    info.has_d_do_s_protection,
+                                    info.has_schedule_settings,
+                                    info.has_access_log_settings
+                                );
+                                config_store.set_enabled_features(
+                                    info.has_dns_info,
+                                    info.has_cache_info,
+                                    info.has_thresholds,
+                                    info.has_ssh,
+                                    info.has_system_settings,
+                                    info.has_d_do_s_protection,
+                                    info.has_schedule_settings,
+                                    info.has_access_log_settings,
+                                );
+                            }
+                            Err(e) if is_unsupported_node_type_error(&e) => {
+                                if !ENABLED_FEATURES_UNSUPPORTED_LOGGED
+                                    .swap(true, Ordering::Relaxed)
+                                {
+                                    debug!(
+                                        "Enabled feature sync is not supported by this API node for node credentials: {}",
+                                        e
+                                    );
+                                }
+                            }
+                            Err(e) => debug!("Failed to fetch enabled features: {}", e),
                         }
                     }
                 }
@@ -1498,9 +1393,14 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
         let cache_stats = crate::cache_manager::CACHE.storage.runtime_stats().await;
         let governor_snapshot = crate::memory_governor::MEMORY_GOVERNOR
             .snapshot(crate::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads());
+        let mace_memory = crate::metrics::storage::mace_memory_observation();
+        let geoip_memory = crate::metrics::analyzer::geoip_memory_snapshot();
+        let shadow_connections = crate::metrics::shadow_connection_metrics();
         let l4_metrics = crate::l4_defense::metrics_snapshot();
         let resource_governor = serde_json::json!({
             "memoryPressure": governor_snapshot.memory_pressure_level.as_str(),
+            "memoryRawAvailableBytes": governor_snapshot.memory_raw_available_bytes,
+            "memoryAvailability": format!("{:?}", governor_snapshot.memory_availability),
             "fdUsed": governor_snapshot.fd_used,
             "fdSoftLimit": governor_snapshot.fd_soft_limit,
             "fdUsedPercent": governor_snapshot.fd_used_pct,
@@ -1522,9 +1422,67 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             "processRssBytes": governor_snapshot.process_rss_bytes,
             "processPssBytes": governor_snapshot.process_pss_bytes,
             "processAnonRssBytes": governor_snapshot.process_anon_rss_bytes,
+            "psiMemorySomeAvg10PctX100": governor_snapshot.psi_some_avg10_x100,
+            "psiMemoryFullAvg10PctX100": governor_snapshot.psi_full_avg10_x100,
             "residentUsedBytes": governor_snapshot.resident_memory.total_used_bytes,
             "residentBudgetBytes": governor_snapshot.resident_memory.total_budget_bytes,
+            "mace": {
+                "tier": format!("{:?}", mace_memory.tier),
+                "concurrentWrite": mace_memory.concurrent_write,
+                "walBufferBytesPerGroup": mace_memory.wal_buffer_bytes_per_group,
+                "walBufferCapacityBytes": mace_memory.wal_buffer_capacity_bytes,
+                "walFileSizeBytes": mace_memory.wal_file_size_bytes,
+                "bucketCacheCapacityBytes": mace_memory.bucket_cache_capacity_bytes,
+                "bucketPoolCapacityBytes": mace_memory.bucket_pool_capacity_bytes,
+                "bucketCheckpointSizeBytes": mace_memory.bucket_checkpoint_size_bytes
+            },
         });
+        // The json! macro hits the recursion limit past ~50 fields; merge a
+        // second object for the slower-changing observability fields.
+        let shed = crate::memory_shed::shed_stats();
+        let resource_governor_extra = serde_json::json!({
+            "metricsAggregatorBytes": governor_snapshot.metrics_aggregator_bytes,
+            "unaccountedRssBytes": governor_snapshot.unaccounted_rss_bytes,
+            "requestWorkspaceUsedBytes": governor_snapshot.request_workspace_used_bytes,
+            "pressureEventWakeups": crate::memory_reclaim::pressure_event_wakeups(),
+            "ledgerReconcileStaleOwners": crate::memory_reclaim::ledger_reconcile_stale_owners(),
+            "ledgerReconcileBytesRefunded": crate::memory_reclaim::ledger_reconcile_bytes_refunded(),
+            "shed": serde_json::json!({
+                "keepaliveShedActive": shed.keepalive_shed_active,
+                "criticalStreak": shed.critical_streak,
+                "drainedConnectionsTotal": shed.drained_connections_total,
+                "keepaliveMarkedTotal": shed.keepalive_marked_total,
+                "lastDrainAgeMs": shed.last_drain_age_ms
+            }),
+            "ledgerOwnerCapRejections": governor_snapshot.resident_memory.owner_cap_rejections,
+            "ledgerTrackedOwners": governor_snapshot.resident_memory.tracked_owners,
+            "lastReclaim": crate::memory_reclaim::last_reclaim_stats().map(|s| serde_json::json!({
+                "entriesRemoved": s.total_entries_removed(),
+                "l1BytesFreedEstimate": s.l1_bytes_freed_estimate,
+                "surrogateIndexTagsRemoved": s.surrogate_index_tags_removed,
+                "rssBeforeBytes": s.process_rss_before_bytes,
+                "rssAfterBytes": s.process_rss_after_bytes
+            })),
+            "configReloadGeneration": config_store.runtime_reload_generation(),
+            "configServers": config_store.get_all_servers_sync().len(),
+            "configInstalledJsonBytes": crate::config_apply::installed_config_json_bytes(),
+            "geoip": {
+                "cityLoaded": geoip_memory.city_loaded,
+                "cityBytes": geoip_memory.city_bytes,
+                "cityGeneration": geoip_memory.city_generation,
+                "asnLoaded": geoip_memory.asn_loaded,
+                "asnBytes": geoip_memory.asn_bytes
+            },
+        });
+        let mut resource_governor = resource_governor;
+        if let (Some(target), Some(extra)) = (
+            resource_governor.as_object_mut(),
+            resource_governor_extra.as_object(),
+        ) {
+            for (key, value) in extra {
+                target.insert(key.clone(), value.clone());
+            }
+        }
         let l4_defense = serde_json::json!({
             "eventsTotal": l4_metrics.events_total,
             "blockedTotal": l4_metrics.blocked_total,
@@ -1561,6 +1519,17 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             "internalApiRejected": pipeline_metrics.internal_api_rejected,
             "rpcStreamCommandRejected": pipeline_metrics.rpc_stream_command_rejected,
             "rpcStreamReplyDropped": pipeline_metrics.rpc_stream_reply_dropped,
+            "configTaskBatchesPublished": pipeline_metrics.config_task_batches_published,
+            "configTaskBatchesDeferred": pipeline_metrics.config_task_batches_deferred,
+            "configTaskPrepareFailed": pipeline_metrics.config_task_prepare_failed,
+            "configTaskCommitRejected": pipeline_metrics.config_task_commit_rejected,
+            "configTaskAckFailed": pipeline_metrics.config_task_ack_failed,
+            "configTaskDeferred": pipeline_metrics.config_task_deferred,
+            "tcpRelayBufferShrunk": pipeline_metrics.tcp_relay_buffer_shrunk,
+            "negativeCacheAdmissionRejected": pipeline_metrics.negative_cache_admission_rejected,
+            "wafStateEvicted": pipeline_metrics.waf_state_evicted,
+            "firewallPendingDropped": pipeline_metrics.firewall_pending_dropped,
+            "metricsCardinalityDropped": pipeline_metrics.metrics_cardinality_dropped,
         });
 
         let status = serde_json::json!({
@@ -1587,6 +1556,16 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             "trafficInBytes": traffic_in,
             "trafficOutBytes": traffic_out,
             "connectionCount": connections,
+            "connectionShadow": {
+                "downstreamTransports": shadow_connections.downstream_transports,
+                "upstreamTransports": shadow_connections.upstream_transports,
+                "rpcTransports": shadow_connections.rpc_transports,
+                "udpSessions": shadow_connections.udp_sessions,
+                "quicConnections": shadow_connections.quic_connections,
+                "pendingRequests": shadow_connections.pending_requests,
+                "forwardingRequests": shadow_connections.forwarding_requests,
+                "activeRequests": shadow_connections.active_requests
+            },
             "apiSuccessPercent": api_success_percent,
             "apiAvgCostSeconds": api_avg_cost_seconds,
             "cacheTotalDiskSize": cache_stats.disk_bytes,
@@ -1682,6 +1661,7 @@ pub async fn report_node_online_once(
     let now = crate::utils::time::now_timestamp();
     let xdp_status = serde_json::to_value(crate::xdp::status_snapshot())
         .unwrap_or_else(|_| serde_json::json!({"available": false}));
+    let shadow_connections = crate::metrics::shadow_connection_metrics();
     let status = serde_json::json!({
         "buildVersion": env!("CARGO_PKG_VERSION"),
         "buildVersionCode": build_version_code(),
@@ -1701,6 +1681,16 @@ pub async fn report_node_online_once(
         "trafficInBytes": traffic_in,
         "trafficOutBytes": traffic_out,
         "connectionCount": connections,
+        "connectionShadow": {
+            "downstreamTransports": shadow_connections.downstream_transports,
+            "upstreamTransports": shadow_connections.upstream_transports,
+            "rpcTransports": shadow_connections.rpc_transports,
+            "udpSessions": shadow_connections.udp_sessions,
+            "quicConnections": shadow_connections.quic_connections,
+            "pendingRequests": shadow_connections.pending_requests,
+            "forwardingRequests": shadow_connections.forwarding_requests,
+            "activeRequests": shadow_connections.active_requests
+        },
         "apiSuccessPercent": api_success_percent,
         "apiAvgCostSeconds": api_avg_cost_seconds,
         "cacheTotalDiskSize": cache_stats.disk_bytes,

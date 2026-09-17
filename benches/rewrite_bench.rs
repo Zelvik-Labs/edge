@@ -1,5 +1,5 @@
-use cloudsidra_edge::config_models::{HTTPHostRedirectConfig, HTTPRewriteRef, HTTPRewriteRule};
-use cloudsidra_edge::rewrite::{evaluate_host_redirects, evaluate_rewrites};
+use cloud_node_rust::config_models::{HTTPHostRedirectConfig, HTTPRewriteRef, HTTPRewriteRule};
+use cloud_node_rust::rewrite::{evaluate_host_redirects, evaluate_rewrites};
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 

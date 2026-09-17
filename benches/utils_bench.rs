@@ -1,4 +1,4 @@
-use cloudsidra_edge::utils::fnv_hash64;
+use cloud_node_rust::utils::fnv_hash64;
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 

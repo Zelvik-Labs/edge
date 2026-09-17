@@ -134,6 +134,27 @@ impl CompiledServerFeaturePlan {
             .and_then(|optimization| optimization.kind(content_type, request_url))
     }
 
+    /// Returns whether any response optimization rule can match this URL.
+    /// The response content type is not known during request cache admission,
+    /// so callers use this conservative predicate to avoid caching a body
+    /// before a later optimization filter can change it.
+    pub fn optimization_matches_url(&self, request_url: &str) -> bool {
+        self.optimization.as_ref().is_some_and(|optimization| {
+            optimization
+                .html
+                .as_ref()
+                .is_some_and(|patterns| patterns.matches_url(request_url))
+                || optimization
+                    .css
+                    .as_ref()
+                    .is_some_and(|patterns| patterns.matches_url(request_url))
+                || optimization
+                    .javascript
+                    .as_ref()
+                    .is_some_and(|patterns| patterns.matches_url(request_url))
+        })
+    }
+
     pub fn has_hls_encrypting(&self) -> bool {
         self.hls_encrypting.is_some()
     }
@@ -368,7 +389,7 @@ impl CompiledAuthPlan {
         path: &str,
         authorization: Option<&str>,
     ) -> Option<CompiledAuthResult> {
-        for policy in &self.policies {
+        if let Some(policy) = self.policies.first() {
             let result = policy.result(host, path, authorization)?;
             return Some(result);
         }
@@ -1194,7 +1215,7 @@ fn canonical_url_pattern_type(type_name: &str) -> String {
 
 fn url_without_query_fragment(value: &str) -> &str {
     value
-        .find(|ch| ch == '?' || ch == '#')
+        .find(['?', '#'])
         .map(|idx| &value[..idx])
         .unwrap_or(value)
 }
@@ -1292,6 +1313,57 @@ impl CompiledPlanSet {
         }
     }
 
+    fn remove_server_id(&mut self, server_id: i64) {
+        self.server_firewall.remove(&server_id);
+        self.server_cache.remove(&server_id);
+        self.server_headers.remove(&server_id);
+        self.server_rewrite.remove(&server_id);
+        self.server_features.remove(&server_id);
+    }
+
+    fn insert_server(&mut self, server: &ServerConfig) {
+        let id = server.numeric_id();
+        self.remove_server_id(id);
+        if let Some(policy) = server
+            .web
+            .as_ref()
+            .and_then(|web| web.firewall_policy.as_ref())
+        {
+            self.server_firewall.insert(
+                id,
+                Arc::new(crate::firewall::compiled::CompiledFirewallPolicy::compile(
+                    policy,
+                )),
+            );
+        }
+        if let Some(plan) = CompiledWebCachePlan::compile(server) {
+            self.server_cache.insert(id, Arc::new(plan));
+        }
+        if let Some(plan) = crate::headers::CompiledServerHeaderPlan::compile(server) {
+            self.server_headers.insert(id, Arc::new(plan));
+        }
+        if let Some(plan) = crate::rewrite::CompiledServerRewritePlan::compile(server) {
+            self.server_rewrite.insert(id, Arc::new(plan));
+        }
+        if let Some(plan) = CompiledServerFeaturePlan::compile(server) {
+            self.server_features.insert(id, Arc::new(plan));
+        }
+    }
+
+    /// Keep global compiled plans and rewrite only the changed server entries.
+    /// This avoids allocating a full derived index for every site on a
+    /// single-site hot reload.
+    pub fn recompile_servers(&self, added: &[Arc<ServerConfig>], removed_ids: &[i64]) -> Self {
+        let mut next = self.clone();
+        for server_id in removed_ids {
+            next.remove_server_id(*server_id);
+        }
+        for server in added {
+            next.insert_server(server);
+        }
+        next
+    }
+
     pub fn compile_firewall(
         global_policies: &[HTTPFirewallPolicy],
         servers: &[Arc<ServerConfig>],
@@ -1341,5 +1413,29 @@ mod tests {
         assert!(!patterns.matches_url("/assets/app.js?v=1"));
         assert!(!patterns.matches_url("/assets/movie.mp4"));
         assert!(!patterns.matches_url("/other/path"));
+    }
+
+    #[test]
+    fn recompile_servers_removes_and_inserts_without_full_rebuild_panic() {
+        let first = Arc::new(ServerConfig {
+            id: Some(11),
+            is_on: true,
+            ..Default::default()
+        });
+        let second = Arc::new(ServerConfig {
+            id: Some(12),
+            is_on: true,
+            ..Default::default()
+        });
+        let plans = CompiledPlanSet::compile(&[], &[], &[Arc::clone(&first), Arc::clone(&second)]);
+        let replacement = Arc::new(ServerConfig {
+            id: Some(13),
+            is_on: true,
+            ..Default::default()
+        });
+        let next = plans.recompile_servers(&[replacement], &[11]);
+        assert!(!next.server_features.contains_key(&11));
+        let _ = second;
+        let _ = next;
     }
 }

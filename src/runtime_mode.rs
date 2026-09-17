@@ -12,15 +12,11 @@ const DEFAULT_POD_IP_ENV: &str = "POD_IP";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum RuntimeMode {
+    #[default]
     Standalone,
     Rke2,
-}
-
-impl Default for RuntimeMode {
-    fn default() -> Self {
-        Self::Standalone
-    }
 }
 
 impl RuntimeMode {
@@ -45,16 +41,12 @@ pub struct RuntimeSection {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum XdpAttachMode {
+    #[default]
     Auto,
     Drv,
     Skb,
-}
-
-impl Default for XdpAttachMode {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 impl XdpAttachMode {
@@ -69,15 +61,11 @@ impl XdpAttachMode {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum XdpFallbackMode {
+    #[default]
     Pass,
     FailStart,
-}
-
-impl Default for XdpFallbackMode {
-    fn default() -> Self {
-        Self::Pass
-    }
 }
 
 impl XdpFallbackMode {
@@ -95,16 +83,12 @@ impl XdpFallbackMode {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum XdpRuntimeMode {
+    #[default]
     Observe,
     Protect,
     Proxy,
-}
-
-impl Default for XdpRuntimeMode {
-    fn default() -> Self {
-        Self::Observe
-    }
 }
 
 impl XdpRuntimeMode {
@@ -119,18 +103,14 @@ impl XdpRuntimeMode {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum XdpProxyProtocol {
     Http,
     Https,
+    #[default]
     Tcp,
     Udp,
     H3,
-}
-
-impl Default for XdpProxyProtocol {
-    fn default() -> Self {
-        Self::Tcp
-    }
 }
 
 impl XdpProxyProtocol {
@@ -168,12 +148,128 @@ pub struct XdpInterfaceConfig {
     pub name: String,
     #[serde(default)]
     pub queues: Vec<u32>,
+    /// Optional CPU ids aligned index-wise with `queues`; pins each per-queue
+    /// AF_XDP reactor thread. Empty = auto round-robin across online CPUs.
+    #[serde(default)]
+    pub cpus: Vec<u32>,
     #[serde(default)]
     pub mode: XdpRuntimeMode,
     #[serde(rename = "localIps", default)]
     pub local_ips: Vec<std::net::IpAddr>,
     #[serde(rename = "frameSize", default = "default_xdp_frame_size")]
     pub frame_size: u32,
+    /// Explicitly configured UDP direct-forward rules. Each entry DNATs a
+    /// listen tuple to a backend at the XDP layer (XDP_TX, no userspace
+    /// pass). The backend must route replies back through this node.
+    #[serde(rename = "udpForwards", default)]
+    pub udp_forwards: Vec<XdpUdpForwardConfig>,
+    /// Explicitly configured TCP direct-forward rules: stateful L4 NAT at the
+    /// XDP layer (conntrack on bare SYN; mid-stream packets without state fall
+    /// back to the normal dataplane). The backend must route replies back
+    /// through this node.
+    #[serde(rename = "tcpForwards", default)]
+    pub tcp_forwards: Vec<XdpUdpForwardConfig>,
+    /// Fragment disposition for this interface's security domain: "pass"
+    /// (default) hands all IP fragments to the kernel stack — the legacy
+    /// behavior; "drop" rejects them at XDP. A first fragment never creates
+    /// a trusted L4 flow under either setting.
+    #[serde(rename = "fragmentAction", default)]
+    pub fragment_action: XdpFragmentAction,
+    /// Per-VIP service policy. Each `ip` must also be listed in `localIps`;
+    /// overrides are meaningless without local-IP filtering.
+    #[serde(rename = "protectedServices", default)]
+    pub protected_services: Vec<XdpProtectedService>,
+    /// AF_XDP socket bind mode (EN-12): "auto" (default) probes zero-copy and
+    /// falls back to copy explicitly when the driver rejects it; "copy" never
+    /// attempts zero-copy; "zero-copy" fails queue setup if unsupported.
+    #[serde(rename = "xskMode", default)]
+    pub xsk_mode: XdpXskMode,
+}
+
+/// Fragment disposition at the XDP layer (EN-05): fragments are classified
+/// before any L4 handling, so neither setting lets a fragment create flow
+/// state — "pass" defers reassembly to the kernel, "drop" discards at RX.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum XdpFragmentAction {
+    #[default]
+    Pass,
+    Drop,
+}
+
+/// AF_XDP bind-mode policy (EN-12). `Auto` probes zero-copy at bind time and
+/// falls back to copy mode with an explicit status record — the landed mode
+/// is reported per queue so operators can see what the NIC actually granted.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum XdpXskMode {
+    #[default]
+    Auto,
+    Copy,
+    ZeroCopy,
+}
+
+impl XdpXskMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Copy => "copy",
+            Self::ZeroCopy => "zero-copy",
+        }
+    }
+}
+
+/// Per-VIP protected-service policy (EN-06): protection scope and the AF_XDP
+/// redirect switch are independent. `redirect: false` keeps the VIP under
+/// XDP protection (classification, ACL, rate limits, fragment policy) while
+/// its ports are served by the kernel stack — two VIPs sharing a port do
+/// not cross-redirect.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct XdpProtectedService {
+    pub ip: std::net::IpAddr,
+    /// Whether proxy-port traffic for this VIP may redirect into AF_XDP.
+    /// Default true — preserving pre-EN-06 semantics for plain localIps.
+    #[serde(default = "default_true")]
+    pub redirect: bool,
+    /// Optional per-VIP fragment disposition override (resolved via the
+    /// XDP_LOCAL_* map value bits[2:1]).
+    #[serde(rename = "fragmentAction", default)]
+    pub fragment_action: Option<XdpFragmentAction>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// A single UDP direct-forward rule applied at the XDP layer.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct XdpUdpForwardConfig {
+    /// Local listen address, e.g. "192.0.2.10:5353" or "0.0.0.0:5353".
+    pub listen: std::net::SocketAddr,
+    /// Backend target, e.g. "10.0.0.5:5353" (hostnames resolve at sync time).
+    pub backend: String,
+    /// Optional explicit next-hop MAC for the backend; when empty it is
+    /// resolved from the neighbor table at sync time.
+    #[serde(rename = "nextHopMac", default)]
+    pub next_hop_mac: String,
+    /// Billing dimension for flow accounting.
+    #[serde(rename = "serverId", default)]
+    pub server_id: i64,
+    /// Rewrite forwarded frames' source to the listen address plus a
+    /// node-allocated port. Required on fabrics that drop egress frames whose
+    /// source IP is not bound to this port (cloud vSwitch anti-spoof).
+    /// Default false = plain DNAT preserving the client IP.
+    #[serde(rename = "snat", default)]
+    pub snat: bool,
+    /// EN-14 stateless TCP cookie challenge (ADR-001): SYNs to this rule get
+    /// a SYNPROXY-style challenge; state is allocated only after the client's
+    /// proving ACK. TCP+SNAT+IPv4 only — the flag is rejected explicitly for
+    /// UDP rules, plain-DNAT rules (no observable backend SYN-ACK to splice
+    /// against), and IPv6 rules (challenge path is v4-only in this slice;
+    /// v6 keeps bounded admission).
+    #[serde(rename = "challenge", default)]
+    pub challenge: bool,
 }
 
 impl Default for XdpInterfaceConfig {
@@ -181,9 +277,15 @@ impl Default for XdpInterfaceConfig {
         Self {
             name: String::new(),
             queues: Vec::new(),
+            cpus: Vec::new(),
             mode: XdpRuntimeMode::default(),
             local_ips: Vec::new(),
             frame_size: default_xdp_frame_size(),
+            udp_forwards: Vec::new(),
+            tcp_forwards: Vec::new(),
+            fragment_action: XdpFragmentAction::default(),
+            protected_services: Vec::new(),
+            xsk_mode: XdpXskMode::default(),
         }
     }
 }
@@ -205,7 +307,278 @@ impl Default for XdpProxyConfig {
     }
 }
 
+fn default_xdp_rate_limit_window_ms() -> u64 {
+    1000
+}
+
+/// EN-07 aggregate budgets. Node-wide totals; the manager divides them by
+/// the possible-CPU count into per-CPU eBPF bucket shares (I09: quota does
+/// not multiply with CPU/queue count). Baseline protection is always on —
+/// including at Normal pressure — unless the operator explicitly sets
+/// `enabled: false`. Pressure scaling narrows the elastic allowance but
+/// clamps each per-CPU share at >=1 so "divide to zero" can never silently
+/// disable a dimension.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct XdpBudgetSettings {
+    /// Master switch for the aggregate budget gates. Default true.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Node-wide ceiling on packets/sec entering the unverified path
+    /// (local TCP/UDP post-ACL). Default 2M pps.
+    #[serde(rename = "unverifiedPps", default = "default_unverified_pps")]
+    pub unverified_pps: u64,
+    /// Node-wide ceiling on new conntrack/SNAT admissions per second.
+    /// Default 100k/s.
+    #[serde(rename = "newFlowPerSec", default = "default_new_flow_per_sec")]
+    pub new_flow_per_sec: u64,
+    /// Node-wide ceiling on packets/sec holding verified conntrack or SNAT
+    /// state — the reserve a flood of unverified traffic cannot drain.
+    /// Default 8M pps.
+    #[serde(rename = "verifiedPps", default = "default_verified_pps")]
+    pub verified_pps: u64,
+    /// Node-wide ceiling on AF_XDP redirect work per second.
+    /// Default 4M pps.
+    #[serde(rename = "xskRedirectPps", default = "default_xsk_redirect_pps")]
+    pub xsk_redirect_pps: u64,
+    /// Node-wide ceiling on necessary-control packets/sec (ICMP/ND/PMTU).
+    /// Default 100k pps.
+    #[serde(rename = "controlPps", default = "default_control_pps")]
+    pub control_pps: u64,
+    /// Per-service ceiling on new-flow admissions/sec keyed by listen port —
+    /// a distributed flood on one service cannot drain sibling services'
+    /// share of the new-flow envelope. Default: equal to the aggregate
+    /// new-flow cap (single-service nodes see no behavior change; tighten it
+    /// to reserve admission headroom across many services).
+    #[serde(rename = "serviceFlowPps")]
+    pub service_flow_pps: Option<u64>,
+    /// Node-wide ceiling on stateless challenge responses/sec (cookie
+    /// SYN-ACKs, dim3) — bounds forged-packet egress under SYN flood.
+    /// Default: equal to the aggregate new-flow cap.
+    #[serde(rename = "challengePps")]
+    pub challenge_pps: Option<u64>,
+    /// Accounting window for the fixed-window buckets.
+    #[serde(rename = "windowMs", default = "default_xdp_rate_limit_window_ms")]
+    pub window_ms: u64,
+}
+
+fn default_unverified_pps() -> u64 {
+    2_000_000
+}
+
+fn default_new_flow_per_sec() -> u64 {
+    100_000
+}
+
+fn default_verified_pps() -> u64 {
+    8_000_000
+}
+
+fn default_xsk_redirect_pps() -> u64 {
+    4_000_000
+}
+
+fn default_control_pps() -> u64 {
+    100_000
+}
+
+impl Default for XdpBudgetSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            unverified_pps: default_unverified_pps(),
+            new_flow_per_sec: default_new_flow_per_sec(),
+            verified_pps: default_verified_pps(),
+            xsk_redirect_pps: default_xsk_redirect_pps(),
+            control_pps: default_control_pps(),
+            service_flow_pps: None,
+            challenge_pps: None,
+            window_ms: default_xdp_rate_limit_window_ms(),
+        }
+    }
+}
+
+/// Base per-IP fixed-window limits for the eBPF limiter. Userspace scales
+/// these down under elevated pressure (Elevated: x1, High: /2, Critical: /4)
+/// and disables the limiter entirely at Normal pressure. `0` disables the
+/// limit for that protocol.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct XdpRateLimitSettings {
+    #[serde(rename = "udpPps", default)]
+    pub udp_pps: u64,
+    #[serde(rename = "tcpSynPps", default)]
+    pub tcp_syn_pps: u64,
+    #[serde(rename = "windowMs", default = "default_xdp_rate_limit_window_ms")]
+    pub window_ms: u64,
+    /// EN-08 prefix fairness: source-bucket granularity. 0 (default) =
+    /// per-address; 1..=32 groups IPv4 sources into prefix buckets, so a
+    /// randomized flood inside one prefix shares one bucket.
+    #[serde(rename = "prefixV4Len", default)]
+    pub prefix_v4_len: u32,
+    /// Same for IPv6; 0 (default) = /128 per-address, else 1..=128.
+    #[serde(rename = "prefixV6Len", default)]
+    pub prefix_v6_len: u32,
+    /// Rate buckets idle for this many windows are reaped by the sweeper.
+    /// Default 8.
+    #[serde(rename = "gcAfterWindows", default = "default_gc_after_windows")]
+    pub gc_after_windows: u64,
+}
+
+fn default_gc_after_windows() -> u64 {
+    8
+}
+
+pub(crate) fn default_tcp_pending_ms() -> u64 {
+    3_000
+}
+
+/// EN-09 half-open admission contract. TCP flows admitted on a bare SYN live
+/// in the bounded XDP_PENDING table until handshake evidence (backend SYN-ACK
+/// then client ACK) promotes them into the authoritative CT table. The
+/// pending table is a separate bounded map (capacity 65536) so a SYN flood
+/// can never occupy established-flow space. The deadline below is absolute:
+/// pending hits never extend it.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct XdpAdmissionSettings {
+    /// Absolute half-open deadline in milliseconds. Default 3000.
+    #[serde(rename = "tcpPendingMs", default = "default_tcp_pending_ms")]
+    pub tcp_pending_ms: u64,
+    /// Test-only fault-injection bits pushed into XDP_PENDING_CAP.flags
+    /// (XDP_PENDING_CAP_FAIL_*). Production configs must leave this 0; each
+    /// bit forces the corresponding datapath admission step onto its
+    /// explicit, observable failure path.
+    #[serde(rename = "debugFailFlags", default)]
+    pub debug_fail_flags: u64,
+}
+
+impl Default for XdpAdmissionSettings {
+    fn default() -> Self {
+        Self {
+            tcp_pending_ms: default_tcp_pending_ms(),
+            debug_fail_flags: 0,
+        }
+    }
+}
+
+impl Default for XdpRateLimitSettings {
+    fn default() -> Self {
+        Self {
+            udp_pps: 0,
+            tcp_syn_pps: 0,
+            window_ms: default_xdp_rate_limit_window_ms(),
+            prefix_v4_len: 0,
+            prefix_v6_len: 0,
+            gc_after_windows: default_gc_after_windows(),
+        }
+    }
+}
+
+/// T4 (D-B1): node-originated upstream dataplane selection. `kernel`
+/// keeps the existing connect() path; `afxdp` routes upstream TCP through
+/// the AF_XDP reactor (dial registry + XDP_OUT_CT). The kernel guard and
+/// reserved source-port range only apply in `afxdp` mode.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum XdpUpstreamMode {
+    #[default]
+    Kernel,
+    Afxdp,
+}
+
+/// T4 (D-B1): outbound-dial settings. `dialPortStart`/`dialPortEnd`
+/// (inclusive) define the reserved source-port span — default
+/// 40000-49999. The range must lie inside `ip_local_port_range`; it is
+/// pinned via `ip_local_reserved_ports` and guarded by a netfilter DROP
+/// so the kernel can neither allocate the ports nor RST steered flows.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct XdpUpstreamSettings {
+    #[serde(default)]
+    pub mode: XdpUpstreamMode,
+    #[serde(rename = "dialPortStart", default)]
+    pub dial_port_start: Option<u16>,
+    #[serde(rename = "dialPortEnd", default)]
+    pub dial_port_end: Option<u16>,
+}
+
+/// T5: congestion-controller selection for AF_XDP-terminated TCP.
+/// `cubic` is the validated production default; `edgecc` is the
+/// decision-layer controller under acceptance; `bbr3`, `new-reno` and
+/// `loss-blind` exist only for deterministic validation/ablation.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum XdpTransportController {
+    #[default]
+    Cubic,
+    Edgecc,
+    Bbr3,
+    NewReno,
+    LossBlind,
+}
+
+impl XdpTransportController {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Cubic => "cubic",
+            Self::Edgecc => "edgecc",
+            Self::Bbr3 => "bbr3",
+            Self::NewReno => "new-reno",
+            Self::LossBlind => "loss-blind",
+        }
+    }
+}
+
+/// T5: transport policy for AF_XDP-terminated TCP flows.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct XdpTransportSettings {
+    #[serde(rename = "controller", default)]
+    pub controller: XdpTransportController,
+    /// D-D2 controlled-link flag: on own-infrastructure paths CE marks
+    /// carry full weight; on the public Internet they are capped and
+    /// downweighted. Default false (public).
+    #[serde(rename = "trustedEcn", default)]
+    pub trusted_ecn: bool,
+    /// Worker-local shared-bottleneck aggregation (EdgeCC only). On by
+    /// default when EdgeCC is selected; the aggregate is worker-local
+    /// (`Rc<RefCell>`), never a cross-worker lock.
+    #[serde(rename = "aggregation", default = "default_true")]
+    pub aggregation: bool,
+}
+
+impl XdpTransportSettings {
+    /// Resolved aggregation flag — only meaningful under EdgeCC.
+    pub fn aggregation_enabled(&self) -> bool {
+        self.controller == XdpTransportController::Edgecc && self.aggregation
+    }
+}
+
+impl XdpUpstreamSettings {
+    /// Resolved reserved span (start, end inclusive), applying defaults.
+    pub fn dial_port_range(&self) -> (u16, u16) {
+        (
+            self.dial_port_start.unwrap_or(40_000),
+            self.dial_port_end.unwrap_or(49_999),
+        )
+    }
+
+    /// The span is valid when non-empty and inside the kernel ephemeral
+    /// range — validated again at guard-install time against the live
+    /// `ip_local_port_range` value.
+    pub fn dial_port_range_valid(&self) -> bool {
+        let (start, end) = self.dial_port_range();
+        start <= end
+    }
+}
+
+impl Default for XdpUpstreamSettings {
+    fn default() -> Self {
+        Self {
+            mode: XdpUpstreamMode::Kernel,
+            dial_port_start: None,
+            dial_port_end: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub struct XdpConfig {
     #[serde(default)]
     pub enabled: bool,
@@ -217,18 +590,89 @@ pub struct XdpConfig {
     pub interfaces: Vec<XdpInterfaceConfig>,
     #[serde(default)]
     pub proxy: XdpProxyConfig,
+    #[serde(rename = "rateLimit", default)]
+    pub rate_limit: Option<XdpRateLimitSettings>,
+    /// Aggregate budget gate (EN-07). Absent = built-in baseline.
+    #[serde(rename = "budget", default)]
+    pub budget: Option<XdpBudgetSettings>,
+    /// Half-open admission contract (EN-09). Absent = default 3s absolute
+    /// pending deadline with the bounded pending table.
+    #[serde(rename = "admission", default)]
+    pub admission: Option<XdpAdmissionSettings>,
+    /// Explicit path to an external eBPF object. When unset, the binary uses
+    /// the object embedded at build time (recommended: binary and program can
+    /// never drift apart). Set only for eBPF hotfix/debugging.
+    #[serde(rename = "ebpfObject", default)]
+    pub ebpf_object: Option<String>,
+    /// EN-16 explicit eBPF state-table sizing for memory-constrained nodes.
+    /// Absent fields keep production defaults; declared sizes are applied at
+    /// load and counted by the kernel-BPF memory ledger, which still rejects
+    /// attach when the projected total exceeds the node budget.
+    #[serde(rename = "stateTables", default)]
+    pub state_tables: Option<XdpStateTables>,
+    /// T4 (D-B1): node-originated upstream dataplane — `kernel` (default)
+    /// or `afxdp`. See `XdpUpstreamSettings`.
+    #[serde(rename = "upstream", default)]
+    pub upstream: Option<XdpUpstreamSettings>,
+    /// T5: transport-controller selection for AF_XDP-terminated TCP
+    /// flows. Absent = `cubic` (validated production default). `edgecc`
+    /// enables the EdgeCC decision layer; `bbr3`/`new-reno`/`loss-blind`
+    /// are validation-only ablations — never a production menu.
+    #[serde(rename = "transport", default)]
+    pub transport: Option<XdpTransportSettings>,
+    /// T8 (D-G2): node egress shaping budget in bytes/s, split evenly
+    /// across AF_XDP workers as a token bucket (~1ms batch target,
+    /// CAKE-style 38B/frame overhead). Absent = no shaping (现状).
+    #[serde(rename = "egressRateBps", default)]
+    pub egress_rate_bps: Option<u64>,
 }
 
-impl Default for XdpConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            attach_mode: XdpAttachMode::default(),
-            fallback: XdpFallbackMode::default(),
-            interfaces: Vec::new(),
-            proxy: XdpProxyConfig::default(),
-        }
+impl XdpConfig {
+    /// Resolved upstream dataplane mode (`kernel` when unconfigured).
+    pub fn upstream_mode(&self) -> XdpUpstreamMode {
+        self.upstream.as_ref().map(|u| u.mode).unwrap_or_default()
     }
+
+    /// Resolved reserved source-port span for AF_XDP dials.
+    pub fn dial_port_range(&self) -> (u16, u16) {
+        self.upstream
+            .as_ref()
+            .map(|u| u.dial_port_range())
+            .unwrap_or((40_000, 49_999))
+    }
+}
+
+/// Operator-sized eBPF state tables (EN-16). Absent = built-in production
+/// default for that table.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct XdpStateTables {
+    /// Max entries in each connection-tracking table (XDP_TCP_CT/UDP_CT).
+    #[serde(rename = "ctMaxEntries", default)]
+    pub ct_max_entries: Option<u32>,
+    /// Bounded half-open admission table (XDP_PENDING).
+    #[serde(rename = "pendingMaxEntries", default)]
+    pub pending_max_entries: Option<u32>,
+    /// SNAT reverse-mapping table (XDP_SNAT_REV).
+    #[serde(rename = "snatRevMaxEntries", default)]
+    pub snat_rev_max_entries: Option<u32>,
+    /// Per-CPU flow accounting table (XDP_FLOW_ACCT).
+    #[serde(rename = "flowAcctMaxEntries", default)]
+    pub flow_acct_max_entries: Option<u32>,
+    /// IPv6 rate-limit table (XDP_RATE_V6).
+    #[serde(rename = "rateV6MaxEntries", default)]
+    pub rate_v6_max_entries: Option<u32>,
+    /// ACL block lists — exact-match hashes AND prefix tries
+    /// (XDP_BLOCKED_V4/V6 + XDP_BLOCKED_V4_LPM/V6_LPM). One knob covers all
+    /// four: the block capacity is a policy footprint the operator sizes
+    /// once per node.
+    #[serde(rename = "aclBlockedMaxEntries", default)]
+    pub acl_blocked_max_entries: Option<u32>,
+    /// ACL allow lists — same shape as aclBlockedMaxEntries.
+    #[serde(rename = "aclAllowedMaxEntries", default)]
+    pub acl_allowed_max_entries: Option<u32>,
+    /// IPv4 per-source rate-limit table (XDP_RATE_V4).
+    #[serde(rename = "rateV4MaxEntries", default)]
+    pub rate_v4_max_entries: Option<u32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -365,9 +809,21 @@ impl RuntimeConfig {
     pub fn load_default() -> anyhow::Result<Self> {
         let node_paths = crate::paths::NodePaths::current();
         let config_path = node_paths.runtime_config_file();
+        // Read the file twice: once as a raw value to learn whether the
+        // operator explicitly set `xdp.enabled` (an absent key must not
+        // override the environment), and once into the typed config.
+        let mut file_xdp_enabled = None;
         let mut config = if config_path.exists() {
             tracing::info!("Loading runtime config from: {}", config_path.display());
-            Self::load(&config_path)?
+            let content = std::fs::read_to_string(&config_path)?;
+            file_xdp_enabled = serde_yaml::from_str::<serde_yaml::Value>(&content)
+                .ok()
+                .and_then(|root| {
+                    root.get("xdp")
+                        .and_then(|xdp| xdp.get("enabled"))
+                        .and_then(|enabled| enabled.as_bool())
+                });
+            serde_yaml::from_str(&content)?
         } else {
             Self::default()
         };
@@ -382,6 +838,22 @@ impl RuntimeConfig {
             }
         }
 
+        // XDP is enabled unless told otherwise. Precedence, weakest first:
+        // built-in default (on) < CLOUD_NODE_XDP env var < explicit
+        // `xdp.enabled` in the config file. Everything else about the
+        // dataplane is auto-derived at attach time, so a missing file never
+        // needs to be generated.
+        let xdp_enabled = match file_xdp_enabled {
+            Some(value) => Some(value),
+            None => Self::xdp_enabled_from_env()?,
+        };
+        config.xdp.enabled = xdp_enabled.unwrap_or(true);
+        if config.is_rke2() {
+            // Cluster mode never runs the XDP dataplane: AF_XDP owns the NIC
+            // queues and would starve Kubernetes networking on the node.
+            config.xdp.enabled = false;
+        }
+
         config.validate()?;
         Ok(config)
     }
@@ -390,6 +862,17 @@ impl RuntimeConfig {
         let content = std::fs::read_to_string(path.as_ref())?;
         let config: Self = serde_yaml::from_str(&content)?;
         Ok(config)
+    }
+
+    fn xdp_enabled_from_env() -> anyhow::Result<Option<bool>> {
+        let Ok(value) = std::env::var("CLOUD_NODE_XDP") else {
+            return Ok(None);
+        };
+        match value.trim().to_ascii_lowercase().as_str() {
+            "" | "1" | "true" | "on" | "yes" | "enable" | "enabled" => Ok(Some(true)),
+            "0" | "false" | "off" | "no" | "disable" | "disabled" => Ok(Some(false)),
+            other => anyhow::bail!("unsupported CLOUD_NODE_XDP value: {other}"),
+        }
     }
 
     pub fn set_current(config: RuntimeConfig) {
@@ -510,6 +993,23 @@ impl RuntimeConfig {
                     interface.name
                 );
             }
+            let mut seen_vips = std::collections::HashSet::new();
+            for entry in &interface.protected_services {
+                if !interface.local_ips.contains(&entry.ip) {
+                    anyhow::bail!(
+                        "xdp interface {} protectedServices ip {} is not listed in localIps",
+                        interface.name,
+                        entry.ip
+                    );
+                }
+                if !seen_vips.insert(entry.ip) {
+                    anyhow::bail!(
+                        "xdp interface {} protectedServices has a duplicate entry for {}",
+                        interface.name,
+                        entry.ip
+                    );
+                }
+            }
         }
         for port in &self.xdp.proxy.ports {
             if port.port == 0 {
@@ -522,6 +1022,15 @@ impl RuntimeConfig {
                     port.port
                 );
             }
+        }
+        if let Some(upstream) = &self.xdp.upstream {
+            if !upstream.dial_port_range_valid() {
+                let (start, end) = upstream.dial_port_range();
+                anyhow::bail!("xdp.upstream dialPortRange is empty: {start}-{end}");
+            }
+            // The span must additionally lie inside the live
+            // ip_local_port_range — that check runs at guard-install
+            // time against the kernel value.
         }
         Ok(())
     }
@@ -646,6 +1155,7 @@ mod tests {
                 interfaces: vec![XdpInterfaceConfig {
                     name: "eth0".to_string(),
                     queues: vec![0],
+                    cpus: Vec::new(),
                     mode: XdpRuntimeMode::Proxy,
                     ..Default::default()
                 }],
@@ -730,5 +1240,217 @@ xdp:
 
         let err = config.validate().unwrap_err().to_string();
         assert!(err.contains("not enabled in xdp.proxy.protocols"));
+    }
+
+    #[test]
+    fn xdp_protected_service_deserializes_and_validates() {
+        let _guard = runtime_config_test_guard();
+        let config: RuntimeConfig = serde_yaml::from_str(
+            r#"
+xdp:
+  enabled: true
+  interfaces:
+    - name: eth0
+      queues: [0]
+      localIps: ["10.0.0.5", "10.0.0.6"]
+      protectedServices:
+        - ip: "10.0.0.6"
+          redirect: false
+          fragmentAction: drop
+"#,
+        )
+        .unwrap();
+        config.validate().unwrap();
+        let svc = &config.xdp.interfaces[0].protected_services[0];
+        assert!(!svc.redirect);
+        assert_eq!(
+            svc.fragment_action,
+            Some(crate::runtime_mode::XdpFragmentAction::Drop)
+        );
+
+        // ip outside localIps is rejected
+        let bad: RuntimeConfig = serde_yaml::from_str(
+            r#"
+xdp:
+  enabled: true
+  interfaces:
+    - name: eth0
+      queues: [0]
+      localIps: ["10.0.0.5"]
+      protectedServices:
+        - ip: "10.0.0.9"
+"#,
+        )
+        .unwrap();
+        let err = bad.validate().unwrap_err().to_string();
+        assert!(err.contains("not listed in localIps"));
+
+        // duplicates are rejected
+        let dup: RuntimeConfig = serde_yaml::from_str(
+            r#"
+xdp:
+  enabled: true
+  interfaces:
+    - name: eth0
+      queues: [0]
+      localIps: ["10.0.0.5"]
+      protectedServices:
+        - ip: "10.0.0.5"
+        - ip: "10.0.0.5"
+"#,
+        )
+        .unwrap();
+        let err = dup.validate().unwrap_err().to_string();
+        assert!(err.contains("duplicate"));
+    }
+
+    struct XdpEnvGuard {
+        saved: Vec<(&'static str, Option<std::ffi::OsString>)>,
+    }
+
+    impl XdpEnvGuard {
+        fn apply(home: &std::path::Path, vars: &[(&'static str, Option<&str>)]) -> Self {
+            let mut saved = vec![("CLOUD_NODE_HOME", std::env::var_os("CLOUD_NODE_HOME"))];
+            unsafe {
+                std::env::set_var("CLOUD_NODE_HOME", home);
+            }
+            for (key, value) in vars {
+                saved.push((key, std::env::var_os(key)));
+                unsafe {
+                    match value {
+                        Some(value) => std::env::set_var(key, value),
+                        None => std::env::remove_var(key),
+                    }
+                }
+            }
+            Self { saved }
+        }
+    }
+
+    impl Drop for XdpEnvGuard {
+        fn drop(&mut self) {
+            for (key, value) in &self.saved {
+                unsafe {
+                    match value {
+                        Some(value) => std::env::set_var(key, value),
+                        None => std::env::remove_var(key),
+                    }
+                }
+            }
+        }
+    }
+
+    fn xdp_home(contents: Option<&str>) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "cloud-node-xdp-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        if let Some(contents) = contents {
+            std::fs::create_dir_all(dir.join("configs")).unwrap();
+            std::fs::write(dir.join("configs").join("runtime.yaml"), contents).unwrap();
+        } else {
+            std::fs::create_dir_all(&dir).unwrap();
+        }
+        dir
+    }
+
+    fn load_xdp_enabled(
+        file: Option<&str>,
+        vars: &[(&'static str, Option<&str>)],
+    ) -> anyhow::Result<bool> {
+        let home = xdp_home(file);
+        let _env = XdpEnvGuard::apply(&home, vars);
+        let enabled = RuntimeConfig::load_default().map(|config| config.xdp.enabled);
+        std::fs::remove_dir_all(&home).ok();
+        enabled
+    }
+
+    fn xdp_var(value: &str) -> (&'static str, Option<&str>) {
+        ("CLOUD_NODE_XDP", Some(value))
+    }
+
+    const NO_XDP_ENV: (&'static str, Option<&'static str>) = ("CLOUD_NODE_XDP", None);
+    const NO_MODE_ENV: (&'static str, Option<&'static str>) = ("CLOUD_NODE_MODE", None);
+
+    #[test]
+    fn xdp_enabled_precedence_default_env_file() {
+        let _guard = runtime_config_test_guard();
+        let clear = &[NO_XDP_ENV, NO_MODE_ENV];
+
+        // No file, no env: default enabled.
+        assert!(load_xdp_enabled(None, clear).unwrap());
+        // No file: env toggles.
+        assert!(!load_xdp_enabled(None, &[xdp_var("0"), NO_MODE_ENV]).unwrap());
+        assert!(load_xdp_enabled(None, &[xdp_var("true"), NO_MODE_ENV]).unwrap());
+        // File without xdp.enabled: env still applies.
+        assert!(!load_xdp_enabled(Some("cluster: {}\n"), &[xdp_var("off"), NO_MODE_ENV]).unwrap());
+        assert!(load_xdp_enabled(Some("xdp: {}\n"), clear).unwrap());
+        // File is the final authority in both directions.
+        assert!(
+            load_xdp_enabled(
+                Some("xdp:\n  enabled: true\n"),
+                &[xdp_var("0"), NO_MODE_ENV]
+            )
+            .unwrap()
+        );
+        assert!(
+            !load_xdp_enabled(
+                Some("xdp:\n  enabled: false\n"),
+                &[xdp_var("1"), NO_MODE_ENV]
+            )
+            .unwrap()
+        );
+        assert!(!load_xdp_enabled(Some("xdp:\n  enabled: false\n"), clear).unwrap());
+        // Garbage env values are an explicit error, not a silent default.
+        assert!(load_xdp_enabled(None, &[xdp_var("maybe"), NO_MODE_ENV]).is_err());
+    }
+
+    #[test]
+    fn xdp_enabled_forced_off_in_rke2_mode() {
+        let _guard = runtime_config_test_guard();
+        let file = r#"
+cluster:
+  enabled: true
+  type: rke2
+  name: prod
+  namespace: cloud-node
+  serviceName: cloud-node
+  cache:
+    localMetaDir: /tmp/meta
+    shards:
+      - id: s0
+        path: /tmp/shard0
+        weight: 1
+        replicas: 1
+"#;
+        let vars = &[
+            xdp_var("1"),
+            ("CLOUD_NODE_MODE", Some("rke2")),
+            ("CLOUD_NODE_CLUSTER_INTERNAL_TOKEN", Some("token")),
+            ("POD_NAME", Some("pod-0")),
+            ("POD_IP", Some("10.0.0.1")),
+        ];
+        assert!(!load_xdp_enabled(Some(file), vars).unwrap());
+    }
+
+    #[test]
+    fn xdp_save_xdp_enabled_preserves_other_keys() {
+        let _guard = runtime_config_test_guard();
+        let home = xdp_home(Some(
+            "runtime:\n  mode: standalone\ncluster:\n  name: prod\nxdp:\n  enabled: false\n  attachMode: drv\n",
+        ));
+        let path = home.join("configs").join("runtime.yaml");
+        crate::xdp_config_wizard::save_xdp_enabled(&path, true).unwrap();
+
+        let body = std::fs::read_to_string(&path).unwrap();
+        let value: serde_yaml::Value = serde_yaml::from_str(&body).unwrap();
+        assert_eq!(value["xdp"]["enabled"].as_bool(), Some(true));
+        assert!(value["xdp"]["attachMode"].is_null());
+        assert_eq!(value["cluster"]["name"].as_str(), Some("prod"));
+        std::fs::remove_dir_all(&home).ok();
     }
 }

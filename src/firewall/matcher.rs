@@ -100,20 +100,20 @@ pub fn evaluate_operator(
         "eq string" => actual == expected,
         "neq string" => actual != expected,
         "match" | "matches" | "regexp" => {
-            get_or_compile_regex(&expected).map_or(false, |re| re.is_match(&actual))
+            get_or_compile_regex(&expected).is_some_and(|re| re.is_match(&actual))
         }
         "not match" | "notmatches" | "notregexp" => {
-            get_or_compile_regex(&expected).map_or(false, |re| !re.is_match(&actual))
+            get_or_compile_regex(&expected).is_some_and(|re| !re.is_match(&actual))
         }
         "wildcard match" => {
             let escaped = regex::escape(&expected).replace("\\*", ".*");
             let re_str = format!("^{}$", escaped);
-            get_or_compile_regex(&re_str).map_or(false, |re| re.is_match(&actual))
+            get_or_compile_regex(&re_str).is_some_and(|re| re.is_match(&actual))
         }
         "wildcard not match" => {
             let escaped = regex::escape(&expected).replace("\\*", ".*");
             let re_str = format!("^{}$", escaped);
-            get_or_compile_regex(&re_str).map_or(false, |re| !re.is_match(&actual))
+            get_or_compile_regex(&re_str).is_some_and(|re| !re.is_match(&actual))
         }
         "contains" | "containsstring" => actual.contains(expected.as_ref()),
         "not contains" | "notcontains" => !actual.contains(expected.as_ref()),
@@ -492,23 +492,23 @@ pub(crate) fn evaluate_operator_bytes(
     match operator_lower.as_ref() {
         "match" | "matches" | "regexp" => {
             get_or_compile_bytes_regex(expected_value, case_insensitive)
-                .map_or(false, |re| re.is_match(body))
+                .is_some_and(|re| re.is_match(body))
         }
         "not match" | "notmatches" | "notregexp" => {
             get_or_compile_bytes_regex(expected_value, case_insensitive)
-                .map_or(false, |re| !re.is_match(body))
+                .is_some_and(|re| !re.is_match(body))
         }
         "wildcard match" => {
             let escaped = regex::escape(expected_value).replace("\\*", ".*");
             let re_str = format!("^{}$", escaped);
             get_or_compile_bytes_regex(&re_str, case_insensitive)
-                .map_or(false, |re| re.is_match(body))
+                .is_some_and(|re| re.is_match(body))
         }
         "wildcard not match" => {
             let escaped = regex::escape(expected_value).replace("\\*", ".*");
             let re_str = format!("^{}$", escaped);
             get_or_compile_bytes_regex(&re_str, case_insensitive)
-                .map_or(false, |re| !re.is_match(body))
+                .is_some_and(|re| !re.is_match(body))
         }
         "contains" | "containsstring" => {
             if pattern_bytes.is_empty() {
@@ -571,12 +571,43 @@ pub fn reclaim_waf_regex_caches(clear_all: bool) -> u64 {
     if clear_all {
         WAF_RE_CACHE.invalidate_all();
         WAF_BYTES_RE_CACHE.invalidate_all();
+        // moka invalidation is lazy: entries are marked but stay resident
+        // until maintenance. Force it so Critical reclaim frees the pages
+        // now and the removed-count below reflects reality.
+        WAF_RE_CACHE.run_pending_tasks();
+        WAF_BYTES_RE_CACHE.run_pending_tasks();
+    } else {
+        // Partial reclaim: evict a deterministic ~half of each cache by key
+        // hash parity. Uniform over the key space, so hot patterns recompile
+        // on next use while the resident footprint roughly halves.
+        evict_hash_parity(&WAF_RE_CACHE);
+        evict_hash_parity(&WAF_BYTES_RE_CACHE);
+        WAF_RE_CACHE.run_pending_tasks();
+        WAF_BYTES_RE_CACHE.run_pending_tasks();
     }
     before.saturating_sub(
         WAF_RE_CACHE
             .entry_count()
             .saturating_add(WAF_BYTES_RE_CACHE.entry_count()),
     )
+}
+
+fn evict_hash_parity<K, V>(cache: &moka::sync::Cache<K, V>)
+where
+    K: std::hash::Hash + Eq + Clone + Send + Sync + 'static,
+    V: Clone + Send + Sync + 'static,
+{
+    let victims: Vec<K> = cache
+        .iter()
+        .filter_map(|(key, _)| {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            key.hash(&mut hasher);
+            (std::hash::Hasher::finish(&hasher) & 1 == 0).then(|| (*key).clone())
+        })
+        .collect();
+    for key in victims {
+        cache.invalidate(&key);
+    }
 }
 
 #[cfg(test)]

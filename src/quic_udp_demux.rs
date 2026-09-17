@@ -47,6 +47,10 @@ struct H3Datagram {
     from: SocketAddr,
     data: Bytes,
     queued_bytes: Option<Arc<AtomicUsize>>,
+    /// C11: IP-header ECN codepoint bits (0–3) from the received frame —
+    /// Quinn reports CE marks for congestion feedback; `None` on the
+    /// kernel-socket path (unchanged contract).
+    ecn: Option<u8>,
 }
 
 impl Drop for H3Datagram {
@@ -202,7 +206,10 @@ impl AsyncUdpSocket for SharedQuinnUdpSocket {
                     datagram.data.len(),
                     datagram.from
                 );
-                Poll::Ready(copy_datagram(datagram, &mut bufs[0], &mut meta[0]).map(|_| 1))
+                Poll::Ready(
+                    copy_datagram(datagram, self.local_addr.ip(), &mut bufs[0], &mut meta[0])
+                        .map(|_| 1),
+                )
             }
             Poll::Ready(None) => Poll::Ready(Ok(0)),
             Poll::Pending => Poll::Pending,
@@ -388,8 +395,8 @@ fn merge_quic_fragment(
         pending.data.resize(fragment.data.len(), 0);
     }
     for range in fragment.ranges {
-        if let Some(data) = fragment.data.get(range.clone()) {
-            pending.data[range.clone()].copy_from_slice(data);
+        if let Some(data) = fragment.data.get(range) {
+            pending.data[range].copy_from_slice(data);
             pending.ranges.push(range);
         }
     }
@@ -666,6 +673,7 @@ fn try_queue_h3_datagram(
     h3_queued_bytes: &Arc<AtomicUsize>,
     client_addr: SocketAddr,
     data: Bytes,
+    ecn: Option<u8>,
     byte_budget: usize,
 ) -> H3QueueStatus {
     let data_len = data.len();
@@ -691,6 +699,7 @@ fn try_queue_h3_datagram(
         from: client_addr,
         data,
         queued_bytes: Some(Arc::clone(h3_queued_bytes)),
+        ecn,
     }) {
         Ok(()) => H3QueueStatus::Sent,
         Err(mpsc::error::TrySendError::Full(_)) => H3QueueStatus::Full,
@@ -700,6 +709,7 @@ fn try_queue_h3_datagram(
 
 fn copy_datagram(
     datagram: H3Datagram,
+    local_ip: StdIpAddr,
     buf: &mut IoSliceMut<'_>,
     meta: &mut quinn::udp::RecvMeta,
 ) -> io::Result<()> {
@@ -714,8 +724,11 @@ fn copy_datagram(
         addr: datagram.from,
         len: datagram.data.len(),
         stride: datagram.data.len(),
-        ecn: None,
-        dst_ip: None,
+        // C11: carry the frame's ECN bits through to Quinn — receivers
+        // count CE marks for congestion feedback. Invalid bit patterns
+        // degrade to None (quinn ignores them) rather than fabricating.
+        ecn: datagram.ecn.and_then(quinn::udp::EcnCodepoint::from_bits),
+        dst_ip: Some(local_ip),
     };
     Ok(())
 }
@@ -765,7 +778,66 @@ pub struct QuicUdpDemuxManager {
     udp_manager: Arc<UdpProxyManager>,
     handled_ports: DashMap<SocketAddr, ListenerHandle>,
     af_xdp_ports: DashMap<SocketAddr, AfXdpDemuxHandle>,
+    /// Addresses whose listener/AF_XDP handle disappeared from the desired
+    /// set, first observed missing at this instant. A short grace period keeps
+    /// a transient config snapshot from killing every session on the port.
+    listener_undesired_since: DashMap<SocketAddr, Instant>,
+    af_xdp_undesired_since: DashMap<SocketAddr, Instant>,
     next_listener_id: AtomicU64,
+}
+
+struct ProcessDatagramArgs<'a> {
+    port: u16,
+    client_addr: SocketAddr,
+    data: Bytes,
+    /// C11: frame ECN bits on the AF_XDP path; `None` on kernel sockets.
+    ecn: Option<u8>,
+    downstream_sender: UdpDownstreamSender,
+    shared: &'a UdpDemuxSharedState,
+    http3_enabled: bool,
+    shutdown_rx: watch::Receiver<bool>,
+}
+
+struct ClassifyRouteArgs<'a> {
+    port: u16,
+    client_addr: SocketAddr,
+    data: Bytes,
+    /// C11: frame ECN bits — forwarded into the H3 queue on Terminated.
+    ecn: Option<u8>,
+    pending_routes: &'a DashMap<SocketAddr, PendingQuicRoute>,
+    pending_reassembly_bytes: &'a AtomicUsize,
+    new_route_windows: &'a DashMap<StdIpAddr, VecDeque<Instant>>,
+    h3_tx: &'a mpsc::Sender<H3Datagram>,
+    h3_queued_bytes: &'a Arc<AtomicUsize>,
+    http3_enabled: bool,
+    downstream_sender: UdpDownstreamSender,
+    shutdown_rx: watch::Receiver<bool>,
+    quic_cid_tx: mpsc::Sender<UdpSessionQuicCid>,
+    pressure_level: crate::l4_defense::L4PressureLevel,
+}
+
+struct RouteHelloArgs<'a> {
+    port: u16,
+    client_addr: SocketAddr,
+    data: &'a [u8],
+    client_hello: crate::quic_probe::QuicClientHello,
+    http3_enabled: bool,
+    downstream_sender: UdpDownstreamSender,
+    shutdown_rx: watch::Receiver<bool>,
+    quic_cid_tx: mpsc::Sender<UdpSessionQuicCid>,
+    pressure_level: crate::l4_defense::L4PressureLevel,
+}
+
+struct DispatchRouteArgs<'a> {
+    route: RouteKind,
+    client_addr: SocketAddr,
+    data: Bytes,
+    /// C11: frame ECN bits forwarded to the H3 queue on Terminated routes.
+    ecn: Option<u8>,
+    h3_tx: &'a mpsc::Sender<H3Datagram>,
+    h3_queued_bytes: &'a Arc<AtomicUsize>,
+    http3_enabled: bool,
+    pressure_level: crate::l4_defense::L4PressureLevel,
 }
 
 impl QuicUdpDemuxManager {
@@ -780,6 +852,8 @@ impl QuicUdpDemuxManager {
             udp_manager,
             handled_ports: DashMap::new(),
             af_xdp_ports: DashMap::new(),
+            listener_undesired_since: DashMap::new(),
+            af_xdp_undesired_since: DashMap::new(),
             next_listener_id: AtomicU64::new(1),
         })
     }
@@ -896,9 +970,24 @@ impl QuicUdpDemuxManager {
         for (bind_addr, http3_enabled) in active_listeners {
             let port = bind_addr.port();
             let desired_http3 = http3_ports.contains(&port);
-            let keep = desired_listeners.contains(&bind_addr) && http3_enabled == desired_http3;
-            if keep {
-                continue;
+            if desired_listeners.contains(&bind_addr) {
+                self.listener_undesired_since.remove(&bind_addr);
+                // A changed http3 flag is a deliberate config change; restart
+                // immediately so socket semantics stay correct.
+                if http3_enabled == desired_http3 {
+                    continue;
+                }
+            } else {
+                // Grace period: a transient config absence must not kill the
+                // listener and every UDP session on the port.
+                let first_missing = *self
+                    .listener_undesired_since
+                    .entry(bind_addr)
+                    .or_insert_with(Instant::now);
+                if first_missing.elapsed() < crate::udp_proxy::UDP_LISTENER_REMOVE_GRACE {
+                    continue;
+                }
+                self.listener_undesired_since.remove(&bind_addr);
             }
             if let Some((_, handle)) = self.handled_ports.remove(&bind_addr) {
                 info!("QUIC UDP demux: stopping listener on {}", bind_addr);
@@ -921,9 +1010,20 @@ impl QuicUdpDemuxManager {
         for (listen_addr, http3_enabled) in active_handles {
             let port = listen_addr.port();
             let desired_http3 = http3_ports.contains(&port);
-            let keep = desired_demux_ports.contains(&port) && http3_enabled == desired_http3;
-            if keep {
-                continue;
+            if desired_demux_ports.contains(&port) {
+                self.af_xdp_undesired_since.remove(&listen_addr);
+                if http3_enabled == desired_http3 {
+                    continue;
+                }
+            } else {
+                let first_missing = *self
+                    .af_xdp_undesired_since
+                    .entry(listen_addr)
+                    .or_insert_with(Instant::now);
+                if first_missing.elapsed() < crate::udp_proxy::UDP_LISTENER_REMOVE_GRACE {
+                    continue;
+                }
+                self.af_xdp_undesired_since.remove(&listen_addr);
             }
             if let Some((_, handle)) = self.af_xdp_ports.remove(&listen_addr) {
                 info!(
@@ -956,15 +1056,16 @@ impl QuicUdpDemuxManager {
         let handle = self
             .ensure_af_xdp_demux_handle(datagram.listen_addr, http3_enabled, downstream_tx.clone())
             .await?;
-        self.process_datagram_with_downstream(
+        self.process_datagram_with_downstream(ProcessDatagramArgs {
             port,
-            datagram.peer_addr,
-            datagram.payload,
-            UdpDownstreamSender::channel(datagram.listen_addr, downstream_tx),
-            &handle.shared,
-            handle.http3_enabled,
-            handle.shutdown_tx.subscribe(),
-        )
+            client_addr: datagram.peer_addr,
+            data: datagram.payload,
+            ecn: datagram.ecn,
+            downstream_sender: UdpDownstreamSender::channel(datagram.listen_addr, downstream_tx),
+            shared: &handle.shared,
+            http3_enabled: handle.http3_enabled,
+            shutdown_rx: handle.shutdown_tx.subscribe(),
+        })
         .await
     }
 
@@ -1104,7 +1205,7 @@ impl QuicUdpDemuxManager {
     ) -> Result<()> {
         let server_config = self
             .http3_manager
-            .build_quinn_server_config()
+            .build_quinn_server_config_scoped(true)
             .await
             .context("build shared HTTP/3 Quinn server config")?;
         let runtime = quinn::default_runtime().context("no Quinn runtime available")?;
@@ -1205,29 +1306,36 @@ impl QuicUdpDemuxManager {
             );
             let data = Bytes::copy_from_slice(&buf[..len]);
             let _ = self
-                .process_datagram_with_downstream(
+                .process_datagram_with_downstream(ProcessDatagramArgs {
                     port,
                     client_addr,
                     data,
-                    downstream_sender.clone(),
-                    &shared,
+                    // C11: kernel-socket path — no ECN metadata; contract
+                    // unchanged.
+                    ecn: None,
+                    downstream_sender: downstream_sender.clone(),
+                    shared: &shared,
                     http3_enabled,
-                    shutdown_rx.clone(),
-                )
+                    shutdown_rx: shutdown_rx.clone(),
+                })
                 .await?;
         }
     }
 
     async fn process_datagram_with_downstream(
         &self,
-        port: u16,
-        client_addr: SocketAddr,
-        data: Bytes,
-        downstream_sender: UdpDownstreamSender,
-        shared: &Arc<UdpDemuxSharedState>,
-        http3_enabled: bool,
-        shutdown_rx: watch::Receiver<bool>,
+        args: ProcessDatagramArgs<'_>,
     ) -> Result<UdpIngressDatagramStatus> {
+        let ProcessDatagramArgs {
+            port,
+            client_addr,
+            data,
+            ecn,
+            downstream_sender,
+            shared,
+            http3_enabled,
+            shutdown_rx,
+        } = args;
         if self.udp_manager.is_l4_blocked(client_addr.ip()) {
             if let Some((_, route)) = shared.routes.remove(&client_addr) {
                 remove_session_route(&shared.session_routes, &route);
@@ -1260,30 +1368,32 @@ impl QuicUdpDemuxManager {
             .map(|entry| entry.value().clone())
         {
             let status = self
-                .dispatch_existing_route(
-                    route.clone(),
+                .dispatch_existing_route(DispatchRouteArgs {
+                    route: route.clone(),
                     client_addr,
                     data,
-                    &shared.h3_tx,
-                    &shared.h3_queued_bytes,
+                    ecn,
+                    h3_tx: &shared.h3_tx,
+                    h3_queued_bytes: &shared.h3_queued_bytes,
                     http3_enabled,
                     pressure_level,
-                )
+                })
                 .await;
             return Ok(self.record_existing_route_dispatch(shared, client_addr, route, status));
         }
 
         if let Some(route) = lookup_cid_route(&shared.cid_routes, &data) {
             let status = self
-                .dispatch_existing_route(
-                    route.clone(),
+                .dispatch_existing_route(DispatchRouteArgs {
+                    route: route.clone(),
                     client_addr,
                     data,
-                    &shared.h3_tx,
-                    &shared.h3_queued_bytes,
+                    ecn,
+                    h3_tx: &shared.h3_tx,
+                    h3_queued_bytes: &shared.h3_queued_bytes,
                     http3_enabled,
                     pressure_level,
-                )
+                })
                 .await;
             return Ok(self.record_cid_route_dispatch(shared, client_addr, route, status));
         }
@@ -1349,21 +1459,22 @@ impl QuicUdpDemuxManager {
         }
 
         let route = self
-            .classify_new_route(
+            .classify_new_route(ClassifyRouteArgs {
                 port,
                 client_addr,
                 data,
-                &shared.pending_routes,
-                &shared.pending_reassembly_bytes,
-                &shared.new_route_windows,
-                &shared.h3_tx,
-                &shared.h3_queued_bytes,
+                ecn,
+                pending_routes: &shared.pending_routes,
+                pending_reassembly_bytes: &shared.pending_reassembly_bytes,
+                new_route_windows: &shared.new_route_windows,
+                h3_tx: &shared.h3_tx,
+                h3_queued_bytes: &shared.h3_queued_bytes,
                 http3_enabled,
                 downstream_sender,
                 shutdown_rx,
-                shared.quic_cid_tx.clone(),
+                quic_cid_tx: shared.quic_cid_tx.clone(),
                 pressure_level,
-            )
+            })
             .await?;
         let Some((route, datagrams)) = route else {
             return Ok(UdpIngressDatagramStatus::NoRoute);
@@ -1382,15 +1493,16 @@ impl QuicUdpDemuxManager {
         let mut result = UdpIngressDatagramStatus::Sent;
         for datagram in datagrams {
             let status = self
-                .dispatch_existing_route(
-                    route.clone(),
+                .dispatch_existing_route(DispatchRouteArgs {
+                    route: route.clone(),
                     client_addr,
-                    datagram,
-                    &shared.h3_tx,
-                    &shared.h3_queued_bytes,
+                    data: datagram,
+                    ecn,
+                    h3_tx: &shared.h3_tx,
+                    h3_queued_bytes: &shared.h3_queued_bytes,
                     http3_enabled,
                     pressure_level,
-                )
+                })
                 .await;
             match status {
                 DispatchStatus::Sent => {}
@@ -1499,20 +1611,24 @@ impl QuicUdpDemuxManager {
 
     async fn classify_new_route(
         &self,
-        port: u16,
-        client_addr: SocketAddr,
-        data: Bytes,
-        pending_routes: &DashMap<SocketAddr, PendingQuicRoute>,
-        pending_reassembly_bytes: &AtomicUsize,
-        new_route_windows: &DashMap<StdIpAddr, VecDeque<Instant>>,
-        h3_tx: &mpsc::Sender<H3Datagram>,
-        h3_queued_bytes: &Arc<AtomicUsize>,
-        http3_enabled: bool,
-        downstream_sender: UdpDownstreamSender,
-        shutdown_rx: watch::Receiver<bool>,
-        quic_cid_tx: mpsc::Sender<UdpSessionQuicCid>,
-        pressure_level: crate::l4_defense::L4PressureLevel,
+        args: ClassifyRouteArgs<'_>,
     ) -> Result<Option<(RouteKind, Vec<Bytes>)>> {
+        let ClassifyRouteArgs {
+            port,
+            client_addr,
+            data,
+            ecn,
+            pending_routes,
+            pending_reassembly_bytes,
+            new_route_windows,
+            h3_tx,
+            h3_queued_bytes,
+            http3_enabled,
+            downstream_sender,
+            shutdown_rx,
+            quic_cid_tx,
+            pressure_level,
+        } = args;
         match crate::quic_probe::probe_quic_client_hello_fragment_result(&data) {
             QuicProbeFragmentResult::Found(client_hello) => {
                 debug!(
@@ -1530,17 +1646,17 @@ impl QuicUdpDemuxManager {
                     })
                     .unwrap_or_default();
                 datagrams.push(data.clone());
-                self.route_for_client_hello(
+                self.route_for_client_hello(RouteHelloArgs {
                     port,
                     client_addr,
-                    &data,
+                    data: &data,
                     client_hello,
                     http3_enabled,
                     downstream_sender,
                     shutdown_rx,
-                    quic_cid_tx.clone(),
+                    quic_cid_tx: quic_cid_tx.clone(),
                     pressure_level,
-                )
+                })
                 .await
                 .map(|route| route.map(|route| (route, datagrams)))
             }
@@ -1679,13 +1795,15 @@ impl QuicUdpDemuxManager {
                         let session = match self
                             .udp_manager
                             .create_passthrough_session_for_server_with_cid_updates_and_downstream(
-                                client_addr,
-                                port,
-                                server,
-                                None,
-                                downstream_sender.clone(),
-                                shutdown_rx,
-                                Some(quic_cid_tx.clone()),
+                                crate::udp_proxy::UdpPassthroughSessionArgs {
+                                    client_addr,
+                                    port,
+                                    server,
+                                    probed_server_name: None,
+                                    downstream_sender: downstream_sender.clone(),
+                                    shutdown_rx,
+                                    quic_cid_tx: Some(quic_cid_tx.clone()),
+                                },
                             )
                             .await
                         {
@@ -1719,17 +1837,17 @@ impl QuicUdpDemuxManager {
                         pending.datagrams
                     })
                     .unwrap_or_else(|| vec![data.clone()]);
-                self.route_for_client_hello(
+                self.route_for_client_hello(RouteHelloArgs {
                     port,
                     client_addr,
-                    &data,
+                    data: &data,
                     client_hello,
                     http3_enabled,
                     downstream_sender,
                     shutdown_rx,
-                    quic_cid_tx.clone(),
+                    quic_cid_tx: quic_cid_tx.clone(),
                     pressure_level,
-                )
+                })
                 .await
                 .map(|route| route.map(|route| (route, datagrams)))
             }
@@ -1778,6 +1896,7 @@ impl QuicUdpDemuxManager {
                         h3_queued_bytes,
                         client_addr,
                         data,
+                        ecn,
                         MEMORY_GOVERNOR.h3_datagram_queue_budget_bytes(),
                     ) {
                         H3QueueStatus::Sent => {}
@@ -1828,18 +1947,18 @@ impl QuicUdpDemuxManager {
         }
     }
 
-    async fn route_for_client_hello(
-        &self,
-        port: u16,
-        client_addr: SocketAddr,
-        data: &[u8],
-        client_hello: crate::quic_probe::QuicClientHello,
-        http3_enabled: bool,
-        downstream_sender: UdpDownstreamSender,
-        shutdown_rx: watch::Receiver<bool>,
-        quic_cid_tx: mpsc::Sender<UdpSessionQuicCid>,
-        pressure_level: crate::l4_defense::L4PressureLevel,
-    ) -> Result<Option<RouteKind>> {
+    async fn route_for_client_hello(&self, args: RouteHelloArgs<'_>) -> Result<Option<RouteKind>> {
+        let RouteHelloArgs {
+            port,
+            client_addr,
+            data,
+            client_hello,
+            http3_enabled,
+            downstream_sender,
+            shutdown_rx,
+            quic_cid_tx,
+            pressure_level,
+        } = args;
         if let Some(server_name) = client_hello.server_name.as_deref() {
             if let Some(server) = self
                 .config_store
@@ -1855,13 +1974,15 @@ impl QuicUdpDemuxManager {
                 let session = match self
                     .udp_manager
                     .create_passthrough_session_for_server_with_cid_updates_and_downstream(
-                        client_addr,
-                        port,
-                        server,
-                        Some(server_name.to_string()),
-                        downstream_sender.clone(),
-                        shutdown_rx,
-                        Some(quic_cid_tx.clone()),
+                        crate::udp_proxy::UdpPassthroughSessionArgs {
+                            client_addr,
+                            port,
+                            server,
+                            probed_server_name: Some(server_name.to_string()),
+                            downstream_sender: downstream_sender.clone(),
+                            shutdown_rx,
+                            quic_cid_tx: Some(quic_cid_tx.clone()),
+                        },
                     )
                     .await
                 {
@@ -1922,13 +2043,15 @@ impl QuicUdpDemuxManager {
                 let session = match self
                     .udp_manager
                     .create_passthrough_session_for_server_with_cid_updates_and_downstream(
-                        client_addr,
-                        port,
-                        server,
-                        Some(server_name.to_string()),
-                        downstream_sender.clone(),
-                        shutdown_rx,
-                        Some(quic_cid_tx.clone()),
+                        crate::udp_proxy::UdpPassthroughSessionArgs {
+                            client_addr,
+                            port,
+                            server,
+                            probed_server_name: Some(server_name.to_string()),
+                            downstream_sender: downstream_sender.clone(),
+                            shutdown_rx,
+                            quic_cid_tx: Some(quic_cid_tx.clone()),
+                        },
                     )
                     .await
                 {
@@ -1959,13 +2082,15 @@ impl QuicUdpDemuxManager {
             let session = match self
                 .udp_manager
                 .create_passthrough_session_for_server_with_cid_updates_and_downstream(
-                    client_addr,
-                    port,
-                    server,
-                    client_hello.server_name.clone(),
-                    downstream_sender.clone(),
-                    shutdown_rx,
-                    Some(quic_cid_tx.clone()),
+                    crate::udp_proxy::UdpPassthroughSessionArgs {
+                        client_addr,
+                        port,
+                        server,
+                        probed_server_name: client_hello.server_name.clone(),
+                        downstream_sender: downstream_sender.clone(),
+                        shutdown_rx,
+                        quic_cid_tx: Some(quic_cid_tx.clone()),
+                    },
                 )
                 .await
             {
@@ -2027,16 +2152,17 @@ impl QuicUdpDemuxManager {
         Ok(session.map(RouteKind::Passthrough))
     }
 
-    async fn dispatch_existing_route(
-        &self,
-        route: RouteKind,
-        client_addr: SocketAddr,
-        data: Bytes,
-        h3_tx: &mpsc::Sender<H3Datagram>,
-        h3_queued_bytes: &Arc<AtomicUsize>,
-        http3_enabled: bool,
-        pressure_level: crate::l4_defense::L4PressureLevel,
-    ) -> DispatchStatus {
+    async fn dispatch_existing_route(&self, args: DispatchRouteArgs<'_>) -> DispatchStatus {
+        let DispatchRouteArgs {
+            route,
+            client_addr,
+            data,
+            ecn,
+            h3_tx,
+            h3_queued_bytes,
+            http3_enabled,
+            pressure_level,
+        } = args;
         match route {
             RouteKind::Http3(last_activity_ms) => {
                 if !http3_enabled {
@@ -2047,6 +2173,7 @@ impl QuicUdpDemuxManager {
                     h3_queued_bytes,
                     client_addr,
                     data,
+                    ecn,
                     MEMORY_GOVERNOR.h3_datagram_queue_budget_bytes(),
                 ) {
                     H3QueueStatus::Sent => {
@@ -2096,17 +2223,22 @@ impl QuicUdpDemuxManager {
                 {
                     UdpSessionSendStatus::Sent => DispatchStatus::Sent,
                     UdpSessionSendStatus::Full => {
-                        self.record_l4_event_with_pressure(
-                            client_addr,
-                            L4DefenseKind::UdpQueueFull,
-                            format!(
-                                "peer={} session={} pressure={}",
+                        // Throttle defense accounting so a busy but
+                        // legitimate session does not look like a per-packet
+                        // flood.
+                        if crate::udp_proxy::udp_session_queue_full_event_due(&session) {
+                            self.record_l4_event_with_pressure(
                                 client_addr,
-                                session.id,
-                                pressure_level.as_str()
-                            ),
-                            pressure_level,
-                        );
+                                L4DefenseKind::UdpQueueFull,
+                                format!(
+                                    "peer={} session={} pressure={}",
+                                    client_addr,
+                                    session.id,
+                                    pressure_level.as_str()
+                                ),
+                                pressure_level,
+                            );
+                        }
                         debug!(
                             "UDP passthrough session {} buffer full, dropping packet",
                             client_addr
@@ -2283,7 +2415,9 @@ mod tests {
         let (shutdown_tx, shutdown) = watch::channel(false);
         let session = Arc::new(UdpSession {
             id: 77,
-            client_addr: Arc::new(tokio::sync::RwLock::new("127.0.0.1:10000".parse().unwrap())),
+            client_addr: Arc::new(arc_swap::ArcSwap::from_pointee(
+                "127.0.0.1:10000".parse().unwrap(),
+            )),
             listen_port: 443,
             backend_addr: "127.0.0.1:20000".parse().unwrap(),
             origin_id: 1,
@@ -2295,6 +2429,7 @@ mod tests {
             quic_cids: Arc::new(tokio::sync::RwLock::new(VecDeque::new())),
             quic_server_cid_len: Arc::new(std::sync::atomic::AtomicU8::new(0)),
             quic_cid_tx: None,
+            queue_full_event_at_ms: AtomicU64::new(0),
             tx,
             shutdown_tx,
             shutdown,
@@ -2332,7 +2467,7 @@ mod tests {
         let (shutdown_tx, shutdown) = watch::channel(false);
         let route = RouteKind::Passthrough(Arc::new(UdpSession {
             id: 78,
-            client_addr: Arc::new(tokio::sync::RwLock::new(original_addr)),
+            client_addr: Arc::new(arc_swap::ArcSwap::from_pointee(original_addr)),
             listen_port: 443,
             backend_addr: "127.0.0.1:20000".parse().unwrap(),
             origin_id: 1,
@@ -2344,6 +2479,7 @@ mod tests {
             quic_cids: Arc::new(tokio::sync::RwLock::new(VecDeque::new())),
             quic_server_cid_len: Arc::new(std::sync::atomic::AtomicU8::new(4)),
             quic_cid_tx: None,
+            queue_full_event_at_ms: AtomicU64::new(0),
             tx,
             shutdown_tx,
             shutdown,
@@ -2377,6 +2513,7 @@ mod tests {
                 &queued_bytes,
                 client_addr,
                 Bytes::from_static(b"abcdef"),
+                None,
                 5,
             ),
             H3QueueStatus::ByteLimited
@@ -2389,6 +2526,7 @@ mod tests {
                 &queued_bytes,
                 client_addr,
                 Bytes::from_static(b"abcdef"),
+                None,
                 16,
             ),
             H3QueueStatus::Sent
@@ -2441,9 +2579,60 @@ mod tests {
                 from: peer_addr,
                 data: Bytes::from_static(b"h3!"),
                 queued_bytes: Some(queued_bytes.clone()),
+                ecn: None,
             })
             .await
             .unwrap();
+        let socket = SharedQuinnUdpSocket::new(
+            UdpDownstreamSender::channel(listen_addr, downstream_tx),
+            listen_addr,
+            h3_rx,
+        );
+        let mut buf = [0u8; 16];
+        let mut meta = [quinn::udp::RecvMeta {
+            addr: listen_addr,
+            len: 0,
+            stride: 0,
+            ecn: None,
+            dst_ip: None,
+        }];
+
+        let count = {
+            let mut bufs = [IoSliceMut::new(&mut buf)];
+            std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta))
+                .await
+                .unwrap()
+        };
+
+        assert_eq!(count, 1);
+        assert_eq!(&buf[..3], b"h3!");
+        assert_eq!(meta[0].addr, peer_addr);
+        assert_eq!(meta[0].len, 3);
+        assert_eq!(meta[0].stride, 3);
+        assert_eq!(queued_bytes.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn shared_quinn_udp_socket_propagates_ecn_and_dst_ip() {
+        let listen_addr: SocketAddr = "127.0.0.1:443".parse().unwrap();
+        let peer_addr: SocketAddr = "127.0.0.1:53000".parse().unwrap();
+        let (downstream_tx, _downstream_rx) = mpsc::channel(2);
+        let (h3_tx, h3_rx) = mpsc::channel(2);
+        let queued_bytes = Arc::new(AtomicUsize::new(6));
+        for (data, ecn) in [
+            (Bytes::from_static(b"ce!"), Some(0b11u8)),
+            (Bytes::from_static(b"bad"), Some(4u8)),
+        ] {
+            h3_tx
+                .send(H3Datagram {
+                    from: peer_addr,
+                    data,
+                    queued_bytes: Some(queued_bytes.clone()),
+                    ecn,
+                })
+                .await
+                .unwrap();
+        }
         let socket = SharedQuinnUdpSocket::new(
             UdpDownstreamSender::channel(listen_addr, downstream_tx),
             listen_addr,
@@ -2459,17 +2648,29 @@ mod tests {
             dst_ip: None,
         }];
 
-        let count = std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta))
-            .await
-            .unwrap();
-        drop(bufs);
+        assert_eq!(
+            std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta))
+                .await
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            meta[0].ecn,
+            Some(quinn::udp::EcnCodepoint::Ce),
+            "C11: AF_XDP frame ECN bits must reach Quinn"
+        );
+        assert_eq!(meta[0].dst_ip, Some(listen_addr.ip()));
 
-        assert_eq!(count, 1);
-        assert_eq!(&buf[..3], b"h3!");
-        assert_eq!(meta[0].addr, peer_addr);
-        assert_eq!(meta[0].len, 3);
-        assert_eq!(meta[0].stride, 3);
-        assert_eq!(queued_bytes.load(Ordering::Acquire), 0);
+        assert_eq!(
+            std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta))
+                .await
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            meta[0].ecn, None,
+            "invalid ECN bit patterns must not be fabricated into a codepoint"
+        );
     }
 
     #[tokio::test]
@@ -2484,6 +2685,7 @@ mod tests {
                 from: peer_addr,
                 data: Bytes::from_static(b"too-wide"),
                 queued_bytes: Some(queued_bytes.clone()),
+                ecn: None,
             })
             .await
             .unwrap();
@@ -2525,6 +2727,7 @@ mod tests {
                     listen_addr,
                     peer_addr,
                     payload: Bytes::from_static(b"probe"),
+                    ecn: None,
                 },
                 downstream_tx,
                 fallback_shutdown_rx,
@@ -2551,6 +2754,16 @@ mod tests {
         let mut changed_shutdown = insert_test_af_xdp_handle(&manager, changed_addr, true);
         let keep_shutdown = insert_test_af_xdp_handle(&manager, keep_addr, true);
 
+        manager.reconcile_af_xdp_handles(&ports(&[8443, 9443]), &ports(&[9443]));
+
+        // A disappeared port stays within the grace period; a mode change is
+        // still applied immediately.
+        assert!(manager.af_xdp_ports.get(&stale_addr).is_some());
+        assert!(manager.af_xdp_ports.get(&changed_addr).is_none());
+        manager.af_xdp_undesired_since.insert(
+            stale_addr,
+            Instant::now() - crate::udp_proxy::UDP_LISTENER_REMOVE_GRACE - Duration::from_secs(1),
+        );
         manager.reconcile_af_xdp_handles(&ports(&[8443, 9443]), &ports(&[9443]));
 
         assert!(manager.af_xdp_ports.get(&stale_addr).is_none());
@@ -2634,7 +2847,9 @@ mod tests {
         let (shutdown_tx, shutdown) = watch::channel(false);
         let session = Arc::new(UdpSession {
             id: 77,
-            client_addr: Arc::new(tokio::sync::RwLock::new("127.0.0.1:10000".parse().unwrap())),
+            client_addr: Arc::new(arc_swap::ArcSwap::from_pointee(
+                "127.0.0.1:10000".parse().unwrap(),
+            )),
             listen_port: 443,
             backend_addr: "127.0.0.1:20000".parse().unwrap(),
             origin_id: 1,
@@ -2646,6 +2861,7 @@ mod tests {
             quic_cids: Arc::new(tokio::sync::RwLock::new(VecDeque::new())),
             quic_server_cid_len: Arc::new(std::sync::atomic::AtomicU8::new(0)),
             quic_cid_tx: None,
+            queue_full_event_at_ms: AtomicU64::new(0),
             tx,
             shutdown_tx,
             shutdown,

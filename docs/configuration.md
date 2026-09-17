@@ -34,9 +34,9 @@ relay:
 可使用内置命令交互或非交互调整零拷贝：
 
 ```bash
-CloudSidra-Edge zerocopy
-CloudSidra-Edge zerocopy --enable --yes
-CloudSidra-Edge zerocopy --disable --yes
+cloud-node zerocopy
+cloud-node zerocopy --enable --yes
+cloud-node zerocopy --disable --yes
 ```
 
 修改后需要重启正在运行的节点进程，已有连接不会切换 relay 模式。
@@ -45,29 +45,77 @@ CloudSidra-Edge zerocopy --disable --yes
 
 ## configs/runtime.yaml
 
-`configs/runtime.yaml` 用于本机运行时开关，不从控制面自动推断网卡。XDP/AF_XDP 默认关闭，需要在该文件中显式启用：
+`configs/runtime.yaml` 是本机运行时开关文件（RKE2 模式、集群缓存等）。XDP/AF_XDP **默认启用**，网卡、队列、端口等全部由代码自动推导；文件只需要在显式关闭（或显式覆盖默认值）时出现：
 
 ```yaml
 xdp:
   enabled: false
-  attachMode: auto
-  fallback: pass
-  interfaces:
-    - name: eth0
-      queues: [0, 1]
-      mode: proxy
-      localIps: []
-      frameSize: 2048
-  proxy:
-    protocols: ["http", "https", "tcp", "udp", "h3"]
-    ports:
-      - protocol: https
-        port: 443
-      - protocol: h3
-        port: 443
 ```
 
-`fallback: pass` 表示 attach、XSK 或 map 同步失败时回退到现有 socket 路径；`fallback: fail-start` 表示启动条件不满足时返回错误。完整说明见 [XDP/AF_XDP 旁路数据面](xdp-af-xdp.md)。
+开关解析顺序：默认启用 < `CLOUD_NODE_XDP` 环境变量 < 文件中的 `xdp.enabled` 显式值（最终裁决）。文件不存在时不会自动生成。RKE2 模式下 XDP 强制关闭。
+
+`fallback: pass`（默认）表示 attach、XSK 或 map 同步失败时回退到现有 socket 路径并记录 fallback 原因；`fallback: fail-start` 表示启动条件不满足时返回错误。完整说明见 [XDP/AF_XDP 旁路数据面](xdp-af-xdp.md)。
+
+eBPF 程序默认使用**构建期内嵌进二进制**的对象（单文件部署，二进制与程序同版本）。需要调试或热替换 eBPF 时才显式指定外部对象：
+
+```yaml
+xdp:
+  ebpfObject: /path/to/cloud-node-xdp-ebpf.o   # 显式覆盖；文件缺失是显式错误
+```
+
+`xdp.ebpfObject`（最高优先级）> `CLOUD_NODE_XDP_EBPF_OBJECT_PATH` 环境变量 > 内嵌对象（默认）。
+
+聚合预算（EN-07）——进入受保护 VIP 的未验证包总量与新状态准入速率上限：
+
+```yaml
+xdp:
+  budget:
+    enabled: true          # 默认 true；唯一关闭方式
+    unverifiedPps: 2000000 # 整机未验证包/秒（本地 TCP/UDP，ACL 之后）
+    newFlowPerSec: 100000  # 整机新建 CT/SNAT 准入/秒
+    verifiedPps: 8000000   # 整机已验证流包/秒（独占池，洪泛无法挤占）
+    xskRedirectPps: 4000000 # 整机 AF_XDP 重定向包/秒
+    controlPps: 100000     # 必要控制报文/秒（ICMP/ND/PMTU）
+    serviceFlowPps: ~      # 每监听服务（dst port）新建准入/秒；
+                           # 缺省 = newFlowPerSec（单服务节点行为不变）
+    windowMs: 1000         # 固定窗口
+```
+
+- 整机总额由用户态按 possible-CPU 数预分成每 CPU 份额（向上取整、下限 1），CPU/队列数变化不会倍增总配额。
+- 基线保护在 Normal 压力下也存在；压力反馈只收窄弹性额度（High ÷2、Critical ÷4，份额下限 1），不存在"除到 0 变关闭"的路径。
+- 命中按 `unverifiedLimited` / `admissionLimited` / `verifiedLimited` / `controlLimited` 计数器上报；新状态拒绝发生在任何 CT/SNAT 写入之前，不产生残留状态。
+- `serviceFlowPps`（EN-07 公平维度，dim6）按监听端口在 `XDP_SVC_BUDGET`（每 CPU 哈希表，256 项）分桶：针对单一服务的分布式洪泛只耗尽其自身份额，兄弟服务的新建准入不受影响，聚合 dim1 上限仍然生效。表满时新桶创建失败由 `svcBudgetFull` 计数并回落到聚合 dim1 信封（有界、可观测，不是静默放行）；单服务拒绝计入 `serviceLimited`。
+
+源地址限流（EN-08）——按源 IP（或源前缀）分桶的固定窗口限制器：
+
+```yaml
+xdp:
+  rateLimit:
+    udpPps: 0          # 每桶 UDP 包/窗口；0 = 关闭该维度
+    tcpSynPps: 0       # 每桶 TCP SYN 尝试/窗口；0 = 关闭该维度
+    windowMs: 1000     # 固定窗口长度
+    prefixV4Len: 0     # 0 = 每地址（/32）；1..=32 = 按前缀共享桶
+    prefixV6Len: 0     # 0 = 每地址（/128）；1..=128 = 按前缀共享桶
+    gcAfterWindows: 8  # 桶空闲超过该窗口数后由 sweeper 回收
+```
+
+- 该限制器是**压力门控**的：Normal 压力下整体关闭（聚合预算仍提供基线），Elevated 起按配置生效，High ÷2、Critical ÷4；非零基数除到下限 1，不会"除到 0 变关闭"。
+- `prefixV4Len`/`prefixV6Len` 是公平性粒度：同一前缀内的随机源共享一个桶，前缀洪泛无法耗尽其额度，良性前缀各自独立。语义是**近似**的 per-source/prefix 限制，不是精确配额；满表时新源回落到聚合预算并由 `ratelimitMapFull` 计数，不会静默放行也不会误杀。
+- GC 由 5s sweeper 执行，单次每表最多回收 8192 项——随机源 churn 不会永久占满表，也不会造成单 tick 无界扫描。
+
+半开连接准入（EN-09）——TCP 直连转发（tcpForwards）的握手前状态隔离：
+
+```yaml
+xdp:
+  admission:
+    tcpPendingMs: 3000   # 半开条目绝对期限（毫秒）
+```
+
+- 裸 SYN 准入后进入**独立有界半开表** `XDP_PENDING`（固定 65536 项，硬上限），不占用权威 CT 表 `XDP_TCP_CT`——SYN 洪泛永远无法挤占已建立流的表空间。
+- 晋升需握手证据：SNAT 流要求回复路径观测到后端 SYN-ACK（PENDING_ACKED 子状态）后客户端 ACK 晋升；纯 DNAT 流的回包对节点不可见（nonlocal 过境），客户端 ACK 即晋升。
+- `last_seen` 在准入时刻冻结 = 绝对期限；重传/任意命中均不续期，到期条目按陈旧处理并重新准入（incarnation 单调递增，防止旧事件覆盖重用 tuple）。
+- 表满时新 SYN 记 `pendingLimited` 并回退到常规判决路径——不产生状态、不驱逐既有条目、不静默放行。
+- UDP 无握手概念，仍直接进入 UDP CT 表（与既有行为一致）。
 
 ## 控制面配置
 
@@ -101,7 +149,7 @@ xdp:
 常见目录和文件：
 
 - `configs/api_node.yaml`：API 节点连接配置。
-- `configs/runtime.yaml`：本机运行时配置，例如 RKE2 模式和 XDP/AF_XDP 显式网卡配置。
+- `configs/runtime.yaml`：本机运行时配置，例如 RKE2 模式和 `xdp.enabled` 显式开关。
 - `data/GeoLite2-City.mmdb`：GeoIP 城市库。
 - `data/GeoLite2-ASN.mmdb`：ASN 数据库。
 - `data/GeoLite2-Country.mmdb`：国家数据库。
@@ -129,14 +177,14 @@ xdp:
 
 ### `enableReadingOriginAsync`
 
-控制面缓存规则里的 `enableReadingOriginAsync` 字段目前在 CloudSidra-Edge 中可以被接收和解析，但不会按单条 `cacheRef` 独立生效。
+控制面缓存规则里的 `enableReadingOriginAsync` 字段目前在 cloud-node 中可以被接收和解析，但不会按单条 `cacheRef` 独立生效。
 
-CloudSidra-Edge 的 HTTP 缓存写入由 Pingora cache 状态机接管。Pingora 的默认行为取决于底层 cache storage 是否支持 `support_streaming_partial_write()`：
+cloud-node 的 HTTP 缓存写入由 Pingora cache 状态机接管。Pingora 的默认行为取决于底层 cache storage 是否支持 `support_streaming_partial_write()`：
 
 - 支持时，缓存 miss 的响应一旦判定可缓存，Pingora 会把源站读取和客户端写出解耦；客户端中断连接后，状态机会忽略 downstream error，继续读取源站并填充缓存。
 - 不支持时，客户端中断通常会结束当前代理链路，不会继续为了缓存单独读完整个源站响应。
 
-因此当前 CloudSidra-Edge 中该能力是 storage 级别的统一行为，不是 `enableReadingOriginAsync` 可单独开启或关闭的规则级行为。严格按单条缓存规则控制该字段，需要后续改造 Pingora cache/代理状态机或在 CloudSidra-Edge 中实现独立的响应体读取与缓存写入路径。
+因此当前 cloud-node 中该能力是 storage 级别的统一行为，不是 `enableReadingOriginAsync` 可单独开启或关闭的规则级行为。严格按单条缓存规则控制该字段，需要后续改造 Pingora cache/代理状态机或在 cloud-node 中实现独立的响应体读取与缓存写入路径。
 
 ## 访问日志配置
 
@@ -195,7 +243,7 @@ sysctl -w net.ipv4.tcp_congestion_control=bbr
 验证本地 `configs/api_node.yaml`：
 
 ```bash
-CloudSidra-Edge test
+cloud-node test
 ```
 
 该命令只验证本地 API 配置是否能解析，不代表控制面连接一定成功。

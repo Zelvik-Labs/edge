@@ -6,6 +6,7 @@ use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
 use std::num::NonZeroUsize;
 use std::sync::LazyLock as Lazy;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tracing::warn;
 use woothee::parser::Parser;
@@ -59,8 +60,11 @@ impl Clone for RequestStats {
 }
 
 static GEO_AVAILABLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static GEO_CITY_BYTES: AtomicU64 = AtomicU64::new(0);
+static GEO_CITY_GENERATION: AtomicU64 = AtomicU64::new(0);
+static GEO_ASN_BYTES: AtomicU64 = AtomicU64::new(0);
 
-static GEO_CITY_READER: Lazy<ArcSwapOption<maxminddb::Reader<Vec<u8>>>> =
+static GEO_CITY_READER: Lazy<ArcSwapOption<maxminddb::Reader<maxminddb::Mmap>>> =
     Lazy::new(ArcSwapOption::empty);
 
 pub fn initialize_geoip_readers() {
@@ -79,7 +83,10 @@ pub fn initialize_geoip_readers() {
 }
 
 pub fn reload_city_reader(path: &std::path::Path) -> anyhow::Result<()> {
-    let reader = maxminddb::Reader::open_readfile(path)?;
+    // SAFETY: the GeoIP database is only replaced via download-to-temp plus
+    // atomic rename (rpc/files.rs install_city_database), so the inode this
+    // reader mmaps is never modified or truncated in place.
+    let reader = unsafe { maxminddb::Reader::open_mmap(path)? };
     reader.verify()?;
     anyhow::ensure!(
         reader
@@ -91,17 +98,34 @@ pub fn reload_city_reader(path: &std::path::Path) -> anyhow::Result<()> {
         reader.metadata().database_type
     );
     GEO_CITY_READER.store(Some(Arc::new(reader)));
+    GEO_CITY_BYTES.store(
+        std::fs::metadata(path)
+            .map(|metadata| metadata.len())
+            .unwrap_or(0),
+        Ordering::Release,
+    );
+    GEO_CITY_GENERATION.fetch_add(1, Ordering::AcqRel);
     GEO_AVAILABLE.store(true, std::sync::atomic::Ordering::Release);
     GEO_CACHE.clear();
     Ok(())
 }
 
-static GEO_ASN_READER: Lazy<Option<maxminddb::Reader<Vec<u8>>>> = Lazy::new(|| {
+static GEO_ASN_READER: Lazy<Option<maxminddb::Reader<maxminddb::Mmap>>> = Lazy::new(|| {
     let paths = crate::paths::NodePaths::current().geoip_asn_candidates();
     for path in &paths {
         if path.exists() {
-            return match maxminddb::Reader::open_readfile(path) {
-                Ok(r) => Some(r),
+            // SAFETY: GeoIP databases are only installed via atomic rename;
+            // see reload_city_reader.
+            return match unsafe { maxminddb::Reader::open_mmap(path) } {
+                Ok(r) => {
+                    GEO_ASN_BYTES.store(
+                        std::fs::metadata(path)
+                            .map(|metadata| metadata.len())
+                            .unwrap_or(0),
+                        Ordering::Release,
+                    );
+                    Some(r)
+                }
                 Err(e) => {
                     warn!(
                         "Failed to load GeoIP ASN database at {}: {}. ASN stats will be disabled.",
@@ -151,8 +175,20 @@ impl<K: Hash + Eq, V: Clone> ShardedLru<K, V> {
 
     fn clear(&self) {
         for shard in &self.shards {
-            shard.lock().unwrap().clear();
+            shard.lock().unwrap_or_else(|e| e.into_inner()).clear();
         }
+    }
+
+    fn clear_counted(&self) -> usize {
+        self.shards
+            .iter()
+            .map(|shard| {
+                let mut cache = shard.lock().unwrap_or_else(|e| e.into_inner());
+                let removed = cache.len();
+                cache.clear();
+                removed
+            })
+            .sum()
     }
 
     fn get_shard(&self, key: &K) -> &Mutex<LruCache<K, V>> {
@@ -175,21 +211,13 @@ impl<K: Hash + Eq, V: Clone> ShardedLru<K, V> {
 }
 
 // Cache for GeoIP results (IP -> GeoInfo)
-static GEO_CACHE: Lazy<ShardedLru<IpAddr, Option<GeoInfo>>> = Lazy::new(|| {
-    ShardedLru::new(cache_capacity_per_shard(
-        GEO_CACHE_ENTRY_ESTIMATED_BYTES,
-        4,
-    ))
-});
+static GEO_CACHE: Lazy<ShardedLru<IpAddr, Option<GeoInfo>>> =
+    Lazy::new(|| ShardedLru::new(cache_capacity_per_shard(GEO_CACHE_ENTRY_ESTIMATED_BYTES, 4)));
 
 // Cache for User-Agent results (UA string -> (Arc<str>, Arc<str>))
-static UA_CACHE: Lazy<ShardedLru<String, (Arc<str>, Arc<str>, Arc<str>, Arc<str>)>> =
-    Lazy::new(|| {
-        ShardedLru::new(cache_capacity_per_shard(
-            UA_CACHE_ENTRY_ESTIMATED_BYTES,
-            4,
-        ))
-    });
+type UaCacheValue = (Arc<str>, Arc<str>, Arc<str>, Arc<str>);
+static UA_CACHE: Lazy<ShardedLru<String, UaCacheValue>> =
+    Lazy::new(|| ShardedLru::new(cache_capacity_per_shard(UA_CACHE_ENTRY_ESTIMATED_BYTES, 4)));
 
 static UA_PARSER: Lazy<Parser> = Lazy::new(Parser::new);
 
@@ -197,7 +225,7 @@ pub fn analyze_request(ip: IpAddr, ua: &str) -> RequestStats {
     // Fast path: skip Mutex lock when GeoIP database is unavailable
     let geo = if GEO_AVAILABLE.load(std::sync::atomic::Ordering::Relaxed) {
         let mutex = GEO_CACHE.get_shard(&ip);
-        let mut cache = mutex.lock().unwrap();
+        let mut cache = mutex.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(cached) = cache.get(&ip) {
             cached.clone()
         } else {
@@ -213,7 +241,7 @@ pub fn analyze_request(ip: IpAddr, ua: &str) -> RequestStats {
         (Arc::from(""), Arc::from(""), Arc::from(""), Arc::from(""))
     } else {
         let mutex = UA_CACHE.get_shard_by(ua);
-        let mut cache = mutex.lock().unwrap();
+        let mut cache = mutex.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(cached) = cache.get(ua) {
             cached.clone()
         } else {
@@ -304,29 +332,6 @@ fn lookup_geo_internal(ip: IpAddr) -> Option<GeoInfo> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn analyze_request_reuses_ua_cache_result_shape() {
-        let ip = "127.0.0.1".parse().expect("valid ip");
-        let ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36";
-
-        let first = analyze_request(ip, ua);
-        let second = analyze_request(ip, ua);
-
-        assert_eq!(&*first.browser, &*second.browser);
-        assert_eq!(&*first.os, &*second.os);
-    }
-
-    #[test]
-    fn lookup_asn_label_formats_as_prefix_when_number_known() {
-        assert_eq!(lookup_asn_label("127.0.0.1".parse().unwrap()).as_ref(), "");
-        assert_eq!(lookup_asn_number("127.0.0.1".parse().unwrap()), 0);
-    }
-}
-
 pub fn lookup_isp_name(ip: IpAddr) -> Arc<str> {
     Arc::from(get_isp_name(ip))
 }
@@ -358,14 +363,58 @@ pub fn asn_database_available() -> bool {
     GEO_ASN_READER.is_some()
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct GeoIpMemorySnapshot {
+    pub city_loaded: bool,
+    pub city_bytes: u64,
+    pub city_generation: u64,
+    pub asn_loaded: bool,
+    pub asn_bytes: u64,
+}
+
+pub fn geoip_memory_snapshot() -> GeoIpMemorySnapshot {
+    GeoIpMemorySnapshot {
+        city_loaded: GEO_AVAILABLE.load(Ordering::Acquire),
+        city_bytes: GEO_CITY_BYTES.load(Ordering::Acquire),
+        city_generation: GEO_CITY_GENERATION.load(Ordering::Acquire),
+        asn_loaded: asn_database_available(),
+        asn_bytes: GEO_ASN_BYTES.load(Ordering::Acquire),
+    }
+}
+
 pub fn lookup_geo(ip: IpAddr) -> Option<GeoInfo> {
     lookup_geo_internal(ip)
 }
 
 pub fn reclaim_geo_ua_caches(clear_all: bool) -> (usize, usize) {
-    GEO_CACHE.clear();
-    if clear_all {
-        UA_CACHE.clear();
+    let geo_removed = GEO_CACHE.clear_counted();
+    let ua_removed = if clear_all {
+        UA_CACHE.clear_counted()
+    } else {
+        0
+    };
+    (geo_removed, ua_removed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn analyze_request_reuses_ua_cache_result_shape() {
+        let ip = "127.0.0.1".parse().expect("valid ip");
+        let ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36";
+
+        let first = analyze_request(ip, ua);
+        let second = analyze_request(ip, ua);
+
+        assert_eq!(&*first.browser, &*second.browser);
+        assert_eq!(&*first.os, &*second.os);
     }
-    (1, usize::from(clear_all))
+
+    #[test]
+    fn lookup_asn_label_formats_as_prefix_when_number_known() {
+        assert_eq!(lookup_asn_label("127.0.0.1".parse().unwrap()).as_ref(), "");
+        assert_eq!(lookup_asn_number("127.0.0.1".parse().unwrap()), 0);
+    }
 }

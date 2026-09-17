@@ -9,8 +9,7 @@ use std::sync::LazyLock as Lazy;
 // parking_lot::RwLock does not poison on panic; the std variant would permanently
 // brick this config-sync path the moment any holder panics.
 use parking_lot::RwLock;
-use std::sync::Arc;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 static LAST_SINGLE_SERVER_JSON_HASH: Lazy<RwLock<String>> =
     Lazy::new(|| RwLock::new(String::new()));
@@ -30,6 +29,19 @@ fn log_server_json_hints(label: &str, raw: &[u8]) {
             );
         }
     }
+}
+
+/// Fingerprint of a server/user JSON payload as installed. Besides the payload
+/// hash it embeds the global runtime context salt (global HTTP settings, node
+/// level, parent nodes, …) and the binary version, so rebuilt routes always
+/// reflect the context they were built under.
+fn scoped_fingerprint(config_store: &ConfigStore, payload_hash: &str) -> String {
+    format!(
+        "{}:{}:{}",
+        config_store.runtime_fingerprint_salt(),
+        env!("CARGO_PKG_VERSION"),
+        payload_hash
+    )
 }
 
 pub async fn sync_single_server_config(
@@ -69,6 +81,19 @@ pub async fn sync_single_server_config(
                 return true;
             }
             let current_hash = format!("{:x}", md5_legacy::compute(&payload.server_config_json));
+            let fingerprint_scope = format!("server:{server_id}");
+            if config_store
+                .published_fingerprint(&fingerprint_scope)
+                .as_deref()
+                == Some(scoped_fingerprint(config_store, &current_hash).as_str())
+            {
+                debug!(
+                    server_id,
+                    fingerprint = %current_hash,
+                    "server config unchanged; skipping rebuild"
+                );
+                return true;
+            }
             let mut should_log = true;
             {
                 let last_hash = LAST_SINGLE_SERVER_JSON_HASH.read();
@@ -79,17 +104,16 @@ pub async fn sync_single_server_config(
             if should_log {
                 log_server_json_hints("server_config_json", &payload.server_config_json);
                 let mut last_hash = LAST_SINGLE_SERVER_JSON_HASH.write();
-                *last_hash = current_hash;
+                *last_hash = current_hash.clone();
             }
             match serde_json::from_slice::<ServerConfig>(&payload.server_config_json) {
                 Ok(server) => {
                     let user_id = server.user_id;
-                    let runtime_servers = vec![server];
                     let (node_level, parent_nodes, tiered_origin_bypass, allow_lan) =
                         config_store.get_origin_runtime_context().await;
                     let global_http = Some((*config_store.get_global_http_config_sync()).clone());
-                    let (servers, routes) = build_runtime_maps(
-                        runtime_servers.clone(),
+                    let maps = build_runtime_maps(
+                        vec![server],
                         health_manager,
                         node_level,
                         parent_nodes,
@@ -98,25 +122,31 @@ pub async fn sync_single_server_config(
                         global_http,
                     )
                     .await;
+                    if !maps.stats.admitted {
+                        warn!(
+                            server_id,
+                            "server config apply deferred by memory governor; keeping previous generation"
+                        );
+                        return false;
+                    }
                     if user_id > 0 {
                         config_store
                             .replace_user_servers(
                                 user_id,
-                                runtime_servers.into_iter().map(Arc::new).collect(),
-                                servers,
-                                routes,
+                                maps.all_servers,
+                                maps.servers,
+                                maps.routes,
                             )
                             .await;
                     } else {
                         config_store
-                            .replace_server(
-                                server_id,
-                                runtime_servers.into_iter().map(Arc::new).collect(),
-                                servers,
-                                routes,
-                            )
+                            .replace_server(server_id, maps.all_servers, maps.servers, maps.routes)
                             .await;
                     }
+                    config_store.mark_published_fingerprint(
+                        fingerprint_scope,
+                        scoped_fingerprint(config_store, &current_hash),
+                    );
                     let _ = sync_active_plans(api_config, config_store).await;
                     true
                 }
@@ -225,6 +255,19 @@ pub async fn sync_user_servers_state(
                 return true;
             }
             let current_hash = format!("{:x}", md5_legacy::compute(&payload.servers_config_json));
+            let fingerprint_scope = format!("user:{user_id}");
+            if config_store
+                .published_fingerprint(&fingerprint_scope)
+                .as_deref()
+                == Some(scoped_fingerprint(config_store, &current_hash).as_str())
+            {
+                debug!(
+                    user_id,
+                    fingerprint = %current_hash,
+                    "user server config unchanged; skipping rebuild"
+                );
+                return true;
+            }
             let mut should_log = true;
             {
                 let last_hash = LAST_MULTI_SERVER_JSON_HASH.read();
@@ -235,16 +278,15 @@ pub async fn sync_user_servers_state(
             if should_log {
                 log_server_json_hints("servers_config_json", &payload.servers_config_json);
                 let mut last_hash = LAST_MULTI_SERVER_JSON_HASH.write();
-                *last_hash = current_hash;
+                *last_hash = current_hash.clone();
             }
             match serde_json::from_slice::<Vec<ServerConfig>>(&payload.servers_config_json) {
                 Ok(servers) => {
-                    let runtime_servers = servers;
                     let (node_level, parent_nodes, tiered_origin_bypass, allow_lan) =
                         config_store.get_origin_runtime_context().await;
                     let global_http = Some((*config_store.get_global_http_config_sync()).clone());
-                    let (servers_map, routes_map) = build_runtime_maps(
-                        runtime_servers.clone(),
+                    let maps = build_runtime_maps(
+                        servers,
                         health_manager,
                         node_level,
                         parent_nodes,
@@ -253,14 +295,20 @@ pub async fn sync_user_servers_state(
                         global_http,
                     )
                     .await;
-                    config_store
-                        .replace_user_servers(
+                    if !maps.stats.admitted {
+                        warn!(
                             user_id,
-                            runtime_servers.into_iter().map(Arc::new).collect(),
-                            servers_map,
-                            routes_map,
-                        )
+                            "user servers config apply deferred by memory governor; keeping previous generation"
+                        );
+                        return false;
+                    }
+                    config_store
+                        .replace_user_servers(user_id, maps.all_servers, maps.servers, maps.routes)
                         .await;
+                    config_store.mark_published_fingerprint(
+                        fingerprint_scope,
+                        scoped_fingerprint(config_store, &current_hash),
+                    );
                     let _ = sync_active_plans(api_config, config_store).await;
                     true
                 }

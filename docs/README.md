@@ -1,34 +1,36 @@
-# CloudSidra-Edge 文档
+# CloudNode Rust 文档
 
-文档描述 **CloudSidra-Edge `0.1.0` 产品版本**，其代码来源为 `cloud-node-rust 1.2.2` 基线。产品线见 [series.md](series.md)。CLI 为 `CloudSidra-Edge`。
+这个目录保存 CloudNode Rust 的长期维护文档。README 只保留项目入口信息，具体功能、运行时、配置和运维细节统一放在这里。
 
 ## 文档目录
 
-- [产品线](series.md)
-- [架构概览](architecture.md)
-- [运行时说明](runtime.md)
-- [功能说明](features.md)
-- [配置说明](configuration.md)
-- [XDP/AF_XDP 旁路数据面](xdp-af-xdp.md)
-- [RocksDB 到 Mace 元数据迁移](mace-migration.md)
-- [mace-kv 0.1.1 静态审计](mace-0.1.1-audit.md)
-- [接收配置审计](config-receive-audit.md)
-- [部署与运维](operations.md)
-- [RKE2 部署文档](rke2-deployment.md)
-- [gRPC API](grpc-api.md)
-- [版本号规划](versioning.md)
+- [架构概览](architecture.md)：说明控制面、代理运行时、缓存、WAF、日志统计和四层代理之间的关系。
+- [生产级边缘节点目标架构](edge-node-production-architecture.md)：面向 XDP、防护、代理、缓存和可靠性的目标合同、故障策略与验收要求；属于待实施设计。
+- [生产级边缘节点开发计划](../tasks/edge-node-production-plan.md)：34 个任务包、依赖、阶段门槛、验证证据和回退方法。
+- [其他模型开发交接](../tasks/edge-node-development-handoff.md)：可复制的开发与独立审阅指令，以及任务状态和证据模板。
+- [运行时说明](runtime.md)：说明进程启动、任务调度、配置热更新、证书、缓存后台任务和性能监控。
+- [功能说明](features.md)：逐项介绍协议代理、缓存、WAF、内容处理、日志统计、证书和多级分发能力。
+- [配置说明](configuration.md)：说明 `configs/api_node.yaml`、运行目录、数据文件、缓存目录和控制面配置兼容。
+- [XDP/AF_XDP 旁路数据面](xdp-af-xdp.md)：说明 Linux XDP protect/proxy 配置、CLI、回退、协议接入和集成测试。
+- [RocksDB 到 Mace 元数据迁移](mace-migration.md)：说明升级存储引擎时的数据导入、校验与回滚边界。
+- [mace-kv 0.1.1 静态审计](mace-0.1.1-audit.md)：对照上游 issue #1 修复，说明何时可以拆除适配层串行规避。
+- [接收配置审计](config-receive-audit.md)：对照全局配置、网站配置、实际应用路径和优先级，并列出当前接收缺口。
+- [部署与运维](operations.md)：说明构建、安装、systemd、系统参数、监控、日志和排障建议。
+- [RKE2 部署文档](rke2-deployment.md)：说明 RKE2 多副本部署流程，以及复用/新建 Longhorn 的缓存存储配置。
+- [gRPC API 使用文档](grpc-api.md)：说明节点当前调用的控制面 gRPC 接口、请求、响应和配置应用方式。
 
 ## 阅读顺序
 
-1. [产品线](series.md)
-2. [架构概览](architecture.md)
-3. [配置说明](configuration.md)
-4. [功能说明](features.md)
-5. [运行时说明](runtime.md) 与 [部署与运维](operations.md)
+新接触项目时建议按以下顺序阅读：
 
-## 维护原则
+1. 先读 [架构概览](architecture.md)，理解节点整体数据流。
+2. 再读 [配置说明](configuration.md)，确认节点如何连接控制面。
+3. 然后读 [功能说明](features.md)，理解各类能力边界。
+4. 最后读 [运行时说明](runtime.md) 和 [部署与运维](operations.md)，用于上线和排障。
 
-- 功能变更同步改文档。
-- 命令必须对应当前 CLI `CloudSidra-Edge`。
-- 不写真实密钥、内网地址或生产账号。
-- 不追加已删除的历史 Release 说明。
+## 文档维护原则
+
+- README 保持简洁，避免堆叠所有实现细节。
+- 功能变更需要同步更新对应文档。
+- 文档中的命令必须能对应当前 CLI。
+- 不在文档中暴露真实节点密钥、内网地址或生产账号信息。

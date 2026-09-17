@@ -1,4 +1,4 @@
-# Edge 节点 gRPC API（`cloud-node-rust-v1` 兼容基线）
+# cloud-node-rust gRPC API 使用文档
 
 本文档只覆盖当前 Rust 数据面会主动调用的控制面 gRPC 接口。字段说明以 2026-05-26 对真实控制面节点凭据采样为准；写接口未为了文档造数据，因此写接口的响应按 proto 和运行时调用语义说明为准。
 
@@ -367,7 +367,7 @@
 
 ## 8. 运行时内部 API（RKE2 pod 间，不是控制面 gRPC）
 
-RKE2 模式启用 pod 内部 HTTP API，默认监听 `0.0.0.0:19090`，通过 `CLOUD_NODE_CLUSTER_INTERNAL_TOKEN` 鉴权，Headless Service 暴露给同 namespace 内其他 CloudSidra-Edge pod。
+RKE2 模式启用 pod 内部 HTTP API，默认监听 `0.0.0.0:19090`，通过 `CLOUD_NODE_CLUSTER_INTERNAL_TOKEN` 鉴权，Headless Service 暴露给同 namespace 内其他 cloud-node pod。
 
 - `GET /internal/v1/health`：健康检查，Kubernetes probe 使用。
 - `POST /internal/v1/purge`：Leader 将 cache purge fanout 到其他 pod。

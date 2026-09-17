@@ -17,8 +17,136 @@ use pingora_proxy::{ProxyHttp, Session};
 use std::sync::LazyLock as Lazy;
 use std::time::Duration;
 
-use cloudsidra_edge::cache_manager::CACHE;
+use cloud_node_rust::cache_manager::CACHE;
 use pingora_cache::CacheKey;
+
+/// Minimal HTTP/3 (QUIC) listener mirroring the production `http3_proxy_manager`
+/// path: quinn Endpoint -> h3::server accept -> H3DownstreamSession ->
+/// ServerSession::new_custom -> HttpProxy::process_new_http. Upstream stays the
+/// default HTTP/1.1 TCP connector (unit custom connector).
+mod h3_listener {
+    use super::BenchProxy;
+    use bytes::Bytes;
+    use cloud_node_rust::h3_downstream::H3DownstreamSession;
+    use pingora_core::apps::HttpServerApp;
+    use pingora_core::protocols::http::server::Session as ServerSession;
+    use pingora_core::server::configuration::ServerConf;
+    use std::net::SocketAddr;
+    use std::sync::Arc;
+
+    fn load_rustls_config(cert_path: &str, key_path: &str) -> anyhow::Result<quinn::ServerConfig> {
+        let cert_pem = std::fs::read(cert_path)?;
+        let key_pem = std::fs::read(key_path)?;
+        let certs: Vec<rustls::pki_types::CertificateDer<'static>> =
+            rustls_pemfile::certs(&mut cert_pem.as_slice()).collect::<Result<_, _>>()?;
+        let key = rustls_pemfile::private_key(&mut key_pem.as_slice())?
+            .ok_or_else(|| anyhow::anyhow!("no private key in {key_path}"))?;
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        let mut tls = rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(certs, key)?;
+        tls.alpn_protocols = vec![b"h3".to_vec()];
+        tls.max_early_data_size = 0;
+        let crypto = quinn::crypto::rustls::QuicServerConfig::try_from(Arc::new(tls))?;
+        let mut cfg = quinn::ServerConfig::with_crypto(Arc::new(crypto));
+        // BENCH_QUIC_MTU raises the initial/upper-bound QUIC datagram size —
+        // on loopback (mtu 65536) each datagram carries far more payload so
+        // the per-packet syscall+AEAD cost amortizes over more bytes.
+        let mtu = std::env::var("BENCH_QUIC_MTU")
+            .ok()
+            .and_then(|v| v.parse::<u16>().ok());
+        let transport = Arc::get_mut(&mut cfg.transport).unwrap();
+        *transport = cloud_node_rust::quic_transport::tuned_transport_config(mtu);
+        transport.max_concurrent_bidi_streams(256u32.into());
+        transport.max_concurrent_uni_streams(256u32.into());
+        Ok(cfg)
+    }
+
+    pub fn spawn(
+        addr: &str,
+        conf: Arc<ServerConf>,
+        cert_path: String,
+        key_path: String,
+    ) -> anyhow::Result<()> {
+        let server_config = load_rustls_config(&cert_path, &key_path)?;
+        let bind: SocketAddr = addr.parse()?;
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().expect("h3 runtime");
+            rt.block_on(async move {
+                if let Err(err) = run(bind, server_config, conf).await {
+                    eprintln!("h3 listener exited: {err}");
+                }
+            });
+        });
+        Ok(())
+    }
+
+    async fn run(
+        bind: SocketAddr,
+        server_config: quinn::ServerConfig,
+        conf: Arc<ServerConf>,
+    ) -> anyhow::Result<()> {
+        let endpoint = quinn::Endpoint::server(server_config, bind)?;
+        eprintln!("Bench proxy H3 ready: udp {}", bind);
+        let proxy = Arc::new(pingora_proxy::http_proxy_custom(&conf, BenchProxy, ()));
+        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let _keep_alive = shutdown_tx; // never signalled; keeps senders alive
+        loop {
+            let Some(connecting) = endpoint.accept().await else {
+                continue;
+            };
+            let remote_addr = connecting.remote_address();
+            let local_addr = bind;
+            let proxy = Arc::clone(&proxy);
+            let shutdown = shutdown_rx.clone();
+            tokio::spawn(async move {
+                let Ok(conn) = connecting.await else { return };
+                let Ok(mut h3_conn) = h3::server::builder()
+                    .build(h3_quinn::Connection::new(conn))
+                    .await
+                else {
+                    return;
+                };
+                loop {
+                    match h3_conn.accept().await {
+                        Ok(Some(resolver)) => {
+                            let proxy = Arc::clone(&proxy);
+                            let shutdown = shutdown.clone();
+                            tokio::spawn(async move {
+                                let Ok((request, stream)) = resolver.resolve_request().await else {
+                                    return;
+                                };
+                                let Ok(h3_session) = H3DownstreamSession::new(
+                                    request,
+                                    stream,
+                                    remote_addr,
+                                    local_addr,
+                                ) else {
+                                    return;
+                                };
+                                let session = ServerSession::new_custom(Box::new(h3_session));
+                                proxy.process_new_http(session, &shutdown).await;
+                            });
+                        }
+                        Ok(None) => return,
+                        Err(_) => return,
+                    }
+                }
+            });
+        }
+    }
+
+    // Silence unused import lint when feature-gated pieces shift.
+    #[allow(dead_code)]
+    fn _t(_: Bytes) {}
+}
+
+use h3_listener as bench_h3;
+
+// Match the production binary's allocator so benchmarks measure the same
+// allocation behavior.
+#[global_allocator]
+static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 static CACHE_LOCK: Lazy<CacheLock> =
     Lazy::new(|| CacheLock::new(std::time::Duration::from_secs(1)));
@@ -33,9 +161,20 @@ impl ProxyHttp for BenchProxy {
     }
 
     async fn request_filter(&self, session: &mut Session, _ctx: &mut Self::CTX) -> Result<bool> {
-        session
-            .cache
-            .enable(&*CACHE.storage, None, None, Some(&*CACHE_LOCK), None);
+        // A `dyn=` query marker models dynamic API traffic: cache stays
+        // disabled end-to-end so the run measures pure passthrough (no
+        // lookup, no fill, no metadata write) instead of a miss stream.
+        let dynamic = session
+            .req_header()
+            .uri
+            .query()
+            .map(|q| q.split('&').any(|p| p.starts_with("dyn=")))
+            .unwrap_or(false);
+        if !dynamic {
+            session
+                .cache
+                .enable(CACHE.storage, None, None, Some(&*CACHE_LOCK), None);
+        }
         Ok(false)
     }
 
@@ -68,6 +207,18 @@ impl ProxyHttp for BenchProxy {
         Ok(pingora_cache::RespCacheable::Cacheable(meta))
     }
 
+    /// File-backed cache hits may bypass `response_body_filter` (sendfile).
+    /// The bench has no per-byte accounting or throttling, so allow it
+    /// unconditionally.
+    async fn cache_hit_file_body(
+        &self,
+        _session: &mut Session,
+        _body_len: u64,
+        _ctx: &mut Self::CTX,
+    ) -> Result<Option<Duration>> {
+        Ok(Some(Duration::ZERO))
+    }
+
     async fn response_filter(
         &self,
         _session: &mut Session,
@@ -80,10 +231,13 @@ impl ProxyHttp for BenchProxy {
 }
 
 fn main() {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
     let mut conf = ServerConf::default();
     conf.threads = num_cpus::get();
     conf.upstream_keepalive_pool_size =
-        cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.pingora_keepalive_pool_size(conf.threads);
+        cloud_node_rust::memory_governor::MEMORY_GOVERNOR.pingora_keepalive_pool_size(conf.threads);
 
     let mut server = Server::new_with_opt_and_conf(None, conf);
     server.bootstrap();
@@ -91,8 +245,68 @@ fn main() {
     // Force initialization of global cache
     Lazy::force(&CACHE);
 
+    // BENCH_DISK_MAX_BYTES caps the L2 budget for miss-stream workloads so
+    // the purger bounds total cache writes during a bounded run.
+    if let Ok(limit) = std::env::var("BENCH_DISK_MAX_BYTES")
+        && let Ok(bytes) = limit.parse::<u64>()
+    {
+        CACHE
+            .storage
+            .max_disk_bytes
+            .store(bytes, std::sync::atomic::Ordering::Relaxed);
+        eprintln!("L2 disk budget overridden: {bytes} bytes");
+    }
+
+    // Cache metadata lives in the Mace-backed MetricStorage; without the writer
+    // thread every fill is discarded and all requests miss. Run the flusher on
+    // its own runtime so the tokio::spawn inside it has a reactor.
+    std::thread::spawn(|| {
+        let rt = tokio::runtime::Runtime::new().expect("flusher runtime");
+        rt.block_on(async {
+            cloud_node_rust::metrics::storage::start_cache_access_flusher();
+            // The purger enforces BENCH_DISK_MAX_BYTES (and expiry) on the
+            // isolated cache volume; without it the miss-stream group could
+            // grow the disk cache without bound.
+            tokio::spawn(cloud_node_rust::cache_hybrid::start_cache_purger(
+                CACHE.storage,
+                cloud_node_rust::paths::NodePaths::current().cache_dir(),
+            ));
+            std::future::pending::<()>().await;
+        });
+    });
+
     let mut proxy = pingora_proxy::http_proxy_service(&server.configuration, BenchProxy);
     proxy.add_tcp("0.0.0.0:8080");
+
+    // Optional TLS + H3 endpoints for protocol-matrix runs. Enabled only when
+    // BENCH_TLS_CERT / BENCH_TLS_KEY point at PEM files: :8443/tcp serves
+    // h1+h2 via ALPN, :8443/udp serves h3. Without them the binary behaves
+    // exactly as before (h1 cleartext only).
+    match (
+        std::env::var("BENCH_TLS_CERT"),
+        std::env::var("BENCH_TLS_KEY"),
+    ) {
+        (Ok(cert), Ok(key)) => {
+            match pingora_core::listeners::tls::TlsSettings::intermediate(&cert, &key) {
+                Ok(mut tls) => {
+                    tls.enable_h2(); // ALPN: h2 preferred, http/1.1 allowed
+                    proxy.add_tls_with_settings("0.0.0.0:8443", None, tls);
+                    eprintln!("Bench proxy TLS ready: :8443 (ALPN h2,http/1.1)");
+                }
+                Err(err) => eprintln!("TLS listener disabled: {err}"),
+            }
+            if let Err(err) = bench_h3::spawn(
+                "0.0.0.0:8443",
+                server.configuration.clone(),
+                cert.clone(),
+                key.clone(),
+            ) {
+                eprintln!("H3 listener disabled: {err}");
+            }
+        }
+        _ => eprintln!("BENCH_TLS_CERT/BENCH_TLS_KEY unset: TLS/H3 listeners disabled"),
+    }
+
     server.add_service(proxy);
 
     eprintln!("Bench proxy ready: :8080 -> origin :8081");

@@ -70,7 +70,7 @@ pub struct TcpExtCounters {
 }
 
 pub fn start_monitor() {
-    let _ = *STARTED;
+    *STARTED;
     static SPAWNED: AtomicU64 = AtomicU64::new(0);
     if SPAWNED
         .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
@@ -137,7 +137,8 @@ async fn monitor_loop() {
                 .saturating_sub(prev.req_q_full_do_cookies),
             req_q_full_drop: current.req_q_full_drop.saturating_sub(prev.req_q_full_drop),
         };
-        let level = pressure_from_delta(&delta);
+        let level =
+            crate::l4_defense::syn_pressure_level_hysteretic(pressure_from_delta(&delta));
         LISTEN_OVERFLOWS_DELTA.store(delta.listen_overflows, Ordering::Relaxed);
         LISTEN_DROPS_DELTA.store(delta.listen_drops, Ordering::Relaxed);
         SYNCOOKIES_SENT_DELTA.store(delta.syncookies_sent, Ordering::Relaxed);
@@ -189,7 +190,7 @@ pub fn parse_tcp_ext_counters(input: &str) -> anyhow::Result<TcpExtCounters> {
             let values = fields;
             let map = header
                 .into_iter()
-                .zip(values.into_iter())
+                .zip(values)
                 .filter_map(|(key, value)| value.parse::<u64>().ok().map(|value| (key, value)))
                 .collect::<HashMap<_, _>>();
             return Ok(TcpExtCounters {
@@ -252,7 +253,7 @@ pub enum SynproxyMode {
 pub async fn synproxy_command(mode: SynproxyMode) -> anyhow::Result<String> {
     #[cfg(not(target_os = "linux"))]
     {
-        return match mode {
+        match mode {
             SynproxyMode::Status => Ok(format!(
                 "CloudNode SYNPROXY status\n  platform: unsupported (Linux only)\n  syn pressure: {}\n  l4 pressure: {}",
                 snapshot().pressure_level.as_str(),
@@ -261,7 +262,7 @@ pub async fn synproxy_command(mode: SynproxyMode) -> anyhow::Result<String> {
             SynproxyMode::Enable | SynproxyMode::Disable => {
                 anyhow::bail!("SYNPROXY management is only supported on Linux")
             }
-        };
+        }
     }
 
     #[cfg(target_os = "linux")]
@@ -999,7 +1000,7 @@ fn notrack_rule_args() -> [&'static str; 24] {
 }
 
 #[cfg(target_os = "linux")]
-fn synproxy_rule_args() -> [&'static str; 20] {
+fn synproxy_rule_args() -> [&'static str; 19] {
     [
         "add",
         "rule",
@@ -1020,7 +1021,6 @@ fn synproxy_rule_args() -> [&'static str; 20] {
         "timestamp",
         "sack-perm",
         "comment",
-        NFT_COMMENT_SYNPROXY,
     ]
 }
 
@@ -1079,7 +1079,7 @@ fn with_rule_comment(args: &[String]) -> Vec<String> {
         } else {
             NFT_COMMENT_SYNPROXY
         };
-        out.push(comment.to_string());
+        out.push(format!("\"{comment}\""));
     }
     out
 }

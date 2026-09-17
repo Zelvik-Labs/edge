@@ -59,18 +59,13 @@ pub enum L4DefenseKind {
     H3AdmissionReject,
 }
 
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Default)]
 pub enum L4PressureLevel {
+    #[default]
     Normal,
     Elevated,
     High,
     Critical,
-}
-
-impl Default for L4PressureLevel {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 impl L4PressureLevel {
@@ -230,6 +225,10 @@ impl ActiveIpTracker {
         loop {
             let current = counter.load(Ordering::Acquire);
             if current >= limit {
+                // Rejected acquisitions must not strand the counter entry we
+                // just created — an IP-spoofed flood would otherwise grow the
+                // tracker without bound.
+                self.remove_if_idle(ip, &counter);
                 return None;
             }
             if counter
@@ -259,8 +258,7 @@ impl Drop for ActiveIpPermit {
 static TCP_ACTIVE_IP_TRACKER: LazyLock<ActiveIpTracker> = LazyLock::new(ActiveIpTracker::new);
 static L4_METRICS: LazyLock<L4DefenseMetrics> = LazyLock::new(L4DefenseMetrics::new);
 static L4_AGGREGATES: LazyLock<L4AggregateState> = LazyLock::new(L4AggregateState::new);
-static L4_EXACT_COUNTERS: LazyLock<L4ExactCounterState> =
-    LazyLock::new(L4ExactCounterState::new);
+static L4_EXACT_COUNTERS: LazyLock<L4ExactCounterState> = LazyLock::new(L4ExactCounterState::new);
 static LAST_BLOCK_WARN_AT_MS: AtomicI64 = AtomicI64::new(0);
 static LAST_COUNTER_SATURATION_WARN_AT_MS: AtomicI64 = AtomicI64::new(0);
 
@@ -436,30 +434,27 @@ impl L4AggregateState {
         let budget = MEMORY_GOVERNOR
             .snapshot(MEMORY_GOVERNOR.pingora_worker_threads())
             .l4_aggregate_state_budget_bytes;
-        (budget
-            / L4_AGGREGATE_ESTIMATED_BYTES
-            .saturating_mul(prefix_count.max(1) as u64))
-        .max(1)
-        .min(usize::MAX as u64) as usize
+        (budget / L4_AGGREGATE_ESTIMATED_BYTES.saturating_mul(prefix_count.max(1) as u64))
+            .max(1)
+            .min(usize::MAX as u64) as usize
     }
 
     fn record(&self, cluster_id: i64, ip: IpAddr, kind: L4DefenseKind) -> AggregateRecord {
         let now = Instant::now();
         self.sweep_if_needed(now);
-        let prefix_capacity = self
-            .capacity()
-            .max(L4_SURGE_DISTINCT_IP_CRITICAL)
-            .max(1);
+        let prefix_capacity = self.capacity().max(L4_SURGE_DISTINCT_IP_CRITICAL).max(1);
         let key = L4AggregateKey::from_ip(ip);
         let mut prefix_counter = if self.prefix_counts.contains_key(&(cluster_id, key))
             || self.prefix_counts.len() < prefix_capacity
         {
-            Some(self.prefix_counts.entry((cluster_id, key)).or_insert_with(|| {
-                PrefixCountWindow {
-                    last_seen: now,
-                    count: AtomicU64::new(0),
-                }
-            }))
+            Some(
+                self.prefix_counts
+                    .entry((cluster_id, key))
+                    .or_insert_with(|| PrefixCountWindow {
+                        last_seen: now,
+                        count: AtomicU64::new(0),
+                    }),
+            )
         } else {
             None
         };
@@ -519,18 +514,24 @@ impl L4AggregateState {
             .distinct_ips
             .iter()
             .filter_map(|entry| {
-                entry.value().lock().ok().and_then(|mut window| {
+                entry.value().lock().ok().map(|mut window| {
                     window.reset_if_stale(now);
-                    Some(window.ips.len())
+                    window.ips.len()
                 })
             })
             .max()
             .unwrap_or_default();
-        let pressure_level = surge_pressure_level(distinct_ips_recent);
+        let pressure_level =
+            AGGREGATE_PRESSURE_STATE.apply(surge_pressure_level(distinct_ips_recent));
         let (top_prefix, top_prefix_events) = self
             .prefix_counts
             .iter()
-            .map(|entry| (entry.key().1.label(), entry.value().count.load(Ordering::Relaxed)))
+            .map(|entry| {
+                (
+                    entry.key().1.label(),
+                    entry.value().count.load(Ordering::Relaxed),
+                )
+            })
             .max_by_key(|(_, count)| *count)
             .unwrap_or_default();
         AggregateSnapshot {
@@ -556,19 +557,18 @@ impl L4AggregateState {
         }
         self.prefixes.retain(|_, window| {
             window
-                .lock()
+                .get_mut()
                 .map(|window| now.duration_since(window.started_at) < L4_AGGREGATE_WINDOW)
                 .unwrap_or(false)
         });
         self.distinct_ips.retain(|_, window| {
             window
-                .lock()
+                .get_mut()
                 .map(|window| now.duration_since(window.started_at) < L4_AGGREGATE_WINDOW)
                 .unwrap_or(false)
         });
-        self.prefix_counts.retain(|_, window| {
-            now.duration_since(window.last_seen) < L4_AGGREGATE_WINDOW
-        });
+        self.prefix_counts
+            .retain(|_, window| now.duration_since(window.last_seen) < L4_AGGREGATE_WINDOW);
     }
 }
 
@@ -660,7 +660,7 @@ impl L4ExactCounterState {
 
     fn sweep_force(&self, now: Instant) {
         self.counters
-            .retain(|_, window| window.lock().map(|w| !w.is_stale(now)).unwrap_or(false));
+            .retain(|_, window| window.get_mut().map(|w| !w.is_stale(now)).unwrap_or(false));
     }
 }
 
@@ -965,18 +965,170 @@ pub fn pressure_level_from_utilization_pct_ext(
         .max(crate::kernel_syn_defense::current_pressure_level())
 }
 
+/// Desired accept-worker count for the current pressure level: double at
+/// Elevated, quadruple at High, 8x at Critical, capped at 4x online CPUs so
+/// SO_REUSEPORT fan-out never exceeds what the machine can schedule. The cap
+/// can only tighten below `base_workers` when `base_workers` itself exceeds
+/// 4x CPUs (misconfiguration); it never shrinks below the base count.
+pub fn pressure_accept_worker_target(base_workers: usize) -> usize {
+    scale_accept_workers(
+        base_workers,
+        current_pressure_level(),
+        num_cpus::get(),
+    )
+}
+
+fn scale_accept_workers(
+    base_workers: usize,
+    level: L4PressureLevel,
+    online_cpus: usize,
+) -> usize {
+    let base = base_workers.max(1);
+    let scaled = match level {
+        L4PressureLevel::Normal => base,
+        L4PressureLevel::Elevated => base.saturating_mul(2),
+        L4PressureLevel::High => base.saturating_mul(4),
+        L4PressureLevel::Critical => base.saturating_mul(8),
+    };
+    scaled.min(online_cpus.saturating_mul(4)).max(base)
+}
+
+/// EN-16 hysteresis state: index (0..=3) of the last utilization-driven
+/// pressure level emitted by `current_pressure_level*`. Escalation is
+/// immediate; de-escalation requires the dominant utilization to fall below
+/// the stored band's exit threshold (10 points under the entry edge) so
+/// pressure response cannot flap at a boundary.
+static UTIL_PRESSURE_STATE: AtomicU64 = AtomicU64::new(0);
+
+fn l4_level_from_index(index: usize) -> L4PressureLevel {
+    match index.min(3) {
+        0 => L4PressureLevel::Normal,
+        1 => L4PressureLevel::Elevated,
+        2 => L4PressureLevel::High,
+        _ => L4PressureLevel::Critical,
+    }
+}
+
+/// Utilization scalar -> hysteretic pressure level. Entry bands match
+/// `level_from_pct` (70/85/95); exit bands sit 10 points lower (60/75/90)
+/// so a workload hovering at a boundary holds its level instead of
+/// oscillating protective behaviour on every observation.
+fn utilization_pressure_level_hysteretic(pct: u64) -> L4PressureLevel {
+    const ENTER: [u64; 4] = [0, 70, 85, 95];
+    const EXIT: [u64; 4] = [0, 60, 75, 90];
+    let mut index = UTIL_PRESSURE_STATE.load(Ordering::Relaxed).min(3) as usize;
+    while index < 3 && pct >= ENTER[index + 1] {
+        index += 1;
+    }
+    while index > 0 && pct < EXIT[index] {
+        index -= 1;
+    }
+    UTIL_PRESSURE_STATE.store(index as u64, Ordering::Relaxed);
+    l4_level_from_index(index)
+}
+
+fn l4_index_of(level: L4PressureLevel) -> u64 {
+    match level {
+        L4PressureLevel::Normal => 0,
+        L4PressureLevel::Elevated => 1,
+        L4PressureLevel::High => 2,
+        L4PressureLevel::Critical => 3,
+    }
+}
+
+/// EN-16: dwell-based de-escalation for the non-utilization pressure
+/// channels (memory, aggregate surge, kernel SYN). Those signals arrive
+/// already quantized as levels rather than a utilization percentage, so
+/// the hysteresis is temporal: escalation is immediate, while
+/// de-escalation only commits after the raw level has stayed below the
+/// emitted level for `L4_PRESSURE_DEESCALATE_DWELL_MS` continuously. A
+/// boundary-flickering signal can therefore never flap protection, and
+/// read-path frequency cannot shorten the dwell because it is timed.
+struct LevelHysteresis {
+    level: AtomicU64,
+    /// ms timestamp the raw level first fell below `level`; 0 = none.
+    lower_since_ms: AtomicI64,
+}
+
+/// De-escalation dwell for the level-quantized pressure channels: the raw
+/// level must stay below the emitted level for 5s before the emitted
+/// level follows it down.
+const L4_PRESSURE_DEESCALATE_DWELL_MS: i64 = 5_000;
+
+impl LevelHysteresis {
+    const fn new() -> Self {
+        Self {
+            level: AtomicU64::new(0),
+            lower_since_ms: AtomicI64::new(0),
+        }
+    }
+
+    fn apply(&self, raw: L4PressureLevel) -> L4PressureLevel {
+        self.apply_at(raw, crate::utils::time::now_timestamp_millis())
+    }
+
+    fn apply_at(&self, raw: L4PressureLevel, now: i64) -> L4PressureLevel {
+        let current = l4_level_from_index(
+            self.level.load(Ordering::Relaxed).min(3) as usize,
+        );
+        if raw >= current {
+            // Escalate (or hold) immediately — pressure protection never
+            // waits for the dwell window.
+            self.lower_since_ms.store(0, Ordering::Relaxed);
+            self.level.store(l4_index_of(raw), Ordering::Relaxed);
+            return raw;
+        }
+        let since = self.lower_since_ms.load(Ordering::Relaxed);
+        if since == 0 {
+            self.lower_since_ms.store(now.max(1), Ordering::Relaxed);
+            return current;
+        }
+        if now.saturating_sub(since) < L4_PRESSURE_DEESCALATE_DWELL_MS {
+            return current;
+        }
+        self.lower_since_ms.store(0, Ordering::Relaxed);
+        self.level.store(l4_index_of(raw), Ordering::Relaxed);
+        raw
+    }
+}
+
+/// Memory-pressure channel (governor `available_bytes` bands) seen by the
+/// L4 rollup.
+static MEMORY_PRESSURE_STATE: LevelHysteresis = LevelHysteresis::new();
+/// Aggregate distinct-source surge channel (`L4_AGGREGATES`).
+static AGGREGATE_PRESSURE_STATE: LevelHysteresis = LevelHysteresis::new();
+/// Kernel TCP/SYN counters channel (`kernel_syn_defense` monitor).
+static SYN_PRESSURE_STATE: LevelHysteresis = LevelHysteresis::new();
+
+/// Kernel-SYN monitor de-escalation point: the monitor loop computes the
+/// raw level from per-second TcpExt deltas; the stored/emitted level only
+/// steps down after the dwell window.
+pub(crate) fn syn_pressure_level_hysteretic(raw: L4PressureLevel) -> L4PressureLevel {
+    SYN_PRESSURE_STATE.apply(raw)
+}
+
+fn memory_level_to_l4(level: MemoryPressureLevel) -> L4PressureLevel {
+    match level {
+        MemoryPressureLevel::Normal => L4PressureLevel::Normal,
+        MemoryPressureLevel::Elevated => L4PressureLevel::Elevated,
+        MemoryPressureLevel::High => L4PressureLevel::High,
+        MemoryPressureLevel::Critical => L4PressureLevel::Critical,
+    }
+}
+
 pub fn current_pressure_level() -> L4PressureLevel {
     let snapshot = MEMORY_GOVERNOR.snapshot(MEMORY_GOVERNOR.pingora_worker_threads());
     let connection_pct = snapshot
         .connection_admission_used_bytes
         .saturating_mul(100)
         .saturating_div(snapshot.connection_budget_bytes.max(1));
-    aggregate_pressure_level(
-        snapshot.memory_pressure_level,
-        connection_pct,
-        None,
-        Some(snapshot.fd_used_pct),
-    )
+    MEMORY_PRESSURE_STATE
+        .apply(memory_level_to_l4(snapshot.memory_pressure_level))
+        .max(utilization_pressure_level_hysteretic(
+            connection_pct.max(snapshot.fd_used_pct),
+        ))
+        .max(L4_AGGREGATES.snapshot().pressure_level)
+        .max(crate::kernel_syn_defense::current_pressure_level())
 }
 
 pub fn aggregate_pressure_level(
@@ -1011,12 +1163,13 @@ pub fn current_pressure_level_with_quic_usage(
         .connection_admission_used_bytes
         .saturating_mul(100)
         .saturating_div(snapshot.connection_budget_bytes.max(1));
-    aggregate_pressure_level(
-        snapshot.memory_pressure_level,
-        connection_pct,
-        Some(quic_pct),
-        Some(snapshot.fd_used_pct),
-    )
+    MEMORY_PRESSURE_STATE
+        .apply(memory_level_to_l4(snapshot.memory_pressure_level))
+        .max(utilization_pressure_level_hysteretic(
+            connection_pct.max(quic_pct).max(snapshot.fd_used_pct),
+        ))
+        .max(L4_AGGREGATES.snapshot().pressure_level)
+        .max(crate::kernel_syn_defense::current_pressure_level())
 }
 
 fn usage_pct(used: usize, limit: usize) -> u64 {
@@ -1067,9 +1220,7 @@ pub fn current_tcp_active_limit_per_ip() -> usize {
 }
 
 pub fn current_sni_tcp_active_limit_per_ip() -> usize {
-    current_tcp_active_limit_per_ip()
-        .saturating_mul(4)
-        .max(256)
+    current_tcp_active_limit_per_ip().saturating_mul(4).max(256)
 }
 
 pub fn first_byte_timeout(level: L4PressureLevel) -> Duration {
@@ -1172,7 +1323,8 @@ pub fn effective_l4_threshold(
         .max(1)
         .saturating_mul(kind.threshold_multiplier());
     match level {
-        L4PressureLevel::Normal | L4PressureLevel::Elevated => threshold.max(1),
+        L4PressureLevel::Normal => threshold.max(1),
+        L4PressureLevel::Elevated => threshold.saturating_mul(3).saturating_div(4).max(1),
         L4PressureLevel::High => (threshold / 2).max(2),
         L4PressureLevel::Critical => (threshold / 4).max(2),
     }
@@ -1295,16 +1447,16 @@ where
     debug_assert!(kind.is_completed_handshake());
     let cluster_id = config_store.get_node_cluster_id_sync();
     config_store.get_empty_connection_flood_config_for_cluster_sync(cluster_id)?;
-    Some(record_l4_event_weighted_with_pressure(
+    Some(record_l4_event_weighted_with_pressure(L4EventArgs {
         config_store,
         waf_state,
         node_id,
         ip,
         kind,
         amount,
-        detail(),
-        current_pressure_level(),
-    ))
+        detail: detail(),
+        pressure_level: current_pressure_level(),
+    }))
 }
 
 pub fn record_l4_event_with_pressure(
@@ -1316,37 +1468,39 @@ pub fn record_l4_event_with_pressure(
     detail: impl Into<String>,
     pressure_level: L4PressureLevel,
 ) -> L4DefenseVerdict {
-    record_l4_event_weighted_with_pressure(
+    record_l4_event_weighted_with_pressure(L4EventArgs {
         config_store,
         waf_state,
         node_id,
         ip,
         kind,
-        1,
-        detail,
+        amount: 1,
+        detail: detail.into(),
         pressure_level,
+    })
+}
+
+pub fn record_l4_event_weighted_with_pressure(args: L4EventArgs) -> L4DefenseVerdict {
+    record_l4_event_scored(
+        args.config_store,
+        args.waf_state,
+        args.node_id,
+        args.ip,
+        args.kind,
+        args.amount,
+        L4EventContext::new(args.detail, args.pressure_level),
     )
 }
 
-pub fn record_l4_event_weighted_with_pressure(
-    config_store: &ConfigStore,
-    waf_state: &Arc<WafStateManager>,
-    node_id: i64,
-    ip: IpAddr,
-    kind: L4DefenseKind,
-    amount: u64,
-    detail: impl Into<String>,
-    pressure_level: L4PressureLevel,
-) -> L4DefenseVerdict {
-    record_l4_event_scored(
-        config_store,
-        waf_state,
-        node_id,
-        ip,
-        kind,
-        amount,
-        L4EventContext::new(detail, pressure_level),
-    )
+pub struct L4EventArgs<'a> {
+    pub config_store: &'a ConfigStore,
+    pub waf_state: &'a Arc<WafStateManager>,
+    pub node_id: i64,
+    pub ip: IpAddr,
+    pub kind: L4DefenseKind,
+    pub amount: u64,
+    pub detail: String,
+    pub pressure_level: L4PressureLevel,
 }
 
 pub fn record_l4_event_scored(
@@ -1394,19 +1548,18 @@ pub fn record_l4_event_scored(
     let aggregate = L4_AGGREGATES.record(cluster_id, ip, kind);
     L4_METRICS.record_prefix_event();
     let aggregate_drop = should_apply_aggregate_emergency_drop(&aggregate, kind, config.threshold);
-    if aggregate_drop {
-        if should_block_prefix(&aggregate, kind, config.threshold)
-            && !prefix_has_whitelisted_ip(waf_state, aggregate.prefix, cluster_scope)
-        {
-            block_cluster_prefix(
-                waf_state,
-                aggregate.prefix,
-                cluster_scope,
-                config.block_secs,
-                config.use_local_firewall,
-            );
-            L4_METRICS.record_prefix_blocked();
-        }
+    if aggregate_drop
+        && should_block_prefix(&aggregate, kind, config.threshold)
+        && !prefix_has_whitelisted_ip(waf_state, aggregate.prefix, cluster_scope)
+    {
+        block_cluster_prefix(
+            waf_state,
+            aggregate.prefix,
+            cluster_scope,
+            config.block_secs,
+            config.use_local_firewall,
+        );
+        L4_METRICS.record_prefix_blocked();
     }
 
     let pressure_level = context
@@ -1526,9 +1679,8 @@ pub fn record_l4_event_scored(
 
 fn drain_l4_connections_for_ip(ip: IpAddr, kind: L4DefenseKind, reason: &'static str) {
     let drained = if kind.preserves_sni_tcp_tunnels() {
-        l4_connection_registry::L4_CONNECTION_REGISTRY.drain_matching(|conn| {
-            conn.ip == ip && conn.protocol != L4ConnectionProtocol::SniTcp
-        })
+        l4_connection_registry::L4_CONNECTION_REGISTRY
+            .drain_matching(|conn| conn.ip == ip && conn.protocol != L4ConnectionProtocol::SniTcp)
     } else {
         l4_connection_registry::drain_ip(ip)
     };
@@ -1680,6 +1832,153 @@ mod tests {
         );
     }
 
+    /// EN-16: utilization-driven pressure escalation is immediate while
+    /// de-escalation requires dropping below the exit band — a workload
+    /// hovering at 84-86% must not flap between Elevated and High.
+    #[test]
+    fn utilization_pressure_level_has_hysteresis() {
+        UTIL_PRESSURE_STATE.store(0, Ordering::Relaxed);
+        assert_eq!(
+            utilization_pressure_level_hysteretic(69),
+            L4PressureLevel::Normal
+        );
+        // Escalate immediately at the entry edge.
+        assert_eq!(
+            utilization_pressure_level_hysteretic(70),
+            L4PressureLevel::Elevated
+        );
+        assert_eq!(
+            utilization_pressure_level_hysteretic(95),
+            L4PressureLevel::Critical
+        );
+        // Still inside the Critical exit band (>= 90): hold, not flap.
+        assert_eq!(
+            utilization_pressure_level_hysteretic(94),
+            L4PressureLevel::Critical
+        );
+        assert_eq!(
+            utilization_pressure_level_hysteretic(90),
+            L4PressureLevel::Critical
+        );
+        // Below 90 exits Critical; 75-89 lands on High's exit band, held.
+        assert_eq!(
+            utilization_pressure_level_hysteretic(89),
+            L4PressureLevel::High
+        );
+        assert_eq!(
+            utilization_pressure_level_hysteretic(75),
+            L4PressureLevel::High
+        );
+        // Below 75 exits High into Elevated band (>= 60).
+        assert_eq!(
+            utilization_pressure_level_hysteretic(74),
+            L4PressureLevel::Elevated
+        );
+        // Below 60 fully de-escalates.
+        assert_eq!(
+            utilization_pressure_level_hysteretic(59),
+            L4PressureLevel::Normal
+        );
+        // Boundary stability: re-escalate at 85, hover at 84 stays High.
+        assert_eq!(
+            utilization_pressure_level_hysteretic(85),
+            L4PressureLevel::High
+        );
+        assert_eq!(
+            utilization_pressure_level_hysteretic(84),
+            L4PressureLevel::High
+        );
+        UTIL_PRESSURE_STATE.store(0, Ordering::Relaxed);
+    }
+
+    /// EN-16: level-quantized channels (memory/aggregate/SYN) escalate
+    /// immediately but only de-escalate after the raw signal stays lower
+    /// for the full dwell window — a flickering signal cannot flap.
+    #[test]
+    fn level_hysteresis_escalates_immediately_and_dwells() {
+        let h = LevelHysteresis::new();
+        let t0 = 100_000i64;
+        assert_eq!(
+            h.apply_at(L4PressureLevel::Normal, t0),
+            L4PressureLevel::Normal
+        );
+        // Escalation is immediate, multi-level jumps included.
+        assert_eq!(
+            h.apply_at(L4PressureLevel::Critical, t0 + 1),
+            L4PressureLevel::Critical
+        );
+        // Raw drops below: emitted level holds through the dwell.
+        assert_eq!(
+            h.apply_at(L4PressureLevel::Normal, t0 + 2),
+            L4PressureLevel::Critical
+        );
+        assert_eq!(
+            h.apply_at(L4PressureLevel::Normal, t0 + 2 + 4_999),
+            L4PressureLevel::Critical
+        );
+        // Dwell elapsed at the boundary: de-escalates to the raw level.
+        assert_eq!(
+            h.apply_at(L4PressureLevel::Normal, t0 + 2 + 5_000),
+            L4PressureLevel::Normal
+        );
+    }
+
+    /// A single re-escalating sample (raw >= emitted) resets the dwell —
+    /// the emitted level cannot ratchet down through alternating
+    /// high/low readings, and a sub-level reading neither resets nor
+    /// de-escalates.
+    #[test]
+    fn level_hysteresis_dwell_resets_on_reescalation() {
+        let h = LevelHysteresis::new();
+        let t0 = 200_000i64;
+        h.apply_at(L4PressureLevel::High, t0);
+        h.apply_at(L4PressureLevel::Normal, t0 + 1); // dwell starts
+        h.apply_at(L4PressureLevel::Normal, t0 + 4_000);
+        // A reading below the emitted level but above Normal is still a
+        // de-escalation candidate — dwell continues, level holds.
+        assert_eq!(
+            h.apply_at(L4PressureLevel::Elevated, t0 + 4_500),
+            L4PressureLevel::High
+        );
+        // Re-escalation at/above the emitted level resets the dwell.
+        assert_eq!(
+            h.apply_at(L4PressureLevel::Critical, t0 + 5_000),
+            L4PressureLevel::Critical
+        );
+        // Dropped again — a NEW dwell window is required from here.
+        assert_eq!(
+            h.apply_at(L4PressureLevel::Normal, t0 + 9_000),
+            L4PressureLevel::Critical
+        );
+        assert_eq!(
+            h.apply_at(L4PressureLevel::Normal, t0 + 14_000),
+            L4PressureLevel::Normal
+        );
+    }
+
+    #[test]
+    fn effective_threshold_scales_down_with_pressure() {
+        // base=20, multiplier=1 (high-confidence kind)
+        let kind = L4DefenseKind::TcpSlowFirstByte;
+        assert_eq!(effective_l4_threshold(20, kind, L4PressureLevel::Normal), 20);
+        assert_eq!(effective_l4_threshold(20, kind, L4PressureLevel::Elevated), 15);
+        assert_eq!(effective_l4_threshold(20, kind, L4PressureLevel::High), 10);
+        assert_eq!(effective_l4_threshold(20, kind, L4PressureLevel::Critical), 5);
+    }
+
+    #[test]
+    fn effective_threshold_never_drops_below_floor() {
+        let kind = L4DefenseKind::TcpSlowFirstByte;
+        assert_eq!(effective_l4_threshold(1, kind, L4PressureLevel::Critical), 2);
+        assert_eq!(effective_l4_threshold(4, kind, L4PressureLevel::High), 2);
+        // multiplier=4 kind: churn
+        let churn = L4DefenseKind::TcpAcceptedChurn;
+        assert_eq!(effective_l4_threshold(10, churn, L4PressureLevel::Normal), 40);
+        assert_eq!(effective_l4_threshold(10, churn, L4PressureLevel::Elevated), 30);
+        assert_eq!(effective_l4_threshold(10, churn, L4PressureLevel::High), 20);
+        assert_eq!(effective_l4_threshold(10, churn, L4PressureLevel::Critical), 10);
+    }
+
     #[test]
     fn tcp_active_limit_per_ip_tightens_by_pressure() {
         let total = 1_048_576;
@@ -1717,7 +2016,7 @@ mod tests {
         );
         assert_eq!(
             effective_l4_threshold(100, L4DefenseKind::QuicNoRoute, L4PressureLevel::Elevated),
-            400
+            300
         );
         assert_eq!(
             effective_l4_threshold(100, L4DefenseKind::QuicNoRoute, L4PressureLevel::High),
@@ -1821,6 +2120,27 @@ mod tests {
         assert!(try_acquire_tcp_active_ip(ip, 1).is_none());
         drop(permit);
         assert!(try_acquire_tcp_active_ip(ip, 1).is_some());
+    }
+
+    #[test]
+    fn active_ip_tracker_rejected_acquire_leaves_no_entry() {
+        // Permits drop against the global tracker, so exercise it directly.
+        let ip: IpAddr = "198.51.100.99".parse().unwrap();
+        {
+            let permit = try_acquire_tcp_active_ip(ip, 1).expect("first permit");
+            assert!(try_acquire_tcp_active_ip(ip, 1).is_none());
+            // A rejected acquire must not strand a fresh counter entry —
+            // an IP-spoofed flood would otherwise grow the tracker without
+            // bound. The live permit legitimately keeps its entry here.
+            assert!(TCP_ACTIVE_IP_TRACKER.active_by_ip.contains_key(&ip));
+            drop(permit);
+        }
+        assert!(
+            !TCP_ACTIVE_IP_TRACKER.active_by_ip.contains_key(&ip),
+            "tracker must release the entry after the last permit drops"
+        );
+        let permit = try_acquire_tcp_active_ip(ip, 1).expect("re-acquire after cleanup");
+        drop(permit);
     }
 
     fn test_firewall_policy(
@@ -1956,16 +2276,16 @@ mod tests {
         amount: u64,
         detail: impl Into<String>,
     ) -> L4DefenseVerdict {
-        record_l4_event_weighted_with_pressure(
-            store,
+        record_l4_event_weighted_with_pressure(L4EventArgs {
+            config_store: store,
             waf_state,
-            7,
+            node_id: 7,
             ip,
             kind,
             amount,
-            detail,
-            L4PressureLevel::Normal,
-        )
+            detail: detail.into(),
+            pressure_level: L4PressureLevel::Normal,
+        })
     }
 
     #[tokio::test]
@@ -2372,7 +2692,10 @@ mod tests {
             L4DefenseKind::H2StreamAdmissionReject,
             L4DefenseKind::H2RequestChurn,
         ] {
-            assert!(kind.is_h2_defense(), "{kind:?} should land in H2 defense metrics");
+            assert!(
+                kind.is_h2_defense(),
+                "{kind:?} should land in H2 defense metrics"
+            );
         }
         for kind in [
             L4DefenseKind::QuicNewRouteFlood,
@@ -2686,5 +3009,28 @@ mod tests {
         );
         assert!(waf_state.is_blocked(ip, cluster_scope));
         assert!(metrics_snapshot().h2_defense_total > before);
+    }
+
+    #[test]
+    fn accept_worker_scaling_tracks_pressure_with_cpu_cap() {
+        assert_eq!(
+            scale_accept_workers(2, L4PressureLevel::Normal, 8),
+            2
+        );
+        assert_eq!(scale_accept_workers(2, L4PressureLevel::Elevated, 8), 4);
+        assert_eq!(scale_accept_workers(2, L4PressureLevel::High, 8), 8);
+        assert_eq!(
+            scale_accept_workers(2, L4PressureLevel::Critical, 8),
+            16
+        );
+        // CPU cap: 2 CPUs allow at most 8 workers even at Critical.
+        assert_eq!(
+            scale_accept_workers(4, L4PressureLevel::Critical, 2),
+            8
+        );
+        // Base never shrinks: a base larger than the cap keeps all workers.
+        assert_eq!(scale_accept_workers(64, L4PressureLevel::Normal, 2), 64);
+        // Zero base is clamped to one worker minimum.
+        assert_eq!(scale_accept_workers(0, L4PressureLevel::Normal, 8), 1);
     }
 }

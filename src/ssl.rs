@@ -12,10 +12,12 @@ use x509_parser::prelude::*;
 use crate::config_models::SSLCertConfig;
 use crate::tls_crypto::{default_crypto_provider, install_default_crypto_provider};
 
+type CertCacheMap = Arc<RwLock<HashMap<i64, (String, Arc<CertPair>)>>>;
+
 #[derive(Clone)]
 pub struct DynamicCertSelector {
     snapshot: Arc<ArcSwap<CertSnapshot>>,
-    cache: Arc<RwLock<HashMap<i64, (String, Arc<CertPair>)>>>,
+    cache: CertCacheMap,
 }
 
 impl std::fmt::Debug for DynamicCertSelector {
@@ -42,6 +44,12 @@ pub struct CertPair {
     ocsp: Arc<ArcSwap<Vec<u8>>>,
 }
 
+impl Default for DynamicCertSelector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DynamicCertSelector {
     pub fn new() -> Self {
         install_default_crypto_provider();
@@ -52,7 +60,7 @@ impl DynamicCertSelector {
     }
 
     pub async fn update_ocsp(&self, cert_id: i64, data: Vec<u8>) {
-        let cache = self.cache.read().unwrap();
+        let cache = self.cache.read().unwrap_or_else(|e| e.into_inner());
         for (_, pair) in cache.values() {
             if pair.id == cert_id {
                 pair.ocsp.store(Arc::new(data.clone()));
@@ -202,7 +210,7 @@ pub async fn sync_certs(cert_selector: &DynamicCertSelector, certs: &[SSLCertCon
     let mut new_cache = HashMap::new();
 
     let (stats_parsed, stats_reused, stats_parsed_fresh) = {
-        let old_cache = cert_selector.cache.read().unwrap();
+        let old_cache = cert_selector.cache.read().unwrap_or_else(|e| e.into_inner());
         let mut parsed = 0;
         let mut reused = 0;
         let mut parsed_fresh = 0;
@@ -294,7 +302,7 @@ pub async fn sync_certs(cert_selector: &DynamicCertSelector, certs: &[SSLCertCon
         default: default_pair.or(fallback_pair),
     };
     let default_present = new_snapshot.default.is_some();
-    let mut cache_lock = cert_selector.cache.write().unwrap();
+    let mut cache_lock = cert_selector.cache.write().unwrap_or_else(|e| e.into_inner());
     *cache_lock = new_cache;
     cert_selector.snapshot.store(Arc::new(new_snapshot));
 

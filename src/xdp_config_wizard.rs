@@ -150,19 +150,7 @@ fn prompt_yes_no(prompt: &str, default: bool) -> Result<bool> {
 pub fn save_xdp_config(path: &Path, xdp: &XdpConfig) -> Result<()> {
     use std::fs;
 
-    let mut root = if path.exists() {
-        let existing = fs::read_to_string(path)?;
-        if existing.trim().is_empty() {
-            serde_yaml::Mapping::new()
-        } else {
-            match serde_yaml::from_str::<serde_yaml::Value>(&existing)? {
-                serde_yaml::Value::Mapping(mapping) => mapping,
-                _ => anyhow::bail!("{} is not a YAML mapping", path.display()),
-            }
-        }
-    } else {
-        serde_yaml::Mapping::new()
-    };
+    let mut root = read_yaml_mapping(path)?;
 
     root.insert(
         serde_yaml::Value::String("xdp".to_string()),
@@ -180,6 +168,95 @@ pub fn save_xdp_config(path: &Path, xdp: &XdpConfig) -> Result<()> {
     Ok(())
 }
 
+/// Persist only the `xdp.enabled` flag, preserving everything else already in
+/// the file. XDP is on by default; the file exists solely to record an
+/// explicit operator override and outranks the `CLOUD_NODE_XDP` env var.
+/// The `xdp` section is replaced rather than merged so stale operational
+/// fields cannot shadow the auto-derived configuration.
+pub fn save_xdp_enabled(path: &Path, enabled: bool) -> Result<()> {
+    use std::fs;
+
+    let mut root = read_yaml_mapping(path)?;
+    if let Some(value) = root.get_mut(serde_yaml::Value::String("xdp".to_string()))
+        && !matches!(value, serde_yaml::Value::Mapping(_) | serde_yaml::Value::Null)
+    {
+        anyhow::bail!("{}: `xdp` is not a YAML mapping", path.display());
+    }
+    let mut xdp = serde_yaml::Mapping::new();
+    xdp.insert(
+        serde_yaml::Value::String("enabled".to_string()),
+        serde_yaml::Value::Bool(enabled),
+    );
+    root.insert(
+        serde_yaml::Value::String("xdp".to_string()),
+        serde_yaml::Value::Mapping(xdp),
+    );
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    fs::write(
+        path,
+        serde_yaml::to_string(&serde_yaml::Value::Mapping(root))?,
+    )?;
+    Ok(())
+}
+
+/// Like `save_xdp_enabled` but merges into the existing `xdp` mapping instead
+/// of replacing it. Used when the file carries an explicit operational
+/// configuration (interfaces, ports): that file is the operator's
+/// authoritative document and only the `enabled` toggle may be touched.
+pub fn merge_xdp_enabled(path: &Path, enabled: bool) -> Result<()> {
+    use std::fs;
+
+    let mut root = read_yaml_mapping(path)?;
+    let key = serde_yaml::Value::String("xdp".to_string());
+    match root.get_mut(&key) {
+        Some(serde_yaml::Value::Mapping(xdp)) => {
+            xdp.insert(
+                serde_yaml::Value::String("enabled".to_string()),
+                serde_yaml::Value::Bool(enabled),
+            );
+        }
+        Some(serde_yaml::Value::Null) | None => {
+            let mut xdp = serde_yaml::Mapping::new();
+            xdp.insert(
+                serde_yaml::Value::String("enabled".to_string()),
+                serde_yaml::Value::Bool(enabled),
+            );
+            root.insert(key, serde_yaml::Value::Mapping(xdp));
+        }
+        Some(_) => anyhow::bail!("{}: `xdp` is not a YAML mapping", path.display()),
+    }
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    fs::write(
+        path,
+        serde_yaml::to_string(&serde_yaml::Value::Mapping(root))?,
+    )?;
+    Ok(())
+}
+
+fn read_yaml_mapping(path: &Path) -> Result<serde_yaml::Mapping> {
+    use std::fs;
+
+    if !path.exists() {
+        return Ok(serde_yaml::Mapping::new());
+    }
+    let existing = fs::read_to_string(path)?;
+    if existing.trim().is_empty() {
+        return Ok(serde_yaml::Mapping::new());
+    }
+    match serde_yaml::from_str::<serde_yaml::Value>(&existing)? {
+        serde_yaml::Value::Mapping(mapping) => Ok(mapping),
+        _ => anyhow::bail!("{} is not a YAML mapping", path.display()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,6 +264,31 @@ mod tests {
         XdpAttachMode, XdpFallbackMode, XdpInterfaceConfig, XdpProxyConfig, XdpProxyPortConfig,
         XdpProxyProtocol, XdpRuntimeMode,
     };
+
+    #[test]
+    fn merge_xdp_enabled_preserves_operational_fields() {
+        let dir = std::env::temp_dir().join(format!(
+            "xdp-merge-test-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("runtime.yaml");
+        std::fs::write(
+            &path,
+            "runtime:\n  mode: standalone\nxdp:\n  enabled: false\n  attachMode: skb\n  interfaces:\n    - name: eth0\n      mode: proxy\n",
+        )
+        .unwrap();
+        super::merge_xdp_enabled(&path, true).unwrap();
+        let value: serde_yaml::Value =
+            serde_yaml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(value["xdp"]["enabled"].as_bool(), Some(true));
+        assert_eq!(value["xdp"]["attachMode"].as_str(), Some("skb"));
+        assert_eq!(
+            value["xdp"]["interfaces"][0]["name"].as_str(),
+            Some("eth0")
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn serializes_runtime_compatible_xdp_section() {
@@ -197,9 +299,15 @@ mod tests {
             interfaces: vec![XdpInterfaceConfig {
                 name: "eth0".to_string(),
                 queues: vec![0, 1],
+                cpus: Vec::new(),
                 mode: XdpRuntimeMode::Proxy,
                 local_ips: vec!["192.0.2.10".parse().unwrap()],
                 frame_size: 2048,
+                udp_forwards: Vec::new(),
+                tcp_forwards: Vec::new(),
+                fragment_action: crate::runtime_mode::XdpFragmentAction::default(),
+                protected_services: Vec::new(),
+                xsk_mode: crate::runtime_mode::XdpXskMode::default(),
             }],
             proxy: XdpProxyConfig {
                 protocols: vec![
@@ -214,6 +322,14 @@ mod tests {
                     port: 443,
                 }],
             },
+            rate_limit: None,
+            budget: None,
+            admission: None,
+            ebpf_object: None,
+            state_tables: None,
+            upstream: None,
+            transport: None,
+            egress_rate_bps: None,
         };
 
         let yaml = serde_yaml::to_string(&xdp).unwrap();

@@ -25,7 +25,27 @@ struct OriginHealthEntry {
 static ORIGIN_HEALTH_MAP: Lazy<dashmap::DashMap<i64, Arc<OriginHealthEntry>>> =
     Lazy::new(dashmap::DashMap::new);
 
+/// Entries for origins removed from the configuration stop receiving health
+/// events; the reporter GCs them once their last check ages past this TTL.
+const ORIGIN_HEALTH_STALE_SECS: i64 = 1800;
+/// Backstop bound on tracked origins — far above any legitimate origin count.
+const ORIGIN_HEALTH_MAX_ENTRIES: usize = 65_536;
+
 pub fn push_origin_health_event(origin_id: i64, healthy: bool, latency_ms: i64) {
+    push_origin_health_event_with_capacity(
+        origin_id,
+        healthy,
+        latency_ms,
+        ORIGIN_HEALTH_MAX_ENTRIES,
+    );
+}
+
+fn push_origin_health_event_with_capacity(
+    origin_id: i64,
+    healthy: bool,
+    latency_ms: i64,
+    max_entries: usize,
+) {
     if origin_id <= 0 {
         return;
     }
@@ -40,6 +60,21 @@ pub fn push_origin_health_event(origin_id: i64, healthy: bool, latency_ms: i64) 
         entry.latency_ms.store(latency_ms, Ordering::Relaxed);
         entry.last_check_ts.store(now, Ordering::Relaxed);
     } else {
+        if ORIGIN_HEALTH_MAP.len() >= max_entries {
+            static ORIGIN_HEALTH_FULL_WARN: AtomicI64 = AtomicI64::new(0);
+            let last = ORIGIN_HEALTH_FULL_WARN.load(Ordering::Relaxed);
+            if now.saturating_sub(last) >= 600
+                && ORIGIN_HEALTH_FULL_WARN
+                    .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)
+                    .is_ok()
+            {
+                warn!(
+                    entries = ORIGIN_HEALTH_MAP.len(),
+                    "origin health map at capacity — new origin ids are not tracked until stale entries expire"
+                );
+            }
+            return;
+        }
         ORIGIN_HEALTH_MAP.insert(
             origin_id,
             Arc::new(OriginHealthEntry {
@@ -51,10 +86,24 @@ pub fn push_origin_health_event(origin_id: i64, healthy: bool, latency_ms: i64) 
     }
 }
 
+fn gc_stale_origin_health(now_ts: i64) -> usize {
+    let before = ORIGIN_HEALTH_MAP.len();
+    ORIGIN_HEALTH_MAP.retain(|_, entry| {
+        now_ts.saturating_sub(entry.last_check_ts.load(Ordering::Relaxed))
+            <= ORIGIN_HEALTH_STALE_SECS
+    });
+    before.saturating_sub(ORIGIN_HEALTH_MAP.len())
+}
+
 pub async fn start_origin_health_reporter(api_config: ApiConfig) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
     loop {
         interval.tick().await;
+        // Drop entries whose origins stopped producing health events — an
+        // actively checked origin refreshes last_check_ts every cycle, so
+        // only removed/disabled origins age out. Runs even when not leader
+        // so a long follower stint cannot strand stale entries.
+        gc_stale_origin_health(crate::utils::time::now_timestamp());
         if !crate::cluster::leader::require_leader("origin_health_reporter") {
             continue;
         }
@@ -301,7 +350,7 @@ fn persist_bandwidth_state(
     pending_stats: &[PendingBandwidthStat],
 ) {
     if current_window.is_empty() && window_stats.is_empty() && pending_stats.is_empty() {
-        let _ = crate::metrics::storage::STORAGE.delete_key(BANDWIDTH_STATE_STORAGE_KEY);
+        crate::metrics::storage::STORAGE.delete_key(BANDWIDTH_STATE_STORAGE_KEY);
         return;
     }
 
@@ -843,7 +892,6 @@ pub async fn start_metric_stat_reporter(
         }
         let metric_items = config_store.get_metric_items().await;
         if metric_items.is_empty() {
-            let _ = crate::metrics::aggregator::METRIC_STAT_AGGREGATOR.flush();
             continue;
         }
 
@@ -863,6 +911,7 @@ pub async fn start_metric_stat_reporter(
             continue;
         }
 
+        let mut upload_succeeded = true;
         for item in metric_items {
             if !item.is_on {
                 continue;
@@ -885,8 +934,12 @@ pub async fn start_metric_stat_reporter(
                         "Failed to upload metric stats for server {} item {}: {}",
                         server_id, item.id, e
                     );
+                    upload_succeeded = false;
                 }
             }
+        }
+        if !upload_succeeded {
+            crate::metrics::aggregator::METRIC_STAT_AGGREGATOR.restore(samples);
         }
     }
 }
@@ -928,7 +981,7 @@ fn trim_http_request_stat_rows_with_limits(
     limits: HttpRequestStatUploadLimits,
 ) {
     req.region_cities
-        .sort_by(|a, b| b.count_requests.cmp(&a.count_requests));
+        .sort_by_key(|a| std::cmp::Reverse(a.count_requests));
     let mut server_counts = HashMap::<i64, usize>::new();
     req.region_cities.retain(|row| {
         let count = server_counts.entry(row.server_id).or_default();
@@ -936,7 +989,8 @@ fn trim_http_request_stat_rows_with_limits(
         *count <= limits.max_cities
     });
 
-    req.region_providers.sort_by(|a, b| b.count.cmp(&a.count));
+    req.region_providers
+        .sort_by_key(|a| std::cmp::Reverse(a.count));
     server_counts.clear();
     req.region_providers.retain(|row| {
         let count = server_counts.entry(row.server_id).or_default();
@@ -944,7 +998,7 @@ fn trim_http_request_stat_rows_with_limits(
         *count <= limits.max_providers
     });
 
-    req.systems.sort_by(|a, b| b.count.cmp(&a.count));
+    req.systems.sort_by_key(|a| std::cmp::Reverse(a.count));
     server_counts.clear();
     req.systems.retain(|row| {
         let count = server_counts.entry(row.server_id).or_default();
@@ -952,7 +1006,7 @@ fn trim_http_request_stat_rows_with_limits(
         *count <= limits.max_systems
     });
 
-    req.browsers.sort_by(|a, b| b.count.cmp(&a.count));
+    req.browsers.sort_by_key(|a| std::cmp::Reverse(a.count));
     server_counts.clear();
     req.browsers.retain(|row| {
         let count = server_counts.entry(row.server_id).or_default();
@@ -1029,13 +1083,16 @@ pub async fn start_metrics_aggregator_reporter(config_store: ConfigStore, api_co
             http_firewall_rule_groups: vec![],
         };
 
-        let mut city_map: HashMap<(i64, i64, i64, i64), (i64, i64, i64, i64)> = HashMap::new();
+        type CityStatKey = (i64, i64, i64, i64);
+        type CityStatValue = (i64, i64, i64, i64);
+        type CityStatMap = HashMap<CityStatKey, CityStatValue>;
+        let mut city_map: CityStatMap = HashMap::new();
         let mut provider_map: HashMap<(i64, i64), i64> = HashMap::new();
         let mut system_map: HashMap<(i64, String, String), i64> = HashMap::new();
         let mut browser_map: HashMap<(i64, String, String), i64> = HashMap::new();
         let mut waf_map: HashMap<(i64, i64, String), i64> = HashMap::new();
 
-        for (key, val) in samples {
+        for (key, val) in &samples {
             if key.country_id > 0 {
                 let entry = city_map
                     .entry((key.server_id, key.country_id, key.province_id, key.city_id))
@@ -1138,10 +1195,11 @@ pub async fn start_metrics_aggregator_reporter(config_store: ConfigStore, api_co
             HttpRequestStatUploadLimits::from_config(&config_store.get_global_stat_upload_sync());
         trim_http_request_stat_rows_with_limits(&mut req, upload_limits);
 
-        if let Err(e) =
-            crate::rpc::track_rpc(server_service.upload_server_http_request_stat(req)).await
-        {
+        let upload_result =
+            crate::rpc::track_rpc(server_service.upload_server_http_request_stat(req)).await;
+        if let Err(e) = upload_result {
             warn!("Failed to upload HTTP request stats: {}", e);
+            crate::metrics::aggregator::HTTP_REQUEST_STAT_AGGREGATOR.restore(samples);
         }
     }
 }
@@ -1163,6 +1221,9 @@ pub async fn start_top_ip_stat_reporter(api_config: ApiConfig) {
             Ok(shared) => shared.as_rpc_client(),
             Err(e) => {
                 warn!("Top IP stat reporter failed to connect: {}", e);
+                // Upload never happened: give the counts back to the tracker
+                // so the next window re-attempts them.
+                crate::metrics::top_ip::TOP_IP_TRACKER.restore(&rows);
                 continue;
             }
         };
@@ -1174,18 +1235,18 @@ pub async fn start_top_ip_stat_reporter(api_config: ApiConfig) {
         let time_at = format!("{:02}{:02}", now.hour(), minute_floor);
 
         let stats = rows
-            .into_iter()
-            .map(
-                |(server_id, ip, count_requests)| pb::upload_server_top_ip_stats_request::Stat {
-                    server_id: server_id as u64,
-                    ip,
+            .iter()
+            .map(|(server_id, ip, count_requests)| {
+                pb::upload_server_top_ip_stats_request::Stat {
+                    server_id: *server_id as u64,
+                    ip: ip.clone(),
                     // u64 → u32 silent wraparound at 4.3B would mask runaway IPs;
                     // saturate to u32::MAX so the upper bound stays visible.
-                    count_requests: u32::try_from(count_requests).unwrap_or(u32::MAX),
+                    count_requests: u32::try_from(*count_requests).unwrap_or(u32::MAX),
                     day: day.clone(),
                     time_at: time_at.clone(),
-                },
-            )
+                }
+            })
             .collect();
 
         if let Err(e) = crate::rpc::track_rpc(
@@ -1194,6 +1255,7 @@ pub async fn start_top_ip_stat_reporter(api_config: ApiConfig) {
         .await
         {
             warn!("Failed to upload top IP stats: {}", e);
+            crate::metrics::top_ip::TOP_IP_TRACKER.restore(&rows);
         }
     }
 }
@@ -1471,7 +1533,7 @@ mod tests {
             )
         }
 
-        let samples = vec![
+        let samples = [
             sample(crate::metrics::METRIC_CATEGORY_HTTP),
             sample(crate::metrics::METRIC_CATEGORY_TCP),
         ];
@@ -1485,5 +1547,55 @@ mod tests {
         assert_eq!(matching, 1);
         assert!(sample_matches_metric_category(&samples[0], &http_category));
         assert!(!sample_matches_metric_category(&samples[1], &http_category));
+    }
+
+    #[test]
+    fn origin_health_map_gc_removes_stale_entries_only() {
+        let now = crate::utils::time::now_timestamp();
+        let fresh_id = i64::MAX - 1;
+        let stale_id = i64::MAX - 2;
+        ORIGIN_HEALTH_MAP.insert(
+            fresh_id,
+            Arc::new(OriginHealthEntry {
+                status: AtomicU8::new(ORIGIN_HEALTH_STATUS_HEALTHY),
+                latency_ms: AtomicI64::new(1),
+                last_check_ts: AtomicI64::new(now),
+            }),
+        );
+        ORIGIN_HEALTH_MAP.insert(
+            stale_id,
+            Arc::new(OriginHealthEntry {
+                status: AtomicU8::new(ORIGIN_HEALTH_STATUS_DOWN),
+                latency_ms: AtomicI64::new(1),
+                last_check_ts: AtomicI64::new(now - ORIGIN_HEALTH_STALE_SECS - 1),
+            }),
+        );
+        gc_stale_origin_health(now);
+        assert!(ORIGIN_HEALTH_MAP.contains_key(&fresh_id));
+        assert!(!ORIGIN_HEALTH_MAP.contains_key(&stale_id));
+        ORIGIN_HEALTH_MAP.remove(&fresh_id);
+        ORIGIN_HEALTH_MAP.remove(&stale_id);
+    }
+
+    #[test]
+    fn origin_health_map_respects_capacity_bound() {
+        // cap = 0 makes any new insert deterministically refused, immune to
+        // concurrent tests mutating the shared map's length.
+        let id_a = i64::MAX - 1_000_010;
+        let id_c = i64::MAX - 1_000_012;
+        push_origin_health_event_with_capacity(id_a, true, 1, usize::MAX);
+        assert!(ORIGIN_HEALTH_MAP.contains_key(&id_a));
+        // At capacity a brand-new id is refused; existing ids still update.
+        push_origin_health_event_with_capacity(id_c, true, 1, 0);
+        assert!(!ORIGIN_HEALTH_MAP.contains_key(&id_c));
+        push_origin_health_event_with_capacity(id_a, false, 9, 0);
+        let entry = ORIGIN_HEALTH_MAP.get(&id_a).expect("existing entry");
+        assert_eq!(
+            entry.status.load(Ordering::Relaxed),
+            ORIGIN_HEALTH_STATUS_DOWN
+        );
+        drop(entry);
+        ORIGIN_HEALTH_MAP.remove(&id_a);
+        ORIGIN_HEALTH_MAP.remove(&id_c);
     }
 }

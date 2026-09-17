@@ -1,9 +1,9 @@
-use cloudsidra_edge::cache_hybrid::{HybridStorage, fast_l1_lookup};
-use cloudsidra_edge::config_models::{HTTPHTMLOptimizationConfig, SSLCertConfig, SSLPolicyConfig};
-use cloudsidra_edge::firewall::verifier::WafVerifier;
-use cloudsidra_edge::metrics::analyzer::analyze_request;
-use cloudsidra_edge::proxy::EdgeProxy;
-use cloudsidra_edge::ssl::{DynamicCertSelector, sync_certs};
+use cloud_node_rust::cache_hybrid::{HybridStorage, fast_l1_lookup};
+use cloud_node_rust::config_models::{HTTPHTMLOptimizationConfig, SSLCertConfig, SSLPolicyConfig};
+use cloud_node_rust::firewall::verifier::WafVerifier;
+use cloud_node_rust::metrics::analyzer::analyze_request;
+use cloud_node_rust::proxy::EdgeProxy;
+use cloud_node_rust::ssl::{DynamicCertSelector, sync_certs};
 use criterion::{Criterion, criterion_group, criterion_main};
 use image::{DynamicImage, ImageBuffer, ImageFormat, Rgba};
 use pingora_cache::{CacheKey, CacheMeta, Storage, trace::Span};

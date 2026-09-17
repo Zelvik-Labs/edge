@@ -52,11 +52,20 @@ impl KernelTuningConfig {
 pub struct RelayConfig {
     #[serde(rename = "zeroCopy", default)]
     pub zero_copy: bool,
-    #[serde(rename = "tcpKeepaliveIdleSecs", default = "default_tcp_keepalive_idle_secs")]
+    #[serde(
+        rename = "tcpKeepaliveIdleSecs",
+        default = "default_tcp_keepalive_idle_secs"
+    )]
     pub tcp_keepalive_idle_secs: u32,
-    #[serde(rename = "tcpKeepaliveIntervalSecs", default = "default_tcp_keepalive_interval_secs")]
+    #[serde(
+        rename = "tcpKeepaliveIntervalSecs",
+        default = "default_tcp_keepalive_interval_secs"
+    )]
     pub tcp_keepalive_interval_secs: u32,
-    #[serde(rename = "tcpKeepaliveProbes", default = "default_tcp_keepalive_probes")]
+    #[serde(
+        rename = "tcpKeepaliveProbes",
+        default = "default_tcp_keepalive_probes"
+    )]
     pub tcp_keepalive_probes: u32,
 }
 
@@ -224,6 +233,121 @@ fn default_kernel_tuning_enabled() -> bool {
     true
 }
 
+impl ApiConfig {
+    pub fn default_paths() -> Vec<PathBuf> {
+        crate::paths::NodePaths::current().api_config_candidates()
+    }
+
+    pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let content = fs::read_to_string(&path)?;
+        let mut config: ApiConfig = serde_yaml::from_str(&content)?;
+        config.rpc_endpoints = validate_rpc_endpoints(config.rpc_endpoints)?;
+        if config.rpc_endpoints.is_empty() {
+            anyhow::bail!("no valid 'rpc.endpoints' in {:?}", path.as_ref());
+        }
+        if config.node_id.is_empty() {
+            anyhow::bail!("'nodeId' required in {:?}", path.as_ref());
+        }
+        if config.secret.is_empty() {
+            anyhow::bail!("'secret' required in {:?}", path.as_ref());
+        }
+        Self::set_runtime_rpc_endpoints(config.rpc_endpoints.clone())?;
+        Ok(config)
+    }
+
+    pub fn load_default() -> anyhow::Result<Self> {
+        let node_paths = crate::paths::NodePaths::current();
+        let canonical = node_paths.api_config_file();
+        let paths = node_paths.api_config_candidates();
+        for path in &paths {
+            if path.exists() {
+                if path != &canonical {
+                    tracing::warn!(
+                        "Loading API config from legacy path {}. Please migrate it to {}.",
+                        path.display(),
+                        canonical.display()
+                    );
+                } else {
+                    tracing::info!("Loading config from: {}", path.display());
+                }
+                return Self::load(path);
+            }
+        }
+        anyhow::bail!("no config file found in default paths: {:?}", paths)
+    }
+
+    pub fn write_default(&self) -> anyhow::Result<()> {
+        let node_paths = crate::paths::NodePaths::current();
+        fs::create_dir_all(node_paths.config_dir())?;
+        let target = node_paths.api_config_file();
+        let content = serde_yaml::to_string(self)?;
+        fs::write(target, content)?;
+        Ok(())
+    }
+
+    pub fn effective_rpc_endpoints(&self) -> Vec<String> {
+        RUNTIME_RPC_ENDPOINTS
+            .read()
+            .ok()
+            .and_then(|guard| guard.clone())
+            .filter(|endpoints| !endpoints.is_empty())
+            .unwrap_or_else(|| self.rpc_endpoints.clone())
+    }
+
+    pub fn set_runtime_rpc_endpoints(endpoints: Vec<String>) -> anyhow::Result<()> {
+        let endpoints = validate_rpc_endpoints(endpoints)?;
+        if endpoints.is_empty() {
+            anyhow::bail!("no valid RPC endpoints supplied");
+        }
+        if let Ok(mut guard) = RUNTIME_RPC_ENDPOINTS.write() {
+            *guard = Some(endpoints);
+        }
+        Ok(())
+    }
+}
+
+pub fn validate_rpc_endpoint(endpoint: &str) -> anyhow::Result<String> {
+    let endpoint = endpoint.trim();
+    if endpoint.is_empty() {
+        anyhow::bail!("RPC endpoint is empty");
+    }
+    let uri: http::Uri = endpoint
+        .parse()
+        .map_err(|err| anyhow::anyhow!("invalid RPC endpoint {endpoint:?}: {err}"))?;
+    let scheme = uri
+        .scheme_str()
+        .ok_or_else(|| anyhow::anyhow!("RPC endpoint {endpoint:?} has no scheme"))?;
+    let authority = uri
+        .authority()
+        .ok_or_else(|| anyhow::anyhow!("RPC endpoint {endpoint:?} has no host"))?;
+    if uri
+        .path_and_query()
+        .is_some_and(|value| value.as_str() != "/")
+    {
+        anyhow::bail!("RPC endpoint {endpoint:?} must not contain a path or query");
+    }
+    if authority.as_str().contains('@') {
+        anyhow::bail!("RPC endpoint {endpoint:?} must not contain userinfo");
+    }
+    if !matches!(scheme, "http" | "https") {
+        anyhow::bail!("RPC endpoint {endpoint:?} uses unsupported scheme {scheme:?}");
+    }
+    // Plain HTTP/2 gRPC remains supported for legacy control planes. Deployments
+    // should protect remote plaintext endpoints with a private network or tunnel.
+    Ok(endpoint.trim_end_matches('/').to_string())
+}
+
+pub fn validate_rpc_endpoints(endpoints: Vec<String>) -> anyhow::Result<Vec<String>> {
+    let mut normalized = Vec::with_capacity(endpoints.len());
+    for endpoint in endpoints {
+        let endpoint = validate_rpc_endpoint(&endpoint)?;
+        if !normalized.contains(&endpoint) {
+            normalized.push(endpoint);
+        }
+    }
+    Ok(normalized)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -319,116 +443,4 @@ kernelTuning:
 
         assert_eq!(validate_rpc_endpoint(endpoint).unwrap(), endpoint);
     }
-}
-
-impl ApiConfig {
-    pub fn default_paths() -> Vec<PathBuf> {
-        crate::paths::NodePaths::current().api_config_candidates()
-    }
-
-    pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let content = fs::read_to_string(&path)?;
-        let mut config: ApiConfig = serde_yaml::from_str(&content)?;
-        config.rpc_endpoints = validate_rpc_endpoints(config.rpc_endpoints)?;
-        if config.rpc_endpoints.is_empty() {
-            anyhow::bail!("no valid 'rpc.endpoints' in {:?}", path.as_ref());
-        }
-        if config.node_id.is_empty() {
-            anyhow::bail!("'nodeId' required in {:?}", path.as_ref());
-        }
-        if config.secret.is_empty() {
-            anyhow::bail!("'secret' required in {:?}", path.as_ref());
-        }
-        Self::set_runtime_rpc_endpoints(config.rpc_endpoints.clone())?;
-        Ok(config)
-    }
-
-    pub fn load_default() -> anyhow::Result<Self> {
-        let node_paths = crate::paths::NodePaths::current();
-        let canonical = node_paths.api_config_file();
-        let paths = node_paths.api_config_candidates();
-        for path in &paths {
-            if path.exists() {
-                if path != &canonical {
-                    tracing::warn!(
-                        "Loading API config from legacy path {}. Please migrate it to {}.",
-                        path.display(),
-                        canonical.display()
-                    );
-                } else {
-                    tracing::info!("Loading config from: {}", path.display());
-                }
-                return Self::load(path);
-            }
-        }
-        anyhow::bail!("no config file found in default paths: {:?}", paths)
-    }
-
-    pub fn write_default(&self) -> anyhow::Result<()> {
-        let node_paths = crate::paths::NodePaths::current();
-        fs::create_dir_all(node_paths.config_dir())?;
-        let target = node_paths.api_config_file();
-        let content = serde_yaml::to_string(self)?;
-        fs::write(target, content)?;
-        Ok(())
-    }
-
-    pub fn effective_rpc_endpoints(&self) -> Vec<String> {
-        RUNTIME_RPC_ENDPOINTS
-            .read()
-            .ok()
-            .and_then(|guard| guard.clone())
-            .filter(|endpoints| !endpoints.is_empty())
-            .unwrap_or_else(|| self.rpc_endpoints.clone())
-    }
-
-    pub fn set_runtime_rpc_endpoints(endpoints: Vec<String>) -> anyhow::Result<()> {
-        let endpoints = validate_rpc_endpoints(endpoints)?;
-        if endpoints.is_empty() {
-            anyhow::bail!("no valid RPC endpoints supplied");
-        }
-        if let Ok(mut guard) = RUNTIME_RPC_ENDPOINTS.write() {
-            *guard = Some(endpoints);
-        }
-        Ok(())
-    }
-}
-
-pub fn validate_rpc_endpoint(endpoint: &str) -> anyhow::Result<String> {
-    let endpoint = endpoint.trim();
-    if endpoint.is_empty() {
-        anyhow::bail!("RPC endpoint is empty");
-    }
-    let uri: http::Uri = endpoint
-        .parse()
-        .map_err(|err| anyhow::anyhow!("invalid RPC endpoint {endpoint:?}: {err}"))?;
-    let scheme = uri
-        .scheme_str()
-        .ok_or_else(|| anyhow::anyhow!("RPC endpoint {endpoint:?} has no scheme"))?;
-    let authority = uri
-        .authority()
-        .ok_or_else(|| anyhow::anyhow!("RPC endpoint {endpoint:?} has no host"))?;
-    if uri.path_and_query().is_some_and(|value| value.as_str() != "/") {
-        anyhow::bail!("RPC endpoint {endpoint:?} must not contain a path or query");
-    }
-    if authority.as_str().contains('@') {
-        anyhow::bail!("RPC endpoint {endpoint:?} must not contain userinfo");
-    }
-    if !matches!(scheme, "http" | "https") {
-        anyhow::bail!("RPC endpoint {endpoint:?} uses unsupported scheme {scheme:?}");
-    }
-    // Plain HTTP/2 gRPC remains supported for legacy control planes. Deployments
-    // should protect remote plaintext endpoints with a private network or tunnel.
-    Ok(endpoint.trim_end_matches('/').to_string())
-}
-
-pub fn validate_rpc_endpoints(endpoints: Vec<String>) -> anyhow::Result<Vec<String>> {
-    let mut normalized = Vec::with_capacity(endpoints.len());
-    for endpoint in endpoints {
-        let endpoint = validate_rpc_endpoint(&endpoint)?;
-        if !normalized.contains(&endpoint) {
-            normalized.push(endpoint);
-        }
-    }
-    Ok(normalized)
 }

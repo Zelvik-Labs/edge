@@ -14,6 +14,8 @@ used_rust_rpcs.txt
 current_head.txt
 app-*.js
 *.pcap
+__pycache__/
+*.py[cod]
 
 # Ignore local hidden tool/editor directories and their contents.
 .*/
@@ -23,3 +25,5 @@ app-*.js
 !.github/**
 !.cargo/
 !.cargo/**
+crates/cloud-node-xdp-common/target/
+xtask/target/

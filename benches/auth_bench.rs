@@ -1,4 +1,4 @@
-use cloudsidra_edge::auth::{UrlAuthConfig, generate_token, verify_url_auth};
+use cloud_node_rust::auth::{UrlAuthConfig, generate_token, verify_url_auth};
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 use std::time::{SystemTime, UNIX_EPOCH};

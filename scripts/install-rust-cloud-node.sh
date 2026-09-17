@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${REPO:-CloudSidra/CloudSidra-Edge}"
+REPO="${REPO:-Zypixh/cloud-node-rust}"
 VERSION="${VERSION:-latest}"
-SERVICE_NAME="${SERVICE_NAME:-CloudSidra-Edge}"
+SERVICE_NAME="${SERVICE_NAME:-cloud-node}"
 BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/cloud-node-rust-migration}"
 INSTALL_DIR="${INSTALL_DIR:-}"
 INSTALL_BINARY="${INSTALL_BINARY:-}"
@@ -43,8 +43,8 @@ Usage:
   sudo scripts/install-rust-cloud-node.sh --restore
 
 Run directly from GitHub:
-  curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-rust-cloud-node.sh | sudo bash
-  curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-rust-cloud-node.sh | sudo bash -s -- --fresh --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret --geoip
+  curl -fsSL https://raw.githubusercontent.com/Zypixh/cloud-node-rust/main/scripts/install-rust-cloud-node.sh | sudo bash
+  curl -fsSL https://raw.githubusercontent.com/Zypixh/cloud-node-rust/main/scripts/install-rust-cloud-node.sh | sudo bash -s -- --fresh --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret --geoip
 
 Options:
   --install              Install, migrate, or upgrade to the Rust release.
@@ -54,8 +54,8 @@ Options:
   --restore              Restore the Go original from a previous backup.
   --restore-backup DIR   Restore from this backup dir. Default: latest backup.
   --list-backups         List available backup dirs and exit.
-  --repo OWNER/REPO       GitHub repo. Default: CloudSidra/edge
-  --version VERSION      Release tag, for example v0.1.0. Default: latest
+  --repo OWNER/REPO       GitHub repo. Default: Zypixh/cloud-node-rust
+  --version VERSION      Release tag, for example v1.0.7. Default: latest
   --service NAME         systemd service name. Default: cloud-node
   --install-dir DIR      Runtime working directory. Default: existing runtime dir, or /opt/cloud-node-rust
   --install-binary PATH  Installed Rust binary path. Default: INSTALL_DIR/cloud-node-rust
@@ -1322,18 +1322,18 @@ detect_asset_name() {
             elif ! cpu_has_flag sse4_2; then
                 die "x86_64 CPU without SSE4.2 is not supported by official release assets"
             elif cpu_has_flag avx512f; then
-                printf 'CloudSidra-Edge-linux-x64-v4-avx512.tar.gz\n'
+                printf 'cloud-node-rust-linux-x64-v4-avx512.tar.gz\n'
             elif cpu_has_flag avx2; then
-                printf 'CloudSidra-Edge-linux-x64-v3-avx2.tar.gz\n'
+                printf 'cloud-node-rust-linux-x64-v3-avx2.tar.gz\n'
             else
-                printf 'CloudSidra-Edge-linux-x64-v2-sse4.2.tar.gz\n'
+                printf 'cloud-node-rust-linux-x64-v2-sse4.2.tar.gz\n'
             fi
             ;;
         aarch64|arm64)
             if [ -r /proc/cpuinfo ] && grep -qi 'neoverse-n1' /proc/cpuinfo; then
-                printf 'CloudSidra-Edge-linux-arm64-neoverse-n1.tar.gz\n'
+                printf 'cloud-node-rust-linux-arm64-neoverse-n1.tar.gz\n'
             else
-                printf 'CloudSidra-Edge-linux-arm64-generic.tar.gz\n'
+                printf 'cloud-node-rust-linux-arm64-generic.tar.gz\n'
             fi
             ;;
         *)
@@ -1979,7 +1979,7 @@ if [ "$DRY_RUN" -eq 0 ]; then
     tar -xzf "$TMP_DIR/$ASSET_NAME" -C "$TMP_DIR"
     [ -f "$TMP_DIR/cloud-node" ] || die "release archive does not contain cloud-node"
     if [ ! -f "$TMP_DIR/data/cloud-node-xdp-ebpf.o" ]; then
-        warn "release archive does not contain data/cloud-node-xdp-ebpf.o; XDP attach will be unavailable until the eBPF object is installed"
+        warn "release archive does not contain data/cloud-node-xdp-ebpf.o; the binary will use its embedded eBPF object (the file is only needed for explicit xdp.ebpfObject overrides)"
     fi
 else
     log "+ curl -fL --retry 3 --connect-timeout 20 -o $TMP_DIR/$ASSET_NAME $DOWNLOAD_URL"

@@ -1,5 +1,5 @@
 use chrono::{Local, Utc};
-use cloudsidra_edge::utils::time::{now_local, now_utc, update_time_offset};
+use cloud_node_rust::utils::time::{now_local, now_utc, update_time_offset};
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 

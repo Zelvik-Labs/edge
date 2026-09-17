@@ -152,6 +152,11 @@ pub async fn start_node_stream(api_config: ApiConfig, config_store: Arc<ConfigSt
                     continue;
                 }
             };
+        // Shadow counter for the live node stream transport; dropped when the
+        // stream ends so reconnects are reflected.
+        let _rpc_transport = crate::metrics::transport_metrics_guard(
+            crate::metrics::ShadowTransportKind::RpcTransport,
+        );
         let stream_result = run_stream(client, &api_config, config_store.clone())
             .await
             .map(|_| NodeStreamProbeResult::default());
@@ -259,8 +264,7 @@ async fn run_tonic_stream(
     let initial_ping_sent = true;
     let rpc_channel_capacity = crate::memory_governor::MEMORY_GOVERNOR
         .limit_for(crate::memory_governor::AdmissionClass::RpcStreamCommand)
-        .min(100)
-        .max(1);
+        .clamp(1, 100);
     let (tx, mut rx) = mpsc::channel(rpc_channel_capacity);
     let rx_stream = async_stream::stream! {
         if let Some(ping) = initial_ping {
@@ -463,10 +467,7 @@ fn validate_stream_message(message: &pb::NodeStreamMessage) -> anyhow::Result<()
     Ok(())
 }
 
-fn try_send_stream_reply(
-    tx: &mpsc::Sender<pb::NodeStreamMessage>,
-    reply: pb::NodeStreamMessage,
-) {
+fn try_send_stream_reply(tx: &mpsc::Sender<pb::NodeStreamMessage>, reply: pb::NodeStreamMessage) {
     if tx.try_send(reply).is_err() {
         crate::pipeline_metrics::increment(
             crate::pipeline_metrics::PipelineCounter::RpcStreamReplyDropped,

@@ -20,6 +20,137 @@ pub const METRIC_CATEGORY_HTTP: &str = "http";
 pub const METRIC_CATEGORY_TCP: &str = "tcp";
 pub const METRIC_CATEGORY_UDP: &str = "udp";
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ShadowTransportKind {
+    DownstreamTcp,
+    UpstreamTcp,
+    RpcTransport,
+    UdpSession,
+    QuicConnection,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ShadowConnectionMetrics {
+    pub downstream_transports: i64,
+    pub upstream_transports: i64,
+    pub rpc_transports: i64,
+    pub udp_sessions: i64,
+    pub quic_connections: i64,
+    pub pending_requests: i64,
+    pub forwarding_requests: i64,
+    pub active_requests: i64,
+}
+
+struct ShadowConnectionCounters {
+    downstream_transports: AtomicI64,
+    upstream_transports: AtomicI64,
+    rpc_transports: AtomicI64,
+    udp_sessions: AtomicI64,
+    quic_connections: AtomicI64,
+    pending_requests: AtomicI64,
+    forwarding_requests: AtomicI64,
+    active_requests: AtomicI64,
+}
+
+static SHADOW_CONNECTION_COUNTERS: ShadowConnectionCounters = ShadowConnectionCounters {
+    downstream_transports: AtomicI64::new(0),
+    upstream_transports: AtomicI64::new(0),
+    rpc_transports: AtomicI64::new(0),
+    udp_sessions: AtomicI64::new(0),
+    quic_connections: AtomicI64::new(0),
+    pending_requests: AtomicI64::new(0),
+    forwarding_requests: AtomicI64::new(0),
+    active_requests: AtomicI64::new(0),
+};
+
+pub fn shadow_connection_metrics() -> ShadowConnectionMetrics {
+    ShadowConnectionMetrics {
+        downstream_transports: SHADOW_CONNECTION_COUNTERS
+            .downstream_transports
+            .load(Ordering::Relaxed),
+        upstream_transports: SHADOW_CONNECTION_COUNTERS
+            .upstream_transports
+            .load(Ordering::Relaxed),
+        rpc_transports: SHADOW_CONNECTION_COUNTERS
+            .rpc_transports
+            .load(Ordering::Relaxed),
+        udp_sessions: SHADOW_CONNECTION_COUNTERS
+            .udp_sessions
+            .load(Ordering::Relaxed),
+        quic_connections: SHADOW_CONNECTION_COUNTERS
+            .quic_connections
+            .load(Ordering::Relaxed),
+        pending_requests: SHADOW_CONNECTION_COUNTERS
+            .pending_requests
+            .load(Ordering::Relaxed),
+        forwarding_requests: SHADOW_CONNECTION_COUNTERS
+            .forwarding_requests
+            .load(Ordering::Relaxed),
+        active_requests: SHADOW_CONNECTION_COUNTERS
+            .active_requests
+            .load(Ordering::Relaxed),
+    }
+}
+
+pub struct ShadowTransportMetricsGuard {
+    counter: &'static AtomicI64,
+}
+
+impl Drop for ShadowTransportMetricsGuard {
+    fn drop(&mut self) {
+        decrement_active_connections(self.counter);
+    }
+}
+
+pub fn transport_metrics_guard(kind: ShadowTransportKind) -> ShadowTransportMetricsGuard {
+    let counter = match kind {
+        ShadowTransportKind::DownstreamTcp => &SHADOW_CONNECTION_COUNTERS.downstream_transports,
+        ShadowTransportKind::UpstreamTcp => &SHADOW_CONNECTION_COUNTERS.upstream_transports,
+        ShadowTransportKind::RpcTransport => &SHADOW_CONNECTION_COUNTERS.rpc_transports,
+        ShadowTransportKind::UdpSession => &SHADOW_CONNECTION_COUNTERS.udp_sessions,
+        ShadowTransportKind::QuicConnection => &SHADOW_CONNECTION_COUNTERS.quic_connections,
+    };
+    counter.fetch_add(1, Ordering::Relaxed);
+    ShadowTransportMetricsGuard { counter }
+}
+
+pub struct ShadowRequestMetricsGuard {
+    counter: &'static AtomicI64,
+}
+
+impl Drop for ShadowRequestMetricsGuard {
+    fn drop(&mut self) {
+        decrement_active_connections(self.counter);
+    }
+}
+
+pub fn pending_request_metrics_guard() -> ShadowRequestMetricsGuard {
+    SHADOW_CONNECTION_COUNTERS
+        .pending_requests
+        .fetch_add(1, Ordering::Relaxed);
+    ShadowRequestMetricsGuard {
+        counter: &SHADOW_CONNECTION_COUNTERS.pending_requests,
+    }
+}
+
+pub fn forwarding_metrics_guard() -> ShadowRequestMetricsGuard {
+    SHADOW_CONNECTION_COUNTERS
+        .forwarding_requests
+        .fetch_add(1, Ordering::Relaxed);
+    ShadowRequestMetricsGuard {
+        counter: &SHADOW_CONNECTION_COUNTERS.forwarding_requests,
+    }
+}
+
+pub fn active_request_metrics_guard() -> ShadowRequestMetricsGuard {
+    SHADOW_CONNECTION_COUNTERS
+        .active_requests
+        .fetch_add(1, Ordering::Relaxed);
+    ShadowRequestMetricsGuard {
+        counter: &SHADOW_CONNECTION_COUNTERS.active_requests,
+    }
+}
+
 pub fn normalize_metric_category(category: &str) -> String {
     let category = category.trim().to_ascii_lowercase();
     if category.is_empty() {
@@ -52,7 +183,22 @@ fn compute_node_pressure(sys: &mut sysinfo::System) -> f32 {
     sys.refresh_cpu_usage();
     let cpu_load = sys.global_cpu_usage() as f64 / 100.0;
 
-    ((conn_pressure * 0.7 + cpu_load * 0.3).min(1.0)) as f32
+    // Memory was the missing term: an L2 node under governor-classified
+    // memory pressure must look pressured to L1 peers and to the local
+    // transform gate even when CPU/connections are idle. The floor values
+    // map to `limit_for_pressure` steps (0.55→3/4, 0.75→1/2, 0.90→1) so
+    // memory pressure can only raise the signal, never lower it.
+    let memory_component = match crate::memory_governor::MEMORY_GOVERNOR
+        .snapshot(crate::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads())
+        .memory_pressure_level
+    {
+        crate::memory_governor::MemoryPressureLevel::Normal => 0.0_f64,
+        crate::memory_governor::MemoryPressureLevel::Elevated => 0.55,
+        crate::memory_governor::MemoryPressureLevel::High => 0.75,
+        crate::memory_governor::MemoryPressureLevel::Critical => 0.90,
+    };
+
+    ((conn_pressure * 0.7 + cpu_load * 0.3).min(1.0).max(memory_component)) as f32
 }
 
 pub mod aggregator;
@@ -78,6 +224,46 @@ pub struct HttpDimensionEvent {
     pub analyzed: Option<crate::metrics::analyzer::RequestStats>,
     pub request_context: Arc<MetricRequestContext>,
     pub created_at: i64,
+}
+
+pub struct HttpDimensionsArgs<'a> {
+    pub server_id: i64,
+    pub client_ip: std::net::IpAddr,
+    pub domain: &'a str,
+    pub user_agent: &'a str,
+    pub bytes_sent: i64,
+    pub bytes_received: i64,
+    pub cached_bytes: i64,
+    pub waf_group_id: i64,
+    pub waf_action: Option<&'a str>,
+    pub cached_analyzed: Option<&'a crate::metrics::analyzer::RequestStats>,
+    pub request_context: Option<MetricRequestContext>,
+}
+
+pub struct NetworkDimensionsArgs<'a> {
+    pub category: &'a str,
+    pub server_id: i64,
+    pub client_ip: std::net::IpAddr,
+    pub domain: &'a str,
+    pub user_agent: &'a str,
+    pub bytes_sent: i64,
+    pub bytes_received: i64,
+    pub status: u16,
+}
+
+struct DimensionsArgs<'a> {
+    category: &'a str,
+    server_id: i64,
+    client_ip: std::net::IpAddr,
+    domain: &'a str,
+    user_agent: &'a str,
+    bytes_sent: i64,
+    bytes_received: i64,
+    cached_bytes: i64,
+    waf_group_id: i64,
+    waf_action: Option<&'a str>,
+    cached_analyzed: Option<&'a crate::metrics::analyzer::RequestStats>,
+    request_context: Option<MetricRequestContext>,
 }
 
 #[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
@@ -363,9 +549,7 @@ impl RuntimeDistinctIpTracker {
         Self {
             ips: dashmap::DashSet::new(),
             reserved: AtomicUsize::new(0),
-            capacity: (tracker_budget / 64)
-                .max(1)
-                .min(usize::MAX as u64) as usize,
+            capacity: (tracker_budget / 64).max(1).min(usize::MAX as u64) as usize,
         }
     }
 
@@ -414,6 +598,48 @@ pub struct ServerMetrics {
     pub active_connections: AtomicI64,
     pub count_websocket_connections: AtomicU64,
     pub distinct_ips: RuntimeDistinctIpTracker,
+}
+
+pub struct ActiveRequestMetricsGuard {
+    metrics: Arc<ServerMetrics>,
+    finished: bool,
+}
+
+impl ActiveRequestMetricsGuard {
+    pub fn new(metrics: Arc<ServerMetrics>) -> Self {
+        metrics.active_connections.fetch_add(1, Ordering::Relaxed);
+        Self {
+            metrics,
+            finished: false,
+        }
+    }
+
+    pub fn from_started(metrics: Arc<ServerMetrics>) -> Self {
+        Self::new(metrics)
+    }
+
+    pub fn finish(&mut self) {
+        if !self.finished {
+            self.finished = true;
+            decrement_active_connections(&self.metrics.active_connections);
+        }
+    }
+
+    pub fn metrics(&self) -> &Arc<ServerMetrics> {
+        &self.metrics
+    }
+}
+
+impl Drop for ActiveRequestMetricsGuard {
+    fn drop(&mut self) {
+        self.finish();
+    }
+}
+
+impl Default for ServerMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ServerMetrics {
@@ -693,13 +919,13 @@ impl<T: Clone + Default> TimeCache<T> {
         F: FnOnce() -> T,
     {
         {
-            let read = self.data.read().unwrap();
+            let read = self.data.read().unwrap_or_else(|e| e.into_inner());
             if read.0 == current_tick {
                 return read.1.clone();
             }
         }
 
-        let mut write = self.data.write().unwrap();
+        let mut write = self.data.write().unwrap_or_else(|e| e.into_inner());
         if write.0 == current_tick {
             return write.1.clone();
         }
@@ -774,7 +1000,6 @@ pub mod record {
         }
         m.total_requests.fetch_add(1, Ordering::Relaxed);
         m.active_connections.fetch_add(1, Ordering::Relaxed);
-
         if !ip_recorded {
             if let Ok(remote_ip) = remote_ip.parse::<IpAddr>() {
                 let day = get_current_day();
@@ -787,6 +1012,51 @@ pub mod record {
         false
     }
 
+    /// Record request metadata without owning the active-connection lifetime.
+    ///
+    /// Callers that can be aborted must keep an `ActiveRequestMetricsGuard`
+    /// beside their future and let that guard own the decrement.
+    pub fn request_start_without_active(
+        server_id: i64,
+        remote_ip: &str,
+        user_id: i64,
+        user_plan_id: i64,
+        plan_id: i64,
+        cached_m: Option<&Arc<ServerMetrics>>,
+        ip_recorded: bool,
+    ) -> bool {
+        let m = cached_m
+            .cloned()
+            .unwrap_or_else(|| get_or_create(server_id));
+        if user_id > 0 {
+            m.user_id.store(user_id, Ordering::Relaxed);
+        }
+        if user_plan_id > 0 {
+            m.user_plan_id.store(user_plan_id, Ordering::Relaxed);
+        }
+        if plan_id > 0 {
+            m.plan_id.store(plan_id, Ordering::Relaxed);
+        }
+        m.total_requests.fetch_add(1, Ordering::Relaxed);
+        if !ip_recorded && let Ok(remote_ip) = remote_ip.parse::<IpAddr>() {
+            let day = get_current_day();
+            crate::metrics::daily::UNIQUE_IP_TRACKER.record(server_id, &day, remote_ip);
+            m.distinct_ips.insert(remote_ip);
+            return true;
+        }
+        false
+    }
+
+    pub fn active_request_guard(
+        server_id: i64,
+        cached_m: Option<&Arc<ServerMetrics>>,
+    ) -> ActiveRequestMetricsGuard {
+        let metrics = cached_m
+            .cloned()
+            .unwrap_or_else(|| get_or_create(server_id));
+        ActiveRequestMetricsGuard::new(metrics)
+    }
+
     pub fn request_end(
         server_id: i64,
         bytes_sent: u64,
@@ -796,12 +1066,58 @@ pub mod record {
         is_websocket: bool,
         cached_m: Option<&Arc<ServerMetrics>>,
     ) {
+        request_end_inner(
+            server_id,
+            bytes_sent,
+            bytes_received,
+            is_cached,
+            is_attack,
+            is_websocket,
+            cached_m,
+            true,
+        );
+    }
+
+    pub fn request_end_without_active(
+        server_id: i64,
+        bytes_sent: u64,
+        bytes_received: u64,
+        is_cached: bool,
+        is_attack: bool,
+        is_websocket: bool,
+        cached_m: Option<&Arc<ServerMetrics>>,
+    ) {
+        request_end_inner(
+            server_id,
+            bytes_sent,
+            bytes_received,
+            is_cached,
+            is_attack,
+            is_websocket,
+            cached_m,
+            false,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn request_end_inner(
+        server_id: i64,
+        bytes_sent: u64,
+        bytes_received: u64,
+        is_cached: bool,
+        is_attack: bool,
+        is_websocket: bool,
+        cached_m: Option<&Arc<ServerMetrics>>,
+        release_active: bool,
+    ) {
         let m = if let Some(m) = cached_m {
             (*m).clone()
         } else {
             get_or_create(server_id)
         };
-        decrement_active_connections(&m.active_connections);
+        if release_active {
+            decrement_active_connections(&m.active_connections);
+        }
         m.bytes_sent.fetch_add(bytes_sent, Ordering::Relaxed);
         m.bytes_received
             .fetch_add(bytes_received, Ordering::Relaxed);
@@ -879,21 +1195,50 @@ pub mod record {
             .fetch_add(cost_ms, Ordering::Relaxed);
     }
 
-    pub fn record_http_dimensions(
-        server_id: i64,
-        client_ip: IpAddr,
-        domain: &str,
-        user_agent: &str,
-        bytes_sent: i64,
-        bytes_received: i64,
-        cached_bytes: i64,
-        waf_group_id: i64,
-        waf_action: Option<&str>,
-        cached_analyzed: Option<&crate::metrics::analyzer::RequestStats>,
-        request_context: Option<MetricRequestContext>,
-    ) {
-        record_dimensions(
-            crate::metrics::METRIC_CATEGORY_HTTP,
+    pub fn record_http_dimensions(args: HttpDimensionsArgs<'_>) {
+        record_dimensions(DimensionsArgs {
+            category: crate::metrics::METRIC_CATEGORY_HTTP,
+            server_id: args.server_id,
+            client_ip: args.client_ip,
+            domain: args.domain,
+            user_agent: args.user_agent,
+            bytes_sent: args.bytes_sent,
+            bytes_received: args.bytes_received,
+            cached_bytes: args.cached_bytes,
+            waf_group_id: args.waf_group_id,
+            waf_action: args.waf_action,
+            cached_analyzed: args.cached_analyzed,
+            request_context: args.request_context,
+        });
+    }
+
+    pub fn record_network_dimensions(args: NetworkDimensionsArgs<'_>) {
+        record_dimensions(DimensionsArgs {
+            category: args.category,
+            server_id: args.server_id,
+            client_ip: args.client_ip,
+            domain: args.domain,
+            user_agent: args.user_agent,
+            bytes_sent: args.bytes_sent,
+            bytes_received: args.bytes_received,
+            cached_bytes: 0,
+            waf_group_id: 0,
+            waf_action: None,
+            cached_analyzed: None,
+            request_context: Some(MetricRequestContext::network(
+                args.domain,
+                args.client_ip,
+                args.user_agent,
+                args.bytes_sent,
+                args.bytes_received,
+                args.status,
+            )),
+        });
+    }
+
+    fn record_dimensions(args: DimensionsArgs<'_>) {
+        let DimensionsArgs {
+            category,
             server_id,
             client_ip,
             domain,
@@ -905,56 +1250,7 @@ pub mod record {
             waf_action,
             cached_analyzed,
             request_context,
-        );
-    }
-
-    pub fn record_network_dimensions(
-        category: &str,
-        server_id: i64,
-        client_ip: IpAddr,
-        domain: &str,
-        user_agent: &str,
-        bytes_sent: i64,
-        bytes_received: i64,
-        status: u16,
-    ) {
-        record_dimensions(
-            category,
-            server_id,
-            client_ip,
-            domain,
-            user_agent,
-            bytes_sent,
-            bytes_received,
-            0,
-            0,
-            None,
-            None,
-            Some(MetricRequestContext::network(
-                domain,
-                client_ip,
-                user_agent,
-                bytes_sent,
-                bytes_received,
-                status,
-            )),
-        );
-    }
-
-    fn record_dimensions(
-        category: &str,
-        server_id: i64,
-        client_ip: IpAddr,
-        domain: &str,
-        user_agent: &str,
-        bytes_sent: i64,
-        bytes_received: i64,
-        cached_bytes: i64,
-        waf_group_id: i64,
-        waf_action: Option<&str>,
-        cached_analyzed: Option<&crate::metrics::analyzer::RequestStats>,
-        request_context: Option<MetricRequestContext>,
-    ) {
+        } = args;
         if server_id <= 0 {
             return;
         }
@@ -1103,7 +1399,44 @@ pub async fn start_persistence_flusher() {
 
     loop {
         interval.tick().await;
+        let metrics_state_bytes = crate::metrics::aggregator::METRIC_STAT_AGGREGATOR
+            .approximate_bytes()
+            .saturating_add(
+                crate::metrics::aggregator::HTTP_REQUEST_STAT_AGGREGATOR.approximate_bytes(),
+            )
+            .saturating_add(crate::metrics::top_ip::TOP_IP_TRACKER.approximate_bytes())
+            .saturating_add(crate::metrics::daily::DAILY_DOMAIN_TRACKER.approximate_bytes())
+            .saturating_add(crate::metrics::daily::UNIQUE_IP_TRACKER.approximate_bytes());
+        crate::memory_governor::MEMORY_GOVERNOR
+            .set_metrics_aggregator_bytes(metrics_state_bytes);
+        // Observability-only guard: the metrics maps are unbounded by design
+        // today, so surface a rate-limited warning when their estimated
+        // footprint becomes a material share of the node budget. No samples
+        // are dropped here — capping requires an explicit policy decision.
+        {
+            static LAST_METRICS_WARN: AtomicI64 = AtomicI64::new(0);
+            let snap = crate::memory_governor::MEMORY_GOVERNOR.snapshot(
+                crate::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads(),
+            );
+            let floor = 64u64 * 1024 * 1024;
+            let limit = (snap.memory_total_bytes / 8).max(floor);
+            let now = crate::utils::time::now_timestamp();
+            let last = LAST_METRICS_WARN.load(std::sync::atomic::Ordering::Relaxed);
+            if metrics_state_bytes > limit && now.saturating_sub(last) >= 600 {
+                LAST_METRICS_WARN.store(now, std::sync::atomic::Ordering::Relaxed);
+                tracing::warn!(
+                    metrics_state_bytes,
+                    limit,
+                    memory_total_bytes = snap.memory_total_bytes,
+                    "METRICS_MEMORY: estimated metrics tracker footprint exceeds 1/8 of node memory budget; consider cardinality caps"
+                );
+            }
+        }
         let mut updates = Vec::new();
+        // Baselines are only committed after the Mace write succeeds; on a
+        // failed write the next round recomputes the same deltas instead of
+        // silently losing them.
+        let mut new_baselines: Vec<(i64, ServerStatusSnapshot)> = Vec::new();
         let now = crate::utils::time::now_timestamp();
         let period = (now / 300) * 300;
 
@@ -1149,35 +1482,53 @@ pub async fn start_persistence_flusher() {
                 count_ips: current.count_ips,
             });
 
-            *last = current;
-            last.server_id = server_id;
+            new_baselines.push((server_id, current));
         }
 
         let node_sent = METRICS.total_bytes_sent.load(Ordering::Relaxed);
         let node_recv = METRICS.total_bytes_received.load(Ordering::Relaxed);
         let node_sent_delta = node_sent - last_node_sent;
         let node_recv_delta = node_recv - last_node_recv;
-        last_node_sent = node_sent;
-        last_node_recv = node_recv;
 
         let cleanup_before = (now % 3600 < 30).then_some(now - 86400);
         if !updates.is_empty() || cleanup_before.is_some() {
             let write_result = tokio::task::spawn_blocking(move || {
-                if !updates.is_empty() {
-                    storage::STORAGE.record_server_batch(
-                        period,
-                        updates,
-                        node_sent_delta,
-                        node_recv_delta,
-                    );
-                }
-                if let Some(older_than) = cleanup_before {
-                    storage::STORAGE.cleanup_old_stats(older_than);
-                }
+                let record_result = if !updates.is_empty() {
+                    storage::STORAGE
+                        .record_server_batch(period, updates, node_sent_delta, node_recv_delta)
+                        .inspect_err(|err| {
+                            tracing::error!(?err, "metric server batch persistence failed");
+                        })
+                } else {
+                    Ok(())
+                };
+                let cleanup_result = if let Some(older_than) = cleanup_before {
+                    storage::STORAGE
+                        .cleanup_old_stats(older_than)
+                        .inspect_err(|err| {
+                            tracing::error!(?err, "metric history cleanup failed");
+                        })
+                        .map(|_| ())
+                } else {
+                    Ok(())
+                };
+                record_result.and(cleanup_result)
             })
             .await;
-            if let Err(err) = write_result {
-                tracing::error!(error = %err, "metrics persistence worker failed");
+            match write_result {
+                Ok(Ok(())) => {
+                    for (server_id, snapshot) in new_baselines {
+                        last_values.insert(server_id, snapshot);
+                    }
+                    last_node_sent = node_sent;
+                    last_node_recv = node_recv;
+                }
+                Ok(Err(err)) => {
+                    tracing::error!(error = %err, "metrics persistence worker failed");
+                }
+                Err(err) => {
+                    tracing::error!(error = %err, "metrics persistence worker failed");
+                }
             }
         }
     }
@@ -1258,7 +1609,10 @@ mod tests {
     fn runtime_distinct_ip_tracker_fail_closed_at_capacity() {
         let tracker = super::RuntimeDistinctIpTracker::new(1);
         let capacity = tracker.capacity();
-        assert!(capacity > 0, "distinct IP tracker must derive a positive capacity");
+        assert!(
+            capacity > 0,
+            "distinct IP tracker must derive a positive capacity"
+        );
 
         for i in 0..capacity.saturating_add(128) {
             let ip = IpAddr::from([10, 0, (i / 256) as u8, (i % 256) as u8]);
@@ -1269,5 +1623,85 @@ mod tests {
             "distinct IP tracker must not grow beyond capacity ({capacity}), got {}",
             tracker.len()
         );
+    }
+
+    #[test]
+    fn active_request_guard_drops_to_exact_baseline() {
+        let metrics = std::sync::Arc::new(super::ServerMetrics::new());
+        assert_eq!(
+            metrics
+                .active_connections
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
+        {
+            let _guard = super::ActiveRequestMetricsGuard::new(metrics.clone());
+            assert_eq!(
+                metrics
+                    .active_connections
+                    .load(std::sync::atomic::Ordering::Relaxed),
+                1
+            );
+        }
+        assert_eq!(
+            metrics
+                .active_connections
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
+    }
+
+    #[test]
+    fn active_request_guard_finish_is_idempotent() {
+        let metrics = std::sync::Arc::new(super::ServerMetrics::new());
+        let mut guard = super::ActiveRequestMetricsGuard::new(metrics.clone());
+        guard.finish();
+        guard.finish();
+        assert_eq!(
+            metrics
+                .active_connections
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
+    }
+
+    #[test]
+    fn active_request_guard_keeps_old_arc_after_registry_replacement() {
+        let old = super::record::get_or_create(9_001);
+        let mut guard = super::ActiveRequestMetricsGuard::new(old.clone());
+        super::METRICS.servers.remove(&9_001);
+        let new = super::record::get_or_create(9_001);
+        guard.finish();
+        assert_eq!(
+            old.active_connections
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
+        assert_eq!(
+            new.active_connections
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
+    }
+
+    #[test]
+    fn shadow_connection_metrics_track_distinct_lifecycles() {
+        let before = super::shadow_connection_metrics();
+        let transport = super::transport_metrics_guard(super::ShadowTransportKind::DownstreamTcp);
+        let pending = super::pending_request_metrics_guard();
+        let forwarding = super::forwarding_metrics_guard();
+        let during = super::shadow_connection_metrics();
+
+        assert_eq!(
+            during.downstream_transports,
+            before.downstream_transports + 1
+        );
+        assert_eq!(during.pending_requests, before.pending_requests + 1);
+        assert_eq!(during.forwarding_requests, before.forwarding_requests + 1);
+
+        drop(forwarding);
+        drop(pending);
+        drop(transport);
+        assert_eq!(super::shadow_connection_metrics(), before);
     }
 }

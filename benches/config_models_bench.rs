@@ -1,4 +1,4 @@
-use cloudsidra_edge::config_models::{
+use cloud_node_rust::config_models::{
     ServerConfig, SizeCapacity, URLPattern, parse_life_to_seconds,
 };
 use criterion::{Criterion, criterion_group, criterion_main};
@@ -147,7 +147,7 @@ fn bench_server_config(c: &mut Criterion) {
     };
     server
         .server_names
-        .push(cloudsidra_edge::config_models::ServerNameConfig {
+        .push(cloud_node_rust::config_models::ServerNameConfig {
             name: "www.example.com".to_string(),
             sub_names: vec!["api.example.com".to_string(), "cdn.example.com".to_string()],
             ..Default::default()

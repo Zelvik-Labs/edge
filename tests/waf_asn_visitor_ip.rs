@@ -1,8 +1,8 @@
 //! WAF ASN matching and visitor-IP resolution audit tests.
 
-use cloudsidra_edge::client_ip;
-use cloudsidra_edge::config_models::{HTTPRemoteAddrConfig, ServerConfig};
-use cloudsidra_edge::metrics::analyzer;
+use cloud_node_rust::client_ip;
+use cloud_node_rust::config_models::{HTTPRemoteAddrConfig, ServerConfig};
+use cloud_node_rust::metrics::analyzer;
 use std::net::IpAddr;
 
 #[test]

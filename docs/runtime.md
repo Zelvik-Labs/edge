@@ -22,27 +22,27 @@ CloudNode Rust 的运行时由一个主进程和多个异步后台任务组成�
 ## CLI 命令
 
 ```bash
-CloudSidra-Edge start
-CloudSidra-Edge stop
-CloudSidra-Edge restart
-CloudSidra-Edge status
-CloudSidra-Edge install
-CloudSidra-Edge upgrade
-CloudSidra-Edge ntp
-CloudSidra-Edge firewall list
-CloudSidra-Edge firewall init
-CloudSidra-Edge xdp status
-CloudSidra-Edge xdp doctor
-CloudSidra-Edge xdp attach
-CloudSidra-Edge xdp detach
-CloudSidra-Edge test
+cloud-node start
+cloud-node stop
+cloud-node restart
+cloud-node status
+cloud-node install
+cloud-node upgrade
+cloud-node ntp
+cloud-node firewall list
+cloud-node firewall init
+cloud-node xdp status
+cloud-node xdp doctor
+cloud-node xdp attach
+cloud-node xdp detach
+cloud-node test
 ```
 
 全局参数：
 
 ```bash
-CloudSidra-Edge --monitor-port 8888
-CloudSidra-Edge --monitor-port 8888 --monitor-clear
+cloud-node --monitor-port 8888
+cloud-node --monitor-port 8888 --monitor-clear
 ```
 
 命令说明：
@@ -51,7 +51,7 @@ CloudSidra-Edge --monitor-port 8888 --monitor-clear
 - `stop`：停止后台节点。
 - `restart`：先停止再启动。
 - `status`：读取 PID 文件和文件锁判断节点状态。
-- `install`：注册 `/usr/bin/CloudSidra-Edge` wrapper 和 systemd service。
+- `install`：注册 `/usr/bin/cloud-node` wrapper 和 systemd service。
 - `upgrade`：从 GitHub Release 下载匹配当前 CPU/架构的最新版或指定版本，确认后备份并替换当前二进制，同时安装 release 包内的 `data/cloud-node-xdp-ebpf.o`。
 - `ntp`：交互式或非交互式设置系统时区，并按内置 NTP 源校准系统时钟；守护进程自动 NTP 只校准程序内部偏移。
 - `firewall init`：初始化本地 `nftables` table/set/chain/drop rule。
@@ -63,25 +63,25 @@ CloudSidra-Edge --monitor-port 8888 --monitor-clear
 - `xdp dump-maps`：输出当前进程维护的 XDP shadow maps 和 proxy 端口状态。
 - `test`：验证 `configs/api_node.yaml` 是否可解析。
 
-`upgrade` 默认使用交互式确认，并在成功替换后重启正在运行的 `CloudSidra-Edge.service` 或内置后台进程：
+`upgrade` 默认使用交互式确认，并在成功替换后重启正在运行的 `cloud-node.service` 或内置后台进程：
 
 ```bash
-CloudSidra-Edge upgrade
+cloud-node upgrade
 ```
 
 自动化场景可通过参数完整输入，跳过交互确认：
 
 ```bash
-CloudSidra-Edge upgrade --yes
-CloudSidra-Edge upgrade --version v0.1.0 --yes
-CloudSidra-Edge upgrade --version latest --github-mirror https://gh-proxy.example --yes
-CloudSidra-Edge upgrade --version v0.1.0 --github-base-url https://github.example.com --repo CloudSidra/CloudSidra-Edge --yes
+cloud-node upgrade --yes
+cloud-node upgrade --version v1.1.7 --yes
+cloud-node upgrade --version latest --github-mirror https://gh-proxy.example --yes
+cloud-node upgrade --version v1.1.7 --github-base-url https://github.example.com --repo Zypixh/cloud-node-rust --yes
 ```
 
 常用参数：
 
 - `--version`：目标版本，默认 `latest`；可传 `v1.1.7` 或 `1.1.7`。
-- `--repo`：GitHub 仓库，默认 `CloudSidra/CloudSidra-Edge`。
+- `--repo`：GitHub 仓库，默认 `Zypixh/cloud-node-rust`。
 - `--github-base-url`：GitHub 或 GitHub Enterprise 基础地址，默认 `https://github.com`。
 - `--github-mirror`：下载镜像/代理地址；如果包含 `{url}`，会用原始 GitHub 下载地址替换该占位符。
 - `--asset`：手动指定 release asset 文件名，覆盖自动 CPU/架构选择。
@@ -98,7 +98,7 @@ CloudSidra-Edge upgrade --version v0.1.0 --github-base-url https://github.exampl
 - `configs/api_node.yaml`：API 节点连接配置。
 - `data/cloud-node.pid`：后台进程 PID 文件。
 - `data/state.json`：部分运行状态持久化。
-- `data/cloud-node-xdp-ebpf.o`：`cargo xtask build-ebpf` 生成的 XDP eBPF 对象。
+- `data/cloud-node-xdp-ebpf.o`：可选的外部 XDP eBPF 对象（`cargo xtask build-ebpf` 生成）。默认加载的是构建期内嵌进二进制的对象；仅当 `xdp.ebpfObject` 或 `CLOUD_NODE_XDP_EBPF_OBJECT_PATH` 显式指定时才读取该文件。
 - `data/metrics.mace`：统计、缓存元数据和本地运行时防火墙封禁状态持久化。
 - `data/cache`：默认磁盘缓存目录。
 - `data/GeoLite2-City.mmdb`、`data/GeoLite2-ASN.mmdb`：GeoIP 数据库。
@@ -175,7 +175,7 @@ PROXY Protocol 入站只信任 loopback、private 或 link-local immediate peer�
 - `cleanCache`：清理本地缓存文件和缓存元数据。
 - `getStat`：回传 CPU、内存、负载、流量和连接数。
 - `changeAPINode`：切换运行时 API endpoint，并触发重连。
-- `checkSystemdService`：检查 `CloudSidra-Edge` systemd service 是否已启用。
+- `checkSystemdService`：检查 `cloud-node` systemd service 是否已启用。
 - `checkLocalFirewall`：检查本地 `nftables` 可用性并回复版本或错误。
 
 未知消息会回复 `unhandled`，不会静默丢弃。HTTP 明文 endpoint 下，运行时使用底层 HTTP/2 gRPC frame 实现保持流打开，行为更接近 Go 客户端：请求流打开后即开始心跳，不把“服务端响应头已返回”作为建流成功的前置条件。
@@ -199,7 +199,7 @@ HTTPS/TLS 源站的 `tlsSecurityVerifyMode` 按单个源站生效，支持 `auto
 通过 `--monitor-port` 启动本地监控页：
 
 ```bash
-CloudSidra-Edge --monitor-port 8888
+cloud-node --monitor-port 8888
 ```
 
 监控页展示：
@@ -217,12 +217,12 @@ CloudSidra-Edge --monitor-port 8888
 
 未注册 systemd 时，`stop` 会通过 PID 文件和 Linux `/proc` 识别当前运行实例，先发送 `SIGTERM` 并等待进程退出；超时未退出时会发送 `SIGKILL`，确认进程结束后才清理匹配的 PID 文件。`restart` 会等待旧进程真实退出后再执行 `start`，避免旧进程仍占用 80/443 或持有数据目录锁时启动新实例。
 
-`status` 会清理陈旧 PID 文件；如果 PID 文件丢失但同一工作目录下仍有 CloudSidra-Edge 进程，Linux 环境会继续识别为运行中，避免进程仍在监听端口但 CLI 误报 stopped。
+`status` 会清理陈旧 PID 文件；如果 PID 文件丢失但同一工作目录下仍有 cloud-node 进程，Linux 环境会继续识别为运行中，避免进程仍在监听端口但 CLI 误报 stopped。
 
-systemd 安装模式使用 `Type=simple` 直接托管前台进程，`TimeoutStopSec=35` 限制停止等待时间，并设置 `CLOUD_NODE_HOME` 指向运行目录。Pingora 的 SIGTERM graceful shutdown 宽限期设置为 5 秒，避免 `systemctl stop CloudSidra-Edge` 长时间停留在 deactivating。
+systemd 安装模式使用 `Type=simple` 直接托管前台进程，`TimeoutStopSec=35` 限制停止等待时间，并设置 `CLOUD_NODE_HOME` 指向运行目录。Pingora 的 SIGTERM graceful shutdown 宽限期设置为 5 秒，避免 `systemctl stop cloud-node` 长时间停留在 deactivating。
 
 如果进程异常退出，systemd 安装模式下会按 `Restart=on-failure` 自动拉起。排障时优先查看：
 
-- `systemctl status CloudSidra-Edge`
-- `journalctl -u CloudSidra-Edge`
+- `systemctl status cloud-node`
+- `journalctl -u cloud-node`
 - `logs/run.log`

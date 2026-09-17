@@ -2,11 +2,11 @@
 //! These tests verify bounded structures and document structural gaps where
 //! governor budgets exist but are not yet wired to every runtime cache.
 
-use cloudsidra_edge::firewall::matcher::evaluate_operator;
-use cloudsidra_edge::memory_governor::MEMORY_GOVERNOR;
-use cloudsidra_edge::metrics::aggregator::{AggregationKey, MetricAggregator};
-use cloudsidra_edge::metrics::daily::DailyDomainTracker;
-use cloudsidra_edge::metrics::top_ip::TopIpTracker;
+use cloud_node_rust::firewall::matcher::evaluate_operator;
+use cloud_node_rust::memory_governor::MEMORY_GOVERNOR;
+use cloud_node_rust::metrics::aggregator::{AggregationKey, MetricAggregator};
+use cloud_node_rust::metrics::daily::DailyDomainTracker;
+use cloud_node_rust::metrics::top_ip::TopIpTracker;
 use std::collections::BTreeMap;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -14,7 +14,7 @@ use std::sync::Arc;
 const IP_REPORT_CHANNEL_CAPACITY: usize = 1000;
 const RPC_STREAM_CHANNEL_CAPACITY: usize = 100;
 
-fn governor_snapshot() -> cloudsidra_edge::memory_governor::GovernorSnapshot {
+fn governor_snapshot() -> cloud_node_rust::memory_governor::GovernorSnapshot {
     MEMORY_GOVERNOR.snapshot(MEMORY_GOVERNOR.pingora_worker_threads())
 }
 
@@ -45,8 +45,7 @@ fn rpc_stream_channel_depth_aligns_with_governor_admission_limit() {
     let snapshot = governor_snapshot();
     let aligned = snapshot
         .rpc_stream_command_limit
-        .min(RPC_STREAM_CHANNEL_CAPACITY)
-        .max(1);
+        .clamp(1, RPC_STREAM_CHANNEL_CAPACITY);
     assert!(
         aligned <= RPC_STREAM_CHANNEL_CAPACITY,
         "RPC stream channel depth should not exceed the historical fixed cap"
@@ -78,7 +77,7 @@ fn ip_report_channel_depth_is_conservative_relative_to_governor_budget() {
 fn metric_aggregator_flush_empties_in_memory_store() {
     let aggregator = MetricAggregator::new();
     let key = AggregationKey {
-        category: Arc::from(cloudsidra_edge::metrics::METRIC_CATEGORY_HTTP),
+        category: Arc::from(cloud_node_rust::metrics::METRIC_CATEGORY_HTTP),
         server_id: 1,
         country: Arc::from(""),
         country_id: 0,
@@ -102,7 +101,10 @@ fn metric_aggregator_flush_empties_in_memory_store() {
 
     let flushed = aggregator.flush();
     assert_eq!(flushed.len(), 1);
-    assert!(aggregator.data.is_empty(), "flush must drain aggregator keys");
+    assert!(
+        aggregator.data.is_empty(),
+        "flush must drain aggregator keys"
+    );
 }
 
 #[test]
@@ -111,7 +113,7 @@ fn metric_stat_aggregator_with_samples_flush_drains_all_state() {
     let mut attrs = BTreeMap::new();
     attrs.insert("requestId".to_string(), "1".to_string());
     let key = AggregationKey {
-        category: Arc::from(cloudsidra_edge::metrics::METRIC_CATEGORY_HTTP),
+        category: Arc::from(cloud_node_rust::metrics::METRIC_CATEGORY_HTTP),
         server_id: 42,
         country: Arc::from(""),
         country_id: 0,
@@ -172,8 +174,44 @@ fn waf_regex_evaluator_reuses_compiled_patterns_without_error() {
     for value in ["oom-audit-reuse-1", "oom-audit-reuse-2", "no-match"] {
         let _ = evaluate_operator(value, "regexp", pattern, false);
     }
-    assert!(evaluate_operator("oom-audit-reuse-99", "regexp", pattern, false));
+    assert!(evaluate_operator(
+        "oom-audit-reuse-99",
+        "regexp",
+        pattern,
+        false
+    ));
     assert!(!evaluate_operator("bad", "regexp", pattern, false));
+}
+
+#[test]
+fn config_sync_decode_budget_is_bounded_by_governor_available_memory() {
+    let snapshot = governor_snapshot();
+    let limits = cloud_node_rust::config_apply::ConfigApplyLimits::from_governor();
+    assert_eq!(limits.available_bytes, snapshot.memory_available_bytes);
+    assert!(limits.decode_budget_bytes() > 0);
+    assert!(
+        limits.decode_budget_bytes() <= snapshot.memory_available_bytes.max(16 * 1024 * 1024),
+        "config-sync decode budget must not exceed available memory"
+    );
+    assert!(
+        limits.server_chunk_size() <= 256,
+        "config-sync chunk size must stay bounded"
+    );
+    let high = cloud_node_rust::config_apply::ConfigApplyLimits::synthetic(
+        2 * 1024 * 1024 * 1024,
+        150 * 1024 * 1024,
+    );
+    let low = cloud_node_rust::config_apply::ConfigApplyLimits::synthetic(
+        512 * 1024 * 1024,
+        32 * 1024 * 1024,
+    );
+    assert!(high.defer_health_registration());
+    assert!(low.defer_health_registration());
+    assert!(
+        !limits.defer_health_registration()
+            || snapshot.memory_pressure_level
+                >= cloud_node_rust::memory_governor::MemoryPressureLevel::High
+    );
 }
 
 #[test]

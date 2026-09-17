@@ -14,13 +14,18 @@ use std::sync::Arc;
 use std::sync::LazyLock as Lazy;
 
 static HEADER_NAME_CACHE: Lazy<DashMap<String, Option<HeaderName>>> = Lazy::new(DashMap::new);
+/// Keys come from operator config, so growth is naturally bounded — this cap
+/// is pure defense-in-depth against a pathological config blob.
+const HEADER_NAME_CACHE_MAX: usize = 65_536;
 
 fn cached_header_name(name: &str) -> Option<HeaderName> {
     if let Some(cached) = HEADER_NAME_CACHE.get(name) {
         return cached.clone();
     }
     let parsed = HeaderName::from_str(name).ok();
-    HEADER_NAME_CACHE.insert(name.to_string(), parsed.clone());
+    if HEADER_NAME_CACHE.len() < HEADER_NAME_CACHE_MAX {
+        HEADER_NAME_CACHE.insert(name.to_string(), parsed.clone());
+    }
     parsed
 }
 
@@ -367,7 +372,7 @@ impl CompiledHeaderStatus {
     fn matches(&self, status: u16) -> bool {
         match self {
             Self::Any => true,
-            Self::Codes(codes) => codes.iter().any(|code| *code == status as i32),
+            Self::Codes(codes) => codes.contains(&(status as i32)),
         }
     }
 }
@@ -693,10 +698,10 @@ pub fn apply_compiled_request_header_policy_to_upstream(
             continue;
         }
         let resolved = header.value_template.render(vars);
-        if let (Some(hn), Ok(hv)) = (&header.name.parsed, HeaderValue::from_str(&resolved)) {
-            if upstream_request.headers.get(hn).is_none() {
-                upstream_request.insert_header(hn.clone(), hv).ok();
-            }
+        if let (Some(hn), Ok(hv)) = (&header.name.parsed, HeaderValue::from_str(&resolved))
+            && upstream_request.headers.get(hn).is_none()
+        {
+            upstream_request.insert_header(hn.clone(), hv).ok();
         }
     }
 }
@@ -745,10 +750,9 @@ pub fn apply_request_header_policy_to_upstream(
         if let (Some(hn), Ok(hv)) = (
             cached_header_name(&h.name),
             HeaderValue::from_str(&resolved),
-        ) {
-            if upstream_request.headers.get(&hn).is_none() {
-                upstream_request.insert_header(hn, hv).ok();
-            }
+        ) && upstream_request.headers.get(&hn).is_none()
+        {
+            upstream_request.insert_header(hn, hv).ok();
         }
     }
 }

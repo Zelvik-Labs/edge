@@ -1,21 +1,8 @@
 [package]
-name = "cloudsidra-edge"
-version = "0.1.0"
+name = "cloud-node-rust"
+version = "1.2.7"
 edition = "2024"
-rust-version = "1.97.1"
-description = "CloudSidra Edge CDN and global traffic data plane"
-
-[package.metadata.cloudsidra]
-product = "CloudSidra-Edge"
-version_scheme = "product-semver"
-upstream_project = "cloud-node-rust"
-upstream_version = "1.2.2"
-upstream_commit = "631e5c76cc5605e748dc0230ffc019053b852f80"
-compatibility_lineage = "cloud-node-rust-v1"
-
-[[bin]]
-name = "CloudSidra-Edge"
-path = "src/main.rs"
+rust-version = "1.98.1"
 
 [dependencies]
 aes = "0.9.2"
@@ -48,6 +35,9 @@ regex = "1.13.1"
 aho-corasick = "1.1.5"
 reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "stream", "http2"] }
 quinn = "0.11.11"
+# Direct pin to the lockfile version so `congestion::Controller` impls
+# can name `RttEstimator` (quinn does not re-export it).
+quinn-proto = "=0.11.17"
 rustls = { version = "0.23.43", default-features = false, features = ["aws-lc-rs", "std"] }
 rustls-native-certs = "0.8.4"
 rustls-pemfile = "2.2.0"
@@ -77,7 +67,7 @@ x509-parser = "0.18.1"
 num_cpus = "1.17.0"
 local-ip-address = "0.6.13"
 governor = "0.10.4"
-maxminddb = "0.30.0"
+maxminddb = { version = "0.30.0", features = ["mmap"] }
 lru = "0.18.2"
 moka = { version = "0.12.16", default-features = false, features = ["sync"] }
 zstd = "0.13.3"
@@ -94,16 +84,24 @@ async-compression = { version = "0.4.43", features = ["tokio", "zstd"] }
 arc-swap = "1.9.2"
 ahash = "0.8.12"
 cloud-node-xdp-common = { path = "crates/cloud-node-xdp-common", features = ["aya"] }
+cloud-node-transport = { path = "crates/cloud-node-transport" }
+mimalloc = "0.1.52"
+# Pinned to the exact version mimalloc links so `mi_collect` resolves to the
+# same statically linked allocator instance instead of a second copy.
+# `extended` exposes mi_collect/mi_option_set; feature unification merges it
+# into the single libmimalloc-sys build shared with the `mimalloc` crate.
+libmimalloc-sys = { version = "=0.1.49", features = ["extended"] }
+memmap2 = "0.9.11"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 aya = "0.14.0"
 neli = "0.7.4"
-smoltcp = { version = "0.14.0", default-features = false, features = ["std", "async", "medium-ethernet", "medium-ip", "proto-ipv4", "proto-ipv6", "socket-tcp", "socket-udp"] }
+smoltcp = { version = "0.14.0", default-features = false, features = ["std", "async", "medium-ethernet", "medium-ip", "proto-ipv4", "proto-ipv6", "socket-tcp", "socket-tcp-cubic", "socket-udp"] }
 xsk-rs = "0.9.0"
 
 [dev-dependencies]
 criterion = { version = "0.8.2", features = ["html_reports", "async_tokio"] }
-smoltcp = { version = "0.14.0", default-features = false, features = ["std", "async", "medium-ethernet", "medium-ip", "proto-ipv4", "proto-ipv6", "socket-tcp", "socket-udp"] }
+smoltcp = { version = "0.14.0", default-features = false, features = ["std", "async", "medium-ethernet", "medium-ip", "proto-ipv4", "proto-ipv6", "socket-tcp", "socket-tcp-cubic", "socket-udp"] }
 
 [[bench]]
 name = "template_bench"
@@ -179,6 +177,24 @@ harness = false
 
 [build-dependencies]
 tonic-prost-build = "0.14.6"
+
+# crates/cloud-node-xdp-ebpf stays outside: it pins a dated nightly via its
+# own rust-toolchain.toml and builds for the bpfeb target — it must not join
+# this workspace's resolution.
+[workspace]
+members = ["crates/cloud-node-transport"]
+# cloud-node-xdp-ebpf pins its own dated nightly/bpfeb toolchain;
+# pingora-main is a vendored checkout with its own workspace root;
+# xtask is a standalone tool manifest — all three must stay outside
+# this workspace's auto-membership.
+exclude = ["crates/cloud-node-xdp-ebpf", "pingora-main", "xtask"]
+
+# smoltcp-edge is a controlled fork of smoltcp 0.14.0 (T3): transport
+# hooks in socket/tcp.rs + minimal wire repr surface, every divergence
+# recorded in vendor/smoltcp-edge/DIVERGENCE.md. This patch redirects
+# both dependency declarations (linux target + dev-dependencies).
+[patch.crates-io]
+smoltcp = { path = "vendor/smoltcp-edge" }
 
 [profile.release]
 lto = "fat"

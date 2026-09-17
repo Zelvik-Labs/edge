@@ -7,6 +7,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::Notify;
 use tracing::warn;
 
+type OriginBuildContext = (
+    i32,
+    Arc<HashMap<i64, Vec<ParentNodeConfig>>>,
+    bool,
+    bool,
+    Option<crate::config_models::GlobalHTTPAllConfig>,
+);
+
 use crate::config_models::{
     HTTP3Policy, HTTPCCPolicy, HTTPCachePolicy, HTTPFirewallPolicy, HTTPPageConfig,
     HTTPPagesPolicy, MetricItemConfig, ParentNodeConfig, SSLCertConfig, SSLPolicyConfig,
@@ -285,6 +293,12 @@ pub struct ConfigStore {
     reload_notify: Arc<Notify>,
     reload_generation: Arc<AtomicU64>,
     parent_pressure: Arc<DashMap<String, (f32, std::time::Instant)>>,
+    published_fingerprints: Arc<DashMap<String, String>>,
+    /// Hash of the global runtime context (global HTTP settings, node level,
+    /// parent nodes, tiered bypass, LAN allow). Per-server/per-user published
+    /// fingerprints embed this salt, so a global-context change forces the
+    /// incremental syncs to rebuild instead of skipping on a matching JSON.
+    runtime_context_salt: Arc<Mutex<String>>,
 }
 
 #[derive(Clone, Default)]
@@ -360,9 +374,9 @@ fn dedup_ssl_certs(certs: Vec<SSLCertConfig>) -> Vec<SSLCertConfig> {
             by_id.insert(key, cert);
             continue;
         }
-        if !by_id.contains_key(&cert.id) {
+        if let std::collections::hash_map::Entry::Vacant(e) = by_id.entry(cert.id) {
             order.push(cert.id);
-            by_id.insert(cert.id, cert);
+            e.insert(cert);
             continue;
         }
         let replace = by_id
@@ -389,11 +403,82 @@ impl ConfigStore {
             reload_notify: Arc::new(Notify::new()),
             reload_generation: Arc::new(AtomicU64::new(0)),
             parent_pressure: Arc::new(DashMap::new()),
+            published_fingerprints: Arc::new(DashMap::new()),
+            runtime_context_salt: Arc::new(Mutex::new(String::new())),
         }
     }
 
     pub fn runtime_reload_generation(&self) -> u64 {
         self.reload_generation.load(Ordering::Acquire)
+    }
+
+    pub fn published_fingerprint(&self, scope: &str) -> Option<String> {
+        self.published_fingerprints
+            .get(scope)
+            .map(|entry| entry.value().clone())
+    }
+
+    pub fn mark_published_fingerprint(
+        &self,
+        scope: impl Into<String>,
+        fingerprint: impl Into<String>,
+    ) {
+        self.published_fingerprints
+            .insert(scope.into(), fingerprint.into());
+    }
+
+    /// Drop a published fingerprint so a later sync with identical JSON still
+    /// rebuilds. Called when a server/user is removed or disabled — otherwise
+    /// re-enabling the same JSON would be misread as "already published" while
+    /// the actual routes are gone.
+    pub fn clear_published_fingerprint(&self, scope: &str) {
+        self.published_fingerprints.remove(scope);
+    }
+
+    /// Salt for published fingerprints derived from the global runtime
+    /// context. Fingerprints computed against an older salt (older global
+    /// settings or an older binary) no longer match, forcing a rebuild.
+    pub fn runtime_fingerprint_salt(&self) -> String {
+        self.runtime_context_salt.lock().clone()
+    }
+
+    fn refresh_runtime_context_salt_locked(
+        global_http: &crate::config_models::GlobalHTTPAllConfig,
+        level: i32,
+        parent_nodes: &HashMap<i64, Vec<ParentNodeConfig>>,
+        tiered_origin_bypass: bool,
+        allow_lan_ip: bool,
+    ) -> String {
+        let context_json = serde_json::to_vec(&(
+            global_http,
+            level,
+            parent_nodes,
+            tiered_origin_bypass,
+            allow_lan_ip,
+            env!("CARGO_PKG_VERSION"),
+        ))
+        .unwrap_or_default();
+        format!("{:x}", md5_legacy::compute(context_json))
+    }
+
+    /// Forget fingerprints whose server/user no longer exists after a full
+    /// snapshot. Keeps the map bounded by the live site count.
+    fn prune_published_fingerprints(&self, live_servers: &HashSet<i64>, live_users: &HashSet<i64>) {
+        self.published_fingerprints.retain(|scope, _| {
+            if let Some(id) = scope
+                .strip_prefix("server:")
+                .and_then(|v| v.parse::<i64>().ok())
+            {
+                live_servers.contains(&id)
+            } else if let Some(id) = scope
+                .strip_prefix("user:")
+                .and_then(|v| v.parse::<i64>().ok())
+            {
+                live_users.contains(&id)
+            } else {
+                true
+            }
+        });
     }
 
     pub async fn wait_for_runtime_reload(&self, seen_generation: u64) -> u64 {
@@ -906,6 +991,14 @@ impl ConfigStore {
         Self::pick_global_policy(&lock.http3_policies, cluster_id)
     }
 
+    /// Test-only policy injection for exercises of the production H3
+    /// accept path (run_endpoint reads the policy through the same
+    /// get_global_http3_policy_sync call as production).
+    #[cfg(test)]
+    pub fn test_set_http3_policy(&self, policy: HTTP3Policy) {
+        self.inner.write().http3_policies.insert(0, policy);
+    }
+
     pub fn get_global_http_pages_policy_sync(&self) -> Option<HTTPPagesPolicy> {
         let lock = self.inner.read();
         let cluster_id = lock.node_cluster_id;
@@ -962,15 +1055,7 @@ impl ConfigStore {
         )
     }
 
-    pub fn get_origin_build_context_sync(
-        &self,
-    ) -> (
-        i32,
-        Arc<HashMap<i64, Vec<ParentNodeConfig>>>,
-        bool,
-        bool,
-        Option<crate::config_models::GlobalHTTPAllConfig>,
-    ) {
+    pub fn get_origin_build_context_sync(&self) -> OriginBuildContext {
         let lock = self.inner.read();
         (
             lock.level,
@@ -1445,9 +1530,66 @@ impl ConfigStore {
                 .map(|cfg| cfg.is_on)
                 .unwrap_or(false),
         );
+        let live_server_ids: HashSet<i64> = lock
+            .all_servers
+            .iter()
+            .map(|server| server.numeric_id())
+            .collect();
+        let live_user_ids: HashSet<i64> = lock
+            .all_servers
+            .iter()
+            .map(|server| server.user_id)
+            .filter(|user_id| *user_id > 0)
+            .collect();
+        let new_salt = Self::refresh_runtime_context_salt_locked(
+            &lock.global_http_config,
+            lock.level,
+            &lock.parent_nodes,
+            lock.tiered_origin_bypass,
+            lock.allow_lan_ip,
+        );
         Self::refresh_passthrough_indexes(&mut lock);
         Self::refresh_cluster_policy_indexes(&mut lock);
         drop(lock);
+        *self.runtime_context_salt.lock() = new_salt;
+        self.prune_published_fingerprints(&live_server_ids, &live_user_ids);
+        self.notify_runtime_reload();
+    }
+
+    pub async fn replace_all_servers(
+        &self,
+        all_servers: Vec<Arc<ServerConfig>>,
+        servers: HashMap<String, Arc<ServerConfig>>,
+        routes: HashMap<String, Arc<crate::lb_factory::AnyLoadBalancer>>,
+        id_to_lb: HashMap<i64, Arc<crate::lb_factory::AnyLoadBalancer>>,
+    ) {
+        let _update = self.update_gate.lock();
+        for server in &all_servers {
+            server.compile_url_patterns();
+        }
+        crate::routing::location::clear_compiled_locations();
+        let (firewall_policies, cache_policies) = {
+            let lock = self.inner.read();
+            (
+                Arc::clone(&lock.firewall_policies),
+                Arc::clone(&lock.cache_policies),
+            )
+        };
+        let compiled_plans = crate::compiled::CompiledPlanSet::compile(
+            firewall_policies.as_ref().as_slice(),
+            cache_policies.as_ref().as_slice(),
+            &all_servers,
+        );
+        let mut lock = self.inner.write();
+        lock.all_servers = all_servers;
+        lock.servers = servers;
+        lock.routes = routes;
+        lock.id_to_lb = id_to_lb;
+        lock.compiled_plans = Arc::new(compiled_plans);
+        Self::refresh_passthrough_indexes(&mut lock);
+        Self::refresh_cluster_policy_indexes(&mut lock);
+        drop(lock);
+        drop(_update);
         self.notify_runtime_reload();
     }
 
@@ -1458,47 +1600,73 @@ impl ConfigStore {
         servers: HashMap<String, Arc<ServerConfig>>,
         routes: HashMap<String, Arc<crate::lb_factory::AnyLoadBalancer>>,
     ) {
+        let mut id_to_lb = HashMap::new();
+        if server_id > 0
+            && let Some(lb) = routes.values().next()
+        {
+            id_to_lb.insert(server_id, Arc::clone(lb));
+        }
+        self.replace_servers_snapshot(
+            std::iter::once(server_id).filter(|id| *id > 0).collect(),
+            all_servers,
+            servers,
+            routes,
+            id_to_lb,
+        )
+        .await;
+    }
+
+    pub async fn replace_servers_snapshot(
+        &self,
+        stale_ids: std::collections::HashSet<i64>,
+        added_servers: Vec<Arc<ServerConfig>>,
+        servers: HashMap<String, Arc<ServerConfig>>,
+        routes: HashMap<String, Arc<crate::lb_factory::AnyLoadBalancer>>,
+        id_to_lb: HashMap<i64, Arc<crate::lb_factory::AnyLoadBalancer>>,
+    ) {
         let _update = self.update_gate.lock();
-        for server in &all_servers {
+        for server in &added_servers {
             server.compile_url_patterns();
         }
         crate::routing::location::clear_compiled_locations();
-        let mut candidate = self.inner.read().clone();
-        candidate
-            .all_servers
-            .retain(|server| server.numeric_id() != server_id);
-        let stale_hosts = candidate
-            .servers
-            .iter()
-            .filter_map(|(host, server)| (server.numeric_id() == server_id).then_some(host.clone()))
-            .collect::<Vec<_>>();
-
-        for host in &stale_hosts {
-            candidate.servers.remove(host);
-            candidate.routes.remove(host);
-        }
-        if server_id > 0 {
-            candidate.id_to_lb.remove(&server_id);
-        }
-
-        candidate.all_servers.extend(all_servers);
-        for (host, config) in servers {
-            candidate.servers.insert(host, config);
-        }
-        for (host, lb) in routes {
-            if server_id > 0 {
-                candidate.id_to_lb.insert(server_id, lb.clone());
+        let removed: Vec<i64> = stale_ids.iter().copied().collect();
+        let compiled_plans = {
+            let lock = self.inner.read();
+            Arc::new(
+                lock.compiled_plans
+                    .recompile_servers(&added_servers, &removed),
+            )
+        };
+        let mut lock = self.inner.write();
+        if !stale_ids.is_empty() {
+            lock.all_servers
+                .retain(|server| !stale_ids.contains(&server.numeric_id()));
+            let stale_hosts: Vec<String> = lock
+                .servers
+                .iter()
+                .filter(|&(_host, server)| stale_ids.contains(&server.numeric_id()))
+                .map(|(host, _server)| host.clone())
+                .collect();
+            for host in &stale_hosts {
+                lock.servers.remove(host);
+                lock.routes.remove(host);
             }
-            candidate.routes.insert(host, lb);
+            for server_id in &stale_ids {
+                lock.id_to_lb.remove(server_id);
+            }
         }
-        candidate.compiled_plans = Arc::new(crate::compiled::CompiledPlanSet::compile(
-            candidate.firewall_policies.as_ref().as_slice(),
-            candidate.cache_policies.as_ref().as_slice(),
-            &candidate.all_servers,
-        ));
-        Self::refresh_passthrough_indexes(&mut candidate);
-        Self::refresh_cluster_policy_indexes(&mut candidate);
-        *self.inner.write() = candidate;
+        lock.compiled_plans = compiled_plans;
+        lock.all_servers.extend(added_servers);
+        lock.servers.extend(servers);
+        lock.routes.extend(routes);
+        for (server_id, lb) in id_to_lb {
+            if server_id > 0 {
+                lock.id_to_lb.insert(server_id, lb);
+            }
+        }
+        Self::refresh_passthrough_indexes(&mut lock);
+        Self::refresh_cluster_policy_indexes(&mut lock);
+        drop(lock);
         drop(_update);
         self.notify_runtime_reload();
     }
@@ -1510,129 +1678,54 @@ impl ConfigStore {
         servers: HashMap<String, Arc<ServerConfig>>,
         routes: HashMap<String, Arc<crate::lb_factory::AnyLoadBalancer>>,
     ) {
-        let _update = self.update_gate.lock();
-        for server in &all_servers {
-            server.compile_url_patterns();
-        }
-        crate::routing::location::clear_compiled_locations();
-        let mut candidate = self.inner.read().clone();
-        let stale_server_ids = candidate
-            .all_servers
-            .iter()
-            .filter_map(|server| (server.user_id == user_id).then_some(server.numeric_id()))
-            .collect::<std::collections::HashSet<_>>();
-        candidate
-            .all_servers
-            .retain(|server| server.user_id != user_id);
-        let stale_hosts = candidate
-            .servers
-            .iter()
-            .filter_map(|(host, server)| (server.user_id == user_id).then_some(host.clone()))
-            .collect::<Vec<_>>();
-
-        for host in &stale_hosts {
-            candidate.servers.remove(host);
-            candidate.routes.remove(host);
-        }
-        for server_id in stale_server_ids {
-            if server_id > 0 {
-                candidate.id_to_lb.remove(&server_id);
-            }
-        }
-
-        candidate.all_servers.extend(all_servers);
-        for (host, config) in servers {
+        let stale_ids = {
+            let lock = self.inner.read();
+            lock.all_servers
+                .iter()
+                .filter_map(|server| (server.user_id == user_id).then_some(server.numeric_id()))
+                .collect::<std::collections::HashSet<_>>()
+        };
+        let mut id_to_lb = HashMap::new();
+        for (host, config) in &servers {
             if let Some(sid) = config.id
-                && let Some(lb) = routes.get(&host)
+                && let Some(lb) = routes.get(host)
             {
-                candidate.id_to_lb.insert(sid, lb.clone());
+                id_to_lb.insert(sid, Arc::clone(lb));
             }
-            candidate.servers.insert(host, config);
         }
-        for (host, lb) in routes {
-            candidate.routes.insert(host, lb);
-        }
-        candidate.compiled_plans = Arc::new(crate::compiled::CompiledPlanSet::compile(
-            candidate.firewall_policies.as_ref().as_slice(),
-            candidate.cache_policies.as_ref().as_slice(),
-            &candidate.all_servers,
-        ));
-        Self::refresh_passthrough_indexes(&mut candidate);
-        Self::refresh_cluster_policy_indexes(&mut candidate);
-        *self.inner.write() = candidate;
-        drop(_update);
-        self.notify_runtime_reload();
+        self.replace_servers_snapshot(stale_ids, all_servers, servers, routes, id_to_lb)
+            .await;
     }
 
     pub async fn remove_user_servers(&self, user_id: i64) {
-        let _update = self.update_gate.lock();
-        crate::routing::location::clear_compiled_locations();
-        let mut candidate = self.inner.read().clone();
-        let stale_server_ids = candidate
-            .all_servers
-            .iter()
-            .filter_map(|server| (server.user_id == user_id).then_some(server.numeric_id()))
-            .collect::<std::collections::HashSet<_>>();
-        candidate
-            .all_servers
-            .retain(|server| server.user_id != user_id);
-        let stale_hosts = candidate
-            .servers
-            .iter()
-            .filter_map(|(host, server)| (server.user_id == user_id).then_some(host.clone()))
-            .collect::<Vec<_>>();
-
-        for host in stale_hosts {
-            candidate.servers.remove(&host);
-            candidate.routes.remove(&host);
-        }
-        for server_id in stale_server_ids {
-            if server_id > 0 {
-                candidate.id_to_lb.remove(&server_id);
-            }
-        }
-        candidate.compiled_plans = Arc::new(crate::compiled::CompiledPlanSet::compile(
-            candidate.firewall_policies.as_ref().as_slice(),
-            candidate.cache_policies.as_ref().as_slice(),
-            &candidate.all_servers,
-        ));
-        Self::refresh_passthrough_indexes(&mut candidate);
-        Self::refresh_cluster_policy_indexes(&mut candidate);
-        *self.inner.write() = candidate;
-        drop(_update);
-        self.notify_runtime_reload();
+        let stale_ids = {
+            let lock = self.inner.read();
+            lock.all_servers
+                .iter()
+                .filter_map(|server| (server.user_id == user_id).then_some(server.numeric_id()))
+                .collect::<std::collections::HashSet<_>>()
+        };
+        self.clear_published_fingerprint(&format!("user:{user_id}"));
+        self.replace_servers_snapshot(
+            stale_ids,
+            Vec::new(),
+            HashMap::new(),
+            HashMap::new(),
+            HashMap::new(),
+        )
+        .await;
     }
 
     pub async fn remove_server(&self, server_id: i64) {
-        let _update = self.update_gate.lock();
-        crate::routing::location::clear_compiled_locations();
-        let mut candidate = self.inner.read().clone();
-        candidate
-            .all_servers
-            .retain(|server| server.numeric_id() != server_id);
-        let stale_hosts = candidate
-            .servers
-            .iter()
-            .filter_map(|(host, server)| (server.numeric_id() == server_id).then_some(host.clone()))
-            .collect::<Vec<_>>();
-
-        for host in stale_hosts {
-            candidate.servers.remove(&host);
-            candidate.routes.remove(&host);
-        }
-        if server_id > 0 {
-            candidate.id_to_lb.remove(&server_id);
-        }
-        candidate.compiled_plans = Arc::new(crate::compiled::CompiledPlanSet::compile(
-            candidate.firewall_policies.as_ref().as_slice(),
-            candidate.cache_policies.as_ref().as_slice(),
-            &candidate.all_servers,
-        ));
-        Self::refresh_passthrough_indexes(&mut candidate);
-        Self::refresh_cluster_policy_indexes(&mut candidate);
-        *self.inner.write() = candidate;
-        drop(_update);
-        self.notify_runtime_reload();
+        self.clear_published_fingerprint(&format!("server:{server_id}"));
+        self.replace_servers_snapshot(
+            std::iter::once(server_id).collect(),
+            Vec::new(),
+            HashMap::new(),
+            HashMap::new(),
+            HashMap::new(),
+        )
+        .await;
     }
 
     pub async fn cache_server_route(
@@ -1641,30 +1734,22 @@ impl ConfigStore {
         server: Arc<ServerConfig>,
         lb: Arc<crate::lb_factory::AnyLoadBalancer>,
     ) {
-        let _update = self.update_gate.lock();
-        server.compile_url_patterns();
-        crate::routing::location::clear_compiled_locations();
-        let mut candidate = self.inner.read().clone();
         let server_id = server.numeric_id();
+        let mut id_to_lb = HashMap::new();
         if server_id > 0 {
-            candidate.id_to_lb.insert(server_id, lb.clone());
-            candidate
-                .all_servers
-                .retain(|existing| existing.numeric_id() != server_id);
+            id_to_lb.insert(server_id, Arc::clone(&lb));
         }
-        candidate.all_servers.push(server.clone());
-        candidate.servers.insert(host.clone(), server);
-        candidate.routes.insert(host, lb);
-        candidate.compiled_plans = Arc::new(crate::compiled::CompiledPlanSet::compile(
-            candidate.firewall_policies.as_ref().as_slice(),
-            candidate.cache_policies.as_ref().as_slice(),
-            &candidate.all_servers,
-        ));
-        Self::refresh_passthrough_indexes(&mut candidate);
-        Self::refresh_cluster_policy_indexes(&mut candidate);
-        *self.inner.write() = candidate;
-        drop(_update);
-        self.notify_runtime_reload();
+        let mut servers = HashMap::new();
+        servers.insert(host.clone(), Arc::clone(&server));
+        let mut routes = HashMap::new();
+        routes.insert(host, lb);
+        let stale_ids = if server_id > 0 {
+            std::iter::once(server_id).collect()
+        } else {
+            std::collections::HashSet::new()
+        };
+        self.replace_servers_snapshot(stale_ids, vec![server], servers, routes, id_to_lb)
+            .await;
     }
 
     fn refresh_plan_derived(lock: &mut NodeConfig) {
@@ -1834,6 +1919,9 @@ impl ConfigStore {
         lock.udp_server_by_port.clear();
 
         for server in &lock.all_servers {
+            if !server.is_on {
+                continue;
+            }
             if !server.is_quic_passthrough() {
                 for port in Self::server_udp_ports(server, false) {
                     if let Some(existing) = lock.udp_server_by_port.get(&port) {
@@ -1960,6 +2048,9 @@ impl ConfigStore {
         server: &Arc<ServerConfig>,
         ports: Vec<u16>,
     ) {
+        if !server.is_on {
+            return;
+        }
         for name in server.get_plain_server_names() {
             let name = Self::normalize_host(&name);
             if name.is_empty() {
@@ -2036,6 +2127,72 @@ mod tests {
         TLSExhaustionAttackConfig, UDPConfig,
     };
     use serde_json::json;
+
+    #[test]
+    fn published_fingerprint_is_scoped_and_only_changes_when_marked() {
+        let store = ConfigStore::new();
+        assert_eq!(store.published_fingerprint("server:7"), None);
+        store.mark_published_fingerprint("server:7", "v1");
+        assert_eq!(
+            store.published_fingerprint("server:7").as_deref(),
+            Some("v1")
+        );
+        assert_eq!(store.published_fingerprint("server:8"), None);
+        store.mark_published_fingerprint("server:7", "v2");
+        assert_eq!(
+            store.published_fingerprint("server:7").as_deref(),
+            Some("v2")
+        );
+    }
+
+    #[test]
+    fn published_fingerprints_clear_on_removal_and_prune_to_live_sites() {
+        let store = ConfigStore::new();
+        store.mark_published_fingerprint("server:7", "v1");
+        store.mark_published_fingerprint("user:9", "v1");
+        store.mark_published_fingerprint("user:10", "v1");
+
+        // Removing a server/user must drop its fingerprint so re-enabling the
+        // same JSON rebuilds instead of being skipped as "already published".
+        store.clear_published_fingerprint("server:7");
+        assert_eq!(store.published_fingerprint("server:7"), None);
+        assert_eq!(store.published_fingerprint("user:9").as_deref(), Some("v1"));
+
+        // A full snapshot prunes fingerprints whose site/user no longer exists.
+        store.prune_published_fingerprints(&HashSet::from([7]), &HashSet::from([9]));
+        assert_eq!(store.published_fingerprint("user:9").as_deref(), Some("v1"));
+        assert_eq!(store.published_fingerprint("user:10"), None);
+    }
+
+    #[test]
+    fn runtime_fingerprint_salt_tracks_global_context() {
+        let store = ConfigStore::new();
+        assert_eq!(store.runtime_fingerprint_salt(), "");
+        let salt_one = ConfigStore::refresh_runtime_context_salt_locked(
+            &crate::config_models::GlobalHTTPAllConfig::default(),
+            1,
+            &HashMap::new(),
+            false,
+            false,
+        );
+        assert!(!salt_one.is_empty());
+        let salt_two = ConfigStore::refresh_runtime_context_salt_locked(
+            &crate::config_models::GlobalHTTPAllConfig::default(),
+            1,
+            &HashMap::new(),
+            false,
+            false,
+        );
+        assert_eq!(salt_one, salt_two, "unchanged context must keep the salt");
+        let salt_three = ConfigStore::refresh_runtime_context_salt_locked(
+            &crate::config_models::GlobalHTTPAllConfig::default(),
+            2,
+            &HashMap::new(),
+            false,
+            false,
+        );
+        assert_ne!(salt_one, salt_three, "changed context must move the salt");
+    }
 
     fn test_firewall_policy(id: i64) -> HTTPFirewallPolicy {
         HTTPFirewallPolicy {

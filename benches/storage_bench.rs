@@ -1,5 +1,5 @@
-use cloudsidra_edge::metrics::storage::{CacheMetaUpsert, MetricStorage};
-use cloudsidra_edge::rpc::metrics::ServerMetricUpdate;
+use cloud_node_rust::metrics::storage::{CacheMetaUpsert, MetricStorage};
+use cloud_node_rust::rpc::metrics::ServerMetricUpdate;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use std::hint::black_box;
 use std::path::PathBuf;
@@ -78,7 +78,9 @@ fn bench_kv_basic(c: &mut Criterion) {
 
     group.bench_function("get_value_counter", |b| {
         let storage = open_mace("get_value");
-        storage.increment_batch(vec![("counter".to_string(), 100)]);
+        storage
+            .increment_batch(vec![("counter".to_string(), 100)])
+            .expect("persist counter");
         b.iter(|| black_box(storage.get_value("counter")));
     });
 
@@ -99,7 +101,12 @@ fn bench_metrics_write_paths(c: &mut Criterion) {
                 let updates: Vec<(String, u64)> = (0..*count)
                     .map(|i| (format!("S1_T1000_req_{i}"), 1))
                     .collect();
-                b.iter(|| black_box(storage.increment_batch(updates.clone())));
+                b.iter(|| {
+                    storage
+                        .increment_batch(updates.clone())
+                        .expect("persist benchmark batch");
+                    black_box(())
+                });
             },
         );
 
@@ -110,12 +117,10 @@ fn bench_metrics_write_paths(c: &mut Criterion) {
                 let storage = open_mace(&format!("server_batch_{count}"));
                 let updates = sample_metric_updates(*count);
                 b.iter(|| {
-                    black_box(storage.record_server_batch(
-                        1_700_000_000,
-                        updates.clone(),
-                        4096,
-                        2048,
-                    ))
+                    storage
+                        .record_server_batch(1_700_000_000, updates.clone(), 4096, 2048)
+                        .expect("persist benchmark batch");
+                    black_box(())
                 });
             },
         );
@@ -154,7 +159,13 @@ fn bench_firewall_and_scan(c: &mut Criterion) {
             |b, count| {
                 let storage = open_mace(&format!("scan_{count}"));
                 prefill_firewall_records(&storage, *count);
-                b.iter(|| black_box(storage.scan_json_prefix::<serde_json::Value>("FWBLK_V1_").len()));
+                b.iter(|| {
+                    black_box(
+                        storage
+                            .scan_json_prefix::<serde_json::Value>("FWBLK_V1_")
+                            .len(),
+                    )
+                });
             },
         );
     }
@@ -214,14 +225,20 @@ fn bench_cache_hot_path(c: &mut Criterion) {
             status: 200,
             headers: &[],
             compressed: false,
+            error_status_allowed: false,
             shard_id: None,
             relative_path: None,
+            root_path: None,
             event_version: None,
             updated_at: Some(1),
             stale_while_revalidate_secs: 0,
+            stale_if_error_secs: 0,
             created_at: 1,
         });
-        b.iter(|| black_box(storage.record_cache_access("benchhash")));
+        b.iter(|| {
+            storage.record_cache_access("benchhash");
+            black_box(())
+        });
     });
 
     group.bench_function("get_cache_meta", |b| {
@@ -236,11 +253,14 @@ fn bench_cache_hot_path(c: &mut Criterion) {
             status: 200,
             headers: &[],
             compressed: false,
+            error_status_allowed: false,
             shard_id: None,
             relative_path: None,
+            root_path: None,
             event_version: None,
             updated_at: Some(1),
             stale_while_revalidate_secs: 0,
+            stale_if_error_secs: 0,
             created_at: 1,
         });
         b.iter(|| black_box(storage.get_cache_meta("benchhash")));
@@ -262,7 +282,9 @@ fn bench_concurrent_stress(c: &mut Criterion) {
                     let storage = Arc::clone(&storage);
                     thread::spawn(move || {
                         for i in 0..500 {
-                            storage.increment_batch(vec![(format!("t{t}_k{i}"), 1)]);
+                            storage
+                                .increment_batch(vec![(format!("t{t}_k{i}"), 1)])
+                                .expect("persist concurrent benchmark batch");
                         }
                     })
                 })

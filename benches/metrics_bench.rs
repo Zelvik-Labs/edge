@@ -1,4 +1,4 @@
-use cloudsidra_edge::metrics::record;
+use cloud_node_rust::metrics::record;
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 

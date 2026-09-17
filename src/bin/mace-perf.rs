@@ -1,4 +1,4 @@
-use cloudsidra_edge::metrics::storage::MetricStorage;
+use cloud_node_rust::metrics::storage::MetricStorage;
 use serde::Serialize;
 use std::env;
 use std::path::PathBuf;
@@ -184,7 +184,7 @@ fn main() -> anyhow::Result<()> {
                     }
                     Mode::Get => db.get_json::<serde_json::Value>(&key).is_some(),
                     Mode::Mixed => {
-                        if sequence % 2 == 0 {
+                        if sequence.is_multiple_of(2) {
                             db.put_json(
                                 &format!("BENCH_MIXED_{worker}"),
                                 &serde_json::json!({
@@ -201,8 +201,7 @@ fn main() -> anyhow::Result<()> {
                         for _ in 0..batch_size {
                             updates.push((merge_key.clone(), 1));
                         }
-                        db.increment_batch(updates);
-                        true
+                        db.increment_batch(updates).is_ok()
                     }
                     Mode::Reopen => unreachable!(),
                 };

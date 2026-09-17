@@ -1,4 +1,4 @@
-use cloudsidra_edge::metrics::analyzer::analyze_request;
+use cloud_node_rust::metrics::analyzer::analyze_request;
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 use std::net::IpAddr;

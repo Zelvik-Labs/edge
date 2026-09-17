@@ -212,6 +212,409 @@ pub struct XdpCounters {
     pub parse_errors: u64,
     pub map_miss: u64,
     pub xsk_drops: u64,
+    pub rate_limited: u64,
+    pub ratelimit_map_full: u64,
+    pub udp_fwd_tx: u64,
+    pub udp_fwd_map_full: u64,
+    pub tcp_fwd_tx: u64,
+    pub tcp_fwd_map_full: u64,
+    /// SNAT source-port bindings successfully claimed.
+    pub snat_bound: u64,
+    /// SNAT port allocation failures (port space probe exhausted); those
+    /// packets fall back to the userspace dataplane.
+    pub snat_alloc_fail: u64,
+    /// Backend replies restored to clients through a SNAT reverse binding.
+    pub snat_reply_tx: u64,
+    /// Terminal XDP_TX actions (direct-forwarded replies). Forward-specific
+    /// counters still attribute per-rule; this makes
+    /// pass+drop+redirect+tx == packets hold for action accounting.
+    pub tx: u64,
+    /// Terminal drops caused by an ACL block rule (observe mode returns PASS
+    /// and does not increment this). Distinct from rate/internal drops.
+    pub acl_blocked: u64,
+    /// XDP_CLASS_MALFORMED terminal drops: deterministic-illegal packets
+    /// (truncated headers, bad lengths, impossible TCP flag combos). Always
+    /// dropped regardless of interface mode — there is no legal interpretation.
+    pub malformed: u64,
+    /// XDP_CLASS_UNSUPPORTED: legal-looking traffic the bounded parser cannot
+    /// fully classify (deep IPv6 ext chains, >2 VLAN tags, non-TCP/UDP/ICMP).
+    /// Passed to the kernel — never a trusted flow, never dropped by parse.
+    pub unsupported: u64,
+    /// XDP_CLASS_FRAGMENTED: IP fragments classified before L4 handling.
+    /// The fragment policy decides PASS (kernel reassembly) or DROP; a first
+    /// fragment alone never creates a trusted L4 flow.
+    pub fragmented: u64,
+    /// XDP_CLASS_CONTROL: ICMP/ICMPv6 (ND, PMTU) handed to the kernel stack.
+    /// Exempt from L4 handling but still subject to ACL block rules.
+    pub control: u64,
+    /// Packets matching an ACL block rule on an observe-mode interface:
+    /// passed (observing, not enforcing) but counted so the would-be drop is
+    /// visible before protect/proxy is enabled.
+    pub acl_would_block: u64,
+    /// Packets whose destination is outside the interface's protected VIP
+    /// set (`local_ip_filter` on, no XDP_LOCAL_* hit): passed untouched —
+    /// management and transit traffic is not this layer's concern.
+    pub nonlocal_pass: u64,
+    /// Packets on the unverified path (no conntrack hit, no SNAT binding,
+    /// no forward rule) dropped because the aggregate unverified-packet
+    /// budget window was exhausted. EN-07: this is the fail-closed
+    /// admission ceiling that keeps floods from consuming table-creation
+    /// work; verified flows never touch this bucket.
+    pub unverified_limited: u64,
+    /// New-state admissions (forward-rule CT/SNAT creation) rejected because
+    /// the new-flow-per-second budget was exhausted. Counted before any
+    /// map insert, so a rejected admission creates no state at all.
+    pub admission_limited: u64,
+    /// EN-09: SYN admissions rejected because the bounded half-open table
+    /// `XDP_PENDING` is full. The packet falls through to the normal path;
+    /// no state is created and no existing entry is evicted.
+    pub pending_limited: u64,
+    /// EN-10: lifecycle events dropped because XDP_FLOW_EVENTS was full.
+    /// Events are advisory feedback only — the dataplane never blocks on
+    /// publication, and kernel maps stay authoritative for flow state.
+    pub flow_event_lost: u64,
+    /// EN-11: packets whose flow tuple is already bound to a different
+    /// listen (VIP) tuple — the multi-VIP same-backend ambiguity. The
+    /// existing binding wins; the conflicting packet falls back to the
+    /// userspace dataplane instead of silently rebinding the reply tuple.
+    pub nat_conflict: u64,
+    /// Packets on state-verified flows dropped by the verified-packet
+    /// budget (dim4).
+    pub verified_limited: u64,
+    /// Necessary-control packets (ICMP etc.) dropped by the control
+    /// budget (dim5).
+    pub control_limited: u64,
+    /// TCP packets whose sequence/ack numbers failed the admission
+    /// anchors — counted separately from conflicts so blind-ACK floods
+    /// are observable.
+    pub nat_seq_rejected: u64,
+    /// New-flow admissions rejected by the per-service budget (dim6):
+    /// the listen port's per-CPU bucket was exhausted, so a flood aimed
+    /// at one service is contained without draining siblings.
+    pub service_limited: u64,
+    /// Per-service budget buckets that could not be created because
+    /// XDP_SVC_BUDGET is at capacity — those packets still pass/fail on
+    /// the aggregate dim1 envelope; the count makes the fairness gap
+    /// observable instead of silent.
+    pub svc_budget_full: u64,
+    /// EN-14: stateless challenge SYN-ACKs generated for challenged
+    /// services (dim3 challenge_pps gated).
+    pub challenge_sent: u64,
+    /// EN-14: packets rejected by cookie validation — bad/expired cookie
+    /// or a non-SYN/ACK packet on a challenged rule without state.
+    pub challenge_rejected: u64,
+    /// EN-14: challenge/splice worker faults — helper or forge failures
+    /// after a packet entered the slot-11 worker. Dropped, never passed:
+    /// a half-forged frame must not reach the kernel stack.
+    pub challenge_worker_err: u64,
+    /// T4: packets that hit XDP_OUT_CT (replies to node-dialed outbound
+    /// flows) and were redirected to the ingress queue's XSK for the
+    /// userspace dial-flow demux.
+    pub out_ct_hit: u64,
+    /// T4-7: ICMP/ICMPv6 errors whose quoted inner 5-tuple hit
+    /// XDP_OUT_CT — redirected to the XSK for PMTU/error delivery.
+    /// Counted separately from `out_ct_hit` so the PMTU path stays
+    /// observable on its own.
+    pub out_ct_icmp: u64,
+}
+
+/// Per-IP fixed-window rate limit configuration written by userspace.
+/// A zero `*_pps` disables limiting for that protocol; a zero `window_ns`
+/// disables the limiter entirely.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpRateLimitConfig {
+    pub udp_pps: u64,
+    pub tcp_syn_pps: u64,
+    pub window_ns: u64,
+    /// EN-08 prefix fairness: bucket granularity for the per-source limiter.
+    /// 0 = per-address (/32 or /128, the historical default); otherwise the
+    /// source address is masked to this prefix length before keying, so a
+    /// randomized-source flood inside one prefix cannot escape its bucket
+    /// and many benign prefixes each keep their own.
+    pub v4_prefix_len: u32,
+    pub v6_prefix_len: u32,
+}
+
+/// Per-IP fixed-window bucket; one entry per source address.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpRateBucket {
+    pub window_start_ns: u64,
+    pub count: u64,
+}
+
+/// QUIC long-header Destination Connection ID lookup key. `bytes` holds the
+/// DCID left-padded with trailing zeros; `len` is the encoded DCID length
+/// (1..=20). Only long headers carry an explicit DCID length, so short-header
+/// packets are never matched against this map — they use RSS queue affinity.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct XdpQuicDcidKey {
+    pub bytes: [u8; 20],
+    pub len: u8,
+    pub _pad: [u8; 3],
+}
+
+impl XdpQuicDcidKey {
+    pub fn new(dcid: &[u8]) -> Option<Self> {
+        if dcid.is_empty() || dcid.len() > 20 {
+            return None;
+        }
+        let mut bytes = [0u8; 20];
+        bytes[..dcid.len()].copy_from_slice(dcid);
+        Some(Self {
+            bytes,
+            len: dcid.len() as u8,
+            _pad: [0; 3],
+        })
+    }
+}
+
+/// UDP direct-forward rule key: a listen address+port that bypasses the
+/// userspace dataplane entirely. `addr` carries an IPv4 address in the first
+/// 4 bytes when `family == 4`, or a full IPv6 address when `family == 6`.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct XdpUdpFwdKey {
+    pub addr: [u8; 16],
+    pub port_be: u16,
+    pub family: u8,
+    pub _pad: u8,
+}
+
+impl XdpUdpFwdKey {
+    pub fn new_v4(addr_be: u32, port_be: u16) -> Self {
+        let mut addr = [0u8; 16];
+        addr[..4].copy_from_slice(&addr_be.to_be_bytes());
+        Self {
+            addr,
+            port_be,
+            family: 4,
+            _pad: 0,
+        }
+    }
+
+    pub fn new_v6(addr: [u8; 16], port_be: u16) -> Self {
+        Self {
+            addr,
+            port_be,
+            family: 6,
+            _pad: 0,
+        }
+    }
+}
+
+/// NAT target for a direct-forwarded UDP listen tuple. `next_hop_mac` is the
+/// resolved gateway/neighbor MAC for the backend, populated by userspace;
+/// the egress source MAC is taken from the inbound frame's destination (this
+/// interface's own address), so it needs no config.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpUdpFwdRule {
+    pub backend_addr: [u8; 16],
+    pub next_hop_mac: [u8; 6],
+    pub backend_port_be: u16,
+    pub family: u8,
+    /// SNAT mode: when non-zero the forwarded frame's source is rewritten to
+    /// the listen address plus a node-allocated port. Required on fabrics
+    /// that drop egress frames whose source IP is not bound to this port
+    /// (cloud vSwitch anti-spoof). 0 = plain DNAT preserving the client IP.
+    pub snat: u8,
+    /// Billing dimension: forwarded bytes are attributed to this server id.
+    pub server_id: i64,
+    /// EN-14: stateless cookie challenge. 1 = SYNs to this rule get a
+    /// SYNPROXY-style challenge instead of immediate forwarding; requires
+    /// `snat` (the splice needs observable backend replies).
+    pub challenge: u8,
+    pub _pad2: [u8; 7],
+}
+
+/// Conntrack entry: a client 4-tuple pinned to a backend so reply traffic can
+/// be rewritten back to the listen tuple. Written on the first forwarded
+/// datagram (UDP) or SYN (TCP); `client_mac` is learned from the ingress
+/// Ethernet header. `proto` distinguishes UDP/TCP tuples that otherwise share
+/// the same addresses and ports.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct XdpUdpCtKey {
+    pub client_addr: [u8; 16],
+    pub backend_addr: [u8; 16],
+    pub client_port_be: u16,
+    pub backend_port_be: u16,
+    pub family: u8,
+    /// IP protocol number (6 = TCP, 17 = UDP).
+    pub proto: u8,
+    pub _pad: [u8; 2],
+}
+
+/// Conntrack state: a fresh/established flow.
+pub const XDP_CT_STATE_OPEN: u8 = 0;
+/// Conntrack state: a FIN or RST was observed; the entry is reaped after a
+/// short grace window instead of the full idle timeout.
+pub const XDP_CT_STATE_CLOSING: u8 = 1;
+/// EN-09 half-open admission state, stored in `XDP_PENDING` (not the
+/// authoritative CT table): SYN was admitted but no handshake evidence yet.
+/// `last_seen_ns` is the admission timestamp — an absolute deadline, never
+/// extended by retransmits (any hit must not refresh it).
+pub const XDP_CT_STATE_PENDING: u8 = 2;
+/// Pending sub-state: the backend's SYN-ACK was observed on the reply path.
+/// A client packet with ACK&&!SYN on a PENDING_ACKED entry promotes it into
+/// the authoritative CT table. Plain-DNAT flows (snat_port_be == 0) have no
+/// observable SYN-ACK — their replies transit the kernel as nonlocal — so
+/// the client's ACK alone promotes them.
+pub const XDP_CT_STATE_PENDING_ACKED: u8 = 3;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpUdpCtValue {
+    pub listen_addr: [u8; 16],
+    pub client_mac: [u8; 6],
+    pub listen_port_be: u16,
+    pub family: u8,
+    /// TCP lifecycle marker (XDP_CT_STATE_*); always OPEN for UDP.
+    pub state: u8,
+    /// Node-allocated SNAT source port claimed for this flow
+    /// (XDP_SNAT_PORT_BASE..); 0 means the flow runs plain DNAT.
+    pub snat_port_be: u16,
+    /// Tuple-reuse guard (EN-09): monotonically increasing per admission so
+    /// events/state belonging to an older incarnation of a recycled tuple
+    /// can be told apart (consumed by the EN-10 event channel).
+    pub incarnation: u32,
+    /// Billing dimension mirrored from the forward rule.
+    pub server_id: i64,
+    pub last_seen_ns: u64,
+    /// TCP sequence anchor: at admission this is the client SYN's seq+1 —
+    /// the client's ACK must carry exactly this seq to promote, so a blind
+    /// ACK flood cannot promote a DNAT pending entry. 0 for UDP (unused).
+    pub expect_seq: u32,
+    /// For SNAT flows the backend SYN-ACK's seq+1, recorded when the reply
+    /// path marks PENDING_ACKED — promotion additionally requires the
+    /// client's ack number to match, so an off-path ACK cannot promote.
+    /// 0 = no backend reply observed yet.
+    pub expect_ack: u32,
+    /// EN-14 splice: node-challenge ISN (s_isn). Set at post-cookie
+    /// admission; used to compute `seq_delta` when the backend SYN-ACK
+    /// is consumed. 0 when `splice_state` == SPLICE_NONE.
+    pub splice_isn: u32,
+    /// EN-14 splice: sequence delta s_isn - b_isn applied to backend->client
+    /// seq numbers and subtracted from client->backend ack numbers for the
+    /// flow lifetime once `splice_state` == SPLICE_SPLICED.
+    pub seq_delta: i32,
+    /// EN-14: XDP_SPLICE_* — challenge/splice progress for this flow.
+    pub splice_state: u8,
+    pub _pad2: [u8; 3],
+}
+
+/// EN-14: flow carries no challenge splice.
+pub const XDP_SPLICE_NONE: u8 = 0;
+/// EN-14: cookie validated, SYN replayed; awaiting the backend SYN-ACK so
+/// the sequence delta can be anchored. Client packets in this state are
+/// consumed (challenge ACK) or dropped, never forwarded half-spliced.
+pub const XDP_SPLICE_WAIT: u8 = 1;
+/// EN-14: backend handshake complete; seq_delta translation active.
+pub const XDP_SPLICE_DONE: u8 = 2;
+
+/// T4 outbound-CT key: a flow the node itself dialed through an AF_XDP
+/// userspace socket (upstream/origin connections). Replies arrive with
+/// dst = the node's dialed local endpoint, so the key matches the
+/// packet's dst (local) + src (remote) tuple — the reverse direction
+/// from `XdpUdpCtKey`, whose `client_addr` is the downstream peer.
+///
+/// A hit redirects to the *current* queue's XSK: an XSKMAP redirect is
+/// only valid for the ingress queue the packet arrived on (F7), so the
+/// value carries no steering target — the userspace dial-flow demux owns
+/// cross-queue delivery to the reactor that dialed the flow.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct XdpOutCtKey {
+    /// Our dialed local endpoint address (reply dst).
+    pub local_addr: [u8; 16],
+    /// Upstream peer address (reply src).
+    pub remote_addr: [u8; 16],
+    pub local_port_be: u16,
+    pub remote_port_be: u16,
+    pub family: u8,
+    /// IP protocol number (6 = TCP, 17 = UDP).
+    pub proto: u8,
+    pub _pad: [u8; 2],
+}
+
+/// T4 outbound-CT value: presence is the steering decision (redirect to
+/// this queue's XSK); `created_ns` exists for observability/debug dumps
+/// only and is never consulted by the datapath.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpOutCtValue {
+    pub created_ns: u64,
+}
+
+/// EN-14 cookie key ring: `cur` signs new challenges; `prev` still
+/// validates challenges issued before the last rotation. Userspace rotates
+/// cur->prev and installs a fresh cur; a two-slot window keeps in-flight
+/// handshakes valid across one rotation.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpCookieKey {
+    pub cur: [u8; 16],
+    pub prev: [u8; 16],
+}
+
+/// SNAT reverse-binding key: backend replies arrive addressed to
+/// (listen_addr, snat_port); the value restores the client tuple.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct XdpSnatRevKey {
+    pub listen_addr: [u8; 16],
+    pub snat_port_be: u16,
+    /// IP protocol number (17 = UDP, 6 = TCP).
+    pub proto: u8,
+    pub family: u8,
+    /// Explicit tail padding keeps every key byte an initialized field — a
+    /// compiler-added padding byte reads as uninitialized stack under the
+    /// verifier on strict kernels.
+    pub _pad: [u8; 4],
+}
+
+/// SNAT reverse-binding value: the full client flow tuple, needed both for
+/// the reply rewrite and to rebuild the conntrack key when sweeping orphan
+/// bindings.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpSnatRevValue {
+    pub client_addr: [u8; 16],
+    pub backend_addr: [u8; 16],
+    pub client_mac: [u8; 6],
+    pub client_port_be: u16,
+    pub backend_port_be: u16,
+    pub family: u8,
+    pub proto: u8,
+    /// Original listen port (network order): replies must masquerade as
+    /// (listen_addr, listen_port) - the tuple the client originally dialed.
+    /// Kept inside the former padding so earlier fields stay ABI-stable.
+    pub listen_port_be: u16,
+    pub _pad: [u8; 2],
+    /// Billing dimension copied from the forward rule so replies still
+    /// account correctly if the conntrack entry was already reaped.
+    pub server_id: i64,
+}
+
+/// First SNAT source port allocated by the eBPF dataplane.
+pub const XDP_SNAT_PORT_BASE: u16 = 40000;
+/// SNAT port space size: 40000..=60999.
+pub const XDP_SNAT_PORT_SPAN: u16 = 21000;
+
+/// Per-CPU traffic accounting for direct-forwarded flows, keyed by the
+/// conntrack key so both directions accumulate under the client flow.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpFlowAcct {
+    pub rx_bytes: u64,
+    pub tx_bytes: u64,
+    pub rx_pkts: u64,
+    pub tx_pkts: u64,
+    pub last_seen_ns: u64,
+    pub server_id: i64,
 }
 
 #[repr(C)]
@@ -220,9 +623,424 @@ pub struct XdpInterfacePolicy {
     pub mode: u8,
     pub fallback_pass: u8,
     pub local_ip_filter: u8,
-    pub _pad: u8,
+    /// Fragment disposition for this security domain (XDP_FRAGMENT_*).
+    /// PASS hands fragments to the kernel stack (legacy behavior); DROP
+    /// rejects them at XDP. A first fragment never continues into the
+    /// redirect/NAT path regardless of this setting.
+    pub fragment_action: u8,
     pub frame_size: u32,
 }
+
+/// Fragment policy values for `XdpInterfacePolicy::fragment_action`.
+pub const XDP_FRAGMENT_PASS: u8 = 0;
+pub const XDP_FRAGMENT_DROP: u8 = 1;
+
+/// XDP_LOCAL_* map value encoding: bit0 marks the entry as present; bits[2:1]
+/// carry a per-VIP fragment override (0 = inherit interface policy,
+/// 1 = force PASS, 2 = force DROP).
+pub const XDP_LOCAL_PRESENT: u32 = 1;
+pub const XDP_LOCAL_FRAG_PASS: u32 = 1 << 1;
+pub const XDP_LOCAL_FRAG_DROP: u32 = 2 << 1;
+/// EN-06: this VIP may redirect proxy-port traffic into AF_XDP. Cleared per
+/// VIP (`protectedServices[].redirect: false`) to keep a VIP protected —
+/// classification, ACL, rate limits, fragment policy — while its ports are
+/// served by the kernel stack. Two VIPs sharing a port therefore do not
+/// cross-redirect.
+pub const XDP_LOCAL_REDIRECT: u32 = 1 << 3;
+
+/// Per-CPU scratch space for NAT/DCID key construction in the eBPF dataplane.
+/// eBPF stack is capped at 512 bytes and the conntrack/forward keys plus
+/// values exceed it when inlined, so large temporaries are built in this map
+/// instead. The layout lives here (not in the eBPF crate) so userspace can
+/// verify the pinned XDP_NAT_SCRATCH map still matches the ABI before reuse.
+/// The map itself is internal only; contents are never read by userspace.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct NatScratch {
+    pub fwd_key: XdpUdpFwdKey,
+    pub ct_key: XdpUdpCtKey,
+    pub ct_value: XdpUdpCtValue,
+    pub dcid_key: XdpQuicDcidKey,
+    pub csum_old: [u32; 4],
+    pub csum_new: [u32; 4],
+    pub snat_rev_key: XdpSnatRevKey,
+    pub snat_rev_value: XdpSnatRevValue,
+    /// Packet header snapshots for the IPv6 handlers: keeping the two 16-byte
+    /// addresses in the per-CPU map instead of locals keeps those frames
+    /// under the 512-byte verifier stack limit.
+    pub pkt_src: [u8; 16],
+    pub pkt_dst: [u8; 16],
+    /// Redirect context stashed before a NAT tail call so the dispatch site
+    /// keeps no spillable registers (see the eBPF-side mirror).
+    pub redir_flags: u32,
+    pub redir_proto: u8,
+    pub redir_l4off: u16,
+    pub redir_pad: u8,
+    /// Worker context stashed before the dispatch -> work tail call. Offsets
+    /// are re-validated against packet bounds inside the worker program.
+    pub work_ip_off: u32,
+    pub work_ifindex: u32,
+    pub work_pkt_len: u64,
+    /// XdpPendingCap.flags snapshot taken once per packet at the NAT entry
+    /// points — the per-CPU scratch read keeps fault-injection checks a
+    /// plain load instead of a map lookup per call site.
+    pub debug_flags: u64,
+    /// EN-14: forged-packet parameters staged by the caller before the
+    /// challenge/splice builders run (map-pointer arg passing keeps the
+    /// helpers inside the 5-register calling convention).
+    pub forge_seq: u32,
+    pub forge_ack: u32,
+    /// MSS option value to emit; 0 = emit no options (doff 5).
+    pub forge_mss: u16,
+    pub forge_flags: u8,
+    pub forge_pad0: u8,
+    /// Advertised window for the forged packet.
+    pub forge_win: u16,
+    /// Source port for backend-directed forgeries (claimed SNAT port).
+    pub forge_src_port: u16,
+    /// L2 destination for backend-directed forgeries (rule next_hop or
+    /// the backend frame's source MAC for reply-direction packets).
+    pub forge_next_hop: [u8; 6],
+    pub forge_pad1: [u8; 2],
+    /// EN-14: pending incarnation staged for post-cookie admission.
+    pub forge_incarnation: u32,
+    /// EN-14 worker opcode staged before the XDP_DISPATCH_TCP4_CHALLENGE
+    /// tail call: 0 = challenge dispatch (SYN/ACK handling), 1 = splice
+    /// anchor (backend SYN-ACK consumption).
+    pub forge_op: u8,
+    pub forge_pad4: u8,
+    pub forge_pad5: u16,
+    /// Forward-rule server_id staged before the challenge tail call —
+    /// the rule pointer itself cannot cross program boundaries. Full
+    /// i64 width: server ids are operator-chosen and must not truncate.
+    pub forge_server_id: i64,
+    /// EN-14: forged IPv4/TCP header staging buffers — kept in the
+    /// per-CPU scratch map value so the challenge -> forge call chain
+    /// stays under the 512-byte combined-stack verifier limit.
+    pub forge_ipb: [u8; 20],
+    pub forge_tb: [u8; 24],
+    /// Transient copies of the original addrs/ports while building.
+    pub forge_tmp: [u8; 8],
+    pub forge_pad3: u32,
+    /// T4-7: quoted-packet offset + containing packet_end parked before the
+    /// ICMPv6 out-CT inner tail call — the quoted ext-header walk doubles
+    /// the caller's verifier budget, so the claim runs in its own program.
+    pub icmp_inner_off: u32,
+    pub icmp_inner_end: u32,
+}
+
+// ---------------------------------------------------------------------------
+// EN-01 shared contracts: admission state machine, flow identity, owner/path
+// binding, budgets and decision reasons. These types are the fixed ABI shared
+// between the eBPF dataplane and userspace; every field is network-order or
+// explicitly host-order documented. Sizes are asserted at compile time below —
+// a layout change must bump XDP_ABI_VERSION and update the map spec table in
+// src/xdp.rs (drop_stale_pinned_maps) so mismatched pinned maps are rejected.
+// ---------------------------------------------------------------------------
+
+/// ABI version of the whole XDP map/contract surface. Bump when any shared
+/// key/value layout, map semantics, or dispatch slot contract changes; userspace
+/// refuses to reuse pinned objects whose spec does not match this build.
+/// v1: EN-01 baseline. v2: XDP_COUNTERS -> PerCpuArray, +tx +acl_blocked.
+/// v3: EN-05 parse classification — XdpCounters +malformed/unsupported/
+/// fragmented/control; XdpInterfacePolicy +fragment_action; XDP_LOCAL_* values
+/// gain per-VIP fragment override bits.
+/// v4: EN-06 protected-service policy — XdpCounters +acl_would_block/
+/// nonlocal_pass; XDP_LOCAL_* values gain the XDP_LOCAL_REDIRECT bit.
+/// v5: EN-06 verifier split — NatScratch +work_ip_off/work_ifindex/
+/// work_pkt_len; XDP_DISPATCH grows to 16 slots (7-10 = NAT work programs).
+/// v7: EN-08 — XdpRateLimitConfig +v4/v6_prefix_len.
+/// v8: EN-09 — XdpUdpCtValue._pad->incarnation, XdpPendingCap._pad->
+/// pending_ttl_ns, XdpCounters +pending_limited, XDP_PENDING table.
+/// v9: EN-10 — XdpCounters +flow_event_lost (216->224B);
+/// XDP_FLOW_EVENTS ringbuf + XDP_OWNER_EPOCH + XDP_FLOW_SEQ maps;
+/// flow-state maps pinned for generational takeover.
+/// v10: EN-11 — XdpCounters +nat_conflict (224->232B);
+/// XDP_DECISION_NAT_CONFLICT.
+/// v11: EN-11 — XdpCounters +snat_alloc_fail (232->240B);
+/// XdpPendingCap +flags (test-only fault injection);
+/// NatScratch +debug_flags.
+/// v12: EN-06/07/13 — XdpBudgetConfig +verified_pps/control_pps (48->64B),
+/// XdpBudgetBucket grows to six dims (64->96B), XdpUdpCtValue
+/// +expect_seq/expect_ack (40->48B), XdpCounters +verified_limited/
+/// control_limited/nat_seq_rejected (240->256B), NatScratch 320->328B.
+/// v13: EN-07 fairness — XdpBudgetConfig +service_flow_pps (64->72B, flag
+/// bit6), new XdpSvcBucket + XDP_SVC_BUDGET per-CPU per-port admission map,
+/// XdpCounters +service_limited/svc_budget_full (256->272B).
+/// v14: EN-14 — XdpUdpFwdRule +challenge flag (40->48B), XdpUdpCtValue
+/// +splice_isn/seq_delta/splice_state (56->72B), XdpCookieKey +
+/// XDP_COOKIE_KEY map, XdpCounters +challenge_sent/challenge_rejected
+/// (272->288B), XdpBudgetConfig flag bit3 (challenge_pps) now live.
+/// v15: EN-14 — NatScratch +forge_ipb/forge_tb/forge_tmp staging buffers
+/// +forge_server_id/forge_op tail-call staging (376->440B) so the
+/// challenge/splice work runs in its own XDP_DISPATCH program (slot 11)
+/// and the combined stack stays under the 512B verifier limit;
+/// XdpSnatRevKey._pad 3->4B (explicit tail byte for strict verifier
+/// stack-init checks; layout stays 24B).
+/// v16: EN-14 review hardening — XdpCounters +challenge_worker_err
+/// (288->296B); XdpPendingCap.flags gains XDP_PENDING_CAP_FAIL_FORGE.
+/// v17: T4-8 kernel-6.1 verifier conformance — NatScratch +icmp_inner_off/
+/// icmp_inner_end staging (440->448B), XDP_DISPATCH max_entries 16->20 for
+/// the ICMPv6 inner-claim worker (slot 16); xdp_main_v4/v6_work (slots
+/// 12/13) and xdp_icmp_ct_v4/v6 (slots 14/15) tail-call programs added.
+pub const XDP_ABI_VERSION: u32 = 17;
+
+/// Path that owns a flow's transport state (architecture §4.4 PathBinding).
+/// A flow has exactly one owner for its lifetime; packets may not migrate a
+/// flow between paths mid-stream.
+pub const XDP_OWNER_KERNEL: u8 = 0;
+/// AF_XDP userspace transport owner (smoltcp/UDP demux/QUIC).
+pub const XDP_OWNER_AFXDP: u8 = 1;
+/// XDP NAT direct-forward owner (XDP_TX rewrite).
+pub const XDP_OWNER_NAT: u8 = 2;
+
+/// Admission state machine states (architecture §4.4):
+///   ABSENT → PENDING → VALIDATED → CLOSING → EXPIRED
+///                  └──────────────→ EXPIRED
+/// ABSENT is "no map entry", so only four states are stored.
+pub const XDP_FLOW_PENDING: u8 = 0;
+pub const XDP_FLOW_VALIDATED: u8 = 1;
+pub const XDP_FLOW_CLOSING: u8 = 2;
+pub const XDP_FLOW_EXPIRED: u8 = 3;
+
+/// Validation level recorded at admission time.
+pub const XDP_VALIDATION_NONE: u8 = 0;
+/// Source passed a stateless proof (TCP cookie / QUIC Retry token).
+pub const XDP_VALIDATION_STATELESS: u8 = 1;
+/// A transport owner confirmed the handshake completed.
+pub const XDP_VALIDATION_OWNER: u8 = 2;
+
+/// Terminal decision reasons. Every DROP/reject path must carry exactly one
+/// reason so observability can attribute it (I10). Values are stable ABI for
+/// counters/metrics labels — append only, never renumber.
+pub const XDP_DECISION_PASS: u8 = 0;
+pub const XDP_DECISION_ACL_BLOCK: u8 = 1;
+pub const XDP_DECISION_RATE_SOURCE: u8 = 2;
+pub const XDP_DECISION_MALFORMED: u8 = 3;
+pub const XDP_DECISION_FRAGMENT: u8 = 4;
+pub const XDP_DECISION_NO_FLOW: u8 = 5;
+pub const XDP_DECISION_BUDGET: u8 = 6;
+pub const XDP_DECISION_NO_XSK: u8 = 7;
+pub const XDP_DECISION_FLOW_TABLE_FULL: u8 = 8;
+pub const XDP_DECISION_TCP_FLAG: u8 = 9;
+/// EN-11: flow tuple already bound to a different listen (VIP) tuple;
+/// rejected instead of silently rebinding the existing conntrack entry.
+pub const XDP_DECISION_NAT_CONFLICT: u8 = 10;
+/// EN-14: internal dataplane fault (forge/helper failure) — allocations
+/// rolled back and the frame dropped; distinct from policy rejections.
+pub const XDP_DECISION_INTERNAL_ERR: u8 = 11;
+
+/// Parse classification (architecture §4.3): replaces the single
+/// Err→PASS bucket. CONTROL covers PMTU/ICMPv6-ND and other exempt traffic.
+pub const XDP_CLASS_SUPPORTED: u8 = 0;
+pub const XDP_CLASS_MALFORMED: u8 = 1;
+pub const XDP_CLASS_UNSUPPORTED: u8 = 2;
+pub const XDP_CLASS_FRAGMENTED: u8 = 3;
+pub const XDP_CLASS_CONTROL: u8 = 4;
+
+/// Flow identity. `service_*` is the node-side listen tuple (VIP); when the
+/// tenant is not yet known (shared 443) `service_id` carries the
+/// listener/service identity instead of a tenant id (I06/I11).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct XdpFlowKey {
+    pub client_addr: [u8; 16],
+    pub service_addr: [u8; 16],
+    /// Billing/tenant dimension; listener id until tenant is identified.
+    pub service_id: i64,
+    pub client_port_be: u16,
+    pub service_port_be: u16,
+    /// Interface-derived security zone.
+    pub security_domain: u16,
+    pub family: u8,
+    pub proto: u8,
+}
+
+/// Per-flow admission record. Lookup must validate deadlines; GC only reclaims
+/// space. `absolute_deadline_ns` is never extended by retransmits (I02/I03);
+/// `idle_deadline_ns` only advances on packets that match the current
+/// incarnation and owner.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpFlowRecord {
+    pub created_ns: u64,
+    /// Hard cap for PENDING lifetime; retransmits never extend it.
+    pub absolute_deadline_ns: u64,
+    /// Validated-flow idle deadline; lookup checks, GC reclaims.
+    pub idle_deadline_ns: u64,
+    /// Tuple-reuse guard: bumped per admission so stale events cannot own a
+    /// recycled tuple.
+    pub flow_incarnation: u64,
+    /// Owner generation; an old worker's events cannot touch a re-owned flow.
+    pub owner_epoch: u64,
+    /// Policy generation selected for this packet/flow.
+    pub policy_generation: u64,
+    pub service_id: i64,
+    /// XDP_FLOW_* state.
+    pub state: u8,
+    /// XDP_OWNER_* path owner.
+    pub owner_kind: u8,
+    /// XDP_VALIDATION_* level.
+    pub validation: u8,
+    pub flags: u8,
+    pub _pad: u32,
+}
+
+/// XdpFlowEvent::kind values (EN-10). Append only.
+pub const XDP_FLOW_EVENT_ADMITTED: u8 = 0;
+pub const XDP_FLOW_EVENT_VALIDATED: u8 = 1;
+pub const XDP_FLOW_EVENT_CLOSED: u8 = 2;
+pub const XDP_FLOW_EVENT_REJECTED: u8 = 3;
+pub const XDP_FLOW_EVENT_EXPIRED: u8 = 4;
+
+/// Flow lifecycle event (userspace ↔ dataplane feedback contract, EN-10).
+/// Old events must not override newer state on a reused tuple — compare
+/// (incarnation, owner_epoch, seq) before applying.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpFlowEvent {
+    pub key: XdpFlowKey,
+    pub flow_incarnation: u64,
+    pub owner_epoch: u64,
+    pub seq: u64,
+    pub timestamp_ns: u64,
+    /// Event kind: 0=admitted 1=validated 2=closed 3=rejected 4=expired.
+    pub kind: u8,
+    /// XDP_DECISION_* reason.
+    pub reason: u8,
+    pub _pad: [u8; 6],
+}
+
+/// Transport binding for a flow's owner path.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpPathBinding {
+    /// XDP_OWNER_*.
+    pub kind: u8,
+    pub _pad0: [u8; 3],
+    /// AF_XDP: bound RX queue; NAT: unused (backend lives in the CT value).
+    pub queue_id: u32,
+    /// NAT backend tuple (family-embedded), zero for KERNEL/AFXDP.
+    pub backend_addr: [u8; 16],
+    pub backend_port_be: u16,
+    pub _pad1: [u8; 6],
+}
+
+/// Aggregate admission budgets written by userspace (architecture §4.5).
+/// All counters are per-second rates over `window_ns`; zero disables a check.
+/// These are *aggregate* ceilings — they hold regardless of source rotation.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpBudgetConfig {
+    /// Max packets/sec that may enter the unverified path.
+    pub unverified_pps: u64,
+    /// Max new-state admissions/sec (SYN, first-packet UDP, QUIC Initial).
+    pub new_flow_per_sec: u64,
+    /// Max packets/sec redirected into AF_XDP (protects the reactor).
+    pub xsk_redirect_pps: u64,
+    /// Max challenge responses/sec (cookie/Retry replies).
+    pub challenge_pps: u64,
+    /// Max packets/sec on flows holding verified conntrack state. The
+    /// verified pool is exclusive: verified hits refund the unverified
+    /// charge, so an unverified flood can never starve established flows.
+    pub verified_pps: u64,
+    /// Max necessary-control packets/sec (ICMP et al. passed early).
+    pub control_pps: u64,
+    /// Max new-state admissions/sec per listen service (dst port). A
+    /// distributed flood against one service cannot exhaust the shared
+    /// new-flow envelope for sibling services; the aggregate dim1 cap
+    /// still applies on top.
+    pub service_flow_pps: u64,
+    /// Accounting window shared by the buckets.
+    pub window_ns: u64,
+    /// Enable bitset; bit0 = enforce unverified_pps, bit1 = new_flow,
+    /// bit2 = xsk_redirect, bit3 = challenge, bit4 = verified,
+    /// bit5 = control, bit6 = per-service new-flow.
+    pub flags: u64,
+}
+
+/// Per-CPU budget bucket state for `XDP_BUDGET` (EN-07). Each CPU owns its
+/// slots exclusively, so read-modify-write is race-free; userspace pre-divides
+/// the node-wide totals by the possible-CPU count when writing
+/// `XdpBudgetConfig`, keeping the aggregate quota independent of CPU/queue
+/// count. Index convention matches `XdpBudgetConfig` flag bits:
+/// 0=unverified pps, 1=new-flow admissions, 2=xsk redirect, 3=challenge,
+/// 4=verified pps, 5=control pps.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpBudgetBucket {
+    pub window_start_ns: [u64; 6],
+    pub count: [u64; 6],
+}
+
+/// Per-CPU per-service admission bucket for `XDP_SVC_BUDGET` (EN-07
+/// fairness): keyed by listen port (network order, widened to u32), so a
+/// distributed flood against one service cannot drain sibling services'
+/// share of the new-flow budget. The map is bounded — capacity beyond the
+/// configured service set degrades to the aggregate dim1 envelope only.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpSvcBucket {
+    pub window_start_ns: u64,
+    pub count: u64,
+}
+
+/// Half-open concurrency cap stored in a single-slot map value so the dataplane
+/// can compare pending_count against a ceiling without a second lookup.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpPendingCap {
+    /// Informational capacity of the pending table (the map bound is the
+    /// actual hard limit; userspace mirrors it here for observability).
+    pub max_pending: u64,
+    /// Absolute half-open deadline in nanoseconds. A pending entry whose
+    /// age exceeds this is treated as absent and re-admitted as a new flow.
+    pub pending_ttl_ns: u64,
+    /// Test-only fault-injection bits (XDP_PENDING_CAP_FAIL_*). Production
+    /// configs leave this zero; each set bit forces the corresponding
+    /// datapath admission step onto its explicit failure path so rollback
+    /// semantics can be exercised without filling a production-scale map.
+    pub flags: u64,
+}
+
+/// `XdpPendingCap.flags` bit: the pending→CT promotion acts as if the
+/// authoritative CT insert failed (pending record must stay untouched).
+pub const XDP_PENDING_CAP_FAIL_CT_INSERT: u64 = 1 << 0;
+/// `XdpPendingCap.flags` bit: fresh pending admissions act as if the
+/// bounded pending table insert failed (claimed SNAT port must roll back).
+pub const XDP_PENDING_CAP_FAIL_PENDING_INSERT: u64 = 1 << 1;
+/// `XdpPendingCap.flags` bit: SNAT port allocation acts exhausted so the
+/// explicit userspace fallback is exercised on demand.
+pub const XDP_PENDING_CAP_FAIL_SNAT_ALLOC: u64 = 1 << 2;
+/// `XdpPendingCap.flags` bit: packet forging acts as if the write helpers
+/// failed — exercises worker error rollback (pending/SNAT state must not
+/// leak, verdict must be DROP not PASS).
+pub const XDP_PENDING_CAP_FAIL_FORGE: u64 = 1 << 3;
+
+// Compile-time ABI assertions. If any of these fire, a shared layout changed:
+// bump XDP_ABI_VERSION and update the map spec table so stale pinned maps are
+// rejected instead of misread.
+const _: () = assert!(core::mem::size_of::<XdpFlowKey>() == 48);
+const _: () = assert!(core::mem::size_of::<XdpFlowRecord>() == 64);
+const _: () = assert!(core::mem::size_of::<XdpFlowEvent>() == 88);
+const _: () = assert!(core::mem::size_of::<XdpPathBinding>() == 32);
+const _: () = assert!(core::mem::size_of::<XdpBudgetConfig>() == 72);
+const _: () = assert!(core::mem::size_of::<XdpBudgetBucket>() == 96);
+const _: () = assert!(core::mem::size_of::<XdpSvcBucket>() == 16);
+const _: () = assert!(core::mem::size_of::<XdpPendingCap>() == 24);
+const _: () = assert!(core::mem::size_of::<XdpCounters>() == 312);
+const _: () = assert!(core::mem::size_of::<XdpOutCtKey>() == 40);
+const _: () = assert!(core::mem::size_of::<XdpOutCtValue>() == 8);
+const _: () = assert!(core::mem::size_of::<XdpUdpCtKey>() == 40);
+const _: () = assert!(core::mem::size_of::<XdpUdpCtValue>() == 72);
+const _: () = assert!(core::mem::size_of::<XdpUdpFwdRule>() == 48);
+const _: () = assert!(core::mem::size_of::<XdpCookieKey>() == 32);
+const _: () = assert!(core::mem::size_of::<XdpSnatRevKey>() == 24);
+const _: () = assert!(core::mem::size_of::<XdpSnatRevValue>() == 56);
+const _: () = assert!(core::mem::size_of::<XdpInterfacePolicy>() == 8);
+const _: () = assert!(core::mem::size_of::<XdpRateBucket>() == 16);
+const _: () = assert!(core::mem::size_of::<XdpRateLimitConfig>() == 32);
+const _: () = assert!(core::mem::size_of::<NatScratch>() == 448);
 
 #[cfg(all(feature = "aya", target_os = "linux"))]
 macro_rules! unsafe_impl_aya_pod {
@@ -246,6 +1064,28 @@ unsafe_impl_aya_pod!(
     XdpRuleValue,
     XdpCounters,
     XdpInterfacePolicy,
+    XdpRateLimitConfig,
+    XdpRateBucket,
+    XdpQuicDcidKey,
+    XdpUdpFwdKey,
+    XdpUdpFwdRule,
+    XdpCookieKey,
+    XdpUdpCtKey,
+    XdpUdpCtValue,
+    XdpOutCtKey,
+    XdpOutCtValue,
+    XdpSnatRevKey,
+    XdpSnatRevValue,
+    XdpFlowAcct,
+    NatScratch,
+    XdpFlowKey,
+    XdpFlowRecord,
+    XdpFlowEvent,
+    XdpPathBinding,
+    XdpBudgetConfig,
+    XdpBudgetBucket,
+    XdpSvcBucket,
+    XdpPendingCap,
 );
 
 #[cfg(feature = "std")]
@@ -308,6 +1148,28 @@ pub mod host {
         }
 
         #[test]
+        fn quic_dcid_key_pads_and_bounds() {
+            let key = XdpQuicDcidKey::new(&[0xaa, 0xbb, 0xcc]).unwrap();
+            assert_eq!(key.len, 3);
+            assert_eq!(&key.bytes[..3], &[0xaa, 0xbb, 0xcc]);
+            assert!(key.bytes[3..].iter().all(|b| *b == 0));
+
+            let mut long = [0x11u8; 20];
+            long[19] = 0x22;
+            let key = XdpQuicDcidKey::new(&long).unwrap();
+            assert_eq!(key.len, 20);
+            assert_eq!(key.bytes, long);
+
+            assert!(XdpQuicDcidKey::new(&[]).is_none());
+            assert!(XdpQuicDcidKey::new(&[0u8; 21]).is_none());
+
+            // Same bytes with different lengths must not collide.
+            let short = XdpQuicDcidKey::new(&[1, 2]).unwrap();
+            let long = XdpQuicDcidKey::new(&[1, 2, 0]).unwrap();
+            assert_ne!(short, long);
+        }
+
+        #[test]
         fn mixed_family_range_is_rejected() {
             assert!(
                 range_key(
@@ -316,6 +1178,78 @@ pub mod host {
                 )
                 .is_none()
             );
+        }
+
+        // ---- EN-01 contract tests -------------------------------------
+
+        /// A stale event must not own a recycled tuple: the (incarnation,
+        /// owner_epoch, seq) triple is the ordering key — same tuple, later
+        /// admission must win over an older queued event.
+        #[test]
+        fn flow_event_orders_by_incarnation_epoch_seq() {
+            let mut key = XdpFlowKey::default();
+            key.family = 4;
+            key.proto = XDP_PROTO_TCP;
+            let stale = XdpFlowEvent {
+                key,
+                flow_incarnation: 1,
+                owner_epoch: 3,
+                seq: 40,
+                kind: 2,
+                reason: XDP_DECISION_PASS,
+                ..Default::default()
+            };
+            let fresh = XdpFlowEvent {
+                key,
+                flow_incarnation: 2,
+                owner_epoch: 4,
+                seq: 0,
+                kind: 0,
+                reason: XDP_DECISION_PASS,
+                ..Default::default()
+            };
+            // Ordering tuple: incarnation first, then epoch, then seq.
+            let order = |e: &XdpFlowEvent| (e.flow_incarnation, e.owner_epoch, e.seq);
+            assert!(order(&fresh) > order(&stale));
+        }
+
+        /// Pending flows die by absolute deadline even if retransmits keep
+        /// arriving — callers must compare against absolute_deadline_ns, not
+        /// refresh it.
+        #[test]
+        fn pending_record_has_absolute_and_idle_deadlines() {
+            let rec = XdpFlowRecord {
+                created_ns: 1_000,
+                absolute_deadline_ns: 5_000,
+                idle_deadline_ns: 2_000,
+                state: XDP_FLOW_PENDING,
+                ..Default::default()
+            };
+            assert!(rec.absolute_deadline_ns > rec.created_ns);
+            assert_ne!(rec.absolute_deadline_ns, rec.idle_deadline_ns);
+        }
+
+        /// Decision reason codes are append-only ABI; pin the numeric values
+        /// so a careless rename/renumber breaks the build, not the metrics.
+        #[test]
+        fn decision_reasons_are_stable() {
+            assert_eq!(XDP_DECISION_PASS, 0);
+            assert_eq!(XDP_DECISION_NO_XSK, 7);
+            assert_eq!(XDP_DECISION_TCP_FLAG, 9);
+            assert_eq!(XDP_DECISION_NAT_CONFLICT, 10);
+        }
+
+        /// Disabled budget bits must make the whole config inert — zero flags
+        /// with nonzero rates is the documented "not configured" state.
+        #[test]
+        fn budget_config_zero_flags_is_disabled() {
+            let cfg = XdpBudgetConfig {
+                unverified_pps: 1_000_000,
+                flags: 0,
+                ..Default::default()
+            };
+            assert_eq!(cfg.flags, 0);
+            assert_eq!(cfg.window_ns, 0);
         }
     }
 }

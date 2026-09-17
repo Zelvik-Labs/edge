@@ -341,6 +341,51 @@ pub struct HTTP3Policy {
     pub port: i32,
     #[serde(rename = "supportMobileBrowsers", default)]
     pub support_mobile_browsers: bool,
+    #[serde(rename = "addressValidation", default = "default_http3_address_validation")]
+    pub address_validation: String,
+    /// Node-wide ceiling on QUIC Retry responses per second, shared by
+    /// every H3 listener (never multiplied per listener/worker). `0`
+    /// disables Retry issuance — over-budget Initials are explicitly
+    /// ignored and counted. Absent = built-in default (1024/s).
+    #[serde(rename = "retryPps")]
+    pub retry_pps: Option<u64>,
+}
+
+fn default_http3_address_validation() -> String {
+    "adaptive".to_string()
+}
+
+/// EN-15: terminating-H3 address-validation policy for unvalidated QUIC
+/// Initial packets. The decision is made on `quinn::Incoming` before any
+/// handshake state, admission permits, or tasks are allocated.
+///
+/// - `adaptive` (default): issue a stateless Retry while L4 pressure is
+///   Elevated or worse; accept directly otherwise. Zero added RTT in
+///   normal operation, bounded state under an Initial flood.
+/// - `always`: require a Retry round trip for every unvalidated address.
+/// - `off`: never issue Retry (operator-declared lower protection).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Http3AddressValidation {
+    #[default]
+    Adaptive,
+    Always,
+    Off,
+}
+
+impl HTTP3Policy {
+    pub fn address_validation_mode(&self) -> Http3AddressValidation {
+        match self.address_validation.trim().to_ascii_lowercase().as_str() {
+            "always" => Http3AddressValidation::Always,
+            "off" | "none" | "disabled" => Http3AddressValidation::Off,
+            _ => Http3AddressValidation::Adaptive,
+        }
+    }
+
+    /// Aggregate Retry responses/sec ceiling (0 disables issuance).
+    pub fn retry_pps_limit(&self) -> u64 {
+        self.retry_pps
+            .unwrap_or(crate::http3_proxy_manager::H3_RETRY_DEFAULT_PPS)
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -438,6 +483,10 @@ pub struct DataMapConfig {
 impl DataMapConfig {
     pub fn len(&self) -> usize {
         self.r#map.len() + self.extra.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.r#map.is_empty() && self.extra.is_empty()
     }
 
     pub fn get(&self, key: &str) -> Option<&Value> {
@@ -1758,7 +1807,7 @@ impl URLPattern {
 
     fn path_without_query_fragment(value: &str) -> &str {
         value
-            .find(|ch| ch == '?' || ch == '#')
+            .find(['?', '#'])
             .map(|idx| &value[..idx])
             .unwrap_or(value)
     }
@@ -1833,7 +1882,7 @@ impl URLPattern {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct UAMConfig {
     #[serde(rename = "isPrior", default)]
     pub is_prior: bool,
@@ -1873,22 +1922,6 @@ pub struct UAMConfig {
         deserialize_with = "deserialize_flexible_u8_opt"
     )]
     pub pow_difficulty: Option<u8>,
-}
-
-impl Default for UAMConfig {
-    fn default() -> Self {
-        Self {
-            is_prior: false,
-            is_on: false,
-            only_url_patterns: Vec::new(),
-            except_url_patterns: Vec::new(),
-            min_qps_per_ip: 0,
-            conds: None,
-            key_life: 0,
-            mode: None,
-            pow_difficulty: None,
-        }
-    }
 }
 
 impl UAMConfig {
@@ -2726,7 +2759,7 @@ pub struct HTTPStatusConfig {
 
 impl HTTPStatusConfig {
     pub fn matches(&self, status: u16) -> bool {
-        self.always || self.codes.iter().any(|code| *code == status as i32)
+        self.always || self.codes.contains(&(status as i32))
     }
 }
 
@@ -3065,20 +3098,20 @@ struct NormalizedOriginAddr {
 fn normalize_origin_addr_string(raw: &str) -> NormalizedOriginAddr {
     let trimmed = raw.trim();
 
-    if has_uri_scheme(trimmed) {
-        if let Ok(uri) = trimmed.parse::<http::Uri>() {
-            let scheme = uri.scheme_str().unwrap_or("");
-            let host = uri.host().unwrap_or("").to_string();
-            let port = uri
-                .port_u16()
-                .unwrap_or_else(|| default_port_for_protocol(scheme));
-            let use_tls = corrected_origin_tls(scheme, Some(port));
-            return NormalizedOriginAddr {
-                address: format_host_port(&host, port),
-                host,
-                use_tls,
-            };
-        }
+    if has_uri_scheme(trimmed)
+        && let Ok(uri) = trimmed.parse::<http::Uri>()
+    {
+        let scheme = uri.scheme_str().unwrap_or("");
+        let host = uri.host().unwrap_or("").to_string();
+        let port = uri
+            .port_u16()
+            .unwrap_or_else(|| default_port_for_protocol(scheme));
+        let use_tls = corrected_origin_tls(scheme, Some(port));
+        return NormalizedOriginAddr {
+            address: format_host_port(&host, port),
+            host,
+            use_tls,
+        };
     }
 
     let (without_scheme, use_tls) = strip_known_scheme(trimmed);
@@ -3087,7 +3120,7 @@ fn normalize_origin_addr_string(raw: &str) -> NormalizedOriginAddr {
         .next()
         .unwrap_or(without_scheme);
     let (host, port) = split_host_port(without_path);
-    let port = port.unwrap_or_else(|| if use_tls { 443 } else { 80 });
+    let port = port.unwrap_or(if use_tls { 443 } else { 80 });
     let use_tls = corrected_origin_tls(if use_tls { "https" } else { "http" }, Some(port));
 
     NormalizedOriginAddr {
@@ -3119,20 +3152,20 @@ fn strip_known_scheme(value: &str) -> (&str, bool) {
 }
 
 fn split_host_port(value: &str) -> (String, Option<u16>) {
-    if let Some(rest) = value.strip_prefix('[') {
-        if let Some(end) = rest.find(']') {
-            let host = rest[..end].to_string();
-            let port = rest[end + 1..]
-                .strip_prefix(':')
-                .and_then(|p| p.parse::<u16>().ok());
-            return (host, port);
-        }
+    if let Some(rest) = value.strip_prefix('[')
+        && let Some(end) = rest.find(']')
+    {
+        let host = rest[..end].to_string();
+        let port = rest[end + 1..]
+            .strip_prefix(':')
+            .and_then(|p| p.parse::<u16>().ok());
+        return (host, port);
     }
 
-    if value.matches(':').count() == 1 {
-        if let Some((host, port)) = value.rsplit_once(':') {
-            return (host.to_string(), port.parse::<u16>().ok());
-        }
+    if value.matches(':').count() == 1
+        && let Some((host, port)) = value.rsplit_once(':')
+    {
+        return (host.to_string(), port.parse::<u16>().ok());
     }
 
     (value.to_string(), None)
@@ -3335,11 +3368,14 @@ impl SizeCapacity {
 
     pub fn to_bytes(&self) -> i64 {
         if self.unit.eq_ignore_ascii_case("kb") || self.unit.eq_ignore_ascii_case("k") {
-            self.count * 1024
+            self.count.saturating_mul(1024)
         } else if self.unit.eq_ignore_ascii_case("mb") || self.unit.eq_ignore_ascii_case("m") {
-            self.count * 1024 * 1024
+            self.count.saturating_mul(1024).saturating_mul(1024)
         } else if self.unit.eq_ignore_ascii_case("gb") || self.unit.eq_ignore_ascii_case("g") {
-            self.count * 1024 * 1024 * 1024
+            self.count
+                .saturating_mul(1024)
+                .saturating_mul(1024)
+                .saturating_mul(1024)
         } else {
             self.count
         }
@@ -3365,6 +3401,37 @@ pub fn parse_life_to_seconds(v: &Value) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn http3_policy_address_validation_defaults_and_parses() {
+        let policy: HTTP3Policy = serde_json::from_value(serde_json::json!({
+            "isOn": true,
+            "port": 443
+        }))
+        .expect("http3 policy should parse without addressValidation");
+        assert_eq!(
+            policy.address_validation_mode(),
+            Http3AddressValidation::Adaptive
+        );
+
+        for (value, expected) in [
+            ("always", Http3AddressValidation::Always),
+            ("ALWAYS", Http3AddressValidation::Always),
+            ("off", Http3AddressValidation::Off),
+            ("none", Http3AddressValidation::Off),
+            ("disabled", Http3AddressValidation::Off),
+            ("adaptive", Http3AddressValidation::Adaptive),
+            ("bogus", Http3AddressValidation::Adaptive),
+            ("", Http3AddressValidation::Adaptive),
+        ] {
+            let policy: HTTP3Policy = serde_json::from_value(serde_json::json!({
+                "isOn": true,
+                "addressValidation": value
+            }))
+            .expect("http3 policy should parse");
+            assert_eq!(policy.address_validation_mode(), expected, "value={value}");
+        }
+    }
 
     #[test]
     fn metric_item_category_defaults_and_normalizes() {
@@ -3691,6 +3758,12 @@ mod tests {
         assert_eq!(fallback.count, 0);
         assert_eq!(fallback.unit, "b");
         assert_eq!(fallback.to_bytes(), 0);
+
+        let huge = SizeCapacity {
+            count: i64::MAX,
+            unit: "GB".to_string(),
+        };
+        assert_eq!(huge.to_bytes(), i64::MAX);
     }
 
     #[test]

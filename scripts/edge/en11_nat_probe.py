@@ -1,0 +1,709 @@
+#!/usr/bin/env python3
+"""EN-11 evidence probe: multi-VIP disambiguation, SNAT port lifecycle,
+and bidirectional flow accounting against the real eBPF dataplane.
+
+Topology: veth pair en2-a (host, node VIPs 10.99.0.5 + 10.99.0.7, XDP
+attached) <-> en2-b (netns en2-ns, 10.99.0.6). Both VIPs forward UDP
+:8543 and TCP :8443 to the SAME backend 10.99.0.6:9543/9443 — the
+multi-VIP same-backend ambiguity case from the EN-11 acceptance.
+
+Phases:
+  A udp conflict: client tuple -> VIP1 establishes a CT binding; the same
+    client tuple -> VIP2 must be rejected (natConflict), not rebound.
+    VIP1 traffic afterwards still forwards on the original binding.
+  B tcp pending conflict: SYN -> VIP1 (SNAT) creates a pending entry and
+    claims a port; the same tuple -> VIP2 must be rejected while the
+    pending entry and the SNAT binding stay owned by VIP1.
+  C pending expiry releases the SNAT port: after tcpPendingMs elapses a
+    retransmitted SYN re-admits; XDP_SNAT_REV still holds exactly one
+    binding for the tuple (the expired claim was released in-datapath).
+  D billing: FLOW_ACCT entry for the UDP flow carries the VIP1 server_id
+    with both tx (client->backend) and rx (backend->client) bytes.
+
+Usage (root, Linux):
+    sudo python3 scripts/edge/en11_nat_probe.py \
+        --node-bin target/debug/cloud-node-rust --out /tmp/en11.json
+"""
+
+import argparse
+import json
+import os
+import random
+import re
+import socket
+import struct
+import subprocess
+import time
+
+NS = "en11-ns"
+HOST_IF = "en11-a"
+PEER_IF = "en11-b"
+VIP1 = "10.99.0.5"
+VIP2 = "10.99.0.7"
+PEER_IP = "10.99.0.6"
+CLIENT_IP = "10.99.0.9"
+PIN_DIR = "/sys/fs/bpf/cloud-node-xdp"
+BPFTOOL_CANDIDATES = [
+    "/usr/lib/linux-tools-5.15.0-191/bpftool",
+    "bpftool",
+]
+TCP_LISTEN = 8443
+TCP_BACKEND = 9443
+UDP_LISTEN = 8543
+UDP_BACKEND = 9543
+CLIENT_PORT = 40000
+UDP_CLIENT_PORT = 41000
+PENDING_MS = 4000
+
+
+def sh(cmd, check=True, capture=True, netns=None, cwd=None):
+    if netns:
+        cmd = ["ip", "netns", "exec", NS] + cmd
+    p = subprocess.run(cmd, capture_output=capture, text=True, cwd=cwd)
+    if check and p.returncode != 0:
+        raise RuntimeError(
+            f"{' '.join(map(str, cmd))} rc={p.returncode}: "
+            f"{p.stderr.strip() or p.stdout.strip()}")
+    return p
+
+
+def bpftool():
+    for cand in BPFTOOL_CANDIDATES:
+        if subprocess.run(["which", cand],
+                          capture_output=True).returncode == 0 \
+                or os.path.exists(cand):
+            return cand
+    raise RuntimeError("bpftool not found")
+
+
+def setup_netns():
+    teardown_netns()
+    sh(["ip", "netns", "add", NS])
+    sh(["ip", "link", "add", HOST_IF, "type", "veth", "peer", "name", PEER_IF])
+    sh(["ip", "link", "set", PEER_IF, "netns", NS])
+    sh(["ip", "addr", "add", f"{VIP1}/24", "dev", HOST_IF])
+    sh(["ip", "addr", "add", f"{VIP2}/24", "dev", HOST_IF])
+    sh(["ip", "link", "set", HOST_IF, "up"])
+    sh(["ip", "netns", "exec", NS, "ip", "addr", "add", f"{PEER_IP}/24",
+        "dev", PEER_IF])
+    sh(["ip", "netns", "exec", NS, "ip", "link", "set", PEER_IF, "up"])
+    sh(["ip", "netns", "exec", NS, "ip", "link", "set", "lo", "up"])
+    for iface, ns in ((HOST_IF, None), (PEER_IF, NS)):
+        sh(["sysctl", "-qw", f"net.ipv6.conf.{iface}.disable_ipv6=1"],
+           check=False, netns=ns)
+
+
+def teardown_netns():
+    for cmd in (["ip", "link", "delete", HOST_IF],
+                ["ip", "netns", "delete", NS]):
+        subprocess.run(cmd, capture_output=True)
+
+
+def peer_mac():
+    out = sh(["ip", "netns", "exec", NS, "ip", "-o", "link", "show",
+              "dev", PEER_IF]).stdout
+    return out.split("link/ether")[1].split()[0]
+
+
+def write_node_config(path, next_hop):
+    body = f"""runtime:
+  mode: standalone
+
+xdp:
+  enabled: true
+  attachMode: skb
+  fallback: fail-start
+  interfaces:
+    - name: {HOST_IF}
+      queues: [0]
+      mode: proxy
+      localIps:
+        - {VIP1}
+        - {VIP2}
+      frameSize: 2048
+      tcpForwards:
+        - listen: "{VIP1}:{TCP_LISTEN}"
+          backend: "{PEER_IP}:{TCP_BACKEND}"
+          nextHopMac: "{next_hop}"
+          snat: true
+          serverId: 42
+        - listen: "{VIP2}:{TCP_LISTEN}"
+          backend: "{PEER_IP}:{TCP_BACKEND}"
+          nextHopMac: "{next_hop}"
+          snat: true
+          serverId: 45
+      udpForwards:
+        - listen: "{VIP1}:{UDP_LISTEN}"
+          backend: "{PEER_IP}:{UDP_BACKEND}"
+          nextHopMac: "{next_hop}"
+          snat: true
+          serverId: 43
+        - listen: "{VIP2}:{UDP_LISTEN}"
+          backend: "{PEER_IP}:{UDP_BACKEND}"
+          nextHopMac: "{next_hop}"
+          snat: true
+          serverId: 44
+  proxy:
+    protocols: ["tcp", "udp"]
+    ports:
+      - protocol: tcp
+        port: 443
+  admission:
+    tcpPendingMs: {PENDING_MS}
+"""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write(body)
+
+
+def write_api_config(path):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write('nodeId: "0"\nsecret: "en11-probe"\n'
+                '"rpc.endpoints":\n  - "http://127.0.0.1:9/"\n'
+                '"rpc.disableUpdate": true\n'
+                'kernelTuning:\n  enabled: false\n')
+
+
+def dump_maps(node_bin, cwd):
+    out = sh([node_bin, "xdp", "dump-maps"], cwd=cwd).stdout
+    return json.loads(out)
+
+
+def map_id(name):
+    out = sh([bpftool(), "map", "show"]).stdout
+    for m in re.finditer(r"^(\d+):\s+\S+\s+name\s+(\S+)", out, re.M):
+        if m.group(2) == name:
+            return int(m.group(1))
+    raise RuntimeError(f"bpf map {name} not found")
+
+
+def map_entries(name):
+    out = sh([bpftool(), "map", "dump", "id", str(map_id(name))]).stdout
+    return out.count("key:")
+
+
+def snat_rev_count(proto):
+    out = sh([bpftool(), "map", "dump", "-j", "id",
+              str(map_id("XDP_SNAT_REV"))]).stdout
+    return sum(1 for item in json.loads(out)
+               if bytes(int(b, 16) for b in item["key"])[18] == proto)
+
+
+def udp_snat_port():
+    """Claimed SNAT port for the UDP flow (proto=17) in XDP_SNAT_REV."""
+    out = sh([bpftool(), "map", "dump", "-j", "id",
+              str(map_id("XDP_SNAT_REV"))]).stdout
+    for item in json.loads(out):
+        key = bytes(int(b, 16) for b in item["key"])
+        if key[18] == 17:
+            return struct.unpack(">H", key[16:18])[0]
+    raise RuntimeError("no UDP SNAT binding found")
+
+
+def tcp_snat_port_for(cport):
+    """SNAT port claimed by the pending/CT TCP flow for client port cport."""
+    out = sh([bpftool(), "map", "dump", "-j", "id",
+              str(map_id("XDP_PENDING"))]).stdout
+    for item in json.loads(out):
+        key = bytes(int(b, 16) for b in item["key"])
+        val = bytes(int(b, 16) for b in item["value"])
+        if struct.unpack(">H", key[32:34])[0] == cport:
+            return struct.unpack(">H", val[26:28])[0]
+    raise RuntimeError(f"no pending SNAT binding for client port {cport}")
+
+
+def pending_entry(cport):
+    """Decode the XDP_PENDING value for client port cport (or None)."""
+    out = sh([bpftool(), "map", "dump", "-j", "id",
+              str(map_id("XDP_PENDING"))]).stdout
+    for item in json.loads(out):
+        key = bytes(int(b, 16) for b in item["key"])
+        val = bytes(int(b, 16) for b in item["value"])
+        if struct.unpack(">H", key[32:34])[0] == cport:
+            # XdpUdpCtValue: state@25, snat_port_be@26, last_seen_ns@40.
+            return {"state": val[25],
+                    "snat_port": struct.unpack(">H", val[26:28])[0],
+                    "last_seen": struct.unpack("<Q", val[40:48])[0]}
+    return None
+
+
+def set_pending_flags(flags):
+    """Write XdpPendingCap.flags in the XDP_PENDING_CAP array (id 0 slot)."""
+    mid = map_id("XDP_PENDING_CAP")
+    out = sh([bpftool(), "map", "dump", "-j", "id", str(mid)]).stdout
+    raw = bytearray(int(b, 16) for b in json.loads(out)[0]["value"])
+    assert len(raw) == 24, f"unexpected XdpPendingCap size {len(raw)}"
+    raw[16:24] = flags.to_bytes(8, "little")
+    sh([bpftool(), "map", "update", "id", str(mid),
+        "key", "hex", "00", "00", "00", "00",
+        "value", "hex"] + [f"{b:02x}" for b in raw])
+
+
+def flow_acct_entries():
+    """Decode XDP_FLOW_ACCT per-cpu values -> list of dicts (summed)."""
+    out = sh([bpftool(), "map", "dump", "-j", "id",
+              str(map_id("XDP_FLOW_ACCT"))]).stdout
+    entries = []
+    for item in json.loads(out):
+        total = {"rx_bytes": 0, "tx_bytes": 0, "rx_pkts": 0, "tx_pkts": 0,
+                 "server_id": 0}
+        for cpu_val in item.get("values", []):
+            v = cpu_val["value"]
+            raw = (bytes.fromhex(v.removeprefix("0x")) if isinstance(v, str)
+                   else bytes(int(b, 16) for b in v))
+            if len(raw) < 48:
+                continue
+            (rx_b, tx_b, rx_p, tx_p, _seen,
+             sid) = struct.unpack("<QQQQQq", raw[:48])
+            total["rx_bytes"] += rx_b
+            total["tx_bytes"] += tx_b
+            total["rx_pkts"] += rx_p
+            total["tx_pkts"] += tx_p
+            # Idle CPUs hold an all-zero slot; attribution comes from the
+            # CPU that actually handled the flow.
+            if rx_b or tx_b:
+                total["server_id"] = sid
+        entries.append(total)
+    return entries
+
+
+def send_frames(frames):
+    s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
+    s.bind((PEER_IF, 0))
+    for f in frames:
+        s.send(f)
+
+
+def csum16(data):
+    if len(data) % 2:
+        data += b"\x00"
+    s = sum(struct.unpack(f">{len(data)//2}H", data))
+    while s >> 16:
+        s = (s & 0xFFFF) + (s >> 16)
+    return (~s) & 0xFFFF
+
+
+def ip_frame(dst_mac, proto, src_ip, dst_ip, l4):
+    src_mac = bytes([0x02, 0x0b, random.randrange(256),
+                     random.randrange(256), random.randrange(256),
+                     random.randrange(256)])
+    tot = 20 + len(l4)
+    ip = struct.pack(">BBHHHBBH4s4s", 0x45, 0, tot, random.randrange(65536),
+                     0, 64, proto, 0, socket.inet_aton(src_ip),
+                     socket.inet_aton(dst_ip))
+    ip = ip[:10] + struct.pack(">H", csum16(ip)) + ip[12:]
+    eth = bytes.fromhex(dst_mac.replace(":", "")) + src_mac + b"\x08\x00"
+    return eth + ip + l4
+
+
+def tcp_frame(dst_mac, src_ip, dst_ip, sport, dport, flags, seq=1000,
+              ackno=0, payload=b""):
+    offset_flags = (5 << 12) | flags
+    tcp = struct.pack(">HHIIBBHHH", sport, dport, seq, ackno,
+                      offset_flags >> 8, offset_flags & 0xFF, 65535, 0, 0)
+    return ip_frame(dst_mac, 6, src_ip, dst_ip, tcp + payload)
+
+
+def udp_frame(dst_mac, src_ip, dst_ip, sport, dport, payload=b"x"):
+    udp = struct.pack(">HHHH", sport, dport, 8 + len(payload), 0)
+    return ip_frame(dst_mac, 17, src_ip, dst_ip, udp + payload)
+
+
+SYN, ACK, FIN, RST, SYNACK = 0x02, 0x10, 0x01, 0x04, 0x12
+
+
+def run_sender(mode, dst_mac, a):
+    frames = []
+    if mode == "udp_vip1":
+        frames = [udp_frame(dst_mac, CLIENT_IP, VIP1,
+                            UDP_CLIENT_PORT, UDP_LISTEN, b"en11")
+                  for _ in range(a)]
+    elif mode == "udp_vip2":
+        frames = [udp_frame(dst_mac, CLIENT_IP, VIP2,
+                            UDP_CLIENT_PORT, UDP_LISTEN, b"en11")
+                  for _ in range(a)]
+    elif mode == "udp_reply":
+        # SNAT reply: backend -> (VIP1, claimed node port passed as a).
+        frames = [udp_frame(dst_mac, PEER_IP, VIP1,
+                            UDP_BACKEND, a, b"ack")]
+    elif mode == "syn_vip1":
+        frames = [tcp_frame(dst_mac, CLIENT_IP, VIP1,
+                            CLIENT_PORT, TCP_LISTEN, SYN)
+                  for _ in range(a)]
+    elif mode == "syn_vip2":
+        frames = [tcp_frame(dst_mac, CLIENT_IP, VIP2,
+                            CLIENT_PORT, TCP_LISTEN, SYN)
+                  for _ in range(a)]
+    elif mode == "syn_vip1p":
+        # a = client port: fresh tuple for isolated fault-injection phases.
+        frames = [tcp_frame(dst_mac, CLIENT_IP, VIP1,
+                            a, TCP_LISTEN, SYN)]
+    elif mode == "ack_vip1p":
+        frames = [tcp_frame(dst_mac, CLIENT_IP, VIP1,
+                            a, TCP_LISTEN, ACK, seq=1001, ackno=2001)]
+    elif mode == "synack_p":
+        # Backend SYN-ACK addressed to the claimed SNAT port (a).
+        frames = [tcp_frame(dst_mac, PEER_IP, VIP1,
+                            TCP_BACKEND, a, SYNACK, seq=2000, ackno=1001)]
+    elif mode == "data_p":
+        # Backend ACK-only data packet (NOT a SYN-ACK): must not mark
+        # handshake evidence on the pending entry.
+        frames = [tcp_frame(dst_mac, PEER_IP, VIP1,
+                            TCP_BACKEND, a, ACK, seq=2001, ackno=1001,
+                            payload=b"x")]
+    elif mode == "blind_ack_p":
+        # Client ACK with wrong sequence numbers: must not promote.
+        frames = [tcp_frame(dst_mac, CLIENT_IP, VIP1,
+                            a, TCP_LISTEN, ACK, seq=5000, ackno=9000)]
+    send_frames(frames)
+    print(json.dumps({"sent": len(frames)}))
+
+
+def send(script, mode, dst_mac, a):
+    return sh(["python3", script, "--send", mode, dst_mac, str(a)], netns=NS)
+
+
+def clean_pins():
+    subprocess.run(["rm", "-rf", PIN_DIR], capture_output=True)
+
+
+def start_node(node_bin, home, cwd):
+    nh = peer_mac()
+    write_node_config(os.path.join(cwd, "configs", "runtime.yaml"), nh)
+    write_node_config(os.path.join(home, "configs", "runtime.yaml"), nh)
+    write_api_config(os.path.join(home, "configs", "api_node.yaml"))
+    obj_src = os.path.normpath(os.path.join(
+        os.path.dirname(os.path.abspath(node_bin)),
+        "..", "..", "data", "cloud-node-xdp-ebpf.o"))
+    os.makedirs(os.path.join(home, "data"), exist_ok=True)
+    if os.path.exists(obj_src):
+        import shutil
+        shutil.copyfile(obj_src,
+                        os.path.join(home, "data", "cloud-node-xdp-ebpf.o"))
+    env = dict(os.environ, CLOUD_NODE_HOME=home, RUST_LOG="info")
+    log = open(os.path.join(cwd, "node.log"), "w")
+    proc = subprocess.Popen([os.path.abspath(node_bin)],
+                            cwd=cwd, env=env, stdout=log, stderr=log,
+                            start_new_session=True)
+    deadline = time.time() + 60
+    while time.time() < deadline:
+        if os.path.exists(f"{PIN_DIR}/link-{HOST_IF}"):
+            time.sleep(2)
+            return proc
+        if proc.poll() is not None:
+            raise RuntimeError(f"node exited rc={proc.returncode}; "
+                               f"see {cwd}/node.log")
+        time.sleep(0.3)
+    raise RuntimeError("timed out waiting for XDP attach")
+
+
+def stop_node(proc):
+    proc.terminate()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=10)
+
+
+def counters(node_bin, cwd):
+    return dump_maps(node_bin, cwd).get("counters") or {}
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--node-bin")
+    ap.add_argument("--out")
+    ap.add_argument("--send", nargs=3, metavar=("MODE", "DST_MAC", "N"),
+                    help=argparse.SUPPRESS)
+    ap.add_argument("--home", default="/tmp/en11-home")
+    ap.add_argument("--work", default="/tmp/en11-run")
+    args = ap.parse_args()
+
+    if args.send:
+        mode, dst_mac, a = args.send
+        run_sender(mode, dst_mac, int(a))
+        return
+
+    node_bin = os.path.abspath(args.node_bin)
+    result = {"ok": False, "phases": {}}
+    proc = None
+    try:
+        clean_pins()
+        setup_netns()
+        proc = start_node(node_bin, args.home, args.work)
+        script = os.path.abspath(__file__)
+
+        # ---- Phase A: UDP multi-VIP conflict --------------------------
+        # Forward rules sync asynchronously after attach — retry the first
+        # VIP1 send until the dataplane forwards it (bounded).
+        c0 = counters(node_bin, args.work)
+        udp_fwd_a = 0
+        for _ in range(20):
+            send(script, "udp_vip1", peer_mac(), 3)
+            time.sleep(0.5)
+            c1 = counters(node_bin, args.work)
+            udp_fwd_a = c1.get("udpFwdTx", 0) - c0.get("udpFwdTx", 0)
+            if udp_fwd_a > 0:
+                break
+
+        send(script, "udp_vip2", peer_mac(), 2)
+        time.sleep(1.0)
+        c2 = counters(node_bin, args.work)
+        conflict_delta = c2.get("natConflict", 0) - c1.get("natConflict", 0)
+        fwd_delta_vip2 = c2.get("udpFwdTx", 0) - c1.get("udpFwdTx", 0)
+        ct_after_conflict = map_entries("XDP_UDP_CT")
+
+        # VIP1 traffic still forwards on the original binding.
+        send(script, "udp_vip1", peer_mac(), 2)
+        time.sleep(1.0)
+        c3 = counters(node_bin, args.work)
+        fwd_vip1_after = c3.get("udpFwdTx", 0) - c2.get("udpFwdTx", 0)
+
+        result["phases"]["A_udp_conflict"] = {
+            "vip1FwdDelta": udp_fwd_a,
+            "vip2ConflictDelta": conflict_delta,
+            "vip2FwdDelta": fwd_delta_vip2,
+            "ctEntriesAfterConflict": ct_after_conflict,
+            "vip1FwdDeltaAfter": fwd_vip1_after,
+            "ok": (udp_fwd_a >= 3 and conflict_delta >= 2
+                   and fwd_delta_vip2 == 0 and ct_after_conflict == 1
+                   and fwd_vip1_after >= 2),
+        }
+
+        # ---- Phase B: TCP pending conflict ----------------------------
+        c4 = counters(node_bin, args.work)
+        snat_bound_b = 0
+        for _ in range(10):
+            send(script, "syn_vip1", peer_mac(), 1)
+            time.sleep(0.4)
+            c5 = counters(node_bin, args.work)
+            snat_bound_b = c5.get("snatBound", 0) - c4.get("snatBound", 0)
+            if map_entries("XDP_PENDING") >= 1:
+                break
+        pending_after_syn = map_entries("XDP_PENDING")
+        snat_rev_after_syn = snat_rev_count(6)
+
+        send(script, "syn_vip2", peer_mac(), 2)
+        time.sleep(0.6)
+        c6 = counters(node_bin, args.work)
+        conflict_tcp = c6.get("natConflict", 0) - c5.get("natConflict", 0)
+        pending_after = map_entries("XDP_PENDING")
+        snat_rev_after = snat_rev_count(6)
+        snat_bound_vip2 = c6.get("snatBound", 0) - c5.get("snatBound", 0)
+
+        result["phases"]["B_tcp_pending_conflict"] = {
+            "snatBoundVip1": snat_bound_b,
+            "pendingAfterSyn": pending_after_syn,
+            "snatRevAfterSyn": snat_rev_after_syn,
+            "vip2ConflictDelta": conflict_tcp,
+            "vip2SnatBoundDelta": snat_bound_vip2,
+            "pendingAfterVip2": pending_after,
+            "snatRevAfterVip2": snat_rev_after,
+            "ok": (snat_bound_b >= 1 and pending_after_syn == 1
+                   and snat_rev_after_syn == 1 and conflict_tcp >= 2
+                   and snat_bound_vip2 == 0 and pending_after == 1
+                   and snat_rev_after == 1),
+        }
+
+        # ---- Phase C: pending expiry releases the SNAT port -----------
+        time.sleep(PENDING_MS / 1000.0 + 0.5)
+        c7 = counters(node_bin, args.work)
+        send(script, "syn_vip1", peer_mac(), 1)
+        time.sleep(0.8)
+        c8 = counters(node_bin, args.work)
+        # Re-admission claims a new port; the expired claim must have been
+        # released in-datapath, so SNAT_REV still holds exactly one entry.
+        snat_rev_after_renew = snat_rev_count(6)
+        pending_after_renew = map_entries("XDP_PENDING")
+        snat_bound_total = c8.get("snatBound", 0) - c4.get("snatBound", 0)
+
+        result["phases"]["C_expiry_port_release"] = {
+            "snatBoundTotal": snat_bound_total,
+            "snatRevAfterRenew": snat_rev_after_renew,
+            "pendingAfterRenew": pending_after_renew,
+            "ok": (snat_bound_total >= 2 and snat_rev_after_renew == 1
+                   and pending_after_renew == 1),
+        }
+
+        # ---- Phase D: bidirectional accounting + server attribution ---
+        # The UDP flow is SNAT'd: replies arrive at the node-claimed port
+        # (a local address), exercising the snat_rev lookup path.
+        snat_port = udp_snat_port()
+        send(script, "udp_reply", peer_mac(), snat_port)
+        time.sleep(1.0)
+        acct = flow_acct_entries()
+        udp_acct = [e for e in acct if e["server_id"] == 43]
+        billed = (len(udp_acct) == 1 and udp_acct[0]["tx_bytes"] > 0
+                  and udp_acct[0]["rx_bytes"] > 0)
+        result["phases"]["D_billing"] = {
+            "acctEntries": len(acct),
+            "vip1Flow": udp_acct,
+            "ok": billed,
+        }
+
+        # ---- Phase E: CT-insert failure keeps pending state intact ----
+        # Fault flag 1 (FAIL_CT_INSERT): promotion must take the explicit
+        # failure path — pending record keeps its state AND its absolute
+        # admission deadline; clearing the flag lets the retry promote.
+        P2 = CLIENT_PORT + 1
+        c9 = counters(node_bin, args.work)
+        set_pending_flags(1)
+        ent = None
+        for _ in range(10):
+            send(script, "syn_vip1p", peer_mac(), P2)
+            time.sleep(0.4)
+            ent = pending_entry(P2)
+            if ent:
+                break
+        assert ent, "phase E: pending entry never admitted"
+        # Backend SYN-ACK marks the entry PENDING_ACKED (weak observation;
+        # strong sequence validation is EN-13/14 scope).
+        send(script, "synack_p", peer_mac(), ent["snat_port"])
+        time.sleep(0.3)
+        ent2 = pending_entry(P2)
+        # Client ACK: promotion attempt hits the injected CT-full path.
+        send(script, "ack_vip1p", peer_mac(), P2)
+        time.sleep(0.4)
+        c10 = counters(node_bin, args.work)
+        ent3 = pending_entry(P2)
+        ct_during_fail = map_entries("XDP_TCP_CT")
+        mapfull_delta = (c10.get("tcpFwdMapFull", 0)
+                         - c9.get("tcpFwdMapFull", 0))
+        # Recover: clear the flag, retransmit ACK — promotion must succeed.
+        set_pending_flags(0)
+        send(script, "ack_vip1p", peer_mac(), P2)
+        time.sleep(0.5)
+        ent4 = pending_entry(P2)
+        ct_after_retry = map_entries("XDP_TCP_CT")
+
+        result["phases"]["E_ct_insert_fail"] = {
+            "stateAfterSynAck": ent2["state"] if ent2 else None,
+            "stateAfterFailedPromote": ent3["state"] if ent3 else None,
+            "deadlineKept": (ent3 is not None
+                             and ent3["last_seen"] == ent["last_seen"]),
+            "tcpFwdMapFullDelta": mapfull_delta,
+            "ctEntriesDuringFail": ct_during_fail,
+            "pendingAfterRetry": ent4,
+            "ctEntriesAfterRetry": ct_after_retry,
+            "ok": (ent2 is not None and ent2["state"] == 3
+                   and ent3 is not None and ent3["state"] == 3
+                   and ent3["last_seen"] == ent["last_seen"]
+                   and mapfull_delta >= 1
+                   and ent4 is None
+                   and ct_after_retry == ct_during_fail + 1),
+        }
+
+        # ---- Phase F: pending-insert failure rolls back SNAT claim ----
+        P3 = CLIENT_PORT + 2
+        c11 = counters(node_bin, args.work)
+        rev_before_f = snat_rev_count(6)
+        set_pending_flags(2)
+        send(script, "syn_vip1p", peer_mac(), P3)
+        time.sleep(0.8)
+        c12 = counters(node_bin, args.work)
+        pending_limited_delta = (c12.get("pendingLimited", 0)
+                                 - c11.get("pendingLimited", 0))
+        rev_after_f = snat_rev_count(6)
+        p3_pending = pending_entry(P3)
+        set_pending_flags(0)
+
+        result["phases"]["F_pending_insert_fail"] = {
+            "pendingLimitedDelta": pending_limited_delta,
+            "snatRevBefore": rev_before_f,
+            "snatRevAfter": rev_after_f,
+            "pendingEntry": p3_pending,
+            "ok": (pending_limited_delta >= 1
+                   and rev_after_f == rev_before_f
+                   and p3_pending is None),
+        }
+
+        # ---- Phase G: SNAT allocation exhaustion is explicit ----------
+        P4 = CLIENT_PORT + 3
+        c13 = counters(node_bin, args.work)
+        rev_before_g = snat_rev_count(6)
+        set_pending_flags(4)
+        send(script, "syn_vip1p", peer_mac(), P4)
+        time.sleep(0.8)
+        c14 = counters(node_bin, args.work)
+        alloc_fail_delta = (c14.get("snatAllocFail", 0)
+                            - c13.get("snatAllocFail", 0))
+        rev_after_g = snat_rev_count(6)
+        p4_pending = pending_entry(P4)
+        set_pending_flags(0)
+
+        result["phases"]["G_snat_exhausted"] = {
+            "snatAllocFailDelta": alloc_fail_delta,
+            "snatRevBefore": rev_before_g,
+            "snatRevAfter": rev_after_g,
+            "pendingEntry": p4_pending,
+            # Other bindings may legitimately expire during the window —
+            # the assertion is that the failed admission ADDS none.
+            "ok": (alloc_fail_delta >= 1
+                   and rev_after_g <= rev_before_g
+                   and p4_pending is None),
+        }
+
+        # ---- Phase H: weak-observation packets cannot promote (EN-13/14)
+        # A pending flow must ignore a blind client ACK (wrong seq/ack) and
+        # must not mark PENDING_ACKED on a non-SYN-ACK backend packet; the
+        # correctly-anchored handshake still promotes afterwards.
+        P5 = CLIENT_PORT + 4
+        c15 = counters(node_bin, args.work)
+        send(script, "syn_vip1p", peer_mac(), P5)
+        time.sleep(0.5)
+        ent_h = pending_entry(P5)
+        h_snat = ent_h["snat_port"] if ent_h else 0
+
+        # 1) non-SYN-ACK backend packet must not mark handshake evidence
+        send(script, "data_p", peer_mac(), h_snat)
+        time.sleep(0.25)
+        ent_h2 = pending_entry(P5)
+
+        # 2) blind client ACK must not promote
+        send(script, "blind_ack_p", peer_mac(), P5)
+        time.sleep(0.25)
+        c16 = counters(node_bin, args.work)
+        seqrej_delta = (c16.get("natSeqRejected", 0)
+                        - c15.get("natSeqRejected", 0))
+        ent_h3 = pending_entry(P5)
+        ct_h_blind = map_entries("XDP_TCP_CT")
+
+        # 3) correctly-anchored SYN-ACK + ACK still promote
+        send(script, "synack_p", peer_mac(), h_snat)
+        time.sleep(0.25)
+        send(script, "ack_vip1p", peer_mac(), P5)
+        time.sleep(0.35)
+        ent_h4 = pending_entry(P5)
+        ct_h_after = map_entries("XDP_TCP_CT")
+
+        result["phases"]["H_weak_observation"] = {
+            "stateAfterDataPkt": ent_h2["state"] if ent_h2 else None,
+            "stateAfterBlindAck": ent_h3["state"] if ent_h3 else None,
+            "natSeqRejectedDelta": seqrej_delta,
+            "ctAfterBlindAck": ct_h_blind,
+            "pendingAfterRetry": ent_h4,
+            "ctAfterCorrectAck": ct_h_after,
+            "ok": (ent_h is not None and ent_h["state"] == 2
+                   and ent_h2 is not None and ent_h2["state"] == 2
+                   and ent_h3 is not None and ent_h3["state"] == 2
+                   and seqrej_delta >= 1
+                   and ent_h4 is None
+                   and ct_h_after == ct_h_blind + 1),
+        }
+
+        result["ok"] = all(p["ok"] for p in result["phases"].values())
+    finally:
+        if proc is not None:
+            stop_node(proc)
+        teardown_netns()
+
+    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+    with open(args.out, "w") as f:
+        json.dump(result, f, indent=2)
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()
