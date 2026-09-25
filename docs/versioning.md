@@ -6,7 +6,7 @@
 
 | 对象 | 方案 | 例子 | 说明 |
 | --- | --- | --- | --- |
-| **组件（本产品）** | `YYYY.MM.PATCH` | `2026.9.0` | 年份、发布月份、补丁号。release tag 为 `v<组件版本>`，如 `v2026.9.0`。 |
+| **组件（本产品）** | `YYYY.MM.PATCH`，允许偶发第四段 `YYYY.MM.PATCH.x` | `2026.9.0`、补丁 `2026.9.0.1` | 年份、发布月份、补丁号；第四段仅作为该版本的补丁版本偶发使用。release tag 为 `v<组件版本>`，如 `v2026.9.0` / `v2026.9.0.1`。 |
 | **协议** | `api-major.api-minor` + schema | `node.v1`、`event.schema.1` | reader/writer 字段兼容，不跟随组件补丁号。 |
 | **来源 provenance** | 项目 + 版本 + commit | `cloud-node-rust 1.3.1 @ b3cdc37` | 审计、迁移和回归追踪，不参与产品版本比较。 |
 
@@ -14,7 +14,7 @@
 
 - 补丁号只修复 bug、安全问题和不改变契约的行为。
 - 月份变化表示同一代内的发布月份，不自动表示破坏性变化。
-- Cargo `version` 与产品版本一致（`YYYY.MM.PATCH` 本身即为合法 SemVer）。
+- Cargo `version` 与产品版本一致（`YYYY.MM.PATCH` 本身即为合法 SemVer）。第四段补丁号不是合法 SemVer，只出现在 release tag 与 `VERSION-MANIFEST.toml` 中，Cargo `version` 始终保持三段。
 - `.github/workflows/release.yml` 由 `v*` tag 与 `workflow_dispatch` 触发，main 分支 push 不触发构建；产物命名为 `CloudSidra-Edge-<target>.tar.gz`。
 - 每次套件发布生成 API/Edge/Agent/Admin/User/Portal 兼容矩阵。
 
