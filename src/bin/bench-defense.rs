@@ -136,6 +136,7 @@ fn main() -> anyhow::Result<()> {
         access_log_pipeline: AccessLogPipelineConfig::default(),
         relay: Default::default(),
         kernel_tuning: Default::default(),
+        cache: Default::default(),
     });
     let cert_selector = Arc::new(DynamicCertSelector::new());
 
@@ -401,6 +402,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_servers(
     http_port: u16,
     tls_port: u16,

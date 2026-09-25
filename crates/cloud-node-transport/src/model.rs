@@ -208,6 +208,27 @@ pub struct PathModel {
     /// decision layer sets them from probe/response outcomes.
     bw_hi: Option<u64>,
     bw_lo: Option<u64>,
+    /// Delivery slope window — (time_us, delivered_total) samples
+    /// kept over ~2 srtt. Per-ACK rate samples can be inflated
+    /// arbitrarily by ACK compression and post-stall drains (delivered
+    /// spans a whole catch-up burst over a microsecond interval), and
+    /// the `4×flight/base_rtt` cap above cannot catch that because the
+    /// catch-up flight is itself huge. The counter is cumulative
+    /// confirmed-delivered (SACKs count at SACK arrival, not when the
+    /// cumulative edge covers them — `cum_ack` is unfit here: a
+    /// hole-fill registers a whole sacked backlog as instant
+    /// delivery). Confirmed bytes over a real time window cannot
+    /// exceed the bottleneck — and the span deliberately includes
+    /// stall time, which makes the slope a *conservative* bound
+    /// (diluted by stalls, never inflated by them).
+    ack_slope: std::collections::VecDeque<(u64, u64)>,
+    /// First delivered sample's (time_us, delivered_total) — the
+    /// lifetime slope `delivered/elapsed` is the same honest quantity
+    /// as the windowed slope and remains computable while the window
+    /// is too young (startup) or starved by a long stall
+    /// (RTO/recovery). It lags a ramping flow, so it serves as a
+    /// bound only.
+    slope_origin: Option<(u64, u64)>,
 
     // --- RTT / queueing delay ---
     /// `base_rtt` — long-window minimum (BBR `min_rtt`) plus drift
@@ -254,6 +275,14 @@ pub struct PathModel {
     /// Quiet-column denominators for `p_rand`.
     quiet_lost: u64,
     quiet_delivered: u64,
+    /// Recent quiet-path byte counters (slow EWMA over ACKs) —
+    /// byte-ratio basis matching `p_rand`. The window must be long:
+    /// the inference compares this against `p_rand` with a
+    /// one-sided `max(0, …)` clip, so any short-window noise spikes
+    /// (burst-marked tails) accumulate strictly-positive phantom
+    /// evidence even when the mean rate is at baseline.
+    quiet_lost_ewma: Ewma,
+    quiet_delivered_ewma: Ewma,
     /// Spurious-retransmit accounting (DSACK/Eifel, §2.8 feeds this).
     spurious_bytes: u64,
     retx_bytes: u64,
@@ -266,6 +295,14 @@ pub struct PathModel {
     // --- lt_bw / policer (BBRv1) ---
     lt_bw: Option<u64>,
     lt_candidate: f64,
+    /// Peak confirmed-delivery slope this episode — what actually gets
+    /// pinned. Anchoring the pin to the *current* slope lets a stall-
+    /// diluted window pin the pacer near zero and the lift test can
+    /// never fire (delivery capped at the pin keeps the slope at the
+    /// pin — a self-fulfilling ~0 ceiling, seen in production as
+    /// paceBps ~5KB/s). Decays toward current delivery each round so a
+    /// genuine slowdown re-anchors within a few rounds.
+    lt_slope_peak: f64,
     lt_rounds: u32,
     lt_round_end_us: u64,
     lt_round_had_loss: bool,
@@ -292,6 +329,8 @@ impl PathModel {
             bw_last_sample: 0.0,
             bw_hi: None,
             bw_lo: None,
+            ack_slope: std::collections::VecDeque::new(),
+            slope_origin: None,
             base_rtt: WinFilter::new_min(BASE_RTT_WINDOW),
             recent_min: WinFilter::new_min(RECENT_MIN_WINDOW),
             base_floor_seen_us: 0,
@@ -314,11 +353,14 @@ impl PathModel {
             accel_until_us: 0,
             quiet_lost: 0,
             quiet_delivered: 0,
+            quiet_lost_ewma: Ewma::default(),
+            quiet_delivered_ewma: Ewma::default(),
             spurious_bytes: 0,
             retx_bytes: 0,
             alpha: Ewma::default(),
             lt_bw: None,
             lt_candidate: 0.0,
+            lt_slope_peak: 0.0,
             lt_rounds: 0,
             lt_round_end_us: 0,
             lt_round_had_loss: false,
@@ -356,7 +398,12 @@ impl PathModel {
         rtt: &RttState,
     ) {
         let now_us = rs.now.micros();
-        self.delivered_total += rs.delivered;
+        // `rs.delivered` is the segment-lifetime window (overlapping
+        // across ACKs — not additive). `acked_sacked` is the per-ACK
+        // additive confirmed count; every accounting denominator
+        // below must use it or the loss columns overstate delivered
+        // by the flight-span overlap and p_rand collapses low.
+        self.delivered_total += rs.acked_sacked;
         self.lost_total += rs.lost;
         self.cached_srtt_us = rtt
             .srtt
@@ -405,7 +452,24 @@ impl PathModel {
 
         // --- bandwidth ---
         if rs.delivered > 0 {
-            let rate = rs.delivery_rate_bps() as f64;
+            // ACK-compression bound: a sample cannot confirm bytes
+            // faster than the outstanding flight drains — cap the
+            // rate at a few flights per base RTT (Little's law with
+            // transient slack). Without this, post-stall compressed
+            // ACKs report the whole flight over a microsecond
+            // interval and poison bw_est/bw_max (and everything
+            // derived: BDP, envelope floor, pacing) with GB/s
+            // phantom rates.
+            let rate = {
+                let r = rs.delivery_rate_bps() as f64;
+                match self.base_rtt.value() {
+                    Some(base_us) if base_us > 0.0 => {
+                        let flight = rs.prior_in_flight.max(rs.delivered) as f64;
+                        r.min(4.0 * flight * 1e6 / base_us)
+                    }
+                    _ => r,
+                }
+            };
             self.bw_last_sample = rate;
             if rate > 0.0 {
                 if let Some(srtt) = rtt.srtt {
@@ -430,6 +494,27 @@ impl PathModel {
                 self.extra_acked
                     .add(EWMA_GAIN, (rs.acked_sacked as f64 - expected).max(0.0));
             }
+
+            // Maintain the ACK-slope window over ~2 srtt (bounded so a
+            // stalled connection cannot hold a stale span forever —
+            // 4s matches the bw_max filter's outer horizon). Stalls
+            // stay in the span on purpose: the slope is a bound, and
+            // a stall-diluted value is conservative, never inflated.
+            if self.slope_origin.is_none() {
+                self.slope_origin = Some((now_us, self.delivered_total));
+            }
+            self.ack_slope.push_back((now_us, self.delivered_total));
+            let horizon = self
+                .cached_srtt_us
+                .map(|s| (s as u64).saturating_mul(2))
+                .unwrap_or(4_000_000)
+                .clamp(200_000, 4_000_000);
+            while let Some(&(t, _)) = self.ack_slope.front() {
+                if now_us.saturating_sub(t) <= horizon {
+                    break;
+                }
+                self.ack_slope.pop_front();
+            }
         }
 
         // --- lt_bw round close (BBRv1): close any overdue round BEFORE
@@ -441,7 +526,20 @@ impl PathModel {
             .as_micros()
             .max(1) as u64;
         if self.lt_round_end_us > 0 && now_us >= self.lt_round_end_us {
-            let bw = self.bw_est.get().unwrap_or(0.0);
+            // lt tracking needs a compression-immune estimator: per-ACK
+            // delivery samples are bimodal on policers (trickle
+            // survivors vs catch-up bursts) so the EWMA never holds
+            // ±LT_BW_RATIO for the required rounds and the verdict can
+            // never pin. The slope window's confirmed-delivery rate is
+            // stable by construction — it is the honest bound.
+            let bw = self
+                .bw_slope()
+                .map(|v| v as f64)
+                .unwrap_or_else(|| self.bw_est.get().unwrap_or(0.0));
+            // The episode peak decays toward current delivery: bursts
+            // keep it high, a true slowdown re-anchors within a few
+            // rounds — the PIN uses this, not the stall-diluted slope.
+            self.lt_slope_peak = bw.max(self.lt_slope_peak * 0.75);
             if self.lt_round_had_loss
                 && self.lt_candidate > 0.0
                 && (bw - self.lt_candidate).abs() <= self.lt_candidate * LT_BW_RATIO
@@ -451,8 +549,20 @@ impl PathModel {
                 self.lt_rounds = 0;
                 self.lt_candidate = bw;
             }
-            if self.lt_rounds >= LT_INTVL_MIN_RTT && self.lt_candidate > 0.0 {
-                self.lt_bw = Some(self.lt_candidate as u64);
+            if self.lt_rounds >= LT_INTVL_MIN_RTT && self.lt_slope_peak > 0.0 {
+                // Pin value = the *injection* rate that produced the peak
+                // confirmed delivery: slope measures what got through,
+                // not what the policer forwards. Scaling by (1−loss)
+                // estimates the policed rate itself; the lift test then
+                // sits only ~25% above it, so a pinned flow can still
+                // observe the improvement that unlocks the ceiling.
+                // Uses the TOTAL loss ratio — on policers the drops are
+                // congestion-attributed (inflight > BDP) and never reach
+                // the quiet columns, so quiet_loss_rate under-reads.
+                let p = (self.lost_total as f64
+                    / (self.delivered_total + self.lost_total).max(1) as f64)
+                    .clamp(0.0, 0.8);
+                self.lt_bw = Some((self.lt_slope_peak / (1.0 - p)) as u64);
             }
             self.lt_round_had_loss = false;
             self.lt_round_end_us = now_us + rtt_us;
@@ -460,18 +570,32 @@ impl PathModel {
 
         // --- loss process ---
         let in_accel_window = now_us <= self.accel_until_us;
-        let qd_elevated = self.qdelay_us
-            > self.qdelay_elevated_thresh().as_micros() as f64;
+        // Congestion attribution: an occupied queue means we were
+        // overfilling the pipe. The in_flight-vs-BDP test is preferred —
+        // RTT-derived qdelay inflates for RTTs after recovery stalls
+        // (ACKs span the retransmit gap, which is not queueing), which
+        // would misclassify quiet-path random loss as congestion and
+        // starve the p_rand baseline. The qdelay test stays as the
+        // pre-BDP-estimate fallback.
+        let congested = self.loss_congested(in_flight);
         if in_accel_window {
-            self.accel_delivered += rs.delivered + rs.lost;
+            self.accel_delivered += rs.acked_sacked + rs.lost;
             self.accel_lost += rs.lost;
-        } else if !qd_elevated && rs.delivered_ce == 0 {
+        } else if !congested && rs.delivered_ce == 0 {
             // Quiet path sample: only these feed the random baseline.
-            self.quiet_delivered += rs.delivered;
+            // Acceleration-window samples are excluded — p_rand is the
+            // pre-speedup baseline the causation test compares against;
+            // counting probe losses would inflate it and hide the
+            // speedup's own effect.
+            self.quiet_delivered += rs.acked_sacked;
             self.quiet_lost += rs.lost;
+            self.quiet_lost_ewma
+                .add(EWMA_GAIN * EWMA_GAIN, rs.lost as f64);
+            self.quiet_delivered_ewma
+                .add(EWMA_GAIN * EWMA_GAIN, rs.acked_sacked as f64);
         }
         if rs.lost > 0 {
-            if qd_elevated {
+            if congested {
                 self.loss_qdelay_bytes += rs.lost;
                 self.loss_qdelay_events += 1;
             } else {
@@ -491,9 +615,16 @@ impl PathModel {
             self.lt_round_had_loss = true;
             if self.lt_round_end_us == 0 {
                 self.lt_round_end_us = now_us + rtt_us;
-                self.lt_candidate = self.bw_est.get().unwrap_or_else(|| {
-                    self.bw_max.value().unwrap_or(0.0)
-                });
+                let anchor = self
+                    .bw_slope()
+                    .map(|v| v as f64)
+                    .unwrap_or_else(|| {
+                        self.bw_est
+                            .get()
+                            .unwrap_or_else(|| self.bw_max.value().unwrap_or(0.0))
+                    });
+                self.lt_candidate = anchor;
+                self.lt_slope_peak = self.lt_slope_peak.max(anchor);
             }
         }
 
@@ -504,12 +635,19 @@ impl PathModel {
         }
 
         // A policer verdict is lifted when the path later delivers
-        // clearly more than the pinned rate (BBRv1 does the same).
+        // clearly more than the pinned rate (BBRv1 does the same) —
+        // judged on the same compression-immune slope that set it.
         if let Some(lt) = self.lt_bw
-            && self.bw_est.get().unwrap_or(0.0) > lt as f64 * (1.0 + LT_BW_RATIO * 2.0)
+            && self
+                .bw_slope()
+                .map(|v| v as f64)
+                .or_else(|| self.bw_est.get())
+                .unwrap_or(0.0)
+                > lt as f64 * (1.0 + LT_BW_RATIO * 2.0)
         {
             self.lt_bw = None;
             self.lt_rounds = 0;
+            self.lt_slope_peak = 0.0;
         }
     }
 
@@ -520,6 +658,50 @@ impl PathModel {
         self.accel_lost = 0;
         self.accel_delivered = 0;
         self.accel_until_us = now.micros() + horizon.as_micros() as u64;
+    }
+
+    /// RTO-declared loss (§2.2): retransmit-timer sweeps never appear
+    /// in `rs.lost` (that field is dupack-marked only), so on
+    /// tail-loss-dominated paths the loss columns would otherwise see
+    /// a small fraction of the real loss process and `p_rand` could
+    /// never converge. Feed them here, split by the same congestion
+    /// test; `delivered` denominators still come from rate samples.
+    /// It also counts toward the lt_bw policer verdict — on ACK-sparse
+    /// paths dupack rounds essentially never occur, so without this the
+    /// verdict can never see a "lossy round" and stays permanently
+    /// unpinned while the pacer overshoots a real policer.
+    pub fn note_rto_loss(&mut self, now: TransportInstant, lost: u64, congested: bool) {
+        if lost == 0 {
+            return;
+        }
+        self.lost_total += lost;
+        if congested {
+            self.loss_qdelay_bytes += lost;
+            self.loss_qdelay_events += 1;
+        } else {
+            self.loss_quiet_bytes += lost;
+            self.loss_quiet_events += 1;
+            self.quiet_lost += lost;
+        }
+        self.lt_round_had_loss = true;
+        if self.lt_round_end_us == 0 {
+            let rtt_us = self
+                .cached_srtt_us
+                .map(|s| s as u64)
+                .unwrap_or(200_000)
+                .clamp(2_000, 4_000_000);
+            self.lt_round_end_us = now.micros() + rtt_us;
+            let anchor = self
+                .bw_slope()
+                .map(|v| v as f64)
+                .unwrap_or_else(|| {
+                    self.bw_est
+                        .get()
+                        .unwrap_or_else(|| self.bw_max.value().unwrap_or(0.0))
+                });
+            self.lt_candidate = anchor;
+            self.lt_slope_peak = self.lt_slope_peak.max(anchor);
+        }
     }
 
     /// DSACK/Eifel judged `bytes` of retransmission spurious (§2.8).
@@ -545,9 +727,70 @@ impl PathModel {
         self.bw_est.get().map(|v| v as u64)
     }
 
+    /// `bw_slope` — confirmed-delivery rate over the slope window,
+    /// bytes/s. Immune to per-sample ACK-compression inflation: the
+    /// window spans stalls, and confirmed-delivered cannot advance
+    /// faster than the bottleneck delivers. `None` until the window
+    /// covers a meaningful span — the absolute floor is small (2 ms)
+    /// because on short-RTT paths the damage from an unbounded
+    /// estimate is done within a few ms.
+    pub fn bw_slope(&self) -> Option<u64> {
+        self.bw_slope_windowed().or_else(|| self.bw_slope_lifetime())
+    }
+
+    /// Windowed confirmed-delivered slope only — `None` while the
+    /// window is too young or has been starved by a stall. The span
+    /// includes stall time on purpose: the slope is a *bound*, and a
+    /// stall-diluted value is conservative (never inflated).
+    pub fn bw_slope_windowed(&self) -> Option<u64> {
+        self.bw_slope_min_span(
+            self.cached_srtt_us
+                .map(|s| (s as u64 / 2).clamp(2_000, 50_000))
+                .unwrap_or(50_000),
+        )
+    }
+
+    /// Slope over a span of at least one srtt — "proven rate" grade
+    /// evidence: a full RTT of contiguous delivery, long enough that
+    /// a single catch-up burst cannot pass for capacity.
+    pub fn bw_slope_proven(&self) -> Option<u64> {
+        self.bw_slope_min_span(self.cached_srtt_us? as u64)
+    }
+
+    fn bw_slope_min_span(&self, min_span: u64) -> Option<u64> {
+        let (t0, c0) = *self.ack_slope.front()?;
+        let (t1, c1) = *self.ack_slope.back()?;
+        let span = t1.saturating_sub(t0);
+        if span < min_span {
+            return None;
+        }
+        Some(c1.saturating_sub(c0).saturating_mul(1_000_000) / span)
+    }
+
+    /// Lifetime confirmed-delivered slope — `delivered / elapsed`
+    /// since the first delivered sample. Honest (compression cannot
+    /// inflate it) but it lags ramps and dilutes during stalls, so it
+    /// is strictly a last-resort bound.
+    pub fn bw_slope_lifetime(&self) -> Option<u64> {
+        let (o_t, o_c) = self.slope_origin?;
+        let (t1, c1) = *self.ack_slope.back()?;
+        let lspan = t1.saturating_sub(o_t);
+        if lspan < 2_000 {
+            return None;
+        }
+        Some(c1.saturating_sub(o_c).saturating_mul(1_000_000) / lspan)
+    }
+
     /// Most recent delivery-rate sample (B/s) as fed to the filters.
     pub fn bw_last_sample(&self) -> u64 {
         self.bw_last_sample as u64
+    }
+
+    /// Debug: raw ACK-slope deque contents `(t_us, delivered_total)`
+    /// for harnesses investigating slope inflation.
+    #[doc(hidden)]
+    pub fn ack_slope_dump(&self) -> Vec<(u64, u64)> {
+        self.ack_slope.iter().copied().collect()
     }
 
     /// `bw_sigma` — mean-deviation EWMA scaled to a σ estimate (√(π/2)
@@ -619,6 +862,21 @@ impl PathModel {
         self.extra_acked.get().unwrap_or(0.0) as u64
     }
 
+    /// Was a loss taken now congestion-caused? Preferred test: our own
+    /// queue occupancy — `in_flight` beyond 1.25× the BDP estimate
+    /// means we were overfilling the pipe (margin covers BDP estimate
+    /// noise; below it, drop-tail overflow is not our doing). Falls
+    /// back to the RTT-derived qdelay threshold before a BDP estimate
+    /// exists.
+    pub fn loss_congested(&self, in_flight: u64) -> bool {
+        match self.bdp_est() {
+            Some(bdp) if bdp > 0 => in_flight > bdp + bdp / 4,
+            _ => {
+                self.qdelay_us > self.qdelay_elevated_thresh().as_micros() as f64
+            }
+        }
+    }
+
     /// Two-column loss split (Veno-style): bytes lost while qdelay was
     /// elevated vs quiet.
     pub fn loss_columns(&self) -> (u64, u64) {
@@ -645,6 +903,21 @@ impl PathModel {
         let accel_rate = self.accel_lost as f64 / denom as f64;
         let base = self.p_rand().unwrap_or(0.0).max(1e-6);
         Some(accel_rate / base)
+    }
+
+    /// Recent quiet-path loss byte-ratio (~64-ACK window). Same
+    /// measurement basis as `p_rand` — the excess-vs-baseline test
+    /// uses this so burst marking granularity can't bias the compare.
+    pub fn quiet_loss_rate(&self) -> Option<f64> {
+        let l = self.quiet_lost_ewma.get()?;
+        let d = self.quiet_delivered_ewma.get()?;
+        Some((l / (l + d).max(1.0)).clamp(0.0, 1.0))
+    }
+
+    /// `in_flight` beyond the BDP estimate — the occupancy test shared
+    /// by congestion attribution and plateau evidence.
+    pub fn over_bdp(&self, in_flight: u64) -> bool {
+        self.bdp_est().map(|b| in_flight > b).unwrap_or(false)
     }
 
     /// `p_rand` — random-loss baseline ∈ [0,1]: loss rate on samples

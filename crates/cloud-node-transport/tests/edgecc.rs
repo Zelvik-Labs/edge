@@ -77,6 +77,63 @@ fn edgecc_survives_random_loss_paths() {
     }
 }
 
+/// §7.1 extreme WAN cells: long-RTT + heavy independent loss. The
+/// controller must keep making progress (no RTO livelock) and finish —
+/// 20-30% random loss on a 200-300ms path is the harsh corner of the
+/// acceptance grid that loss-reactive controllers historically
+/// collapse on.
+#[test]
+fn edgecc_survives_high_rtt_extreme_loss() {
+    for &(rtt_ms, loss) in &[(200u64, 0.10f64), (250, 0.20), (300, 0.30)] {
+        let mut cfg = base(Duration::from_millis(rtt_ms), 12_500_000);
+        cfg.buffer_bytes = bdp(&cfg);
+        cfg.random_loss = loss;
+        cfg.total_bytes = 1024 * 1024;
+        cfg.duration = Duration::from_secs(300);
+        let (res, cc) = edgecc_run(&cfg);
+        assert!(
+            res.completed,
+            "edgecc failed rtt={rtt_ms}ms loss={loss}: delivered={}/{} drops={} rtos={} mode={}",
+            res.delivered_bytes,
+            cfg.total_bytes,
+            res.drops,
+            res.rto_events,
+            cc.snapshot().mode,
+        );
+    }
+}
+
+/// Same harsh cell for every controller: EdgeCC must finish strictly
+/// faster than the loss-reactive references — random loss is not
+/// congestion evidence, and a controller that treats it as such pays
+/// for every phantom backoff on a 250ms path.
+#[test]
+fn edgecc_outperforms_loss_reactive_refs_under_random_loss() {
+    use cloud_node_transport::cc::reference::{CubicRef, NewRenoRef};
+    let mut cfg = base(Duration::from_millis(250), 12_500_000);
+    cfg.buffer_bytes = bdp(&cfg);
+    cfg.random_loss = 0.20;
+    cfg.total_bytes = 1024 * 1024;
+    cfg.duration = Duration::from_secs(300);
+
+    let (edge_res, _) = edgecc_run(&cfg);
+    let mut cubic = CubicRef::new(cfg.mss);
+    let cubic_res = run(&mut cubic, &cfg);
+    let mut reno = NewRenoRef::new(cfg.mss);
+    let reno_res = run(&mut reno, &cfg);
+
+    assert!(edge_res.completed, "edgecc did not finish the harsh cell");
+    // FCT is wall-clock-independent sim time — a strict-less comparison
+    // on identical seeds/queues is a real ordering, not a flake source.
+    assert!(
+        edge_res.fct_us < cubic_res.fct_us.max(reno_res.fct_us),
+        "edgecc fct={}us not below refs cubic={}us reno={}us",
+        edge_res.fct_us,
+        cubic_res.fct_us,
+        reno_res.fct_us,
+    );
+}
+
 #[test]
 fn edgecc_prior_seeded_start() {
     let mut cfg = base(Duration::from_millis(50), 50_000_000);
@@ -96,18 +153,21 @@ fn edgecc_prior_seeded_start() {
 }
 
 #[test]
-fn edgecc_envelope_bounds_on_sustained_loss() {
-    // Deep-queue loss + qdelay rise should set inflight_hi — the
-    // snapshot exposes it; a controller with no envelope would show
-    // None forever.
+fn edgecc_survives_shallow_buffer_without_collapse() {
+    // Shallow buffer → genuine congestion loss. The BDP-assignment law
+    // must not ratchet the window to the floor: the run completes and
+    // the terminal window stays a real work point, not the liveness
+    // minimum. (The queue-delay guardrail, not a sticky ceiling, owns
+    // the congestion response now.)
     let mut cfg = base(Duration::from_millis(50), 50_000_000);
     cfg.buffer_bytes = bdp(&cfg) / 4; // shallow buffer → congestion loss
     let (res, cc) = edgecc_run(&cfg);
     assert!(res.completed, "shallow-buffer run must still complete");
     let snap = cc.snapshot();
     assert!(
-        snap.envelope_bytes.is_some() || res.loss_events == 0,
-        "congestion loss never set the envelope: {:?}",
+        snap.cwnd_bytes > 4 * MSS,
+        "congestion loss collapsed the window to the floor: cwnd={} mode={}",
+        snap.cwnd_bytes,
         snap.mode
     );
 }
@@ -199,21 +259,27 @@ fn loss_blind_ref_completes_but_behaves_differently() {
     let mut cc = LossBlindRef::new(cfg.mss, Tier::T1, None, true);
     let res = run(&mut cc, &cfg);
     assert!(res.completed, "loss-blind control failed");
-    // Deep buffer → no queue-delay evidence, so belief on this path is
-    // dominated by loss. The blind variant must show strictly lower
-    // belief than the sighted control on the identical run.
+    // Same path for both variants; loss evidence is what separates
+    // them — assert on the evidence weights directly (aggregate
+    // belief saturates on qdelay with a deep buffer and cannot
+    // discriminate).
     cfg.random_loss = 0.03;
     cfg.buffer_bytes = bdp(&cfg) * 4;
-    let mut blind = LossBlindRef::new(cfg.mss, Tier::T1, None, true);
+    let mut blind = EdgeCc::new(cfg.mss, Tier::T1, None, true);
+    blind.loss_blind = true;
     let mut sighted = EdgeCc::new(cfg.mss, Tier::T1, None, true);
     let rb = run(&mut blind, &cfg);
     let rs = run(&mut sighted, &cfg);
     assert!(rb.completed && rs.completed);
-    let bb = blind.snapshot().belief_milli.unwrap_or(0);
-    let sb = sighted.snapshot().belief_milli.unwrap_or(0);
+    // Aggregate belief can saturate on qdelay evidence alone (a deep
+    // buffer lets the queue stand), so assert on the loss-evidence
+    // channels directly: the blind variant must record none while the
+    // sighted control must record some on a genuinely lossy path.
+    let blind_loss_w = blind.infer.w_loss_qd_total + blind.infer.w_quiet_total;
+    let sighted_loss_w = sighted.infer.w_loss_qd_total + sighted.infer.w_quiet_total;
     assert!(
-        bb < sb,
-        "loss-blind belief {bb} not below sighted {sb}"
+        blind_loss_w == 0.0 && sighted_loss_w > 0.0,
+        "loss weights blind={blind_loss_w} sighted={sighted_loss_w}"
     );
 }
 
@@ -226,12 +292,10 @@ fn edgecc_mode_audit_trail() {
     assert!(res.completed);
     let snap = cc.snapshot();
     // After completion the controller must have left startup and
-    // settled into a steady-state mode.
+    // settled into the cruise work point (recovery is a transient
+    // display state, not a resting mode).
     assert!(
-        matches!(
-            snap.mode,
-            "delay_target" | "plateau_probe" | "probe" | "utility_tune" | "drain" | "startup" | "recovery"
-        ),
+        matches!(snap.mode, "cruise" | "startup" | "paced_start" | "recovery"),
         "unexpected terminal mode {}",
         snap.mode
     );

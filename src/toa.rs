@@ -678,8 +678,11 @@ pub fn toa_syn_option_bytes(client: SocketAddr) -> Vec<u8> {
 /// owned by the AF_XDP dial registry and released on session reap.
 pub enum UpstreamL4Stream {
     Kernel(TcpStream),
+    // Boxed: the smoltcp-edge stream carries its queue-byte credential
+    // and channel ends — several hundred bytes versus a 16-byte kernel
+    // fd. Constructed once per upstream dial, not per packet.
     #[cfg(target_os = "linux")]
-    AfXdp(crate::xdp::af_xdp::AfXdpTcpStream),
+    AfXdp(Box<crate::xdp::af_xdp::AfXdpTcpStream>),
 }
 
 impl UpstreamL4Stream {
@@ -736,7 +739,7 @@ impl UpstreamL4Stream {
             }
             #[cfg(target_os = "linux")]
             Self::AfXdp(stream) => {
-                crate::xdp::af_xdp::virtual_l4_stream(stream, peer_addr)
+                crate::xdp::af_xdp::virtual_l4_stream(*stream, peer_addr)
             }
         }
     }
@@ -826,12 +829,24 @@ async fn connect_upstream_afxdp(
     toa_config: Option<TOAConfig>,
     connect_timeout: Duration,
 ) -> Result<UpstreamL4Stream> {
-    let backend = tokio::net::lookup_host(backend_addr)
+    let backends: Vec<SocketAddr> = tokio::net::lookup_host(backend_addr)
         .await
         .with_context(|| format!("failed to resolve AF_XDP upstream {}", backend_addr))?
-        .next()
-        .ok_or_else(|| anyhow!("no socket address resolved for AF_XDP upstream {backend_addr}"))?;
-    let toa_enabled = toa_config.map(|cfg| cfg.is_on).unwrap_or(false);
+        .collect();
+    if backends.is_empty() {
+        anyhow::bail!("no socket address resolved for AF_XDP upstream {backend_addr}");
+    }
+    // Loopback upstreams can never ride AF_XDP — `lo` carries no XSK and
+    // `ip route get` for a loopback target resolves to dev `lo`, which
+    // has no reactor queue. A co-located upstream service must still be
+    // reachable, so an all-loopback resolution takes the kernel path
+    // (explicitly, not as a silent fallback for AF_XDP failures).
+    if backends.iter().all(|addr| addr.ip().is_loopback()) {
+        return connect_with_toa(backend_addr, remote_addr, toa_config, connect_timeout)
+            .await
+            .map(UpstreamL4Stream::Kernel);
+    }
+    let toa_enabled = toa_config.as_ref().map(|cfg| cfg.is_on).unwrap_or(false);
     // TOA on the AF_XDP path is a SYN option we write ourselves — the
     // cloud_toa_sender kernel module never sees these packets (no
     // LOCAL_OUT traversal), and its port allocator is not involved.
@@ -840,14 +855,50 @@ async fn connect_upstream_afxdp(
     } else {
         Vec::new()
     };
-    let stream = timeout(
-        connect_timeout,
-        crate::xdp::af_xdp_dial_tcp(backend, syn_extra_options),
-    )
-    .await
-    .with_context(|| format!("timed out connecting AF_XDP upstream {}", backend_addr))?
-    .with_context(|| format!("failed to connect AF_XDP upstream {}", backend_addr))?;
-    Ok(UpstreamL4Stream::AfXdp(stream))
+    // Mirror kernel TcpStream::connect semantics: try every resolved
+    // address, not just the first. A hostname can resolve to an
+    // unreachable family or a stale first answer that the kernel path
+    // would skip automatically; every attempt's failure is reported.
+    let dial_all = async {
+        let mut attempts = String::new();
+        for backend in &backends {
+            // Mixed resolutions (e.g. `localhost` → 127.0.0.1 + public):
+            // loopback members take the kernel path — AF_XDP has no
+            // reactor on `lo`, so the reactor dial would fail closed.
+            if backend.ip().is_loopback() {
+                match connect_with_toa(
+                    &backend.to_string(),
+                    remote_addr,
+                    toa_config.clone(),
+                    connect_timeout,
+                )
+                .await
+                {
+                    Ok(stream) => return Ok(UpstreamL4Stream::Kernel(stream)),
+                    Err(err) => {
+                        use std::fmt::Write as _;
+                        let _ = writeln!(attempts, "  {backend} (kernel loopback): {err:#}");
+                    }
+                }
+                continue;
+            }
+            match crate::xdp::af_xdp_dial_tcp(*backend, syn_extra_options.clone()).await {
+                Ok(stream) => return Ok(UpstreamL4Stream::AfXdp(Box::new(stream))),
+                Err(err) => {
+                    use std::fmt::Write as _;
+                    let _ = writeln!(attempts, "  {backend}: {err:#}");
+                }
+            }
+        }
+        Err(anyhow!(
+            "all {} resolved address(es) failed:\n{attempts}",
+            backends.len()
+        ))
+    };
+    timeout(connect_timeout, dial_all)
+        .await
+        .with_context(|| format!("timed out connecting AF_XDP upstream {}", backend_addr))?
+        .with_context(|| format!("failed to connect AF_XDP upstream {}", backend_addr))
 }
 
 #[cfg(test)]
@@ -879,6 +930,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn connect_upstream_kernel_mode_returns_kernel_stream() {
         let _guard = crate::runtime_mode::runtime_config_test_guard();
         crate::runtime_mode::RuntimeConfig::set_current(
@@ -906,6 +958,7 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn connect_upstream_afxdp_mode_without_registry_is_explicit_error() {
         let _guard = crate::runtime_mode::runtime_config_test_guard();
         let mut config = crate::runtime_mode::RuntimeConfig::default();
@@ -915,8 +968,11 @@ mod tests {
         });
         crate::runtime_mode::RuntimeConfig::set_current(config);
         let client: SocketAddr = "198.51.100.9:4444".parse().unwrap();
+        // Non-loopback target: loopback upstreams legitimately take the
+        // kernel path (AF_XDP has no reactor on `lo`) — only a routable
+        // destination exercises the missing-registry fail-closed check.
         let err = match connect_upstream(
-            "127.0.0.1:1",
+            "203.0.113.7:443",
             client,
             None,
             Duration::from_secs(1),

@@ -1,6 +1,7 @@
 use super::*;
 use crate::runtime_mode::{
-    XdpAttachMode, XdpInterfaceConfig, XdpRuntimeMode, XdpStateTables,
+    XdpAttachMode, XdpInterfaceConfig, XdpRuntimeMode, XdpStateTables, XdpXskMode,
+    xsk_driver_native_floor,
 };
 use aya::maps::lpm_trie::Key as LpmKey;
 use aya::maps::{Array, HashMap as AyaHashMap, LpmTrie, PerCpuArray, XskMap};
@@ -27,6 +28,23 @@ use xsk_rs::{CompQueue, FillQueue, FrameDesc, RxQueue, Socket, TxQueue, Umem};
 const AF_XDP_FRAME_COUNT: u32 = 4096;
 const AF_XDP_RING_SIZE: u32 = 2048;
 const AF_XDP_RX_BATCH: usize = 64;
+/// Bound on TX descriptors held by the kernel (produced to the TX ring but
+/// not yet completed). The NIC's own transmit queue already provides the
+/// pipeline — descriptors beyond it only sit in the xsk ring adding delay
+/// (observed: virtio_net virtqueue depth is 256 while this ring is 2048,
+/// so a saturated ring queued ~1.6s of bufferbloat, pushed RTT over RTO,
+/// and collapsed peer congestion windows). Spill-over goes to the bridge's
+/// bounded defer queue where CoDel applies real AQM backpressure instead
+/// of unobserved queueing.
+///
+/// Sized for the measured completion cadence: on virtio_net copy mode the
+/// TX completion path (skb destruct → NAPI reclaim) runs ~16ms behind, so
+/// 256 in-flight capped egress near ~200Mbps and the defer queue shed TCP
+/// frames under ordinary speedtest load — every shed frame is a TCP loss.
+/// 768 buys ~3x headroom (~45ms worst-case queueing at that drain rate,
+/// still far below RTO) while staying well under the 2048 ring and the
+/// UMEM frame pool.
+const AF_XDP_TX_INFLIGHT_CAP: usize = 768;
 const AF_XDP_MAX_SOCKETS: usize = 4096;
 const AF_XDP_SOCKET_CREATE_ATTEMPTS: usize = 80;
 const AF_XDP_SOCKET_CREATE_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(250);
@@ -271,6 +289,10 @@ pub struct AttachedProgram {
     /// callers record it so status reports and later reloads see the real
     /// map sizes rather than the unsized defaults.
     pub effective_state_tables: Option<XdpStateTables>,
+    /// Shared-account credential for this generation's new pinned map
+    /// bytes — committed at attach, released on teardown. `None` only
+    /// when the account was bypassed (never in normal attach).
+    pub resource_permit: Option<crate::memory_governor::StaticSharedPermit>,
 }
 
 #[derive(Debug)]
@@ -284,6 +306,19 @@ pub struct AfXdpRuntimeHandle {
     /// dataplane-compatible — the sockets, UMEMs and worker threads are
     /// never dropped across such a reload.
     pub(crate) lease: Option<std::sync::Arc<AfXdpDataplaneLease>>,
+    /// Committed shared-account credential covering the UMEM frames and
+    /// ring descriptors — released when the runtime handle drops.
+    umem_permit: Option<crate::memory_governor::StaticSharedPermit>,
+}
+
+impl AfXdpRuntimeHandle {
+    /// Bytes this runtime's UMEM + rings hold against the shared account.
+    pub(crate) fn umem_committed_bytes(&self) -> u64 {
+        self.umem_permit
+            .as_ref()
+            .map(|permit| permit.bytes())
+            .unwrap_or(0)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -354,6 +389,25 @@ pub(crate) struct AfXdpQueueHandle {
     rx_batch: Vec<FrameDesc>,
     tx_completion_batch: Vec<FrameDesc>,
     tx_scratch: Vec<u8>,
+    /// TX descriptors produced to the ring but not yet completed —
+    /// the in-flight depth capped by `AF_XDP_TX_INFLIGHT_CAP`.
+    tx_inflight: usize,
+    /// A TX frame was produced this round but the kernel has not been
+    /// kicked yet — `flush_tx_kick` sends one `sendto` per round.
+    tx_kick_pending: bool,
+    /// TX wakeup syscalls that returned a real error (benign transient
+    /// errnos are filtered inside the wakeup itself).
+    tx_kick_errors: u64,
+    /// Cumulative TX completions drained from the completion queue —
+    /// distinguishes "kernel never returns completions" from
+    /// "completions arrive but lag behind produces" in wedge diagnosis.
+    tx_completed_total: u64,
+    /// Debug wire dump — `CLOUD_NODE_XDP_PCAP=<path>` writes every
+    /// RX/TX frame to `<path>.q<N>` in pcap (DLT_EN10MB) so AF_XDP
+    /// traffic can be inspected even though dev_direct_xmit and XDP
+    /// redirect are both invisible to packet taps (tcpdump sees
+    /// nothing on this dataplane).
+    pcap: Option<std::io::BufWriter<std::fs::File>>,
 }
 
 impl AfXdpQueueHandle {
@@ -361,6 +415,13 @@ impl AfXdpQueueHandle {
     where
         F: FnMut(&str, u32, Vec<u8>),
     {
+        // Drain TX completions unconditionally — reclaiming only inside the
+        // send path leaves the last sent frames' completions parked in the
+        // CQ once traffic stops, which keeps the xsk fd permanently readable
+        // and turns the reactor's idle wait into a hot loop (observed live:
+        // afxdp worker pinned at ~20% CPU on an idle queue, POLLIN re-arming
+        // every round).
+        self.reclaim_tx_completions();
         let mut stats = AfXdpPollStats {
             refilled: self.replenish_fill()?,
             ..AfXdpPollStats::default()
@@ -383,6 +444,9 @@ impl AfXdpQueueHandle {
                 stats.parsed += 1;
             } else {
                 stats.parse_errors += 1;
+            }
+            if let Some(w) = self.pcap.as_mut() {
+                Self::pcap_write(w, frame);
             }
             on_packet(&self.interface, self.queue, frame.to_vec());
         }
@@ -444,6 +508,8 @@ impl AfXdpQueueHandle {
         let completed = unsafe { comp.consume(&mut self.tx_completion_batch) };
         self.free_frames
             .extend_from_slice(&self.tx_completion_batch[..completed]);
+        self.tx_inflight = self.tx_inflight.saturating_sub(completed);
+        self.tx_completed_total = self.tx_completed_total.saturating_add(completed as u64);
         completed
     }
 
@@ -456,6 +522,9 @@ impl AfXdpQueueHandle {
         ecn: Option<u8>,
     ) -> anyhow::Result<bool> {
         self.reclaim_tx_completions();
+        if self.tx_inflight >= AF_XDP_TX_INFLIGHT_CAP {
+            return Ok(false);
+        }
         let Some(mut desc) = self.free_frames.pop() else {
             return Ok(false);
         };
@@ -481,10 +550,48 @@ impl AfXdpQueueHandle {
 
     pub(super) fn send_raw_frame(&mut self, frame: &[u8]) -> anyhow::Result<bool> {
         self.reclaim_tx_completions();
+        if self.tx_inflight >= AF_XDP_TX_INFLIGHT_CAP {
+            return Ok(false);
+        }
         let Some(desc) = self.free_frames.pop() else {
             return Ok(false);
         };
         self.submit_raw_frame(desc, frame)
+    }
+
+    /// TX descriptors currently held by the kernel (produced minus
+    /// completed) — observability for the in-flight cap.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn tx_inflight(&self) -> usize {
+        self.tx_inflight
+    }
+
+    /// Free UMEM frames available to the TX path — distinguishes
+    /// allocator starvation from ring backpressure in diagnostics.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn free_frames_len(&self) -> usize {
+        self.free_frames.len()
+    }
+
+    /// Kernel-side XSK statistics (XDP_STATISTICS getsockopt) —
+    /// `tx_ring_empty_descs` counts the times the kernel drained the TX
+    /// ring in `xsk_generic_xmit`; `tx_invalid_descs` counts descriptors
+    /// the kernel rejected. During a TX wedge these tell whether the
+    /// kernel consumed the produced descriptors (completions then lost
+    /// on the CQ path) or never entered the consume loop.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn xdp_stats(&self) -> Option<(u64, u64, u64)> {
+        self.tx
+            .fd()
+            .xdp_statistics()
+            .ok()
+            .map(|s| {
+                (
+                    s.tx_ring_empty_descs(),
+                    s.tx_invalid_descs(),
+                    self.tx_completed_total,
+                )
+            })
     }
 
     fn submit_raw_frame(&mut self, mut desc: FrameDesc, frame: &[u8]) -> anyhow::Result<bool> {
@@ -503,16 +610,80 @@ impl AfXdpQueueHandle {
         }
         // SAFETY: `desc` describes a frame from this queue's UMEM. After successful
         // submission it is not reused until returned by the completion queue.
-        match unsafe { self.tx.produce_one_and_wakeup(&desc) } {
-            Ok(1) => Ok(true),
-            Ok(_) => {
+        match unsafe { self.tx.produce_one(&desc) } {
+            1 => {
+                self.tx_inflight += 1;
+                if let Some(w) = self.pcap.as_mut() {
+                    Self::pcap_write(w, frame);
+                }
+                // The driver kick is deferred to `flush_tx_kick` (one
+                // sendto per loop round): the producer flag does not
+                // reliably reflect a stalled TX ring on virtio_net, so
+                // gating the kick on `needs_wakeup` strands frames until
+                // an unrelated NAPI run flushes them (observed: ~1-3s
+                // reply bursts on kernel 6.12/virtio_net).
+                self.tx_kick_pending = true;
+                Ok(true)
+            }
+            _ => {
                 self.free_frames.push(desc);
                 Ok(false)
             }
-            Err(err) => {
-                self.free_frames.push(desc);
-                Err(err.into())
-            }
+        }
+    }
+
+    /// Append one frame to the debug pcap (see the `pcap` field).
+    fn pcap_write(w: &mut std::io::BufWriter<std::fs::File>, frame: &[u8]) {
+        use std::io::Write;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
+        let len = frame.len().min(u16::MAX as usize) as u32;
+        let _ = w.write_all(&(now.as_secs() as u32).to_le_bytes());
+        let _ = w.write_all(&(now.subsec_micros()).to_le_bytes());
+        let _ = w.write_all(&len.to_le_bytes());
+        let _ = w.write_all(&len.to_le_bytes());
+        let _ = w.write_all(&frame[..len as usize]);
+        let _ = w.flush();
+    }
+
+    /// Open `<path>.q<queue>` with the pcap global header. Returns None
+    /// when the env var is unset or the file cannot be created — dump is
+    /// strictly optional diagnostics.
+    fn pcap_open(queue: u32) -> Option<std::io::BufWriter<std::fs::File>> {
+        use std::io::Write;
+        let base = std::env::var("CLOUD_NODE_XDP_PCAP").ok()?;
+        let mut w = std::io::BufWriter::new(
+            std::fs::File::create(format!("{base}.q{queue}")).ok()?,
+        );
+        // magic(LE) ver 2.4, snaplen 65535, linktype EN10MB
+        let hdr: [u8; 24] = [
+            0xd4, 0xc3, 0xb2, 0xa1, 2, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 1, 0,
+            0, 0,
+        ];
+        w.write_all(&hdr).ok()?;
+        Some(w)
+    }
+
+    /// Kick the kernel TX path whenever it may hold produced descriptors:
+    /// a successful produce set `tx_kick_pending`, or earlier descriptors
+    /// are still in flight. The socket was bound with XDP_USE_NEED_WAKEUP,
+    /// so the kick is a `sendto(MSG_DONTWAIT)` that schedules TX
+    /// processing. Gating the kick on a produce this round is a deadlock
+    /// in generic (XDP_SKB) mode — the kernel drains the TX ring only
+    /// inside sendto/poll syscalls there, so a round whose sends are all
+    /// refused by the in-flight cap or a full ring never kicks, the ring
+    /// never drains, and every later send fails the same way (observed on
+    /// Debian 12 kernel 6.1 + virtio_net: TX wedged permanently with zero
+    /// sendto syscalls while egress backpressure shed all traffic).
+    pub(crate) fn flush_tx_kick(&mut self) {
+        if !self.tx_kick_pending && self.tx_inflight == 0 {
+            return;
+        }
+        self.tx_kick_pending = false;
+        if let Err(err) = self.tx.wakeup() {
+            self.tx_kick_errors = self.tx_kick_errors.saturating_add(1);
+            tracing::warn!("AF_XDP TX wakeup failed: {err}");
         }
     }
 }
@@ -567,15 +738,23 @@ pub fn prepare_af_xdp_sockets(config: &XdpConfig) -> anyhow::Result<AfXdpRuntime
                 .ok_or_else(|| anyhow::anyhow!("AF_XDP total byte count overflow"))?;
         }
     }
-    let budget = crate::memory_governor::MEMORY_GOVERNOR
-        .snapshot(crate::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads())
-        .af_xdp_budget_bytes;
-    anyhow::ensure!(
-        projected_bytes <= budget,
-        "AF_XDP projected memory {} exceeds node budget {}",
-        projected_bytes,
-        budget
-    );
+    // UMEM frames + rings are pinned userspace memory for the dataplane's
+    // whole lifetime — a committed shared-account grant, taken on a fresh
+    // observation (not the possibly-stale published snapshot).
+    let mut umem_permit = crate::memory_governor::MEMORY_GOVERNOR
+        .try_grant_shared_fresh(
+            crate::memory_governor::SharedGrantPurpose::AfXdpUmem,
+            projected_bytes,
+        )
+        .ok_or_else(|| {
+            let view = crate::memory_governor::MEMORY_GOVERNOR.account_view();
+            anyhow::anyhow!(
+                "AF_XDP projected memory {projected_bytes}B exceeds shared account capacity \
+                 (grantable {}B)",
+                view.grantable_bytes
+            )
+        })?;
+    umem_permit.commit();
     let mut queues = Vec::with_capacity(socket_count);
     let mut statuses = Vec::with_capacity(socket_count);
     for interface in config
@@ -583,6 +762,23 @@ pub fn prepare_af_xdp_sockets(config: &XdpConfig) -> anyhow::Result<AfXdpRuntime
         .iter()
         .filter(|interface| interface.mode == XdpRuntimeMode::Proxy)
     {
+        // Fail closed before any socket exists: without driver-native XSK
+        // the kernel silently lands the bind on the emulated generic path —
+        // the dataplane that saturated under production SNI load on Debian
+        // 6.1 + virtio_net. The refusal is recorded per queue so `xdp
+        // status` shows exactly why this interface carries no sockets.
+        if let Err(gate_err) = af_xdp_driver_gate(interface) {
+            for queue in &interface.queues {
+                statuses.push(XdpQueueStatus {
+                    interface: interface.name.clone(),
+                    queue: *queue,
+                    configured: true,
+                    detail: format!("AF_XDP socket setup refused: {gate_err}"),
+                    ..XdpQueueStatus::default()
+                });
+            }
+            continue;
+        }
         for queue in &interface.queues {
             match create_af_xdp_queue_with_retry(interface, *queue) {
                 Ok((handle, status)) => {
@@ -606,6 +802,7 @@ pub fn prepare_af_xdp_sockets(config: &XdpConfig) -> anyhow::Result<AfXdpRuntime
         statuses,
         last_status_refresh_at: None,
         lease: None,
+        umem_permit: Some(umem_permit),
     })
 }
 
@@ -682,6 +879,83 @@ pub fn register_af_xdp_sockets(
     Ok(())
 }
 
+/// AF_XDP bind attempts for a configured `xskMode`. `auto` probes
+/// zero-copy first and falls back to the driver's copy path — both are
+/// driver-managed XSK, so a host whose hypervisor blocks zero-copy
+/// (virtio_net without VIRTIO_F_ACCESS_PLATFORM, or any driver below its
+/// zc floor) still gets a working dataplane. `copy` pins the copy path
+/// explicitly (test environments without driver XSK — veth, netns —
+/// bypass `af_xdp_driver_gate` only via this mode). The landed mode is
+/// recorded in queue status.
+pub(crate) fn xsk_bind_attempts(mode: XdpXskMode) -> &'static [(&'static str, BindFlags)] {
+    const ZERO_COPY_FLAGS: BindFlags = BindFlags::from_bits_retain(
+        BindFlags::XDP_USE_NEED_WAKEUP.bits() | BindFlags::XDP_ZEROCOPY.bits(),
+    );
+    const COPY_FLAGS: BindFlags = BindFlags::from_bits_retain(
+        BindFlags::XDP_USE_NEED_WAKEUP.bits() | BindFlags::XDP_COPY.bits(),
+    );
+    const ZERO_COPY: &[(&str, BindFlags)] = &[("zero-copy", ZERO_COPY_FLAGS)];
+    const COPY: &[(&str, BindFlags)] = &[("copy", COPY_FLAGS)];
+    const AUTO: &[(&str, BindFlags)] =
+        &[("zero-copy", ZERO_COPY_FLAGS), ("copy", COPY_FLAGS)];
+    match mode {
+        XdpXskMode::Auto => AUTO,
+        XdpXskMode::Copy => COPY,
+        XdpXskMode::ZeroCopy => ZERO_COPY,
+    }
+}
+
+/// Driver/kernel support gate for the AF_XDP dataplane. Binds are only
+/// meaningful when the NIC driver implements native XSK (xsk pool ops and
+/// wakeup): below the per-driver floor a bind could only land on the
+/// kernel-emulated generic path, whose skb TX path is not a supported
+/// dataplane. `xskMode: copy` is the explicit escape hatch for test
+/// environments whose virtual NICs have no driver XSK (veth, netns
+/// smoke) — it bypasses this gate.
+///
+/// Returns Err with the refusal reason; the caller surfaces it per queue.
+fn af_xdp_driver_gate(interface: &XdpInterfaceConfig) -> anyhow::Result<()> {
+    if interface.xsk_mode == XdpXskMode::Copy {
+        return Ok(());
+    }
+    let driver = std::fs::read_link(format!("/sys/class/net/{}/device/driver", interface.name))
+        .ok()
+        .and_then(|target| {
+            target
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        });
+    let kver = std::fs::read_to_string("/proc/sys/kernel/osrelease")
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let mut parts = kver.split('.');
+    let major: u32 = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
+    let minor: u32 = parts
+        .next()
+        .and_then(|v| v.split(['-', '+']).next().and_then(|v| v.parse().ok()))
+        .unwrap_or(0);
+    let Some(driver) = driver else {
+        anyhow::bail!(
+            "interface {} has no NIC driver (virtual interface?); AF_XDP needs driver-managed XSK (zero-copy or copy) — the generic kernel path is not a supported dataplane",
+            interface.name
+        );
+    };
+    let Some((floor_maj, floor_min)) = xsk_driver_native_floor(&driver) else {
+        anyhow::bail!(
+            "interface {iface} driver '{driver}' has no known native XSK support on kernel {kver}; the generic kernel path is not a supported dataplane — disable xdp.enabled or use a supported NIC/driver",
+            iface = interface.name,
+        );
+    };
+    if (major, minor) < (floor_maj, floor_min) {
+        anyhow::bail!(
+            "interface {iface} driver '{driver}' needs kernel >= {floor_maj}.{floor_min} for native XSK (have {kver}); the generic kernel path is not a supported dataplane — upgrade the kernel or disable xdp.enabled",
+            iface = interface.name,
+        );
+    }
+    Ok(())
+}
+
 fn create_af_xdp_queue(
     interface: &crate::runtime_mode::XdpInterfaceConfig,
     queue: u32,
@@ -692,7 +966,13 @@ fn create_af_xdp_queue(
     umem_config
         .frame_size(frame_size)
         .fill_queue_size(ring_size)
-        .comp_queue_size(ring_size);
+        .comp_queue_size(ring_size)
+        // virtio_net zero-copy refuses the bind with EINVAL when the UMEM
+        // headroom is smaller than its virtnet header (vi->hdr_len = 12
+        // for mrg_rxbuf). Reserve a little extra for alignment; the TX
+        // path writes only the data segment, so the reserved bytes cost
+        // nothing on send.
+        .frame_headroom(32);
     let umem_config = umem_config.build()?;
     let frame_count = NonZeroU32::new(AF_XDP_FRAME_COUNT)
         .ok_or_else(|| anyhow::anyhow!("AF_XDP frame count must be non-zero"))?;
@@ -720,26 +1000,13 @@ fn create_af_xdp_queue(
             anyhow::anyhow!(detail)
         })
     };
-    // EN-12 real bind-mode probing: `auto` asks the kernel for zero-copy and
-    // falls back to copy explicitly when the driver rejects it; the landed
-    // mode is recorded in queue status. `zero-copy` fails queue setup when
-    // unsupported — a configured hard requirement, not a silent downgrade.
-    use crate::runtime_mode::XdpXskMode;
+    // Real bind-mode probing: `auto` tries zero-copy first and falls back
+    // to the driver-managed copy path; the landed mode is recorded in
+    // queue status. `af_xdp_driver_gate` ran before this: a driver below
+    // the native-XSK floor never reaches bind, so a copy bind here is
+    // driver-managed, never the kernel-emulated generic path.
     let mut socket_probe = None;
-    let bind_attempts: &[(&str, BindFlags)] = match interface.xsk_mode {
-        XdpXskMode::Auto => &[
-            (
-                "zero-copy",
-                BindFlags::XDP_USE_NEED_WAKEUP | BindFlags::XDP_ZEROCOPY,
-            ),
-            ("copy", BindFlags::XDP_USE_NEED_WAKEUP | BindFlags::XDP_COPY),
-        ],
-        XdpXskMode::Copy => &[("copy", BindFlags::XDP_USE_NEED_WAKEUP | BindFlags::XDP_COPY)],
-        XdpXskMode::ZeroCopy => &[(
-            "zero-copy",
-            BindFlags::XDP_USE_NEED_WAKEUP | BindFlags::XDP_ZEROCOPY,
-        )],
-    };
+    let bind_attempts = xsk_bind_attempts(interface.xsk_mode);
     let mut last_bind_error: Option<(&str, anyhow::Error)> = None;
     let mut landed_mode = "";
     let mut socket_parts = None;
@@ -806,6 +1073,10 @@ fn create_af_xdp_queue(
         admission_refusals: 0,
         aqm_drops: 0,
         aqm_ce_marks: 0,
+        tx_inflight: 0,
+        stale_dwells: 0,
+        steered_frames: 0,
+        steer_sheds: 0,
     };
     Ok((
         AfXdpQueueHandle {
@@ -820,6 +1091,11 @@ fn create_af_xdp_queue(
             rx_batch: vec![FrameDesc::default(); AF_XDP_RX_BATCH],
             tx_completion_batch: vec![FrameDesc::default(); AF_XDP_RX_BATCH],
             tx_scratch: Vec::with_capacity(interface.frame_size as usize),
+            tx_inflight: 0,
+            tx_kick_pending: false,
+            tx_kick_errors: 0,
+            tx_completed_total: 0,
+            pcap: AfXdpQueueHandle::pcap_open(queue),
         },
         status,
     ))
@@ -855,19 +1131,71 @@ pub async fn attach(
             anyhow::anyhow!("create bpffs pin dir {}: {err}", xdp_bpf_pin_dir())
         })?;
     // When the operator gave no explicit stateTables, size the scalable
-    // state maps to this node's kernel-BPF budget — default tables can
-    // exceed the budget on small nodes and would otherwise fail attach.
-    // Explicit operator sizes are never silently shrunk: they either fit
-    // or fail the budget check below.
-    let bpf_budget = crate::memory_governor::MEMORY_GOVERNOR
-        .snapshot(crate::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads())
-        .kernel_bpf_budget_bytes;
+    // state maps to the pinned-allocation headroom — only *new* pinned
+    // bytes are charged, so a re-attach reusing its existing pins always
+    // fits. Explicit operator sizes are never silently shrunk: they either
+    // fit or fail the headroom check below.
     let mut effective_config = config.clone();
-    if effective_config.state_tables.is_none() {
-        effective_config.state_tables = auto_scale_state_tables(config, bpf_budget)?;
+    // `queues: []` on an interface entry means "auto" — resolve the NIC's
+    // RX queues from sysfs here (single choke point covering daemon, CLI
+    // and smoke attach paths). A miss yields [0] and bind fails loudly.
+    crate::xdp_auto_config::fill_missing_xdp_interface_queues(&mut effective_config);
+    // One shared-account transaction covers the whole attach: new pinned
+    // map bytes + load/JIT transient + the old↔new coexistence peak —
+    // no separate checks against the same headroom. The grant stays
+    // pending through load/link attach; commit lands only when the
+    // dataplane is fully attached, and every early return drops the
+    // pending credential for a full refund.
+    let mut attach_permit: Option<(
+        crate::memory_governor::StaticSharedPermit,
+        u64, // transient overhead share, refunded at commit
+    )> = None;
+    let mut sizing = |config: &mut XdpConfig| -> anyhow::Result<()> {
+        // Large non-reclaimable commitments observe fresh state, not the
+        // published snapshot which may be up to a cadence old.
+        let grantable = crate::memory_governor::MEMORY_GOVERNOR
+            .account_view_fresh()
+            .grantable_bytes;
+        // One pin survey per attempt: sizing and enforcement must judge
+        // the same pin set — separate reads race a pin appearing or
+        // disappearing mid-attach.
+        let survey = pinned_map_survey(config);
+        if config.state_tables.is_none() {
+            config.state_tables = auto_scale_state_tables(config, grantable, &survey)?;
+        }
+        ensure_bpf_map_budget_with_survey(config, grantable, &survey)?;
+        let new_bytes = projected_bpf_map_bytes(config)
+            .saturating_sub(pinned_spec_bytes_from_survey(config, &survey));
+        let overhead = attach_transient_overhead_bytes(new_bytes);
+        let permit = crate::memory_governor::MEMORY_GOVERNOR
+            .try_grant_shared(
+                crate::memory_governor::SharedGrantPurpose::KernelBpf,
+                new_bytes.saturating_add(overhead),
+            )
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "shared account cannot cover eBPF attach: {new_bytes}B new pinned \
+                     + {overhead}B load/coexistence overhead (grantable {}B)",
+                    crate::memory_governor::MEMORY_GOVERNOR
+                        .account_view()
+                        .grantable_bytes
+                )
+            })?;
+        attach_permit = Some((permit, overhead));
+        Ok(())
+    };
+    if let Err(first) = sizing(&mut effective_config) {
+        // Reclaimable pools (caches, regex, connector caches) yield before a
+        // pinned allocation is refused — sweep once, refresh the snapshot,
+        // then re-judge the same water level.
+        tracing::warn!(
+            "eBPF attach sizing short of headroom ({first}); reclaiming caches and retrying"
+        );
+        crate::memory_reclaim::reclaim_for_level(crate::memory_governor::MemoryPressureLevel::High);
+        crate::memory_governor::MEMORY_GOVERNOR.invalidate_snapshot_cache();
+        sizing(&mut effective_config)?;
     }
     let config = &effective_config;
-    ensure_bpf_map_budget(config, bpf_budget)?;
     // State-pin gate runs before any load attempt: an ABI-incompatible
     // pinned state map is a migration boundary, not an attach side effect.
     // Refusing keeps the live dataplane running and reports exactly which
@@ -1170,10 +1498,16 @@ pub async fn attach(
             &dispatch_prev,
         )?;
     } else {
+        // A pinned link outlives the process that created it: a daemon
+        // that exits without detaching (SIGKILL, OOM, a too-fast SIGINT)
+        // leaves the previous program attached, and bpf_link_create then
+        // fails EBUSY forever ("Can't replace active BPF XDP link").
+        // Reclaim links whose owner is gone before attaching fresh.
+        reclaim_orphaned_xdp_links()?;
         for interface in &config.interfaces {
-            // The commit-phase detach just released the previous link; kernel
-            // link teardown can lag the pin removal by an RCU grace period, so
-            // retry EBUSY briefly rather than racing bpf_link_create once.
+            // Kernel link teardown can lag the pin removal by an RCU
+            // grace period, so retry EBUSY briefly rather than racing
+            // bpf_link_create once.
             let mut attach_err = None;
             let mut link_id = None;
             for _ in 0..20 {
@@ -1199,9 +1533,14 @@ pub async fn attach(
             }
             let link_id = link_id.ok_or_else(|| {
                 anyhow::anyhow!(
-                    "attach XDP to {} after bounded EBUSY wait: {}",
+                    "attach XDP to {} after bounded EBUSY wait: {}; an unpinned or \
+                     foreign XDP link may still hold the interface — inspect with \
+                     `ip link show dev {}` and reclaim with `xdp detach` or \
+                     `ip link set dev {} xdp off`",
                     interface.name,
-                    attach_err.map(|e| e.to_string()).unwrap_or_default()
+                    attach_err.map(|e| e.to_string()).unwrap_or_default(),
+                    interface.name,
+                    interface.name
                 )
             })?;
             let link = program.take_link(link_id)?;
@@ -1219,13 +1558,32 @@ pub async fn attach(
             attached.insert(interface.name.clone());
         }
     }
+    // Commit point: the generation is fully attached. The transient
+    // load/coexistence share is refunded first — only the new pinned map
+    // bytes stay committed for the dataplane's lifetime (they release
+    // when this AttachedProgram is dropped).
+    let mut resource_permit = None;
+    if let Some((mut permit, overhead)) = attach_permit {
+        permit.shrink(overhead);
+        permit.commit();
+        resource_permit = Some(permit);
+    }
     Ok(AttachedProgram {
         interfaces: attached,
         ebpf,
         owner_epoch,
         imported_flows,
         effective_state_tables: effective_config.state_tables,
+        resource_permit,
     })
+}
+
+/// Transient share of the attach transaction beyond new pinned map
+/// bytes: ELF parse, verifier work, JIT output, and the brief window
+/// where old and new generations coexist during atomic reattach. Scaled
+/// by the new-map footprint with a floor covering a minimal object.
+fn attach_transient_overhead_bytes(new_map_bytes: u64) -> u64 {
+    (new_map_bytes / 8).saturating_add(32 * 1024 * 1024)
 }
 
 /// F1 atomic handover: point the running dataplane at the new
@@ -1415,6 +1773,94 @@ fn atomic_link_swap(
     Ok(())
 }
 
+/// Detect a live cloud-node daemon that still owns the pinned
+/// dataplane. The daemon holds an exclusive flock on its pidfile for
+/// its entire lifetime, so a lock held by a different live pid means a
+/// predecessor is mid-handover. This process's own lock is excluded —
+/// the daemon calls attach while holding it.
+fn xdp_owner_alive() -> Option<u32> {
+    use std::os::fd::AsRawFd;
+    for path in crate::paths::NodePaths::current().pid_file_candidates() {
+        let Ok(file) = std::fs::File::open(&path) else {
+            continue;
+        };
+        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+            unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_UN) };
+            continue;
+        }
+        // Locked — resolve who holds it. An unreadable or unparsable
+        // pidfile stays conservative: claim "alive" rather than rip a
+        // dataplane out from under a possibly-running daemon.
+        let pid = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|body| body.trim().parse::<u32>().ok());
+        match pid {
+            Some(pid) if pid == std::process::id() => {}
+            Some(pid) if unsafe { libc::kill(pid as i32, 0) } == 0 => return Some(pid),
+            Some(_) => {}
+            None => return Some(0),
+        }
+    }
+    None
+}
+
+/// Reclaim pinned `link-*` objects left behind by a generation that
+/// exited without detaching. A pinned link survives its owner process —
+/// the kernel keeps the program attached until the bpffs pin is
+/// removed — and would block `bpf_link_create` with EBUSY forever.
+/// Refuse when a different live daemon still owns the dataplane: a
+/// cold attach must never tear down links a running predecessor
+/// depends on (hot handover goes through `atomic_link_swap` instead).
+fn reclaim_orphaned_xdp_links() -> anyhow::Result<()> {
+    let pin_dir = PathBuf::from(xdp_bpf_pin_dir());
+    let mut pins: Vec<PathBuf> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&pin_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let is_link_pin = path
+                .file_name()
+                .map(|name| name.to_string_lossy().starts_with("link-"))
+                .unwrap_or(false);
+            if is_link_pin && path.is_file() {
+                pins.push(path);
+            }
+        }
+    }
+    if pins.is_empty() {
+        return Ok(());
+    }
+    if let Some(owner) = xdp_owner_alive() {
+        anyhow::bail!(
+            "pinned XDP links {pins:?} are owned by a running cloud-node daemon \
+             (pid {owner}); refusing to tear down a live dataplane — use the \
+             daemon's reload path or run `xdp detach` first"
+        );
+    }
+    for pin in pins {
+        match PinnedLink::from_pin(&pin) {
+            // unpin() hands back the live link; dropping it here closes
+            // the fd and destroys the link — the interface is freed for
+            // the fresh attach below.
+            Ok(pinned) => match pinned.unpin() {
+                Ok(_link) => {
+                    tracing::warn!(
+                        "reclaimed stale XDP link {} left by a generation that \
+                         exited without detaching",
+                        pin.display()
+                    );
+                }
+                Err(err) => {
+                    tracing::warn!("failed to unpin stale XDP link {}: {err}", pin.display());
+                }
+            },
+            Err(err) => {
+                tracing::warn!("failed to open pinned XDP link {}: {err}", pin.display());
+            }
+        }
+    }
+    Ok(())
+}
+
 pub async fn detach(config: &XdpConfig) -> anyhow::Result<()> {
     detach_blocking(config)
 }
@@ -1467,7 +1913,7 @@ pub fn detach_blocking(config: &XdpConfig) -> anyhow::Result<()> {
         for entry in dir.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
             let path = entry.path();
-            if name.starts_with("link-") && !link_pins.iter().any(|p| *p == path) {
+            if name.starts_with("link-") && !link_pins.contains(&path) {
                 link_pins.push(path);
             }
         }
@@ -1508,10 +1954,10 @@ pub fn detach_blocking(config: &XdpConfig) -> anyhow::Result<()> {
         let _ = std::fs::remove_dir(&prog_pin_dir);
     }
     let dispatch_pin = Path::new(xdp_bpf_pin_dir()).join("XDP_DISPATCH");
-    if dispatch_pin.exists() {
-        if let Err(err) = std::fs::remove_file(&dispatch_pin) {
-            tracing::warn!("failed to unpin XDP_DISPATCH map: {err}");
-        }
+    if dispatch_pin.exists()
+        && let Err(err) = std::fs::remove_file(&dispatch_pin)
+    {
+        tracing::warn!("failed to unpin XDP_DISPATCH map: {err}");
     }
     Ok(())
 }
@@ -1757,8 +2203,10 @@ pub fn sync_cookie_key(ebpf: &mut aya::Ebpf) -> anyhow::Result<()> {
     if cur.cur != [0u8; 16] {
         return Ok(());
     }
-    let mut key = cloud_node_xdp_common::XdpCookieKey::default();
-    key.cur = rand::random::<[u8; 16]>();
+    let key = cloud_node_xdp_common::XdpCookieKey {
+        cur: rand::random::<[u8; 16]>(),
+        ..Default::default()
+    };
     array.set(0, key, 0)?;
     Ok(())
 }
@@ -2289,6 +2737,32 @@ fn resolve_neighbor_mac(next_hop: &str) -> anyhow::Result<[u8; 6]> {
     anyhow::bail!("no usable neighbor entry for {next_hop}")
 }
 
+/// T4: neighbor warm-up budget — a single egress probe makes the kernel
+/// run ARP/ND; usable entries normally appear within a few hundred ms.
+const NEIGHBOR_WARM_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(900);
+const NEIGHBOR_WARM_POLL: std::time::Duration = std::time::Duration::from_millis(50);
+
+/// T4: nudge the kernel into resolving a next hop. Any egress datagram to
+/// `next_hop` starts ARP/ND — the payload and the inevitable
+/// port-unreachable ICMP reply are both irrelevant. Best-effort by
+/// design: the caller still polls `resolve_neighbor_mac` and fails closed
+/// when the entry never materializes.
+fn warm_neighbor(next_hop: &str) {
+    let Ok(ip) = next_hop.parse::<IpAddr>() else {
+        return;
+    };
+    let bind: SocketAddr = if ip.is_ipv4() {
+        "0.0.0.0:0".parse().unwrap()
+    } else {
+        "[::]:0".parse().unwrap()
+    };
+    if let Ok(socket) = std::net::UdpSocket::bind(bind)
+        && socket.connect(SocketAddr::new(ip, 9)).is_ok()
+    {
+        let _ = socket.send(&[0u8]);
+    }
+}
+
 /// T4: fully resolved outbound route for a node-dialed flow.
 pub(crate) struct XdpOutboundRoute {
     /// Egress interface name from the routing table — must match an
@@ -2327,8 +2801,30 @@ pub(crate) fn resolve_outbound_route(target: IpAddr) -> anyhow::Result<XdpOutbou
         .and_then(|v| v.as_str())
         .map(str::to_string)
         .unwrap_or_else(|| target.to_string());
-    let destination_mac = resolve_neighbor_mac(&next_hop)
-        .map_err(|err| anyhow::anyhow!("{err} (route to {target})"))?;
+    let destination_mac = match resolve_neighbor_mac(&next_hop) {
+        Ok(mac) => mac,
+        Err(first_err) => {
+            // Cold neighbor table: a kernel connect() resolves ARP/ND
+            // implicitly, but this path needs the entry up-front. Emit a
+            // probe datagram so the kernel starts resolving, then poll
+            // briefly — still failing closed when no usable entry lands.
+            warm_neighbor(&next_hop);
+            let deadline =
+                std::time::Instant::now() + NEIGHBOR_WARM_TIMEOUT;
+            loop {
+                std::thread::sleep(NEIGHBOR_WARM_POLL);
+                match resolve_neighbor_mac(&next_hop) {
+                    Ok(mac) => break mac,
+                    Err(_) if std::time::Instant::now() < deadline => continue,
+                    Err(err) => {
+                        return Err(anyhow::anyhow!(
+                            "{err} (route to {target}; neighbor {next_hop} still unresolved after warm-up: {first_err})"
+                        ));
+                    }
+                }
+            }
+        }
+    };
     let links = run_ip_json(&["link", "show", "dev", &interface])?;
     let source_mac = links
         .first()
@@ -2842,84 +3338,166 @@ pub(crate) fn projected_bpf_map_bytes(config: &XdpConfig) -> u64 {
     total
 }
 
-/// Auto-size the sizeable state tables to the kernel-BPF budget when the
-/// operator gave no explicit `xdp.stateTables`. Without this a default
-/// configuration exceeds the budget on small nodes (e.g. 2 GiB VPS) and
-/// attach would fail outright. The scale-down is proportional across the
-/// scalable tables with a per-table floor; if even floored tables do not
-/// fit, the node is too small and attach fails explicitly.
-fn auto_scale_state_tables(config: &XdpConfig, budget: u64) -> anyhow::Result<Option<XdpStateTables>> {
-    let projected = projected_bpf_map_bytes(config);
-    if projected <= budget {
-        return Ok(None);
-    }
+/// One bpffs pin survey per attach attempt: map name → pinned max_entries
+/// for pins whose type/key/value match the object spec. Sizing and
+/// enforcement must judge the same pin set — re-reading pins between the
+/// scale-down and the budget check races a pin appearing or disappearing
+/// mid-attach and lets the two steps disagree about what is already owned.
+pub(crate) type PinnedMapSurvey = std::collections::HashMap<&'static str, u32>;
+
+pub(crate) fn pinned_map_survey_at(config: &XdpConfig, pin_dir: &Path) -> PinnedMapSurvey {
+    bpf_map_specs(config)
+        .iter()
+        .filter_map(|(name, ty, key, value, _)| {
+            pinned_map_max_entries_at(name, *ty, *key, *value, pin_dir).map(|max| (*name, max))
+        })
+        .collect()
+}
+
+fn pinned_map_survey(config: &XdpConfig) -> PinnedMapSurvey {
+    pinned_map_survey_at(config, Path::new(xdp_bpf_pin_dir()))
+}
+
+fn pinned_spec_bytes_from_survey(config: &XdpConfig, survey: &PinnedMapSurvey) -> u64 {
+    bpf_map_specs(config)
+        .iter()
+        .map(|(name, ty, key, value, max)| match survey.get(name) {
+            Some(pinned) if pinned == max => map_spec_bytes(*ty, *key, *value, *pinned),
+            _ => 0,
+        })
+        .sum()
+}
+
+/// Auto-size the sizeable state tables to the pinned-allocation headroom
+/// when the operator gave no explicit `xdp.stateTables`. A knob whose maps
+/// are all pinned at one spec-compatible size is *locked* to that size —
+/// already-owned kernel memory is exempt, and the footprint survives
+/// restarts and headroom drift instead of being re-derived from the
+/// moving `available` watermark (which is what stranded a once-shrunk
+/// node: defaults came back, the stale-pin gate refused, attach failed).
+/// Knobs with no pins scale into the remaining headroom with a per-table
+/// floor; if even floored *new* bytes do not fit, attach fails explicitly.
+pub(crate) fn auto_scale_state_tables(
+    config: &XdpConfig,
+    headroom: u64,
+    survey: &PinnedMapSurvey,
+) -> anyhow::Result<Option<XdpStateTables>> {
     const STATE_TABLE_FLOOR: u32 = 1_024;
-    // Fixed cost = maps not covered by state_table_override. `config` here
-    // always carries the default table sizes (this runs only when the
-    // operator left `stateTables` unset).
+    /// (map name, per-entry bytes, default max_entries) per scalable map.
+    type Member = (&'static str, u64, u32);
+    let projected = projected_bpf_map_bytes(config);
+    // Fixed cost = maps not covered by state_table_override — but only the
+    // share not already pinned at spec size. `config` here always carries
+    // the default table sizes (this runs only when the operator left
+    // `stateTables` unset).
     let mut fixed = 0u64;
-    let mut scalable: Vec<(&'static str, u64, u32, aya::maps::MapType, u32, u32)> = Vec::new();
+    let mut knobs: Vec<(&'static str, Vec<Member>)> = Vec::new();
     for (name, ty, key, value, max) in bpf_map_specs(config) {
         let bytes = map_spec_bytes(ty, key, value, max);
         if state_table_override_scalable(name) {
-            scalable.push((name, bytes / u64::from(max).max(1), max, ty, key, value));
-        } else {
+            let knob = state_table_knob(name);
+            let per_entry = bytes / u64::from(max).max(1);
+            match knobs.iter_mut().find(|(k, _)| *k == knob) {
+                Some((_, members)) => members.push((name, per_entry, max)),
+                None => knobs.push((knob, vec![(name, per_entry, max)])),
+            }
+        } else if survey.get(name) != Some(&max) {
             fixed = fixed.saturating_add(bytes);
         }
     }
-    let headroom = budget.saturating_sub(fixed);
-    // Scale factor in milli-units to keep integer math.
-    let scalable_total: u64 = scalable
-        .iter()
-        .map(|(_, per_entry, max, ..)| per_entry.saturating_mul(u64::from(*max)))
-        .sum();
-    if scalable_total == 0 {
-        return Ok(None);
-    }
-    let scale_milli = headroom.saturating_mul(1000) / scalable_total;
-    // Per-map candidate sizes. Prefer an existing spec-compatible pin: the
-    // stale-pin gate refuses any max mismatch, so adopting the pinned size
-    // keeps restarts stable when this boot's scale factor drifts. Pins that
-    // no longer fit the headroom fail the capacity check below explicitly.
-    let mut candidates: Vec<(&'static str, &'static str, u64, u32)> =
-        Vec::with_capacity(scalable.len());
-    for (name, per_entry, default_max, ty, key, value) in &scalable {
-        let pinned_max = pinned_map_max_entries(name, *ty, *key, *value);
-        let scaled_max = u64::from(*default_max)
-            .saturating_mul(scale_milli)
-            / 1000;
-        let candidate = match pinned_max {
-            Some(pin_max) => pin_max.min(*default_max),
-            None => (scaled_max as u32).max(STATE_TABLE_FLOOR).min(*default_max),
-        };
-        candidates.push((state_table_knob(name), name, *per_entry, candidate));
-    }
-    // A stateTables knob covers every map in its group with ONE value, so
-    // the charged size must be the group minimum — a member charged at its
-    // own larger candidate would make the real projection exceed the
-    // accounted total. Members whose pin exceeds the chosen value trip the
-    // stale-pin gate later: an explicit refusal, not silent state loss.
-    let mut knob_values: Vec<(&'static str, u32)> = Vec::new();
-    for (knob, _name, _per_entry, candidate) in &candidates {
-        match knob_values.iter_mut().find(|(k, _)| k == knob) {
-            Some((_, v)) => *v = (*v).min(*candidate),
-            None => knob_values.push((knob, *candidate)),
+    // Lock every knob that already has spec-compatible pins to the
+    // smallest pinned size in the group: members pinned at that size are
+    // reused for free, unpinned members are created at it (charged), and
+    // members pinned *larger* trip the stale-pin gate later — an explicit
+    // refusal, not silent state loss.
+    let mut locked: Vec<(&'static str, u32)> = Vec::new();
+    let mut locked_new_bytes = 0u64;
+    for (knob, members) in &knobs {
+        let pinned_sizes: Vec<u32> = members
+            .iter()
+            .filter_map(|(name, ..)| survey.get(name).copied())
+            .collect();
+        if pinned_sizes.is_empty() {
+            continue;
+        }
+        let chosen = pinned_sizes.iter().copied().min().unwrap_or(0);
+        locked.push((*knob, chosen));
+        for (name, per_entry, _) in members {
+            if survey.get(name) != Some(&chosen) {
+                locked_new_bytes =
+                    locked_new_bytes.saturating_add(per_entry.saturating_mul(u64::from(chosen)));
+            }
         }
     }
-    let mut scaled_total = 0u64;
-    for (knob, _name, per_entry, candidate) in &candidates {
-        let chosen = knob_values
+    let remaining = headroom
+        .saturating_sub(fixed)
+        .saturating_sub(locked_new_bytes);
+    let free_total: u64 = knobs
+        .iter()
+        .filter(|(knob, _)| !locked.iter().any(|(k, _)| k == knob))
+        .flat_map(|(_, members)| members.iter())
+        .map(|(_, per_entry, max)| per_entry.saturating_mul(u64::from(*max)))
+        .sum();
+    // Scale factor in milli-units to keep integer math; only knobs without
+    // pins compete for the remaining headroom.
+    let scale_milli = remaining
+        .saturating_mul(1000)
+        .checked_div(free_total)
+        .unwrap_or(1000);
+    let mut knob_values: Vec<(&'static str, u32)> = Vec::new();
+    let mut new_bytes = fixed.saturating_add(locked_new_bytes);
+    let mut differs_from_default = false;
+    for (knob, members) in &knobs {
+        if let Some((_, chosen)) = locked.iter().find(|(k, _)| k == knob) {
+            let chosen = *chosen;
+            // Emit the pinned size even when it equals the defaults — a
+            // `None` knob would resolve to default specs and mismatch the
+            // pin. Members pinned larger than `chosen` were charged above
+            // and trip the stale-pin gate.
+            knob_values.push((*knob, chosen));
+            if members.iter().any(|(_, _, default_max)| *default_max != chosen) {
+                differs_from_default = true;
+            }
+            continue;
+        }
+        // Unpinned knob: scale into the remaining headroom, clamped per
+        // member to [floor, its own default]. A group shares one knob
+        // value, so the emitted size is the member minimum — but only
+        // emit it when scaling actually shrank the group; emitting the
+        // default would silently shrink members with larger defaults.
+        let scaled: Vec<u32> = members
             .iter()
-            .find(|(k, _)| k == knob)
-            .map(|(_, v)| *v)
-            .unwrap_or(*candidate);
-        scaled_total =
-            scaled_total.saturating_add(per_entry.saturating_mul(u64::from(chosen)));
+            .map(|(_, _, default_max)| {
+                (u64::from(*default_max).saturating_mul(scale_milli) / 1000)
+                    .min(u64::from(*default_max))
+                    .max(u64::from(STATE_TABLE_FLOOR)) as u32
+            })
+            .collect();
+        let shrank = members
+            .iter()
+            .zip(scaled.iter())
+            .any(|((_, _, default_max), s)| *s != *default_max);
+        let spec_size = if shrank {
+            let chosen = scaled.iter().copied().min().unwrap_or(STATE_TABLE_FLOOR);
+            knob_values.push((*knob, chosen));
+            differs_from_default = true;
+            chosen
+        } else {
+            0 // per-member defaults below
+        };
+        for ((_, per_entry, _), s) in members.iter().zip(scaled.iter()) {
+            let spec = if shrank { spec_size } else { *s };
+            new_bytes = new_bytes.saturating_add(per_entry.saturating_mul(u64::from(spec)));
+        }
     }
     anyhow::ensure!(
-        scaled_total <= headroom,
-        "eBPF state tables cannot fit kernel-bpf budget {budget} even at the {STATE_TABLE_FLOOR}-entry floor (fixed={fixed}, need={scaled_total})"
+        new_bytes <= headroom,
+        "eBPF state tables need {new_bytes}B of new pinned memory; attach headroom {headroom}B \
+         (fixed-new={fixed}, already-pinned reusable — grow memory, shrink stateTables, or purge stale pins)"
     );
+    if !differs_from_default {
+        return Ok(None);
+    }
     let get = |knob: &str| -> Option<u32> {
         knob_values
             .iter()
@@ -2935,7 +3513,7 @@ fn auto_scale_state_tables(config: &XdpConfig, budget: u64) -> anyhow::Result<Op
     let acl_allowed = get("acl_allowed");
     let rate_v4 = get("rate_v4");
     tracing::warn!(
-        "eBPF state tables auto-scaled to fit kernel-bpf budget {budget}B (projected {projected}B): ct={ct:?} pending={pending:?} snatRev={snat_rev:?} flowAcct={flow_acct:?} rateV4={rate_v4:?} rateV6={rate_v6:?} aclBlocked={acl_blocked:?} aclAllowed={acl_allowed:?}"
+        "eBPF state tables resolved for attach headroom {headroom}B (projected {projected}B): ct={ct:?} pending={pending:?} snatRev={snat_rev:?} flowAcct={flow_acct:?} rateV4={rate_v4:?} rateV6={rate_v6:?} aclBlocked={acl_blocked:?} aclAllowed={acl_allowed:?}"
     );
     Ok(Some(XdpStateTables {
         ct_max_entries: ct,
@@ -2973,20 +3551,50 @@ fn state_table_knob(name: &str) -> &'static str {
     }
 }
 
+/// Bytes of eBPF map memory already pinned under bpffs at `config`'s spec
+/// sizes — the maps a re-attach reuses unchanged. Already-committed kernel
+/// memory is never charged against the headroom watermark again: charging
+/// owned bytes a second time is what wedged small nodes into attach
+/// failure once the moving budget shrank under daemon RSS growth.
+pub(crate) fn pinned_spec_bytes(config: &XdpConfig) -> u64 {
+    pinned_spec_bytes_at(config, Path::new(xdp_bpf_pin_dir()))
+}
+
+pub(crate) fn pinned_spec_bytes_at(config: &XdpConfig, pin_dir: &Path) -> u64 {
+    pinned_spec_bytes_from_survey(config, &pinned_map_survey_at(config, pin_dir))
+}
+
 /// Ensure the object's projected map memory fits the kernel-BPF ledger.
 /// Called before load: map memory is preallocated and non-reclaimable, so
 /// over-budget objects must fail attach explicitly rather than silently
-/// pinning unbounded kernel memory. `budget` is a single caller-supplied
-/// snapshot — the governor's budget moves with live free memory, and
-/// sizing against one snapshot while enforcing another races (a shrinking
-/// snapshot can reject tables that were scaled to fit the earlier one).
-fn ensure_bpf_map_budget(config: &XdpConfig, budget: u64) -> anyhow::Result<()> {
+/// pinning unbounded kernel memory. Only *new* bytes are charged —
+/// maps already pinned at their spec sizes are owned, not re-bought.
+/// `headroom` is a single caller-supplied snapshot so the scale-down and
+/// this check judge the same water level.
+fn ensure_bpf_map_budget_with_survey(
+    config: &XdpConfig,
+    headroom: u64,
+    survey: &PinnedMapSurvey,
+) -> anyhow::Result<()> {
     let projected = projected_bpf_map_bytes(config);
+    let pinned = pinned_spec_bytes_from_survey(config, survey);
+    let new_bytes = projected.saturating_sub(pinned);
     anyhow::ensure!(
-        projected <= budget,
-        "eBPF map projected memory {projected} exceeds kernel-bpf budget {budget}"
+        new_bytes <= headroom,
+        "eBPF maps need {new_bytes}B of new pinned memory; attach headroom {headroom}B \
+         (projected={projected}B, already-pinned={pinned}B — grow memory, shrink stateTables, \
+         or purge stale pins)"
     );
     Ok(())
+}
+
+#[cfg(test)]
+pub(crate) fn ensure_bpf_map_budget_at(
+    config: &XdpConfig,
+    headroom: u64,
+    pin_dir: &Path,
+) -> anyhow::Result<()> {
+    ensure_bpf_map_budget_with_survey(config, headroom, &pinned_map_survey_at(config, pin_dir))
 }
 
 /// EN-16 post-load audit: every map the object actually declares must be
@@ -3122,16 +3730,18 @@ pub fn open_pinned_flow_events() -> anyhow::Result<Option<aya::maps::RingBuf<aya
 }
 
 /// Max entries of a pinned map whose type/key/value match the object spec —
-/// used by auto-scaling to prefer the live pinned size so restart sizing is
-/// stable. Returns `None` when the pin is absent, unreadable, or has an
-/// ABI-different layout (in which case the stale-pin gate still applies).
-fn pinned_map_max_entries(
+/// used by the pin survey so attach sizing prefers the live pinned size and
+/// restart sizing is stable. Returns `None` when the pin is absent,
+/// unreadable, or has an ABI-different layout (in which case the stale-pin
+/// gate still applies).
+pub(crate) fn pinned_map_max_entries_at(
     name: &str,
     spec_ty: aya::maps::MapType,
     spec_key: u32,
     spec_value: u32,
+    pin_dir: &Path,
 ) -> Option<u32> {
-    let path = Path::new(xdp_bpf_pin_dir()).join(name);
+    let path = pin_dir.join(name);
     let info = aya::maps::MapInfo::from_pin(&path).ok()?;
     (info.map_type().ok() == Some(spec_ty)
         && info.key_size() == spec_key

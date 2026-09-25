@@ -1,5 +1,46 @@
 #[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
 use super::*;
+
+/// Resolves when SIGINT or SIGTERM arrives. Smoke paths must observe
+/// termination *before* process exit: an XDP program attached via a
+/// pinned BPF link survives exit and keeps redirecting into dead AF_XDP
+/// sockets — the restart blackhole shape. Returning early lets the
+/// caller's existing `detach(false)` cleanup actually run (observed
+/// on-node: `systemctl stop` left prog id attached and blackholed the
+/// next kernel-arm run).
+#[cfg(target_os = "linux")]
+async fn smoke_shutdown_signal() -> &'static str {
+    use tokio::signal::unix::{SignalKind, signal};
+    let sig = match signal(SignalKind::terminate()) {
+        Ok(mut term) => {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => "SIGINT",
+                _ = term.recv() => "SIGTERM",
+            }
+        }
+        Err(_) => {
+            let _ = tokio::signal::ctrl_c().await;
+            "SIGINT"
+        }
+    };
+    SMOKE_SIGNAL_RECEIVED.store(true, Ordering::Relaxed);
+    sig
+}
+
+#[cfg(target_os = "linux")]
+static SMOKE_SIGNAL_RECEIVED: AtomicBool = AtomicBool::new(false);
+
+/// Pollable form of `smoke_shutdown_signal` for loops that cannot
+/// `.await` a select — arms a one-shot watcher on first call.
+#[cfg(target_os = "linux")]
+fn smoke_signal_received() -> bool {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        tokio::spawn(smoke_shutdown_signal());
+    });
+    SMOKE_SIGNAL_RECEIVED.load(Ordering::Relaxed)
+}
+
 #[cfg(target_os = "linux")]
 pub async fn raw_smoke(
     duration: std::time::Duration,
@@ -51,6 +92,9 @@ async fn raw_smoke_inner(
     let mut samples = Vec::new();
 
     while tokio::time::Instant::now() < deadline {
+        if smoke_signal_received() {
+            break;
+        }
         let mut frames = Vec::with_capacity(64);
         let stats = {
             let mut runtime = manager.af_xdp.lock();
@@ -144,15 +188,22 @@ async fn raw_smoke_inner(
 pub async fn proxy_smoke(
     duration: std::time::Duration,
     ready_file: Option<std::path::PathBuf>,
+    kernel_mode: bool,
+    remote: Option<std::net::IpAddr>,
 ) -> anyhow::Result<serde_json::Value> {
     af_xdp::reset_tcp_diag();
     crate::tcp_proxy::reset_af_xdp_tcp_proxy_diag();
+    crate::udp_proxy::reset_af_xdp_udp_diag();
     let manager = manager_from_runtime();
     let ports = xdp_proxy_smoke_ports(&manager.config)?;
 
+    if kernel_mode {
+        return proxy_smoke_kernel(ports, duration, ready_file, remote).await;
+    }
+
     manager.initialize().await?;
     start_rule_sweeper(&manager);
-    let services = match XdpProxySmokeServices::start().await {
+    let services = match XdpProxySmokeServices::start(remote).await {
         Ok(services) => services,
         Err(err) => {
             if let Err(detach_err) = detach(false).await {
@@ -202,7 +253,7 @@ pub async fn proxy_reload_smoke(
         .await
         .map_err(|err| anyhow::anyhow!("AF_XDP reload initial initialize failed: {err}"))?;
     start_rule_sweeper(&old_manager);
-    let services = match XdpProxySmokeServices::start().await {
+    let services = match XdpProxySmokeServices::start(None).await {
         Ok(services) => services,
         Err(err) => {
             if let Err(detach_err) = detach(false).await {
@@ -292,7 +343,12 @@ async fn proxy_reload_smoke_inner(
     let result = async {
         wait_for_proxy_smoke_ready(&after_manager, duration, &old_bridge).await?;
         write_ready_file(ready_file.as_ref())?;
-        tokio::time::sleep(duration).await;
+        tokio::select! {
+            _ = tokio::time::sleep(duration) => {}
+            sig = smoke_shutdown_signal() => {
+                tracing::info!("proxy reload smoke received {sig}; detaching dataplane");
+            }
+        }
         let after_reload = after_manager.status();
         anyhow::ensure!(
             before_reload.proxy_ready && before_reload.proxy_redirect_enabled,
@@ -370,7 +426,7 @@ pub async fn dial_smoke(
     let ports = xdp_proxy_smoke_ports(&manager.config)?;
     manager.initialize().await?;
     start_rule_sweeper(&manager);
-    let services = match XdpProxySmokeServices::start().await {
+    let services = match XdpProxySmokeServices::start(None).await {
         Ok(services) => services,
         Err(err) => {
             if let Err(detach_err) = detach(false).await {
@@ -418,6 +474,7 @@ pub async fn dial_smoke(
 }
 
 #[cfg(target_os = "linux")]
+#[allow(clippy::too_many_arguments)]
 async fn dial_smoke_inner(
     manager: std::sync::Arc<XdpManager>,
     target: std::net::SocketAddr,
@@ -634,6 +691,13 @@ async fn dial_smoke_inner(
 }
 
 #[cfg(target_os = "linux")]
+fn queue_stats<'a>(
+    status: &'a super::XdpStatusSnapshot,
+) -> impl Iterator<Item = &'a super::XdpQueueStatus> + 'a {
+    status.interfaces.iter().flat_map(|i| i.xsk_queues.iter())
+}
+
+#[cfg(target_os = "linux")]
 async fn proxy_smoke_inner(
     manager: std::sync::Arc<XdpManager>,
     services: XdpProxySmokeServices,
@@ -645,7 +709,12 @@ async fn proxy_smoke_inner(
     wait_for_proxy_smoke_ready(&manager, duration, bridge).await?;
     write_ready_file(ready_file.as_ref())?;
 
-    tokio::time::sleep(duration).await;
+    tokio::select! {
+        _ = tokio::time::sleep(duration) => {}
+        sig = smoke_shutdown_signal() => {
+            tracing::info!("proxy smoke received {sig}; detaching dataplane");
+        }
+    }
     let status = manager.status();
     let report = serde_json::json!({
         "durationMillis": duration.as_millis(),
@@ -661,6 +730,21 @@ async fn proxy_smoke_inner(
         "parseErrors": status.parse_errors,
         "mapMiss": status.map_miss,
         "xskDrops": status.xsk_drops,
+        // Per-queue XSK/bridge counters — burst loss attribution between
+        // NIC→XSK delivery (kernel stats), TX backpressure (congested) and
+        // reactor admission refusals must be visible in the report, not
+        // only in a live `xdp status` snapshot.
+        "xskQueueStats": {
+            "rxDropped": queue_stats(&status).map(|q| q.rx_dropped).sum::<u64>(),
+            "rxRingFull": queue_stats(&status).map(|q| q.rx_ring_full).sum::<u64>(),
+            "rxInvalidDescs": queue_stats(&status).map(|q| q.rx_invalid_descs).sum::<u64>(),
+            "txInvalidDescs": queue_stats(&status).map(|q| q.tx_invalid_descs).sum::<u64>(),
+            "congestedDrops": queue_stats(&status).map(|q| q.congested_drops).sum::<u64>(),
+            "admissionRefusals": queue_stats(&status).map(|q| q.admission_refusals).sum::<u64>(),
+            "aqmDrops": queue_stats(&status).map(|q| q.aqm_drops).sum::<u64>(),
+            "txInflightMax": queue_stats(&status).map(|q| q.tx_inflight).max().unwrap_or(0),
+            "faulted": queue_stats(&status).filter(|q| q.faulted).count(),
+        },
         "ports": {
             "http": ports.http,
             "https": ports.https,
@@ -688,8 +772,119 @@ async fn proxy_smoke_inner(
         },
         "tcpDiag": af_xdp::tcp_diag_snapshot(),
         "tcpProxyDiag": crate::tcp_proxy::af_xdp_tcp_proxy_diag_snapshot(),
+        "udpProxyDiag": crate::udp_proxy::af_xdp_udp_diag_snapshot(),
     });
     services.abort();
+    Ok(report)
+}
+
+/// Kernel-socket counterpart of `proxy_smoke`: identical site set, backends
+/// and proxy managers, but ingress is the kernel TCP/UDP stack instead of
+/// AF_XDP. Used as the XDP-off arm of dataplane A/B benchmarks — both arms
+/// serve `xdp-smoke-*.local` through the same EdgeProxy pipeline, so the only
+/// changed variable is the packet path.
+#[cfg(target_os = "linux")]
+async fn proxy_smoke_kernel(
+    ports: XdpProxySmokePorts,
+    duration: std::time::Duration,
+    ready_file: Option<std::path::PathBuf>,
+    remote: Option<std::net::IpAddr>,
+) -> anyhow::Result<serde_json::Value> {
+    // A kernel arm must not inherit a stale XDP program: a predecessor
+    // that died without detaching leaves the dataplane redirecting into
+    // dead AF_XDP sockets and blackholes this listener (observed on-node
+    // after `systemctl stop` on an afxdp arm). Reclaim before serving.
+    if let Err(err) = detach(false).await {
+        tracing::warn!("kernel proxy smoke: stale XDP detach failed: {err}");
+    }
+    // The kernel arm has no AF_XDP dataplane: report XDP disabled so
+    // `upstream_mode()` resolves kernel instead of the enabled→afxdp
+    // short-circuit. Without this every upstream dial takes the unarmed
+    // AF_XDP registry and the arm 502s before a SYN leaves the node.
+    let mut kernel_runtime = RuntimeConfig::current().unwrap_or_default();
+    kernel_runtime.xdp.enabled = false;
+    RuntimeConfig::set_current(kernel_runtime);
+    let services = XdpProxySmokeServices::start(remote).await?;
+    let (quic_demux, tcp_manager, http_manager) =
+        xdp_proxy_smoke_managers(&services, &ports).await?;
+    let listener_tasks: Vec<tokio::task::JoinHandle<()>> = {
+        let quic_demux = quic_demux.clone();
+        let tcp_manager = tcp_manager.clone();
+        let http_manager = http_manager.clone();
+        vec![
+            tokio::spawn(async move { quic_demux.start_listeners().await }),
+            tokio::spawn(async move { tcp_manager.start_listeners().await }),
+            tokio::spawn(async move { http_manager.start_listeners().await }),
+        ]
+    };
+
+    // Readiness = the TCP listeners actually accepting. UDP binds land in the
+    // same reconcile pass, so a live TCP accept implies the set is up.
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+    let mut ready = false;
+    while tokio::time::Instant::now() < deadline {
+        if listener_tasks.iter().any(|task| task.is_finished()) {
+            anyhow::bail!("kernel proxy-smoke listener task exited before ready");
+        }
+        if tokio::net::TcpStream::connect(("127.0.0.1", ports.http))
+            .await
+            .is_ok()
+            && tokio::net::TcpStream::connect(("127.0.0.1", ports.tcp))
+                .await
+                .is_ok()
+        {
+            ready = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    if !ready {
+        anyhow::bail!("timed out waiting for kernel proxy-smoke listeners");
+    }
+    write_ready_file(ready_file.as_ref())?;
+
+    tokio::select! {
+        _ = tokio::time::sleep(duration) => {}
+        sig = smoke_shutdown_signal() => {
+            tracing::info!("kernel proxy smoke received {sig}; exiting");
+        }
+    }
+    let report = serde_json::json!({
+        "durationMillis": duration.as_millis(),
+        "dataplane": "kernel",
+        "proxyReady": true,
+        "ports": {
+            "http": ports.http,
+            "https": ports.https,
+            "tcp": ports.tcp,
+            "udp": ports.udp,
+            "h3": ports.h3,
+        },
+        "backends": {
+            "http": services.http_addr.to_string(),
+            "https": services.https_addr.to_string(),
+            "tcp": services.tcp_addr.to_string(),
+            "udp": services.udp_addr.to_string(),
+            "h3": services.h3_addr.to_string(),
+            "sni": services.sni_addr.to_string(),
+            "quic": services.quic_addr.to_string(),
+        },
+        "app": {
+            "httpRequests": services.http_requests.load(Ordering::Relaxed),
+            "httpsRequests": services.https_requests.load(Ordering::Relaxed),
+            "tcpConnections": services.tcp_connections.load(Ordering::Relaxed),
+            "udpDatagrams": services.udp_datagrams.load(Ordering::Relaxed),
+            "h3Requests": services.h3_requests.load(Ordering::Relaxed),
+            "sniConnections": services.sni_connections.load(Ordering::Relaxed),
+            "quicRequests": services.quic_requests.load(Ordering::Relaxed),
+        },
+        "tcpProxyDiag": crate::tcp_proxy::af_xdp_tcp_proxy_diag_snapshot(),
+        "udpProxyDiag": crate::udp_proxy::af_xdp_udp_diag_snapshot(),
+    });
+    services.abort();
+    for task in &listener_tasks {
+        task.abort();
+    }
     Ok(report)
 }
 
@@ -804,7 +999,12 @@ struct XdpProxySmokeServices {
 
 #[cfg(target_os = "linux")]
 impl XdpProxySmokeServices {
-    async fn start() -> anyhow::Result<Self> {
+    /// `remote = Some(ip)` points upstreams at a backend fleet on that host
+    /// (port convention: 19000 http/h3, 19002 tcp-echo, 19003 udp-echo,
+    /// 19005 sni-tls). The QUIC backend stays in-process — a remote QUIC
+    /// endpoint is not part of the remote fleet contract. Per-backend
+    /// counters stay zero in remote mode.
+    async fn start(remote: Option<std::net::IpAddr>) -> anyhow::Result<Self> {
         let http_requests = std::sync::Arc::new(AtomicU64::new(0));
         let https_requests = std::sync::Arc::new(AtomicU64::new(0));
         let tcp_connections = std::sync::Arc::new(AtomicU64::new(0));
@@ -812,6 +1012,28 @@ impl XdpProxySmokeServices {
         let h3_requests = std::sync::Arc::new(AtomicU64::new(0));
         let sni_connections = std::sync::Arc::new(AtomicU64::new(0));
         let quic_requests = std::sync::Arc::new(AtomicU64::new(0));
+
+        if let Some(ip) = remote {
+            let (quic_addr, quic_task) =
+                start_xdp_smoke_quic_backend(quic_requests.clone()).await?;
+            return Ok(Self {
+                http_addr: std::net::SocketAddr::new(ip, 19000),
+                https_addr: std::net::SocketAddr::new(ip, 19000),
+                tcp_addr: std::net::SocketAddr::new(ip, 19002),
+                udp_addr: std::net::SocketAddr::new(ip, 19003),
+                h3_addr: std::net::SocketAddr::new(ip, 19000),
+                sni_addr: std::net::SocketAddr::new(ip, 19005),
+                quic_addr,
+                http_requests,
+                https_requests,
+                tcp_connections,
+                udp_datagrams,
+                h3_requests,
+                sni_connections,
+                quic_requests,
+                tasks: vec![quic_task],
+            });
+        }
 
         let (http_addr, http_task) =
             start_xdp_smoke_http_backend(http_requests.clone(), b"xdp-http-smoke\n").await?;
@@ -1126,6 +1348,7 @@ async fn xdp_proxy_smoke_managers(
         access_log_pipeline: crate::api_config::AccessLogPipelineConfig::default(),
         relay: crate::api_config::RelayConfig::default(),
         kernel_tuning: crate::api_config::KernelTuningConfig::default(),
+        cache: Default::default(),
     });
     let proxy_logic = crate::proxy::EdgeProxy {
         config: std::sync::Arc::new(store.clone()),
@@ -1204,8 +1427,10 @@ async fn xdp_proxy_smoke_config_store(
         }
     }
 
-    let mut global_http = crate::config_models::GlobalHTTPAllConfig::default();
-    global_http.allow_lan_ip = true;
+    let global_http = crate::config_models::GlobalHTTPAllConfig {
+        allow_lan_ip: true,
+        ..Default::default()
+    };
     let mut http3_policies = std::collections::HashMap::new();
     http3_policies.insert(
         1,
@@ -1507,6 +1732,8 @@ pub async fn raw_smoke(
 pub async fn proxy_smoke(
     _duration: std::time::Duration,
     _ready_file: Option<std::path::PathBuf>,
+    _kernel_mode: bool,
+    _remote: Option<std::net::IpAddr>,
 ) -> anyhow::Result<serde_json::Value> {
     anyhow::bail!("XDP proxy smoke is supported on Linux only")
 }

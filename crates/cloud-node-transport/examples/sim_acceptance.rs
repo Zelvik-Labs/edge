@@ -1,8 +1,9 @@
 //! §7/§8 acceptance matrix runner: sweeps the plan's RTT × loss ×
 //! bandwidth grid plus per-axis slices (buffer, policer, jitter, AQM,
-//! route switch, concurrency) over EdgeCC, its ablation variants, and
-//! the pinned references. Emits CSV rows; deterministic per (cell,
-//! replica) seed so runs are reproducible.
+//! route switch, concurrency) over EdgeCC, its ablation variants
+//! (loss-blind, no-p_rand, seeded prior), and the pinned references.
+//! Emits CSV rows; deterministic per (cell, replica) seed so runs are
+//! reproducible.
 //!
 //! Usage: cargo run -p cloud-node-transport --release --example \
 //!          sim_acceptance > matrix.csv
@@ -11,7 +12,7 @@ use cloud_node_transport::cc::reference::{
     Bbr3Ref, CubicRef, LossBlindRef, NewRenoRef,
 };
 use cloud_node_transport::cc::CongestionController;
-use cloud_node_transport::edgecc::{Ablations, EdgeCc, PathPrior, Tier};
+use cloud_node_transport::edgecc::{EdgeCc, PathPrior, Tier};
 use cloud_node_transport::sim::{
     run, run_multi, Aqm, FlowSpec, Policer, RouteSwitch, SimConfig, SimResult,
 };
@@ -30,7 +31,7 @@ struct Variant {
 
 #[derive(Clone, Copy)]
 enum Vk {
-    Edge(Ablations, bool /* prand_off */, bool /* prior */),
+    Edge(bool /* prand_off */, bool /* prior */),
     LossBlindFlag, // EdgeCc.loss_blind — the §2.9 ablation path
     Bbr3,
     LossBlindRef,
@@ -38,37 +39,14 @@ enum Vk {
     NewReno,
 }
 
-const NO_ABLATE: Ablations = Ablations {
-    no_probe: false,
-    no_utility: false,
-    no_belief: false,
-    no_plateau: false,
-};
-
 const VARIANTS: &[Variant] = &[
-    Variant { name: "edgecc", kind: Vk::Edge(NO_ABLATE, false, false) },
-    Variant {
-        name: "edgecc_no_probe",
-        kind: Vk::Edge(Ablations { no_probe: true, ..NO_ABLATE }, false, false),
-    },
-    Variant {
-        name: "edgecc_no_utility",
-        kind: Vk::Edge(Ablations { no_utility: true, ..NO_ABLATE }, false, false),
-    },
-    Variant {
-        name: "edgecc_no_belief",
-        kind: Vk::Edge(Ablations { no_belief: true, ..NO_ABLATE }, false, false),
-    },
-    Variant {
-        name: "edgecc_no_plateau",
-        kind: Vk::Edge(Ablations { no_plateau: true, ..NO_ABLATE }, false, false),
-    },
+    Variant { name: "edgecc", kind: Vk::Edge(false, false) },
     Variant {
         name: "edgecc_no_prand",
-        kind: Vk::Edge(NO_ABLATE, true, false),
+        kind: Vk::Edge(true, false),
     },
     Variant { name: "edgecc_loss_blind", kind: Vk::LossBlindFlag },
-    Variant { name: "edgecc_prior", kind: Vk::Edge(NO_ABLATE, false, true) },
+    Variant { name: "edgecc_prior", kind: Vk::Edge(false, true) },
     Variant { name: "bbr3ref", kind: Vk::Bbr3 },
     Variant { name: "lossblindref", kind: Vk::LossBlindRef },
     Variant { name: "cubicref", kind: Vk::Cubic },
@@ -77,7 +55,7 @@ const VARIANTS: &[Variant] = &[
 
 fn build(v: &Variant, cfg: &SimConfig) -> Box<dyn CongestionController> {
     match &v.kind {
-        Vk::Edge(ab, prand_off, prior) => {
+        Vk::Edge(prand_off, prior) => {
             let prior = prior.then(|| PathPrior {
                 bw_bps: cfg.rate_bps,
                 base_rtt: cfg.delay + cfg.ack_delay_prop,
@@ -86,7 +64,6 @@ fn build(v: &Variant, cfg: &SimConfig) -> Box<dyn CongestionController> {
                 confidence: 0.8,
             });
             let mut cc = EdgeCc::new(cfg.mss, Tier::T1, prior, false);
-            cc.ablations = *ab;
             cc.infer.prand_off = *prand_off;
             Box::new(cc)
         }
@@ -164,7 +141,7 @@ fn selected(cell: &str, variant: &str, replica: u32) -> bool {
     let mut it = f.splitn(3, ':');
     it.next() == Some(cell)
         && it.next() == Some(variant)
-        && it.next().map_or(true, |r| r == replica.to_string())
+        && it.next().is_none_or(|r| r == replica.to_string())
 }
 
 fn run_cell(v: &Variant, cfg: &SimConfig, flows: u32, cell: &str, replica: u32) {
@@ -255,6 +232,27 @@ fn main() {
                 let mut cfg = base_cell(rtt, mbps, loss);
                 cfg.buffer_bytes = bdp(&cfg);
                 let cell = format!("rtt{rtt}_loss{loss}_bw{mbps}");
+                for v in VARIANTS {
+                    for rep in 0..REPLICAS {
+                        run_cell(v, &cfg, 1, &cell, rep);
+                    }
+                }
+            }
+        }
+    }
+
+    // Harsh-WAN grid: high-RTT (200-300ms) × high-loss (10-30%) cells.
+    // These are the paths a CDN edge actually serves cross-ocean; each
+    // cell caps the transfer at 2 MiB / 240s virtual so tail-loss RTO
+    // storms bound the wall-clock cost of one run.
+    for &rtt in &[200u64, 250, 300] {
+        for &loss in &[10.0f64, 20.0, 30.0] {
+            for &mbps in &[10u64, 100] {
+                let mut cfg = base_cell(rtt, mbps, loss);
+                cfg.buffer_bytes = bdp(&cfg);
+                cfg.total_bytes = 2 * 1024 * 1024;
+                cfg.duration = Duration::from_secs(240);
+                let cell = format!("harsh_rtt{rtt}_loss{loss}_bw{mbps}");
                 for v in VARIANTS {
                     for rep in 0..REPLICAS {
                         run_cell(v, &cfg, 1, &cell, rep);

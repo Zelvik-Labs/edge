@@ -409,7 +409,7 @@ impl Http3ProxyManager {
     /// transport policy apply to its connections.
     pub async fn build_quinn_server_config_scoped(
         &self,
-        af_xdp_scoped: bool,
+        _af_xdp_scoped: bool,
     ) -> Result<quinn::ServerConfig> {
         let mut rustls_config = crate::ssl::build_rustls_server_config(
             Arc::clone(&self.cert_selector),
@@ -430,7 +430,7 @@ impl Http3ProxyManager {
             // keeps quinn's stock controller — non-XDP contract
             // unchanged (§A.4).
             #[cfg(target_os = "linux")]
-            if af_xdp_scoped
+            if _af_xdp_scoped
                 && let Some(factory) = crate::xdp::xdp_quic_cc_factory()
             {
                 transport_config.congestion_controller_factory(factory);
@@ -956,6 +956,7 @@ mod tests {
                 crate::api_config::AccessLogPipelineConfig::default(),
             relay: crate::api_config::RelayConfig::default(),
             kernel_tuning: crate::api_config::KernelTuningConfig::default(),
+            cache: Default::default(),
         });
         let waf_state = Arc::new(crate::firewall::state::WafStateManager::new());
         let proxy_logic = crate::proxy::EdgeProxy {

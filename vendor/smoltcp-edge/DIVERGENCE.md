@@ -53,6 +53,11 @@ tests at the end of `socket::tcp::test`.
   `set_transport_controller`, `has_transport_controller`,
   `transport_snapshot` (`Option<CcSnapshot>`), `transport_pacing_rate`,
   `transport_next_send_due`, `set_rx_window_cap`.
+- Read-only observability getters (additive, non-behavioural):
+  `remote_window` (`remote_win_len` after scaling), `unacked_bytes`
+  (`flight_size` — whole unacked range), `transport_pipe` (scoreboard
+  pipe under an external controller), `timer_state` (retransmit /
+  zero-window-probe / idle timer name for remote diagnostics).
 - `rx_window_cap: Option<usize>` — `scaled_window()` applies the cap
   before window scaling (dynamic advertised-window control, D-R1 hook).
 - PAWS (RFC 7323 §5.3): after ACK acceptability, segments with
@@ -79,7 +84,11 @@ tests at the end of `socket::tcp::test`.
   `pending_fast_retransmit` under ext; send selection order is
   scoreboard-lost records (cwnd-gated) → new data (cwnd + pacing gated)
   → TLP tail probe; post-emit `note_sent` + `pace_after_send` +
-  `mark_app_limited` + `clear_tlp_probe`.
+  `mark_app_limited` + `clear_tlp_probe`. A pending TLP probe that the
+  round cannot turn into a sequence-occupying segment (zero window and
+  no tail record — the silent-peer zombie shape) is consumed anyway:
+  left pending it made `poll_at` report Now forever and pinned an
+  afxdp reactor at ~101% with no wire traffic (EN-27).
 - `cwnd_remaining()`: under ext returns `cc.cwnd() - pipe` instead of
   `controller.window() - flight_size`.
 - `seq_to_transmit()`: admits cwnd-admissible lost records and pending
@@ -117,6 +126,47 @@ tests at the end of `socket::tcp::test`.
   `test_set_path_mtu_floors_bogus_small_values`,
   `test_pmtu_report_disarms_blackhole_probe`,
   `test_rto_blackhole_probe_arms_and_ack_disarms`.
+
+### T9 additions (in-session buffer autotune)
+
+- `src/storage/ring_buffer.rs`: `RingBuffer::resize(new_capacity)`
+  (alloc-gated) — copies the logical contents in read order into a
+  fresh owned allocation, preserving `length` and re-basing `read_at`.
+  Refuses `new_capacity == capacity` or `< length`; borrowed storage is
+  promoted to owned on success.
+- `src/socket/tcp.rs`: public APIs
+  `grow_recv_buffer`/`grow_send_buffer` (ring resize passthrough),
+  `rx_window_wire_cap` (`u16::MAX << remote_win_shift` — the largest
+  window encodable under the negotiated scale, 64 KiB when the peer
+  offered no RFC 1323 scaling), and
+  `set_rx_window_shift_for_ceiling` — raises `remote_win_shift` as if
+  the buffer were already the ceiling size, so in-session growth stays
+  encodable. Must be called before the socket emits SYN/SYN-ACK (the
+  shift is negotiated there); a peer without window-scaling support
+  still zeroes it at handshake.
+- New field `rx_win_shift_floor: u8` — persists the configured ceiling
+  shift across `reset()` (which otherwise re-derives the shift from
+  current capacity and would silently drop a pre-handshake ceiling).
+  `reset()` now computes `max(capacity-derived shift, floor)`; with
+  the floor at its default 0 the computation is byte-for-byte
+  upstream.
+- Mid-session shrink safety (live-observed crash fix): upstream's
+  `enqueue_unallocated` invariant (`count <= window()`) assumes the
+  advertised window can never exceed ring capacity, which runtime
+  `resize` breaks two ways — bytes parked in the out-of-order
+  assembler are not counted by `rx_buffer.len()`, and the peer's last
+  advertised window (`remote_last_win`) can cover a burst larger than
+  the shrunken capacity.
+  - `grow_recv_buffer` refuses a shrink below
+    `len + assembler high-water mark` so parked out-of-order bytes can
+    never outlive the ring.
+  - The ingest path clips each wire payload to the ring's writable
+    span before the assembler records it; a fully-clipped segment gets
+    an immediate ACK carrying the shrunken window, and the clipped
+    tail is retransmitted by the peer when the window reopens — normal
+    TCP semantics for a reduced buffer, no silent corruption.
+  - New tests `test_grow_recv_buffer_refuses_shrink_below_assembler`
+    and `test_rx_ingest_clips_to_shrunk_capacity`.
 
 ## `src/socket/tcp/congestion.rs`
 

@@ -415,7 +415,7 @@ enum XdpCommands {
     /// Dump XDP shadow maps known to this process
     #[command(name = "dump-maps")]
     DumpMaps,
-    /// Detach and attach again using configs/runtime.yaml
+    /// Detach and attach again using configs/api_node.yaml
     Reload,
     /// Attach and poll raw AF_XDP frames for a short Linux dataplane smoke test
     #[command(name = "raw-smoke")]
@@ -436,6 +436,21 @@ enum XdpCommands {
         /// Write this file after AF_XDP proxy redirect is ready
         #[arg(long)]
         ready_file: Option<PathBuf>,
+        /// Serve the same smoke site set on kernel sockets instead of
+        /// attaching XDP (A/B dataplane comparison; xdp.proxy.ports still
+        /// supplies the listen ports)
+        #[arg(long)]
+        kernel: bool,
+        /// Point upstreams at a remote backend fleet on this host instead of
+        /// spawning in-process backends (remote port convention: 19000 http,
+        /// 19002 tcp-echo, 19003 udp-echo, 19005 sni-tls; quic stays local)
+        #[arg(long)]
+        remote: Option<std::net::IpAddr>,
+        /// Validation-only: pin the AF_XDP dataplane's congestion controller
+        /// for this smoke process (real-wire A/B measurement; production
+        /// stays pinned to edgecc)
+        #[arg(long, value_enum)]
+        cc: Option<XdpCliCc>,
     },
     /// Verify an in-process XDP reload while AF_XDP proxy bridge is active
     #[command(name = "proxy-reload-smoke")]
@@ -469,11 +484,37 @@ enum XdpCommands {
         /// after session establishment (F1 lifecycle validation)
         #[arg(long)]
         reload_at_ms: Option<u64>,
+        /// Validation-only: pin the AF_XDP dataplane's congestion controller
+        /// for this smoke process (real-wire A/B measurement; production
+        /// stays pinned to edgecc)
+        #[arg(long, value_enum)]
+        cc: Option<XdpCliCc>,
     },
 
     /// Interactive XDP configuration wizard / XDP 交互式配置向导
     #[command(name = "configure")]
     Configure,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum XdpCliCc {
+    Cubic,
+    Edgecc,
+    Bbr3,
+    NewReno,
+    LossBlind,
+}
+
+impl From<XdpCliCc> for cloud_node_rust::runtime_mode::XdpTransportController {
+    fn from(value: XdpCliCc) -> Self {
+        match value {
+            XdpCliCc::Cubic => Self::Cubic,
+            XdpCliCc::Edgecc => Self::Edgecc,
+            XdpCliCc::Bbr3 => Self::Bbr3,
+            XdpCliCc::NewReno => Self::NewReno,
+            XdpCliCc::LossBlind => Self::LossBlind,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -571,7 +612,7 @@ fn spawn_xdp_port_sync_task(rt: &tokio::runtime::Runtime, enabled: bool) {
                         consecutive_errors, err
                     );
                     warn!("{message}");
-                    if consecutive_errors == 1 || consecutive_errors % 10 == 0 {
+                    if consecutive_errors == 1 || consecutive_errors.is_multiple_of(10) {
                         logging::report_node_log(
                             "warn".to_string(),
                             "xdp_ports".to_string(),
@@ -584,6 +625,30 @@ fn spawn_xdp_port_sync_task(rt: &tokio::runtime::Runtime, enabled: bool) {
         }
     });
 
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = rt;
+    }
+}
+
+/// Periodic AF_XDP session-table visibility: the scalar diag counters are
+/// the only live view into the smoltcp session table from journal logs —
+/// session count, unverified share, evictions and refusals stay
+/// observable without a monitor endpoint.
+fn spawn_xdp_diag_log_task(rt: &tokio::runtime::Runtime, enabled: bool) {
+    if !enabled {
+        return;
+    }
+    #[cfg(target_os = "linux")]
+    spawn_staggered(rt, Duration::from_secs(60), async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            interval.tick().await;
+            let diag = cloud_node_rust::xdp::af_xdp::tcp_diag_scalars();
+            info!("afxdp.tcp diag {}", diag);
+        }
+    });
     #[cfg(not(target_os = "linux"))]
     {
         let _ = rt;
@@ -907,7 +972,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             let effective_xdp = if file_config_is_authoritative {
                 // The file's explicit interface list is authoritative: apply
                 // CLI overrides on top without consulting the live node config
-                // (attach must work with a fully-declared runtime.yaml).
+                // (attach must work with a fully-declared api_node.yaml).
                 let mut xdp = runtime_config.xdp.clone();
                 if let Some(mode) = mode {
                     let mode = XdpRuntimeMode::from(mode);
@@ -969,7 +1034,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 );
                 return Ok(());
             }
-            let runtime_path = cloud_node_rust::paths::NodePaths::current().runtime_config_file();
+            let runtime_path = cloud_node_rust::paths::NodePaths::current().api_config_file();
             if file_config_is_authoritative {
                 cloud_node_rust::xdp_config_wizard::merge_xdp_enabled(&runtime_path, true)?;
             } else {
@@ -998,7 +1063,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 .build()?;
             rt.block_on(cloud_node_rust::xdp::detach(purge_state))?;
             runtime_config.xdp.enabled = false;
-            let runtime_path = cloud_node_rust::paths::NodePaths::current().runtime_config_file();
+            let runtime_path = cloud_node_rust::paths::NodePaths::current().api_config_file();
             save_xdp_enabled(&runtime_path, false)?;
             RuntimeConfig::set_current(runtime_config);
             print_xdp_status();
@@ -1079,14 +1144,27 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
         XdpCommands::ProxySmoke {
             duration_ms,
             ready_file,
+            kernel,
+            remote,
+            cc,
         } => {
             let runtime_config = RuntimeConfig::load_default()?;
             RuntimeConfig::set_current(runtime_config);
-            let rt = tokio::runtime::Builder::new_current_thread()
+            if let Some(cc) = cc {
+                cloud_node_rust::runtime_mode::set_validation_transport_controller(cc.into());
+            }
+            // Match the production `run_node` scheduler: session tasks,
+            // demux workers and per-queue bridges spread across cores.
+            // current_thread serializes all of that onto the bridge loop's
+            // thread, which starves XSK ring draining under burst load and
+            // reports proxy losses the real deployment never sees.
+            let rt = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()?;
             let duration = Duration::from_millis(duration_ms.max(1));
-            let report = rt.block_on(cloud_node_rust::xdp::proxy_smoke(duration, ready_file))?;
+            let report = rt.block_on(cloud_node_rust::xdp::proxy_smoke(
+                duration, ready_file, kernel, remote,
+            ))?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
         XdpCommands::ProxyReloadSmoke {
@@ -1111,9 +1189,13 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             payload_bytes,
             send_interval_ms,
             reload_at_ms,
+            cc,
         } => {
             let runtime_config = RuntimeConfig::load_default()?;
             RuntimeConfig::set_current(runtime_config);
+            if let Some(cc) = cc {
+                cloud_node_rust::runtime_mode::set_validation_transport_controller(cc.into());
+            }
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?;
@@ -2843,6 +2925,52 @@ WorkingDirectory='/opt/cloud-node'
     }
 }
 
+/// Raise RLIMIT_NOFILE to the node's working target. Every entry path
+/// that opens sockets needs this — the daemon used to be the only
+/// caller, which left `xdp proxy-smoke` and friends running under the
+/// systemd/interactive default of 1024 and silently crushing every
+/// fd-derived admission budget (EN-27: HTTP=179, Origin=128).
+#[cfg(target_family = "unix")]
+fn raise_nofile_limit() {
+    unsafe {
+        let mut rlim = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
+        if libc::getrlimit(libc::RLIMIT_NOFILE, &mut rlim) == 0 {
+            let target = 1048576;
+            let old_cur = rlim.rlim_cur;
+
+            if rlim.rlim_max < target {
+                rlim.rlim_max = target;
+            }
+            if rlim.rlim_cur < target {
+                rlim.rlim_cur = target;
+            }
+
+            if libc::setrlimit(libc::RLIMIT_NOFILE, &rlim) == 0 {
+                if old_cur < target {
+                    info!(
+                        "Successfully raised RLIMIT_NOFILE (file descriptor limit) from {} to {}",
+                        old_cur, target
+                    );
+                }
+            } else {
+                let err = std::io::Error::last_os_error();
+                warn!(
+                    "Failed to raise RLIMIT_NOFILE to {}. Current limit: cur={}, max={}. Error: {}. (You may need 'ulimit -n 1048576' or root privileges)",
+                    target, rlim.rlim_cur, rlim.rlim_max, err
+                );
+            }
+        } else {
+            warn!("Failed to get RLIMIT_NOFILE");
+        }
+    }
+}
+
+#[cfg(not(target_family = "unix"))]
+fn raise_nofile_limit() {}
+
 fn main() -> anyhow::Result<()> {
     // Must run before any worker/runtime threads spawn: enables mimalloc's
     // abandoned-page purge on thread termination so RSS does not plateau on
@@ -2850,6 +2978,7 @@ fn main() -> anyhow::Result<()> {
     cloud_node_rust::memory_reclaim::configure_allocator();
     let cli = Cli::parse();
     Language::set_current(Language::detect());
+    raise_nofile_limit();
 
     match cli.command {
         None => {
@@ -3105,7 +3234,6 @@ WantedBy=multi-user.target\n",
                 t("test.relay_copy_buffer"),
                 cloud_node_rust::memory_governor::MEMORY_GOVERNOR.relay_copy_buffer_bytes()
             );
-            println!("{}: {:?}", t("test.runtime_mode"), runtime_config.mode());
             println!(
                 "XDP: enabled={} attachMode={} fallback={} interfaces={}",
                 yes_no(runtime_config.xdp.enabled),
@@ -3121,6 +3249,12 @@ WantedBy=multi-user.target\n",
 
 fn spawn_xdp_health_fallback_task(rt: &tokio::runtime::Runtime, waf_state: Arc<WafStateManager>) {
     spawn_staggered(rt, Duration::from_secs(10), async move {
+        // Boot grace: the first proxy-port sync (~30s in) triggers an
+        // attach→XSK→bridge sequence whose "not ready yet" window can
+        // exceed the failure budget on slow/small nodes. Transient by
+        // design, so do not count failures during warmup.
+        const XDP_HEALTH_BOOT_GRACE: Duration = Duration::from_secs(120);
+        let booted_at = std::time::Instant::now();
         let mut interval = tokio::time::interval(Duration::from_secs(5));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         let mut consecutive_failures = 0u8;
@@ -3133,6 +3267,10 @@ fn spawn_xdp_health_fallback_task(rt: &tokio::runtime::Runtime, waf_state: Arc<W
             }
 
             let status = cloud_node_rust::xdp::status_snapshot();
+            if status.warming || booted_at.elapsed() < XDP_HEALTH_BOOT_GRACE {
+                consecutive_failures = 0;
+                continue;
+            }
             let Some(reason) = xdp_health_fallback_reason(&status) else {
                 consecutive_failures = 0;
                 continue;
@@ -3194,6 +3332,55 @@ fn xdp_health_fallback_reason(status: &cloud_node_rust::xdp::XdpStatusSnapshot) 
     None
 }
 
+/// Detaches the XDP dataplane when the server shuts down. A pinned BPF
+/// link survives process exit — without teardown the dead generation's
+/// program keeps redirecting into dead AF_XDP sockets (connection
+/// refusals) and blocks the next attach with EBUSY. Pingora broadcasts
+/// shutdown to services during the graceful window, which is what lets
+/// this run before the process exits. A graceful upgrade (SIGQUIT) is
+/// deliberately skipped: the successor adopts the pinned dataplane.
+struct XdpShutdownService {
+    phase: parking_lot::Mutex<
+        tokio::sync::broadcast::Receiver<pingora_core::server::ExecutionPhase>,
+    >,
+}
+
+#[async_trait::async_trait]
+impl pingora_core::services::background::BackgroundService for XdpShutdownService {
+    async fn start(&self, mut shutdown: pingora_core::server::ShutdownWatch) {
+        if shutdown.changed().await.is_err() {
+            return;
+        }
+        let mut phase = None;
+        {
+            let mut rx = self.phase.lock();
+            while let Ok(latest) = rx.try_recv() {
+                phase = Some(latest);
+            }
+        }
+        if matches!(
+            phase,
+            Some(
+                pingora_core::server::ExecutionPhase::GracefulUpgradeTransferringFds
+                    | pingora_core::server::ExecutionPhase::GracefulUpgradeCloseTimeout
+            )
+        ) {
+            info!("graceful upgrade in progress — XDP dataplane left for the successor");
+            return;
+        }
+        match tokio::time::timeout(
+            Duration::from_secs(3),
+            cloud_node_rust::xdp::detach(false),
+        )
+        .await
+        {
+            Ok(Ok(())) => info!("XDP dataplane detached during shutdown"),
+            Ok(Err(err)) => warn!("XDP detach during shutdown failed: {err}"),
+            Err(_) => warn!("XDP detach during shutdown exceeded its 3s budget"),
+        }
+    }
+}
+
 fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()> {
     let node_paths = cloud_node_rust::paths::NodePaths::current();
     node_paths.ensure_runtime_dirs().ok();
@@ -3243,49 +3430,6 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
 
     info!("Starting CloudNode Rust v{}...", env!("CARGO_PKG_VERSION"));
 
-    #[cfg(target_family = "unix")]
-    {
-        unsafe {
-            let mut rlim = libc::rlimit {
-                rlim_cur: 0,
-                rlim_max: 0,
-            };
-            if libc::getrlimit(libc::RLIMIT_NOFILE, &mut rlim) == 0 {
-                let target = 1048576;
-                let old_cur = rlim.rlim_cur;
-
-                if rlim.rlim_max < target {
-                    rlim.rlim_max = target;
-                }
-                if rlim.rlim_cur < target {
-                    rlim.rlim_cur = target;
-                }
-
-                if libc::setrlimit(libc::RLIMIT_NOFILE, &rlim) == 0 {
-                    if old_cur < target {
-                        info!(
-                            "Successfully raised RLIMIT_NOFILE (file descriptor limit) from {} to {}",
-                            old_cur, target
-                        );
-                    } else {
-                        info!(
-                            "RLIMIT_NOFILE (file descriptor limit) is already {} (>= {})",
-                            old_cur, target
-                        );
-                    }
-                } else {
-                    let err = std::io::Error::last_os_error();
-                    warn!(
-                        "Failed to raise RLIMIT_NOFILE to {}. Current limit: cur={}, max={}. Error: {}. (You may need 'ulimit -n 1048576' or root privileges)",
-                        target, rlim.rlim_cur, rlim.rlim_max, err
-                    );
-                }
-            } else {
-                warn!("Failed to get RLIMIT_NOFILE");
-            }
-        }
-    }
-
     // Create the runtime to spawn background tasks
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -3315,15 +3459,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         Duration::from_millis(access_log_pipeline.warning_interval_ms),
     );
     let mut runtime_config =
-        RuntimeConfig::load_default().expect("Failed to load configs/runtime.yaml");
-    if runtime_config.is_rke2() {
-        info!(
-            "RKE2 runtime mode enabled for cluster {} in namespace {}.",
-            runtime_config.cluster.name, runtime_config.cluster.namespace
-        );
-    } else {
-        info!("Standalone runtime mode enabled.");
-    }
+        RuntimeConfig::load_default().expect("Failed to load configs/api_node.yaml");
     RuntimeConfig::set_current(runtime_config.clone());
     repair_missing_xdp_ebpf_object_for_current_runtime(&node_paths);
     if runtime_config.xdp.enabled && runtime_config.xdp.interfaces.is_empty() {
@@ -3358,6 +3494,17 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
                     &mut runtime_config.xdp,
                 );
                 runtime_config.validate()?;
+                if !runtime_config.xdp.interfaces.is_empty()
+                    && runtime_config
+                        .xdp
+                        .interfaces
+                        .iter()
+                        .all(|interface| interface.mode != XdpRuntimeMode::Proxy)
+                {
+                    warn!(
+                        "xdp.enabled=true but no interface has mode: proxy — AF_XDP dataplane inactive; set mode: proxy or leave interfaces empty for auto-config"
+                    );
+                }
                 RuntimeConfig::set_current(runtime_config.clone());
                 if before_interfaces != runtime_config.xdp.interfaces {
                     info!("XDP interface queues refreshed after netdev tuning");
@@ -3384,12 +3531,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         warn!("XDP initialization skipped: {}", err);
     }
     spawn_xdp_port_sync_task(&rt, runtime_config.xdp.enabled);
-    if runtime_config.is_rke2() {
-        cloud_node_rust::cache_manager::CACHE
-            .storage
-            .apply_cluster_cache_config(&runtime_config.cluster.cache)?;
-    }
-    cloud_node_rust::cluster::runtime::start(&runtime_config);
+    spawn_xdp_diag_log_task(&rt, runtime_config.xdp.enabled);
     let api_config_arc = Arc::new(api_config.clone());
     cloud_node_rust::client_agent::load_client_agent_ip_index();
     cloud_node_rust::client_agent::start_client_agent_queue(api_config_arc.clone());
@@ -3657,6 +3799,33 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     spawn_staggered(&rt, Duration::from_secs(2), async move {
         tcp_manager.start_listeners().await;
     });
+
+    my_server.add_service(
+        pingora_core::services::background::background_service(
+            "xdp-shutdown",
+            XdpShutdownService {
+                phase: parking_lot::Mutex::new(my_server.watch_execution_phase()),
+            },
+        ),
+    );
+
+    // SIGINT takes Pingora's fast-shutdown path: the shutdown broadcast
+    // never reaches services, so a dedicated listener runs a bounded
+    // best-effort detach before the process exits.
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        if let Ok(mut sigint) = signal(SignalKind::interrupt()) {
+            rt.spawn(async move {
+                sigint.recv().await;
+                let _ = tokio::time::timeout(
+                    Duration::from_millis(1500),
+                    cloud_node_rust::xdp::detach(false),
+                )
+                .await;
+            });
+        }
+    }
 
     info!("CloudNode (PID {}) is ready.", std::process::id());
     my_server.run_forever();

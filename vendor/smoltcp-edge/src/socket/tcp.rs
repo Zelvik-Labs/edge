@@ -532,6 +532,10 @@ pub struct Socket<'a> {
     /// The sending window scaling factor advertised to remotes which support RFC 1323.
     /// It is zero if the window <= 64KiB and/or the remote does not support it.
     remote_win_shift: u8,
+    /// smoltcp-edge (T9): floor for `remote_win_shift` that survives
+    /// `reset()` — lets the advertised scale cover a growth ceiling
+    /// larger than the initial receive buffer. 0 = upstream behavior.
+    rx_win_shift_floor: u8,
     /// The remote window size, relative to local_seq_no
     /// I.e. we're allowed to send octets until local_seq_no+remote_win_len
     remote_win_len: usize,
@@ -676,6 +680,14 @@ const PMTU_PROBE_MSS: usize = 512;
 /// blackhole probe arms — one strike can still be ordinary loss.
 const PMTU_BLACKHOLE_RTO_THRESHOLD: u8 = 2;
 
+/// Consecutive no-progress RTOs before the connection is abandoned.
+/// Upstream smoltcp retransmits forever; on the AF_XDP dataplane a
+/// dead-peer session keeps burning encode+produce work per RTO cycle
+/// and refreshes its own activity timestamp, so nothing ever reaps it.
+/// ~10 timeouts at backed-off RTO bounds the zombie lifetime to a few
+/// minutes (Linux TCP_RETRIES2 gives up around 15).
+const RTO_NO_PROGRESS_ABORT: u8 = 10;
+
 impl<'a> Socket<'a> {
     #[allow(unused_comparisons)] // small usize platforms always pass rx_capacity check
     /// Create a socket using the given buffers.
@@ -716,6 +728,7 @@ impl<'a> Socket<'a> {
             remote_last_win: 0,
             remote_win_len: 0,
             remote_win_shift: rx_cap_log2.saturating_sub(16) as u8,
+            rx_win_shift_floor: 0,
             remote_win_scale: None,
             remote_has_sack: false,
             remote_mss: DEFAULT_MSS,
@@ -812,6 +825,43 @@ impl<'a> Socket<'a> {
     /// a new-data segment. `None` when unpaced or no controller is set.
     pub fn transport_next_send_due(&self) -> Option<Instant> {
         self.ext_transport.as_ref().and_then(|e| e.next_send_due)
+    }
+
+    /// smoltcp-edge (observability): peer-advertised send window in
+    /// bytes — `remote_win_len` after window-scale is applied. Zero is
+    /// the zero-window-probe regime (sender cannot emit data).
+    pub fn remote_window(&self) -> usize {
+        self.remote_win_len
+    }
+
+    /// smoltcp-edge (observability): bytes transmitted but not yet
+    /// cumulatively ACKed (`flight_size`, whole unacked range —
+    /// including records the scoreboard already marked lost).
+    pub fn unacked_bytes(&self) -> usize {
+        self.flight_size()
+    }
+
+    /// smoltcp-edge (observability): scoreboard pipe — records counted
+    /// in flight by Linux `tcp_packets_in_flight` semantics (SACKed and
+    /// lost-marked records excluded). `None` without an external
+    /// controller.
+    pub fn transport_pipe(&self) -> Option<usize> {
+        self.ext_transport.as_ref().map(|e| e.pipe)
+    }
+
+    /// smoltcp-edge (observability): retransmit/zero-window/idle timer
+    /// state name — distinguishes "waiting on RTO" from "timer disarmed"
+    /// in remote diagnostics.
+    pub fn timer_state(&self) -> &'static str {
+        match self.timer {
+            Timer::Idle { keep_alive_at } => {
+                if keep_alive_at.is_some() { "keepalive" } else { "idle" }
+            }
+            Timer::Retransmit { .. } => "retransmit",
+            Timer::FastRetransmit => "fast_retransmit",
+            Timer::ZeroWindowProbe { .. } => "zero_window_probe",
+            Timer::Close { .. } => "close",
+        }
     }
 
     /// smoltcp-edge (T3): dynamic advertised-window cap. `Some(cap)`
@@ -1246,7 +1296,12 @@ impl<'a> Socket<'a> {
         self.remote_last_win = 0;
         self.remote_win_len = 0;
         self.remote_win_scale = None;
-        self.remote_win_shift = rx_cap_log2.saturating_sub(16) as u8;
+        // smoltcp-edge (T9): `rx_win_shift_floor` survives reset — a
+        // ceiling configured via `set_rx_window_shift_for_ceiling` keeps
+        // the negotiated scale reachable across re-listen.
+        self.remote_win_shift = rx_cap_log2
+            .saturating_sub(16)
+            .max(self.rx_win_shift_floor as usize) as u8;
         self.remote_mss = DEFAULT_MSS;
         self.remote_last_ts = None;
         // smoltcp-edge (T7): reset returns the socket to responder
@@ -1565,6 +1620,66 @@ impl<'a> Socket<'a> {
     #[inline]
     pub fn send_capacity(&self) -> usize {
         self.tx_buffer.capacity()
+    }
+
+    /// smoltcp-edge (T9): grow the receive buffer in place, preserving
+    /// queued data in ring order. The advertised window can only make
+    /// use of capacity up to `rx_window_wire_cap()` — anything past the
+    /// negotiated scale is heap without wire effect. Returns false (and
+    /// leaves the buffer untouched) when the new capacity cannot hold
+    /// queued data, or when shrinking below space already spoken for by
+    /// the out-of-order assembler — those bytes occupy logical buffer
+    /// space that `len()` does not report, and a capacity below
+    /// `len + assembled_hi` would let the next hole-fill enqueue past
+    /// `window()` and trip the ring's invariant.
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    pub fn grow_recv_buffer(&mut self, new_capacity: usize) -> bool {
+        let assembled_hi = self
+            .assembler
+            .iter_data()
+            .map(|(_start, end)| end)
+            .max()
+            .unwrap_or(0);
+        if new_capacity < self.rx_buffer.len() + assembled_hi {
+            return false;
+        }
+        self.rx_buffer.resize(new_capacity)
+    }
+
+    /// smoltcp-edge (T9): grow the transmit buffer in place — no wire
+    /// negotiation is involved, the buffer is purely local queuing.
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    pub fn grow_send_buffer(&mut self, new_capacity: usize) -> bool {
+        self.tx_buffer.resize(new_capacity)
+    }
+
+    /// smoltcp-edge (T9): the largest receive window encodable on the
+    /// wire under the currently effective scale — `u16::MAX` shifted by
+    /// `remote_win_shift`. Before the handshake completes this reflects
+    /// the pre-negotiation value; a peer without RFC 1323 support pins
+    /// the shift to 0 (64 KiB wire cap) during the handshake.
+    #[inline]
+    pub fn rx_window_wire_cap(&self) -> usize {
+        (u16::MAX as usize) << self.remote_win_shift
+    }
+
+    /// smoltcp-edge (T9): raise the advertised window shift as if the
+    /// receive buffer were `ceiling_capacity` bytes, so later
+    /// `grow_recv_buffer` calls stay encodable on the wire. Must be
+    /// called before the socket emits SYN/SYN-ACK — the shift is
+    /// negotiated there and fixed for the connection. Only ever raises
+    /// the shift; a peer that does not offer window scaling zeroes it
+    /// at handshake anyway. The configured floor survives `reset()` so
+    /// a re-listen keeps the ceiling reachable.
+    pub fn set_rx_window_shift_for_ceiling(&mut self, ceiling_capacity: usize) {
+        let log2 = mem::size_of::<usize>() * 8
+            - (ceiling_capacity | 1).leading_zeros() as usize;
+        // RFC 1323 caps the shift at 14 (2 GiB windows).
+        let shift = (log2.saturating_sub(16) as u8).min(14);
+        self.rx_win_shift_floor = self.rx_win_shift_floor.max(shift);
+        if shift > self.remote_win_shift {
+            self.remote_win_shift = shift;
+        }
     }
 
     /// Check whether the receive buffer is not empty.
@@ -2764,6 +2879,22 @@ impl<'a> Socket<'a> {
             return None;
         }
 
+        // smoltcp-edge (T9): the ring is the ground truth — after a
+        // mid-session `grow_recv_buffer` shrink, a peer's in-flight burst
+        // inside the last advertised window can exceed the new capacity.
+        // Clip to the writable span so the assembler never records bytes
+        // the ring cannot hold; the clipped tail behaves as dropped data
+        // and is retransmitted once the window reopens.
+        let writable = self.rx_buffer.window().saturating_sub(payload_offset);
+        let payload_len = payload_len.min(writable);
+        let payload = &payload[..payload_len];
+        if payload_len == 0 {
+            // The segment carried data but none of it fits — answer with an
+            // immediate ACK advertising the current (smaller) window so the
+            // peer learns the new edge instead of stalling in backoff.
+            return Some(self.ack_reply(ip_repr, repr));
+        }
+
         let assembler_was_empty = self.assembler.is_empty();
 
         // Try adding payload octets to the assembler.
@@ -3062,6 +3193,14 @@ impl<'a> Socket<'a> {
                 // PMTU_PROBE_MSS. Skipped while an ICMP cap is installed:
                 // a reported PTB already carries the path's answer.
                 self.rto_no_progress = self.rto_no_progress.saturating_add(1);
+                if self.rto_no_progress >= RTO_NO_PROGRESS_ABORT {
+                    // smoltcp-edge: bound zombie sessions — the peer has
+                    // not acknowledged a single byte across this many
+                    // timeout generations; retransmitting forever only
+                    // burns dataplane CPU. Same give-up as `timed_out`.
+                    net_debug!("retransmit abandon: no ack progress");
+                    self.set_state(State::Closed);
+                }
                 if self.rto_no_progress >= PMTU_BLACKHOLE_RTO_THRESHOLD
                     && self.path_mtu_cap.is_none()
                 {
@@ -3407,6 +3546,21 @@ impl<'a> Socket<'a> {
             State::FinWait2 | State::TimeWait => {}
         }
 
+        // smoltcp-edge: a pending TLP probe that could not occupy
+        // sequence space this round (zero peer window AND no emittable
+        // tail record) must be consumed anyway — left pending it makes
+        // `seq_to_transmit`/`poll_at` report Now forever while dispatch
+        // can never emit the probe, which pinned an afxdp reactor at
+        // ~101% with zero wire traffic (EN-27). The RTO timer remains
+        // the retry backstop.
+        if repr.payload.is_empty()
+            && repr.control == TcpControl::None
+            && let Some(ext) = &mut self.ext_transport
+            && ext.tlp_probe_pending()
+        {
+            ext.clear_tlp_probe();
+        }
+
         // There might be more than one reason to send a packet. E.g. the keep-alive timer
         // has expired, and we also have data in transmit buffer. Since any packet that occupies
         // sequence space will elicit an ACK, we only need to send an explicit packet if we
@@ -3536,6 +3690,29 @@ impl<'a> Socket<'a> {
             && matches!(self.acc_ecn.mode, EcnMode::AccEcn | EcnMode::ClassicEcn)
         {
             ip_repr.set_ecn(2); // ECT(0)
+        }
+
+        // smoltcp-edge: suppress content-free emits. A dispatch that
+        // entered the `seq_to_transmit` branch but produced no payload
+        // (pacing gate, zero cwnd, or a full send buffer), no control
+        // flag, and carries no new information — no ACK debt, no window
+        // update, no SACK ranges, no pending ECN feedback, no CWR —
+        // must not go on the wire: the bare ACK duplicates
+        // `remote_last_ack` exactly and only burns a TX cycle. Observed
+        // on the AF_XDP dataplane: ~33k/s empty ACKs per queue pair
+        // while pacing held data, starving real segments. The pacing
+        // deadline is still reported through `poll_at` so the retry
+        // arrives on time.
+        if repr.payload.is_empty()
+            && repr.control == TcpControl::None
+            && !self.ack_to_transmit()
+            && !self.window_to_update()
+            && !self.accecn_ack_needed
+            && !self.cwr_pending
+            && !commit_feedback
+            && repr.sack_ranges.iter().all(|r| r.is_none())
+        {
+            return Ok(());
         }
 
         // Actually send the packet. If this succeeds, it means the packet is in
@@ -10884,6 +11061,87 @@ mod test {
     }
 
     #[test]
+    fn test_pacing_blocked_data_emits_nothing() {
+        use cloud_node_transport::cc::reference::CubicRef;
+
+        // Regression: when the pacing gate holds new data before its
+        // deadline, dispatch must produce NO packet at all — previously
+        // each poll still committed the default bare ACK, which flooded
+        // the AF_XDP dataplane with ~33k/s content-free frames.
+        let mut s = socket_established_with_buffer_sizes(8192, 64);
+        s.remote_win_len = 65535;
+        s.remote_mss = 1024;
+        s.set_transport_controller(Box::new(CubicRef::new(1024)));
+
+        let data = [b'x'; 8192];
+        s.send_slice(&data[..]).unwrap();
+
+        recv!(s, time 0, [
+            TcpRepr {
+                seq_number: LOCAL_SEQ + 1,
+                ack_number: Some(REMOTE_SEQ + 1),
+                payload: &data[..1024],
+                ..RECV_TEMPL
+            },
+            TcpRepr {
+                seq_number: LOCAL_SEQ + 1 + 1024,
+                ack_number: Some(REMOTE_SEQ + 1),
+                payload: &data[1024..2048],
+                ..RECV_TEMPL
+            },
+            TcpRepr {
+                seq_number: LOCAL_SEQ + 1 + 2048,
+                ack_number: Some(REMOTE_SEQ + 1),
+                payload: &data[2048..3072],
+                ..RECV_TEMPL
+            },
+            TcpRepr {
+                seq_number: LOCAL_SEQ + 1 + 3072,
+                ack_number: Some(REMOTE_SEQ + 1),
+                payload: &data[3072..4096],
+                ..RECV_TEMPL
+            }
+        ]);
+
+        // ACK one segment: cwnd opens for two more, but pacing spaces
+        // them ~10ms out (102400 B/s over 50ms srtt → due at ~t=60).
+        send!(
+            s,
+            time 50,
+            TcpRepr {
+                seq_number: REMOTE_SEQ + 1,
+                ack_number: Some(LOCAL_SEQ + 1 + 1024),
+                window_len: 65535,
+                ..SEND_TEMPL
+            }
+        );
+
+        // Pacing spaces subsequent sends ~10ms out — the first post-ACK
+        // segment goes immediately; the NEXT is held until ~t=70.
+        recv!(s, time 60, Ok(TcpRepr {
+            seq_number: LOCAL_SEQ + 1 + 4096,
+            ack_number: Some(REMOTE_SEQ + 1),
+            payload: &data[4096..5120],
+            ..RECV_TEMPL
+        }));
+
+        // Repeated polls before the pacing deadline must stay silent —
+        // not a single bare ACK (regression for the AF_XDP empty-ACK
+        // flood, ~33k/s content-free frames while pacing held data).
+        for t in [61i64, 65, 69] {
+            recv_nothing!(s, time t);
+        }
+
+        // At the deadline the queued segment finally appears.
+        recv!(s, time 70, Ok(TcpRepr {
+            seq_number: LOCAL_SEQ + 1 + 5120,
+            ack_number: Some(REMOTE_SEQ + 1),
+            payload: &data[5120..6144],
+            ..RECV_TEMPL
+        }));
+    }
+
+    #[test]
     fn test_external_transport_loss_event_shrinks_cwnd() {
         use cloud_node_transport::cc::reference::CubicRef;
 
@@ -11491,6 +11749,100 @@ mod test {
             })
         );
         assert!(!s.cwr_pending);
+    }
+
+    #[test]
+    fn test_grow_recv_buffer_refuses_shrink_below_assembler() {
+        let mut s = socket_established();
+
+        // Park a 10-byte out-of-order tail behind a 10-byte hole:
+        // rx_buffer stays empty while the assembler owns seqs +11..+21.
+        send!(
+            s,
+            TcpRepr {
+                seq_number: REMOTE_SEQ + 1 + 10,
+                ack_number: Some(LOCAL_SEQ + 1),
+                payload: &b"AAAAAAAAAA"[..],
+                ..SEND_TEMPL
+            },
+            Some(TcpRepr {
+                seq_number: LOCAL_SEQ + 1,
+                ack_number: Some(REMOTE_SEQ + 1),
+                window_len: 64,
+                ..RECV_TEMPL
+            })
+        );
+        assert_eq!(s.recv_queue(), 0);
+        assert!(!s.assembler.is_empty());
+
+        // Shrinking below the assembler's high-water mark would orphan
+        // the parked bytes — the resize must be refused.
+        assert!(!s.grow_recv_buffer(16));
+        assert_eq!(s.recv_capacity(), 64);
+        // A shrink that still covers the parked range is legal.
+        assert!(s.grow_recv_buffer(32));
+        assert_eq!(s.recv_capacity(), 32);
+
+        // Filling the hole now must not trip the ring's enqueue
+        // invariant: contig_len (20) fits within window (32).
+        send!(
+            s,
+            TcpRepr {
+                seq_number: REMOTE_SEQ + 1,
+                ack_number: Some(LOCAL_SEQ + 1),
+                payload: &b"BBBBBBBBBB"[..],
+                ..SEND_TEMPL
+            },
+            Some(TcpRepr {
+                seq_number: LOCAL_SEQ + 1,
+                ack_number: Some(REMOTE_SEQ + 1 + 20),
+                window_len: 12,
+                ..RECV_TEMPL
+            })
+        );
+        assert_eq!(s.recv_queue(), 20);
+    }
+
+    #[test]
+    fn test_rx_ingest_clips_to_shrunk_capacity() {
+        let mut s = socket_established();
+
+        // Idle session shrinks its rx ring mid-connection; the peer's
+        // last advertised window (64) still covers a larger burst.
+        assert!(s.grow_recv_buffer(16));
+
+        // A 40-byte segment arriving inside the stale advertised window
+        // must be clipped to the ring's writable span instead of
+        // asserting inside `enqueue_unallocated`.
+        send!(
+            s,
+            TcpRepr {
+                seq_number: REMOTE_SEQ + 1,
+                ack_number: Some(LOCAL_SEQ + 1),
+                payload: &[b'X'; 40][..],
+                ..SEND_TEMPL
+            }
+        );
+        assert_eq!(s.recv_queue(), 16);
+
+        // A follow-up segment that fits nothing at all still earns an
+        // immediate ACK carrying the shrunken window edge.
+        send!(
+            s,
+            TcpRepr {
+                seq_number: REMOTE_SEQ + 1 + 16,
+                ack_number: Some(LOCAL_SEQ + 1),
+                payload: &b"YY"[..],
+                ..SEND_TEMPL
+            },
+            Some(TcpRepr {
+                seq_number: LOCAL_SEQ + 1,
+                ack_number: Some(REMOTE_SEQ + 1 + 16),
+                window_len: 0,
+                ..RECV_TEMPL
+            })
+        );
+        assert_eq!(s.recv_queue(), 16);
     }
 }
 

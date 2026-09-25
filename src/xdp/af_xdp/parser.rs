@@ -230,6 +230,7 @@ pub(crate) fn encode_reply_eth_header(link: &AfXdpLinkMeta, ethertype: u16, out:
 /// destination (the upstream peer); `mtu` carries the reported
 /// next-hop/PTB MTU where the error type provides one.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(any(test, target_os = "linux"))]
 pub struct AfXdpIcmpError {
     pub flow: AfXdpTcpFlowKey,
     pub proto: u8,
@@ -738,6 +739,7 @@ pub(crate) fn ipv6_transport_offset(
     None
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn parse_transport(
     frame: &[u8],
     protocol: u8,
@@ -1059,8 +1061,7 @@ fn classify_ipv4(frame: &[u8], ip_offset: usize) -> AfXdpFrameClass {
     let ihl = usize::from(base[0] & 0x0f) * 4;
     let total_len = usize::from(u16::from_be_bytes([base[2], base[3]]));
     if base[0] >> 4 != 4
-        || ihl < IPV4_MIN_HEADER_LEN
-        || ihl > 15 * 4
+        || !(IPV4_MIN_HEADER_LEN..=15 * 4).contains(&ihl)
         || total_len < ihl
         || ip_offset + total_len > frame.len()
     {

@@ -103,7 +103,9 @@ impl OriginH3ClientSession {
 /// (never a silent kernel fallback).
 async fn create_h3_endpoint(server_addr: StdSocketAddr) -> PingoraResult<Endpoint> {
     #[cfg(target_os = "linux")]
-    if crate::xdp::afxdp_upstream_selected() {
+    // Loopback upstreams take the kernel path — `lo` has no XSK/reactor
+    // queue, so an AF_XDP dial to one can only fail.
+    if crate::xdp::afxdp_upstream_selected() && !server_addr.ip().is_loopback() {
         let socket = crate::xdp::af_xdp_dial_udp(server_addr, None)
             .await
             .map_err(|err| {
@@ -173,24 +175,22 @@ mod af_xdp_quinn {
     /// is awaited via `reserve_owned`; the returned permit is dropped
     /// immediately — it only proves a slot existed, and quinn retries
     /// `try_send` which re-registers here if the slot was reclaimed.
+    type PendingPermit = Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        tokio::sync::mpsc::OwnedPermit<AfXdpReactorRequest>,
+                        tokio::sync::mpsc::error::SendError<()>,
+                    >,
+                > + Send,
+        >,
+    >;
+
     struct AfXdpUdpPoller {
         tx: tokio::sync::mpsc::Sender<AfXdpReactorRequest>,
         // `Mutex` keeps the poller `Sync` (`UdpPoller` requires it);
         // `poll_writable` only ever holds the guard while polling.
-        pending: std::sync::Mutex<
-            Option<
-                Pin<
-                    Box<
-                        dyn Future<
-                                Output = Result<
-                                    tokio::sync::mpsc::OwnedPermit<AfXdpReactorRequest>,
-                                    tokio::sync::mpsc::error::SendError<()>,
-                                >,
-                            > + Send,
-                    >,
-                >,
-            >,
-        >,
+        pending: std::sync::Mutex<Option<PendingPermit>>,
     }
 
     impl std::fmt::Debug for AfXdpUdpPoller {
@@ -414,6 +414,7 @@ fn client_config(verify_cert: bool) -> PingoraResult<ClientConfig> {
             format!("building H3 TLS config: {err}"),
         )
     })?;
+    #[allow(unused_mut)]
     let mut config = ClientConfig::new(Arc::new(quic));
     // T5: when this client will run over the AF_XDP upstream path,
     // apply the policy-selected transport controller. The stock

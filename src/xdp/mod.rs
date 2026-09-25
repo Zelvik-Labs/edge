@@ -40,6 +40,12 @@ const XDP_RULE_SWEEP_INTERVAL_SECS: u64 = 5;
 // whole-second resonance with the rule sweeper.
 const XDP_MAP_SYNC_DEBOUNCE_MS: u64 = 47;
 const XDP_PROXY_DATAPLANE_ACTIVE: bool = true;
+// Status-file writes are last-writer-wins by claim order: `persist_status`
+// spawns one async writer per call and they can complete out of order, so
+// each claim carries a sequence and a stale claim drops its write instead
+// of clobbering a newer snapshot.
+static XDP_STATUS_WRITE_SEQ: AtomicU64 = AtomicU64::new(0);
+static XDP_STATUS_WRITE_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
 #[cfg(any(test, target_os = "linux"))]
 const XDP_XSK_STATUS_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
@@ -81,6 +87,26 @@ pub struct XdpQueueStatus {
     /// T9/D-AQM: CE marks applied to ECT-capable deferred units (RFC 3168).
     #[serde(default)]
     pub aqm_ce_marks: u64,
+    /// TX descriptors currently held by the kernel (produced minus
+    /// completed), bounded by the in-flight cap — observability for
+    /// bufferbloat at the xsk TX ring.
+    #[serde(default)]
+    pub tx_inflight: u64,
+    /// Frames that crossed the dataplane dwell bound before reaching the
+    /// wire (emit→send > 100 ms). Measurement only — they were still
+    /// sent. Nonzero under load means emit backpressure isn't bounding
+    /// queue latency and RTT samples can fold in internal queueing.
+    #[serde(default)]
+    pub stale_dwells: u64,
+    /// TCP frames handed off to a sibling worker (flow-ownership
+    /// steering). High values relative to RX mean the NIC's RSS spread
+    /// disagrees with the worker assignment — normal on asymmetric RSS.
+    #[serde(default)]
+    pub steered_frames: u64,
+    /// Steered frames shed because the target worker's channel was full.
+    /// TCP retransmits cover the loss; nonzero means a worker is behind.
+    #[serde(default)]
+    pub steer_sheds: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -122,6 +148,11 @@ pub struct XdpStatusSnapshot {
     pub proxy_ready: bool,
     #[serde(default)]
     pub proxy_redirect_enabled: bool,
+    /// Proxy bridge/AF_XDP workers are mid-spawn — attach or reload is in
+    /// progress and "redirect not enabled yet" is a transient state, not a
+    /// fault. Health checks must not count failures while this is set.
+    #[serde(default)]
+    pub warming: bool,
     pub proxy_fallback_reason: String,
     pub tcp_dataplane_ready: bool,
     pub tcp_dataplane_detail: String,
@@ -324,6 +355,7 @@ fn xsk_status_refresh_due(
 /// Workers gate on this lease, not on the manager Arc they were spawned
 /// with: `manager_is_current` must never stop a polling loop that still
 /// owns live sessions.
+#[cfg(any(test, target_os = "linux"))]
 pub(crate) struct AfXdpDataplaneLease {
     /// Set when this socket generation is truly decommissioned — runtime
     /// stop, `xdp.enabled=false`, or dataplane teardown. A compatible
@@ -341,10 +373,10 @@ pub(crate) struct AfXdpDataplaneLease {
     /// spawn, decremented when the worker loop returns. Retirement
     /// callers that rebind the queues wait for this to drain so a new
     /// socket generation never races a dying worker's still-open fd.
-    #[allow(dead_code)]
     live_workers: AtomicU64,
 }
 
+#[cfg(any(test, target_os = "linux"))]
 impl AfXdpDataplaneLease {
     pub(crate) fn new(owner: std::sync::Arc<XdpManager>) -> Self {
         Self {
@@ -405,6 +437,7 @@ impl AfXdpDataplaneLease {
     }
 }
 
+#[cfg(any(test, target_os = "linux"))]
 impl std::fmt::Debug for AfXdpDataplaneLease {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Deliberately shallow — `owner` is an Arc<XdpManager> and
@@ -479,6 +512,7 @@ pub(crate) struct XdpManager {
     /// `xdp.stateTables` was configured and the defaults were auto-scaled
     /// to fit this node's kernel-BPF budget. Status reports the real
     /// footprint, not the unsized defaults.
+    #[cfg(any(test, target_os = "linux"))]
     effective_state_tables: parking_lot::RwLock<Option<crate::runtime_mode::XdpStateTables>>,
     state: parking_lot::RwLock<RuleState>,
     fallback_reason: parking_lot::RwLock<String>,
@@ -488,6 +522,12 @@ pub(crate) struct XdpManager {
     attached: parking_lot::RwLock<BTreeSet<String>>,
     #[cfg(target_os = "linux")]
     ebpf: parking_lot::Mutex<Option<aya::Ebpf>>,
+    /// Shared-account credential covering this generation's new pinned
+    /// map bytes — held for the dataplane's lifetime, released on
+    /// teardown/manager drop. Kept beside `ebpf` so ownership tracks the
+    /// same lifecycle.
+    #[cfg(target_os = "linux")]
+    attach_permit: parking_lot::Mutex<Option<crate::memory_governor::StaticSharedPermit>>,
     #[cfg(target_os = "linux")]
     af_xdp: parking_lot::Mutex<Option<linux::AfXdpRuntimeHandle>>,
     /// T4: outbound dial registry for the current bridge generation —
@@ -576,7 +616,6 @@ pub(crate) struct XdpManager {
     /// redirect enable attempt, so queue workers stay alive while the
     /// bridge proves they can actually process before opening redirect.
     /// Socket registration alone is not proof a worker is running.
-    #[allow(dead_code)]
     proxy_workers_starting: AtomicBool,
     /// F1: this generation adopted the predecessor's live AF_XDP
     /// dataplane instead of creating fresh sockets — observability for
@@ -620,6 +659,7 @@ impl XdpManager {
     fn new(config: XdpConfig) -> Self {
         Self {
             config,
+            #[cfg(any(test, target_os = "linux"))]
             effective_state_tables: parking_lot::RwLock::new(None),
             state: parking_lot::RwLock::new(RuleState::default()),
             fallback_reason: parking_lot::RwLock::new(String::new()),
@@ -629,6 +669,8 @@ impl XdpManager {
             attached: parking_lot::RwLock::new(BTreeSet::new()),
             #[cfg(target_os = "linux")]
             ebpf: parking_lot::Mutex::new(None),
+            #[cfg(target_os = "linux")]
+            attach_permit: parking_lot::Mutex::new(None),
             #[cfg(target_os = "linux")]
             af_xdp: parking_lot::Mutex::new(None),
             #[cfg(target_os = "linux")]
@@ -741,7 +783,10 @@ impl XdpManager {
         }
         if self.config.interfaces.is_empty() {
             self.set_fallback_reason("runtime xdp.interfaces is empty");
-            if self.config.fallback.fail_start() {
+            // A reload must never publish a generation that cannot attach:
+            // rejecting keeps the predecessor's dataplane serving. The
+            // fallback=pass contract only covers cold start.
+            if self.config.fallback.fail_start() || predecessor.is_some() {
                 anyhow::bail!("xdp enabled but no interfaces configured");
             }
             return Ok(());
@@ -749,7 +794,7 @@ impl XdpManager {
         let proxy_frame_size_detail = xdp_proxy_frame_size_detail(&self.config);
         if !proxy_frame_size_detail.is_empty() {
             self.set_fallback_reason(format!("{proxy_frame_size_detail}; traffic will PASS"));
-            if self.config.fallback.fail_start() {
+            if self.config.fallback.fail_start() || predecessor.is_some() {
                 anyhow::bail!("{proxy_frame_size_detail}");
             }
             self.persist_status();
@@ -761,18 +806,18 @@ impl XdpManager {
         }
 
         let object_override = ebpf_object_override(&self.config);
-        if let Some(path) = &object_override {
-            if !path.exists() {
-                self.set_fallback_reason(format!(
-                    "configured eBPF object {} is missing",
-                    path.display()
-                ));
-                if self.config.fallback.fail_start() {
-                    anyhow::bail!("xdp eBPF object is missing: {}", path.display());
-                }
-                self.persist_status();
-                return Ok(());
+        if let Some(path) = &object_override
+            && !path.exists()
+        {
+            self.set_fallback_reason(format!(
+                "configured eBPF object {} is missing",
+                path.display()
+            ));
+            if self.config.fallback.fail_start() || predecessor.is_some() {
+                anyhow::bail!("xdp eBPF object is missing: {}", path.display());
             }
+            self.persist_status();
+            return Ok(());
         }
 
         #[cfg(target_os = "linux")]
@@ -807,8 +852,18 @@ impl XdpManager {
             self.attach_committed.store(false, Ordering::Relaxed);
             self.attach_dataplane_restored
                 .store(false, Ordering::Relaxed);
+            // Reload keeps the resolved footprint: when the operator left
+            // `stateTables` unset, inherit the predecessor's effective
+            // sizes so attach never re-derives them from the moving
+            // `available` watermark. Restart recovery (no predecessor)
+            // happens inside attach via the pin survey.
+            let mut attach_config = self.config.clone();
+            if attach_config.state_tables.is_none() {
+                attach_config.state_tables =
+                    predecessor.and_then(|old| old.effective_state_tables.read().clone());
+            }
             match linux::attach(
-                &self.config,
+                &attach_config,
                 object_override.as_deref(),
                 false,
                 Some(&self.attach_committed),
@@ -823,6 +878,10 @@ impl XdpManager {
                         .store(attached_program.imported_flows, Ordering::Relaxed);
                     *self.effective_state_tables.write() =
                         attached_program.effective_state_tables;
+                    // The committed map-memory credential lives as long as
+                    // this generation's dataplane — dropping it here would
+                    // free ledger bytes the kernel still pins.
+                    *self.attach_permit.lock() = attached_program.resource_permit;
                     *self.ebpf.lock() = Some(attached_program.ebpf);
                     let attached = attached_program.interfaces;
                     *self.attached.write() = attached;
@@ -863,7 +922,11 @@ impl XdpManager {
                 }
                 Err(err) => {
                     self.set_fallback_reason(format!("attach failed: {err}"));
-                    if self.config.fallback.fail_start() {
+                    // On reload the failed generation must not stay
+                    // published — `fallback=pass` would silently drop the
+                    // predecessor's dataplane with it. Reject the change
+                    // and let the rollback restore the serving manager.
+                    if self.config.fallback.fail_start() || predecessor.is_some() {
                         return Err(err);
                     }
                 }
@@ -872,7 +935,7 @@ impl XdpManager {
         #[cfg(not(target_os = "linux"))]
         {
             self.set_fallback_reason("XDP attach is supported on Linux only");
-            if self.config.fallback.fail_start() {
+            if self.config.fallback.fail_start() || predecessor.is_some() {
                 anyhow::bail!("XDP attach is supported on Linux only");
             }
         }
@@ -897,20 +960,21 @@ impl XdpManager {
             self.release_dial_guard().await;
             *self.af_xdp.lock() = None;
             *self.ebpf.lock() = None;
-            if !self.config.interfaces.is_empty() {
-                if let Err(err) = linux::detach(&self.config).await {
-                    let detail = format!("runtime xdp.enabled=false; detach failed: {err}");
-                    self.set_fallback_reason(detail.clone());
-                    tracing::warn!("{detail}");
-                    crate::logging::report_node_log(
-                        "warn".to_string(),
-                        "xdp".to_string(),
-                        detail,
-                        0,
-                    );
-                    self.persist_status_blocking();
-                    return;
-                }
+            *self.attach_permit.lock() = None;
+            if !self.config.interfaces.is_empty()
+                && let Err(err) = linux::detach(&self.config).await
+            {
+                let detail = format!("runtime xdp.enabled=false; detach failed: {err}");
+                self.set_fallback_reason(detail.clone());
+                tracing::warn!("{detail}");
+                crate::logging::report_node_log(
+                    "warn".to_string(),
+                    "xdp".to_string(),
+                    detail,
+                    0,
+                );
+                self.persist_status_blocking();
+                return;
             }
         }
         self.attached.write().clear();
@@ -1419,6 +1483,7 @@ impl XdpManager {
             proxy_unsupported_ports,
             proxy_ready,
             proxy_redirect_enabled: self.proxy_redirect_enabled.load(Ordering::Relaxed),
+            warming: self.proxy_workers_starting.load(Ordering::Relaxed),
             proxy_fallback_reason,
             tcp_dataplane_ready: xdp_proxy_has_tcp_like_ports(&self.config)
                 && xdp_tcp_dataplane_supported()
@@ -1431,7 +1496,9 @@ impl XdpManager {
             tcp_congestion_control: if xdp_proxy_has_tcp_like_ports(&self.config)
                 && xdp_tcp_dataplane_supported()
             {
-                "cubic".to_string()
+                crate::runtime_mode::XdpTransportController::Edgecc
+                    .as_str()
+                    .to_string()
             } else {
                 String::new()
             },
@@ -1561,21 +1628,33 @@ impl XdpManager {
         let paths = crate::paths::NodePaths::current();
         let path = paths.xdp_state_file();
         let status = self.status();
+        let seq = XDP_STATUS_WRITE_SEQ.fetch_add(1, Ordering::Relaxed) + 1;
         match tokio::runtime::Handle::try_current() {
             Ok(handle) => {
                 handle.spawn(async move {
+                    if seq != XDP_STATUS_WRITE_SEQ.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    let _guard = XDP_STATUS_WRITE_LOCK.lock();
+                    if seq != XDP_STATUS_WRITE_SEQ.load(Ordering::Relaxed) {
+                        return;
+                    }
                     if let Some(parent) = path.parent() {
-                        let _ = tokio::fs::create_dir_all(parent).await;
+                        let _ = std::fs::create_dir_all(parent);
                     }
                     match serde_json::to_vec_pretty(&status) {
                         Ok(body) => {
-                            let _ = tokio::fs::write(path, body).await;
+                            let _ = std::fs::write(&path, body);
                         }
                         Err(err) => tracing::warn!("failed to encode XDP status: {}", err),
                     }
                 });
             }
             Err(_) => {
+                let _guard = XDP_STATUS_WRITE_LOCK.lock();
+                if seq != XDP_STATUS_WRITE_SEQ.load(Ordering::Relaxed) {
+                    return;
+                }
                 if let Err(err) = write_status_snapshot_blocking(&path, &status) {
                     tracing::warn!("failed to write XDP status: {}", err);
                 }
@@ -1590,6 +1669,11 @@ impl XdpManager {
         );
         let path = crate::paths::NodePaths::current().xdp_state_file();
         let status = self.status();
+        let seq = XDP_STATUS_WRITE_SEQ.fetch_add(1, Ordering::Relaxed) + 1;
+        let _guard = XDP_STATUS_WRITE_LOCK.lock();
+        if seq != XDP_STATUS_WRITE_SEQ.load(Ordering::Relaxed) {
+            return;
+        }
         if let Err(err) = write_status_snapshot_blocking(&path, &status) {
             tracing::warn!("failed to write XDP status: {}", err);
         }
@@ -1633,6 +1717,9 @@ impl XdpManager {
                 status.aqm_drops = prev.aqm_drops;
                 status.aqm_ce_marks = prev.aqm_ce_marks;
                 status.admission_refusals = prev.admission_refusals;
+                status.stale_dwells = prev.stale_dwells;
+                status.steered_frames = prev.steered_frames;
+                status.steer_sheds = prev.steer_sheds;
                 if prev.faulted {
                     status.faulted = true;
                     status.registered = false;
@@ -1919,8 +2006,8 @@ impl XdpManager {
     }
 
     /// EN-14: install the cookie key ring if the pinned map has none.
+    #[cfg(target_os = "linux")]
     fn sync_cookie_key(&self) {
-        #[cfg(target_os = "linux")]
         let result = {
             let mut ebpf = self.ebpf.lock();
             match ebpf.as_mut() {
@@ -1928,8 +2015,6 @@ impl XdpManager {
                 None => return,
             }
         };
-        #[cfg(not(target_os = "linux"))]
-        let result: anyhow::Result<()> = Ok(());
         if let Err(err) = result {
             tracing::warn!("XDP cookie key install unavailable: {err}");
         }
@@ -1956,8 +2041,8 @@ impl XdpManager {
     }
 
     /// Push the EN-09 absolute pending deadline into XDP_PENDING_CAP.
+    #[cfg(target_os = "linux")]
     fn sync_pending_cap(&self) {
-        #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
         let ttl_ns = self
             .config
             .admission
@@ -1965,7 +2050,6 @@ impl XdpManager {
             .map(|a| a.tcp_pending_ms)
             .unwrap_or_else(crate::runtime_mode::default_tcp_pending_ms)
             .saturating_mul(1_000_000);
-        #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
         let flags = self
             .config
             .admission
@@ -1974,14 +2058,12 @@ impl XdpManager {
             .unwrap_or(0);
         // EN-16: the admission cap tracks the configured pending-table size
         // so the eBPF bound and the pinned map never disagree.
-        #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
         let max_pending = self
             .config
             .state_tables
             .as_ref()
             .and_then(|t| t.pending_max_entries)
             .unwrap_or(65_536);
-        #[cfg(target_os = "linux")]
         let result = {
             let mut ebpf = self.ebpf.lock();
             match ebpf.as_mut() {
@@ -1989,8 +2071,6 @@ impl XdpManager {
                 None => return,
             }
         };
-        #[cfg(not(target_os = "linux"))]
-        let result: anyhow::Result<()> = Ok(());
         if let Err(err) = result {
             tracing::warn!("XDP pending-cap map sync unavailable: {err}");
         }
@@ -2254,6 +2334,22 @@ impl XdpManager {
         0
     }
 
+    /// eBPF map bytes already pinned under bpffs at the effective spec —
+    /// the share of `projectedBytes` a re-attach does not re-charge.
+    #[cfg(target_os = "linux")]
+    fn bpf_map_pinned_bytes(&self) -> u64 {
+        let mut config = self.config.clone();
+        if let Some(tables) = self.effective_state_tables.read().clone() {
+            config.state_tables = Some(tables);
+        }
+        linux::pinned_spec_bytes(&config)
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn bpf_map_pinned_bytes(&self) -> u64 {
+        0
+    }
+
     #[cfg(target_os = "linux")]
     fn detach_after_runtime_failure(&self, reason: String) {
         if let Err(err) = linux::detach_blocking(&self.config) {
@@ -2264,6 +2360,7 @@ impl XdpManager {
             self.set_fallback_reason(reason);
         }
         *self.ebpf.lock() = None;
+        *self.attach_permit.lock() = None;
         *self.af_xdp.lock() = None;
         self.attached.write().clear();
         self.xsk_status.write().clear();
@@ -2448,6 +2545,10 @@ impl XdpManager {
             },
             "kernelBpfBudget": {
                 "projectedBytes": self.bpf_map_projected_bytes(),
+                "pinnedBytes": self.bpf_map_pinned_bytes(),
+                // Bytes committed to the shared account by this
+                // generation's attach transaction (new pinned maps).
+                "accountCommittedBytes": self.attach_committed_bytes(),
                 "budgetBytes": crate::memory_governor::MEMORY_GOVERNOR
                     .snapshot(crate::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads())
                     .kernel_bpf_budget_bytes,
@@ -2455,6 +2556,8 @@ impl XdpManager {
             "tcpDataplane": {
                 "ready": xdp_tcp_dataplane_supported(),
                 "detail": self.tcp_dataplane_detail(),
+                // UMEM + ring bytes committed to the shared account.
+                "umemAccountBytes": self.af_xdp_umem_committed_bytes(),
             },
             "flowFeedback": self.flow_feedback_json(),
             "xskQueues": queue_statuses,
@@ -2465,6 +2568,40 @@ impl XdpManager {
             "blockedRanges": state.blocked_ranges.iter().filter(|(_, expiry)| **expiry > now).map(|(range, expiry)| serde_json::json!({"from": range_bound_to_ip(range.from, range.v6).to_string(), "to": range_bound_to_ip(range.to, range.v6).to_string(), "expiresAt": expiry})).collect::<Vec<_>>(),
             "allowedRanges": state.allowed_ranges.iter().filter(|(_, expiry)| **expiry > now).map(|(range, expiry)| serde_json::json!({"from": range_bound_to_ip(range.from, range.v6).to_string(), "to": range_bound_to_ip(range.to, range.v6).to_string(), "expiresAt": expiry})).collect::<Vec<_>>(),
         })
+    }
+
+    /// Committed shared-account bytes held by this generation's attach
+    /// (0 when unattached or off-Linux).
+    fn attach_committed_bytes(&self) -> u64 {
+        #[cfg(target_os = "linux")]
+        {
+            self.attach_permit
+                .lock()
+                .as_ref()
+                .map(|permit| permit.bytes())
+                .unwrap_or(0)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            0
+        }
+    }
+
+    /// Committed shared-account bytes held by the AF_XDP runtime's UMEM
+    /// and rings (0 without a runtime).
+    fn af_xdp_umem_committed_bytes(&self) -> u64 {
+        #[cfg(target_os = "linux")]
+        {
+            self.af_xdp
+                .lock()
+                .as_ref()
+                .map(|handle| handle.umem_committed_bytes())
+                .unwrap_or(0)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            0
+        }
     }
 
     /// EN-10 feedback/takeover state. `ownerEpoch` is read from the pinned
@@ -2535,6 +2672,7 @@ impl XdpManager {
             self.release_dial_guard_blocking();
             *self.af_xdp.lock() = None;
             *self.ebpf.lock() = None;
+            *self.attach_permit.lock() = None;
         }
         self.attached.write().clear();
         self.xsk_status.write().clear();
@@ -2639,7 +2777,11 @@ impl XdpManager {
         self.proxy_redirect_enabled.store(false, Ordering::Relaxed);
         #[cfg(target_os = "linux")]
         {
+            // Adoption/teardown releases this generation's map credential:
+            // pinned bytes adopted by the successor are already inside
+            // observed `used` — no double charge.
             *self.ebpf.lock() = None;
+            *self.attach_permit.lock() = None;
         }
         self.attached.write().clear();
         self.xsk_status.write().clear();
@@ -2671,6 +2813,7 @@ impl XdpManager {
             *self.af_xdp.lock() = None;
             linux::detach(&self.config).await?;
             *self.ebpf.lock() = None;
+            *self.attach_permit.lock() = None;
         }
         self.attached.write().clear();
         self.xsk_status.write().clear();
@@ -2809,44 +2952,41 @@ pub(crate) fn af_xdp_dial_registry() -> Option<std::sync::Arc<af_xdp::AfXdpDialR
     manager_from_runtime().dial_registry()
 }
 
-/// T4-6: whether `xdp.upstream.mode=afxdp` is selected in the live
-/// runtime config. Always false off-Linux — every upstream surface then
-/// takes its kernel path unchanged.
+/// T4-6: whether upstream dials ride the AF_XDP reactor. True whenever
+/// the live runtime config has the XDP dataplane enabled — an enabled
+/// dataplane is always bidirectional, there is no kernel-outbound mode
+/// to select. Linux-only — every upstream surface gates its call site
+/// and takes the kernel path unchanged elsewhere.
+#[cfg(target_os = "linux")]
 pub(crate) fn afxdp_upstream_selected() -> bool {
-    #[cfg(target_os = "linux")]
-    {
-        return RuntimeConfig::current()
-            .map(|runtime| {
-                runtime.xdp.upstream_mode() == crate::runtime_mode::XdpUpstreamMode::Afxdp
-            })
-            .unwrap_or(false);
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        false
-    }
+    RuntimeConfig::current()
+        .map(|runtime| {
+            runtime.xdp.upstream_mode() == crate::runtime_mode::XdpUpstreamMode::Afxdp
+        })
+        .unwrap_or(false)
 }
 
 /// T5: resolved transport policy for QUIC endpoints that are AF_XDP
-/// scoped (demux-fed H3 server, AF_XDP H3 upstream). Returns `None`
-/// when the selection is the cubic default — the caller keeps quinn's
-/// stock controller and the non-XDP contract is unchanged.
+/// scoped (demux-fed H3 server, AF_XDP H3 upstream). The controller is
+/// pinned to EdgeCC like the TCP dataplane; callers keep quinn's stock
+/// controller only on non-XDP-scoped endpoints (§A.4 contract).
 #[cfg(target_os = "linux")]
 pub(crate) fn xdp_quic_cc_factory(
 ) -> Option<Arc<dyn quinn::congestion::ControllerFactory + Send + Sync>> {
     let settings = RuntimeConfig::current()
         .and_then(|runtime| runtime.xdp.transport.clone())
-        .unwrap_or_default();
-    (settings.controller != crate::runtime_mode::XdpTransportController::Cubic).then(|| {
+        .unwrap_or_default()
+        .production_pinned();
+    Some(
         Arc::new(crate::quic_cc::XdpTransportControllerFactory::new(settings))
-            as Arc<dyn quinn::congestion::ControllerFactory + Send + Sync>
-    })
+            as Arc<dyn quinn::congestion::ControllerFactory + Send + Sync>,
+    )
 }
 
 /// T4-6: node-originated TCP connect through the AF_XDP dataplane.
-/// Callers must have explicitly selected `xdp.upstream.mode=afxdp`; a
-/// missing registry is an explicit error, never a silent kernel
-/// fallback.
+/// Reached whenever the XDP dataplane is enabled (bidirectional is
+/// mandatory); a missing registry is an explicit error, never a
+/// silent kernel fallback.
 #[cfg(target_os = "linux")]
 pub(crate) async fn af_xdp_dial_tcp(
     remote: std::net::SocketAddr,
@@ -2855,7 +2995,7 @@ pub(crate) async fn af_xdp_dial_tcp(
     let registry = af_xdp_dial_registry().ok_or_else(|| {
         std::io::Error::new(
             std::io::ErrorKind::NotConnected,
-            "xdp.upstream.mode=afxdp but no live AF_XDP dial registry \
+            "XDP enabled but no live AF_XDP dial registry \
              (bridge not started or dial guard install failed — see xdp status dialGuardDetail)",
         )
     })?;
@@ -2872,7 +3012,7 @@ pub(crate) async fn af_xdp_dial_udp(
     let registry = af_xdp_dial_registry().ok_or_else(|| {
         std::io::Error::new(
             std::io::ErrorKind::NotConnected,
-            "xdp.upstream.mode=afxdp but no live AF_XDP dial registry \
+            "XDP enabled but no live AF_XDP dial registry \
              (bridge not started or dial guard install failed — see xdp status dialGuardDetail)",
         )
     })?;
@@ -2888,7 +3028,20 @@ fn replace_manager_from_runtime() -> std::sync::Arc<XdpManager> {
     });
     let mut current = manager.write();
     let previous = current.clone();
-    *current = std::sync::Arc::new(XdpManager::new(config));
+    let next = std::sync::Arc::new(XdpManager::new(config));
+    #[cfg(target_os = "linux")]
+    {
+        // Share — never take — the predecessor's dial registry so new
+        // upstream dials keep resolving the serving generation while this
+        // one prepares (publish happens before `initialize_inner`, and a
+        // registry-less current manager would fail every dial with
+        // NotConnected). A failed prepare drops only this clone — the
+        // predecessor's registry keeps serving after rollback; a real
+        // handover replaces it via `set_dial_registry` or
+        // `adopt_af_xdp_runtime`.
+        *next.dial_registry.lock() = previous.dial_registry.lock().clone();
+    }
+    *current = next;
     previous.stop_rule_sweeper();
     previous.stop_map_sync_worker();
     previous.stop_flow_event_consumer();
@@ -3318,6 +3471,18 @@ pub async fn reload_from_runtime() -> anyhow::Result<()> {
         .await
     {
         Ok(()) => {
+            // Publish gate: an enabled generation that never attached must
+            // not replace a serving predecessor. `initialize_inner` already
+            // rejects every failure path on reload, so this is the last
+            // line of defense — roll back instead of reporting success.
+            if runtime_config.enabled && manager.attached.read().is_empty() {
+                manager.release_for_handover();
+                restore_manager(old_manager.clone());
+                old_manager.persist_status_blocking();
+                return Err(anyhow::anyhow!(
+                    "XDP reload produced an unattached generation; previous generation kept serving"
+                ));
+            }
             start_rule_sweeper(&manager);
             start_flow_event_consumer(&manager);
             manager.persist_status_blocking();
@@ -3356,6 +3521,7 @@ pub async fn reload_from_runtime() -> anyhow::Result<()> {
                 #[cfg(target_os = "linux")]
                 {
                     old_manager.ebpf.lock().take();
+                    old_manager.attach_permit.lock().take();
                     // F1: an unrestored commit failure already mutated the
                     // live dataplane. Retire the lease so workers abort
                     // sessions explicitly (wire RST), then wait for the

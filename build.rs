@@ -49,12 +49,12 @@ fn sha256_hex(bytes: &[u8]) -> String {
             let _ = child.kill();
             continue;
         }
-        if let Ok(output) = child.wait_with_output() {
-            if output.status.success() {
-                let text = String::from_utf8_lossy(&output.stdout);
-                if let Some(hex) = text.split_whitespace().next() {
-                    return hex.to_ascii_lowercase();
-                }
+        if let Ok(output) = child.wait_with_output()
+            && output.status.success()
+        {
+            let text = String::from_utf8_lossy(&output.stdout);
+            if let Some(hex) = text.split_whitespace().next() {
+                return hex.to_ascii_lowercase();
             }
         }
     }
@@ -132,12 +132,11 @@ fn toolchain_channel(toml: &str) -> Option<String> {
             in_toolchain = line.trim_start_matches('[').starts_with("toolchain");
             continue;
         }
-        if in_toolchain {
-            if let Some((key, value)) = line.split_once('=') {
-                if key.trim() == "channel" {
-                    return Some(value.trim().trim_matches('"').to_string());
-                }
-            }
+        if in_toolchain
+            && let Some((key, value)) = line.split_once('=')
+            && key.trim() == "channel"
+        {
+            return Some(value.trim().trim_matches('"').to_string());
         }
     }
     None
@@ -233,6 +232,18 @@ fn embed_xdp_ebpf_object() -> Result<(), Box<dyn std::error::Error>> {
     // sysroot or -Z build-std looks for rust-src under the stable dir.
     cmd.env_remove("RUSTC");
     cmd.env_remove("RUSTUP_TOOLCHAIN");
+    // A leaked CARGO_TARGET_DIR pushes the child into the parent's target
+    // dir, where it blocks on the parent's build lock; leaked per-target
+    // rustflags (e.g. target-cpu for the host triple) miscompile the
+    // child's x86 host dependencies.
+    cmd.env_remove("CARGO_TARGET_DIR");
+    cmd.env_remove("RUSTFLAGS");
+    for (key, _) in std::env::vars_os() {
+        let Some(key) = key.to_str() else { continue };
+        if key.starts_with("CARGO_TARGET_") && key.ends_with("_RUSTFLAGS") {
+            cmd.env_remove(key);
+        }
+    }
     let built = cmd
         .status()
         .map(|status| status.success())

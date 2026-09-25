@@ -23,8 +23,6 @@ use arc_swap::ArcSwap;
 
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 
-static CLUSTER_STORAGE_POLICY_SKIP_LOGGED: AtomicBool = AtomicBool::new(false);
-
 static CACHED_DISK_AVAILABLE: AtomicU64 = AtomicU64::new(u64::MAX);
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 const CACHE_WRITE_LOCK_SHARDS: usize = 256;
@@ -658,30 +656,6 @@ fn persisted_content_length_matches_body(
         content_length = Some(value);
     }
     content_length_matches_body(key, content_length, body_size)
-}
-
-fn parse_runtime_size_bytes(value: &str) -> anyhow::Result<u64> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return Ok(0);
-    }
-
-    let split_at = trimmed
-        .find(|ch: char| !(ch.is_ascii_digit() || ch == '.'))
-        .unwrap_or(trimmed.len());
-    let (number, unit) = trimmed.split_at(split_at);
-    let count = number
-        .parse::<f64>()
-        .map_err(|_| anyhow::anyhow!("invalid size value: {value}"))?;
-    let multiplier = match unit.trim().to_ascii_lowercase().as_str() {
-        "" | "b" => 1_f64,
-        "k" | "kb" | "ki" | "kib" => 1024_f64,
-        "m" | "mb" | "mi" | "mib" => 1024_f64.powi(2),
-        "g" | "gb" | "gi" | "gib" => 1024_f64.powi(3),
-        "t" | "tb" | "ti" | "tib" => 1024_f64.powi(4),
-        other => anyhow::bail!("unsupported size unit in {value}: {other}"),
-    };
-    Ok((count * multiplier) as u64)
 }
 
 async fn remove_cache_file_from_roots(inner: &FileStorageInner, hash: &str) {
@@ -1569,23 +1543,6 @@ impl Storage for FileStorage {
             })
             .await;
 
-        if persisted {
-            crate::cluster::metadata::emit_upsert(crate::cluster::metadata::CacheMetaUpsertEvent {
-                hash: &hash,
-                cache_key: &k_str,
-                shard_id: existing.shard_id.as_deref(),
-                relative_path: existing.relative_path.as_deref(),
-                root_path: existing.root_path.as_deref(),
-                size: existing.size,
-                expires,
-                status,
-                headers: &header_pairs,
-                compressed: existing.compressed,
-                error_status_allowed,
-                stale_while_revalidate_secs: swr_secs,
-                stale_if_error_secs: sie_secs,
-            });
-        }
         Ok(persisted)
     }
 
@@ -2500,21 +2457,6 @@ impl HandleMiss for FileMissHandler {
             let _ = tokio::fs::remove_file(previous_body_path).await;
         }
         index_surrogate_keys(&self.headers, &self.hash);
-        crate::cluster::metadata::emit_upsert(crate::cluster::metadata::CacheMetaUpsertEvent {
-            hash: &self.hash,
-            cache_key: &self.key_str,
-            shard_id: self.shard_id.as_deref(),
-            relative_path: Some(&self.relative_path),
-            root_path: self.root_path.as_deref(),
-            size: written as u64,
-            expires: self.expires,
-            status: self.status,
-            headers: &self.headers,
-            compressed: self.compressed,
-            error_status_allowed: self.error_status_allowed,
-            stale_while_revalidate_secs: self.stale_while_revalidate_secs,
-            stale_if_error_secs: self.stale_if_error_secs,
-        });
 
         self.committed = true;
         Ok(MissFinishType::Created(written))
@@ -2701,7 +2643,7 @@ fn remove_surrogate_tag_set(tag: &str) {
     if let Some((_, set)) = SURROGATE_KEY_INDEX.remove(tag) {
         let members = set.len() as u64;
         for hash in set.iter() {
-            let owner = format!("{tag}\0{}", &*hash);
+            let owner = format!("{tag}\0{}", hash.as_str());
             let _ = MEMORY_GOVERNOR.resident_memory_replace_owned(
                 crate::memory_governor::ResidentCategory::SurrogateIndex,
                 &owner,
@@ -3061,21 +3003,6 @@ impl TinyUfoL1 {
         self.set_max_bytes(0);
     }
 
-    fn rebuild_empty(&self, resolved: u64) {
-        self.max_bytes.store(resolved, Ordering::Relaxed);
-        let new_cache = Arc::new(Self::build_cache(resolved));
-        self.current_weight.store(0, Ordering::Relaxed);
-        {
-            let mut guard = self.inner.write().expect("TinyUfoL1 lock poisoned");
-            *guard = new_cache.clone();
-        }
-        // Keys inserted between the swap and this retain resolve against the
-        // new (empty) cache and are kept only if their entry is actually
-        // live there — a clear() would drop index entries for fresh puts.
-        self.keys
-            .retain(|key| new_cache.get_stale(key).0.is_some());
-    }
-
     fn force_rebuild_with_limit(&self, bytes: u64) {
         let resolved = bytes.max(1024);
         let target_weight = Self::weight_limit_for_bytes(resolved);
@@ -3136,10 +3063,93 @@ impl TinyUfoL1 {
         self.refresh_stats(&new_cache);
     }
 
+    /// Bounded eviction for the pressure-reclaim path: at most
+    /// `BATCH_ITEMS` keys or `BATCH_BUDGET` per pass, re-evaluating the
+    /// byte gap between passes. Reuses `remove()` — no whole-index clone,
+    /// no global sort, no cache rebuild, so reclaim's own temporary
+    /// allocation is O(batch), not O(cache). Oldest-within-batch eviction
+    /// approximates LRU without touching the vendored TinyUFO internals.
+    /// `shrink_to_bytes` of `None` means evict everything (Critical).
+    fn reclaim_batched(&self, shrink_to_bytes: Option<u64>) -> (usize, u64) {
+        const BATCH_ITEMS: usize = 256;
+        const BATCH_BUDGET: std::time::Duration = std::time::Duration::from_millis(2);
+        let (count_before, bytes_before) = self.stats();
+        let target_bytes = shrink_to_bytes.unwrap_or(0);
+        let mut removed = 0usize;
+        let mut freed_estimate = 0u64;
+        // Convergence guard: a round that found nothing removable means
+        // the index holds only live entries already inside the target —
+        // evicting more would just churn the working set.
+        let mut idle_rounds = 0u32;
+        loop {
+            let (_, current_bytes) = self.stats();
+            let deficit = current_bytes.saturating_sub(target_bytes);
+            if deficit == 0 {
+                break;
+            }
+            let started = std::time::Instant::now();
+            // Bounded candidate harvest: clone at most BATCH_ITEMS keys.
+            // Removed entries leave the set, so the next pass's iterator
+            // front advances past what this pass already drained.
+            let mut batch: Vec<(String, i64, u64)> = Vec::with_capacity(BATCH_ITEMS);
+            let mut candidates: Vec<String> = Vec::with_capacity(BATCH_ITEMS);
+            for key_ref in self.keys.iter() {
+                if candidates.len() >= BATCH_ITEMS || started.elapsed() >= BATCH_BUDGET {
+                    break;
+                }
+                candidates.push(key_ref.clone());
+            }
+            for key in candidates {
+                if started.elapsed() >= BATCH_BUDGET {
+                    break;
+                }
+                match self.get_stale(&key) {
+                    Some((entry, _)) => batch.push((
+                        key.clone(),
+                        entry.created_at,
+                        Self::entry_weight_units(&key, &entry) as u64 * 1024,
+                    )),
+                    None => {
+                        // Index row for a dead entry — free hygiene.
+                        self.keys.remove(&key);
+                    }
+                }
+            }
+            batch.sort_unstable_by_key(|(_, created_at, _)| *created_at);
+            let mut batch_freed = 0u64;
+            for (key, _, est_bytes) in batch {
+                if started.elapsed() >= BATCH_BUDGET {
+                    break;
+                }
+                if shrink_to_bytes.is_some() && batch_freed >= deficit {
+                    break;
+                }
+                self.remove(&key);
+                removed += 1;
+                freed_estimate = freed_estimate.saturating_add(est_bytes);
+                batch_freed += est_bytes;
+            }
+            if batch_freed == 0 {
+                idle_rounds += 1;
+                if idle_rounds >= 2 {
+                    break;
+                }
+            } else {
+                idle_rounds = 0;
+            }
+        }
+        let (count_after, bytes_after) = self.stats();
+        (
+            count_before.saturating_sub(count_after).min(removed),
+            bytes_before.saturating_sub(bytes_after).max(freed_estimate),
+        )
+    }
+
+    #[cfg(test)]
     fn force_clear(&self) {
-        // Critical reclaim means "drop everything" — no salvage.
-        let limit = self.max_bytes.load(Ordering::Relaxed).max(1024);
-        self.rebuild_empty(limit);
+        // Clear-all via the same bounded eviction path the reclaim
+        // coordinator uses.
+        let _ = self.reclaim_batched(None);
     }
 
     fn stats(&self) -> (usize, u64) {
@@ -3656,17 +3666,12 @@ pub struct CacheReclaimStats {
     pub surrogate_index_tags_removed: usize,
 }
 
+/// Pressure-path L1 reclaim goes through bounded batch eviction: the
+/// coordinator (the only caller chain) frees ≤256 entries per ~2ms pass
+/// and re-evaluates the gap between passes — no whole-index clone, no
+/// global sort, no rebuild on the reclaim path.
 fn reclaim_l1_from_storage(storage: &HybridStorage, shrink_to_bytes: Option<u64>) -> (usize, u64) {
-    let (count_before, bytes_before) = storage.l1.stats();
-    match shrink_to_bytes {
-        Some(bytes) => storage.l1.force_rebuild_with_limit(bytes),
-        None => storage.l1.force_clear(),
-    }
-    let (count_after, bytes_after) = storage.l1.stats();
-    (
-        count_before.saturating_sub(count_after),
-        bytes_before.saturating_sub(bytes_after),
-    )
+    storage.l1.reclaim_batched(shrink_to_bytes)
 }
 
 pub fn reclaim_caches_elevated() -> CacheReclaimStats {
@@ -3842,15 +3847,14 @@ impl HybridStorage {
         self.l2.partial_location_for_key_str(key)
     }
 
-    /// A sharded cache layout is intended for a shared cluster volume.  A
+    /// A sharded cache layout is intended for a shared cache volume.  A
     /// memory-only fallback without a CMETA row cannot observe a purge that
     /// happened in another process, so it must not be admitted there.
     fn memory_fallback_requires_metadata(&self) -> bool {
-        crate::runtime_mode::RuntimeConfig::current_is_rke2()
-            || matches!(
-                &self.l2.inner.load().layout,
-                FileStorageLayout::Sharded { .. }
-            )
+        matches!(
+            &self.l2.inner.load().layout,
+            FileStorageLayout::Sharded { .. }
+        )
     }
 
     fn compute_memory_budget() -> u64 {
@@ -4013,61 +4017,7 @@ impl HybridStorage {
         Self::compute_memory_budget()
     }
 
-    pub fn apply_cluster_cache_config(
-        &self,
-        config: &crate::runtime_mode::ClusterCacheConfig,
-    ) -> anyhow::Result<()> {
-        if !config.shared_max_bytes.trim().is_empty() {
-            let bytes = parse_runtime_size_bytes(&config.shared_max_bytes)?;
-            if bytes > 0 {
-                self.max_disk_bytes.store(bytes, Ordering::Relaxed);
-            }
-        }
-
-        crate::memory_governor::MEMORY_GOVERNOR.set_disk_class_budget(
-            crate::memory_governor::DiskLedgerClass::CacheL2,
-            self.max_disk_bytes.load(Ordering::Relaxed),
-        );
-
-        if !config.min_free_bytes.trim().is_empty() {
-            let bytes = parse_runtime_size_bytes(&config.min_free_bytes)?;
-            self.min_free_bytes.store(bytes, Ordering::Relaxed);
-        }
-
-        self.l1.set_max_bytes(config.max_fast_l1_bytes);
-
-        let shards = config
-            .shards
-            .iter()
-            .map(|shard| CacheShard {
-                id: shard.id.clone(),
-                root: shard.path.clone(),
-                weight: shard.weight,
-            })
-            .collect();
-        self.l2.update_shards(shards, Vec::new(), true, false);
-
-        info!(
-            "RPC_CACHE: Applied local RKE2 cache config: shards={}, sharedMaxBytes={}, minFreeBytes={}, maxFastL1Bytes={}",
-            config.shards.len(),
-            config.shared_max_bytes,
-            config.min_free_bytes,
-            config.max_fast_l1_bytes
-        );
-        Ok(())
-    }
-
     pub async fn apply_policy(&self, policy: &crate::config_models::HTTPCachePolicy) {
-        if crate::runtime_mode::RuntimeConfig::current_is_rke2() {
-            self.policy_type.store(POLICY_FILE, Ordering::Relaxed);
-            if !CLUSTER_STORAGE_POLICY_SKIP_LOGGED.swap(true, Ordering::Relaxed) {
-                info!(
-                    "RPC_CACHE: RKE2 runtime mode ignores control-plane cache storage path/capacity settings; local runtime cache config is authoritative."
-                );
-            }
-            return;
-        }
-
         let val = if policy.r#type == "memory" {
             POLICY_MEMORY
         } else {
@@ -4149,10 +4099,15 @@ impl HybridStorage {
                         .collect::<Vec<_>>()
                 });
 
-            let enable_sendfile = options
-                .get("enableSendfile")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true);
+            // A node-local `cache.sendfile` in api_node.yaml wins over the
+            // pushed flag; absent, the control-plane value (default on) rules.
+            let sendfile_override = crate::api_config::local_cache_sendfile_override();
+            let enable_sendfile = sendfile_override.unwrap_or_else(|| {
+                options
+                    .get("enableSendfile")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true)
+            });
             let enable_file_cache = options
                 .get("openFileCache")
                 .and_then(|v| v.get("isOn"))
@@ -4161,8 +4116,14 @@ impl HybridStorage {
 
             if let Some(main) = main_dir {
                 info!(
-                    "RPC_CACHE: Updating cache configuration (Sendfile: {}, HandleCache: {})",
-                    enable_sendfile, enable_file_cache
+                    "RPC_CACHE: Updating cache configuration (Sendfile: {}{}, HandleCache: {})",
+                    enable_sendfile,
+                    if sendfile_override.is_some() {
+                        " [local]"
+                    } else {
+                        ""
+                    },
+                    enable_file_cache
                 );
                 self.l2.update_config(
                     main,
@@ -6182,8 +6143,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn remote_delete_clears_metadata_less_l1_when_local_meta_is_missing() {
-        let key = unique_test_suffix("remote-delete-l1");
+    async fn delete_clears_metadata_less_l1_when_local_meta_is_missing() {
+        let key = unique_test_suffix("delete-l1");
         let now = crate::utils::time::now_timestamp();
         crate::cache_manager::CACHE.storage.l1.put(
             &key,
@@ -6210,54 +6171,38 @@ mod tests {
         assert!(crate::metrics::storage::get_cache_meta_memory(&hash).is_none());
         assert!(crate::cache_manager::CACHE.storage.l1.get(&key).is_some());
 
-        crate::cluster::metadata::apply_remote_event(crate::cluster::metadata::CacheMetaEvent {
-            event_id: unique_test_suffix("event"),
-            event_type: crate::cluster::metadata::CacheMetaEventType::Delete,
-            pod_name: "remote-pod".to_string(),
-            hash: hash.clone(),
-            cache_key: key.clone(),
-            shard_id: None,
-            relative_path: None,
-            root_path: None,
-            size: 0,
-            expires: 0,
-            status: 200,
-            headers: Vec::new(),
-            compressed: false,
-            error_status_allowed: false,
-            created_at: now,
-            version: 100,
-            stale_while_revalidate_secs: 0,
-            stale_if_error_secs: 0,
-        })
-        .await;
+        crate::cache_hybrid::invalidate_l1_key(&key);
+        crate::metrics::storage::STORAGE
+            .delete_cache_meta_async_at_version(&hash, 100)
+            .await;
 
         assert!(crate::cache_manager::CACHE.storage.l1.get(&key).is_none());
         assert!(crate::metrics::storage::cache_meta_tombstone_version(&hash).is_some());
 
         // A delayed upsert from before the delete must not recreate the
         // metadata row after the delete has removed the current row.
-        crate::cluster::metadata::apply_remote_event(crate::cluster::metadata::CacheMetaEvent {
-            event_id: unique_test_suffix("late-upsert"),
-            event_type: crate::cluster::metadata::CacheMetaEventType::Upsert,
-            pod_name: "remote-pod".to_string(),
-            hash: hash.clone(),
-            cache_key: key.clone(),
-            shard_id: None,
-            relative_path: None,
-            root_path: None,
-            size: 10,
-            expires: now + 60,
-            status: 200,
-            headers: Vec::new(),
-            compressed: false,
-            error_status_allowed: false,
-            created_at: now,
-            version: 99,
-            stale_while_revalidate_secs: 0,
-            stale_if_error_secs: 0,
-        })
-        .await;
+        crate::metrics::storage::STORAGE
+            .upsert_cache_meta_absolute_async(crate::metrics::storage::CacheMetaUpsert {
+                hash: &hash,
+                cache_key: &key,
+                size: 10,
+                expires: now + 60,
+                access_time: now,
+                access_count: 0,
+                status: 200,
+                headers: &[],
+                compressed: false,
+                error_status_allowed: false,
+                shard_id: None,
+                relative_path: None,
+                root_path: None,
+                event_version: Some(99),
+                updated_at: Some(now),
+                stale_while_revalidate_secs: 0,
+                stale_if_error_secs: 0,
+                created_at: now,
+            })
+            .await;
         assert!(crate::metrics::storage::get_cache_meta_memory(&hash).is_none());
 
         NEGATIVE_CACHE.remove(&key);
@@ -6350,27 +6295,10 @@ mod tests {
             .l1
             .put(&unique, entry(), std::time::Duration::from_secs(60));
 
-        crate::cluster::metadata::apply_remote_event(crate::cluster::metadata::CacheMetaEvent {
-            event_id: unique_test_suffix("fence-event"),
-            event_type: crate::cluster::metadata::CacheMetaEventType::Delete,
-            pod_name: "remote-pod".to_string(),
-            hash: hash.clone(),
-            cache_key: unique.clone(),
-            shard_id: None,
-            relative_path: None,
-            root_path: None,
-            size: 0,
-            expires: 0,
-            status: 200,
-            headers: Vec::new(),
-            compressed: false,
-            error_status_allowed: false,
-            created_at: now,
-            version: state_version.saturating_add(1),
-            stale_while_revalidate_secs: 0,
-            stale_if_error_secs: 0,
-        })
-        .await;
+        crate::cache_hybrid::invalidate_l1_key(&unique);
+        crate::metrics::storage::STORAGE
+            .delete_cache_meta_async_at_version(&hash, state_version.saturating_add(1))
+            .await;
 
         // Reinsert the old process-local fallback after the event. This
         // simulates a delayed/lost callback; the shared tombstone itself must

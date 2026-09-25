@@ -17,6 +17,13 @@ jobs:
     name: Check / Clippy - linux-x64
     runs-on: ubuntu-22.04
     timeout-minutes: 45
+    env:
+      # .cargo/config.toml sets target-cpu=native, but rust-cache restores
+      # target/ across heterogeneous runner hardware — a proc-macro .so
+      # compiled for a newer CPU SIGILLs inside rustc on an older runner
+      # (observed twice compiling pingora-pool). RUSTFLAGS env overrides
+      # config.toml; pin the CI baseline to the minimum release target.
+      RUSTFLAGS: "-C target-cpu=x86-64-v2"
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -74,6 +81,37 @@ jobs:
             . -> target
             pingora-main -> pingora-main/target
 
+      - name: Install eBPF Toolchain
+        shell: bash
+        env:
+          # Same pin as release.yml — bumping it requires re-running the
+          # XDP/AF_XDP smoke matrix.
+          BPF_LINKER_VERSION: "0.11.1"
+        run: |
+          set -euo pipefail
+          EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/cloud-node-xdp-ebpf/rust-toolchain.toml | head -1)"
+          test -n "$EBPF_NIGHTLY"
+          rustup toolchain install "$EBPF_NIGHTLY" --profile minimal -c rust-src -c rustc-dev
+          # bpf-linker links against libLLVM (>= the LLVM providing
+          # LLVMGetDINodeTag). Distro LLVM is too old; the toolchain's own
+          # rustc-dev component ships the version-exact shared lib, so
+          # point LLVM_PREFIX at the sysroot and provide the unversioned
+          # soname the linker looks for.
+          SYSROOT="$(rustup run "$EBPF_NIGHTLY" rustc --print sysroot)"
+          ln -sf "$(find "$SYSROOT/lib" -name 'libLLVM.so.*' -print -quit)" "$SYSROOT/lib/libLLVM.so"
+          export LLVM_PREFIX="$SYSROOT"
+          cargo +"$EBPF_NIGHTLY" install bpf-linker --version "$BPF_LINKER_VERSION" --locked
+
+      - name: Build XDP eBPF Object
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f data/cloud-node-xdp-ebpf.o
+          cargo xtask build-ebpf
+          test -s data/cloud-node-xdp-ebpf.o
+          echo "CLOUD_NODE_XDP_EBPF_SOURCE=data/cloud-node-xdp-ebpf.o" >> "$GITHUB_ENV"
+          echo "CLOUD_NODE_XDP_EBPF_SHA256=$(sha256sum data/cloud-node-xdp-ebpf.o | awk '{print $1}')" >> "$GITHUB_ENV"
+
       - name: cargo check (all targets)
         run: cargo check --all-targets
 
@@ -88,6 +126,10 @@ jobs:
     name: Test - linux-x64
     runs-on: ubuntu-22.04
     timeout-minutes: 60
+    env:
+      # Same rationale as the check job: target-cpu=native artifacts in the
+      # shared rust-cache SIGILL on older runner hardware.
+      RUSTFLAGS: "-C target-cpu=x86-64-v2"
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -139,6 +181,37 @@ jobs:
           workspaces: |
             . -> target
             pingora-main -> pingora-main/target
+
+      - name: Install eBPF Toolchain
+        shell: bash
+        env:
+          # Same pin as release.yml — bumping it requires re-running the
+          # XDP/AF_XDP smoke matrix.
+          BPF_LINKER_VERSION: "0.11.1"
+        run: |
+          set -euo pipefail
+          EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/cloud-node-xdp-ebpf/rust-toolchain.toml | head -1)"
+          test -n "$EBPF_NIGHTLY"
+          rustup toolchain install "$EBPF_NIGHTLY" --profile minimal -c rust-src -c rustc-dev
+          # bpf-linker links against libLLVM (>= the LLVM providing
+          # LLVMGetDINodeTag). Distro LLVM is too old; the toolchain's own
+          # rustc-dev component ships the version-exact shared lib, so
+          # point LLVM_PREFIX at the sysroot and provide the unversioned
+          # soname the linker looks for.
+          SYSROOT="$(rustup run "$EBPF_NIGHTLY" rustc --print sysroot)"
+          ln -sf "$(find "$SYSROOT/lib" -name 'libLLVM.so.*' -print -quit)" "$SYSROOT/lib/libLLVM.so"
+          export LLVM_PREFIX="$SYSROOT"
+          cargo +"$EBPF_NIGHTLY" install bpf-linker --version "$BPF_LINKER_VERSION" --locked
+
+      - name: Build XDP eBPF Object
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f data/cloud-node-xdp-ebpf.o
+          cargo xtask build-ebpf
+          test -s data/cloud-node-xdp-ebpf.o
+          echo "CLOUD_NODE_XDP_EBPF_SOURCE=data/cloud-node-xdp-ebpf.o" >> "$GITHUB_ENV"
+          echo "CLOUD_NODE_XDP_EBPF_SHA256=$(sha256sum data/cloud-node-xdp-ebpf.o | awk '{print $1}')" >> "$GITHUB_ENV"
 
       - name: cargo test
         run: cargo test --lib --bins

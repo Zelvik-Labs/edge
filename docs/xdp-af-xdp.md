@@ -8,7 +8,7 @@
 
 - 仅 Linux 生产环境启用。
 - 需要 root，或至少具备 `CAP_BPF`、`CAP_NET_ADMIN`、`CAP_NET_RAW`。
-- XDP 默认启用；RKE2 集群模式下强制关闭（AF_XDP 会独占网卡队列，影响 Kubernetes 网络）。
+- XDP 默认启用；启用后固定为双向数据面（入向代理 + 出向 AF_XDP 回源），没有内核出向选项。
 - 标准 MTU 是当前主要验收目标；proxy 模式遇到 jumbo/multi-buffer 风险时会在 doctor 或启动阶段拒绝或回退。
 - `fallback: pass`（默认）会 fail-open 到原 socket 路径并记录 fallback 原因；`fallback: fail-start` 会在无法满足 XDP 启动条件时返回错误。
 
@@ -21,7 +21,7 @@
 XDP 只需要一个开关，优先级为：默认值（启用）< `CLOUD_NODE_XDP` 环境变量 < 配置文件显式值。
 
 ```text
-configs/runtime.yaml   # 可选；不存在时不会自动生成
+configs/api_node.yaml   # 唯一的本地配置文件；xdp 段与 API 连接信息同文件
 ```
 
 - 不配置任何文件也不设环境变量 → XDP 启用，其余全部自动推导。
@@ -35,7 +35,7 @@ xdp:
 
 `cloud-node xdp start` 写入 `xdp.enabled: true`，`cloud-node xdp stop` 写入 `xdp.enabled: false`；两者都保留文件中的其他内容，不会把推导出的运行时状态写回配置。
 
-除 `enabled` 之外的字段（`attachMode`、`fallback`、`interfaces`、`proxy`、`rateLimit`）仍可在文件中显式提供以覆盖自动推导结果，但正常部署不需要；自动推导的状态只存在于内存，不会写回 `runtime.yaml`。
+除 `enabled` 之外的字段（`attachMode`、`fallback`、`interfaces`、`proxy`、`rateLimit`）仍可在文件中显式提供以覆盖自动推导结果，但正常部署不需要；自动推导的状态只存在于内存，不会写回 `api_node.yaml`。
 
 字段说明（显式覆盖时）：
 
@@ -46,9 +46,10 @@ xdp:
 - `interfaces[].mode`：`observe`、`protect`、`proxy`。
 - `interfaces[].localIps`：proxy 模式下可限制只旁路目标为这些本机 IP 的包；为空表示不启用本机 IP 过滤。
 - `interfaces[].frameSize`：UMEM frame size，默认 `2048`。
-- `interfaces[].xskMode`（EN-12）：AF_XDP bind 模式探测策略，默认 `auto`。
-  - `auto`：先尝试 zero-copy bind，驱动不支持时显式回退 copy——落地模式记录到每队列状态 `xsk_mode`，探测失败原因写入 `detail`。
-  - `copy`：从不尝试 zero-copy，直接按 copy 模式 bind。
+- `interfaces[].xskMode`（EN-12）：AF_XDP bind 模式策略，默认 `auto`。
+  - 前置门控（`auto`/`zero-copy`）：运行时先验证网卡驱动有原生 XSK 支持（`xsk_driver_native_floor`，如 virtio_net 需内核 ≥6.11、主流服务器网卡 ≥5.4）；不满足时队列 socket 创建显式拒绝并写入状态——内核模拟的 generic 路径不是受支持数据面（曾在 Debian 6.1 + virtio_net 生产负载下 TX 饱和、SNI 断流）。
+  - `auto`：先尝试 zero-copy bind，失败时回退到驱动 copy 路径（virtio_net 自 6.13 起声明 ZEROCOPY 但还要求 hypervisor 协商 VIRTIO_F_ACCESS_PLATFORM，不满足则落 copy；6.11–6.12 的 virtio_net 只有 copy 模式）；落地模式记录到每队列状态 `xsk_mode`。
+  - `copy`：显式诊断/测试选项，直接按 copy 模式 bind 且跳过驱动门控——在无驱动 XSK 的环境（veth、netns 冒烟）会落到 generic 路径，不用于生产。
   - `zero-copy`：强制 zero-copy；驱动不支持时该队列 socket 创建显式失败（状态可见），不静默降级。
 - `proxy.protocols`：允许进入 AF_XDP proxy 数据面的协议族。
 - `proxy.ports`：显式发布到 eBPF map 的协议和端口。

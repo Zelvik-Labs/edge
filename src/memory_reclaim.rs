@@ -53,16 +53,28 @@ const MI_OPTION_ABANDONED_PAGE_PURGE: libmimalloc_sys::mi_option_t = 12;
 /// this node — objects allocated on one runtime are routinely dropped on
 /// another thread.
 const MI_OPTION_ABANDONED_RECLAIM_ON_FREE: libmimalloc_sys::mi_option_t = 26;
+/// Enum slot 21: abandoned-segment reclaim cap per try, percent (=10). A
+/// 10% drain rate leaves dead-heap segments resident across many collect
+/// cycles; 50 drains the same plateau in a handful of tries without
+/// touching the allocation fast path.
+const MI_OPTION_MAX_SEGMENT_RECLAIM: libmimalloc_sys::mi_option_t = 21;
+/// Enum slot 24: arena purge delay as a multiple of `purge_delay` (=10).
+/// Arenas are the multi-MiB extents mimalloc retains for reuse; 2 keeps a
+/// 20ms reuse window instead of a 100ms tail after traffic bursts.
+const MI_OPTION_ARENA_PURGE_MULT: libmimalloc_sys::mi_option_t = 24;
 
 /// Must run before worker threads spawn. Without these options, pages freed
 /// on a dying thread's heap keep their delayed purges unexecuted and stay
 /// committed until another thread slowly reclaims the abandoned segments
 /// (capped at ~10% per attempt), which shows up as multi-ten-MiB RSS plateaus
-/// after short-lived runtimes exit.
+/// after short-lived runtimes exit. `purge_delay` itself stays at the 10ms
+/// default — immediate purging would pay decommit syscalls on the hot path.
 pub fn configure_allocator() {
     unsafe {
         libmimalloc_sys::mi_option_set(MI_OPTION_ABANDONED_PAGE_PURGE, 1);
         libmimalloc_sys::mi_option_set(MI_OPTION_ABANDONED_RECLAIM_ON_FREE, 1);
+        libmimalloc_sys::mi_option_set(MI_OPTION_MAX_SEGMENT_RECLAIM, 50);
+        libmimalloc_sys::mi_option_set(MI_OPTION_ARENA_PURGE_MULT, 2);
     }
 }
 static RECLAIM_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
@@ -80,6 +92,31 @@ pub fn last_reclaim_stats() -> Option<ReclaimStats> {
 // work themselves.
 static PENDING_RECLAIM_LEVEL: AtomicU8 = AtomicU8::new(MemoryPressureLevel::Normal as u8);
 static RECLAIM_MONITOR_THREAD: OnceLock<std::thread::Thread> = OnceLock::new();
+
+/// Coordinator-wide activity counters: passes run, estimated bytes freed,
+/// last pass wall time, and panicked passes (kept alive by catch_unwind).
+/// Feeds the "reclaim target vs actual result" state fields.
+static RECLAIM_RUNS_TOTAL: AtomicU64 = AtomicU64::new(0);
+static RECLAIM_BYTES_FREED_EST: AtomicU64 = AtomicU64::new(0);
+static RECLAIM_LAST_DURATION_MS: AtomicU64 = AtomicU64::new(0);
+static RECLAIM_PANICS_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ReclaimActivitySnapshot {
+    pub runs_total: u64,
+    pub bytes_freed_estimate: u64,
+    pub last_duration_ms: u64,
+    pub panics_total: u64,
+}
+
+pub fn reclaim_activity() -> ReclaimActivitySnapshot {
+    ReclaimActivitySnapshot {
+        runs_total: RECLAIM_RUNS_TOTAL.load(Ordering::Relaxed),
+        bytes_freed_estimate: RECLAIM_BYTES_FREED_EST.load(Ordering::Relaxed),
+        last_duration_ms: RECLAIM_LAST_DURATION_MS.load(Ordering::Relaxed),
+        panics_total: RECLAIM_PANICS_TOTAL.load(Ordering::Relaxed),
+    }
+}
 
 thread_local! {
     // Reclaiming cache state can update resident-memory accounting, which in
@@ -278,8 +315,10 @@ pub fn reclaim_for_level(level: MemoryPressureLevel) -> ReclaimStats {
         panic!("forced reclaim panic for unwind-safety test");
     }
 
-    let mut stats = ReclaimStats::default();
-    stats.process_rss_before_bytes = current_process_rss_bytes();
+    let mut stats = ReclaimStats {
+        process_rss_before_bytes: current_process_rss_bytes(),
+        ..Default::default()
+    };
     match level {
         MemoryPressureLevel::Normal => {}
         MemoryPressureLevel::Elevated => {
@@ -384,19 +423,28 @@ pub fn request_reclaim(level: MemoryPressureLevel) -> Option<ReclaimStats> {
     // monitor thread keeps driving future reclaims. The panic is still
     // reported by the default panic hook; we additionally log it as an error
     // so it cannot be mistaken for a normal cooldown skip.
+    let reclaim_started = Instant::now();
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         reclaim_for_level(level)
     }));
+    RECLAIM_RUNS_TOTAL.fetch_add(1, Ordering::Relaxed);
+    RECLAIM_LAST_DURATION_MS.store(
+        reclaim_started.elapsed().as_millis() as u64,
+        Ordering::Relaxed,
+    );
     // Cooldown is measured from reclaim completion, not start — a slow pass
     // must not leave the window already expired when it finishes. `.max(1)`
     // keeps 0 reserved for "never reclaimed".
     LAST_RECLAIM_AT_MS.store(monotonic_elapsed_ms().max(1), Ordering::Release);
     match outcome {
         Ok(stats) => {
+            RECLAIM_BYTES_FREED_EST
+                .fetch_add(stats.freed_bytes_estimate(), Ordering::Relaxed);
             drop(_reset);
             Some(stats)
         }
         Err(payload) => {
+            RECLAIM_PANICS_TOTAL.fetch_add(1, Ordering::Relaxed);
             tracing::error!(
                 target: "memory_reclaim",
                 level = level.as_str(),
@@ -592,10 +640,12 @@ pub fn start_reclaim_monitor() {
         .spawn(|| {
             let _ = RECLAIM_MONITOR_THREAD.set(std::thread::current());
             loop {
-                // Wake on an async pressure notification or every 5 seconds so
-                // sustained pressure still re-escalates through the
-                // coordinator's sample hysteresis and retry backoff.
-                std::thread::park_timeout(Duration::from_secs(5));
+                // Normal observation cadence is 250ms: each wake re-reads
+                // the published snapshot (which refreshes /proc and cgroup
+                // state when stale) so pressure classification and the
+                // shared account never run on stale data. Async pressure
+                // notifications and PSI/cgroup event wakes unpark early.
+                std::thread::park_timeout(Duration::from_millis(250));
                 let pending = drain_pending_pressure();
                 // In unwind builds a panic anywhere in this iteration
                 // (reclaim, collect, reconcile, a poisoned lock) must not
@@ -959,6 +1009,11 @@ mod tests {
         let reclaim =
             unsafe { libmimalloc_sys::mi_option_get(MI_OPTION_ABANDONED_RECLAIM_ON_FREE) };
         assert_eq!(reclaim, 1, "abandoned reclaim-on-free must be enabled");
+        let seg_reclaim =
+            unsafe { libmimalloc_sys::mi_option_get(MI_OPTION_MAX_SEGMENT_RECLAIM) };
+        assert_eq!(seg_reclaim, 50, "abandoned-segment drain rate must be raised");
+        let arena_mult = unsafe { libmimalloc_sys::mi_option_get(MI_OPTION_ARENA_PURGE_MULT) };
+        assert_eq!(arena_mult, 2, "arena purge window must be tightened");
     }
 
     #[test]
@@ -1013,8 +1068,10 @@ mod tests {
         );
         // Cooldown still applies: an immediate second Critical does not
         // stampede another reclaim while one is cooling down.
-        let mut coordinator = ReclaimCoordinator::default();
-        coordinator.next_allowed_ms = 10_000;
+        let mut coordinator = ReclaimCoordinator {
+            next_allowed_ms: 10_000,
+            ..Default::default()
+        };
         assert_eq!(
             coordinator.observe(MemoryPressureLevel::Critical, 1),
             ReclaimDecision::Hold,
