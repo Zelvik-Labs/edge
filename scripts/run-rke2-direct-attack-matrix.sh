@@ -1,9 +1,9 @@
 #!/bin/sh
 set -u
 
-ROOT=/root/cloud-node-rust-test
+ROOT=/root/cloudsidra-edge-test
 RESULTS="$ROOT/perf-results"
-NAMESPACE=cloud-node-perf
+NAMESPACE=cloudsidra-edge-perf
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 run_dir="$RESULTS/direct-$timestamp"
 mkdir -p "$run_dir"

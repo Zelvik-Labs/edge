@@ -7,7 +7,7 @@
 set -euo pipefail
 
 ROOT="${1:-/root/edge-fix}"
-BIN="$ROOT/target/debug/cloud-node-rust"
+BIN="$ROOT/target/debug/cloudsidra-edge"
 NS="${CHURN_NS:-ptb}"
 HOST_IF="${CHURN_IF:-veth0}"
 TARGET_IP="${CHURN_TARGET:-10.250.0.1}"

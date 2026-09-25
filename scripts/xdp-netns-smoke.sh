@@ -2,11 +2,11 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# The node resolves configs/api_node.yaml under CLOUD_NODE_HOME — point it
+# The node resolves configs/api_node.yaml under CLOUDSIDRA_EDGE_HOME — point it
 # at a throwaway home so smoke configs never touch the real
 # configs/api_node.yaml (which carries API credentials).
 SMOKE_HOME="$(mktemp -d)"
-export CLOUD_NODE_HOME="$SMOKE_HOME"
+export CLOUDSIDRA_EDGE_HOME="$SMOKE_HOME"
 CONFIG_FILE="$SMOKE_HOME/configs/api_node.yaml"
 NS_NAME="${XDP_SMOKE_NS:-cn-xdp-smoke}"
 HOST_IF="${XDP_SMOKE_HOST_IF:-cnxdp0}"
@@ -23,7 +23,7 @@ HOST_BYPASS_IP="${HOST_BYPASS_ADDR%/*}"
 HOST_IP6="${HOST_ADDR6%/*}"
 TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT_DIR/target}"
 XDP_SMOKE_PROFILE="${XDP_SMOKE_PROFILE:-debug}"
-NODE_BIN="$TARGET_DIR/$XDP_SMOKE_PROFILE/cloud-node-rust"
+NODE_BIN="$TARGET_DIR/$XDP_SMOKE_PROFILE/cloudsidra-edge"
 H3_PROBE_BIN="$TARGET_DIR/$XDP_SMOKE_PROFILE/h3-probe"
 PIDS_TO_KILL=()
 
@@ -117,7 +117,7 @@ targets = [sys.argv[1]] + ([sys.argv[2]] if len(sys.argv) > 2 and sys.argv[2] el
 for target in targets:
     family = socket.AF_INET6 if ":" in target else socket.AF_INET
     udp = socket.socket(family, socket.SOCK_DGRAM)
-    udp.sendto(b"cloud-node-xdp-udp-smoke", (target, 443))
+    udp.sendto(b"cloudsidra-edge-xdp-udp-smoke", (target, 443))
     udp.close()
 
     tcp = socket.socket(family, socket.SOCK_STREAM)
@@ -242,7 +242,7 @@ tls_context.verify_mode = ssl.CERT_NONE
 
 for target in targets:
     fam = "v6" if ":" in target else "v4"
-    tcp_payload = b"cloud-node-xdp-tcp-proxy-smoke"
+    tcp_payload = b"cloudsidra-edge-xdp-tcp-proxy-smoke"
     expected_tcp = b"xdp-tcp-smoke:" + tcp_payload
     tcp_response = b""
     last_error = None
@@ -307,7 +307,7 @@ for target in targets:
     family = socket.AF_INET6 if ":" in target else socket.AF_INET
     udp = socket.socket(family, socket.SOCK_DGRAM)
     udp.settimeout(3)
-    udp_payload = b"cloud-node-xdp-udp-proxy-smoke"
+    udp_payload = b"cloudsidra-edge-xdp-udp-proxy-smoke"
     udp.sendto(udp_payload, (target, 443))
     udp_response, _ = udp.recvfrom(4096)
     udp.close()
@@ -449,13 +449,13 @@ printf 'xdp:\n  enabled: false\n' > "$CONFIG_FILE"
 if [[ "${XDP_SMOKE_SKIP_BUILD:-0}" != "1" ]]; then
     log "building eBPF object"
     cargo xtask build-ebpf
-    [[ -f "$ROOT_DIR/data/cloud-node-xdp-ebpf.o" ]] || die "missing data/cloud-node-xdp-ebpf.o"
+    [[ -f "$ROOT_DIR/data/cloudsidra-edge-xdp-ebpf.o" ]] || die "missing data/cloudsidra-edge-xdp-ebpf.o"
 
     log "building smoke binaries"
     if [[ "$XDP_SMOKE_PROFILE" == "release" ]]; then
-        cargo build -q --release --bin cloud-node-rust --bin h3-probe
+        cargo build -q --release --bin cloudsidra-edge --bin h3-probe
     else
-        cargo build -q --bin cloud-node-rust --bin h3-probe
+        cargo build -q --bin cloudsidra-edge --bin h3-probe
     fi
 fi
 [[ -x "$NODE_BIN" ]] || die "missing node binary: $NODE_BIN"

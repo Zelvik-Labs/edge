@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cloud-node-rust release build — LOCAL macOS cross-compile to Linux x86_64.
+# cloudsidra-edge release build — LOCAL macOS cross-compile to Linux x86_64.
 #
 # Mirrors /root/memgov/build-release.sh semantics on the build host:
 # - Invoke the real rustup cargo, not the mbx PATH shim (mbx's GC has deleted
@@ -40,13 +40,13 @@ export AR="${AR:-/opt/homebrew/opt/llvm/bin/llvm-ar}"
 
 # x86-64-v2 default: matches the CI baseline and the fleet floor — the
 # XDP node runs Ivy Bridge Xeons (AVX, no AVX2/BMI2/FMA) and v3 SIGILLs
-# there. Override with CLOUD_NODE_TARGET_CPU for v3-capable targets.
-TARGET_CPU="${CLOUD_NODE_TARGET_CPU:-x86-64-v2}"
+# there. Override with CLOUDSIDRA_EDGE_TARGET_CPU for v3-capable targets.
+TARGET_CPU="${CLOUDSIDRA_EDGE_TARGET_CPU:-x86-64-v2}"
 export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C target-cpu=$TARGET_CPU -L $SYSROOT/usr/lib/x86_64-linux-gnu"
-GLIBC="${CLOUD_NODE_GLIBC:-2.36}"
+GLIBC="${CLOUDSIDRA_EDGE_GLIBC:-2.36}"
 TARGET="x86_64-unknown-linux-gnu.${GLIBC}"
 if [ "${1:-}" = "--all-bins" ]; then
   shift
   exec cargo zigbuild --release --target "$TARGET" "$@"
 fi
-exec cargo zigbuild --release --target "$TARGET" --bin cloud-node-rust "$@"
+exec cargo zigbuild --release --target "$TARGET" --bin cloudsidra-edge "$@"

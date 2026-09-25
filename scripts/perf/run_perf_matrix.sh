@@ -55,7 +55,7 @@ mkdir -p "$RESULTS/urls"
 RESULTS="$(cd "$RESULTS" && pwd -P)"
 
 # Isolated node home: bench-proxy resolves data/, metrics.mace and the cache
-# root under CLOUD_NODE_HOME. Never touch the repository's own runtime state.
+# root under CLOUDSIDRA_EDGE_HOME. Never touch the repository's own runtime state.
 BENCH_HOME="$RESULTS/node-home"
 mkdir -p "$BENCH_HOME"
 
@@ -108,7 +108,7 @@ fi
 # ---- start bench-proxy ------------------------------------------------------
 pkill -9 -x bench-proxy 2>/dev/null || true; sleep 1
 rm -rf "$BENCH_HOME/data"
-( cd "$BENCH_HOME" && setsid env CLOUD_NODE_HOME="$BENCH_HOME" \
+( cd "$BENCH_HOME" && setsid env CLOUDSIDRA_EDGE_HOME="$BENCH_HOME" \
     BENCH_DISK_MAX_BYTES="$BENCH_DISK_MAX_BYTES" "$PROXY_BIN" \
     > "$RESULTS/bench-proxy.log" 2>&1 < /dev/null & )
 PROXY_PID=""

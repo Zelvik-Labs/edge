@@ -24,7 +24,7 @@ Phases:
 
 Usage (root, Linux):
     sudo python3 scripts/edge/en09_pending_probe.py \
-        --node-bin target/debug/cloud-node-rust --out /tmp/en09.json
+        --node-bin target/debug/cloudsidra-edge --out /tmp/en09.json
 
 Subcommand (internal): --send ... runs inside the netns as the frame
 sender.
@@ -47,7 +47,7 @@ PEER_IF = "en2-b"
 HOST_IP = "10.99.0.5"
 PEER_IP = "10.99.0.6"
 CLIENT_IP = "10.99.0.9"
-PIN_DIR = "/sys/fs/bpf/cloud-node-xdp"
+PIN_DIR = "/sys/fs/bpf/cloudsidra-edge-xdp"
 BPFTOOL_CANDIDATES = [
     "/usr/lib/linux-tools-5.15.0-191/bpftool",
     "bpftool",
@@ -268,13 +268,13 @@ def start_node(node_bin, home, cwd, pending_ms, snat):
     write_api_config(os.path.join(home, "configs", "api_node.yaml"))
     obj_src = os.path.normpath(os.path.join(
         os.path.dirname(os.path.abspath(node_bin)),
-        "..", "..", "data", "cloud-node-xdp-ebpf.o"))
+        "..", "..", "data", "cloudsidra-edge-xdp-ebpf.o"))
     os.makedirs(os.path.join(home, "data"), exist_ok=True)
     if os.path.exists(obj_src):
         import shutil
         shutil.copyfile(obj_src,
-                        os.path.join(home, "data", "cloud-node-xdp-ebpf.o"))
-    env = dict(os.environ, CLOUD_NODE_HOME=home, RUST_LOG="info")
+                        os.path.join(home, "data", "cloudsidra-edge-xdp-ebpf.o"))
+    env = dict(os.environ, CLOUDSIDRA_EDGE_HOME=home, RUST_LOG="info")
     log = open(os.path.join(cwd, "node.log"), "w")
     proc = subprocess.Popen([os.path.abspath(node_bin)],
                             cwd=cwd, env=env, stdout=log, stderr=log,

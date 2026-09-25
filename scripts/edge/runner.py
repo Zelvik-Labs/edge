@@ -23,7 +23,7 @@ passed; a missing prerequisite aborts with exit 3.
 Usage:
   runner.py --list
   runner.py --matrix scripts/edge/matrix.json --only T01
-  runner.py --topology netns --node-bin target/debug/cloud-node-rust ...
+  runner.py --topology netns --node-bin target/debug/cloudsidra-edge ...
 """
 import argparse
 import hashlib
@@ -233,11 +233,11 @@ def main() -> int:
     ap.add_argument("--topology", choices=["netns", "external"],
                     default="netns")
     ap.add_argument("--node-bin", default=os.path.join(
-        ROOT, "target", "debug", "cloud-node-rust"))
+        ROOT, "target", "debug", "cloudsidra-edge"))
     ap.add_argument("--config", default=os.path.join(
         ROOT, "configs", "en2-api-node.yaml"))
     ap.add_argument("--ebpf-object", default=os.path.join(
-        ROOT, "data", "cloud-node-xdp-ebpf.o"))
+        ROOT, "data", "cloudsidra-edge-xdp-ebpf.o"))
     ap.add_argument("--mode", default="protect",
                     choices=["observe", "protect", "proxy"])
     ap.add_argument("--send-iface", default="")
@@ -296,12 +296,12 @@ def main() -> int:
             teardown_netns()  # remove leftovers of a previous crashed run
             mac = setup_netns()
             write_node_config(args.config, args.mode)
-            # point the node at our dedicated config via CLOUD_NODE_HOME:
+            # point the node at our dedicated config via CLOUDSIDRA_EDGE_HOME:
             # the node reads configs/api_node.yaml under it, so a throwaway
             # home dir means the real configs/api_node.yaml (which carries
             # API credentials) is never swapped.
             node_home = tempfile.mkdtemp(prefix="en2-node-home-")
-            os.environ["CLOUD_NODE_HOME"] = node_home
+            os.environ["CLOUDSIDRA_EDGE_HOME"] = node_home
             os.makedirs(os.path.join(node_home, "configs"), exist_ok=True)
             api_cfg = os.path.join(node_home, "configs", "api_node.yaml")
             with open(api_cfg, "w") as f, open(args.config) as src:
