@@ -104,15 +104,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "cloud-node-xdp-common"
+name = "cloudsidra-edge-xdp-common"
 version = "0.1.0"
 
 [[package]]
-name = "cloud-node-xdp-ebpf"
+name = "cloudsidra-edge-xdp-ebpf"
 version = "0.1.0"
 dependencies = [
  "aya-ebpf",
- "cloud-node-xdp-common",
+ "cloudsidra-edge-xdp-common",
  "network-types",
 ]
 

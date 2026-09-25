@@ -1,12 +1,12 @@
 // RSS comparison bench — this file is copied verbatim onto the v1.2.7
 // baseline tree and the hardened branch, so it only uses APIs that exist in
-// both. Run: CLOUD_NODE_HOME=/tmp/bench-node cargo test --release \
+// both. Run: CLOUDSIDRA_EDGE_HOME=/tmp/bench-node cargo test --release \
 //   --test memory_compare -- --nocapture --test-threads 1
-use cloud_node_rust::firewall::persistence;
-use cloud_node_rust::firewall::state::WafStateManager;
-use cloud_node_rust::metrics::aggregator::{AggregationKey, MetricAggregator};
-use cloud_node_rust::metrics::daily::{DailyDomainTracker, UniqueIpTracker};
-use cloud_node_rust::metrics::top_ip::TopIpTracker;
+use cloudsidra_edge::firewall::persistence;
+use cloudsidra_edge::firewall::state::WafStateManager;
+use cloudsidra_edge::metrics::aggregator::{AggregationKey, MetricAggregator};
+use cloudsidra_edge::metrics::daily::{DailyDomainTracker, UniqueIpTracker};
+use cloudsidra_edge::metrics::top_ip::TopIpTracker;
 use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;

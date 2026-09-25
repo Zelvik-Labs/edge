@@ -1,5 +1,5 @@
-use cloud_node_rust::memory_governor::{MEMORY_GOVERNOR, MemoryPressureLevel};
-use cloud_node_rust::memory_reclaim::reclaim_for_level;
+use cloudsidra_edge::memory_governor::{MEMORY_GOVERNOR, MemoryPressureLevel};
+use cloudsidra_edge::memory_reclaim::reclaim_for_level;
 
 /// VmRSS is process-wide: serialize the RSS-measuring tests in this binary so
 /// a sibling test's allocations cannot contaminate a before/after delta.
@@ -47,10 +47,10 @@ fn small_machine_cache_budget_floor_is_below_default() {
 #[test]
 fn bounded_regex_cache_compiles_and_reclaims() {
     let pattern = "^reclaim-regex-test$";
-    assert!(cloud_node_rust::bounded_regex_cache::get_or_compile(pattern).is_some());
-    cloud_node_rust::bounded_regex_cache::reclaim_all();
-    assert_eq!(cloud_node_rust::bounded_regex_cache::entry_count(), 0);
-    assert!(cloud_node_rust::bounded_regex_cache::get_or_compile(pattern).is_some());
+    assert!(cloudsidra_edge::bounded_regex_cache::get_or_compile(pattern).is_some());
+    cloudsidra_edge::bounded_regex_cache::reclaim_all();
+    assert_eq!(cloudsidra_edge::bounded_regex_cache::entry_count(), 0);
+    assert!(cloudsidra_edge::bounded_regex_cache::get_or_compile(pattern).is_some());
 }
 
 /// End-to-end proof that Critical reclaim actually returns memory to the OS,
@@ -64,16 +64,16 @@ fn critical_reclaim_returns_freed_pages_to_os() {
 
     // Cache capacity is governor-budget-derived (min 256 entries); fill up
     // to 8k unique compiled patterns — enough retained heap to see in RSS.
-    let target = cloud_node_rust::bounded_regex_cache::regex_cache_max_entries()
+    let target = cloudsidra_edge::bounded_regex_cache::regex_cache_max_entries()
         .min(8_192) as u32;
     for i in 0..target {
         let pattern = format!("^rss-reclaim-{i}-[0-9]+$");
         assert!(
-            cloud_node_rust::bounded_regex_cache::get_or_compile(&pattern).is_some(),
+            cloudsidra_edge::bounded_regex_cache::get_or_compile(&pattern).is_some(),
             "fixture pattern must compile"
         );
     }
-    let entries = cloud_node_rust::bounded_regex_cache::entry_count();
+    let entries = cloudsidra_edge::bounded_regex_cache::entry_count();
     assert!(entries >= u64::from(target.min(256)));
 
     let rss_before = process_rss_bytes();
@@ -81,7 +81,7 @@ fn critical_reclaim_returns_freed_pages_to_os() {
     let rss_after = process_rss_bytes();
 
     assert_eq!(
-        cloud_node_rust::bounded_regex_cache::entry_count(),
+        cloudsidra_edge::bounded_regex_cache::entry_count(),
         0,
         "Critical reclaim must empty the regex cache"
     );

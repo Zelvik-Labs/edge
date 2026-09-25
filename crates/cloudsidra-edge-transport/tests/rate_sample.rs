@@ -1,8 +1,8 @@
 //! RateSample unit cases: ACK compression, delayed ACK, SACK subsets,
 //! Karn's rule for retransmits, app-limited propagation.
 
-use cloud_node_transport::rate_sample::{RateSampler, TxRecord};
-use cloud_node_transport::TransportInstant;
+use cloudsidra_edge_transport::rate_sample::{RateSampler, TxRecord};
+use cloudsidra_edge_transport::TransportInstant;
 use std::time::Duration;
 
 const MSS: u64 = 1460;

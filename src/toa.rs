@@ -375,7 +375,7 @@ mod imp {
 
     fn sender_root_candidates() -> Vec<PathBuf> {
         let mut candidates = Vec::new();
-        if let Ok(dir) = std::env::var("CLOUD_NODE_TOA_SENDER_DIR") {
+        if let Ok(dir) = std::env::var("CLOUDSIDRA_EDGE_TOA_SENDER_DIR") {
             candidates.push(PathBuf::from(dir));
         }
         if let Ok(current_dir) = std::env::current_dir() {

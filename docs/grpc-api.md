@@ -1,8 +1,8 @@
-# cloud-node-rust gRPC API 使用文档
+# cloudsidra-edge gRPC API 使用文档
 
 本文档只覆盖当前 Rust 数据面会主动调用的控制面 gRPC 接口。字段说明以 2026-05-26 对真实控制面节点凭据采样为准；写接口未为了文档造数据，因此写接口的响应按 proto 和运行时调用语义说明为准。
 
-认证由 `RpcClient` 统一注入 metadata：`nodeid`、`nodeId`、`token`。`*_with_type()` 客户端额外注入 `type=node`，token 角色也保持为 `node`。默认 gzip 压缩，最大编码/解码消息大小为 512 MiB。真实采样入口是 `tests/real_api_config.rs` 中的 `real_api_grpc_documentation_snapshot`，需要显式设置 `CLOUD_NODE_REAL_API_TEST=1` 与 `CLOUD_NODE_REAL_API_DOC_SNAPSHOT=1`。
+认证由 `RpcClient` 统一注入 metadata：`nodeid`、`nodeId`、`token`。`*_with_type()` 客户端额外注入 `type=node`，token 角色也保持为 `node`。默认 gzip 压缩，最大编码/解码消息大小为 512 MiB。真实采样入口是 `tests/real_api_config.rs` 中的 `real_api_grpc_documentation_snapshot`，需要显式设置 `CLOUDSIDRA_EDGE_REAL_API_TEST=1` 与 `CLOUDSIDRA_EDGE_REAL_API_DOC_SNAPSHOT=1`。
 
 ## 1. 节点配置与控制流
 
@@ -370,11 +370,11 @@
 复跑文档采样：
 
 ```sh
-CLOUD_NODE_REAL_API_TEST=1 \
-CLOUD_NODE_REAL_API_DOC_SNAPSHOT=1 \
-CLOUD_NODE_TEST_RPC_ENDPOINT=<rpc-endpoint> \
-CLOUD_NODE_TEST_NODE_ID=<node-id> \
-CLOUD_NODE_TEST_SECRET=<secret> \
+CLOUDSIDRA_EDGE_REAL_API_TEST=1 \
+CLOUDSIDRA_EDGE_REAL_API_DOC_SNAPSHOT=1 \
+CLOUDSIDRA_EDGE_TEST_RPC_ENDPOINT=<rpc-endpoint> \
+CLOUDSIDRA_EDGE_TEST_NODE_ID=<node-id> \
+CLOUDSIDRA_EDGE_TEST_SECRET=<secret> \
 cargo test --test real_api_config real_api_grpc_documentation_snapshot -- --nocapture
 ```
 

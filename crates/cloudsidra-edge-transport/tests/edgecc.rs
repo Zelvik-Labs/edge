@@ -4,10 +4,10 @@
 //! All comparisons are mechanism assertions (state/transitions), not
 //! throughput rankings — T10 owns the ranking.
 
-use cloud_node_transport::cc::reference::{Bbr3Ref, LossBlindRef};
-use cloud_node_transport::edgecc::{EdgeCc, PathPrior, Tier};
-use cloud_node_transport::CongestionController;
-use cloud_node_transport::sim::{run, Aqm, Policer, SimConfig, SimResult};
+use cloudsidra_edge_transport::cc::reference::{Bbr3Ref, LossBlindRef};
+use cloudsidra_edge_transport::edgecc::{EdgeCc, PathPrior, Tier};
+use cloudsidra_edge_transport::CongestionController;
+use cloudsidra_edge_transport::sim::{run, Aqm, Policer, SimConfig, SimResult};
 use std::time::Duration;
 
 const MSS: u64 = 1460;
@@ -109,7 +109,7 @@ fn edgecc_survives_high_rtt_extreme_loss() {
 /// for every phantom backoff on a 250ms path.
 #[test]
 fn edgecc_outperforms_loss_reactive_refs_under_random_loss() {
-    use cloud_node_transport::cc::reference::{CubicRef, NewRenoRef};
+    use cloudsidra_edge_transport::cc::reference::{CubicRef, NewRenoRef};
     let mut cfg = base(Duration::from_millis(250), 12_500_000);
     cfg.buffer_bytes = bdp(&cfg);
     cfg.random_loss = 0.20;

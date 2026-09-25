@@ -423,7 +423,7 @@ mod tests {
             .expect("system clock is after the Unix epoch")
             .as_nanos();
         std::env::temp_dir().join(format!(
-            "cloud-node-mace-migration-{name}-{}-{nonce}",
+            "cloudsidra-edge-mace-migration-{name}-{}-{nonce}",
             std::process::id()
         ))
     }

@@ -5,15 +5,15 @@
 //! Emits CSV rows; deterministic per (cell, replica) seed so runs are
 //! reproducible.
 //!
-//! Usage: cargo run -p cloud-node-transport --release --example \
+//! Usage: cargo run -p cloudsidra-edge-transport --release --example \
 //!          sim_acceptance > matrix.csv
 
-use cloud_node_transport::cc::reference::{
+use cloudsidra_edge_transport::cc::reference::{
     Bbr3Ref, CubicRef, LossBlindRef, NewRenoRef,
 };
-use cloud_node_transport::cc::CongestionController;
-use cloud_node_transport::edgecc::{EdgeCc, PathPrior, Tier};
-use cloud_node_transport::sim::{
+use cloudsidra_edge_transport::cc::CongestionController;
+use cloudsidra_edge_transport::edgecc::{EdgeCc, PathPrior, Tier};
+use cloudsidra_edge_transport::sim::{
     run, run_multi, Aqm, FlowSpec, Policer, RouteSwitch, SimConfig, SimResult,
 };
 use std::time::Duration;

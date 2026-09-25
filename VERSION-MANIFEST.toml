@@ -1,14 +1,16 @@
 # Product version and source provenance are deliberately separate.
+# Versioning follows the unified CloudSidra scheme (docs/versioning.md):
+# component = YYYY.MM.PATCH, tag = v<component>.
 product = "CloudSidra-Edge"
-product_version = "0.1.0"
-release_tag = "v0.1.0"
-version_scheme = "product-semver"
+product_version = "2026.9.0"
+release_tag = "v2026.9.0"
+version_scheme = "YYYY.MM.PATCH"
 
 [upstream]
 project = "cloud-node-rust"
-version = "1.2.2"
-commit = "631e5c76cc5605e748dc0230ffc019053b852f80"
-relationship = "one-time-imported-baseline"
+version = "1.3.1"
+commit = "b3cdc377e7e41c0c12099a6ba36dd45a8804248a"
+relationship = "merged-from-upstream-main"
 
 [protocol]
 legacy_lineage = "cloud-node-rust-v1"
@@ -16,6 +18,6 @@ node_control = "legacy-compatible-v1"
 config_schema = 1
 event_schema = 1
 
-# This migration is not a numeric upgrade from cloud-node-rust 1.2.2.
+# This migration is not a numeric upgrade from cloud-node-rust 1.x.
 # Installers must detect the legacy lineage and record an explicit migration.
 migration_required_from_upstream = true

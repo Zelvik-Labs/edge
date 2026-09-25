@@ -1,6 +1,6 @@
-# CloudNode Rust 文档
+# CloudSidra Edge 文档
 
-这个目录保存 CloudNode Rust 的长期维护文档。README 只保留项目入口信息，具体功能、运行时、配置和运维细节统一放在这里。
+这个目录保存 CloudSidra Edge 的长期维护文档。README 只保留项目入口信息，具体功能、运行时、配置和运维细节统一放在这里。
 
 ## 文档目录
 

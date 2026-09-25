@@ -16,17 +16,17 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 /// verified eBPF bytecode at the XDP hook, so the program must ship as an ELF
 /// object — embedding it keeps binary and program versioned atomically.
 #[cfg(target_os = "linux")]
-const XDP_EBPF_EMBEDDED: &[u8] = aya::include_bytes_aligned!(env!("CLOUD_NODE_XDP_EBPF_OBJECT"));
+const XDP_EBPF_EMBEDDED: &[u8] = aya::include_bytes_aligned!(env!("CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT"));
 #[cfg(target_os = "linux")]
-const XDP_BPF_PIN_DIR: &str = "/sys/fs/bpf/cloud-node-xdp";
+const XDP_BPF_PIN_DIR: &str = "/sys/fs/bpf/cloudsidra-edge-xdp";
 
-/// Resolved bpffs pin root. `CLOUD_NODE_XDP_PIN_DIR` gives an isolated
+/// Resolved bpffs pin root. `CLOUDSIDRA_EDGE_XDP_PIN_DIR` gives an isolated
 /// task/probe its own pin space; unset keeps the production default.
 #[cfg(target_os = "linux")]
 fn xdp_bpf_pin_dir() -> &'static str {
     static DIR: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     DIR.get_or_init(|| {
-        std::env::var("CLOUD_NODE_XDP_PIN_DIR")
+        std::env::var("CLOUDSIDRA_EDGE_XDP_PIN_DIR")
             .ok()
             .filter(|v| !v.is_empty())
             .unwrap_or_else(|| XDP_BPF_PIN_DIR.to_string())
@@ -646,8 +646,8 @@ pub(crate) struct XdpManager {
     #[cfg(target_os = "linux")]
     udp_flow_shadow: parking_lot::Mutex<
         std::collections::HashMap<
-            cloud_node_xdp_common::XdpUdpCtKey,
-            cloud_node_xdp_common::XdpFlowAcct,
+            cloudsidra_edge_xdp_common::XdpUdpCtKey,
+            cloudsidra_edge_xdp_common::XdpFlowAcct,
         >,
     >,
     map_sync_started: AtomicBool,
@@ -1938,8 +1938,8 @@ impl XdpManager {
     /// Effective per-IP rate limit for the current pressure level: base
     /// settings apply at Elevated, halve at High, quarter at Critical, and the
     /// limiter is fully disabled at Normal (zero pps = off in eBPF).
-    fn effective_rate_limit_config(&self) -> cloud_node_xdp_common::XdpRateLimitConfig {
-        let config = cloud_node_xdp_common::XdpRateLimitConfig::default();
+    fn effective_rate_limit_config(&self) -> cloudsidra_edge_xdp_common::XdpRateLimitConfig {
+        let config = cloudsidra_edge_xdp_common::XdpRateLimitConfig::default();
         let Some(base) = &self.config.rate_limit else {
             return config;
         };
@@ -1960,11 +1960,11 @@ impl XdpManager {
     /// (Elevated x1, High /2, Critical /4) but clamps each share at >=1:
     /// "divide to zero" never disables a dimension. `enabled: false` in
     /// config is the only off switch and writes flag=0 explicitly.
-    fn effective_budget_config(&self) -> cloud_node_xdp_common::XdpBudgetConfig {
+    fn effective_budget_config(&self) -> cloudsidra_edge_xdp_common::XdpBudgetConfig {
         use crate::l4_defense::L4PressureLevel;
         let base = self.config.budget.clone().unwrap_or_default();
         if !base.enabled {
-            return cloud_node_xdp_common::XdpBudgetConfig::default();
+            return cloudsidra_edge_xdp_common::XdpBudgetConfig::default();
         }
         let divisor: u64 = match crate::l4_defense::current_pressure_level() {
             L4PressureLevel::Normal | L4PressureLevel::Elevated => 1,
@@ -1986,7 +1986,7 @@ impl XdpManager {
         // single service may fill the envelope (status quo), while
         // multi-service nodes get a fairness floor operators can tighten.
         let service_flow_pps = base.service_flow_pps.unwrap_or(base.new_flow_per_sec);
-        cloud_node_xdp_common::XdpBudgetConfig {
+        cloudsidra_edge_xdp_common::XdpBudgetConfig {
             unverified_pps: share(base.unverified_pps),
             new_flow_per_sec: share(base.new_flow_per_sec),
             xsk_redirect_pps: share(base.xsk_redirect_pps),
@@ -2195,7 +2195,7 @@ impl XdpManager {
     #[cfg(target_os = "linux")]
     pub(crate) fn upsert_out_ct(
         &self,
-        key: cloud_node_xdp_common::XdpOutCtKey,
+        key: cloudsidra_edge_xdp_common::XdpOutCtKey,
     ) -> anyhow::Result<()> {
         let mut guard = self.ebpf.lock();
         match guard.as_mut() {
@@ -2208,7 +2208,7 @@ impl XdpManager {
     #[cfg(target_os = "linux")]
     pub(crate) fn remove_out_ct(
         &self,
-        key: &cloud_node_xdp_common::XdpOutCtKey,
+        key: &cloudsidra_edge_xdp_common::XdpOutCtKey,
     ) -> anyhow::Result<()> {
         let mut guard = self.ebpf.lock();
         match guard.as_mut() {
@@ -2850,13 +2850,13 @@ static XDP_MANAGER: OnceLock<parking_lot::RwLock<std::sync::Arc<XdpManager>>> = 
 
 /// Pressure level used to scale the XDP per-source rate limiter. Release
 /// builds always use the live aggregate pressure. Debug builds honor
-/// `CLOUD_NODE_XDP_TEST_PRESSURE=normal|elevated|high|critical` so dataplane
+/// `CLOUDSIDRA_EDGE_XDP_TEST_PRESSURE=normal|elevated|high|critical` so dataplane
 /// e2e probes (scripts/edge/en08_rate_probe.py) can exercise the real
 /// config→map→eBPF path without driving the host into memory pressure.
 #[cfg(debug_assertions)]
 fn xdp_rate_limit_pressure_level() -> crate::l4_defense::L4PressureLevel {
     use crate::l4_defense::L4PressureLevel;
-    match std::env::var("CLOUD_NODE_XDP_TEST_PRESSURE").as_deref() {
+    match std::env::var("CLOUDSIDRA_EDGE_XDP_TEST_PRESSURE").as_deref() {
         Ok("normal") => L4PressureLevel::Normal,
         Ok("elevated") => L4PressureLevel::Elevated,
         Ok("high") => L4PressureLevel::High,
@@ -2871,13 +2871,13 @@ fn xdp_rate_limit_pressure_level() -> crate::l4_defense::L4PressureLevel {
 }
 
 /// Test-only EN-05 queue-withdrawal trigger (debug builds only): set
-/// `CLOUD_NODE_XDP_TEST_WITHDRAW_QUEUE=iface:queue` and the bridge will run
+/// `CLOUDSIDRA_EDGE_XDP_TEST_WITHDRAW_QUEUE=iface:queue` and the bridge will run
 /// the queue-local fault path once after redirect opens, so e2e probes can
 /// verify slot withdrawal, status marking, and sibling-queue survival.
 /// Release builds ignore the variable entirely.
 #[cfg(all(debug_assertions, target_os = "linux"))]
 pub(crate) fn test_withdraw_queue_request() -> Option<(String, u32)> {
-    let spec = std::env::var("CLOUD_NODE_XDP_TEST_WITHDRAW_QUEUE").ok()?;
+    let spec = std::env::var("CLOUDSIDRA_EDGE_XDP_TEST_WITHDRAW_QUEUE").ok()?;
     let (interface, queue) = spec.split_once(':')?;
     Some((interface.to_string(), queue.parse().ok()?))
 }
@@ -2895,7 +2895,7 @@ pub(crate) fn test_withdraw_queue_request() -> Option<(String, u32)> {
 fn scaled_rate_limit_config(
     base: &crate::runtime_mode::XdpRateLimitSettings,
     divisor: u64,
-) -> cloud_node_xdp_common::XdpRateLimitConfig {
+) -> cloudsidra_edge_xdp_common::XdpRateLimitConfig {
     let scaled = |pps: u64| {
         if pps == 0 {
             0
@@ -2903,7 +2903,7 @@ fn scaled_rate_limit_config(
             (pps / divisor).max(1)
         }
     };
-    cloud_node_xdp_common::XdpRateLimitConfig {
+    cloudsidra_edge_xdp_common::XdpRateLimitConfig {
         udp_pps: scaled(base.udp_pps),
         tcp_syn_pps: scaled(base.tcp_syn_pps),
         window_ns: base.window_ms.saturating_mul(1_000_000),
@@ -3095,7 +3095,7 @@ pub async fn ensure_current_xdp_auto_config() -> anyhow::Result<()> {
 #[derive(Debug, Default)]
 struct FlowEventLedger {
     entries:
-        std::collections::HashMap<(cloud_node_xdp_common::XdpFlowKey, u64), FlowEventLedgerEntry>,
+        std::collections::HashMap<(cloudsidra_edge_xdp_common::XdpFlowKey, u64), FlowEventLedgerEntry>,
     evicted: u64,
 }
 
@@ -3114,7 +3114,7 @@ impl FlowEventLedger {
 
     /// Apply one event. Returns true when the event was accepted; a false
     /// result means it was older than the recorded triple for the tuple.
-    fn apply(&mut self, event: &cloud_node_xdp_common::XdpFlowEvent) -> bool {
+    fn apply(&mut self, event: &cloudsidra_edge_xdp_common::XdpFlowEvent) -> bool {
         let key = (event.key, event.flow_incarnation);
         if let Some(existing) = self.entries.get(&key) {
             if (event.flow_incarnation, event.owner_epoch, event.seq)
@@ -3129,8 +3129,8 @@ impl FlowEventLedger {
                 .entries
                 .iter()
                 .filter(|(_, e)| {
-                    e.kind == cloud_node_xdp_common::XDP_FLOW_EVENT_CLOSED
-                        || e.kind == cloud_node_xdp_common::XDP_FLOW_EVENT_REJECTED
+                    e.kind == cloudsidra_edge_xdp_common::XDP_FLOW_EVENT_CLOSED
+                        || e.kind == cloudsidra_edge_xdp_common::XDP_FLOW_EVENT_REJECTED
                 })
                 .map(|(k, _)| *k)
                 .next()
@@ -3269,7 +3269,7 @@ async fn run_flow_event_consumer(manager: std::sync::Arc<XdpManager>, generation
         let mut batch = 0u64;
         while let Some(item) = rb.next() {
             let bytes: &[u8] = &item;
-            if bytes.len() != core::mem::size_of::<cloud_node_xdp_common::XdpFlowEvent>() {
+            if bytes.len() != core::mem::size_of::<cloudsidra_edge_xdp_common::XdpFlowEvent>() {
                 manager.flow_events_stale.fetch_add(1, Ordering::Relaxed);
                 continue;
             }
@@ -3277,7 +3277,7 @@ async fn run_flow_event_consumer(manager: std::sync::Arc<XdpManager>, generation
             // is a repr(C) Pod struct; read_unaligned tolerates either way.
             let event = unsafe {
                 core::ptr::read_unaligned(
-                    bytes.as_ptr() as *const cloud_node_xdp_common::XdpFlowEvent
+                    bytes.as_ptr() as *const cloudsidra_edge_xdp_common::XdpFlowEvent
                 )
             };
             let mut ledger = manager.flow_event_ledger.lock();
@@ -3576,7 +3576,7 @@ pub fn doctor_report() -> String {
 
 fn doctor_report_for_config(config: &XdpConfig) -> String {
     let mut lines = Vec::new();
-    lines.push("CloudNode XDP doctor".to_string());
+    lines.push("CloudSidra-Edge XDP doctor".to_string());
     lines.push(format!("  enabled:       {}", yes_no(config.enabled)));
     lines.push(format!("  attach mode:   {}", config.attach_mode.as_str()));
     lines.push(format!("  fallback:      {}", config.fallback.as_str()));
@@ -3664,12 +3664,12 @@ fn doctor_report_for_config(config: &XdpConfig) -> String {
             interface.local_ips.len()
         ));
         if interface.mode == XdpRuntimeMode::Proxy
-            && interface.frame_size != cloud_node_xdp_common::XDP_DEFAULT_FRAME_SIZE
+            && interface.frame_size != cloudsidra_edge_xdp_common::XDP_DEFAULT_FRAME_SIZE
         {
             lines.push(format!(
                 "  warning:       interface {} proxy mode requires frameSize={} until jumbo/multi-buffer support is enabled",
                 interface.name,
-                cloud_node_xdp_common::XDP_DEFAULT_FRAME_SIZE
+                cloudsidra_edge_xdp_common::XDP_DEFAULT_FRAME_SIZE
             ));
         }
         if interface.mode == XdpRuntimeMode::Proxy && config.proxy.ports.is_empty() {
@@ -3708,7 +3708,7 @@ fn range_bound_to_ip(value: u128, v6: bool) -> IpAddr {
 
 /// Explicit external eBPF object override. Precedence follows the project's
 /// config convention: file config (`xdp.ebpfObject`) wins over the
-/// `CLOUD_NODE_XDP_EBPF_OBJECT_PATH` environment variable; when neither is set
+/// `CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT_PATH` environment variable; when neither is set
 /// the binary loads the object embedded at build time.
 fn ebpf_object_override(config: &XdpConfig) -> Option<PathBuf> {
     if let Some(path) = config
@@ -3719,7 +3719,7 @@ fn ebpf_object_override(config: &XdpConfig) -> Option<PathBuf> {
     {
         return Some(PathBuf::from(path));
     }
-    std::env::var_os("CLOUD_NODE_XDP_EBPF_OBJECT_PATH")
+    std::env::var_os("CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT_PATH")
         .map(PathBuf::from)
         .filter(|path| !path.as_os_str().is_empty())
 }
@@ -3738,9 +3738,9 @@ fn yes_no(value: bool) -> &'static str {
 fn xdp_ip_proto(protocol: &XdpProxyProtocol) -> u8 {
     match protocol {
         XdpProxyProtocol::Http | XdpProxyProtocol::Https | XdpProxyProtocol::Tcp => {
-            cloud_node_xdp_common::XDP_PROTO_TCP
+            cloudsidra_edge_xdp_common::XDP_PROTO_TCP
         }
-        XdpProxyProtocol::Udp | XdpProxyProtocol::H3 => cloud_node_xdp_common::XDP_PROTO_UDP,
+        XdpProxyProtocol::Udp | XdpProxyProtocol::H3 => cloudsidra_edge_xdp_common::XDP_PROTO_UDP,
     }
 }
 
@@ -3786,7 +3786,7 @@ fn xdp_proxy_frame_size_detail(config: &XdpConfig) -> String {
         .iter()
         .filter(|interface| {
             interface.mode == XdpRuntimeMode::Proxy
-                && interface.frame_size != cloud_node_xdp_common::XDP_DEFAULT_FRAME_SIZE
+                && interface.frame_size != cloudsidra_edge_xdp_common::XDP_DEFAULT_FRAME_SIZE
         })
         .map(|interface| format!("{} frameSize={}", interface.name, interface.frame_size))
         .collect::<Vec<_>>();
@@ -3795,7 +3795,7 @@ fn xdp_proxy_frame_size_detail(config: &XdpConfig) -> String {
     } else {
         format!(
             "XDP proxy mode requires frameSize={} until jumbo/multi-buffer support is enabled: {}",
-            cloud_node_xdp_common::XDP_DEFAULT_FRAME_SIZE,
+            cloudsidra_edge_xdp_common::XDP_DEFAULT_FRAME_SIZE,
             invalid.join(",")
         )
     }

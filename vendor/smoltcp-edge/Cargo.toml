@@ -573,6 +573,6 @@ debug = 2
 
 # smoltcp-edge (T3): external transport-controller trait, rate sampler
 # and RTT state driving the transport_ext scoreboard in socket/tcp.
-[dependencies.cloud-node-transport]
-path = "../../crates/cloud-node-transport"
+[dependencies.cloudsidra-edge-transport]
+path = "../../crates/cloudsidra-edge-transport"
 version = "0.1.0"

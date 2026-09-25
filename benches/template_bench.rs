@@ -1,4 +1,4 @@
-use cloud_node_rust::utils::template::format_template;
+use cloudsidra_edge::utils::template::format_template;
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 

@@ -673,11 +673,11 @@ pub(crate) struct AfXdpTcpReactor {
     /// T6: worker-local shared-bottleneck aggregate (EdgeCC only).
     /// `Rc<RefCell>` — never a cross-worker lock, never on the ACK path.
     aggregate: Option<
-        std::rc::Rc<std::cell::RefCell<cloud_node_transport::Aggregate>>,
+        std::rc::Rc<std::cell::RefCell<cloudsidra_edge_transport::Aggregate>>,
     >,
     /// T6: worker-local bounded path-prior table (§2.2 长期先验).
     path_table:
-        std::rc::Rc<std::cell::RefCell<cloud_node_transport::PathTable>>,
+        std::rc::Rc<std::cell::RefCell<cloudsidra_edge_transport::PathTable>>,
     /// Aggregate arbitration tick watermark (~100ms periods).
     last_agg_period: SmoltcpInstant,
     /// Runtime that owns per-session L7 proxy tasks (TLS, HTTP, upstream
@@ -761,9 +761,9 @@ impl AfXdpTcpReactor {
             trusted_ecn: false,
             aggregate: None,
             path_table: std::rc::Rc::new(std::cell::RefCell::new(
-                cloud_node_transport::PathTable::new(
-                    cloud_node_transport::path_table::DEFAULT_CAPACITY,
-                    cloud_node_transport::path_table::DEFAULT_TTL,
+                cloudsidra_edge_transport::PathTable::new(
+                    cloudsidra_edge_transport::path_table::DEFAULT_CAPACITY,
+                    cloudsidra_edge_transport::path_table::DEFAULT_TTL,
                 ),
             )),
             last_agg_period: SmoltcpInstant::from_millis(0),
@@ -794,7 +794,7 @@ impl AfXdpTcpReactor {
         self.transport_controller = policy.controller;
         self.trusted_ecn = policy.trusted_ecn;
         if policy.aggregation_enabled() && self.aggregate.is_none() {
-            self.aggregate = Some(cloud_node_transport::Aggregate::shared());
+            self.aggregate = Some(cloudsidra_edge_transport::Aggregate::shared());
         }
     }
 
@@ -822,7 +822,7 @@ impl AfXdpTcpReactor {
     #[cfg(test)]
     pub(crate) fn path_table(
         &self,
-    ) -> std::rc::Rc<std::cell::RefCell<cloud_node_transport::PathTable>> {
+    ) -> std::rc::Rc<std::cell::RefCell<cloudsidra_edge_transport::PathTable>> {
         std::rc::Rc::clone(&self.path_table)
     }
 
@@ -863,7 +863,7 @@ impl AfXdpTcpReactor {
         &self,
         peer: IpAddr,
         local: IpAddr,
-    ) -> Option<cloud_node_transport::PathPrior> {
+    ) -> Option<cloudsidra_edge_transport::PathPrior> {
         let (dst_prefix, prefix_len) = match peer {
             IpAddr::V4(v4) => (
                 IpAddr::V4(std::net::Ipv4Addr::from(
@@ -878,13 +878,13 @@ impl AfXdpTcpReactor {
                 64,
             ),
         };
-        let key = cloud_node_transport::PathKey {
+        let key = cloudsidra_edge_transport::PathKey {
             egress_ifindex: 0,
             local_ip: local,
             dst_prefix,
             prefix_len,
         };
-        let now = cloud_node_transport::TransportInstant::from_micros(
+        let now = cloudsidra_edge_transport::TransportInstant::from_micros(
             self.clock.now_micros().max(0) as u64,
         );
         self.path_table.borrow_mut().lookup(&key, now)
@@ -1075,28 +1075,28 @@ impl AfXdpTcpReactor {
         &self,
         peer: IpAddr,
         local: IpAddr,
-    ) -> Box<dyn cloud_node_transport::cc::CongestionController> {
+    ) -> Box<dyn cloudsidra_edge_transport::cc::CongestionController> {
         use crate::runtime_mode::XdpTransportController as Ctl;
-        use cloud_node_transport::cc as tcc;
+        use cloudsidra_edge_transport::cc as tcc;
         match self.transport_controller {
             Ctl::Cubic => Box::new(tcc::CubicRef::new(536)),
             Ctl::NewReno => Box::new(tcc::NewRenoRef::new(536)),
             Ctl::Bbr3 => Box::new(tcc::Bbr3Ref::new(536)),
             Ctl::LossBlind => Box::new(tcc::LossBlindRef::new(
                 536,
-                cloud_node_transport::Tier::T1,
+                cloudsidra_edge_transport::Tier::T1,
                 None,
                 self.trusted_ecn,
             )),
             Ctl::Edgecc => {
-                let mut cc = cloud_node_transport::EdgeCc::new(
+                let mut cc = cloudsidra_edge_transport::EdgeCc::new(
                     536,
-                    cloud_node_transport::Tier::T1,
+                    cloudsidra_edge_transport::Tier::T1,
                     self.path_prior(peer, local),
                     self.trusted_ecn,
                 );
                 if let Some(agg) = self.aggregate.as_ref()
-                    && let Some(lease) = cloud_node_transport::Aggregate::join(agg)
+                    && let Some(lease) = cloudsidra_edge_transport::Aggregate::join(agg)
                 {
                     cc.set_aggregate(Box::new(lease));
                 }
@@ -1110,12 +1110,12 @@ impl AfXdpTcpReactor {
     /// Static: the reap path calls this while `self.sockets` is borrowed.
     pub(crate) fn record_path_sample(
         table: &std::rc::Rc<
-            std::cell::RefCell<cloud_node_transport::PathTable>,
+            std::cell::RefCell<cloudsidra_edge_transport::PathTable>,
         >,
         clock_us: i64,
         peer: IpAddr,
         local: IpAddr,
-        snap: &cloud_node_transport::cc::CcSnapshot,
+        snap: &cloudsidra_edge_transport::cc::CcSnapshot,
         failed: bool,
     ) {
         let (dst_prefix, prefix_len) = match peer {
@@ -1132,18 +1132,18 @@ impl AfXdpTcpReactor {
                 64,
             ),
         };
-        let key = cloud_node_transport::PathKey {
+        let key = cloudsidra_edge_transport::PathKey {
             egress_ifindex: 0,
             local_ip: local,
             dst_prefix,
             prefix_len,
         };
-        let now = cloud_node_transport::TransportInstant::from_micros(
+        let now = cloudsidra_edge_transport::TransportInstant::from_micros(
             clock_us.max(0) as u64,
         );
         table.borrow_mut().record(
             key,
-            cloud_node_transport::PathSample {
+            cloudsidra_edge_transport::PathSample {
                 bw_bps: snap.bandwidth_lo_bps.or(snap.bandwidth_hi_bps).unwrap_or(0),
                 base_rtt: snap.min_rtt.unwrap_or_default(),
                 p_rand: snap.p_rand_milli.unwrap_or(0) as f64 / 1000.0,

@@ -2,8 +2,8 @@
 use anyhow::Context;
 use chrono::{Local, TimeZone};
 use clap::{Parser, Subcommand, ValueEnum};
-use cloud_node_rust::i18n::{Language, t};
-use cloud_node_rust::xdp_config_wizard::{XdpConfigWizard, save_xdp_enabled};
+use cloudsidra_edge::i18n::{Language, t};
+use cloudsidra_edge::xdp_config_wizard::{XdpConfigWizard, save_xdp_enabled};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::CString;
 use std::fs;
@@ -26,18 +26,18 @@ static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
 
-use cloud_node_rust::api_config::ApiConfig;
-use cloud_node_rust::config::ConfigStore;
-use cloud_node_rust::firewall::state::WafStateManager;
-use cloud_node_rust::health_manager::GlobalHealthManager;
-use cloud_node_rust::kernel_syn_defense;
-use cloud_node_rust::l4_connection_registry;
-use cloud_node_rust::proxy::EdgeProxy;
-use cloud_node_rust::runtime_mode::{
+use cloudsidra_edge::api_config::ApiConfig;
+use cloudsidra_edge::config::ConfigStore;
+use cloudsidra_edge::firewall::state::WafStateManager;
+use cloudsidra_edge::health_manager::GlobalHealthManager;
+use cloudsidra_edge::kernel_syn_defense;
+use cloudsidra_edge::l4_connection_registry;
+use cloudsidra_edge::proxy::EdgeProxy;
+use cloudsidra_edge::runtime_mode::{
     RuntimeConfig, XdpAttachMode, XdpFallbackMode, XdpRuntimeMode,
 };
-use cloud_node_rust::ssl::DynamicCertSelector;
-use cloud_node_rust::{firewall, log_uploader, logging, rpc, tcp_proxy, udp_proxy};
+use cloudsidra_edge::ssl::DynamicCertSelector;
+use cloudsidra_edge::{firewall, log_uploader, logging, rpc, tcp_proxy, udp_proxy};
 
 struct LocalLogTimer;
 
@@ -46,7 +46,7 @@ impl FormatTime for LocalLogTimer {
         write!(
             w,
             "{}",
-            cloud_node_rust::utils::time::now_local_millis().format("%Y-%m-%dT%H:%M:%S%.6f%:z")
+            cloudsidra_edge::utils::time::now_local_millis().format("%Y-%m-%dT%H:%M:%S%.6f%:z")
         )
     }
 }
@@ -59,8 +59,8 @@ struct SharedLogWriter {
 
 impl SharedLogWriter {
     fn new(file: fs::File, path: PathBuf) -> Self {
-        let snapshot = cloud_node_rust::memory_governor::MEMORY_GOVERNOR
-            .snapshot(cloud_node_rust::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads());
+        let snapshot = cloudsidra_edge::memory_governor::MEMORY_GOVERNOR
+            .snapshot(cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads());
         let estimated_event_bytes = 1024u64;
         let queue_capacity =
             usize::try_from(snapshot.local_log_queue_budget_bytes / estimated_event_bytes)
@@ -93,8 +93,8 @@ impl SharedLogGuard {
             Ok(()) => Ok(()),
             Err(std_mpsc::TrySendError::Full(_)) | Err(std_mpsc::TrySendError::Disconnected(_)) => {
                 self.dropped.fetch_add(1, Ordering::Relaxed);
-                cloud_node_rust::pipeline_metrics::increment(
-                    cloud_node_rust::pipeline_metrics::PipelineCounter::LocalLogDropped,
+                cloudsidra_edge::pipeline_metrics::increment(
+                    cloudsidra_edge::pipeline_metrics::PipelineCounter::LocalLogDropped,
                 );
                 Ok(())
             }
@@ -138,8 +138,8 @@ fn run_log_writer(
     _dropped: Arc<AtomicU64>,
 ) {
     use std::io::Write as _;
-    let rotate_bytes = cloud_node_rust::memory_governor::MEMORY_GOVERNOR
-        .snapshot(cloud_node_rust::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads())
+    let rotate_bytes = cloudsidra_edge::memory_governor::MEMORY_GOVERNOR
+        .snapshot(cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads())
         .local_log_queue_budget_bytes
         .max(1024 * 1024);
     let mut written = file.metadata().map(|metadata| metadata.len()).unwrap_or(0);
@@ -168,14 +168,14 @@ fn run_log_writer(
                 Ok(())
             })();
             if rotation.is_err() {
-                cloud_node_rust::pipeline_metrics::increment(
-                    cloud_node_rust::pipeline_metrics::PipelineCounter::LocalLogRotationFailed,
+                cloudsidra_edge::pipeline_metrics::increment(
+                    cloudsidra_edge::pipeline_metrics::PipelineCounter::LocalLogRotationFailed,
                 );
             }
         }
         if file.write_all(&pending).and_then(|_| file.flush()).is_err() {
-            cloud_node_rust::pipeline_metrics::increment(
-                cloud_node_rust::pipeline_metrics::PipelineCounter::LocalLogWriteFailed,
+            cloudsidra_edge::pipeline_metrics::increment(
+                cloudsidra_edge::pipeline_metrics::PipelineCounter::LocalLogWriteFailed,
             );
         } else {
             written = written.saturating_add(pending.len() as u64);
@@ -186,9 +186,9 @@ fn run_log_writer(
 }
 
 #[derive(Parser)]
-#[command(name = "cloud-node-rust")]
+#[command(name = "cloudsidra-edge")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
-#[command(about = "CloudNode - High Performance Cloud Node written in Rust / Rust 编写的高性能云节点", long_about = None)]
+#[command(about = "CloudSidra-Edge - High Performance Cloud Node written in Rust / Rust 编写的高性能云节点", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -227,7 +227,7 @@ enum Commands {
         version: String,
 
         /// GitHub repository in OWNER/REPO form.
-        #[arg(long, default_value = "Zypixh/cloud-node-rust")]
+        #[arg(long, default_value = "CloudSidra/CloudSidra-Edge")]
         repo: String,
 
         /// GitHub base URL used to construct release download URLs.
@@ -247,7 +247,7 @@ enum Commands {
         install_binary: Option<PathBuf>,
 
         /// Directory for previous binary backups.
-        #[arg(long, default_value = "/var/backups/cloud-node-rust-upgrade")]
+        #[arg(long, default_value = "/var/backups/cloudsidra/edge-upgrade")]
         backup_dir: PathBuf,
 
         /// Confirm all prompts and run non-interactively.
@@ -258,7 +258,7 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
 
-        /// Do not restart/start cloud-node after replacing the binary.
+        /// Do not restart/start cloudsidra-edge after replacing the binary.
         #[arg(long)]
         no_restart: bool,
     },
@@ -327,7 +327,7 @@ enum FirewallCommands {
     Init,
     /// Clean expired local firewall block records from Mace
     Gc,
-    /// List nftables and CloudNode blacklist entries
+    /// List nftables and CloudSidra-Edge blacklist entries
     List {
         /// Aggregate exact IP rows when total entries exceed this threshold
         #[arg(long, default_value_t = 200)]
@@ -505,7 +505,7 @@ enum XdpCliCc {
     LossBlind,
 }
 
-impl From<XdpCliCc> for cloud_node_rust::runtime_mode::XdpTransportController {
+impl From<XdpCliCc> for cloudsidra_edge::runtime_mode::XdpTransportController {
     fn from(value: XdpCliCc) -> Self {
         match value {
             XdpCliCc::Cubic => Self::Cubic,
@@ -645,7 +645,7 @@ fn spawn_xdp_diag_log_task(rt: &tokio::runtime::Runtime, enabled: bool) {
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             interval.tick().await;
-            let diag = cloud_node_rust::xdp::af_xdp::tcp_diag_scalars();
+            let diag = cloudsidra_edge::xdp::af_xdp::tcp_diag_scalars();
             info!("afxdp.tcp diag {}", diag);
         }
     });
@@ -667,7 +667,7 @@ async fn sync_xdp_proxy_ports_once() -> anyhow::Result<Option<(usize, usize)>> {
     let payload = kernel_syn_defense::fetch_live_node_config_payload()
         .await
         .context("failed to fetch live node config for XDP proxy port sync")?;
-    let ports = cloud_node_rust::xdp_auto_config::xdp_proxy_ports_from_servers(&payload.servers);
+    let ports = cloudsidra_edge::xdp_auto_config::xdp_proxy_ports_from_servers(&payload.servers);
     if ports == runtime_config.xdp.proxy.ports {
         return Ok(None);
     }
@@ -679,14 +679,14 @@ async fn sync_xdp_proxy_ports_once() -> anyhow::Result<Option<(usize, usize)>> {
     // Derived state lives in memory only: the config file holds at most the
     // explicit `xdp.enabled` override, and every attach re-derives the rest.
     RuntimeConfig::set_current(runtime_config);
-    cloud_node_rust::xdp::reload_from_runtime()
+    cloudsidra_edge::xdp::reload_from_runtime()
         .await
         .context("failed to reload XDP after proxy port sync")?;
     Ok(Some((old_count, new_count)))
 }
 
 fn build_time_display() -> String {
-    option_env!("CLOUD_NODE_BUILD_TIMESTAMP")
+    option_env!("CLOUDSIDRA_EDGE_BUILD_TIMESTAMP")
         .and_then(|value| value.parse::<i64>().ok())
         .and_then(|timestamp| Local.timestamp_opt(timestamp, 0).single())
         .map(|dt| dt.format("%Y-%m-%d %H:%M:%S %z").to_string())
@@ -745,7 +745,7 @@ fn prompt_ntp_timezone() -> anyhow::Result<Option<String>> {
         return Ok(None);
     }
 
-    let current = cloud_node_rust::utils::ntp::detect_system_timezone()
+    let current = cloudsidra_edge::utils::ntp::detect_system_timezone()
         .unwrap_or_else(|| "Asia/Shanghai".to_string());
     println!("{}", t("ntp.title"));
     println!("  {}: {}", t("ntp.current_timezone"), current);
@@ -825,7 +825,7 @@ fn run_zerocopy_command(enable: bool, disable: bool, yes: bool) -> anyhow::Resul
     println!(
         "  {:<18} auto (current {} bytes)",
         format!("{}:", t("zerocopy.copy_buffer")),
-        cloud_node_rust::memory_governor::MEMORY_GOVERNOR.relay_copy_buffer_bytes()
+        cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.relay_copy_buffer_bytes()
     );
 
     let requested_zero_copy = if enable {
@@ -887,13 +887,13 @@ fn run_firewall_command(command: FirewallCommands) -> anyhow::Result<()> {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?;
-            rt.block_on(cloud_node_rust::firewall::kernel::ensure_nftables())?;
+            rt.block_on(cloudsidra_edge::firewall::kernel::ensure_nftables())?;
             println!("{}", t("firewall.initialized"));
         }
         FirewallCommands::Gc => {
-            let now = cloud_node_rust::utils::time::now_timestamp();
-            let removed = cloud_node_rust::firewall::persistence::cleanup_expired(now);
-            let _ = cloud_node_rust::firewall::persistence::flush_pending();
+            let now = cloudsidra_edge::utils::time::now_timestamp();
+            let removed = cloudsidra_edge::firewall::persistence::cleanup_expired(now);
+            let _ = cloudsidra_edge::firewall::persistence::flush_pending();
             println!("{}: {}", t("firewall.gc_removed"), removed);
         }
         FirewallCommands::List {
@@ -940,7 +940,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                     .enable_all()
                     .build()?;
                 match rt.block_on(
-                    cloud_node_rust::xdp_auto_config::derive_xdp_config_from_live_node(
+                    cloudsidra_edge::xdp_auto_config::derive_xdp_config_from_live_node(
                         &runtime_config,
                     ),
                 ) {
@@ -949,7 +949,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 }
             }
             RuntimeConfig::set_current(runtime_config);
-            println!("{}", cloud_node_rust::xdp::doctor_report());
+            println!("{}", cloudsidra_edge::xdp::doctor_report());
             if let Some(err) = auto_error {
                 println!("  auto derive:   failed: {err}");
             }
@@ -989,9 +989,9 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 xdp
             } else {
                 rt.block_on(
-                    cloud_node_rust::xdp_auto_config::derive_xdp_config_from_live_node_with_options(
+                    cloudsidra_edge::xdp_auto_config::derive_xdp_config_from_live_node_with_options(
                         &runtime_config,
-                        cloud_node_rust::xdp_auto_config::XdpAutoConfigOptions {
+                        cloudsidra_edge::xdp_auto_config::XdpAutoConfigOptions {
                             interfaces,
                             mode: mode.map(Into::into).unwrap_or(XdpRuntimeMode::Proxy),
                             attach_mode: attach_mode.map(Into::into).unwrap_or(XdpAttachMode::Auto),
@@ -1009,19 +1009,19 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             runtime_config.xdp = effective_xdp;
             runtime_config.validate()?;
             if !no_tune {
-                let report = cloud_node_rust::xdp_netdev_tuning::apply_for_xdp_config(
+                let report = cloudsidra_edge::xdp_netdev_tuning::apply_for_xdp_config(
                     &runtime_config.xdp,
-                    cloud_node_rust::xdp_netdev_tuning::XdpNetdevTuneOptions {
+                    cloudsidra_edge::xdp_netdev_tuning::XdpNetdevTuneOptions {
                         dry_run,
                         install_tools: !no_install_tools,
                         report_node_log: true,
                         persist_report: !dry_run,
                     },
                 )?;
-                cloud_node_rust::xdp_netdev_tuning::print_report(&report);
+                cloudsidra_edge::xdp_netdev_tuning::print_report(&report);
             }
             if !dry_run {
-                cloud_node_rust::xdp_auto_config::refresh_xdp_interface_queues(
+                cloudsidra_edge::xdp_auto_config::refresh_xdp_interface_queues(
                     &mut runtime_config.xdp,
                 );
                 runtime_config.validate()?;
@@ -1034,9 +1034,9 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 );
                 return Ok(());
             }
-            let runtime_path = cloud_node_rust::paths::NodePaths::current().api_config_file();
+            let runtime_path = cloudsidra_edge::paths::NodePaths::current().api_config_file();
             if file_config_is_authoritative {
-                cloud_node_rust::xdp_config_wizard::merge_xdp_enabled(&runtime_path, true)?;
+                cloudsidra_edge::xdp_config_wizard::merge_xdp_enabled(&runtime_path, true)?;
             } else {
                 save_xdp_enabled(&runtime_path, true)?;
             }
@@ -1044,15 +1044,15 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             if !is_systemd_invocation() && systemd_service_is_active() {
                 run_systemctl("restart")?;
                 std::thread::sleep(Duration::from_secs(3));
-                if let Some(status) = cloud_node_rust::xdp::persisted_status_snapshot() {
+                if let Some(status) = cloudsidra_edge::xdp::persisted_status_snapshot() {
                     print_xdp_status_snapshot(status);
                 } else {
-                    println!("XDP config saved; cloud-node.service restarted.");
+                    println!("XDP config saved; cloudsidra-edge.service restarted.");
                 }
                 return Ok(());
             }
             RuntimeConfig::set_current(runtime_config);
-            rt.block_on(cloud_node_rust::xdp::attach_from_runtime())?;
+            rt.block_on(cloudsidra_edge::xdp::attach_from_runtime())?;
             print_xdp_status();
         }
         XdpCommands::Stop { purge_state } => {
@@ -1061,9 +1061,9 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?;
-            rt.block_on(cloud_node_rust::xdp::detach(purge_state))?;
+            rt.block_on(cloudsidra_edge::xdp::detach(purge_state))?;
             runtime_config.xdp.enabled = false;
-            let runtime_path = cloud_node_rust::paths::NodePaths::current().api_config_file();
+            let runtime_path = cloudsidra_edge::paths::NodePaths::current().api_config_file();
             save_xdp_enabled(&runtime_path, false)?;
             RuntimeConfig::set_current(runtime_config);
             print_xdp_status();
@@ -1080,7 +1080,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                         .enable_all()
                         .build()?;
                     rt.block_on(
-                        cloud_node_rust::xdp_auto_config::derive_xdp_config_from_live_node(
+                        cloudsidra_edge::xdp_auto_config::derive_xdp_config_from_live_node(
                             &runtime_config,
                         ),
                     )?
@@ -1099,24 +1099,24 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             } else {
                 interfaces
             };
-            let report = cloud_node_rust::xdp_netdev_tuning::apply_for_interfaces(
+            let report = cloudsidra_edge::xdp_netdev_tuning::apply_for_interfaces(
                 &interface_names,
                 runtime_config.xdp.fallback,
-                cloud_node_rust::xdp_netdev_tuning::XdpNetdevTuneOptions {
+                cloudsidra_edge::xdp_netdev_tuning::XdpNetdevTuneOptions {
                     dry_run: !apply,
                     install_tools: apply && !no_install_tools,
                     report_node_log: true,
                     persist_report: apply,
                 },
             )?;
-            cloud_node_rust::xdp_netdev_tuning::print_report(&report);
+            cloudsidra_edge::xdp_netdev_tuning::print_report(&report);
         }
         XdpCommands::DumpMaps => {
             let runtime_config = RuntimeConfig::load_default()?;
             RuntimeConfig::set_current(runtime_config);
             println!(
                 "{}",
-                serde_json::to_string_pretty(&cloud_node_rust::xdp::dump_maps())?
+                serde_json::to_string_pretty(&cloudsidra_edge::xdp::dump_maps())?
             );
         }
         XdpCommands::Reload => {
@@ -1125,7 +1125,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?;
-            rt.block_on(cloud_node_rust::xdp::reload_from_runtime())?;
+            rt.block_on(cloudsidra_edge::xdp::reload_from_runtime())?;
             print_xdp_status();
         }
         XdpCommands::RawSmoke {
@@ -1138,7 +1138,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 .enable_all()
                 .build()?;
             let duration = Duration::from_millis(duration_ms.max(1));
-            let report = rt.block_on(cloud_node_rust::xdp::raw_smoke(duration, ready_file))?;
+            let report = rt.block_on(cloudsidra_edge::xdp::raw_smoke(duration, ready_file))?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
         XdpCommands::ProxySmoke {
@@ -1151,7 +1151,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             let runtime_config = RuntimeConfig::load_default()?;
             RuntimeConfig::set_current(runtime_config);
             if let Some(cc) = cc {
-                cloud_node_rust::runtime_mode::set_validation_transport_controller(cc.into());
+                cloudsidra_edge::runtime_mode::set_validation_transport_controller(cc.into());
             }
             // Match the production `run_node` scheduler: session tasks,
             // demux workers and per-queue bridges spread across cores.
@@ -1162,7 +1162,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 .enable_all()
                 .build()?;
             let duration = Duration::from_millis(duration_ms.max(1));
-            let report = rt.block_on(cloud_node_rust::xdp::proxy_smoke(
+            let report = rt.block_on(cloudsidra_edge::xdp::proxy_smoke(
                 duration, ready_file, kernel, remote,
             ))?;
             println!("{}", serde_json::to_string_pretty(&report)?);
@@ -1177,7 +1177,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 .enable_all()
                 .build()?;
             let duration = Duration::from_millis(duration_ms.max(1));
-            let report = rt.block_on(cloud_node_rust::xdp::proxy_reload_smoke(
+            let report = rt.block_on(cloudsidra_edge::xdp::proxy_reload_smoke(
                 duration, ready_file,
             ))?;
             println!("{}", serde_json::to_string_pretty(&report)?);
@@ -1194,7 +1194,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             let runtime_config = RuntimeConfig::load_default()?;
             RuntimeConfig::set_current(runtime_config);
             if let Some(cc) = cc {
-                cloud_node_rust::runtime_mode::set_validation_transport_controller(cc.into());
+                cloudsidra_edge::runtime_mode::set_validation_transport_controller(cc.into());
             }
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -1203,7 +1203,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             let payload = vec![0x5au8; payload_bytes];
             let send_interval = Duration::from_millis(send_interval_ms);
             let reload_at = reload_at_ms.map(Duration::from_millis);
-            let report = rt.block_on(cloud_node_rust::xdp::dial_smoke(
+            let report = rt.block_on(cloudsidra_edge::xdp::dial_smoke(
                 target,
                 duration,
                 ready_file,
@@ -1222,15 +1222,15 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
 
 fn print_xdp_status() {
     let status = if RuntimeConfig::current().is_some() {
-        cloud_node_rust::xdp::status_snapshot()
+        cloudsidra_edge::xdp::status_snapshot()
     } else {
-        cloud_node_rust::xdp::persisted_status_snapshot()
-            .unwrap_or_else(cloud_node_rust::xdp::status_snapshot)
+        cloudsidra_edge::xdp::persisted_status_snapshot()
+            .unwrap_or_else(cloudsidra_edge::xdp::status_snapshot)
     };
     print_xdp_status_snapshot(status);
 }
 
-fn print_xdp_status_snapshot(status: cloud_node_rust::xdp::XdpStatusSnapshot) {
+fn print_xdp_status_snapshot(status: cloudsidra_edge::xdp::XdpStatusSnapshot) {
     println!("{}", t("xdp.status.title"));
     println!(
         "  {:<14} {}",
@@ -1372,7 +1372,7 @@ fn print_xdp_status_snapshot(status: cloud_node_rust::xdp::XdpStatusSnapshot) {
             }
         }
     }
-    for line in cloud_node_rust::xdp_netdev_tuning::status_lines() {
+    for line in cloudsidra_edge::xdp_netdev_tuning::status_lines() {
         println!("{line}");
     }
 }
@@ -1388,8 +1388,8 @@ fn xdp_yes_no(value: bool) -> &'static str {
 fn print_defense_status() {
     let syn = kernel_syn_defense::snapshot();
     let active = l4_connection_registry::snapshot();
-    let metrics = cloud_node_rust::l4_defense::metrics_snapshot();
-    let pressure = cloud_node_rust::l4_defense::current_pressure_level();
+    let metrics = cloudsidra_edge::l4_defense::metrics_snapshot();
+    let pressure = cloudsidra_edge::l4_defense::current_pressure_level();
 
     println!("{}", t("defense.title"));
     println!(
@@ -1472,10 +1472,10 @@ fn run_firewall_list(aggregate_threshold: usize, no_aggregate: bool) -> anyhow::
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    let nf_ips = rt.block_on(cloud_node_rust::firewall::kernel::nftables_blocked_ips())?;
+    let nf_ips = rt.block_on(cloudsidra_edge::firewall::kernel::nftables_blocked_ips())?;
     let nf_ips = nf_ips.into_iter().collect::<BTreeSet<_>>();
-    let expired_cleaned = cloud_node_rust::firewall::persistence::cleanup_expired(
-        cloud_node_rust::utils::time::now_timestamp(),
+    let expired_cleaned = cloudsidra_edge::firewall::persistence::cleanup_expired(
+        cloudsidra_edge::utils::time::now_timestamp(),
     );
     let (black_ips, black_targets) = load_blacklist_snapshot();
 
@@ -1517,10 +1517,10 @@ fn run_firewall_list(aggregate_threshold: usize, no_aggregate: bool) -> anyhow::
 }
 
 fn load_blacklist_snapshot() -> (BTreeSet<IpAddr>, Vec<String>) {
-    let now = cloud_node_rust::utils::time::now_timestamp();
+    let now = cloudsidra_edge::utils::time::now_timestamp();
     let mut ips = BTreeSet::new();
     let mut targets = BTreeSet::new();
-    for record in cloud_node_rust::firewall::persistence::load_active_blacklist_records(now) {
+    for record in cloudsidra_edge::firewall::persistence::load_active_blacklist_records(now) {
         if let Ok(ip) = record.target.parse::<IpAddr>() {
             ips.insert(ip);
         } else {
@@ -1644,13 +1644,13 @@ fn run_ntp_command(
     };
 
     if let Some(timezone) = timezone {
-        cloud_node_rust::utils::ntp::set_system_timezone(&timezone)?;
+        cloudsidra_edge::utils::ntp::set_system_timezone(&timezone)?;
         println!("{} {}", t("ntp.timezone_set"), timezone);
     }
-    cloud_node_rust::utils::time::init_local_timezone();
+    cloudsidra_edge::utils::time::init_local_timezone();
 
     let servers = if servers.is_empty() {
-        cloud_node_rust::utils::ntp::default_servers_as_strings()
+        cloudsidra_edge::utils::ntp::default_servers_as_strings()
     } else {
         servers
     };
@@ -1658,9 +1658,9 @@ fn run_ntp_command(
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    let result = rt.block_on(cloud_node_rust::utils::ntp::sync_once(&servers, timeout))?;
+    let result = rt.block_on(cloudsidra_edge::utils::ntp::sync_once(&servers, timeout))?;
     let adjusted_millis =
-        cloud_node_rust::utils::ntp::apply_system_clock_offset(result.offset_millis)?;
+        cloudsidra_edge::utils::ntp::apply_system_clock_offset(result.offset_millis)?;
     println!("{}", result.system_clock_log_message(adjusted_millis));
     Ok(())
 }
@@ -1717,16 +1717,16 @@ fn cmdline_contains_management_command(cmdline: &[u8]) -> bool {
 }
 
 #[cfg(any(target_os = "linux", test))]
-fn is_cloud_node_binary_name(name: &str) -> bool {
-    matches!(name, "cloud-node-rust" | "cloud-node")
+fn is_cloudsidra_edge_binary_name(name: &str) -> bool {
+    matches!(name, "cloudsidra-edge" | "cloud-node" | "cloud-node-rust")
 }
 
 #[cfg(target_os = "linux")]
-fn is_cloud_node_process(pid: u32) -> bool {
+fn is_cloudsidra_edge_process(pid: u32) -> bool {
     if let Ok(exe) = fs::read_link(format!("/proc/{pid}/exe")) {
         if !process_basename(&exe)
             .as_deref()
-            .is_some_and(is_cloud_node_binary_name)
+            .is_some_and(is_cloudsidra_edge_binary_name)
         {
             return false;
         }
@@ -1741,12 +1741,12 @@ fn is_cloud_node_process(pid: u32) -> bool {
 
     first_cmdline_arg_basename(&cmdline)
         .as_deref()
-        .is_some_and(is_cloud_node_binary_name)
+        .is_some_and(is_cloudsidra_edge_binary_name)
         && !cmdline_contains_management_command(&cmdline)
 }
 
 #[cfg(not(target_os = "linux"))]
-fn is_cloud_node_process(_pid: u32) -> bool {
+fn is_cloudsidra_edge_process(_pid: u32) -> bool {
     true
 }
 
@@ -1754,10 +1754,10 @@ fn read_pid(path: &Path) -> Option<u32> {
     fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
-fn find_cloud_node_process_by_cwd(pid_path: PathBuf) -> Option<RunningInstance> {
+fn find_cloudsidra_edge_process_by_cwd(pid_path: PathBuf) -> Option<RunningInstance> {
     let current_pid = std::process::id();
     let root =
-        fs::canonicalize(cloud_node_rust::paths::NodePaths::current().runtime_root()).ok()?;
+        fs::canonicalize(cloudsidra_edge::paths::NodePaths::current().runtime_root()).ok()?;
 
     for entry in fs::read_dir("/proc").ok()? {
         let Ok(entry) = entry else {
@@ -1766,7 +1766,7 @@ fn find_cloud_node_process_by_cwd(pid_path: PathBuf) -> Option<RunningInstance> 
         let Ok(pid) = entry.file_name().to_string_lossy().parse::<u32>() else {
             continue;
         };
-        if pid == current_pid || !process_exists(pid) || !is_cloud_node_process(pid) {
+        if pid == current_pid || !process_exists(pid) || !is_cloudsidra_edge_process(pid) {
             continue;
         }
 
@@ -1784,7 +1784,7 @@ fn find_cloud_node_process_by_cwd(pid_path: PathBuf) -> Option<RunningInstance> 
 fn check_running() -> Option<RunningInstance> {
     use std::os::unix::io::AsRawFd;
 
-    let node_paths = cloud_node_rust::paths::NodePaths::current();
+    let node_paths = cloudsidra_edge::paths::NodePaths::current();
     let mut pid_paths = node_paths.pid_file_candidates();
 
     for path in &pid_paths {
@@ -1810,7 +1810,7 @@ fn check_running() -> Option<RunningInstance> {
             || err.raw_os_error() == Some(libc::EAGAIN))
             && let Some(pid) = read_pid(path)
         {
-            if process_exists(pid) && is_cloud_node_process(pid) {
+            if process_exists(pid) && is_cloudsidra_edge_process(pid) {
                 return Some(RunningInstance {
                     pid,
                     pid_path: path.clone(),
@@ -1820,7 +1820,7 @@ fn check_running() -> Option<RunningInstance> {
         }
     }
 
-    find_cloud_node_process_by_cwd(pid_paths.remove(0))
+    find_cloudsidra_edge_process_by_cwd(pid_paths.remove(0))
 }
 
 fn send_signal(pid: u32, signal: libc::c_int) -> io::Result<()> {
@@ -1856,7 +1856,7 @@ fn stop_running_instance(instance: RunningInstance) -> anyhow::Result<()> {
         send_signal(instance.pid, libc::SIGKILL)?;
         if !wait_for_exit(instance.pid, Duration::from_secs(5)) {
             anyhow::bail!(
-                "CloudNode process {} did not exit after SIGKILL",
+                "CloudSidra-Edge process {} did not exit after SIGKILL",
                 instance.pid
             );
         }
@@ -1881,7 +1881,7 @@ fn systemd_service_is_active() -> bool {
     Command::new("systemctl")
         .arg("is-active")
         .arg("--quiet")
-        .arg("cloud-node.service")
+        .arg("cloudsidra-edge.service")
         .status()
         .map(|status| status.success())
         .unwrap_or(false)
@@ -1891,7 +1891,7 @@ fn systemd_service_is_active() -> bool {
 fn systemd_service_exists() -> bool {
     Command::new("systemctl")
         .arg("cat")
-        .arg("cloud-node.service")
+        .arg("cloudsidra-edge.service")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -1915,15 +1915,15 @@ fn run_systemctl(action: &str) -> anyhow::Result<bool> {
     }
 
     println!(
-        "{}: systemctl {action} cloud-node.service",
+        "{}: systemctl {action} cloudsidra-edge.service",
         t("systemd.managed")
     );
     let status = Command::new("systemctl")
         .arg(action)
-        .arg("cloud-node.service")
+        .arg("cloudsidra-edge.service")
         .status()?;
     if !status.success() {
-        anyhow::bail!("systemctl {action} cloud-node.service failed with {status}");
+        anyhow::bail!("systemctl {action} cloudsidra-edge.service failed with {status}");
     }
     Ok(true)
 }
@@ -1947,12 +1947,12 @@ struct UpgradeOptions {
     no_restart: bool,
 }
 
-const XDP_EBPF_OBJECT_NAME: &str = "cloud-node-xdp-ebpf.o";
+const XDP_EBPF_OBJECT_NAME: &str = "cloudsidra-edge-xdp-ebpf.o";
 #[cfg(target_os = "linux")]
-const CLOUD_NODE_SYSTEMD_SERVICE: &str = "cloud-node.service";
+const CLOUDSIDRA_EDGE_SYSTEMD_SERVICE: &str = "cloudsidra-edge.service";
 #[cfg(target_os = "linux")]
-const CLOUD_NODE_SYSTEMD_SERVICE_PATH: &str = "/etc/systemd/system/cloud-node.service";
-const CLOUD_NODE_WRAPPER_PATH: &str = "/usr/bin/cloud-node";
+const CLOUDSIDRA_EDGE_SYSTEMD_SERVICE_PATH: &str = "/etc/systemd/system/cloudsidra-edge.service";
+const CLOUDSIDRA_EDGE_WRAPPER_PATH: &str = "/usr/bin/cloudsidra-edge";
 
 #[derive(Debug)]
 struct ExtractedReleasePayload {
@@ -2023,18 +2023,18 @@ fn select_release_asset(
                 );
             }
             if cpuinfo_has_flag(cpuinfo, "avx512f") {
-                Ok("cloud-node-rust-linux-x64-v4-avx512.tar.gz")
+                Ok("CloudSidra-Edge-linux-x64-v4-avx512.tar.gz")
             } else if cpuinfo_has_flag(cpuinfo, "avx2") {
-                Ok("cloud-node-rust-linux-x64-v3-avx2.tar.gz")
+                Ok("CloudSidra-Edge-linux-x64-v3-avx2.tar.gz")
             } else {
-                Ok("cloud-node-rust-linux-x64-v2-sse4.2.tar.gz")
+                Ok("CloudSidra-Edge-linux-x64-v2-sse4.2.tar.gz")
             }
         }
         "aarch64" | "arm64" => {
             if cpuinfo.to_ascii_lowercase().contains("neoverse-n1") {
-                Ok("cloud-node-rust-linux-arm64-neoverse-n1.tar.gz")
+                Ok("CloudSidra-Edge-linux-arm64-neoverse-n1.tar.gz")
             } else {
-                Ok("cloud-node-rust-linux-arm64-generic.tar.gz")
+                Ok("CloudSidra-Edge-linux-arm64-generic.tar.gz")
             }
         }
         other => anyhow::bail!("unsupported architecture for official release assets: {other}"),
@@ -2096,7 +2096,7 @@ async fn download_to_file(url: &str, target: &Path) -> anyhow::Result<()> {
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(20))
         .timeout(Duration::from_secs(600))
-        .user_agent(format!("cloud-node-rust/{}", env!("CARGO_PKG_VERSION")))
+        .user_agent(format!("cloudsidra-edge/{}", env!("CARGO_PKG_VERSION")))
         .build()?;
     let mut response = client.get(url).send().await?;
     if !response.status().is_success() {
@@ -2127,7 +2127,7 @@ fn extract_release_payload(
     let archive_file = fs::File::open(archive_path)?;
     let gz = flate2::read::GzDecoder::new(archive_file);
     let mut archive = tar::Archive::new(gz);
-    let binary = target_dir.join("cloud-node");
+    let binary = target_dir.join("cloudsidra-edge");
     let xdp_ebpf_object = target_dir.join(XDP_EBPF_OBJECT_NAME);
     let mut found_binary = false;
     let mut found_xdp_ebpf_object = false;
@@ -2136,10 +2136,10 @@ fn extract_release_payload(
         let mut entry = entry?;
         let path = entry.path()?.into_owned();
         let parts = archive_path_parts(&path);
-        if parts == ["cloud-node"] {
+        if parts == ["cloudsidra-edge"] {
             entry.unpack(&binary)?;
             if !binary.is_file() {
-                anyhow::bail!("release archive cloud-node entry is not a regular file");
+                anyhow::bail!("release archive cloudsidra-edge entry is not a regular file");
             }
             found_binary = true;
         } else if parts == ["data", XDP_EBPF_OBJECT_NAME] {
@@ -2152,7 +2152,7 @@ fn extract_release_payload(
     }
 
     if !found_binary {
-        anyhow::bail!("release archive does not contain cloud-node");
+        anyhow::bail!("release archive does not contain cloudsidra-edge");
     }
 
     Ok(ExtractedReleasePayload {
@@ -2174,7 +2174,7 @@ fn backup_current_binary(
     let file_name = install_binary
         .file_name()
         .and_then(|name| name.to_str())
-        .unwrap_or("cloud-node");
+        .unwrap_or("cloudsidra-edge");
     let backup_path = backup_dir.join(format!("{file_name}.{version}.{}.backup", unix_timestamp()));
     fs::copy(install_binary, &backup_path)?;
     Ok(backup_path)
@@ -2271,7 +2271,7 @@ fn split_config_words(value: &str) -> Vec<String> {
     words
 }
 
-fn service_env_cloud_node_home_from_text(service: &str) -> Option<PathBuf> {
+fn service_env_cloudsidra_edge_home_from_text(service: &str) -> Option<PathBuf> {
     for line in service.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with('#') {
@@ -2281,7 +2281,7 @@ fn service_env_cloud_node_home_from_text(service: &str) -> Option<PathBuf> {
             continue;
         };
         for word in split_config_words(rest) {
-            if let Some(value) = word.strip_prefix("CLOUD_NODE_HOME=") {
+            if let Some(value) = word.strip_prefix("CLOUDSIDRA_EDGE_HOME=") {
                 return normalize_config_path(value);
             }
         }
@@ -2307,21 +2307,21 @@ fn service_working_directory_from_text(service: &str) -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "linux")]
-fn cloud_node_service_text() -> Option<String> {
+fn cloudsidra_edge_service_text() -> Option<String> {
     if let Ok(output) = Command::new("systemctl")
         .arg("cat")
-        .arg(CLOUD_NODE_SYSTEMD_SERVICE)
+        .arg(CLOUDSIDRA_EDGE_SYSTEMD_SERVICE)
         .output()
         && output.status.success()
         && !output.stdout.is_empty()
     {
         return Some(String::from_utf8_lossy(&output.stdout).into_owned());
     }
-    fs::read_to_string(CLOUD_NODE_SYSTEMD_SERVICE_PATH).ok()
+    fs::read_to_string(CLOUDSIDRA_EDGE_SYSTEMD_SERVICE_PATH).ok()
 }
 
 #[cfg(not(target_os = "linux"))]
-fn cloud_node_service_text() -> Option<String> {
+fn cloudsidra_edge_service_text() -> Option<String> {
     None
 }
 
@@ -2356,14 +2356,14 @@ fn script_cd_workdir(path: &Path) -> Option<PathBuf> {
 }
 
 fn runtime_root_from_inputs(
-    cloud_node_home: Option<PathBuf>,
+    cloudsidra_edge_home: Option<PathBuf>,
     service_env_home: Option<PathBuf>,
     service_workdir: Option<PathBuf>,
     wrapper_workdir: Option<PathBuf>,
     cwd: Option<PathBuf>,
     install_binary: &Path,
 ) -> anyhow::Result<PathBuf> {
-    if let Some(root) = cloud_node_home {
+    if let Some(root) = cloudsidra_edge_home {
         return Ok(root);
     }
     if let Some(root) = service_env_home {
@@ -2387,16 +2387,16 @@ fn runtime_root_from_inputs(
 }
 
 fn runtime_root_for_upgrade(install_binary: &Path) -> anyhow::Result<PathBuf> {
-    let service_text = cloud_node_service_text();
+    let service_text = cloudsidra_edge_service_text();
     runtime_root_from_inputs(
-        std::env::var_os("CLOUD_NODE_HOME").map(PathBuf::from),
+        std::env::var_os("CLOUDSIDRA_EDGE_HOME").map(PathBuf::from),
         service_text
             .as_deref()
-            .and_then(service_env_cloud_node_home_from_text),
+            .and_then(service_env_cloudsidra_edge_home_from_text),
         service_text
             .as_deref()
             .and_then(service_working_directory_from_text),
-        script_cd_workdir(Path::new(CLOUD_NODE_WRAPPER_PATH)),
+        script_cd_workdir(Path::new(CLOUDSIDRA_EDGE_WRAPPER_PATH)),
         std::env::current_dir().ok(),
         install_binary,
     )
@@ -2467,14 +2467,14 @@ fn repair_missing_xdp_ebpf_object(
 }
 
 fn repair_missing_xdp_ebpf_object_for_current_runtime(
-    node_paths: &cloud_node_rust::paths::NodePaths,
+    node_paths: &cloudsidra_edge::paths::NodePaths,
 ) {
     let dest = node_paths.data_dir().join(XDP_EBPF_OBJECT_NAME);
     if dest.is_file() {
         return;
     }
 
-    let install_binary = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cloud-node"));
+    let install_binary = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cloudsidra-edge"));
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     match repair_missing_xdp_ebpf_object(node_paths.runtime_root(), &install_binary, &cwd) {
         Ok(Some(repair)) => warn!(
@@ -2584,7 +2584,7 @@ fn upgrade_binary(options: UpgradeOptions) -> anyhow::Result<()> {
     }
 
     let tmp_dir = std::env::temp_dir().join(format!(
-        "cloud-node-upgrade-{}-{}",
+        "cloudsidra-edge-upgrade-{}-{}",
         std::process::id(),
         unix_timestamp()
     ));
@@ -2642,34 +2642,34 @@ mod upgrade_tests {
         assert_eq!(
             release_download_url(
                 "https://github.com/",
-                "Zypixh/cloud-node-rust",
+                "CloudSidra/CloudSidra-Edge",
                 "latest",
-                "cloud-node-rust-linux-x64-v3-avx2.tar.gz"
+                "CloudSidra-Edge-linux-x64-v3-avx2.tar.gz"
             ),
-            "https://github.com/Zypixh/cloud-node-rust/releases/latest/download/cloud-node-rust-linux-x64-v3-avx2.tar.gz"
+            "https://github.com/CloudSidra/CloudSidra-Edge/releases/latest/download/CloudSidra-Edge-linux-x64-v3-avx2.tar.gz"
         );
         assert_eq!(
             release_download_url(
                 "https://github.com",
-                "Zypixh/cloud-node-rust",
+                "CloudSidra/CloudSidra-Edge",
                 "v1.1.6",
-                "cloud-node-rust-linux-arm64-generic.tar.gz"
+                "CloudSidra-Edge-linux-arm64-generic.tar.gz"
             ),
-            "https://github.com/Zypixh/cloud-node-rust/releases/download/v1.1.6/cloud-node-rust-linux-arm64-generic.tar.gz"
+            "https://github.com/CloudSidra/CloudSidra-Edge/releases/download/v1.1.6/CloudSidra-Edge-linux-arm64-generic.tar.gz"
         );
     }
 
     #[test]
     fn applies_github_mirror_urls() {
-        let url = "https://github.com/Zypixh/cloud-node-rust/releases/latest/download/cloud-node-rust-linux-x64-v2-sse4.2.tar.gz";
+        let url = "https://github.com/CloudSidra/CloudSidra-Edge/releases/latest/download/CloudSidra-Edge-linux-x64-v2-sse4.2.tar.gz";
         assert_eq!(apply_github_mirror(url, None), url);
         assert_eq!(
             apply_github_mirror(url, Some("https://gh-proxy.example")),
-            "https://gh-proxy.example/https://github.com/Zypixh/cloud-node-rust/releases/latest/download/cloud-node-rust-linux-x64-v2-sse4.2.tar.gz"
+            "https://gh-proxy.example/https://github.com/CloudSidra/CloudSidra-Edge/releases/latest/download/CloudSidra-Edge-linux-x64-v2-sse4.2.tar.gz"
         );
         assert_eq!(
             apply_github_mirror(url, Some("https://mirror.example/?target={url}")),
-            "https://mirror.example/?target=https://github.com/Zypixh/cloud-node-rust/releases/latest/download/cloud-node-rust-linux-x64-v2-sse4.2.tar.gz"
+            "https://mirror.example/?target=https://github.com/CloudSidra/CloudSidra-Edge/releases/latest/download/CloudSidra-Edge-linux-x64-v2-sse4.2.tar.gz"
         );
     }
 
@@ -2677,15 +2677,15 @@ mod upgrade_tests {
     fn selects_x64_release_assets_by_cpu_flags() {
         assert_eq!(
             select_release_asset("x86_64", "flags: sse4_2 avx2", false).unwrap(),
-            "cloud-node-rust-linux-x64-v3-avx2.tar.gz"
+            "CloudSidra-Edge-linux-x64-v3-avx2.tar.gz"
         );
         assert_eq!(
             select_release_asset("x86_64", "flags: sse4_2 avx512f avx2", false).unwrap(),
-            "cloud-node-rust-linux-x64-v4-avx512.tar.gz"
+            "CloudSidra-Edge-linux-x64-v4-avx512.tar.gz"
         );
         assert_eq!(
             select_release_asset("x86_64", "flags: sse4_2", false).unwrap(),
-            "cloud-node-rust-linux-x64-v2-sse4.2.tar.gz"
+            "CloudSidra-Edge-linux-x64-v2-sse4.2.tar.gz"
         );
         assert!(select_release_asset("x86_64", "flags: avx2", false).is_err());
         assert!(select_release_asset("x86_64", "flags: sse4_2", true).is_err());
@@ -2695,18 +2695,18 @@ mod upgrade_tests {
     fn selects_arm_release_assets_by_cpuinfo() {
         assert_eq!(
             select_release_asset("aarch64", "CPU part: neoverse-n1", false).unwrap(),
-            "cloud-node-rust-linux-arm64-neoverse-n1.tar.gz"
+            "CloudSidra-Edge-linux-arm64-neoverse-n1.tar.gz"
         );
         assert_eq!(
             select_release_asset("aarch64", "processor: 0", false).unwrap(),
-            "cloud-node-rust-linux-arm64-generic.tar.gz"
+            "CloudSidra-Edge-linux-arm64-generic.tar.gz"
         );
     }
 
     #[test]
     fn extracts_release_payload_with_xdp_object() {
         let temp_root = std::env::temp_dir().join(format!(
-            "cloud-node-release-payload-test-{}-{}",
+            "cloudsidra-edge-release-payload-test-{}-{}",
             std::process::id(),
             unix_timestamp()
         ));
@@ -2720,8 +2720,8 @@ mod upgrade_tests {
             let encoder = GzEncoder::new(file, Compression::default());
             let mut archive = tar::Builder::new(encoder);
 
-            append_test_tar_file(&mut archive, "cloud-node", b"binary")?;
-            append_test_tar_file(&mut archive, "data/cloud-node-xdp-ebpf.o", b"ebpf-object")?;
+            append_test_tar_file(&mut archive, "cloudsidra-edge", b"binary")?;
+            append_test_tar_file(&mut archive, "data/cloudsidra-edge-xdp-ebpf.o", b"ebpf-object")?;
             archive.finish()?;
             let encoder = archive.into_inner()?;
             encoder.finish()?;
@@ -2741,22 +2741,22 @@ mod upgrade_tests {
     fn parses_service_and_wrapper_runtime_paths() {
         let service = r#"
 [Service]
-Environment="FOO=bar" "CLOUD_NODE_HOME=/srv/cloud node" BAZ=qux
-WorkingDirectory='/opt/cloud-node'
+Environment="FOO=bar" "CLOUDSIDRA_EDGE_HOME=/srv/cloud node" BAZ=qux
+WorkingDirectory='/opt/cloudsidra/edge'
 "#;
         assert_eq!(
-            service_env_cloud_node_home_from_text(service),
+            service_env_cloudsidra_edge_home_from_text(service),
             Some(PathBuf::from("/srv/cloud node"))
         );
         assert_eq!(
             service_working_directory_from_text(service),
-            Some(PathBuf::from("/opt/cloud-node"))
+            Some(PathBuf::from("/opt/cloudsidra/edge"))
         );
         assert_eq!(
             parse_script_cd_workdir(
-                "#!/bin/bash\ncd \"/var/lib/cloud-node\" && exec /var/lib/cloud-node/cloud-node \"$@\"\n"
+                "#!/bin/bash\ncd \"/var/lib/cloudsidra/edge\" && exec /var/lib/cloudsidra/edge/cloudsidra-edge \"$@\"\n"
             ),
-            Some(PathBuf::from("/var/lib/cloud-node"))
+            Some(PathBuf::from("/var/lib/cloudsidra/edge"))
         );
     }
 
@@ -2771,7 +2771,7 @@ WorkingDirectory='/opt/cloud-node'
             let cwd = temp_root.join("cwd");
             let empty_cwd = temp_root.join("empty-cwd");
             let bin_dir = temp_root.join("bin");
-            let install_binary = bin_dir.join("cloud-node");
+            let install_binary = bin_dir.join("cloudsidra-edge");
             fs::create_dir_all(cwd.join("configs"))?;
             fs::create_dir_all(&empty_cwd)?;
             fs::create_dir_all(&bin_dir)?;
@@ -2851,7 +2851,7 @@ WorkingDirectory='/opt/cloud-node'
                 None,
                 Some(runtime_root.clone()),
                 Some(cwd),
-                Path::new("/usr/bin/cloud-node"),
+                Path::new("/usr/bin/cloudsidra-edge"),
             )?;
             assert_eq!(resolved, runtime_root);
             assert_ne!(resolved, PathBuf::from("/usr/bin"));
@@ -2879,7 +2879,7 @@ WorkingDirectory='/opt/cloud-node'
             let runtime_root = temp_root.join("runtime");
             let bin_dir = temp_root.join("bin");
             let cwd = temp_root.join("cwd");
-            let install_binary = bin_dir.join("cloud-node");
+            let install_binary = bin_dir.join("cloudsidra-edge");
             let misplaced = bin_dir.join("data").join(XDP_EBPF_OBJECT_NAME);
             fs::create_dir_all(misplaced.parent().unwrap())?;
             fs::create_dir_all(&cwd)?;
@@ -2906,7 +2906,7 @@ WorkingDirectory='/opt/cloud-node'
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
             .unwrap_or(0);
-        std::env::temp_dir().join(format!("cloud-node-{name}-{}-{nanos}", std::process::id()))
+        std::env::temp_dir().join(format!("cloudsidra-edge-{name}-{}-{nanos}", std::process::id()))
     }
 
     fn append_test_tar_file(
@@ -2975,7 +2975,7 @@ fn main() -> anyhow::Result<()> {
     // Must run before any worker/runtime threads spawn: enables mimalloc's
     // abandoned-page purge on thread termination so RSS does not plateau on
     // pages owned by dead heaps.
-    cloud_node_rust::memory_reclaim::configure_allocator();
+    cloudsidra_edge::memory_reclaim::configure_allocator();
     let cli = Cli::parse();
     Language::set_current(Language::detect());
     raise_nofile_limit();
@@ -2995,7 +2995,7 @@ fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
 
-            let node_paths = cloud_node_rust::paths::NodePaths::current();
+            let node_paths = cloudsidra_edge::paths::NodePaths::current();
             node_paths.ensure_runtime_dirs().ok();
 
             // Single-fork daemonize
@@ -3041,7 +3041,7 @@ fn main() -> anyhow::Result<()> {
 
                 // Run directly in the daemon child
                 if let Err(e) = run_node(cli.monitor_port, cli.monitor_clear) {
-                    eprintln!("CloudNode fatal error: {}", e);
+                    eprintln!("CloudSidra-Edge fatal error: {}", e);
                     libc::_exit(1);
                 }
             }
@@ -3097,7 +3097,7 @@ fn main() -> anyhow::Result<()> {
                 let work_dir = std::env::current_dir()?.canonicalize()?;
 
                 // 1. Create global command wrapper
-                let bin_path = "/usr/bin/cloud-node";
+                let bin_path = "/usr/bin/cloudsidra-edge";
                 let wrapper_script = format!(
                     "#!/bin/bash\ncd {}\n{} \"$@\"\n",
                     work_dir.display(),
@@ -3122,15 +3122,15 @@ fn main() -> anyhow::Result<()> {
                 println!("{}", t("install.global_ok"));
 
                 // 2. Create Systemd service
-                let service_path = "/etc/systemd/system/cloud-node.service";
+                let service_path = "/etc/systemd/system/cloudsidra-edge.service";
                 let service_content = format!(
                     "[Unit]\n\
-Description=CloudNode High Performance Cloud Node\n\
+Description=CloudSidra-Edge High Performance Cloud Node\n\
 After=network.target\n\n\
 [Service]\n\
 Type=simple\n\
 WorkingDirectory={}\n\
-Environment=CLOUD_NODE_HOME={}\n\
+Environment=CLOUDSIDRA_EDGE_HOME={}\n\
 ExecStart={}\n\
 ExecStop={} stop\n\
 TimeoutStopSec=35\n\
@@ -3155,7 +3155,7 @@ WantedBy=multi-user.target\n",
                     let _ = Command::new("systemctl").arg("daemon-reload").status();
                     let _ = Command::new("systemctl")
                         .arg("enable")
-                        .arg("cloud-node")
+                        .arg("cloudsidra-edge")
                         .status();
                     println!("{}", t("install.service_ok"));
                 }
@@ -3232,7 +3232,7 @@ WantedBy=multi-user.target\n",
             println!(
                 "{}: auto (current {} bytes)",
                 t("test.relay_copy_buffer"),
-                cloud_node_rust::memory_governor::MEMORY_GOVERNOR.relay_copy_buffer_bytes()
+                cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.relay_copy_buffer_bytes()
             );
             println!(
                 "XDP: enabled={} attachMode={} fallback={} interfaces={}",
@@ -3266,7 +3266,7 @@ fn spawn_xdp_health_fallback_task(rt: &tokio::runtime::Runtime, waf_state: Arc<W
                 continue;
             }
 
-            let status = cloud_node_rust::xdp::status_snapshot();
+            let status = cloudsidra_edge::xdp::status_snapshot();
             if status.warming || booted_at.elapsed() < XDP_HEALTH_BOOT_GRACE {
                 consecutive_failures = 0;
                 continue;
@@ -3284,7 +3284,7 @@ fn spawn_xdp_health_fallback_task(rt: &tokio::runtime::Runtime, waf_state: Arc<W
                 "XDP health check failed repeatedly; switching L4 kernel enforcement to non-XDP fallback: {}",
                 reason
             );
-            let fallback = cloud_node_rust::firewall::kernel::build_non_xdp_fallback_filter().await;
+            let fallback = cloudsidra_edge::firewall::kernel::build_non_xdp_fallback_filter().await;
             let fallback_status = fallback.status();
             waf_state.set_kernel_filter(fallback);
             warn!(
@@ -3296,7 +3296,7 @@ fn spawn_xdp_health_fallback_task(rt: &tokio::runtime::Runtime, waf_state: Arc<W
     });
 }
 
-fn xdp_health_fallback_reason(status: &cloud_node_rust::xdp::XdpStatusSnapshot) -> Option<String> {
+fn xdp_health_fallback_reason(status: &cloudsidra_edge::xdp::XdpStatusSnapshot) -> Option<String> {
     if !status.enabled {
         return None;
     }
@@ -3370,7 +3370,7 @@ impl pingora_core::services::background::BackgroundService for XdpShutdownServic
         }
         match tokio::time::timeout(
             Duration::from_secs(3),
-            cloud_node_rust::xdp::detach(false),
+            cloudsidra_edge::xdp::detach(false),
         )
         .await
         {
@@ -3382,7 +3382,7 @@ impl pingora_core::services::background::BackgroundService for XdpShutdownServic
 }
 
 fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()> {
-    let node_paths = cloud_node_rust::paths::NodePaths::current();
+    let node_paths = cloudsidra_edge::paths::NodePaths::current();
     node_paths.ensure_runtime_dirs().ok();
 
     // 0. Ensure single instance and write PID using flock
@@ -3428,7 +3428,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
 
     init_logging(&node_paths);
 
-    info!("Starting CloudNode Rust v{}...", env!("CARGO_PKG_VERSION"));
+    info!("Starting CloudSidra Edge v{}...", env!("CARGO_PKG_VERSION"));
 
     // Create the runtime to spawn background tasks
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -3438,19 +3438,19 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
 
     if let Some(port) = monitor_port {
         spawn_staggered(&rt, Duration::ZERO, async move {
-            cloud_node_rust::perf_monitor::start(port, monitor_clear).await;
+            cloudsidra_edge::perf_monitor::start(port, monitor_clear).await;
         });
     }
 
     // 1. Load API Config
     let api_config = ApiConfig::load_default().expect("Failed to load configs/api_node.yaml");
-    cloud_node_rust::tcp_proxy::configure_relay_from_api(&api_config);
+    cloudsidra_edge::tcp_proxy::configure_relay_from_api(&api_config);
     let numeric_node_id = api_config.node_id.parse::<i64>().unwrap_or(0);
     logging::set_numeric_node_id(numeric_node_id);
     let access_log_pipeline = api_config.access_log_pipeline.normalized();
     let (log_tx, log_rx) = tokio::sync::mpsc::channel(access_log_pipeline.queue_capacity);
     let (node_log_tx, node_log_rx) = tokio::sync::mpsc::channel(
-        cloud_node_rust::memory_governor::MEMORY_GOVERNOR.node_log_queue_capacity(),
+        cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.node_log_queue_capacity(),
     );
     logging::init_global_log_bus(
         log_tx,
@@ -3463,7 +3463,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     RuntimeConfig::set_current(runtime_config.clone());
     repair_missing_xdp_ebpf_object_for_current_runtime(&node_paths);
     if runtime_config.xdp.enabled && runtime_config.xdp.interfaces.is_empty() {
-        match rt.block_on(cloud_node_rust::xdp::ensure_current_xdp_auto_config()) {
+        match rt.block_on(cloudsidra_edge::xdp::ensure_current_xdp_auto_config()) {
             Ok(()) => {
                 if let Some(current) = RuntimeConfig::current() {
                     runtime_config = current;
@@ -3478,9 +3478,9 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         }
     }
     if runtime_config.xdp.enabled {
-        match cloud_node_rust::xdp_netdev_tuning::apply_for_xdp_config(
+        match cloudsidra_edge::xdp_netdev_tuning::apply_for_xdp_config(
             &runtime_config.xdp,
-            cloud_node_rust::xdp_netdev_tuning::XdpNetdevTuneOptions {
+            cloudsidra_edge::xdp_netdev_tuning::XdpNetdevTuneOptions {
                 dry_run: false,
                 install_tools: false,
                 report_node_log: true,
@@ -3490,7 +3490,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
             Ok(report) => {
                 info!("XDP netdev tuning completed: {}", report.summary());
                 let before_interfaces = runtime_config.xdp.interfaces.clone();
-                cloud_node_rust::xdp_auto_config::refresh_xdp_interface_queues(
+                cloudsidra_edge::xdp_auto_config::refresh_xdp_interface_queues(
                     &mut runtime_config.xdp,
                 );
                 runtime_config.validate()?;
@@ -3524,7 +3524,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
             }
         }
     }
-    if let Err(err) = rt.block_on(cloud_node_rust::xdp::initialize_from_runtime()) {
+    if let Err(err) = rt.block_on(cloudsidra_edge::xdp::initialize_from_runtime()) {
         if runtime_config.xdp.fallback.fail_start() {
             return Err(err.context("XDP initialization failed"));
         }
@@ -3533,16 +3533,16 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     spawn_xdp_port_sync_task(&rt, runtime_config.xdp.enabled);
     spawn_xdp_diag_log_task(&rt, runtime_config.xdp.enabled);
     let api_config_arc = Arc::new(api_config.clone());
-    cloud_node_rust::client_agent::load_client_agent_ip_index();
-    cloud_node_rust::client_agent::start_client_agent_queue(api_config_arc.clone());
-    cloud_node_rust::kernel_syn_defense::start_monitor();
+    cloudsidra_edge::client_agent::load_client_agent_ip_index();
+    cloudsidra_edge::client_agent::start_client_agent_queue(api_config_arc.clone());
+    cloudsidra_edge::kernel_syn_defense::start_monitor();
 
     // 2. Initialize Managers
     let config_store = Arc::new(ConfigStore::new());
-    cloud_node_rust::kernel_syn_defense::start_synproxy_reconciler(config_store.clone());
+    cloudsidra_edge::kernel_syn_defense::start_synproxy_reconciler(config_store.clone());
     let waf_state = Arc::new(WafStateManager::new());
     waf_state.install_kernel_snapshot_provider();
-    let initial_kernel_filter = rt.block_on(cloud_node_rust::firewall::kernel::build_filter(None));
+    let initial_kernel_filter = rt.block_on(cloudsidra_edge::firewall::kernel::build_filter(None));
     if initial_kernel_filter.available() {
         waf_state.set_kernel_filter(initial_kernel_filter);
     }
@@ -3554,8 +3554,8 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
             restored_blocks
         );
     }
-    cloud_node_rust::firewall::persistence::start_flush_task();
-    cloud_node_rust::firewall::state::start_gc_task(waf_state.clone());
+    cloudsidra_edge::firewall::persistence::start_flush_task();
+    cloudsidra_edge::firewall::state::start_gc_task(waf_state.clone());
     let ip_list_manager = Arc::new(firewall::lists::GlobalIpListManager::new(waf_state.clone()));
     let health_manager = GlobalHealthManager::new(16);
     let cert_selector = Arc::new(DynamicCertSelector::new());
@@ -3589,7 +3589,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         rpc::start_ip_list_syncer(ac_i, cs_i, il_i).await;
     });
 
-    cloud_node_rust::metrics::analyzer::initialize_geoip_readers();
+    cloudsidra_edge::metrics::analyzer::initialize_geoip_readers();
 
     let ac_geoip = api_config.clone();
     spawn_staggered(&rt, Duration::from_secs(6), async move {
@@ -3609,8 +3609,8 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         rpc::start_updating_server_list_syncer(ac_us, cs_us, hm_us, ds_us).await;
     });
 
-    cloud_node_rust::metrics::init_http_dimension_worker(
-        cloud_node_rust::memory_governor::MEMORY_GOVERNOR.metrics_queue_capacity(),
+    cloudsidra_edge::metrics::init_http_dimension_worker(
+        cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.metrics_queue_capacity(),
     );
 
     // Reporters
@@ -3666,7 +3666,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     });
 
     spawn_staggered(&rt, Duration::from_secs(21), async move {
-        cloud_node_rust::metrics::start_persistence_flusher().await;
+        cloudsidra_edge::metrics::start_persistence_flusher().await;
     });
 
     let ac_ocsp = api_config.clone();
@@ -3677,7 +3677,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
 
     // Log Uploader
     if api_config.kernel_tuning.normalized().enabled {
-        cloud_node_rust::kernel_tuning::apply_runtime_tuning_and_report();
+        cloudsidra_edge::kernel_tuning::apply_runtime_tuning_and_report();
     } else {
         info!("Runtime kernel tuning disabled by api_config.kernelTuning.enabled=false");
         logging::report_node_log(
@@ -3705,19 +3705,19 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     });
 
     spawn_staggered(&rt, Duration::from_secs(16), async move {
-        cloud_node_rust::utils::ntp::start_auto_ntp_syncer().await;
+        cloudsidra_edge::utils::ntp::start_auto_ntp_syncer().await;
     });
 
     // 4. Initialize Pingora Server with multi-threading
     let mut conf = pingora_core::server::configuration::ServerConf::default();
-    conf.threads = cloud_node_rust::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads();
+    conf.threads = cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads();
     conf.upstream_keepalive_pool_size =
-        cloud_node_rust::memory_governor::MEMORY_GOVERNOR.pingora_keepalive_pool_size(conf.threads);
+        cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.pingora_keepalive_pool_size(conf.threads);
     conf.grace_period_seconds = Some(5);
     conf.graceful_shutdown_timeout_seconds = Some(5);
     let mut my_server = pingora_core::server::Server::new_with_opt_and_conf(None, conf);
     let mem_plan =
-        cloud_node_rust::memory_plan::current_memory_plan(my_server.configuration.threads);
+        cloudsidra_edge::memory_plan::current_memory_plan(my_server.configuration.threads);
     info!(
         "Pingora server configured with {} threads, upstream keepalive pool per thread={}, memory plan={}",
         my_server.configuration.threads,
@@ -3732,34 +3732,34 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         waf_state: waf_state.clone(),
         api_config: api_config_arc.clone(),
         cert_selector: cert_selector.clone(),
-        waf_verifier: Arc::new(cloud_node_rust::firewall::verifier::WafVerifier::new(
+        waf_verifier: Arc::new(cloudsidra_edge::firewall::verifier::WafVerifier::new(
             &api_config_arc.secret,
         )),
         tls_downstream: false,
     };
-    let http_manager = cloud_node_rust::http_proxy_manager::HttpProxyManager::new(
+    let http_manager = cloudsidra_edge::http_proxy_manager::HttpProxyManager::new(
         (*config_store).clone(),
         cert_selector.clone(),
         proxy_logic.clone(),
         my_server.configuration.clone(),
     );
     let xdp_http_manager = http_manager.clone();
-    cloud_node_rust::proxy::start_request_limit_cleanup_task();
-    cloud_node_rust::origin_state::start_origin_state_cleanup_task();
-    cloud_node_rust::metrics::storage::start_cache_access_flusher();
-    // cloud_node_rust::cache_hybrid::start_cache_profiler();
-    cloud_node_rust::metrics::start_pressure_updater();
-    cloud_node_rust::memory_reclaim::start_reclaim_monitor();
-    cloud_node_rust::cache_hybrid::start_cache_janitor();
-    tokio::spawn(cloud_node_rust::cache_hybrid::start_cache_purger(
-        cloud_node_rust::cache_manager::CACHE.storage,
-        cloud_node_rust::paths::NodePaths::current().cache_dir(),
+    cloudsidra_edge::proxy::start_request_limit_cleanup_task();
+    cloudsidra_edge::origin_state::start_origin_state_cleanup_task();
+    cloudsidra_edge::metrics::storage::start_cache_access_flusher();
+    // cloudsidra_edge::cache_hybrid::start_cache_profiler();
+    cloudsidra_edge::metrics::start_pressure_updater();
+    cloudsidra_edge::memory_reclaim::start_reclaim_monitor();
+    cloudsidra_edge::cache_hybrid::start_cache_janitor();
+    tokio::spawn(cloudsidra_edge::cache_hybrid::start_cache_purger(
+        cloudsidra_edge::cache_manager::CACHE.storage,
+        cloudsidra_edge::paths::NodePaths::current().cache_dir(),
     ));
     spawn_staggered(&rt, Duration::from_secs(1), async move {
         http_manager.start_listeners().await;
     });
 
-    let http3_manager = cloud_node_rust::http3_proxy_manager::Http3ProxyManager::new(
+    let http3_manager = cloudsidra_edge::http3_proxy_manager::Http3ProxyManager::new(
         (*config_store).clone(),
         cert_selector.clone(),
         proxy_logic,
@@ -3772,7 +3772,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         waf_state.clone(),
         numeric_node_id,
     );
-    let quic_udp_demux = cloud_node_rust::quic_udp_demux::QuicUdpDemuxManager::new(
+    let quic_udp_demux = cloudsidra_edge::quic_udp_demux::QuicUdpDemuxManager::new(
         (*config_store).clone(),
         http3_manager,
         udp_manager.clone(),
@@ -3789,7 +3789,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         quic_udp_demux.start_listeners().await;
     });
     spawn_staggered(&rt, Duration::from_secs(2), async move {
-        cloud_node_rust::xdp::af_xdp::start_proxy_bridge(
+        cloudsidra_edge::xdp::af_xdp::start_proxy_bridge(
             xdp_quic_udp_demux,
             xdp_tcp_manager,
             xdp_http_manager,
@@ -3820,25 +3820,25 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
                 sigint.recv().await;
                 let _ = tokio::time::timeout(
                     Duration::from_millis(1500),
-                    cloud_node_rust::xdp::detach(false),
+                    cloudsidra_edge::xdp::detach(false),
                 )
                 .await;
             });
         }
     }
 
-    info!("CloudNode (PID {}) is ready.", std::process::id());
+    info!("CloudSidra-Edge (PID {}) is ready.", std::process::id());
     my_server.run_forever();
     #[allow(unreachable_code)]
     Ok(())
 }
 
-fn init_logging(node_paths: &cloud_node_rust::paths::NodePaths) {
+fn init_logging(node_paths: &cloudsidra_edge::paths::NodePaths) {
     // Initialize logging with custom filter to silence hardcoded frame-level noise.
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
 
-    cloud_node_rust::utils::time::init_local_timezone();
+    cloudsidra_edge::utils::time::init_local_timezone();
 
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         tracing_subscriber::EnvFilter::new("info,pingora_proxy::proxy_cache=off")
@@ -3875,7 +3875,7 @@ fn init_logging(node_paths: &cloud_node_rust::paths::NodePaths) {
 
 fn report_l4_performance_summary(api_config: &ApiConfig) {
     let relay = api_config.relay.normalized();
-    let governor = &cloud_node_rust::memory_governor::MEMORY_GOVERNOR;
+    let governor = &cloudsidra_edge::memory_governor::MEMORY_GOVERNOR;
     let message = format!(
         "zero_copy={} tcp_copy_buffer_bytes={} tcp_accept_workers={} udp_demux_workers={} udp_socket_buffer_bytes={}",
         relay.zero_copy,
@@ -3888,7 +3888,7 @@ fn report_l4_performance_summary(api_config: &ApiConfig) {
     logging::report_node_log("info".to_string(), "l4_performance".to_string(), message, 0);
 
     if !relay.zero_copy {
-        let recommendation = "TCP pure L4 forwarding can reduce CPU by enabling zero-copy: cloud-node zerocopy --enable";
+        let recommendation = "TCP pure L4 forwarding can reduce CPU by enabling zero-copy: cloudsidra-edge zerocopy --enable";
         info!("{}", recommendation);
         logging::report_node_log(
             "info".to_string(),
@@ -3903,37 +3903,37 @@ fn report_l4_performance_summary(api_config: &ApiConfig) {
 mod tests {
     use super::{
         FirewallAggregate, FirewallListFlags, cmdline_contains_management_command,
-        first_cmdline_arg_basename, is_cloud_node_binary_name, process_basename,
+        first_cmdline_arg_basename, is_cloudsidra_edge_binary_name, process_basename,
         record_firewall_aggregate, v4_24, v6_48,
     };
     use std::net::{Ipv4Addr, Ipv6Addr};
     use std::path::Path;
 
     #[test]
-    fn cloud_node_binary_names_accept_real_binaries() {
-        assert!(is_cloud_node_binary_name("cloud-node"));
-        assert!(is_cloud_node_binary_name("cloud-node-rust"));
-        assert!(!is_cloud_node_binary_name("bash"));
-        assert!(!is_cloud_node_binary_name("install-rust-cloud-node.sh"));
+    fn cloudsidra_edge_binary_names_accept_real_binaries() {
+        assert!(is_cloudsidra_edge_binary_name("cloudsidra-edge"));
+        assert!(is_cloudsidra_edge_binary_name("cloudsidra-edge"));
+        assert!(!is_cloudsidra_edge_binary_name("bash"));
+        assert!(!is_cloudsidra_edge_binary_name("install-cloudsidra-edge.sh"));
     }
 
     #[test]
     fn process_basename_strips_linux_deleted_suffix() {
         assert_eq!(
-            process_basename(Path::new("/opt/cloud-node-rust/cloud-node-rust (deleted)"))
+            process_basename(Path::new("/opt/cloudsidra/edge/cloudsidra-edge (deleted)"))
                 .as_deref(),
-            Some("cloud-node-rust")
+            Some("cloudsidra-edge")
         );
     }
 
     #[test]
     fn cmdline_detection_uses_argv0_not_wrapper_arguments() {
         assert_eq!(
-            first_cmdline_arg_basename(b"/opt/cloud-node-rust/cloud-node-rust\0start\0").as_deref(),
-            Some("cloud-node-rust")
+            first_cmdline_arg_basename(b"/opt/cloudsidra/edge/cloudsidra-edge\0start\0").as_deref(),
+            Some("cloudsidra-edge")
         );
         assert_eq!(
-            first_cmdline_arg_basename(b"bash\0/usr/bin/cloud-node\0status\0").as_deref(),
+            first_cmdline_arg_basename(b"bash\0/usr/bin/cloudsidra-edge\0status\0").as_deref(),
             Some("bash")
         );
     }
@@ -3941,19 +3941,19 @@ mod tests {
     #[test]
     fn cmdline_detection_excludes_short_lived_management_commands() {
         assert!(cmdline_contains_management_command(
-            b"/opt/cloud-node-rust/cloud-node-rust\0status\0"
+            b"/opt/cloudsidra/edge/cloudsidra-edge\0status\0"
         ));
         assert!(cmdline_contains_management_command(
-            b"/opt/cloud-node-rust/cloud-node-rust\0test\0"
+            b"/opt/cloudsidra/edge/cloudsidra-edge\0test\0"
         ));
         assert!(cmdline_contains_management_command(
-            b"/opt/cloud-node-rust/cloud-node-rust\0defense\0status\0"
+            b"/opt/cloudsidra/edge/cloudsidra-edge\0defense\0status\0"
         ));
         assert!(!cmdline_contains_management_command(
-            b"/opt/cloud-node-rust/cloud-node-rust\0start\0"
+            b"/opt/cloudsidra/edge/cloudsidra-edge\0start\0"
         ));
         assert!(!cmdline_contains_management_command(
-            b"/opt/cloud-node-rust/cloud-node-rust\0--monitor-port\08888\0"
+            b"/opt/cloudsidra/edge/cloudsidra-edge\0--monitor-port\08888\0"
         ));
     }
 

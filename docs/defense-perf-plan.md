@@ -7,9 +7,9 @@
 
 | 层 | 已有能力 | 位置 |
 |---|---|---|
-| XDP/eBPF | 完整 eBPF 程序：精确 IP 封禁 map（v4/v6 各 262k 项）、LPM trie 网段封禁、端口+协议规则、XskMap（AF_XDP 重定向）、per-queue 统计、XDP 计数器 | `crates/cloud-node-xdp-ebpf`、`crates/cloud-node-xdp-common` |
+| XDP/eBPF | 完整 eBPF 程序：精确 IP 封禁 map（v4/v6 各 262k 项）、LPM trie 网段封禁、端口+协议规则、XskMap（AF_XDP 重定向）、per-queue 统计、XDP 计数器 | `crates/cloudsidra-edge-xdp-ebpf`、`crates/cloudsidra-edge-xdp-common` |
 | XDP 用户态 | 加载/attach（Auto/native/generic）、AF_XDP runtime、proxy redirect、queue 状态、status 持久化、shadow rules（allow>block 优先） | `src/xdp.rs`（7.4k 行）、`src/xdp_auto_config.rs`、`src/xdp_netdev_tuning.rs` |
-| nftables | `inet cloud_node` 表 + `blocked_v4/blocked_v6` 精确 set + interval set + SYNPROXY（notrack/synproxy/drop-invalid 三规则 + sysctl 调和） | `src/firewall/kernel.rs`、`src/kernel_syn_defense.rs` |
+| nftables | `inet cloudsidra_edge` 表 + `blocked_v4/blocked_v6` 精确 set + interval set + SYNPROXY（notrack/synproxy/drop-invalid 三规则 + sysctl 调和） | `src/firewall/kernel.rs`、`src/kernel_syn_defense.rs` |
 | L4 判决 → 内核下沉 | `l4_defense` 封禁 → `WafStateManager::block_ip` → `publish_kernel_filter_snapshot` → `KernelFilter`（nft + XDP shadow） | `src/l4_defense.rs:1440`、`src/firewall/state.rs:523` |
 | per-IP 精确计数 | DashMap 分片、262,144 项上限、饱和时 fail-closed、10s 滑动窗 | `src/l4_defense.rs`（`L4ExactCounterState`） |
 | 聚合检测 | /24+v6/48 前缀窗口 + distinct-IP surge（1k/5k/10k 三档压力等级）+ prefix count | `src/l4_defense.rs`（`L4AggregateState`） |
@@ -68,7 +68,7 @@
 **A3. XDP 层 per-IP/前缀速率压制（对付 G2 的根）**
 
 - 问题：1.5M pps UDP 洪水在 socket 队列耗尽合法流量；userspace 判决再快也救不了入队前的饿死。
-- 方案：扩展 `cloud-node-xdp-ebpf`：
+- 方案：扩展 `cloudsidra-edge-xdp-ebpf`：
   1. 新 map `XDP_RATE_V4/V6`（HashMap<IpKey, {window_start_ns, count}>）：per-IP 固定窗口 pps 计数，超限 `XDP_DROP`——eBPF 侧 token bucket 用 `bpf_ktime_get_ns` 原子窗口即可（已有 helper 在用）；
   2. 阈值由 userspace 按 pressure level 下发（Normal 时 map 为空即关闭，零开销）；
   3. 只对 UDP + 非已建立 TCP（SYN）生效，已建立连接包不查 map（per-CPU 数组标记协议开关）；

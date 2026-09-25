@@ -49,8 +49,8 @@ const ETHERTYPE_QINQ: u16 = 0x88a8;
 const ETHERTYPE_QINQ_9100: u16 = 0x9100;
 const ETHERTYPE_QINQ_9200: u16 = 0x9200;
 const ETHERTYPE_QINQ_9300: u16 = 0x9300;
-const IP_PROTO_TCP: u8 = cloud_node_xdp_common::XDP_PROTO_TCP;
-const IP_PROTO_UDP: u8 = cloud_node_xdp_common::XDP_PROTO_UDP;
+const IP_PROTO_TCP: u8 = cloudsidra_edge_xdp_common::XDP_PROTO_TCP;
+const IP_PROTO_UDP: u8 = cloudsidra_edge_xdp_common::XDP_PROTO_UDP;
 /// T4-7: ICMPv4/ICMPv6 next-header values for the PMTU error parser.
 #[cfg(any(test, target_os = "linux"))]
 const IP_PROTO_ICMP: u8 = 1;

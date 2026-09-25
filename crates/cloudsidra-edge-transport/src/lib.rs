@@ -1,4 +1,4 @@
-//! cloud-node-transport — pure transport algorithms for the edge
+//! cloudsidra-edge-transport — pure transport algorithms for the edge
 //! dataplane, the EdgeCC foundation layer
 //! (tasks/xdp-transport-next-steps-2026-09-15.md §2).
 //!

@@ -22,7 +22,7 @@ impl Language {
     }
 
     pub fn detect() -> Self {
-        for name in ["CLOUD_NODE_LANG", "LC_ALL", "LANGUAGE", "LANG"] {
+        for name in ["CLOUDSIDRA_EDGE_LANG", "LC_ALL", "LANGUAGE", "LANG"] {
             if let Ok(lang) = std::env::var(name)
                 && let Some(lang) = Self::parse(&lang)
             {
@@ -56,8 +56,8 @@ const STRINGS: &[(&str, &str, &str)] = &[
     // CLI commands and options
     (
         "app.about",
-        "CloudNode - High Performance Cloud Node written in Rust",
-        "CloudNode - Rust 编写的高性能云节点",
+        "CloudSidra-Edge - High Performance Cloud Node written in Rust",
+        "CloudSidra-Edge - Rust 编写的高性能云节点",
     ),
     (
         "cmd.start",
@@ -132,49 +132,49 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ("common.cancelled", "Cancelled.", "已取消。"),
     ("common.none", "none", "无"),
     // Top-level command output
-    ("status.version", "CloudNode version", "CloudNode 版本"),
+    ("status.version", "CloudSidra-Edge version", "CloudSidra-Edge 版本"),
     ("status.build_time", "Build time", "构建时间"),
     (
         "status.running",
-        "CloudNode is running",
-        "CloudNode 正在运行",
+        "CloudSidra-Edge is running",
+        "CloudSidra-Edge 正在运行",
     ),
     (
         "status.stopped",
-        "CloudNode is stopped.",
-        "CloudNode 已停止。",
+        "CloudSidra-Edge is stopped.",
+        "CloudSidra-Edge 已停止。",
     ),
     (
         "status.already_running",
-        "CloudNode is already running",
-        "CloudNode 已在运行",
+        "CloudSidra-Edge is already running",
+        "CloudSidra-Edge 已在运行",
     ),
     (
         "start.started",
-        "CloudNode started in background",
-        "CloudNode 已在后台启动",
+        "CloudSidra-Edge started in background",
+        "CloudSidra-Edge 已在后台启动",
     ),
-    ("stop.stopped", "CloudNode stopped.", "CloudNode 已停止。"),
+    ("stop.stopped", "CloudSidra-Edge stopped.", "CloudSidra-Edge 已停止。"),
     (
         "stop.not_running",
-        "CloudNode is not running.",
-        "CloudNode 未运行。",
+        "CloudSidra-Edge is not running.",
+        "CloudSidra-Edge 未运行。",
     ),
-    ("stop.stopping", "Stopping CloudNode", "正在停止 CloudNode"),
+    ("stop.stopping", "Stopping CloudSidra-Edge", "正在停止 CloudSidra-Edge"),
     (
         "stop.force",
-        "CloudNode did not stop within 20s, forcing shutdown",
-        "CloudNode 20 秒内未停止，正在强制关闭",
+        "CloudSidra-Edge did not stop within 20s, forcing shutdown",
+        "CloudSidra-Edge 20 秒内未停止，正在强制关闭",
     ),
     (
         "install.global_ok",
-        "Successfully registered global command: cloud-node",
-        "已成功注册全局命令：cloud-node",
+        "Successfully registered global command: cloudsidra-edge",
+        "已成功注册全局命令：cloudsidra-edge",
     ),
     (
         "install.service_ok",
-        "Successfully registered systemd service. You can now use: systemctl start cloud-node",
-        "已成功注册 systemd 服务。现在可以使用：systemctl start cloud-node",
+        "Successfully registered systemd service. You can now use: systemctl start cloudsidra-edge",
+        "已成功注册 systemd 服务。现在可以使用：systemctl start cloudsidra-edge",
     ),
     (
         "install.linux_only",
@@ -183,8 +183,8 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "systemd.managed",
-        "CloudNode is managed by systemd, running",
-        "CloudNode 由 systemd 管理，正在执行",
+        "CloudSidra-Edge is managed by systemd, running",
+        "CloudSidra-Edge 由 systemd 管理，正在执行",
     ),
     ("test.start", "Testing configuration...", "正在测试配置..."),
     ("test.valid", "Configuration is valid.", "配置有效。"),
@@ -195,7 +195,7 @@ const STRINGS: &[(&str, &str, &str)] = &[
         "中继复制缓冲区",
     ),
     // NTP and zero-copy
-    ("ntp.title", "CloudNode NTP", "CloudNode NTP"),
+    ("ntp.title", "CloudSidra-Edge NTP", "CloudSidra-Edge NTP"),
     ("ntp.current_timezone", "current timezone", "当前时区"),
     (
         "ntp.keep_timezone",
@@ -210,8 +210,8 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "zerocopy.title",
-        "CloudNode zero-copy relay",
-        "CloudNode 零拷贝中继",
+        "CloudSidra-Edge zero-copy relay",
+        "CloudSidra-Edge 零拷贝中继",
     ),
     ("zerocopy.config", "config", "配置文件"),
     ("zerocopy.current", "current zero-copy", "当前零拷贝"),
@@ -234,29 +234,29 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "zerocopy.restart",
-        "Restart cloud-node for running listeners to use the new relay mode.",
-        "请重启 cloud-node，使运行中的监听器使用新的中继模式。",
+        "Restart cloudsidra-edge for running listeners to use the new relay mode.",
+        "请重启 cloudsidra-edge，使运行中的监听器使用新的中继模式。",
     ),
     ("upgrade.proceed", "Proceed with upgrade?", "继续升级？"),
     (
         "upgrade.service_stopped",
-        "cloud-node.service is installed but not active; leaving it stopped.",
-        "cloud-node.service 已安装但未运行，将保持停止状态。",
+        "cloudsidra-edge.service is installed but not active; leaving it stopped.",
+        "cloudsidra-edge.service 已安装但未运行，将保持停止状态。",
     ),
     (
         "upgrade.restarting",
-        "Restarting CloudNode with upgraded binary...",
-        "正在使用升级后的二进制重启 CloudNode...",
+        "Restarting CloudSidra-Edge with upgraded binary...",
+        "正在使用升级后的二进制重启 CloudSidra-Edge...",
     ),
     (
         "upgrade.node_stopped",
-        "CloudNode is not running; leaving it stopped.",
-        "CloudNode 未运行，将保持停止状态。",
+        "CloudSidra-Edge is not running; leaving it stopped.",
+        "CloudSidra-Edge 未运行，将保持停止状态。",
     ),
     (
         "upgrade.summary",
-        "CloudNode upgrade summary:",
-        "CloudNode 升级摘要：",
+        "CloudSidra-Edge upgrade summary:",
+        "CloudSidra-Edge 升级摘要：",
     ),
     ("upgrade.current_version", "current version", "当前版本"),
     ("upgrade.target_version", "target version", "目标版本"),
@@ -294,14 +294,14 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "upgrade.xdp_object_missing",
-        "Release archive does not contain data/cloud-node-xdp-ebpf.o; XDP attach will remain unavailable until the object is installed.",
-        "发布包不包含 data/cloud-node-xdp-ebpf.o；安装该对象前 XDP attach 仍不可用。",
+        "Release archive does not contain data/cloudsidra-edge-xdp-ebpf.o; XDP attach will remain unavailable until the object is installed.",
+        "发布包不包含 data/cloudsidra-edge-xdp-ebpf.o；安装该对象前 XDP attach 仍不可用。",
     ),
     // Firewall / defense
     (
         "firewall.initialized",
-        "nftables initialized: table=inet cloud_node sets=blocked_v4,blocked_v6",
-        "nftables 已初始化：table=inet cloud_node sets=blocked_v4,blocked_v6",
+        "nftables initialized: table=inet cloudsidra_edge sets=blocked_v4,blocked_v6",
+        "nftables 已初始化：table=inet cloudsidra_edge sets=blocked_v4,blocked_v6",
     ),
     (
         "firewall.gc_removed",
@@ -310,8 +310,8 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "firewall.title",
-        "CloudNode firewall blacklist",
-        "CloudNode 防火墙黑名单",
+        "CloudSidra-Edge firewall blacklist",
+        "CloudSidra-Edge 防火墙黑名单",
     ),
     (
         "firewall.nft_exact",
@@ -365,8 +365,8 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "defense.title",
-        "CloudNode L4 defense status",
-        "CloudNode L4 防御状态",
+        "CloudSidra-Edge L4 defense status",
+        "CloudSidra-Edge L4 防御状态",
     ),
     ("defense.runtime_scope", "runtime scope", "运行时范围"),
     (
@@ -418,8 +418,8 @@ const STRINGS: &[(&str, &str, &str)] = &[
     // XDP status
     (
         "xdp.status.title",
-        "CloudNode XDP status",
-        "CloudNode XDP 状态",
+        "CloudSidra-Edge XDP status",
+        "CloudSidra-Edge XDP 状态",
     ),
     ("xdp.status.enabled", "enabled", "已启用"),
     ("xdp.status.available", "available", "可用"),

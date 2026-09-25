@@ -3,8 +3,8 @@
 //! app-limited senders, 300ms RTT, multi-flow shared bottleneck, and
 //! golden traces.
 
-use cloud_node_transport::cc::reference::{CubicRef, NewRenoRef};
-use cloud_node_transport::sim::{
+use cloudsidra_edge_transport::cc::reference::{CubicRef, NewRenoRef};
+use cloudsidra_edge_transport::sim::{
     run, run_multi, Aqm, FlowSpec, Policer, RouteSwitch, SimConfig, SimResult, TraceKind,
 };
 use std::time::Duration;

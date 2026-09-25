@@ -19,14 +19,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use cloud_node_rust::api_config::{AccessLogPipelineConfig, ApiConfig};
-use cloud_node_rust::config::ConfigStore;
-use cloud_node_rust::config_models::*;
-use cloud_node_rust::firewall::state::WafStateManager;
-use cloud_node_rust::firewall::verifier::WafVerifier;
-use cloud_node_rust::lb_factory;
-use cloud_node_rust::proxy::EdgeProxy;
-use cloud_node_rust::ssl::DynamicCertSelector;
+use cloudsidra_edge::api_config::{AccessLogPipelineConfig, ApiConfig};
+use cloudsidra_edge::config::ConfigStore;
+use cloudsidra_edge::config_models::*;
+use cloudsidra_edge::firewall::state::WafStateManager;
+use cloudsidra_edge::firewall::verifier::WafVerifier;
+use cloudsidra_edge::lb_factory;
+use cloudsidra_edge::proxy::EdgeProxy;
+use cloudsidra_edge::ssl::DynamicCertSelector;
 use pingora_core::server::configuration::ServerConf;
 use serde_json::{Value, json};
 use tracing::{error, info};
@@ -86,30 +86,30 @@ fn main() -> anyhow::Result<()> {
     // xdp / nftables / iptables to force a specific backend, off to disable.
     let kernel_filter_mode = env_str("BENCH_KERNEL_FILTER", "auto");
 
-    cloud_node_rust::utils::time::init_local_timezone();
+    cloudsidra_edge::utils::time::init_local_timezone();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .context("build bench-defense runtime")?;
     let _guard = runtime.enter();
 
-    cloud_node_rust::metrics::init_http_dimension_worker(10_000);
-    cloud_node_rust::proxy::start_request_limit_cleanup_task();
-    cloud_node_rust::kernel_syn_defense::start_monitor();
+    cloudsidra_edge::metrics::init_http_dimension_worker(10_000);
+    cloudsidra_edge::proxy::start_request_limit_cleanup_task();
+    cloudsidra_edge::kernel_syn_defense::start_monitor();
 
     let config_store = Arc::new(ConfigStore::new());
-    cloud_node_rust::kernel_syn_defense::start_synproxy_reconciler(config_store.clone());
+    cloudsidra_edge::kernel_syn_defense::start_synproxy_reconciler(config_store.clone());
     let waf_state = Arc::new(WafStateManager::new());
     waf_state.install_kernel_snapshot_provider();
     let kernel_filter_status = if kernel_filter_mode == "off" {
-        cloud_node_rust::firewall::kernel::KernelFilterStatus {
+        cloudsidra_edge::firewall::kernel::KernelFilterStatus {
             name: "disabled",
             available: false,
             detail: "BENCH_KERNEL_FILTER=off".to_string(),
         }
     } else {
         let filter =
-            runtime.block_on(cloud_node_rust::firewall::kernel::build_filter(Some(
+            runtime.block_on(cloudsidra_edge::firewall::kernel::build_filter(Some(
                 &kernel_filter_mode,
             )));
         let status = filter.status();
@@ -123,9 +123,9 @@ fn main() -> anyhow::Result<()> {
         kernel_filter_status.available,
         kernel_filter_status.detail,
     );
-    cloud_node_rust::firewall::state::start_gc_task(waf_state.clone());
-    cloud_node_rust::metrics::storage::start_cache_access_flusher();
-    cloud_node_rust::metrics::start_pressure_updater();
+    cloudsidra_edge::firewall::state::start_gc_task(waf_state.clone());
+    cloudsidra_edge::metrics::storage::start_cache_access_flusher();
+    cloudsidra_edge::metrics::start_pressure_updater();
 
     let api_config = Arc::new(ApiConfig {
         rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
@@ -160,7 +160,7 @@ fn main() -> anyhow::Result<()> {
                 "127.0.0.1".to_string(),
             ],
         }];
-        runtime.block_on(cloud_node_rust::ssl::sync_certs(&cert_selector, &certs));
+        runtime.block_on(cloudsidra_edge::ssl::sync_certs(&cert_selector, &certs));
     } else {
         error!("TLS cert/key unreadable ({cert_path}/{key_path}); :{tls_port} will fail to start");
     }
@@ -312,7 +312,7 @@ fn main() -> anyhow::Result<()> {
         ..Default::default()
     });
 
-    let http_manager = cloud_node_rust::http_proxy_manager::HttpProxyManager::new(
+    let http_manager = cloudsidra_edge::http_proxy_manager::HttpProxyManager::new(
         (*config_store).clone(),
         cert_selector.clone(),
         proxy_logic.clone(),
@@ -320,7 +320,7 @@ fn main() -> anyhow::Result<()> {
     );
     runtime.spawn(async move { http_manager.start_listeners().await });
 
-    let tcp_manager = cloud_node_rust::tcp_proxy::TcpProxyManager::new(
+    let tcp_manager = cloudsidra_edge::tcp_proxy::TcpProxyManager::new(
         (*config_store).clone(),
         cert_selector.clone(),
         waf_state.clone(),
@@ -328,7 +328,7 @@ fn main() -> anyhow::Result<()> {
     );
     runtime.spawn(async move { tcp_manager.start_listeners().await });
 
-    let udp_manager = cloud_node_rust::udp_proxy::UdpProxyManager::new(
+    let udp_manager = cloudsidra_edge::udp_proxy::UdpProxyManager::new(
         (*config_store).clone(),
         waf_state.clone(),
         1,
@@ -339,11 +339,11 @@ fn main() -> anyhow::Result<()> {
     runtime.spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;
-            let l4 = cloud_node_rust::l4_defense::metrics_snapshot();
-            let syn = cloud_node_rust::kernel_syn_defense::snapshot();
+            let l4 = cloudsidra_edge::l4_defense::metrics_snapshot();
+            let syn = cloudsidra_edge::kernel_syn_defense::snapshot();
             let kernel = waf_state.kernel_filter_status();
-            let xdp = cloud_node_rust::xdp::status_snapshot();
-            let pipeline = cloud_node_rust::pipeline_metrics::snapshot();
+            let xdp = cloudsidra_edge::xdp::status_snapshot();
+            let pipeline = cloudsidra_edge::pipeline_metrics::snapshot();
             eprintln!(
                 "L4METRICS {}",
                 json!({
@@ -354,7 +354,7 @@ fn main() -> anyhow::Result<()> {
                     "admission_reject_total": l4.admission_reject_total,
                     "slow_close_total": l4.slow_close_total,
                     "prefix_blocked_total": l4.prefix_blocked_total,
-                    "pressure": cloud_node_rust::l4_defense::current_pressure_level().as_str(),
+                    "pressure": cloudsidra_edge::l4_defense::current_pressure_level().as_str(),
                     "syn_overflows": syn.listen_overflows_delta,
                     "syn_drops": syn.listen_drops_delta,
                     "syncookies_sent": syn.syncookies_sent_delta,

@@ -1,7 +1,7 @@
-use cloud_node_transport::CongestionController;
-use cloud_node_transport::cc::reference::Bbr3Ref;
-use cloud_node_transport::edgecc::{EdgeCc, Tier};
-use cloud_node_transport::sim::{LossModel, SimConfig, run};
+use cloudsidra_edge_transport::CongestionController;
+use cloudsidra_edge_transport::cc::reference::Bbr3Ref;
+use cloudsidra_edge_transport::edgecc::{EdgeCc, Tier};
+use cloudsidra_edge_transport::sim::{LossModel, SimConfig, run};
 use std::time::Duration;
 
 fn cell(delay_ms: u64, loss_model: Option<LossModel>, uniform_loss: f64, rate_mbps: u64) {

@@ -3,7 +3,7 @@
 /configs/
 /data/
 /runtime/
-cloud-node-rust
+cloudsidra-edge
 .DS_Store
 configs/cache/disk/
 bench-cert.pem
@@ -26,5 +26,5 @@ __pycache__/
 !.github/**
 !.cargo/
 !.cargo/**
-crates/cloud-node-xdp-common/target/
+crates/cloudsidra-edge-xdp-common/target/
 xtask/target/

@@ -198,7 +198,7 @@ impl XdpXskMode {
 /// bind could only land on the kernel-emulated generic path, which is not
 /// a supported dataplane (its skb TX path saturated under production SNI
 /// load on Debian 6.1 + virtio_net). Mirrors
-/// `xdp_driver_native_xsk_floor` in `scripts/install-rust-cloud-node.sh`;
+/// `xdp_driver_native_xsk_floor` in `scripts/install-cloudsidra-edge.sh`;
 /// keep both in sync.
 ///
 /// virtio_net gained driver XSK in 6.11 (copy); ena in 5.16, gve in 6.2;
@@ -224,7 +224,7 @@ pub fn xsk_driver_native_floor(driver: &str) -> Option<(u32, u32)> {
 /// (RX merged in 6.11, flag + TX/wakeup in 6.13) — and still needs the
 /// hypervisor to negotiate VIRTIO_F_ACCESS_PLATFORM, so the runtime bind
 /// is always the authoritative verdict. Mirrors
-/// `xdp_driver_zerocopy_floor` in `scripts/install-rust-cloud-node.sh`.
+/// `xdp_driver_zerocopy_floor` in `scripts/install-cloudsidra-edge.sh`.
 pub fn xsk_driver_zerocopy_floor(driver: &str) -> Option<(u32, u32)> {
     match driver {
         "virtio_net" => Some((6, 13)),
@@ -804,7 +804,7 @@ impl RuntimeConfig {
         };
 
         // XDP is enabled unless told otherwise. Precedence, weakest first:
-        // built-in default (on) < CLOUD_NODE_XDP env var < explicit
+        // built-in default (on) < CLOUDSIDRA_EDGE_XDP env var < explicit
         // `xdp.enabled` in the config file. Everything else about the
         // dataplane is auto-derived at attach time, so a missing file never
         // needs to be generated.
@@ -825,13 +825,13 @@ impl RuntimeConfig {
     }
 
     fn xdp_enabled_from_env() -> anyhow::Result<Option<bool>> {
-        let Ok(value) = std::env::var("CLOUD_NODE_XDP") else {
+        let Ok(value) = std::env::var("CLOUDSIDRA_EDGE_XDP") else {
             return Ok(None);
         };
         match value.trim().to_ascii_lowercase().as_str() {
             "" | "1" | "true" | "on" | "yes" | "enable" | "enabled" => Ok(Some(true)),
             "0" | "false" | "off" | "no" | "disable" | "disabled" => Ok(Some(false)),
-            other => anyhow::bail!("unsupported CLOUD_NODE_XDP value: {other}"),
+            other => anyhow::bail!("unsupported CLOUDSIDRA_EDGE_XDP value: {other}"),
         }
     }
 
@@ -927,7 +927,7 @@ impl RuntimeConfig {
 }
 
 fn default_xdp_frame_size() -> u32 {
-    cloud_node_xdp_common::XDP_DEFAULT_FRAME_SIZE
+    cloudsidra_edge_xdp_common::XDP_DEFAULT_FRAME_SIZE
 }
 
 fn default_xdp_proxy_protocols() -> Vec<XdpProxyProtocol> {
@@ -1117,9 +1117,9 @@ xdp:
 
     impl XdpEnvGuard {
         fn apply(home: &std::path::Path, vars: &[(&'static str, Option<&str>)]) -> Self {
-            let mut saved = vec![("CLOUD_NODE_HOME", std::env::var_os("CLOUD_NODE_HOME"))];
+            let mut saved = vec![("CLOUDSIDRA_EDGE_HOME", std::env::var_os("CLOUDSIDRA_EDGE_HOME"))];
             unsafe {
-                std::env::set_var("CLOUD_NODE_HOME", home);
+                std::env::set_var("CLOUDSIDRA_EDGE_HOME", home);
             }
             for (key, value) in vars {
                 saved.push((key, std::env::var_os(key)));
@@ -1149,7 +1149,7 @@ xdp:
 
     fn xdp_home(contents: Option<&str>) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "cloud-node-xdp-test-{}-{}",
+            "cloudsidra-edge-xdp-test-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -1177,10 +1177,10 @@ xdp:
     }
 
     fn xdp_var(value: &str) -> (&'static str, Option<&str>) {
-        ("CLOUD_NODE_XDP", Some(value))
+        ("CLOUDSIDRA_EDGE_XDP", Some(value))
     }
 
-    const NO_XDP_ENV: (&str, Option<&str>) = ("CLOUD_NODE_XDP", None);
+    const NO_XDP_ENV: (&str, Option<&str>) = ("CLOUDSIDRA_EDGE_XDP", None);
 
     #[test]
     fn xdp_enabled_precedence_default_env_file() {

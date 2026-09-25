@@ -58,7 +58,7 @@ fn sha256_hex(bytes: &[u8]) -> String {
             }
         }
     }
-    panic!("sha256sum/shasum is required to verify CLOUD_NODE_XDP_EBPF_SOURCE");
+    panic!("sha256sum/shasum is required to verify CLOUDSIDRA_EDGE_XDP_EBPF_SOURCE");
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -77,7 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or(0)
         });
     println!(
-        "cargo:rustc-env=CLOUD_NODE_BUILD_TIMESTAMP={}",
+        "cargo:rustc-env=CLOUDSIDRA_EDGE_BUILD_TIMESTAMP={}",
         build_timestamp
     );
 
@@ -100,21 +100,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Resolve the pinned eBPF toolchain. `crates/cloud-node-xdp-ebpf/
+/// Resolve the pinned eBPF toolchain. `crates/cloudsidra-edge-xdp-ebpf/
 /// rust-toolchain.toml` is the single source of truth for the dated nightly
 /// (shared with xtask `build-ebpf` and the release workflow);
-/// CLOUD_NODE_EBPF_TOOLCHAIN may override it. Never a bare `nightly` name —
+/// CLOUDSIDRA_EDGE_EBPF_TOOLCHAIN may override it. Never a bare `nightly` name —
 /// the embedded object must come from the same verified dated toolchain that
 /// CI installed.
 fn ebpf_toolchain() -> Result<String, Box<dyn std::error::Error>> {
-    if let Ok(name) = std::env::var("CLOUD_NODE_EBPF_TOOLCHAIN") {
+    if let Ok(name) = std::env::var("CLOUDSIDRA_EDGE_EBPF_TOOLCHAIN") {
         let name = name.trim().to_string();
         if !name.is_empty() {
             return Ok(name);
         }
     }
     let toml_path = Path::new("crates")
-        .join("cloud-node-xdp-ebpf")
+        .join("cloudsidra-edge-xdp-ebpf")
         .join("rust-toolchain.toml");
     let toml = fs::read_to_string(&toml_path)
         .map_err(|err| format!("failed to read {}: {err}", toml_path.display()))?;
@@ -145,66 +145,66 @@ fn toolchain_channel(toml: &str) -> Option<String> {
 /// The XDP program must ship inside the main binary: the kernel only accepts
 /// eBPF bytecode at the XDP hook, and keeping the object as a separate runtime
 /// file invites binary/object version skew. Build the eBPF crate for Linux
-/// targets and point `CLOUD_NODE_XDP_EBPF_OBJECT` at the artifact so
+/// targets and point `CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT` at the artifact so
 /// `aya::include_bytes_aligned!` can embed it.
 fn embed_xdp_ebpf_object() -> Result<(), Box<dyn std::error::Error>> {
     let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
-    let dest = out_dir.join("cloud-node-xdp-ebpf.o");
+    let dest = out_dir.join("cloudsidra-edge-xdp-ebpf.o");
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     if target_os != "linux" {
         // XDP is Linux-only; emit a placeholder so include_bytes compiles.
         fs::write(&dest, b"")?;
-        println!("cargo:rustc-env=CLOUD_NODE_XDP_EBPF_OBJECT={}", dest.display());
+        println!("cargo:rustc-env=CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT={}", dest.display());
         return Ok(());
     }
 
-    println!("cargo:rerun-if-changed=crates/cloud-node-xdp-ebpf/src");
-    println!("cargo:rerun-if-changed=crates/cloud-node-xdp-ebpf/Cargo.toml");
-    println!("cargo:rerun-if-changed=crates/cloud-node-xdp-ebpf/rust-toolchain.toml");
-    println!("cargo:rerun-if-changed=crates/cloud-node-xdp-common/src");
-    println!("cargo:rerun-if-changed=crates/cloud-node-xdp-common/Cargo.toml");
-    println!("cargo:rerun-if-env-changed=CLOUD_NODE_XDP_EBPF_SOURCE");
-    println!("cargo:rerun-if-env-changed=CLOUD_NODE_XDP_EBPF_SHA256");
-    println!("cargo:rerun-if-env-changed=CLOUD_NODE_EBPF_TOOLCHAIN");
+    println!("cargo:rerun-if-changed=crates/cloudsidra-edge-xdp-ebpf/src");
+    println!("cargo:rerun-if-changed=crates/cloudsidra-edge-xdp-ebpf/Cargo.toml");
+    println!("cargo:rerun-if-changed=crates/cloudsidra-edge-xdp-ebpf/rust-toolchain.toml");
+    println!("cargo:rerun-if-changed=crates/cloudsidra-edge-xdp-common/src");
+    println!("cargo:rerun-if-changed=crates/cloudsidra-edge-xdp-common/Cargo.toml");
+    println!("cargo:rerun-if-env-changed=CLOUDSIDRA_EDGE_XDP_EBPF_SOURCE");
+    println!("cargo:rerun-if-env-changed=CLOUDSIDRA_EDGE_XDP_EBPF_SHA256");
+    println!("cargo:rerun-if-env-changed=CLOUDSIDRA_EDGE_EBPF_TOOLCHAIN");
 
     // Release builds embed a caller-designated object so the embedded bytes
-    // are provably identical to the packaged data/cloud-node-xdp-ebpf.o:
+    // are provably identical to the packaged data/cloudsidra-edge-xdp-ebpf.o:
     // CI builds the object first, records its SHA256, then builds the node
-    // with both env vars set. When CLOUD_NODE_XDP_EBPF_SHA256 is present the
+    // with both env vars set. When CLOUDSIDRA_EDGE_XDP_EBPF_SHA256 is present the
     // file must match — a stale or foreign object fails the build loudly
     // instead of being embedded silently.
-    if let Ok(source) = std::env::var("CLOUD_NODE_XDP_EBPF_SOURCE") {
+    if let Ok(source) = std::env::var("CLOUDSIDRA_EDGE_XDP_EBPF_SOURCE") {
         let source_path = PathBuf::from(&source);
         let bytes = fs::read(&source_path).map_err(|err| {
             format!(
-                "CLOUD_NODE_XDP_EBPF_SOURCE={source} is not readable: {err}"
+                "CLOUDSIDRA_EDGE_XDP_EBPF_SOURCE={source} is not readable: {err}"
             )
         })?;
         if bytes.is_empty() {
             return Err(format!(
-                "CLOUD_NODE_XDP_EBPF_SOURCE={source} is empty"
+                "CLOUDSIDRA_EDGE_XDP_EBPF_SOURCE={source} is empty"
             )
             .into());
         }
-        if let Ok(expected) = std::env::var("CLOUD_NODE_XDP_EBPF_SHA256") {
+        if let Ok(expected) = std::env::var("CLOUDSIDRA_EDGE_XDP_EBPF_SHA256") {
             let expected = expected.trim().to_ascii_lowercase();
             if !expected.is_empty() {
                 let actual = sha256_hex(&bytes);
                 if actual != expected {
                     return Err(format!(
-                        "CLOUD_NODE_XDP_EBPF_SOURCE={source} sha256 mismatch: expected {expected}, got {actual}"
+                        "CLOUDSIDRA_EDGE_XDP_EBPF_SOURCE={source} sha256 mismatch: expected {expected}, got {actual}"
                     )
                     .into());
                 }
             }
         }
         fs::copy(&source_path, &dest)?;
-        println!("cargo:rustc-env=CLOUD_NODE_XDP_EBPF_OBJECT={}", dest.display());
+        println!("cargo:rustc-env=CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT={}", dest.display());
         return Ok(());
     }
 
     let ebpf_target = "bpfel-unknown-none";
-    let manifest = "crates/cloud-node-xdp-ebpf/Cargo.toml";
+    let manifest = "crates/cloudsidra-edge-xdp-ebpf/Cargo.toml";
     let toolchain = ebpf_toolchain()?;
     // Spawn via `rustup run` so the nested build resolves the pinned dated
     // toolchain's sysroot even though the parent cargo exports
@@ -257,15 +257,15 @@ fn embed_xdp_ebpf_object() -> Result<(), Box<dyn std::error::Error>> {
                 PathBuf::from(target_dir)
                     .join(ebpf_target)
                     .join("release")
-                    .join("cloud-node-xdp-ebpf"),
+                    .join("cloudsidra-edge-xdp-ebpf"),
             );
         }
         candidates.push(
-            Path::new("crates/cloud-node-xdp-ebpf")
+            Path::new("crates/cloudsidra-edge-xdp-ebpf")
                 .join("target")
                 .join(ebpf_target)
                 .join("release")
-                .join("cloud-node-xdp-ebpf"),
+                .join("cloudsidra-edge-xdp-ebpf"),
         );
         source = candidates.into_iter().find(|path| path.is_file());
     }
@@ -274,7 +274,7 @@ fn embed_xdp_ebpf_object() -> Result<(), Box<dyn std::error::Error>> {
         // prebuilt object produced by `cargo xtask build-ebpf` so local dev
         // builds on machines without the bpf toolchain still work. This is
         // loud, not silent: stale-object risk is printed as a warning.
-        let prebuilt = Path::new("data").join("cloud-node-xdp-ebpf.o");
+        let prebuilt = Path::new("data").join("cloudsidra-edge-xdp-ebpf.o");
         if prebuilt.is_file() {
             println!(
                 "cargo:warning=eBPF toolchain build unavailable; embedding prebuilt {} (run `cargo xtask build-ebpf` to refresh)",
@@ -287,12 +287,12 @@ fn embed_xdp_ebpf_object() -> Result<(), Box<dyn std::error::Error>> {
         return Err(format!(
             "cannot build embedded XDP eBPF object: the pinned toolchain {toolchain} with \
              rust-src is required (rustup toolchain install {toolchain} --profile minimal \
-             -c rust-src), or provide a prebuilt data/cloud-node-xdp-ebpf.o via \
+             -c rust-src), or provide a prebuilt data/cloudsidra-edge-xdp-ebpf.o via \
              `cargo xtask build-ebpf`"
         )
         .into());
     };
     fs::copy(&source, &dest)?;
-    println!("cargo:rustc-env=CLOUD_NODE_XDP_EBPF_OBJECT={}", dest.display());
+    println!("cargo:rustc-env=CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT={}", dest.display());
     Ok(())
 }

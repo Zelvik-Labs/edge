@@ -13,7 +13,7 @@
    :19000 http  :19002 tcp-echo  :19003 udp-echo  :19005 sni-tls
 ```
 
-- 二进制：`cloud-node-rust`（`/root/edge-src/target/release/cloud-node-rust`），sha256 `6b25f70e5e217979…`，开发构建 `lto=false`、`codegen-units=8`（非发布产物）。
+- 二进制：`cloudsidra-edge`（`/root/edge-src/target/release/cloudsidra-edge`），sha256 `6b25f70e5e217979…`，开发构建 `lto=false`、`codegen-units=8`（非发布产物）。
 - 配置：`xdp.enabled=true, attachMode=drv, fallback=fail-start, transport.controller=edgecc`，`queues: [0..7]`，`proxy.protocols=[tcp,udp,http,https,h3]`。
 - 出站腿已由 `dial-smoke` 独立验证：`ccAlgorithm=edgecc`、`ccImpl=smoltcp-edge`、`outCtHit=2077`、`dialGuardInstalled=true`、`drop=0/xskDrops=0`，minRtt 4.6ms，源端口 `10.1.10.2:43603` 位于保留拨号段内。
 

@@ -4,11 +4,11 @@
 //! PRR recovery, once-per-RTT ECN, RTO, HyStart++ exit, CUBIC
 //! multiplicative decrease.
 
-use cloud_node_transport::cc::reference::{CubicRef, NewRenoRef};
-use cloud_node_transport::cc::CongestionController;
-use cloud_node_transport::rate_sample::RateSample;
-use cloud_node_transport::rtt::RttState;
-use cloud_node_transport::TransportInstant;
+use cloudsidra_edge_transport::cc::reference::{CubicRef, NewRenoRef};
+use cloudsidra_edge_transport::cc::CongestionController;
+use cloudsidra_edge_transport::rate_sample::RateSample;
+use cloudsidra_edge_transport::rtt::RttState;
+use cloudsidra_edge_transport::TransportInstant;
 use std::time::Duration;
 
 const MSS: u64 = 1460;

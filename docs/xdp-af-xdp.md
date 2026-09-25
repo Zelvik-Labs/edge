@@ -14,26 +14,26 @@
 
 ## 构建
 
-普通节点构建仍使用原 Cargo 命令。XDP eBPF 对象在 Linux 目标上由 `build.rs` 自动编译并内嵌进二进制；`cargo xtask build-ebpf` 仍可单独构建到 `data/cloud-node-xdp-ebpf.o`，用于调试或 `xdp.ebpfObject` 显式外部对象热替换。
+普通节点构建仍使用原 Cargo 命令。XDP eBPF 对象在 Linux 目标上由 `build.rs` 自动编译并内嵌进二进制；`cargo xtask build-ebpf` 仍可单独构建到 `data/cloudsidra-edge-xdp-ebpf.o`，用于调试或 `xdp.ebpfObject` 显式外部对象热替换。
 
 ## 本地配置
 
-XDP 只需要一个开关，优先级为：默认值（启用）< `CLOUD_NODE_XDP` 环境变量 < 配置文件显式值。
+XDP 只需要一个开关，优先级为：默认值（启用）< `CLOUDSIDRA_EDGE_XDP` 环境变量 < 配置文件显式值。
 
 ```text
 configs/api_node.yaml   # 唯一的本地配置文件；xdp 段与 API 连接信息同文件
 ```
 
 - 不配置任何文件也不设环境变量 → XDP 启用，其余全部自动推导。
-- `CLOUD_NODE_XDP=0` / `false` / `off` / `disabled` → 关闭（`1`/`true`/`on`/`enabled` 为开启）。
+- `CLOUDSIDRA_EDGE_XDP=0` / `false` / `off` / `disabled` → 关闭（`1`/`true`/`on`/`enabled` 为开启）。
 - 文件中的 `xdp.enabled` 显式值是最终裁决，覆盖环境变量：
 
 ```yaml
 xdp:
-  enabled: false   # 显式关闭，即使 CLOUD_NODE_XDP=1 也保持关闭
+  enabled: false   # 显式关闭，即使 CLOUDSIDRA_EDGE_XDP=1 也保持关闭
 ```
 
-`cloud-node xdp start` 写入 `xdp.enabled: true`，`cloud-node xdp stop` 写入 `xdp.enabled: false`；两者都保留文件中的其他内容，不会把推导出的运行时状态写回配置。
+`cloudsidra-edge xdp start` 写入 `xdp.enabled: true`，`cloudsidra-edge xdp stop` 写入 `xdp.enabled: false`；两者都保留文件中的其他内容，不会把推导出的运行时状态写回配置。
 
 除 `enabled` 之外的字段（`attachMode`、`fallback`、`interfaces`、`proxy`、`rateLimit`）仍可在文件中显式提供以覆盖自动推导结果，但正常部署不需要；自动推导的状态只存在于内存，不会写回 `api_node.yaml`。
 
@@ -73,20 +73,20 @@ xdp:
 ## CLI
 
 ```bash
-cloud-node xdp doctor
-cloud-node xdp status
-cloud-node xdp attach
-cloud-node xdp detach
-cloud-node xdp reload
-cloud-node xdp dump-maps
+cloudsidra-edge xdp doctor
+cloudsidra-edge xdp status
+cloudsidra-edge xdp attach
+cloudsidra-edge xdp detach
+cloudsidra-edge xdp reload
+cloudsidra-edge xdp dump-maps
 ```
 
 诊断和测试命令：
 
 ```bash
-cloud-node xdp raw-smoke --duration-ms 5000
-cloud-node xdp proxy-smoke --duration-ms 15000
-cloud-node xdp proxy-reload-smoke --duration-ms 3000
+cloudsidra-edge xdp raw-smoke --duration-ms 5000
+cloudsidra-edge xdp proxy-smoke --duration-ms 15000
+cloudsidra-edge xdp proxy-reload-smoke --duration-ms 3000
 ```
 
 `status` 会输出 attach 状态、attach mode、fallback 原因、XSK queue ready 状态、proxy 端口支持情况、XDP pass/drop/redirect、parse errors、map miss 和 XSK drops。节点状态上报 JSON 同步包含 `xdp` 字段。
@@ -114,7 +114,7 @@ proxy 模式命中端口后内核 socket 不再收到该包；未命中、降级
 1. **Prepare（不触碰运行中数据面）**：map 预算检查 → pinned map ABI 检查 → 加载新对象（兼容 pin 复用）→ map spec 审计 → root 程序与全部 dispatch 子程序的 verifier 加载。任何一步失败都直接报错，**旧程序保持 attach**，流量不受影响。
 2. **Commit**：先 detach 旧 links/子程序 pin/dispatch pin → 重新 pin dispatch map 与子程序 → 写 dispatch 槽位 → adopt flow state → 同步策略/localIP/端口/XSK 索引 → 清计数器 → 逐接口 attach 新 link 并 pin。commit 窗口约毫秒级，期间流量走内核路径。
 
-- **Pinned state map ABI 不兼容**：attach 拒绝并列出具体 map 名，旧数据面保持运行；不会删除 pin 后声称无损升级。确认接受状态丢失时执行 `cloud-node xdp detach --purge-state`（显式删除全部 pinned state map 并打 warn 日志），再 attach。
+- **Pinned state map ABI 不兼容**：attach 拒绝并列出具体 map 名，旧数据面保持运行；不会删除 pin 后声称无损升级。确认接受状态丢失时执行 `cloudsidra-edge xdp detach --purge-state`（显式删除全部 pinned state map 并打 warn 日志），再 attach。
 - **reload**：旧 manager 的 kernel links 与 AF_XDP socket 在新代 prepare 期间保持服务；新代 commit 完成后再释放旧代句柄，新 socket 绑定同一队列（socket 创建自带重试，吸收旧 worker 退出窗口）。prepare 失败则恢复旧 manager 继续服务；commit 中途失败则清理半成品 pin 并让旧代重新 attach。
 - **AF_XDP 流在 reload 时的语义**：smoltcp 会话绑定在旧 socket 上，无法迁移到内核路径，也无法跨 socket 迁移到新代——handover 时旧 socket 关闭、会话终止（有显式日志与状态记录）。同一（ifindex, queue）上两个 XSK socket 无法共存，这是 AF_XDP 的硬约束；排空不是把旧流"改成 PASS"——活跃 smoltcp TCP 不能透明移交内核。
 - 接口从配置中移除时，detach 会扫描 pin 目录下所有 `link-*`，旧代遗留 pin 不会挂在已不受管理的接口上。
@@ -136,7 +136,7 @@ proxy 模式命中端口后内核 socket 不再收到该包；未命中、降级
 
 ## 内核程序布局（tail-call）
 
-主程序 `cloud_node_xdp` 按 family/proto 经 `XDP_DISPATCH`（prog array）尾调用到各 NAT 子程序——每个 SNAT-capable handler 约 10KiB BPF 指令，拆分后单个程序才能通过旧内核（6.1 已实测）的 verifier 状态预算：
+主程序 `cloudsidra_xdp` 按 family/proto 经 `XDP_DISPATCH`（prog array）尾调用到各 NAT 子程序——每个 SNAT-capable handler 约 10KiB BPF 指令，拆分后单个程序才能通过旧内核（6.1 已实测）的 verifier 状态预算：
 
 | 槽位 | 程序 | 覆盖 |
 |---|---|---|
@@ -157,11 +157,11 @@ proxy 模式命中端口后内核 socket 不再收到该包；未命中、降级
 
 ## Pinned map 迁移
 
-`/sys/fs/bpf/cloud-node-xdp/` 下的 map pin 跨重启复用。attach 前逐张比对内核报告的 spec（type/key size/value size/max_entries）与当前 .o 定义：
+`/sys/fs/bpf/cloudsidra-edge-xdp/` 下的 map pin 跨重启复用。attach 前逐张比对内核报告的 spec（type/key size/value size/max_entries）与当前 .o 定义：
 
 - **兼容**：pin 复用，conntrack/SNAT/计费状态无损交接（`adopt_flow_state` bump `XDP_OWNER_EPOCH`）。
 - **不兼容的非状态 map**（dispatch 表、计数器、规则表）：删除重建，有 warn 日志，内容本就每次 attach 重建。
-- **不兼容的状态 map**（`XDP_TCP_CT`/`XDP_UDP_CT`/`XDP_PENDING`/`XDP_SNAT_REV`/`XDP_FLOW_ACCT`/`XDP_FLOW_EVENTS`/`XDP_OWNER_EPOCH`/`XDP_FLOW_SEQ`/`XDP_COOKIE_KEY`）：attach **拒绝**并报出具体 map 名，运行中数据面不受影响。这是显式的迁移边界——确认接受状态丢失后运行 `cloud-node xdp detach --purge-state` 再 attach。
+- **不兼容的状态 map**（`XDP_TCP_CT`/`XDP_UDP_CT`/`XDP_PENDING`/`XDP_SNAT_REV`/`XDP_FLOW_ACCT`/`XDP_FLOW_EVENTS`/`XDP_OWNER_EPOCH`/`XDP_FLOW_SEQ`/`XDP_COOKIE_KEY`）：attach **拒绝**并报出具体 map 名，运行中数据面不受影响。这是显式的迁移边界——确认接受状态丢失后运行 `cloudsidra-edge xdp detach --purge-state` 再 attach。
 
 ## 性能基线
 

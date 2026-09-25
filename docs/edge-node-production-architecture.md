@@ -8,7 +8,7 @@
 
 ## 1. 目标、范围与判断原则
 
-首期目标是把现有 CloudNode Rust 做成可长期运营的边缘节点：高吞吐、低尾延迟，在攻击、依赖故障、配置变更和资源压力下保持可预测行为。覆盖 XDP/AF_XDP、TCP/UDP/QUIC、HTTP/TLS、WAF、缓存、回源、节点配置、资源治理、观测、升级与恢复。
+首期目标是把现有 CloudSidra Edge 做成可长期运营的边缘节点：高吞吐、低尾延迟，在攻击、依赖故障、配置变更和资源压力下保持可预测行为。覆盖 XDP/AF_XDP、TCP/UDP/QUIC、HTTP/TLS、WAF、缓存、回源、节点配置、资源治理、观测、升级与恢复。
 
 “像 Cloudflare 一样”在本阶段对应工程属性：防护常驻、正常业务优先、按服务隔离、配置可验证、发布可回滚、故障范围受控、容量有证据。它不表示已经拥有 Cloudflare 的网络容量、全球调度或服务保证。
 
@@ -20,7 +20,7 @@
 
 | 能力 | 当前入口 | 处理原则 |
 |---|---|---|
-| XDP ACL、NAT、tail-call | [eBPF](../crates/cloud-node-xdp-ebpf/src/main.rs)、[共享 ABI](../crates/cloud-node-xdp-common/src/lib.rs) | 增量修正状态与资源语义，保留快路径 |
+| XDP ACL、NAT、tail-call | [eBPF](../crates/cloudsidra-edge-xdp-ebpf/src/main.rs)、[共享 ABI](../crates/cloudsidra-edge-xdp-common/src/lib.rs) | 增量修正状态与资源语义，保留快路径 |
 | AF_XDP 与 smoltcp | [xdp.rs](../src/xdp.rs) | 保留协议入口，按实际路径认证，消除队列和所有权问题 |
 | HTTP/TCP/H3 代理 | [proxy.rs](../src/proxy.rs)、[HTTP manager](../src/http_proxy_manager.rs)、[H3 manager](../src/http3_proxy_manager.rs)、[TCP](../src/tcp_proxy.rs)、[UDP](../src/udp_proxy.rs) | 复用 Pingora、Tokio、Quinn，不重写成熟协议栈 |
 | 配置快照和预编译 | [config.rs](../src/config.rs)、[config_apply.rs](../src/config_apply.rs)、[compiled.rs](../src/compiled.rs) | 补足跨组件发布协议 |

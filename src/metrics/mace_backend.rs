@@ -394,7 +394,7 @@ mod tests {
     use super::{DB, IteratorMode, WriteBatch};
 
     fn test_path() -> std::path::PathBuf {
-        std::env::temp_dir().join(format!("cloud-node-mace-test-{}", uuid::Uuid::new_v4()))
+        std::env::temp_dir().join(format!("cloudsidra-edge-mace-test-{}", uuid::Uuid::new_v4()))
     }
 
     #[test]

@@ -569,8 +569,8 @@ const TEXT_MIME_TYPES: &[&str] = &[
     "text/xhtml",
     "text/sgml",
 ];
-const HLS_KEY_ROUTE: &str = "/.well-known/cloud-node/hls-key";
-const WAF_VERIFY_ROUTE: &str = "/.well-known/cloud-node/waf-verify";
+const HLS_KEY_ROUTE: &str = "/.well-known/cloudsidra-edge/hls-key";
+const WAF_VERIFY_ROUTE: &str = "/.well-known/cloudsidra-edge/waf-verify";
 const UAM_DEFAULT_LIFE_SECONDS: i64 = 3600;
 const UAM_CHALLENGE_LIFE_SECONDS: i64 = 120;
 const UAM_MIN_VERIFY_SECONDS: i64 = 5;
@@ -9670,7 +9670,7 @@ impl ProxyHttp for EdgeProxy {
 
                 // 4. Partial content. Pingora can satisfy client Range requests from a complete
                 // cached object, so keep the complete-object key when that entry already exists.
-                // When it does not exist and partial caching is enabled, the cloud-node partial
+                // When it does not exist and partial caching is enabled, the cloudsidra-edge partial
                 // store keeps one aggregate sparse object and records covered byte ranges.
                 let full_object_hash = format!("{:x}", md5_legacy::compute(key.as_bytes()));
                 let full_object_cached = crate::metrics::storage::STORAGE

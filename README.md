@@ -1,6 +1,6 @@
-# CloudNode Rust
+# CloudSidra Edge
 
-CloudNode Rust 是一个基于 [Pingora](https://github.com/cloudflare/pingora) 构建的高性能 CDN 边缘节点。它面向生产环境中的站点加速、多级分发、动态配置、边缘安全、访问日志和统计上报场景，而不是一个最小化代理示例。
+CloudSidra Edge 是一个基于 [Pingora](https://github.com/cloudflare/pingora) 构建的高性能 CDN 边缘节点。它面向生产环境中的站点加速、多级分发、动态配置、边缘安全、访问日志和统计上报场景，而不是一个最小化代理示例。
 
 项目的核心目标是用 Rust 运行时承载完整边缘节点能力：从控制面协议同步配置，到 L7/L4 代理、缓存、WAF、证书、日志、统计和本地可观测性，尽量让节点在高并发和复杂站点策略下保持稳定、可解释、可运维。
 
@@ -38,13 +38,13 @@ secret: "your-node-secret"
 安装或升级到 GitHub 最新 Rust Release（自动检测现有部署：有则迁移/升级，无则全新安装；输出中英双语）：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Zypixh/cloud-node-rust/main/scripts/install-rust-cloud-node.sh | bash
+curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-cloudsidra-edge.sh | bash
 ```
 
 全新安装的一条非交互命令示例（GeoLite2 库由本仓库 `geoip/` 提供，默认必装）：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Zypixh/cloud-node-rust/main/scripts/install-rust-cloud-node.sh | bash -s -- --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret
+curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-cloudsidra-edge.sh | bash -s -- --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret
 ```
 
 ## 文档
@@ -112,7 +112,7 @@ RUSTFLAGS="-C target-cpu=x86-64-v3 -C opt-level=3 -C lto=fat" cargo build --rele
 
 ## 项目状态
 
-CloudNode Rust 已接入主要边缘节点能力，并持续优化以下方向：
+CloudSidra Edge 已接入主要边缘节点能力，并持续优化以下方向：
 
 - 控制面 PB 协议兼容。
 - 请求热路径锁竞争和分配开销。

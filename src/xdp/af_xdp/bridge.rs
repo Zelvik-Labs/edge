@@ -347,8 +347,8 @@ fn frame_mark_ce(frame: &mut [u8]) -> bool {
 fn queue_deferred_tx(
     pending: &mut std::collections::HashMap<u64, std::collections::VecDeque<PendingTx>>,
     total: &mut usize,
-    sched: &mut cloud_node_transport::sched::Scheduler,
-    now: cloud_node_transport::TransportInstant,
+    sched: &mut cloudsidra_edge_transport::sched::Scheduler,
+    now: cloudsidra_edge_transport::TransportInstant,
     p: PendingTx,
 ) -> bool {
     if *total >= AF_XDP_TX_RETRY_CAP {
@@ -995,7 +995,7 @@ pub(crate) async fn spawn_queue_reactors(
         manager.disable_queue_redirect_for_fault(
             &interface,
             queue,
-            "test-only withdrawal via CLOUD_NODE_XDP_TEST_WITHDRAW_QUEUE".to_string(),
+            "test-only withdrawal via CLOUDSIDRA_EDGE_XDP_TEST_WITHDRAW_QUEUE".to_string(),
         );
     }
 
@@ -1187,16 +1187,16 @@ pub(crate) async fn run_queue_bridge_loop(
     // ordered by (deadline, tier, deficit); a full store sheds — counted.
     // T9 (D-AQM): CoDel runs on the deferred queue's real sojourn time;
     // ECT units are CE-marked, Not-ECT units dropped per the schedule.
-    let mut sched = cloud_node_transport::sched::Scheduler::new(
+    let mut sched = cloudsidra_edge_transport::sched::Scheduler::new(
         egress_rate_bps,
         AF_XDP_EGRESS_OVERHEAD_BYTES,
     );
     let mut pending_tx: std::collections::HashMap<u64, std::collections::VecDeque<PendingTx>> =
         std::collections::HashMap::new();
     let mut pending_tx_count = 0usize;
-    let mut codel = cloud_node_transport::codel::Codel::new(
-        cloud_node_transport::codel::DEFAULT_TARGET,
-        cloud_node_transport::codel::DEFAULT_INTERVAL,
+    let mut codel = cloudsidra_edge_transport::codel::Codel::new(
+        cloudsidra_edge_transport::codel::DEFAULT_TARGET,
+        cloudsidra_edge_transport::codel::DEFAULT_INTERVAL,
     );
     let mut aqm_drops = 0u64;
     let mut aqm_ce_marks = 0u64;
@@ -1251,7 +1251,7 @@ pub(crate) async fn run_queue_bridge_loop(
         // ring leaves the frame at its queue head for the next round.
         // T9: each dequeued head passes CoDel — ECT units get CE-marked,
         // Not-ECT units drop per the RFC 8289 control law.
-        let tx_now = cloud_node_transport::TransportInstant::from_micros(
+        let tx_now = cloudsidra_edge_transport::TransportInstant::from_micros(
             tx_clock.now_micros().max(0) as u64,
         );
         while let Some(flow) = sched.next(tx_now) {
@@ -1266,7 +1266,7 @@ pub(crate) async fn run_queue_bridge_loop(
                 continue;
             };
             match sched.charge(tx_now, flow, head.len()) {
-                cloud_node_transport::sched::Admit::Wait(wait) => {
+                cloudsidra_edge_transport::sched::Admit::Wait(wait) => {
                     let tier = head.tier;
                     pending_tx
                         .get_mut(&flow)
@@ -1277,7 +1277,7 @@ pub(crate) async fn run_queue_bridge_loop(
                     // One shared budget — other flows hit the same wall.
                     break;
                 }
-                cloud_node_transport::sched::Admit::Now => {}
+                cloudsidra_edge_transport::sched::Admit::Now => {}
             }
             // Dwell measurement only: frames past the bound still ship —
             // the emit-side cap bounds queue depth so dwell can't reach
@@ -1287,16 +1287,16 @@ pub(crate) async fn run_queue_bridge_loop(
             {
                 stale_dwells = stale_dwells.saturating_add(1);
             }
-            let stamp = cloud_node_transport::codel::Stamp {
-                enqueued_at: cloud_node_transport::TransportInstant::from_micros(
+            let stamp = cloudsidra_edge_transport::codel::Stamp {
+                enqueued_at: cloudsidra_edge_transport::TransportInstant::from_micros(
                     head.enqueued_us,
                 ),
                 ecn: head.ecn,
             };
             let codel_action = codel.dequeue(tx_now, stamp, pending_tx_count <= 1);
             let codel_dropped = match codel_action {
-                cloud_node_transport::codel::CodelAction::Drop => true,
-                cloud_node_transport::codel::CodelAction::MarkCe => {
+                cloudsidra_edge_transport::codel::CodelAction::Drop => true,
+                cloudsidra_edge_transport::codel::CodelAction::MarkCe => {
                     if head.mark_ce() {
                         aqm_ce_marks = aqm_ce_marks.saturating_add(1);
                         false
@@ -1306,7 +1306,7 @@ pub(crate) async fn run_queue_bridge_loop(
                         true
                     }
                 }
-                cloud_node_transport::codel::CodelAction::Pass => false,
+                cloudsidra_edge_transport::codel::CodelAction::Pass => false,
             };
             if codel_dropped {
                 pending_tx_count -= 1;
@@ -1460,14 +1460,14 @@ pub(crate) async fn run_queue_bridge_loop(
                     // T8: QUIC/UDP egress honors the same shaping gate and
                     // bounded retry queue as TCP — UDP is lossy by
                     // contract, but a shed must be counted, never silent.
-                    let tx_now = cloud_node_transport::TransportInstant::from_micros(
+                    let tx_now = cloudsidra_edge_transport::TransportInstant::from_micros(
                         tx_clock.now_micros().max(0) as u64,
                     );
                     let mut pending =
                         PendingTx::udp(link, local, remote, payload, ecn, tx_now.micros());
                     if matches!(
                         sched.charge(tx_now, pending.flow, pending.len()),
-                        cloud_node_transport::sched::Admit::Wait(_)
+                        cloudsidra_edge_transport::sched::Admit::Wait(_)
                     ) {
                         if !queue_deferred_tx(
                             &mut pending_tx,
@@ -1859,7 +1859,7 @@ pub(crate) async fn run_queue_bridge_loop(
             // T8 shaping gate (D-G2): token deficit defers the datagram
             // into the bounded retry queue — charged on actual send,
             // never dropped silently.
-            let tx_now = cloud_node_transport::TransportInstant::from_micros(
+            let tx_now = cloudsidra_edge_transport::TransportInstant::from_micros(
                 tx_clock.now_micros().max(0) as u64,
             );
             let make_pending = |now_us: u64| {
@@ -1875,7 +1875,7 @@ pub(crate) async fn run_queue_bridge_loop(
             let pending = make_pending(tx_now.micros());
             if matches!(
                 sched.charge(tx_now, pending.flow, pending.len()),
-                cloud_node_transport::sched::Admit::Wait(_)
+                cloudsidra_edge_transport::sched::Admit::Wait(_)
             ) {
                 crate::udp_proxy::note_udp_tx_deferred();
                 if !queue_deferred_tx(
@@ -1976,7 +1976,7 @@ pub(crate) async fn run_queue_bridge_loop(
             };
             // T8: resolve to a sendable unit first so shaping and ring
             // backpressure defer the same object the live path sent.
-            let tx_now = cloud_node_transport::TransportInstant::from_micros(
+            let tx_now = cloudsidra_edge_transport::TransportInstant::from_micros(
                 tx_clock.now_micros().max(0) as u64,
             );
             let pending = match fwd {
@@ -2006,7 +2006,7 @@ pub(crate) async fn run_queue_bridge_loop(
             let pending_len = pending.len();
             if matches!(
                 sched.charge(tx_now, pending.flow, pending_len),
-                cloud_node_transport::sched::Admit::Wait(_)
+                cloudsidra_edge_transport::sched::Admit::Wait(_)
             ) {
                 // Token deficit: defer when the retry queue has room;
                 // a full queue sheds (counted) — never bypass the shaper.
@@ -2147,7 +2147,7 @@ pub(crate) async fn run_queue_bridge_loop(
             // stream on the wire. Defer behind its own queued head; the
             // egress budget above guarantees the store has room.
             let (sched_flow, ..) = frame_sched_meta(&encode_scratch);
-            let tx_now = cloud_node_transport::TransportInstant::from_micros(
+            let tx_now = cloudsidra_edge_transport::TransportInstant::from_micros(
                 tx_clock.now_micros().max(0) as u64,
             );
             if pending_tx.contains_key(&sched_flow) {
@@ -2179,7 +2179,7 @@ pub(crate) async fn run_queue_bridge_loop(
                     sched_flow,
                     encode_scratch.len() as u64,
                 ),
-                cloud_node_transport::sched::Admit::Wait(_)
+                cloudsidra_edge_transport::sched::Admit::Wait(_)
             ) {
                 if !queue_deferred_tx(
                     &mut pending_tx,
@@ -2404,9 +2404,9 @@ pub(crate) fn compact_udp_route_cache(
 mod sched_aqm_tests {
     use super::*;
     use crate::runtime_mode::XdpInterfaceConfig;
-    use cloud_node_transport::codel::{Codel, CodelAction, Stamp, DEFAULT_INTERVAL, DEFAULT_TARGET};
-    use cloud_node_transport::sched::Scheduler;
-    use cloud_node_transport::TransportInstant;
+    use cloudsidra_edge_transport::codel::{Codel, CodelAction, Stamp, DEFAULT_INTERVAL, DEFAULT_TARGET};
+    use cloudsidra_edge_transport::sched::Scheduler;
+    use cloudsidra_edge_transport::TransportInstant;
 
     fn ipv4_frame(tos: u8, proto: u8, l4: &[u8], fix_checksum: bool) -> Vec<u8> {
         let mut f = Vec::with_capacity(14 + 20 + l4.len());

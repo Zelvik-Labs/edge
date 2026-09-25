@@ -1,17 +1,11 @@
 name: Release
 
-# Tags: pushing v* is the release decision. main: the same matrix warms the
-# mbx store under `release-mbx-v1-<leg>-*` keys on the default branch —
-# actions/cache restores are ref-scoped, and tag runs may read default-branch
-# entries, so a tag cut from main restores the most recent main-push store
-# via the restore-key prefix instead of building cold. The `release` job
-# below stays gated on refs/tags/v, so main pushes only build and cache.
+# Tags: pushing v* is the release decision; workflow_dispatch is the manual
+# escape hatch. main pushes intentionally do not run this matrix.
 on:
   push:
     tags:
       - 'v*'
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
@@ -177,9 +171,9 @@ jobs:
             release-mbx-v1-${{ matrix.name }}-
 
       # The eBPF toolchain and object MUST be ready before the node build:
-      # build.rs embeds the object designated by CLOUD_NODE_XDP_EBPF_SOURCE,
+      # build.rs embeds the object designated by CLOUDSIDRA_EDGE_XDP_EBPF_SOURCE,
       # so the embedded bytes are byte-identical to the packaged object by
-      # construction, and CLOUD_NODE_XDP_EBPF_SHA256 makes any stale or
+      # construction, and CLOUDSIDRA_EDGE_XDP_EBPF_SHA256 makes any stale or
       # foreign object a hard build failure rather than a silent embed.
       - name: Install eBPF Toolchain
         shell: bash
@@ -193,7 +187,7 @@ jobs:
           # rust-toolchain.toml. xtask `build-ebpf` and build.rs resolve the
           # same channel, so the toolchain installed here is provably the one
           # every downstream consumer uses.
-          EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/cloud-node-xdp-ebpf/rust-toolchain.toml | head -1)"
+          EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/cloudsidra-edge-xdp-ebpf/rust-toolchain.toml | head -1)"
           test -n "$EBPF_NIGHTLY"
           echo "EBPF_NIGHTLY=$EBPF_NIGHTLY" >> "$GITHUB_ENV"
           rustup toolchain install "$EBPF_NIGHTLY" --profile minimal -c rust-src -c rustc-dev
@@ -218,11 +212,11 @@ jobs:
           set -euo pipefail
           # Never let a stale object survive into the package: remove any
           # checked-in or cached artifact before rebuilding from source.
-          rm -f data/cloud-node-xdp-ebpf.o
+          rm -f data/cloudsidra-edge-xdp-ebpf.o
           mbx xtask build-ebpf
-          test -s data/cloud-node-xdp-ebpf.o
-          sha256sum data/cloud-node-xdp-ebpf.o
-          sha256sum data/cloud-node-xdp-ebpf.o | awk '{print $1}' > ebpf-sha256.txt
+          test -s data/cloudsidra-edge-xdp-ebpf.o
+          sha256sum data/cloudsidra-edge-xdp-ebpf.o
+          sha256sum data/cloudsidra-edge-xdp-ebpf.o | awk '{print $1}' > ebpf-sha256.txt
 
       - name: Build
         shell: bash
@@ -230,10 +224,10 @@ jobs:
           RUSTFLAGS: ${{ matrix.rustflags }}
           CXXFLAGS: ${{ matrix.cxxflags }}
           CFLAGS: ${{ matrix.cxxflags }}
-          CLOUD_NODE_XDP_EBPF_SOURCE: data/cloud-node-xdp-ebpf.o
+          CLOUDSIDRA_EDGE_XDP_EBPF_SOURCE: data/cloudsidra-edge-xdp-ebpf.o
         run: |
           set -euo pipefail
-          export CLOUD_NODE_XDP_EBPF_SHA256="$(cat ebpf-sha256.txt)"
+          export CLOUDSIDRA_EDGE_XDP_EBPF_SHA256="$(cat ebpf-sha256.txt)"
           # 1. Handle ARM Linkers
           if [ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]; then
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
@@ -257,17 +251,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ORIGINAL_BINARY="cloud-node-rust"
-          TARGET_BINARY="cloud-node"
-          PACKAGE_NAME="cloud-node-rust-${{ matrix.name }}"
+          ORIGINAL_BINARY="cloudsidra-edge"
+          TARGET_BINARY="cloudsidra-edge"
+          PACKAGE_NAME="CloudSidra-Edge-${{ matrix.name }}"
 
           # Re-verify the packaged object still matches what build.rs
           # embedded (same file by construction; belt-and-suspenders).
-          test "$(sha256sum data/cloud-node-xdp-ebpf.o | awk '{print $1}')" = "$(cat ebpf-sha256.txt)"
+          test "$(sha256sum data/cloudsidra-edge-xdp-ebpf.o | awk '{print $1}')" = "$(cat ebpf-sha256.txt)"
 
           mkdir -p dist/data
           cp target/${{ matrix.target }}/release/$ORIGINAL_BINARY dist/$TARGET_BINARY
-          cp data/cloud-node-xdp-ebpf.o dist/data/cloud-node-xdp-ebpf.o
+          cp data/cloudsidra-edge-xdp-ebpf.o dist/data/cloudsidra-edge-xdp-ebpf.o
           {
             echo "binary=$(basename "$TARGET_BINARY") target=${{ matrix.target }} variant=${{ matrix.name }}"
             echo "binary_sha256=$(sha256sum "dist/$TARGET_BINARY" | awk '{print $1}')"
@@ -275,14 +269,14 @@ jobs:
             echo "ebpf_toolchain=${EBPF_NIGHTLY} bpf-linker=0.11.1"
           } > dist/SHA256SUMS.txt
           cd dist
-          tar -czf ../$PACKAGE_NAME.tar.gz $TARGET_BINARY data/cloud-node-xdp-ebpf.o SHA256SUMS.txt
+          tar -czf ../$PACKAGE_NAME.tar.gz $TARGET_BINARY data/cloudsidra-edge-xdp-ebpf.o SHA256SUMS.txt
           cd ..
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
-          path: cloud-node-rust-${{ matrix.name }}.tar.gz
+          path: CloudSidra-Edge-${{ matrix.name }}.tar.gz
 
       # Bound the mbx store before actions/cache saves it — GitHub caps a
       # repo's cache at ~10 GB across all entries, and each matrix leg
@@ -331,8 +325,8 @@ jobs:
       - name: Package TOA Sources
         shell: bash
         run: |
-          tar -czf cloud-node-rust-toa-main-source.tar.gz toa-main
-          tar -czf cloud-node-rust-toa-sender-source.tar.gz toa-sender
+          tar -czf cloudsidra-edge-toa-main-source.tar.gz toa-main
+          tar -czf cloudsidra-edge-toa-sender-source.tar.gz toa-sender
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -343,7 +337,7 @@ jobs:
           prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
           files: |
             artifacts/**/*.tar.gz
-            cloud-node-rust-toa-main-source.tar.gz
-            cloud-node-rust-toa-sender-source.tar.gz
+            cloudsidra-edge-toa-main-source.tar.gz
+            cloudsidra-edge-toa-sender-source.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

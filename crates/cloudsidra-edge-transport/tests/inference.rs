@@ -2,11 +2,11 @@
 //! class, RTT decay, DSACK negative evidence, D-D2 public-CE weight
 //! cap, queue_estimate.
 
-use cloud_node_transport::inference::{weights, Inference, PUBLIC_CE_LO_CAP};
-use cloud_node_transport::model::PathModel;
-use cloud_node_transport::rate_sample::RateSample;
-use cloud_node_transport::rtt::RttState;
-use cloud_node_transport::TransportInstant;
+use cloudsidra_edge_transport::inference::{weights, Inference, PUBLIC_CE_LO_CAP};
+use cloudsidra_edge_transport::model::PathModel;
+use cloudsidra_edge_transport::rate_sample::RateSample;
+use cloudsidra_edge_transport::rtt::RttState;
+use cloudsidra_edge_transport::TransportInstant;
 use std::time::Duration;
 
 const MSS: u64 = 1460;

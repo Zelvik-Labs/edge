@@ -17,7 +17,7 @@ use pingora_proxy::{ProxyHttp, Session};
 use std::sync::LazyLock as Lazy;
 use std::time::Duration;
 
-use cloud_node_rust::cache_manager::CACHE;
+use cloudsidra_edge::cache_manager::CACHE;
 use pingora_cache::CacheKey;
 
 /// Minimal HTTP/3 (QUIC) listener mirroring the production `http3_proxy_manager`
@@ -27,7 +27,7 @@ use pingora_cache::CacheKey;
 mod h3_listener {
     use super::BenchProxy;
     use bytes::Bytes;
-    use cloud_node_rust::h3_downstream::H3DownstreamSession;
+    use cloudsidra_edge::h3_downstream::H3DownstreamSession;
     use pingora_core::apps::HttpServerApp;
     use pingora_core::protocols::http::server::Session as ServerSession;
     use pingora_core::server::configuration::ServerConf;
@@ -56,7 +56,7 @@ mod h3_listener {
             .ok()
             .and_then(|v| v.parse::<u16>().ok());
         let transport = Arc::get_mut(&mut cfg.transport).unwrap();
-        *transport = cloud_node_rust::quic_transport::tuned_transport_config(mtu);
+        *transport = cloudsidra_edge::quic_transport::tuned_transport_config(mtu);
         transport.max_concurrent_bidi_streams(256u32.into());
         transport.max_concurrent_uni_streams(256u32.into());
         Ok(cfg)
@@ -237,7 +237,7 @@ fn main() {
     let mut conf = ServerConf::default();
     conf.threads = num_cpus::get();
     conf.upstream_keepalive_pool_size =
-        cloud_node_rust::memory_governor::MEMORY_GOVERNOR.pingora_keepalive_pool_size(conf.threads);
+        cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.pingora_keepalive_pool_size(conf.threads);
 
     let mut server = Server::new_with_opt_and_conf(None, conf);
     server.bootstrap();
@@ -263,13 +263,13 @@ fn main() {
     std::thread::spawn(|| {
         let rt = tokio::runtime::Runtime::new().expect("flusher runtime");
         rt.block_on(async {
-            cloud_node_rust::metrics::storage::start_cache_access_flusher();
+            cloudsidra_edge::metrics::storage::start_cache_access_flusher();
             // The purger enforces BENCH_DISK_MAX_BYTES (and expiry) on the
             // isolated cache volume; without it the miss-stream group could
             // grow the disk cache without bound.
-            tokio::spawn(cloud_node_rust::cache_hybrid::start_cache_purger(
+            tokio::spawn(cloudsidra_edge::cache_hybrid::start_cache_purger(
                 CACHE.storage,
-                cloud_node_rust::paths::NodePaths::current().cache_dir(),
+                cloudsidra_edge::paths::NodePaths::current().cache_dir(),
             ));
             std::future::pending::<()>().await;
         });

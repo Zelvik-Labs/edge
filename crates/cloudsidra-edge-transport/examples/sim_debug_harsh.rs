@@ -1,9 +1,9 @@
 //! Temporary debug: dump EdgeCC trace stats on a harsh cell.
-use cloud_node_transport::CongestionController;
-use cloud_node_transport::edgecc::{EdgeCc, Tier};
-use cloud_node_transport::rate_sample::RateSample;
-use cloud_node_transport::rtt::RttState;
-use cloud_node_transport::sim::{SimConfig, TraceKind, run};
+use cloudsidra_edge_transport::CongestionController;
+use cloudsidra_edge_transport::edgecc::{EdgeCc, Tier};
+use cloudsidra_edge_transport::rate_sample::RateSample;
+use cloudsidra_edge_transport::rtt::RttState;
+use cloudsidra_edge_transport::sim::{SimConfig, TraceKind, run};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -18,7 +18,7 @@ struct Tap {
 impl CongestionController for Tap {
     fn on_sent(
         &mut self,
-        now: cloud_node_transport::TransportInstant,
+        now: cloudsidra_edge_transport::TransportInstant,
         bytes: u64,
         in_flight: u64,
         app: bool,
@@ -45,7 +45,7 @@ impl CongestionController for Tap {
     }
     fn on_loss_event(
         &mut self,
-        now: cloud_node_transport::TransportInstant,
+        now: cloudsidra_edge_transport::TransportInstant,
         lost: u64,
         in_flight: u64,
         persistent: bool,
@@ -69,20 +69,20 @@ impl CongestionController for Tap {
     }
     fn on_ecn_ce(
         &mut self,
-        now: cloud_node_transport::TransportInstant,
+        now: cloudsidra_edge_transport::TransportInstant,
         ce: u64,
         delivered: u64,
         in_flight: u64,
     ) {
         self.inner.on_ecn_ce(now, ce, delivered, in_flight)
     }
-    fn on_rto(&mut self, now: cloud_node_transport::TransportInstant, in_flight: u64) {
+    fn on_rto(&mut self, now: cloudsidra_edge_transport::TransportInstant, in_flight: u64) {
         self.inner.on_rto(now, in_flight)
     }
-    fn on_loss_undo(&mut self, now: cloud_node_transport::TransportInstant) {
+    fn on_loss_undo(&mut self, now: cloudsidra_edge_transport::TransportInstant) {
         self.inner.on_loss_undo(now)
     }
-    fn on_idle_restart(&mut self, now: cloud_node_transport::TransportInstant, idle: Duration) {
+    fn on_idle_restart(&mut self, now: cloudsidra_edge_transport::TransportInstant, idle: Duration) {
         self.inner.on_idle_restart(now, idle)
     }
     fn on_mss_update(&mut self, mss: u64) {
@@ -94,17 +94,17 @@ impl CongestionController for Tap {
     fn pacing_rate(&self) -> Option<u64> {
         self.inner.pacing_rate()
     }
-    fn snapshot(&self) -> cloud_node_transport::cc::CcSnapshot {
+    fn snapshot(&self) -> cloudsidra_edge_transport::cc::CcSnapshot {
         self.inner.snapshot()
     }
 }
 
 fn run_bbr3_probe() {
-    use cloud_node_transport::cc::reference::Bbr3Ref;
-    use cloud_node_transport::cc::CongestionController;
-    use cloud_node_transport::rate_sample::RateSample;
-    use cloud_node_transport::rtt::RttState;
-    use cloud_node_transport::TransportInstant;
+    use cloudsidra_edge_transport::cc::reference::Bbr3Ref;
+    use cloudsidra_edge_transport::cc::CongestionController;
+    use cloudsidra_edge_transport::rate_sample::RateSample;
+    use cloudsidra_edge_transport::rtt::RttState;
+    use cloudsidra_edge_transport::TransportInstant;
     struct T {
         inner: Bbr3Ref,
         rates: Rc<RefCell<Vec<(u64, u64, u64, u64)>>>,
@@ -146,7 +146,7 @@ fn run_bbr3_probe() {
         fn pacing_rate(&self) -> Option<u64> {
             self.inner.pacing_rate()
         }
-        fn snapshot(&self) -> cloud_node_transport::cc::CcSnapshot {
+        fn snapshot(&self) -> cloudsidra_edge_transport::cc::CcSnapshot {
             self.inner.snapshot()
         }
     }

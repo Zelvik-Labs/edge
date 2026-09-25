@@ -136,7 +136,7 @@ mod linux {
     use tokio::process::Command;
     use tokio::sync::Notify;
 
-    const NFT_TABLE: &str = "cloud_node";
+    const NFT_TABLE: &str = "cloudsidra_edge";
     const NFT_CHAIN: &str = "input";
     const NFT_BLOCKED_V4_SET: &str = "blocked_v4";
     const NFT_BLOCKED_V6_SET: &str = "blocked_v6";
@@ -146,7 +146,7 @@ mod linux {
     const NFT_ALLOWED_V6_SET: &str = "allowed_v6";
     const NFT_ALLOWED_V4_INTERVAL_SET: &str = "allowed_v4_intervals";
     const NFT_ALLOWED_V6_INTERVAL_SET: &str = "allowed_v6_intervals";
-    const IPTABLES_CHAIN: &str = "CLOUD_NODE";
+    const IPTABLES_CHAIN: &str = "CLOUDSIDRA_EDGE";
     const NFT_BATCH_WINDOW: Duration = Duration::from_millis(50);
     const NFT_QUEUE_WARNING_INTERVAL_SECS: i64 = 10;
     const IPTABLES_BATCH_WINDOW: Duration = Duration::from_millis(50);
@@ -1262,7 +1262,7 @@ mod linux {
                     KernelTarget::Range { .. } => return None,
                 };
                 Some(format!(
-                    "-A {IPTABLES_CHAIN} {matcher} -m comment --comment cloud_node_expires={expires_at} -j {verdict}\n"
+                    "-A {IPTABLES_CHAIN} {matcher} -m comment --comment cloudsidra_edge_expires={expires_at} -j {verdict}\n"
                 ))
             })
             .collect::<Vec<_>>();

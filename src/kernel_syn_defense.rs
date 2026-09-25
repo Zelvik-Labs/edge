@@ -23,15 +23,15 @@ static SYNPROXY_RECONCILER_STARTED: AtomicU64 = AtomicU64::new(0);
 #[cfg(target_os = "linux")]
 const NFT_BIN: &str = "nft";
 const NFT_FAMILY: &str = "inet";
-const NFT_TABLE: &str = "cloud_node_synproxy";
+const NFT_TABLE: &str = "cloudsidra_edge_synproxy";
 #[cfg(target_os = "linux")]
 const NFT_PREROUTING_CHAIN: &str = "prerouting";
 #[cfg(target_os = "linux")]
 const NFT_INPUT_CHAIN: &str = "input";
 const NFT_PORT_SET: &str = "protected_tcp_ports";
-const NFT_COMMENT_NOTRACK: &str = "cloud-node synproxy notrack";
-const NFT_COMMENT_SYNPROXY: &str = "cloud-node synproxy";
-const NFT_COMMENT_DROP_INVALID: &str = "cloud-node synproxy drop invalid";
+const NFT_COMMENT_NOTRACK: &str = "cloudsidra-edge synproxy notrack";
+const NFT_COMMENT_SYNPROXY: &str = "cloudsidra-edge synproxy";
+const NFT_COMMENT_DROP_INVALID: &str = "cloudsidra-edge synproxy drop invalid";
 #[cfg(target_os = "linux")]
 const SYNPROXY_RECONCILE_RETRY: Duration = Duration::from_secs(60);
 
@@ -255,7 +255,7 @@ pub async fn synproxy_command(mode: SynproxyMode) -> anyhow::Result<String> {
     {
         match mode {
             SynproxyMode::Status => Ok(format!(
-                "CloudNode SYNPROXY status\n  platform: unsupported (Linux only)\n  syn pressure: {}\n  l4 pressure: {}",
+                "CloudSidra-Edge SYNPROXY status\n  platform: unsupported (Linux only)\n  syn pressure: {}\n  l4 pressure: {}",
                 snapshot().pressure_level.as_str(),
                 crate::l4_defense::current_pressure_level().as_str()
             )),
@@ -293,7 +293,7 @@ async fn synproxy_command_with(
         }
         SynproxyMode::Disable => {
             disable_synproxy_rules(runner).await?;
-            Ok("CloudNode SYNPROXY disabled: removed managed nftables rules".to_string())
+            Ok("CloudSidra-Edge SYNPROXY disabled: removed managed nftables rules".to_string())
         }
     }
 }
@@ -1142,7 +1142,7 @@ async fn synproxy_status_output(
     let sysctls = read_synproxy_sysctls(sysctl);
     let counters = read_tcp_ext_counters().unwrap_or_default();
     Ok(format!(
-        "CloudNode SYNPROXY status\n  nft table: {}\n  enabled: {}\n  protected ports: {}\n  rules: notrack={} synproxy={} drop_invalid={}\n  sysctls: {}\n  syn counters: listen_overflows={} listen_drops={} syncookies={} req_q_full_do_cookies={} req_q_full_drop={}\n  syn pressure: {}\n  l4 pressure: {}",
+        "CloudSidra-Edge SYNPROXY status\n  nft table: {}\n  enabled: {}\n  protected ports: {}\n  rules: notrack={} synproxy={} drop_invalid={}\n  sysctls: {}\n  syn counters: listen_overflows={} listen_drops={} syncookies={} req_q_full_do_cookies={} req_q_full_drop={}\n  syn pressure: {}\n  l4 pressure: {}",
         if nft.table_exists {
             "present"
         } else {
@@ -1171,7 +1171,7 @@ fn format_synproxy_apply_output(
     sysctls: &[SynproxySysctlReport],
 ) -> String {
     format!(
-        "CloudNode SYNPROXY {action}\n  protected ports: {}\n  sysctls: {}\n  syn pressure: {}\n  l4 pressure: {}",
+        "CloudSidra-Edge SYNPROXY {action}\n  protected ports: {}\n  sysctls: {}\n  syn pressure: {}\n  l4 pressure: {}",
         format_ports(ports),
         sysctl_report_summary(sysctls),
         snapshot().pressure_level.as_str(),
@@ -1478,17 +1478,17 @@ mod tests {
     fn parses_nft_status_ports_and_managed_rules() {
         let status = parse_nft_status(
             r#"
-table inet cloud_node_synproxy {
+table inet cloudsidra_edge_synproxy {
   set protected_tcp_ports {
     type inet_service
     elements = { 80, 443, 9443 }
   }
   chain prerouting {
-    tcp dport @protected_tcp_ports notrack comment "cloud-node synproxy notrack"
+    tcp dport @protected_tcp_ports notrack comment "cloudsidra-edge synproxy notrack"
   }
   chain input {
-    ct state invalid,untracked tcp dport @protected_tcp_ports synproxy comment "cloud-node synproxy"
-    ct state invalid tcp dport @protected_tcp_ports drop comment "cloud-node synproxy drop invalid"
+    ct state invalid,untracked tcp dport @protected_tcp_ports synproxy comment "cloudsidra-edge synproxy"
+    ct state invalid tcp dport @protected_tcp_ports drop comment "cloudsidra-edge synproxy drop invalid"
   }
 }
 "#,
@@ -1501,8 +1501,8 @@ table inet cloud_node_synproxy {
     fn parses_rule_handles_by_exact_comment() {
         let handles = parse_rule_handles_by_comment(
             r#"
-tcp dport @protected_tcp_ports notrack comment "cloud-node synproxy notrack" # handle 7
-ct state invalid tcp dport @protected_tcp_ports drop comment "cloud-node synproxy drop invalid" # handle 8
+tcp dport @protected_tcp_ports notrack comment "cloudsidra-edge synproxy notrack" # handle 7
+ct state invalid tcp dport @protected_tcp_ports drop comment "cloudsidra-edge synproxy drop invalid" # handle 8
 "#,
             NFT_COMMENT_DROP_INVALID,
         );
@@ -1514,30 +1514,30 @@ ct state invalid tcp dport @protected_tcp_ports drop comment "cloud-node synprox
     async fn enable_generates_managed_nft_commands_without_duplicates() {
         let runner = FakeRunner::default();
         runner.push(
-            "list table inet cloud_node_synproxy",
+            "list table inet cloudsidra_edge_synproxy",
             CommandOutput {
                 success: true,
-                stdout: "table inet cloud_node_synproxy { set protected_tcp_ports { type inet_service elements = { 443 } } }".to_string(),
+                stdout: "table inet cloudsidra_edge_synproxy { set protected_tcp_ports { type inet_service elements = { 443 } } }".to_string(),
                 stderr: String::new(),
             },
         );
         runner.push(
-            "list table inet cloud_node_synproxy",
+            "list table inet cloudsidra_edge_synproxy",
             CommandOutput {
                 success: true,
                 stdout: format!(
-                    "table inet cloud_node_synproxy {{ set protected_tcp_ports {{ type inet_service elements = {{ 443 }} }} chain prerouting {{ comment \"{}\" }} }}",
+                    "table inet cloudsidra_edge_synproxy {{ set protected_tcp_ports {{ type inet_service elements = {{ 443 }} }} chain prerouting {{ comment \"{}\" }} }}",
                     NFT_COMMENT_NOTRACK
                 ),
                 stderr: String::new(),
             },
         );
         runner.push(
-            "list table inet cloud_node_synproxy",
+            "list table inet cloudsidra_edge_synproxy",
             CommandOutput {
                 success: true,
                 stdout: format!(
-                    "table inet cloud_node_synproxy {{ set protected_tcp_ports {{ type inet_service elements = {{ 443 }} }} chain prerouting {{ comment \"{}\" }} chain input {{ comment \"{}\" }} }}",
+                    "table inet cloudsidra_edge_synproxy {{ set protected_tcp_ports {{ type inet_service elements = {{ 443 }} }} chain prerouting {{ comment \"{}\" }} chain input {{ comment \"{}\" }} }}",
                     NFT_COMMENT_NOTRACK, NFT_COMMENT_SYNPROXY
                 ),
                 stderr: String::new(),
@@ -1549,7 +1549,7 @@ ct state invalid tcp dport @protected_tcp_ports drop comment "cloud-node synprox
         let calls = runner.calls();
         assert!(calls.iter().any(|call| {
             call.join(" ")
-                .contains("add element inet cloud_node_synproxy protected_tcp_ports { 443 }")
+                .contains("add element inet cloudsidra_edge_synproxy protected_tcp_ports { 443 }")
         }));
         assert!(calls.iter().any(|call| {
             call.join(" ")
@@ -1569,15 +1569,15 @@ ct state invalid tcp dport @protected_tcp_ports drop comment "cloud-node synprox
     async fn disable_deletes_only_managed_rule_handles() {
         let runner = FakeRunner::default();
         runner.push(
-            "list table inet cloud_node_synproxy",
+            "list table inet cloudsidra_edge_synproxy",
             CommandOutput {
                 success: true,
-                stdout: "table inet cloud_node_synproxy {}".to_string(),
+                stdout: "table inet cloudsidra_edge_synproxy {}".to_string(),
                 stderr: String::new(),
             },
         );
         runner.push(
-            "list chain inet cloud_node_synproxy prerouting",
+            "list chain inet cloudsidra_edge_synproxy prerouting",
             CommandOutput {
                 success: true,
                 stdout: format!(
@@ -1588,7 +1588,7 @@ ct state invalid tcp dport @protected_tcp_ports drop comment "cloud-node synprox
             },
         );
         runner.push(
-            "list chain inet cloud_node_synproxy input",
+            "list chain inet cloudsidra_edge_synproxy input",
             CommandOutput {
                 success: true,
                 stdout: format!(
@@ -1599,7 +1599,7 @@ ct state invalid tcp dport @protected_tcp_ports drop comment "cloud-node synprox
             },
         );
         runner.push(
-            "list chain inet cloud_node_synproxy input",
+            "list chain inet cloudsidra_edge_synproxy input",
             CommandOutput {
                 success: true,
                 stdout: format!(
@@ -1616,24 +1616,24 @@ ct state invalid tcp dport @protected_tcp_ports drop comment "cloud-node synprox
             .map(|call| call.join(" "))
             .collect::<Vec<_>>();
         assert!(joined.iter().any(|call| {
-            call.contains("delete rule inet cloud_node_synproxy prerouting handle 11")
+            call.contains("delete rule inet cloudsidra_edge_synproxy prerouting handle 11")
         }));
         assert!(
             joined
                 .iter()
-                .any(|call| call.contains("delete rule inet cloud_node_synproxy input handle 12"))
+                .any(|call| call.contains("delete rule inet cloudsidra_edge_synproxy input handle 12"))
         );
         assert!(
             joined
                 .iter()
-                .any(|call| call.contains("delete rule inet cloud_node_synproxy input handle 13"))
+                .any(|call| call.contains("delete rule inet cloudsidra_edge_synproxy input handle 13"))
         );
     }
 
     #[test]
     fn status_summary_contains_operational_fields() {
         let status = parse_nft_status(
-            "table inet cloud_node_synproxy { set protected_tcp_ports { elements = { 443 } } }",
+            "table inet cloudsidra_edge_synproxy { set protected_tcp_ports { elements = { 443 } } }",
         );
         let sysctls = vec![SynproxySysctlReport {
             key: "net.ipv4.tcp_syncookies".to_string(),

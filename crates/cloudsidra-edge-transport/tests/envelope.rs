@@ -1,7 +1,7 @@
 //! Envelope unit cases (plan §2.5): set-on-strong-evidence, hold, K-round
 //! low-belief REFILL, and the inviolable clamp() contract.
 
-use cloud_node_transport::envelope::{
+use cloudsidra_edge_transport::envelope::{
     Envelope, DEFAULT_HEADROOM_MILLI, REFILL_AFTER_ROUNDS, REFILL_BELIEF_MILLI,
 };
 

@@ -7,7 +7,7 @@ pub struct NodePaths {
 
 impl NodePaths {
     pub fn current() -> Self {
-        let root = std::env::var_os("CLOUD_NODE_HOME")
+        let root = std::env::var_os("CLOUDSIDRA_EDGE_HOME")
             .map(PathBuf::from)
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
         Self { root }
@@ -42,7 +42,7 @@ impl NodePaths {
     }
 
     pub fn pid_file(&self) -> PathBuf {
-        self.data_dir().join("cloud-node.pid")
+        self.data_dir().join("cloudsidra-edge.pid")
     }
 
     pub fn run_log_file(&self) -> PathBuf {
@@ -87,7 +87,7 @@ impl NodePaths {
     }
 
     pub fn legacy_pid_file(&self) -> PathBuf {
-        self.root.join("../data/cloud-node.pid")
+        self.root.join("../data/cloudsidra-edge.pid")
     }
 
     pub fn legacy_state_file(&self) -> PathBuf {
@@ -123,7 +123,7 @@ impl NodePaths {
             self.api_config_file(),
             self.legacy_api_config_file(),
             self.root.join("../configs/api_node.yaml"),
-            self.root.join("cloud-node/configs/api_node.yaml"),
+            self.root.join("cloudsidra-edge/configs/api_node.yaml"),
         ]
     }
 

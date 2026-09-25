@@ -1,9 +1,9 @@
-use cloud_node_rust::l4_defense::{
+use cloudsidra_edge::l4_defense::{
     self, L4DefenseKind, L4PressureLevel, first_byte_timeout, metrics_snapshot,
     quic_new_route_limit, tcp_active_limit_per_ip_for_level, try_acquire_tcp_active_ip,
 };
-use cloud_node_rust::memory_governor::{AdmissionClass, MEMORY_GOVERNOR};
-use cloud_node_rust::memory_plan::current_memory_plan;
+use cloudsidra_edge::memory_governor::{AdmissionClass, MEMORY_GOVERNOR};
+use cloudsidra_edge::memory_plan::current_memory_plan;
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Barrier};

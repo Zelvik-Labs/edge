@@ -3567,7 +3567,7 @@ mod tests {
 
     #[test]
     fn node_config_payload_parses_snapshot_from_env_when_set() {
-        let Ok(path) = std::env::var("CLOUD_NODE_CONFIG_SNAPSHOT") else {
+        let Ok(path) = std::env::var("CLOUDSIDRA_EDGE_CONFIG_SNAPSHOT") else {
             return;
         };
         let raw = std::fs::read(path).expect("snapshot should be readable");

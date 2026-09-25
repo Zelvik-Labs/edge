@@ -3,13 +3,13 @@ set -euo pipefail
 
 REPO="${REPO:-CloudSidra/CloudSidra-Edge}"
 VERSION="${VERSION:-latest}"
-SERVICE_NAME="${SERVICE_NAME:-CloudSidra-Edge}"
+SERVICE_NAME="${SERVICE_NAME:-cloudsidra-edge}"
 BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/cloud-node-rust-migration}"
 INSTALL_DIR="${INSTALL_DIR:-}"
 INSTALL_BINARY="${INSTALL_BINARY:-}"
 START_MODE="${START_MODE:-preserve}"
 LANGUAGE="${LANGUAGE:-}"
-CLOUD_NODE_LANG="${CLOUD_NODE_LANG:-}"
+CLOUDSIDRA_EDGE_LANG="${CLOUDSIDRA_EDGE_LANG:-}"
 DOWNLOAD_GEOIP="${DOWNLOAD_GEOIP:-ask}"
 GEOIP_DIR="${GEOIP_DIR:-}"
 MODE="${MODE:-ask}"
@@ -25,7 +25,7 @@ SKIP_TIMEZONE=0
 
 usage() {
     cat <<'USAGE'
-Install or upgrade the Rust CloudNode release over an existing cloud-node deployment,
+Install or upgrade CloudSidra-Edge over an existing cloud-node deployment,
 or perform a fresh install on a new server.
 
 The script:
@@ -35,30 +35,30 @@ The script:
   4. Downloads the requested Rust release from GitHub; latest is the default.
   5. Stops any running legacy cloud-node process and unregisters old systemd units.
   6. Optionally downloads GeoLite2 mmdb files from P3TERX/GeoLite.mmdb.
-  7. Overwrites the binary, re-registers the cloud-node command/service, and verifies startup.
+  7. Overwrites the binary, re-registers the cloudsidra-edge command/service, and verifies startup.
 
 Usage:
-  sudo scripts/install-rust-cloud-node.sh
-  sudo scripts/install-rust-cloud-node.sh --fresh
-  sudo scripts/install-rust-cloud-node.sh --restore
+  sudo scripts/install-cloudsidra-edge.sh
+  sudo scripts/install-cloudsidra-edge.sh --fresh
+  sudo scripts/install-cloudsidra-edge.sh --restore
 
 Run directly from GitHub:
-  curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-rust-cloud-node.sh | sudo bash
-  curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-rust-cloud-node.sh | sudo bash -s -- --fresh --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret --geoip
+  curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-cloudsidra-edge.sh | sudo bash
+  curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-cloudsidra-edge.sh | sudo bash -s -- --fresh --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret --geoip
 
 Options:
   --install              Install, migrate, or upgrade to the Rust release.
-                         Explicit mode; fails if no existing cloud-node is found.
+                         Explicit mode; fails if no existing node deployment is found.
   --upgrade              Alias for --install --version latest; upgrade an existing Rust node to latest.
-  --fresh                Fresh install under /root/cloud-node and create configs/api_node.yaml.
+  --fresh                Fresh install under /root/cloudsidra-edge and create configs/api_node.yaml.
   --restore              Restore the Go original from a previous backup.
   --restore-backup DIR   Restore from this backup dir. Default: latest backup.
   --list-backups         List available backup dirs and exit.
   --repo OWNER/REPO       GitHub repo. Default: CloudSidra/edge
   --version VERSION      Release tag, for example v0.1.0. Default: latest
-  --service NAME         systemd service name. Default: cloud-node
-  --install-dir DIR      Runtime working directory. Default: existing runtime dir, or /opt/cloud-node-rust
-  --install-binary PATH  Installed Rust binary path. Default: INSTALL_DIR/cloud-node-rust
+  --service NAME         systemd service name. Default: cloudsidra-edge
+  --install-dir DIR      Runtime working directory. Default: existing runtime dir, or /opt/cloudsidra/edge
+  --install-binary PATH  Installed CloudSidra-Edge binary path. Default: INSTALL_DIR/cloudsidra-edge
   --backup-root DIR      Backup root. Default: /var/backups/cloud-node-rust-migration
   --geoip                Download GeoLite2 mmdb files from P3TERX/GeoLite.mmdb.
   --no-geoip             Do not download GeoLite2 mmdb files.
@@ -71,7 +71,7 @@ Options:
   --no-timezone          Do not prompt for or change system timezone during fresh install.
   --start                Restart/start service after install without prompting.
   --no-start             Do not restart/start service after install.
-  --allow-fresh          Allow install when no existing cloud-node is found.
+  --allow-fresh          Allow install when no existing node deployment is found.
   --dry-run              Print actions without changing files.
   --yes                  Do not prompt for confirmation.
   --non-interactive      Alias for --yes.
@@ -79,7 +79,7 @@ Options:
 
 Environment variables with the same names are also supported:
   REPO, VERSION, SERVICE_NAME, INSTALL_DIR, INSTALL_BINARY, BACKUP_ROOT,
-  START_MODE, LANGUAGE, CLOUD_NODE_LANG, DOWNLOAD_GEOIP, GEOIP_DIR, MODE, RESTORE_BACKUP,
+  START_MODE, LANGUAGE, CLOUDSIDRA_EDGE_LANG, DOWNLOAD_GEOIP, GEOIP_DIR, MODE, RESTORE_BACKUP,
   API_ENDPOINTS, NODE_ID, NODE_SECRET, TIMEZONE.
 USAGE
 }
@@ -222,7 +222,7 @@ die_need_mode() {
 }
 
 title() {
-    printf '\n%s%s%s\n' "$BOLD" "CloudNode Rust Installer" "$RESET"
+    printf '\n%s%s%s\n' "$BOLD" "CloudSidra-Edge Installer" "$RESET"
     printf '%s\n\n' "============================================================"
 }
 
@@ -235,7 +235,7 @@ kv() {
 }
 
 log() {
-    printf '%s[cloud-node]%s %s\n' "$BLUE" "$RESET" "$*"
+    printf '%s[cloudsidra-edge]%s %s\n' "$BLUE" "$RESET" "$*"
 }
 
 ok() {
@@ -268,13 +268,13 @@ systemctl_available() {
 }
 
 prompt_language() {
-    # CLOUD_NODE_LANG is the unambiguous installer setting. LANGUAGE remains
+    # CLOUDSIDRA_EDGE_LANG is the unambiguous installer setting. LANGUAGE remains
     # supported for compatibility, but is parsed as a gettext locale list.
-    if [ -n "$CLOUD_NODE_LANG" ]; then
-        if LANGUAGE="$(language_from_list "$CLOUD_NODE_LANG")"; then
+    if [ -n "$CLOUDSIDRA_EDGE_LANG" ]; then
+        if LANGUAGE="$(language_from_list "$CLOUDSIDRA_EDGE_LANG")"; then
             return
         fi
-        die "unsupported language: $CLOUD_NODE_LANG"
+        die "unsupported language: $CLOUDSIDRA_EDGE_LANG"
     fi
 
     if [ -n "$LANGUAGE" ]; then
@@ -341,13 +341,13 @@ prompt_mode() {
 
     section "$(is_zh && printf '选择操作' || printf 'Choose Action')"
     if is_zh; then
-        printf '  %s1)%s 安装/升级现有 cloud-node 到最新 Rust 版\n' "$BOLD" "$RESET"
-        printf '  %s2)%s 全新安装 Rust 版到 /root/cloud-node\n' "$BOLD" "$RESET"
+        printf '  %s1)%s 安装/升级现有节点到 CloudSidra-Edge\n' "$BOLD" "$RESET"
+        printf '  %s2)%s 全新安装 CloudSidra-Edge 到 /root/cloudsidra-edge\n' "$BOLD" "$RESET"
         printf '  %s3)%s 从备份恢复 Go 原版\n' "$BOLD" "$RESET"
         printf '\n输入序号 %s[1]%s: ' "$DIM" "$RESET"
     else
-        printf '  %s1)%s Install/upgrade existing cloud-node to latest Rust\n' "$BOLD" "$RESET"
-        printf '  %s2)%s Fresh install to /root/cloud-node\n' "$BOLD" "$RESET"
+        printf '  %s1)%s Install/upgrade existing node to CloudSidra-Edge\n' "$BOLD" "$RESET"
+        printf '  %s2)%s Fresh install to /root/cloudsidra-edge\n' "$BOLD" "$RESET"
         printf '  %s3)%s Restore Go original from backup\n' "$BOLD" "$RESET"
         printf '\nEnter choice %s[1]%s: ' "$DIM" "$RESET"
     fi
@@ -584,7 +584,7 @@ while [ "$#" -gt 0 ]; do
             shift 2
             ;;
         # Hidden compatibility for older one-line install commands. New usage should
-        # set CLOUD_NODE_LANG=zh or CLOUD_NODE_LANG=en instead of passing a language flag.
+        # set CLOUDSIDRA_EDGE_LANG=zh or CLOUDSIDRA_EDGE_LANG=en instead of passing a language flag.
         --lang)
             LANGUAGE="${2:?missing language}"
             shift 2
@@ -670,7 +670,7 @@ prompt_mode
 if [ "$MODE" = "fresh" ]; then
     ALLOW_FRESH=1
     if [ -z "$INSTALL_DIR" ]; then
-        INSTALL_DIR="/root/cloud-node"
+        INSTALL_DIR="/root/cloudsidra-edge"
     fi
 fi
 
@@ -727,20 +727,27 @@ find_existing_cloud_node() {
         fi
     fi
 
-    if command -v cloud-node >/dev/null 2>&1; then
-        cmd_path="$(command -v cloud-node)"
-        if [ -n "$cmd_path" ]; then
-            printf '%s\n' "$cmd_path"
-            return
+    for cmd in cloud-node cloudsidra-edge; do
+        if command -v "$cmd" >/dev/null 2>&1; then
+            cmd_path="$(command -v "$cmd")"
+            if [ -n "$cmd_path" ]; then
+                printf '%s\n' "$cmd_path"
+                return
+            fi
         fi
-    fi
+    done
 
     for candidate in \
         /usr/bin/cloud-node \
         /usr/local/bin/cloud-node \
         /usr/sbin/cloud-node \
         /opt/cloud-node/cloud-node \
-        /opt/cloud-node/bin/cloud-node
+        /opt/cloud-node/bin/cloud-node \
+        /usr/bin/cloudsidra-edge \
+        /usr/local/bin/cloudsidra-edge \
+        /usr/sbin/cloudsidra-edge \
+        /opt/cloudsidra/edge/cloudsidra-edge \
+        /opt/cloudsidra/edge/bin/cloudsidra-edge
     do
         if [ -e "$candidate" ]; then
             printf '%s\n' "$candidate"
@@ -808,7 +815,7 @@ detect_runtime() {
     fi
     if command -v strings >/dev/null 2>&1 && strings "$probe_path" 2>/dev/null | grep -q 'Go buildinf:'; then
         printf 'go\n'
-    elif command -v strings >/dev/null 2>&1 && strings "$probe_path" 2>/dev/null | grep -q 'cloud-node-rust'; then
+    elif command -v strings >/dev/null 2>&1 && strings "$probe_path" 2>/dev/null | grep -qE 'cloud-node-rust|cloudsidra-edge'; then
         printf 'rust\n'
     else
         printf 'unknown\n'
@@ -818,7 +825,7 @@ detect_runtime() {
 is_cloud_node_path() {
     local path="$1"
     case "$path" in
-        */cloud-node|*/cloud-node-rust|/usr/bin/cloud-node|/usr/local/bin/cloud-node|/usr/sbin/cloud-node)
+        */cloud-node|*/cloud-node-rust|*/cloudsidra-edge|/usr/bin/cloud-node|/usr/local/bin/cloud-node|/usr/sbin/cloud-node)
             return 0
             ;;
     esac
@@ -846,7 +853,7 @@ discover_legacy_units() {
         units+=("$unit")
     done < <(systemctl list-unit-files --type=service --no-legend --no-pager 2>/dev/null \
         | awk '{print $1}' \
-        | grep -E '^(cloud-node|edge-node|flexcdn|goedge)(-rust)?\.service$' || true)
+        | grep -E '^(cloud-node|edge-node|flexcdn|goedge|cloudsidra-edge)(-rust)?\.service$' || true)
 
     for unit_file in \
         /etc/systemd/system/*.service \
@@ -856,7 +863,7 @@ discover_legacy_units() {
         [ -e "$unit_file" ] || continue
         unit="$(basename "$unit_file")"
         case "$unit" in
-            cloud-node*.service|edge-node*.service|flexcdn*.service|goedge*.service)
+            cloud-node*.service|edge-node*.service|flexcdn*.service|goedge*.service|cloudsidra-edge*.service)
                 units+=("$unit")
                 ;;
         esac
@@ -891,8 +898,8 @@ discover_legacy_pids() {
     local candidates=()
 
     [ -n "${EXISTING_BINARY:-}" ] && candidates+=("$EXISTING_BINARY")
-    [ -n "${EXISTING_BINARY_WORKDIR:-}" ] && candidates+=("$EXISTING_BINARY_WORKDIR/cloud-node" "$EXISTING_BINARY_WORKDIR/cloud-node-rust")
-    [ -n "${EXISTING_RUNTIME_DIR:-}" ] && candidates+=("$EXISTING_RUNTIME_DIR/cloud-node" "$EXISTING_RUNTIME_DIR/cloud-node-rust")
+    [ -n "${EXISTING_BINARY_WORKDIR:-}" ] && candidates+=("$EXISTING_BINARY_WORKDIR/cloud-node" "$EXISTING_BINARY_WORKDIR/cloud-node-rust" "$EXISTING_BINARY_WORKDIR/cloudsidra-edge")
+    [ -n "${EXISTING_RUNTIME_DIR:-}" ] && candidates+=("$EXISTING_RUNTIME_DIR/cloud-node" "$EXISTING_RUNTIME_DIR/cloud-node-rust" "$EXISTING_RUNTIME_DIR/cloudsidra-edge")
     candidates+=(
         /usr/bin/cloud-node
         /usr/local/bin/cloud-node
@@ -902,6 +909,12 @@ discover_legacy_pids() {
         /opt/cloud-node/cloud-node
         /opt/cloud-node/bin/cloud-node
         /opt/cloud-node-rust/cloud-node-rust
+        /usr/bin/cloudsidra-edge
+        /usr/local/bin/cloudsidra-edge
+        /usr/sbin/cloudsidra-edge
+        /root/cloudsidra-edge/cloudsidra-edge
+        /opt/cloudsidra/edge/cloudsidra-edge
+        /opt/cloudsidra/edge/bin/cloudsidra-edge
     )
 
     for path in "${candidates[@]}"; do
@@ -915,13 +928,16 @@ discover_legacy_pids() {
         fi
     done
 
-    for workdir in "$EXISTING_RUNTIME_DIR" "$EXISTING_BINARY_WORKDIR" "$INSTALL_DIR" /root/cloud-node /opt/cloud-node /opt/cloud-node-rust; do
+    for workdir in "$EXISTING_RUNTIME_DIR" "$EXISTING_BINARY_WORKDIR" "$INSTALL_DIR" /root/cloud-node /opt/cloud-node /opt/cloud-node-rust /root/cloudsidra-edge /opt/cloudsidra/edge; do
         [ -n "$workdir" ] || continue
         for pid_file in \
             "$workdir/data/cloud-node.pid" \
+            "$workdir/data/cloudsidra-edge.pid" \
             "$workdir/data/node.pid" \
             "$workdir/cloud-node.pid" \
-            "$workdir/bin/cloud-node.pid"
+            "$workdir/cloudsidra-edge.pid" \
+            "$workdir/bin/cloud-node.pid" \
+            "$workdir/bin/cloudsidra-edge.pid"
         do
             [ -f "$pid_file" ] || continue
             pid="$(trim_spaces "$(head -n 1 "$pid_file" 2>/dev/null || true)")"
@@ -979,7 +995,7 @@ legacy_ports_still_held() {
         return 1
     fi
     for port in "${ports[@]}"; do
-        holders="$(ss -ltnup "sport = :$port" 2>/dev/null | grep -E 'cloud-node|cloud_node' || true)"
+        holders="$(ss -ltnup "sport = :$port" 2>/dev/null | grep -E 'cloud-node|cloud_node|cloudsidra-edge|cloudsidra_edge' || true)"
         if [ -n "$holders" ]; then
             return 0
         fi
@@ -1150,9 +1166,9 @@ validate_rust_service_registration() {
         die "installed binary is missing or not executable: $INSTALL_BINARY"
     fi
 
-    wrapper="/usr/bin/cloud-node"
+    wrapper="/usr/bin/cloudsidra-edge"
     if [ ! -e "$wrapper" ]; then
-        die "global cloud-node command was not registered at $wrapper"
+        die "global cloudsidra-edge command was not registered at $wrapper"
     fi
 
     if systemctl_available; then
@@ -1208,10 +1224,10 @@ verify_service_started() {
 
     if [ -x "$INSTALL_BINARY" ]; then
         if (cd "$INSTALL_DIR" && "$INSTALL_BINARY" status >/dev/null 2>&1); then
-            ok "cloud-node status reports running"
+            ok "cloudsidra-edge status reports running"
             return 0
         fi
-        die "cloud-node status check failed; restore with: $0 --restore --restore-backup $BACKUP_DIR"
+        die "cloudsidra-edge status check failed; restore with: $0 --restore --restore-backup $BACKUP_DIR"
     fi
 }
 
@@ -1261,7 +1277,7 @@ existing_binary_workdir() {
     fi
 
     case "$path" in
-        /usr/bin/cloud-node|/usr/local/bin/cloud-node|/usr/sbin/cloud-node)
+        /usr/bin/cloud-node|/usr/local/bin/cloud-node|/usr/sbin/cloud-node|/usr/bin/cloudsidra-edge|/usr/local/bin/cloudsidra-edge|/usr/sbin/cloudsidra-edge)
             return 0
             ;;
     esac
@@ -1282,7 +1298,8 @@ first_existing_runtime_dir() {
         if [ -e "$dir/configs/api_node.yaml" ] \
             || [ -e "$dir/api_node.yaml" ] \
             || [ -e "$dir/cloud-node-rust" ] \
-            || [ -e "$dir/cloud-node" ]; then
+            || [ -e "$dir/cloud-node" ] \
+            || [ -e "$dir/cloudsidra-edge" ]; then
             printf '%s\n' "$dir"
             return
         fi
@@ -1447,6 +1464,8 @@ migrate_runtime_layout() {
     add_config_candidates /root/cloud-node
     add_config_candidates /opt/cloud-node
     add_config_candidates /opt/cloud-node-rust
+    add_config_candidates /root/cloudsidra-edge
+    add_config_candidates /opt/cloudsidra/edge
 
     if [ ! -e "$config_path" ]; then
         for config_candidate in "${config_candidates[@]}"; do
@@ -1469,6 +1488,8 @@ migrate_runtime_layout() {
     add_data_dir /root/cloud-node/data
     add_data_dir /opt/cloud-node/data
     add_data_dir /opt/cloud-node-rust/data
+    add_data_dir /root/cloudsidra-edge/data
+    add_data_dir /opt/cloudsidra/edge/data
 
     for source_dir in "${data_dirs[@]}"; do
         if [ -e "$source_dir/state.json" ] && [ ! -e "$INSTALL_DIR/data/state.json" ]; then
@@ -1739,7 +1760,7 @@ confirm_install() {
     if [ "$ASSUME_YES" -eq 1 ] || [ "$DRY_RUN" -eq 1 ]; then
         return
     fi
-    ask_yes_no "确认开始安装 Rust CloudNode 吗？" "Proceed with Rust CloudNode install?" "no" || die "aborted"
+    ask_yes_no "确认开始安装 CloudSidra-Edge 吗？" "Proceed with CloudSidra-Edge install?" "no" || die "aborted"
 }
 
 if [ "$MODE" = "list-backups" ]; then
@@ -1761,21 +1782,23 @@ EXISTING_RUNTIME_DIR="$(first_existing_runtime_dir \
     /root/cloud-node \
     /opt/cloud-node \
     /opt/cloud-node-rust \
+    /root/cloudsidra-edge \
+    /opt/cloudsidra/edge \
     || true)"
 if [ "$MODE" = "fresh" ]; then
     ALLOW_FRESH=1
 fi
 if [ -z "$INSTALL_DIR" ]; then
     if [ "$MODE" = "fresh" ]; then
-        INSTALL_DIR="/root/cloud-node"
+        INSTALL_DIR="/root/cloudsidra-edge"
     elif [ -n "$EXISTING_RUNTIME_DIR" ]; then
         INSTALL_DIR="$EXISTING_RUNTIME_DIR"
     else
-        INSTALL_DIR="/opt/cloud-node-rust"
+        INSTALL_DIR="/opt/cloudsidra/edge"
     fi
 fi
 if [ -z "$INSTALL_BINARY" ]; then
-    INSTALL_BINARY="$INSTALL_DIR/cloud-node-rust"
+    INSTALL_BINARY="$INSTALL_DIR/cloudsidra-edge"
 fi
 if [ -z "$GEOIP_DIR" ]; then
     GEOIP_DIR="$INSTALL_DIR/data"
@@ -1827,7 +1850,7 @@ case "$EXISTING_RUNTIME" in
         ;;
 esac
 if [ -z "$EXISTING_BINARY" ] && [ "$ALLOW_FRESH" -eq 0 ]; then
-    die "no existing cloud-node was found; pass --allow-fresh for a new install"
+    die "no existing node deployment was found; pass --allow-fresh for a new install"
 fi
 
 SERVICE_WAS_ACTIVE=0
@@ -1854,7 +1877,7 @@ kv "mode" "$MODE"
 kv "repository" "$REPO"
 kv "version" "$NORMALIZED_VERSION"
 kv "asset" "$ASSET_NAME"
-kv "existing cloud-node" "${EXISTING_BINARY:-not found}"
+kv "existing node" "${EXISTING_BINARY:-not found}"
 kv "existing runtime" "$EXISTING_RUNTIME"
 kv "legacy running" "$LEGACY_WAS_RUNNING"
 kv "install dir" "$INSTALL_DIR"
@@ -1881,9 +1904,9 @@ if [ "$MODE" = "fresh" ]; then
 fi
 
 if [ "$EXISTING_RUNTIME" = "rust" ] && [ "$NORMALIZED_VERSION" = "latest" ]; then
-    ok "existing Rust cloud-node will be upgraded to the latest release."
+    ok "existing CloudSidra-Edge will be upgraded to the latest release."
 elif [ "$EXISTING_RUNTIME" = "rust" ]; then
-    ok "existing Rust cloud-node will be upgraded to the selected release."
+    ok "existing CloudSidra-Edge will be upgraded to the selected release."
 elif [ "$EXISTING_RUNTIME" = "unknown" ]; then
     warn "existing binary runtime is unknown; it will still be backed up before install."
 fi
@@ -1906,6 +1929,10 @@ fi
 
 if [ -e /usr/bin/cloud-node ]; then
     run cp -a /usr/bin/cloud-node "$BACKUP_DIR/usr_bin_cloud-node.$CURRENT_BACKUP_SUFFIX"
+fi
+
+if [ -e /usr/bin/cloudsidra-edge ]; then
+    run cp -a /usr/bin/cloudsidra-edge "$BACKUP_DIR/usr_bin_cloudsidra-edge.$CURRENT_BACKUP_SUFFIX"
 fi
 
 if [ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
@@ -1977,9 +2004,9 @@ log "downloading: $DOWNLOAD_URL"
 if [ "$DRY_RUN" -eq 0 ]; then
     curl -fL --retry 3 --connect-timeout 20 -o "$TMP_DIR/$ASSET_NAME" "$DOWNLOAD_URL"
     tar -xzf "$TMP_DIR/$ASSET_NAME" -C "$TMP_DIR"
-    [ -f "$TMP_DIR/cloud-node" ] || die "release archive does not contain cloud-node"
-    if [ ! -f "$TMP_DIR/data/cloud-node-xdp-ebpf.o" ]; then
-        warn "release archive does not contain data/cloud-node-xdp-ebpf.o; XDP attach will be unavailable until the eBPF object is installed"
+    [ -f "$TMP_DIR/cloudsidra-edge" ] || die "release archive does not contain cloudsidra-edge"
+    if [ ! -f "$TMP_DIR/data/cloudsidra-edge-xdp-ebpf.o" ]; then
+        warn "release archive does not contain data/cloudsidra-edge-xdp-ebpf.o; XDP attach will be unavailable until the eBPF object is installed"
     fi
 else
     log "+ curl -fL --retry 3 --connect-timeout 20 -o $TMP_DIR/$ASSET_NAME $DOWNLOAD_URL"
@@ -1994,16 +2021,16 @@ unregister_legacy_services
 run mkdir -p "$INSTALL_DIR" "$INSTALL_DIR/configs" "$INSTALL_DIR/data" "$INSTALL_DIR/logs"
 migrate_runtime_layout
 if [ "$DRY_RUN" -eq 0 ]; then
-    install -m 0755 "$TMP_DIR/cloud-node" "$INSTALL_BINARY.new"
+    install -m 0755 "$TMP_DIR/cloudsidra-edge" "$INSTALL_BINARY.new"
     mv -f "$INSTALL_BINARY.new" "$INSTALL_BINARY"
-    if [ -f "$TMP_DIR/data/cloud-node-xdp-ebpf.o" ]; then
-        install -m 0644 "$TMP_DIR/data/cloud-node-xdp-ebpf.o" "$INSTALL_DIR/data/cloud-node-xdp-ebpf.o.new"
-        mv -f "$INSTALL_DIR/data/cloud-node-xdp-ebpf.o.new" "$INSTALL_DIR/data/cloud-node-xdp-ebpf.o"
+    if [ -f "$TMP_DIR/data/cloudsidra-edge-xdp-ebpf.o" ]; then
+        install -m 0644 "$TMP_DIR/data/cloudsidra-edge-xdp-ebpf.o" "$INSTALL_DIR/data/cloudsidra-edge-xdp-ebpf.o.new"
+        mv -f "$INSTALL_DIR/data/cloudsidra-edge-xdp-ebpf.o.new" "$INSTALL_DIR/data/cloudsidra-edge-xdp-ebpf.o"
     fi
 else
-    log "+ install -m 0755 $TMP_DIR/cloud-node $INSTALL_BINARY.new"
+    log "+ install -m 0755 $TMP_DIR/cloudsidra-edge $INSTALL_BINARY.new"
     log "+ mv -f $INSTALL_BINARY.new $INSTALL_BINARY"
-    log "+ install -m 0644 $TMP_DIR/data/cloud-node-xdp-ebpf.o $INSTALL_DIR/data/cloud-node-xdp-ebpf.o"
+    log "+ install -m 0644 $TMP_DIR/data/cloudsidra-edge-xdp-ebpf.o $INSTALL_DIR/data/cloudsidra-edge-xdp-ebpf.o"
 fi
 
 write_api_node_config

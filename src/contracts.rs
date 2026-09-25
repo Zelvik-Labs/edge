@@ -1,6 +1,6 @@
 //! EN-01 shared contracts: the fixed vocabulary that all dataplane, cache,
 //! and config work speaks. The eBPF-facing half of these contracts lives in
-//! `cloud-node-xdp-common` (fixed `repr(C)` ABI with compile-time size
+//! `cloudsidra-edge-xdp-common` (fixed `repr(C)` ABI with compile-time size
 //! assertions); this module is the userspace half — service identity, path
 //! profiles, generations, and the total resource-budget calculation that
 //! admission decisions and status output consume.
@@ -167,7 +167,7 @@ pub fn compute_xdp_budget(
     frame_size: u64,
     cpu_count: u64,
 ) -> XdpBudgetBreakdown {
-    use cloud_node_xdp_common::*;
+    use cloudsidra_edge_xdp_common::*;
     let k4 = size_of::<XdpIpv4Key>() as u64;
     let k6 = size_of::<XdpIpv6Key>() as u64;
     let rule = size_of::<XdpRuleValue>() as u64;

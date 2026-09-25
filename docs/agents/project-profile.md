@@ -1,17 +1,17 @@
-# Agent 工程背景（cloud-node-rust）
+# Agent 工程背景（cloudsidra-edge）
 
 本文件汇总 agent 在本仓库工作时需要、但无法从代码快速推导出来的工程背景。
 入口约束见仓库根目录 [AGENTS.md](../../AGENTS.md)。
 
 ## 项目形态
 
-- 根 crate `cloud-node-rust`，Rust edition 2024，由 `rust-toolchain.toml` 固定到 1.98.1。
+- 根 crate `cloudsidra-edge`，Rust edition 2024，由 `rust-toolchain.toml` 固定到 1.98.1。
 - 生产领域：基于 Pingora 的高性能 CDN 边缘节点，覆盖 HTTP/1.1、HTTP/2、HTTP/3、QUIC、
   TCP/UDP 代理、TLS/证书、WAF、缓存、指标、日志、配置热重载和本地可观测性。
 - 主源码树在 `src/`；`crates/` 下是工作区成员，`benches/` 下是 Criterion 基准，
   `tests/` 下是集成测试，`xtask/` 是独立工具 manifest。
-- 工作区配置：`members = ["crates/cloud-node-transport"]`；
-  `exclude = ["crates/cloud-node-xdp-ebpf", "pingora-main", "xtask"]`
+- 工作区配置：`members = ["crates/cloudsidra-edge-transport"]`；
+  `exclude = ["crates/cloudsidra-edge-xdp-ebpf", "pingora-main", "xtask"]`
   ——被排除的三者各有独立构建体系（eBPF 需要自己的 nightly/bpfeb 工具链，
   pingora-main 有自己的工作区根），改动时不要试图把它们并入根工作区。
 
@@ -26,9 +26,9 @@
 | L4 代理 | `tcp_proxy.rs`、`udp_proxy.rs`、`l4_connection_registry.rs`、`l4_defense.rs`、`proxy_protocol.rs`、`toa.rs` |
 | 缓存 | `cache/`、`cache_hybrid.rs`、`cache_manager.rs`、`compiled.rs` |
 | 安全 | `firewall/`、`local_firewall.rs`、`special_defense.rs`、`kernel_syn_defense.rs`、`auth.rs`、`client_ip.rs` |
-| XDP / AF_XDP | `xdp/`、`xdp_auto_config.rs`、`xdp_config_wizard.rs`、`xdp_netdev_tuning.rs`、`crates/cloud-node-xdp-*` |
+| XDP / AF_XDP | `xdp/`、`xdp_auto_config.rs`、`xdp_config_wizard.rs`、`xdp_netdev_tuning.rs`、`crates/cloudsidra-edge-xdp-*` |
 | 内存治理 | `memory_governor.rs`、`memory_plan.rs`、`memory_reclaim.rs`、`memory_shed.rs`、`memory_ticket.rs`、`resource_budget.rs` |
-| QUIC / 传输 | `quic_transport.rs`、`quic_udp_demux.rs`、`quic_cc.rs`、`quic_probe.rs`、`transport_clock.rs`、`crates/cloud-node-transport` |
+| QUIC / 传输 | `quic_transport.rs`、`quic_udp_demux.rs`、`quic_cc.rs`、`quic_probe.rs`、`transport_clock.rs`、`crates/cloudsidra-edge-transport` |
 | 回源 | `origin_h3.rs`、`origin_h3_pool.rs`、`origin_h3_state.rs`、`origin_state.rs`、`oss_origin.rs`、`lb_factory.rs`、`health_manager.rs` |
 | 可观测性 | `metrics.rs`、`metrics/`、`logging.rs`、`log_uploader.rs`、`perf_monitor.rs`、`pipeline_metrics.rs` |
 | 运行时 | `runtime_mode.rs`、`adaptive_cpu.rs`、`kernel_tuning.rs`、`paths.rs`、`net_bind.rs`、`ssl.rs`、`tls_crypto.rs` |

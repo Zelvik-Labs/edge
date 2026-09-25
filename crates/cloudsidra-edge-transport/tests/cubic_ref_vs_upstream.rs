@@ -39,8 +39,8 @@
 //! test also writes a CSV trace of both cwnd trajectories for the EN-24
 //! evidence bundle.
 
-use cloud_node_transport::cc::reference::CubicRef;
-use cloud_node_transport::{CongestionController, RateSample, RttState, TransportInstant};
+use cloudsidra_edge_transport::cc::reference::CubicRef;
+use cloudsidra_edge_transport::{CongestionController, RateSample, RttState, TransportInstant};
 use smoltcp::socket::tcp::congestion::Controller;
 use smoltcp::socket::tcp::congestion::cubic::Cubic;
 use smoltcp::socket::tcp::RttEstimator;

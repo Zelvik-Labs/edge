@@ -1,7 +1,7 @@
 //! smoltcp-edge transport extension (T3).
 //!
 //! Sender-side machinery that exists only when an external
-//! `cloud_node_transport::cc::CongestionController` is installed via
+//! `cloudsidra_edge_transport::cc::CongestionController` is installed via
 //! [`Socket::set_transport_controller`]: per-segment scoreboard, SACK
 //! consumption, RACK loss detection with an adaptive reorder window,
 //! TLP probes, DSACK spurious-retransmit evidence, Eifel undo, per-ACK
@@ -19,10 +19,10 @@ use crate::wire::TcpSeqNumber;
 use alloc::boxed::Box;
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
-use cloud_node_transport::cc::{CcSnapshot, CongestionController};
-use cloud_node_transport::rate_sample::{RateSampler, TxRecord};
-use cloud_node_transport::rtt::RttState;
-use cloud_node_transport::TransportInstant;
+use cloudsidra_edge_transport::cc::{CcSnapshot, CongestionController};
+use cloudsidra_edge_transport::rate_sample::{RateSampler, TxRecord};
+use cloudsidra_edge_transport::rtt::RttState;
+use cloudsidra_edge_transport::TransportInstant;
 use core::fmt;
 use std::time::Duration as StdDuration;
 

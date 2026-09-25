@@ -454,18 +454,18 @@ fn xdp_proxy_bridge_lifecycle_continues_only_when_ready() {
 
 #[test]
 fn xdp_rule_value_monotonic_deadline_controls_active_match() {
-    let legacy = cloud_node_xdp_common::XdpRuleValue::new(
+    let legacy = cloudsidra_edge_xdp_common::XdpRuleValue::new(
         10,
         0,
-        cloud_node_xdp_common::XdpRuleValue::FLAG_BLOCK,
+        cloudsidra_edge_xdp_common::XdpRuleValue::FLAG_BLOCK,
     );
     assert!(legacy.is_active_at_mono(u64::MAX));
 
-    let active = cloud_node_xdp_common::XdpRuleValue::with_monotonic_deadline(
+    let active = cloudsidra_edge_xdp_common::XdpRuleValue::with_monotonic_deadline(
         10,
         1_000,
         0,
-        cloud_node_xdp_common::XdpRuleValue::FLAG_BLOCK,
+        cloudsidra_edge_xdp_common::XdpRuleValue::FLAG_BLOCK,
     );
     assert!(active.is_active_at_mono(999));
     assert!(!active.is_active_at_mono(1_000));
@@ -565,7 +565,7 @@ fn xdp_doctor_rejects_proxy_jumbo_frame_size() {
     assert!(
         report.contains(&format!(
             "requires frameSize={}",
-            cloud_node_xdp_common::XDP_DEFAULT_FRAME_SIZE
+            cloudsidra_edge_xdp_common::XDP_DEFAULT_FRAME_SIZE
         )),
         "doctor report should reject jumbo proxy frames: {report}"
     );
@@ -600,7 +600,7 @@ async fn xdp_initialize_fallbacks_proxy_jumbo_frame_size() {
     assert!(
         status.fallback_reason.contains(&format!(
             "frameSize={}",
-            cloud_node_xdp_common::XDP_DEFAULT_FRAME_SIZE
+            cloudsidra_edge_xdp_common::XDP_DEFAULT_FRAME_SIZE
         )),
         "fallback reason should reject jumbo proxy frames: {}",
         status.fallback_reason
@@ -631,7 +631,7 @@ async fn xdp_initialize_fail_start_rejects_proxy_jumbo_frame_size() {
     assert!(
         err.contains(&format!(
             "frameSize={}",
-            cloud_node_xdp_common::XDP_DEFAULT_FRAME_SIZE
+            cloudsidra_edge_xdp_common::XDP_DEFAULT_FRAME_SIZE
         )),
         "fail-start should reject jumbo proxy frames: {err}"
     );
@@ -641,11 +641,11 @@ async fn xdp_initialize_fail_start_rejects_proxy_jumbo_frame_size() {
 fn xdp_protocol_mapping_uses_l4_protocol_numbers() {
     assert_eq!(
         xdp_ip_proto(&XdpProxyProtocol::Https),
-        cloud_node_xdp_common::XDP_PROTO_TCP
+        cloudsidra_edge_xdp_common::XDP_PROTO_TCP
     );
     assert_eq!(
         xdp_ip_proto(&XdpProxyProtocol::H3),
-        cloud_node_xdp_common::XDP_PROTO_UDP
+        cloudsidra_edge_xdp_common::XDP_PROTO_UDP
     );
 }
 
@@ -843,9 +843,9 @@ fn xdp_proxy_port_status_counts_dataplane_support() {
 
 #[test]
 fn xdp_proxy_port_key_uses_network_order_bytes() {
-    let key = cloud_node_xdp_common::XdpPortProtoKey {
+    let key = cloudsidra_edge_xdp_common::XdpPortProtoKey {
         port_be: 443u16.to_be(),
-        proto: cloud_node_xdp_common::XDP_PROTO_TCP,
+        proto: cloudsidra_edge_xdp_common::XDP_PROTO_TCP,
         _pad: 0,
     };
 
@@ -854,8 +854,8 @@ fn xdp_proxy_port_key_uses_network_order_bytes() {
 
 #[test]
 fn xdp_local_ip_keys_are_interface_scoped_and_network_ordered() {
-    let v4 = cloud_node_xdp_common::host::local_ipv4_key(7, Ipv4Addr::new(198, 51, 100, 5));
-    let v6 = cloud_node_xdp_common::host::local_ipv6_key(
+    let v4 = cloudsidra_edge_xdp_common::host::local_ipv4_key(7, Ipv4Addr::new(198, 51, 100, 5));
+    let v6 = cloudsidra_edge_xdp_common::host::local_ipv6_key(
         9,
         "2001:db8::443".parse::<Ipv6Addr>().unwrap(),
     );
@@ -1268,7 +1268,7 @@ fn af_xdp_tcp_reactor_answers_syn_with_syn_ack() {
     assert_eq!(egress[0].0, route);
     let reply = &egress[0].1;
     assert_eq!(reply[0] >> 4, 4);
-    assert_eq!(reply[9], cloud_node_xdp_common::XDP_PROTO_TCP);
+    assert_eq!(reply[9], cloudsidra_edge_xdp_common::XDP_PROTO_TCP);
     assert_eq!(&reply[12..16], &[198, 51, 100, 5]);
     assert_eq!(&reply[16..20], &[192, 0, 2, 10]);
     let tcp_offset = 20;
@@ -2178,7 +2178,7 @@ fn af_xdp_dial_registry_claim_release_and_demux() {
     let owner = af_xdp::AfXdpDialOwner {
         interface: std::sync::Arc::from("eth0"),
         queue: 0,
-        proto: cloud_node_xdp_common::XDP_PROTO_TCP,
+        proto: cloudsidra_edge_xdp_common::XDP_PROTO_TCP,
         udp_tx: None,
     };
 
@@ -2216,7 +2216,7 @@ fn af_xdp_dial_registry_port_span_exhaustion_is_explicit() {
     let owner = af_xdp::AfXdpDialOwner {
         interface: std::sync::Arc::from("eth0"),
         queue: 0,
-        proto: cloud_node_xdp_common::XDP_PROTO_TCP,
+        proto: cloudsidra_edge_xdp_common::XDP_PROTO_TCP,
         udp_tx: None,
     };
     let source: IpAddr = "198.51.100.5".parse().unwrap();
@@ -2248,7 +2248,7 @@ fn af_xdp_dial_registry_inject_to_dead_owner_cleans_up() {
     let owner = af_xdp::AfXdpDialOwner {
         interface: std::sync::Arc::from("eth0"),
         queue: 7,
-        proto: cloud_node_xdp_common::XDP_PROTO_TCP,
+        proto: cloudsidra_edge_xdp_common::XDP_PROTO_TCP,
         udp_tx: None,
     };
     let flow = registry
@@ -2273,7 +2273,7 @@ fn af_xdp_dial_registry_inject_backpressure_is_explicit() {
     let owner = af_xdp::AfXdpDialOwner {
         interface: std::sync::Arc::from("eth0"),
         queue: 0,
-        proto: cloud_node_xdp_common::XDP_PROTO_TCP,
+        proto: cloudsidra_edge_xdp_common::XDP_PROTO_TCP,
         udp_tx: None,
     };
     let flow = registry
@@ -2299,7 +2299,7 @@ fn af_xdp_dial_registry_udp_owner_demuxes_payload() {
     let owner = af_xdp::AfXdpDialOwner {
         interface: std::sync::Arc::from("eth0"),
         queue: 0,
-        proto: cloud_node_xdp_common::XDP_PROTO_UDP,
+        proto: cloudsidra_edge_xdp_common::XDP_PROTO_UDP,
         udp_tx: Some(udp_tx),
     };
     let flow = registry
@@ -2307,7 +2307,7 @@ fn af_xdp_dial_registry_udp_owner_demuxes_payload() {
         .expect("claim");
     // Bridge demux: owner lookup by reply tuple → payload into udp_tx.
     let owner = registry.owner(&flow).expect("owner");
-    assert_eq!(owner.proto, cloud_node_xdp_common::XDP_PROTO_UDP);
+    assert_eq!(owner.proto, cloudsidra_edge_xdp_common::XDP_PROTO_UDP);
     let tx = owner.udp_tx.clone().expect("udp owner carries its channel");
     tx.try_send(af_xdp::AfXdpUdpIngress::Datagram(
         af_xdp::AfXdpUdpDatagram {
@@ -2335,7 +2335,7 @@ fn af_xdp_dial_registry_preferred_port_pinning() {
     let owner = af_xdp::AfXdpDialOwner {
         interface: std::sync::Arc::from("eth0"),
         queue: 0,
-        proto: cloud_node_xdp_common::XDP_PROTO_UDP,
+        proto: cloudsidra_edge_xdp_common::XDP_PROTO_UDP,
         udp_tx: None,
     };
     let source: IpAddr = "198.51.100.5".parse().unwrap();
@@ -2372,10 +2372,10 @@ fn af_xdp_dial_registry_preferred_port_pinning() {
 fn xdp_out_ct_key_builds_family_correct_tuples() {
     let v4_local: std::net::SocketAddr = "198.51.100.5:39000".parse().unwrap();
     let v4_remote: std::net::SocketAddr = "192.0.2.10:443".parse().unwrap();
-    let key = linux::out_ct_key(v4_local, v4_remote, cloud_node_xdp_common::XDP_PROTO_TCP)
+    let key = linux::out_ct_key(v4_local, v4_remote, cloudsidra_edge_xdp_common::XDP_PROTO_TCP)
         .expect("v4 pair");
     assert_eq!(key.family, 4);
-    assert_eq!(key.proto, cloud_node_xdp_common::XDP_PROTO_TCP);
+    assert_eq!(key.proto, cloudsidra_edge_xdp_common::XDP_PROTO_TCP);
     assert_eq!(&key.local_addr[..4], &[198, 51, 100, 5]);
     assert_eq!(&key.remote_addr[..4], &[192, 0, 2, 10]);
     assert_eq!(u16::from_be(key.local_port_be), 39000);
@@ -2383,13 +2383,13 @@ fn xdp_out_ct_key_builds_family_correct_tuples() {
 
     let v6_local: std::net::SocketAddr = "[2001:db8::5]:39000".parse().unwrap();
     let v6_remote: std::net::SocketAddr = "[2001:db8::10]:443".parse().unwrap();
-    let key = linux::out_ct_key(v6_local, v6_remote, cloud_node_xdp_common::XDP_PROTO_TCP)
+    let key = linux::out_ct_key(v6_local, v6_remote, cloudsidra_edge_xdp_common::XDP_PROTO_TCP)
         .expect("v6 pair");
     assert_eq!(key.family, 6);
     assert_eq!(key.local_addr, "2001:db8::5".parse::<Ipv6Addr>().unwrap().octets());
 
     // Mixed families can never be a wire flow — refused, not truncated.
-    assert!(linux::out_ct_key(v4_local, v6_remote, cloud_node_xdp_common::XDP_PROTO_TCP).is_none());
+    assert!(linux::out_ct_key(v4_local, v6_remote, cloudsidra_edge_xdp_common::XDP_PROTO_TCP).is_none());
 }
 
 #[cfg(any(test, target_os = "linux"))]
@@ -3893,17 +3893,17 @@ fn af_xdp_tcp_path_prior_cannot_inflate_initial_buffers() {
     let reactor = af_xdp::AfXdpTcpReactor::new_with_session_limit_for_test(None, None, 1024);
     let peer = std::net::IpAddr::V4(std::net::Ipv4Addr::new(198, 51, 100, 5));
     let local = std::net::IpAddr::V4(std::net::Ipv4Addr::new(192, 0, 2, 10));
-    let now = cloud_node_transport::TransportInstant::from_micros(
+    let now = cloudsidra_edge_transport::TransportInstant::from_micros(
         reactor.clock_now_micros().max(0) as u64,
     );
     reactor.path_table().borrow_mut().record(
-        cloud_node_transport::PathKey {
+        cloudsidra_edge_transport::PathKey {
             egress_ifindex: 0,
             local_ip: local,
             dst_prefix: std::net::IpAddr::V4(std::net::Ipv4Addr::new(198, 51, 100, 0)),
             prefix_len: 24,
         },
-        cloud_node_transport::PathSample {
+        cloudsidra_edge_transport::PathSample {
             bw_bps: 50_000_000_000, // absurd: ~400 Gbit/s
             base_rtt: std::time::Duration::from_secs(3),
             p_rand: 0.0,
@@ -4761,7 +4761,7 @@ fn test_internet_checksum(bytes: &[u8]) -> u16 {
 #[cfg(target_os = "linux")]
 #[test]
 fn percpu_counter_aggregation_sums_all_cpu_slots() {
-    use cloud_node_xdp_common::XdpCounters;
+    use cloudsidra_edge_xdp_common::XdpCounters;
     let a = XdpCounters {
         packets: 7,
         pass: 3,
@@ -4792,7 +4792,7 @@ fn percpu_counter_aggregation_sums_all_cpu_slots() {
 #[cfg(target_os = "linux")]
 #[test]
 fn percpu_counter_aggregation_saturates_instead_of_wrapping() {
-    use cloud_node_xdp_common::XdpCounters;
+    use cloudsidra_edge_xdp_common::XdpCounters;
     let a = XdpCounters {
         packets: u64::MAX,
         tx: u64::MAX - 1,
@@ -5225,7 +5225,7 @@ fn kernel_bpf_budget_is_bounded_by_state_budget() {
 #[test]
 #[cfg(target_os = "linux")]
 fn pinned_spec_bytes_empty_pin_dir_is_zero() {
-    let dir = std::env::temp_dir().join(format!("cloud-node-test-pins-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("cloudsidra-edge-test-pins-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     assert_eq!(
         linux::pinned_spec_bytes_at(&crate::runtime_mode::XdpConfig::default(), &dir),
@@ -5245,7 +5245,7 @@ fn pinned_spec_bytes_empty_pin_dir_is_zero() {
 #[cfg(target_os = "linux")]
 fn ensure_bpf_map_budget_charges_only_new_bytes() {
     let config = crate::runtime_mode::XdpConfig::default();
-    let dir = std::env::temp_dir().join(format!("cloud-node-test-pins-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("cloudsidra-edge-test-pins-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let projected = linux::projected_bpf_map_bytes(&config);
 
@@ -5396,7 +5396,7 @@ async fn reload_prepare_failure_keeps_previous_manager_serving() {
     }
 
     let mut bad = test_proxy_config("eth-old");
-    bad.ebpf_object = Some("/nonexistent/cloud-node-missing-object.o".to_string());
+    bad.ebpf_object = Some("/nonexistent/cloudsidra-edge-missing-object.o".to_string());
     RuntimeConfig::set_current(RuntimeConfig { xdp: bad });
 
     let err = reload_from_runtime()
@@ -5480,7 +5480,7 @@ fn xdp_proxy_bridge_worker_lease_covers_startup_without_redirect() {
 #[cfg(target_os = "linux")]
 #[test]
 fn flow_event_ledger_orders_by_incarnation_epoch_seq() {
-    use cloud_node_xdp_common::*;
+    use cloudsidra_edge_xdp_common::*;
 
     let key = XdpFlowKey {
         family: 4,
@@ -5515,7 +5515,7 @@ fn flow_event_ledger_orders_by_incarnation_epoch_seq() {
 #[cfg(target_os = "linux")]
 #[test]
 fn flow_event_ledger_capacity_evicts_terminal_first() {
-    use cloud_node_xdp_common::*;
+    use cloudsidra_edge_xdp_common::*;
 
     let mut ledger = FlowEventLedger::default();
     // Vary client_addr (not just port) so CAPACITY > u16::MAX stays distinct.
@@ -6162,7 +6162,7 @@ fn xdp_transport_path_prior_round_trip() {
 
     // Simulate a completed flow's terminal snapshot recorded through the
     // same path the reap pass uses.
-    let snap = cloud_node_transport::CcSnapshot {
+    let snap = cloudsidra_edge_transport::CcSnapshot {
         algo: "edgecc",
         version_pin: "test",
         mode: "steady",
@@ -6221,7 +6221,7 @@ fn xdp_socket_buffer_sizing_uses_bdp_prior_and_budget_cap() {
     assert_eq!(reactor.socket_buffer_bytes(peer, local), 32 * 1024);
 
     // Seed a prior: bw 10MB/s, base_rtt 50ms → 2×BDP = 1MB.
-    let snap = cloud_node_transport::CcSnapshot {
+    let snap = cloudsidra_edge_transport::CcSnapshot {
         algo: "edgecc",
         version_pin: "test",
         mode: "steady",
@@ -6301,7 +6301,7 @@ fn af_xdp_tcp_reactor_reap_persists_terminal_sample() {
         IpAddr::V4(v4) => std::net::Ipv4Addr::from(u32::from(v4) & 0xffff_ff00),
         IpAddr::V6(_) => panic!("v4 frame"),
     };
-    let key = cloud_node_transport::PathKey {
+    let key = cloudsidra_edge_transport::PathKey {
         egress_ifindex: 0,
         local_ip: flow.local_addr.ip(),
         dst_prefix: IpAddr::V4(peer_ip),

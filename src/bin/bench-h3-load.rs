@@ -316,7 +316,7 @@ async fn main() -> anyhow::Result<()> {
         .ok()
         .and_then(|v| v.parse::<u16>().ok());
     client_cfg.transport_config(Arc::new(
-        cloud_node_rust::quic_transport::tuned_transport_config(mtu),
+        cloudsidra_edge::quic_transport::tuned_transport_config(mtu),
     ));
 
     let server = SocketAddr::new(host.parse::<IpAddr>()?, port);

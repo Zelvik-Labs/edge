@@ -1,7 +1,7 @@
 # smoltcp-edge — controlled fork of smoltcp 0.14.0
 
 This crate is a vendored fork of `smoltcp 0.14.0` (Cargo.lock-pinned upstream)
-maintained for the cloud-node edge dataplane (T3). It is patched into the root
+maintained for the cloudsidra-edge dataplane (T3). It is patched into the root
 build via `[patch.crates-io]` in `/Cargo.toml`. Every behavioural divergence
 from upstream is listed here; code sites are marked `smoltcp-edge` /
 `smoltcp-edge (T3)`.
@@ -13,14 +13,14 @@ tests at the end of `socket::tcp::test`.
 
 ## Dependency divergence
 
-- `Cargo.toml` gains `cloud-node-transport` (workspace path) and an empty
+- `Cargo.toml` gains `cloudsidra-edge-transport` (workspace path) and an empty
   `[workspace]` table so the fork stays outside the root workspace and its
   test suite runs standalone.
 
 ## `src/socket/tcp/transport_ext.rs` (new, ~700 lines)
 
 `ExtTransport` — sender-side machinery driven by an installed
-`cloud_node_transport::cc::CongestionController`:
+`cloudsidra_edge_transport::cc::CongestionController`:
 
 - per-segment `SentRecord` scoreboard (`seq`, `end_seq`, `first_tx`/`last_tx`,
   `sacked`, `lost`, `retransmitted`, `delivered_to_sampler`, `tsval`,
@@ -190,6 +190,6 @@ tests at the end of `socket::tcp::test`.
 - Egress ECT/CE marking and receive-side CE reflection (T7).
 - AccECN negotiation (T7).
 - Shared-bottleneck detection (T6): statistics interface lives in
-  `cloud-node-transport::inference`.
+  `cloudsidra-edge-transport::inference`.
 - EdgeCC decision layer (T5): the installed controller remains
   `CubicRef` for T3.

@@ -1,20 +1,25 @@
 # 版本号规划
 
-`cloud-node-rust` 是上游基石，`CloudSidra-Edge` 是重新命名后的独立产品。当前 CloudSidra 产品版本为 **`0.1.0`**；上游 `cloud-node-rust 1.2.2` 只作为来源和迁移识别信息。
+`cloud-node-rust` 是上游基石，`CloudSidra-Edge` 是重新命名后的独立产品。版本策略采用 **CloudSidra 统一方案**（与 API / Admin / User / Agent / Portal 一致），不再使用本仓库独立 SemVer。
 
-## 三层版本模型
+## 版本模型
 
-长期不要把「年份」当成这条 Rust 节点的 major。
-
-| 对象 | 方案 | 例子 | 原因 |
+| 对象 | 方案 | 例子 | 说明 |
 | --- | --- | --- | --- |
-| **CloudSidra-Edge 产品** | 独立 **SemVer `MAJOR.MINOR.PATCH`** | `0.1.0` → `0.1.1` / `0.2.0` / `1.0.0` | `0.1.x` 修复，`0.2.x` 新增能力，稳定控制面合同后 `1.0.0`。 |
-| **上游 provenance** | 项目名 + 固定版本 + commit | `cloud-node-rust 1.2.2 @ 631e5c7` | 用于审计、迁移和回归，不参与 CloudSidra SemVer 比较。 |
-| **CloudSidra 套件营销代次** | **CalVer `YYYY.MINOR`** | `2026.1` | 覆盖 Edge / API / Admin / User / DNS 等并列产品的兼容集合。 |
-| **兼容声明** | 独立矩阵 | `CloudSidra-API 2026.1` 需要 `CloudSidra-Edge >= 0.1.0` + `cloud-node-rust-v1` | 年份无法表达「这个 RPC 还能不能用」。 |
+| **组件（本产品）** | `YYYY.MM.PATCH` | `2026.9.0` | 年份、发布月份、补丁号。release tag 为 `v<组件版本>`，如 `v2026.9.0`。 |
+| **协议** | `api-major.api-minor` + schema | `node.v1`、`event.schema.1` | reader/writer 字段兼容，不跟随组件补丁号。 |
+| **来源 provenance** | 项目 + 版本 + commit | `cloud-node-rust 1.3.1 @ b3cdc37` | 审计、迁移和回归追踪，不参与产品版本比较。 |
 
-不要用「2026 + 小版本」替代节点 SemVer：一年内会有多次不兼容的协议/行为变化，年份无法表达 breaking，最终还是要另写兼容表。CalVer 适合发版节奏和产品代次，不适合作为 crate 兼容合同。
+## 规则
 
-从 `cloud-node-rust 1.2.2` 到 `CloudSidra-Edge 0.1.0` 是**产品迁移**，禁止由安装器按普通数值版本比较处理：必须识别谱系、备份、记录来源、验证配置/数据并保留回滚路径。本仓库首个 CloudSidra tag 使用 `v0.1.0`，后续 `v0.x.x`，稳定后进入 `v1.0.0`；`.github/workflows/release.yml` 继续使用 `v*` 触发。
+- 补丁号只修复 bug、安全问题和不改变契约的行为。
+- 月份变化表示同一代内的发布月份，不自动表示破坏性变化。
+- Cargo `version` 与产品版本一致（`YYYY.MM.PATCH` 本身即为合法 SemVer）。
+- `.github/workflows/release.yml` 由 `v*` tag 与 `workflow_dispatch` 触发，main 分支 push 不触发构建；产物命名为 `CloudSidra-Edge-<target>.tar.gz`。
+- 每次套件发布生成 API/Edge/Agent/Admin/User/Portal 兼容矩阵。
 
-上游 bug/security 修复且没有 CloudSidra 协议变化时递增产品 patch；新增兼容能力递增 minor；配置、gRPC、事件或运行时语义破坏性变化递增 major。完整来源和协议字段见 [VERSION-MANIFEST.toml](../VERSION-MANIFEST.toml)。
+## 迁移
+
+从 `cloud-node-rust 1.x` 到 `CloudSidra-Edge` 是**产品迁移**，禁止安装器按普通数值版本比较处理：必须识别谱系（`cloud-node-rust-v1`）、备份、记录来源、验证配置/数据并保留回滚路径。历史 `v0.1.x`/`v1.x` 标签与发布说明已归档至 `release-notes/archive/`，不再作为版本比较依据。
+
+完整来源和协议字段见 [VERSION-MANIFEST.toml](../VERSION-MANIFEST.toml)。

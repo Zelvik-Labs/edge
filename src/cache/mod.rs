@@ -237,9 +237,9 @@ fn cache_key_representation_root(cache_key: &str) -> std::borrow::Cow<'_, str> {
         .unwrap_or_else(|| std::borrow::Cow::Borrowed(cache_key))
 }
 
-const CACHE_METHOD_KEY_MARKER: &str = "@__cloud_node_method:";
-const CACHE_ENCODING_KEY_MARKER: &str = "@__cloud_node_ce:";
-const CACHE_WEBP_KEY_MARKER: &str = "@__cloud_node_webp:";
+const CACHE_METHOD_KEY_MARKER: &str = "@__cloudsidra_edge_method:";
+const CACHE_ENCODING_KEY_MARKER: &str = "@__cloudsidra_edge_ce:";
+const CACHE_WEBP_KEY_MARKER: &str = "@__cloudsidra_edge_webp:";
 
 /// Append the authenticated method marker used for method-specific cache
 /// variants.  A plain `@method:HEAD` suffix is user-controlled when a custom

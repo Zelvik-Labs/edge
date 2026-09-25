@@ -2497,7 +2497,7 @@ mod tests {
     #[test]
     fn mace_storage_round_trip_and_prefix_scan() {
         let dir =
-            std::env::temp_dir().join(format!("cloud-node-mace-test-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("cloudsidra-edge-mace-test-{}", uuid::Uuid::new_v4()));
         let _ = std::fs::remove_dir_all(&dir);
         let storage = MetricStorage::open(&dir).expect("open mace storage");
 
@@ -2607,7 +2607,7 @@ mod tests {
     #[test]
     fn history_cleanup_removes_only_expired_metric_namespaces() {
         let dir =
-            std::env::temp_dir().join(format!("cloud-node-mace-cleanup-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("cloudsidra-edge-mace-cleanup-{}", uuid::Uuid::new_v4()));
         let _ = std::fs::remove_dir_all(&dir);
         let storage = MetricStorage::open(&dir).expect("open mace storage");
 
@@ -2683,7 +2683,7 @@ mod tests {
     #[test]
     fn cache_metadata_delete_tombstone_fences_delayed_upsert() {
         let dir = std::env::temp_dir().join(format!(
-            "cloud-node-mace-tombstone-{}",
+            "cloudsidra-edge-mace-tombstone-{}",
             uuid::Uuid::new_v4()
         ));
         let _ = std::fs::remove_dir_all(&dir);
@@ -2758,7 +2758,7 @@ mod tests {
     #[test]
     fn cache_metadata_upsert_rejects_explicitly_invalid_status() {
         let dir = std::env::temp_dir().join(format!(
-            "cloud-node-mace-invalid-status-{}",
+            "cloudsidra-edge-mace-invalid-status-{}",
             uuid::Uuid::new_v4()
         ));
         let _ = std::fs::remove_dir_all(&dir);
@@ -2797,7 +2797,7 @@ mod tests {
     #[test]
     fn cache_access_flush_does_not_resurrect_tombstoned_metadata() {
         let dir = std::env::temp_dir().join(format!(
-            "cloud-node-mace-access-tombstone-{}",
+            "cloudsidra-edge-mace-access-tombstone-{}",
             uuid::Uuid::new_v4()
         ));
         let _ = std::fs::remove_dir_all(&dir);
@@ -2843,7 +2843,7 @@ mod tests {
     #[test]
     fn cache_access_flush_does_not_overwrite_newer_durable_metadata() {
         let dir = std::env::temp_dir().join(format!(
-            "cloud-node-mace-access-version-{}",
+            "cloudsidra-edge-mace-access-version-{}",
             uuid::Uuid::new_v4()
         ));
         let _ = std::fs::remove_dir_all(&dir);

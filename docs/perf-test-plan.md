@@ -1,4 +1,4 @@
-# CloudNode Rust 性能测试方案
+# CloudSidra Edge 性能测试方案
 
 面向 `bench-proxy`（Pingora 数据面 + 混合缓存热路径）与 nginx 源站的本地化性能测试方案。
 目标：在不同工况下量化边缘代理的 QPS、延迟分位、吞吐与资源占用，并追踪各组成部分（nginx 源站 / 代理转发 / 缓存命中）的性能。
@@ -76,7 +76,7 @@ sudo nginx
 DUR=15s scripts/perf/run_perf_matrix.sh
 ```
 
-脚本在 `perf-results/<ts>/node-home/` 下建立隔离的 `CLOUD_NODE_HOME`，
+脚本在 `perf-results/<ts>/node-home/` 下建立隔离的 `CLOUDSIDRA_EDGE_HOME`，
 只清理该目录内的 `data/` 与 `metrics.mace`，不会触碰仓库自身的运行数据。
 D 组写盘总量受 `MISS_REQUESTS` 控制（默认 32768 × 256KB ≈ 8GB，低于 L2
 10GB 容量，避免把逐出/磁盘压力混入 miss 基线）。

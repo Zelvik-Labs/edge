@@ -341,7 +341,7 @@ mod tests {
         let html = issue_html(
             Lang::En,
             "waf-token",
-            "/.well-known/cloud-node/waf-verify",
+            "/.well-known/cloudsidra-edge/waf-verify",
             "/return",
             120,
             b"slider-secret",

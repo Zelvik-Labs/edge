@@ -5464,7 +5464,7 @@ mod tests {
     async fn purge_by_key_removes_current_and_legacy_representation_variants() {
         let unique = unique_test_suffix("purge-encoding-variants");
         let base = format!("https://cache.example.test/{unique}");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
 
         let mut seeded = Vec::new();
@@ -5540,7 +5540,7 @@ mod tests {
     async fn local_storage_purge_removes_the_whole_variant_family() {
         let unique = unique_test_suffix("local-purge-variants");
         let base = format!("https://cache.example.test/{unique}");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
         let br = current_encoding_variant(&base, "", "br");
         let head_webp_gzip = current_encoding_variant(&base, "@method:HEAD@webp", "gzip");
@@ -5578,8 +5578,8 @@ mod tests {
     #[tokio::test]
     async fn partial_location_prioritizes_the_current_write_shard() {
         let unique = unique_test_suffix("partial-write-shard-order");
-        let root_a = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}-a"));
-        let root_b = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}-b"));
+        let root_a = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}-a"));
+        let root_b = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}-b"));
         let storage = FileStorage::new(root_a.clone());
         storage.update_shards(
             vec![
@@ -5666,7 +5666,7 @@ mod tests {
         let _state_guard = CACHE_GLOBAL_STATE_LOCK.lock().await;
         let unique = unique_test_suffix("small-l2-hit");
         let key_str = unique.clone();
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
         let key = CacheKey::new("edge", key_str.as_str(), "");
         let hash = storage.get_hash(&key);
@@ -5715,7 +5715,7 @@ mod tests {
     async fn uncompressed_l2_hit_above_memory_read_limit_streams_file() {
         let unique = unique_test_suffix("stream-l2-hit");
         let key_str = unique.clone();
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
         let key = CacheKey::new("edge", key_str.as_str(), "");
         let hash = storage.get_hash(&key);
@@ -5770,7 +5770,7 @@ mod tests {
     async fn file_cache_disabled_streams_small_l2_hits() {
         let unique = unique_test_suffix("file-cache-off");
         let key_str = unique.clone();
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
         storage.update_config(root.clone(), Vec::new(), true, false);
         let key = CacheKey::new("edge", key_str.as_str(), "");
@@ -5820,7 +5820,7 @@ mod tests {
     async fn uncompressed_l2_hit_with_size_mismatch_is_treated_as_miss() {
         let unique = unique_test_suffix("small-meta-large-file");
         let key_str = unique.clone();
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
         let key = CacheKey::new("edge", key_str.as_str(), "");
         let hash = storage.get_hash(&key);
@@ -5860,7 +5860,7 @@ mod tests {
     #[tokio::test]
     async fn file_update_meta_rejects_content_length_mismatch() {
         let unique = unique_test_suffix("update-meta-length-mismatch");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
         let key = CacheKey::new("edge", unique.as_str(), "");
         let hash = storage.get_hash(&key);
@@ -5947,7 +5947,7 @@ mod tests {
     async fn l2_hit_with_invalid_cached_status_is_treated_as_miss() {
         let unique = unique_test_suffix("invalid-status-l2-hit");
         let key_str = unique.clone();
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
         let key = CacheKey::new("edge", key_str.as_str(), "");
         let hash = storage.get_hash(&key);
@@ -5985,7 +5985,7 @@ mod tests {
     #[tokio::test]
     async fn l2_hit_with_legacy_error_status_is_treated_as_miss() {
         let unique = unique_test_suffix("legacy-error-status-l2-hit");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
         let key = CacheKey::new("edge", unique.as_str(), "");
         let hash = storage.get_hash(&key);
@@ -6026,7 +6026,7 @@ mod tests {
     #[tokio::test]
     async fn corrupted_compressed_l2_entry_is_removed_before_origin_retry() {
         let unique = unique_test_suffix("corrupt-compressed-l2");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
         let key = CacheKey::new("edge", unique.as_str(), "");
         let hash = storage.get_hash(&key);
@@ -6068,7 +6068,7 @@ mod tests {
         let base = format!("https://cache.example.test/{unique}");
         let key = crate::cache::partial::partial_cache_key(&base, Some("bytes=0-3"))
             .expect("partial cache key");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         tokio::fs::create_dir_all(&root)
             .await
             .expect("create cache root");
@@ -6213,7 +6213,7 @@ mod tests {
     async fn small_compressed_l2_hit_uses_memory_handler_for_fast_l1_promotion() {
         let unique = unique_test_suffix("small-compressed-l2-hit");
         let key_str = unique.clone();
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
         let key = CacheKey::new("edge", key_str.as_str(), "");
         let hash = storage.get_hash(&key);
@@ -6270,7 +6270,7 @@ mod tests {
     #[tokio::test]
     async fn metadata_less_l1_is_rejected_by_a_shared_exact_purge_fence() {
         let unique = unique_test_suffix("metadata-less-l1-fence");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
         let key = CacheKey::new("edge", unique.as_str(), "");
         let hash = format!("{:x}", md5_legacy::compute(unique.as_bytes()));
@@ -6327,7 +6327,7 @@ mod tests {
             .map(|index| unique_test_suffix(&format!("bloom-l2-{index}")))
             .find(|key| !bloom_may_exist(key))
             .expect("find a Bloom false-negative candidate");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
         let key = CacheKey::new("edge", unique.as_str(), "");
         let hash = storage.l2.get_hash(&key);
@@ -6383,7 +6383,7 @@ mod tests {
     async fn runtime_stats_include_tiny_ufo_l1_memory() {
         let unique = unique_test_suffix("runtime-stats-l1");
         let key = format!("https://cache.example.com/{unique}");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-stats-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-stats-test-{unique}"));
         let storage = HybridStorage::new(0, &root);
         let before = storage.runtime_stats().await;
         assert!(before.file_cache_enabled);
@@ -6452,7 +6452,7 @@ mod tests {
     #[tokio::test]
     async fn uncompressed_file_hit_handler_supports_pingora_range_seek() {
         let unique = unique_test_suffix("file-range-seek");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         tokio::fs::create_dir_all(&root)
             .await
             .expect("create range seek root");
@@ -6531,7 +6531,7 @@ mod tests {
     #[tokio::test]
     async fn file_miss_handler_drop_removes_uncommitted_temp_file() {
         let unique = unique_test_suffix("drop-temp");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         tokio::fs::create_dir_all(&root).await.unwrap();
         let temp_path = root.join("object.tmp");
         tokio::fs::write(&temp_path, b"partial").await.unwrap();
@@ -6587,7 +6587,7 @@ mod tests {
     #[tokio::test]
     async fn file_miss_handler_failed_publish_does_not_overwrite_existing_meta() {
         let unique = unique_test_suffix("failed-publish");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         tokio::fs::create_dir_all(&root).await.unwrap();
         let temp_path = root.join("object.tmp");
         let final_path = root.join("object");
@@ -6666,7 +6666,7 @@ mod tests {
     #[tokio::test]
     async fn memory_miss_handler_rejects_body_shorter_than_content_length() {
         let unique = unique_test_suffix("memory-short-body");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage = HybridStorage::new(1024 * 1024, &root);
         let mut handler = memory_miss_handler_for_test(&storage, unique.clone(), 4).await;
 
@@ -6685,7 +6685,7 @@ mod tests {
     #[tokio::test]
     async fn memory_miss_handler_rejects_body_longer_than_content_length() {
         let unique = unique_test_suffix("memory-long-body");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage = HybridStorage::new(1024 * 1024, &root);
         let mut handler = memory_miss_handler_for_test(&storage, unique.clone(), 4).await;
 
@@ -6704,7 +6704,7 @@ mod tests {
     #[tokio::test]
     async fn waiting_memory_miss_does_not_overwrite_first_fill() {
         let unique = unique_test_suffix("memory-double-check");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let storage: &'static HybridStorage =
             Box::leak(Box::new(HybridStorage::new(1024 * 1024, &root)));
         storage.policy_type.store(POLICY_MEMORY, Ordering::Release);
@@ -6787,7 +6787,7 @@ mod tests {
     #[tokio::test]
     async fn file_miss_handler_rejects_body_shorter_than_content_length() {
         let unique = unique_test_suffix("file-short-body");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let (mut handler, temp_path, final_path) =
             file_miss_handler_for_test(&root, &unique, 4).await;
 
@@ -6808,7 +6808,7 @@ mod tests {
     #[tokio::test]
     async fn file_miss_handler_rejects_body_longer_than_content_length() {
         let unique = unique_test_suffix("file-long-body");
-        let root = std::env::temp_dir().join(format!("cloud-node-rust-cache-test-{unique}"));
+        let root = std::env::temp_dir().join(format!("cloudsidra-edge-cache-test-{unique}"));
         let (mut handler, temp_path, final_path) =
             file_miss_handler_for_test(&root, &unique, 4).await;
 

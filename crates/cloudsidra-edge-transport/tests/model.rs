@@ -3,10 +3,10 @@
 //! gradient, extra_acked, two-column loss + burst + causal test +
 //! p_rand, alpha, lt_bw policer, delay_signal_quality.
 
-use cloud_node_transport::model::PathModel;
-use cloud_node_transport::rate_sample::RateSample;
-use cloud_node_transport::rtt::RttState;
-use cloud_node_transport::TransportInstant;
+use cloudsidra_edge_transport::model::PathModel;
+use cloudsidra_edge_transport::rate_sample::RateSample;
+use cloudsidra_edge_transport::rtt::RttState;
+use cloudsidra_edge_transport::TransportInstant;
 use std::time::Duration;
 
 const MSS: u64 = 1460;

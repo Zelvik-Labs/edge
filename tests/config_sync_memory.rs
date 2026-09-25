@@ -5,14 +5,14 @@
 //! sync panics, deadlocks, drops sites, or grows RSS without bound across
 //! repeated applies.
 
-use cloud_node_rust::config::ConfigStore;
-use cloud_node_rust::config_apply::{
+use cloudsidra_edge::config::ConfigStore;
+use cloudsidra_edge::config_apply::{
     ConfigApplyLimits, MaterializeRuntimeServersArgs, RuntimeServerMaps, apply_server_snapshot,
     parse_node_config_json,
 };
-use cloud_node_rust::config_models::ServerConfig;
-use cloud_node_rust::health_manager::GlobalHealthManager;
-use cloud_node_rust::memory_governor::{MEMORY_GOVERNOR, MemoryPressureLevel};
+use cloudsidra_edge::config_models::ServerConfig;
+use cloudsidra_edge::health_manager::GlobalHealthManager;
+use cloudsidra_edge::memory_governor::{MEMORY_GOVERNOR, MemoryPressureLevel};
 use serde_json::json;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -397,7 +397,7 @@ async fn large_server_json_and_hot_reload_under_low_memory() {
         .expect("large server JSON must parse");
         let round_maps = tokio::time::timeout(
             APPLY_TIMEOUT,
-            cloud_node_rust::config_apply::materialize_runtime_servers(
+            cloudsidra_edge::config_apply::materialize_runtime_servers(
                 MaterializeRuntimeServersArgs {
                     servers: vec![large],
                     health_manager: &health,

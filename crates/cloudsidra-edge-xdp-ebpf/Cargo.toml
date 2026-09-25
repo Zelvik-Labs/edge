@@ -1,5 +1,5 @@
 [package]
-name = "cloud-node-xdp-ebpf"
+name = "cloudsidra-edge-xdp-ebpf"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.98.1"
@@ -7,11 +7,11 @@ publish = false
 
 [dependencies]
 aya-ebpf = "0.2.1"
-cloud-node-xdp-common = { path = "../cloud-node-xdp-common", default-features = false }
+cloudsidra-edge-xdp-common = { path = "../cloudsidra-edge-xdp-common", default-features = false }
 network-types = "0.2.0"
 
 [[bin]]
-name = "cloud-node-xdp-ebpf"
+name = "cloudsidra-edge-xdp-ebpf"
 path = "src/main.rs"
 
 [profile.dev]

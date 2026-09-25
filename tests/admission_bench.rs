@@ -7,7 +7,7 @@
 // Each thread loops try_admit+drop on HttpConnection, saturating the shared
 // admission path the way a per-request pipeline would at high QPS.
 
-use cloud_node_rust::memory_governor::{AdmissionClass, MEMORY_GOVERNOR};
+use cloudsidra_edge::memory_governor::{AdmissionClass, MEMORY_GOVERNOR};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
@@ -61,7 +61,7 @@ fn bench_admission_throughput() {
             std::thread::spawn(move || {
                 // One bucket per thread models one connection's pool; pooled
                 // spends stay on a thread-private line.
-                let bucket = Arc::new(cloud_node_rust::memory_ticket::TicketBucket::new(
+                let bucket = Arc::new(cloudsidra_edge::memory_ticket::TicketBucket::new(
                     std::sync::LazyLock::force(&MEMORY_GOVERNOR),
                 ));
                 while !go.load(Ordering::Acquire) {
@@ -70,12 +70,12 @@ fn bench_admission_throughput() {
                 for _ in 0..iters {
                     let permit = if pooled {
                         bucket
-                            .spend(class, cloud_node_rust::memory_governor::class_estimated_bytes(class))
-                            .map(cloud_node_rust::memory_ticket::WorkspacePermit::Pooled)
+                            .spend(class, cloudsidra_edge::memory_governor::class_estimated_bytes(class))
+                            .map(cloudsidra_edge::memory_ticket::WorkspacePermit::Pooled)
                     } else {
                         MEMORY_GOVERNOR
                             .try_admit(class)
-                            .map(cloud_node_rust::memory_ticket::WorkspacePermit::Direct)
+                            .map(cloudsidra_edge::memory_ticket::WorkspacePermit::Direct)
                     };
                     if let Some(permit) = permit {
                         granted.fetch_add(1, Ordering::Relaxed);

@@ -1,6 +1,6 @@
 # 功能说明
 
-本文件按功能域介绍 CloudNode Rust 已实现的主要能力和运行边界。
+本文件按功能域介绍 CloudSidra Edge 已实现的主要能力和运行边界。
 
 ## HTTP/HTTPS 代理
 

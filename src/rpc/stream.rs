@@ -807,7 +807,7 @@ async fn handle_message(
             }
         }
         "checksystemdservice" => {
-            let (ok, reply) = check_systemd_service("cloud-node").await;
+            let (ok, reply) = check_systemd_service("cloudsidra-edge").await;
             is_ok = ok;
             message_reply = reply;
         }

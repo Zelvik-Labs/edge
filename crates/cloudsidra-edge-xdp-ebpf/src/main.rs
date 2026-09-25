@@ -14,7 +14,7 @@ use aya_ebpf::{
     },
     programs::XdpContext,
 };
-use cloud_node_xdp_common::{
+use cloudsidra_edge_xdp_common::{
     XDP_CLASS_MALFORMED, XDP_CLASS_UNSUPPORTED, XDP_CT_STATE_CLOSING, XDP_CT_STATE_OPEN,
     XDP_CT_STATE_PENDING, XDP_CT_STATE_PENDING_ACKED, XDP_DECISION_FLOW_TABLE_FULL,
     XDP_DECISION_INTERNAL_ERR, XDP_DECISION_NAT_CONFLICT, XDP_DECISION_PASS,
@@ -329,7 +329,7 @@ const XDP_DISPATCH_NAT_TCP6_WORK: u32 = 10;
 /// as its own program reached by tail call — the call boundary resets the
 /// stack budget. All cross-program state is parked in NatScratch.
 const XDP_DISPATCH_TCP4_CHALLENGE: u32 = 11;
-/// Family-split main dataplane: cloud_node_xdp tail-calls one of these so
+/// Family-split main dataplane: cloudsidra_xdp tail-calls one of these so
 /// each family's pipeline verifies under its own 1M-insn budget.
 const XDP_DISPATCH_MAIN_V4_WORK: u32 = 12;
 const XDP_DISPATCH_MAIN_V6_WORK: u32 = 13;
@@ -367,7 +367,7 @@ static XDP_FLOW_ACCT: PerCpuHashMap<XdpUdpCtKey, XdpFlowAcct> =
     PerCpuHashMap::<XdpUdpCtKey, XdpFlowAcct>::with_max_entries(262_144, 0);
 
 #[xdp]
-pub fn cloud_node_xdp(ctx: XdpContext) -> u32 {
+pub fn cloudsidra_xdp(ctx: XdpContext) -> u32 {
     counter_packet();
     let eth_proto = match parse_eth_payload(&ctx) {
         Ok((proto, _)) => proto,
@@ -402,7 +402,7 @@ pub fn cloud_node_xdp(ctx: XdpContext) -> u32 {
 }
 
 /// IPv4 half of the main dataplane, entered via tail call from
-/// cloud_node_xdp. Re-parses the frame so offsets carry fresh packet-range
+/// cloudsidra_xdp. Re-parses the frame so offsets carry fresh packet-range
 /// bounds — values parked in scratch would arrive as unbounded scalars.
 #[xdp]
 pub fn xdp_main_v4_work(ctx: XdpContext) -> u32 {
@@ -427,7 +427,7 @@ pub fn xdp_main_v4_work(ctx: XdpContext) -> u32 {
 }
 
 /// IPv6 half of the main dataplane, entered via tail call from
-/// cloud_node_xdp. See xdp_main_v4_work.
+/// cloudsidra_xdp. See xdp_main_v4_work.
 #[xdp]
 pub fn xdp_main_v6_work(ctx: XdpContext) -> u32 {
     match try_main_family_work::<6>(&ctx) {
