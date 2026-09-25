@@ -1,13 +1,13 @@
 # Product version and source provenance are deliberately separate.
 # Versioning follows the unified CloudSidra scheme (docs/versioning.md):
-# component = YYYY.MM.PATCH, tag = v<component>. An occasional fourth
-# segment (YYYY.MM.PATCH.x, e.g. 2026.9.0.1) is allowed as a patch of that
+# component = YY.MM.PATCH, tag = v<component>. An occasional fourth
+# segment (YY.MM.PATCH.x, e.g. 26.9.0.1) is allowed as a patch of that
 # release; it appears in release tags / product_version only — the Cargo
 # version stays three-part.
 product = "CloudSidra-Edge"
-product_version = "2026.9.0"
-release_tag = "v2026.9.0"
-version_scheme = "YYYY.MM.PATCH"
+product_version = "26.9.0"
+release_tag = "v26.9.0"
+version_scheme = "YY.MM.PATCH"
 
 [upstream]
 project = "cloud-node-rust"
