@@ -612,6 +612,9 @@ pub struct GlobalHTTPAccessLogConfig {
     pub firewall_only: bool,
     #[serde(rename = "enableClientClosed", default)]
     pub enable_client_closed: bool,
+    /// 采样率（0.0-1.0）：小于 1 时按比例丢弃访问日志，默认 1.0=全量
+    #[serde(rename = "sampleRate", default = "default_one")]
+    pub sample_rate: f64,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -3050,6 +3053,9 @@ pub struct ReverseProxyConfig {
 fn default_true() -> bool {
     true
 }
+fn default_one() -> f64 {
+    1.0
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(untagged)]
@@ -4164,5 +4170,121 @@ mod tests {
         assert_eq!(upload.max_providers, 12);
         assert_eq!(upload.max_systems, 13);
         assert_eq!(upload.max_browsers, 14);
+    }
+
+    // Throwaway 1-day self-signed cert for apitest.example.com (test fixture).
+    const TEST_CERT_PEM: &str = "-----BEGIN CERTIFICATE-----\n\
+MIIDHTCCAgWgAwIBAgIUDFToT1O8YptTQZiBUG/zA9+D0ZIwDQYJKoZIhvcNAQEL\n\
+BQAwHjEcMBoGA1UEAwwTYXBpdGVzdC5leGFtcGxlLmNvbTAeFw0yNjA5MjcyMTQy\n\
+NTlaFw0yNjA5MjgyMTQyNTlaMB4xHDAaBgNVBAMME2FwaXRlc3QuZXhhbXBsZS5j\n\
+b20wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC/h4+LU8AljkP5LV5G\n\
+XQ3H/CRaVGjds8hPKfKcV9BLI3C5/JJlc50AkWy/4TNh259mmxGop6TEoXELjrzD\n\
+TnetixPFSn1VKg2mXVpXAXku5W7nDeScrWPAV5+KWhN3I2FjS6C4l4+yVtx7ni0k\n\
+uVW8lynSUxyewhF2Pbm02tvdWtGn6TmaUc+PScUZeVxsT5Ty6EE+1bICVxDK3xXD\n\
+Km46Qt+HkU1dZyY19wHFb0gBQCH5Fj/litVCocXeUogSgnnZHNfKqkYfGFPz3iLn\n\
+PxMRzAWnN3scNyjCOIeYEd1NvJAbPagfVfOueMOtzHC1OdlAwELsN/SD7n2pnarb\n\
+qP7BAgMBAAGjUzBRMB0GA1UdDgQWBBQ68+jVAQ9vjuIptxfm/L4bTu1S0zAfBgNV\n\
+HSMEGDAWgBQ68+jVAQ9vjuIptxfm/L4bTu1S0zAPBgNVHRMBAf8EBTADAQH/MA0G\n\
+CSqGSIb3DQEBCwUAA4IBAQB0zC2sfBBKvnMLeZLOcYKz+DNlUg/5vndrUyLplewl\n\
+IveD+O5C5TTMUty/biTCJzhbGx5NZ5H3dH4ccqykfS6R6DMBTWR0hOwJRWPjT3Zl\n\
+6fqpNkBJCVJQP1OdnOVCC7eqwDW4Tj0+Dw/me0uGxd5elvAVcYYpU91LPvkTg0XI\n\
+CG9igeyGgjHN2fNFNhVtAnHFkxd5H32Z7pTbC4r4akKBYS+xezGoy5devo1zU52B\n\
+HhuvEY1C0MbulYjxipx9whmYO+mfPSzQUmktpY9FY9bGE77Hek/Lb90DwFyqX+4u\n\
+Cs2PE/Z4VJ2Vgpd05CH2AtvZRxdTWSDc44nonWo7OhAT\n\
+-----END CERTIFICATE-----\n";
+
+    const TEST_KEY_PEM: &str = "-----BEGIN PRIVATE KEY-----\n\
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC/h4+LU8AljkP5\n\
+LV5GXQ3H/CRaVGjds8hPKfKcV9BLI3C5/JJlc50AkWy/4TNh259mmxGop6TEoXEL\n\
+jrzDTnetixPFSn1VKg2mXVpXAXku5W7nDeScrWPAV5+KWhN3I2FjS6C4l4+yVtx7\n\
+ni0kuVW8lynSUxyewhF2Pbm02tvdWtGn6TmaUc+PScUZeVxsT5Ty6EE+1bICVxDK\n\
+3xXDKm46Qt+HkU1dZyY19wHFb0gBQCH5Fj/litVCocXeUogSgnnZHNfKqkYfGFPz\n\
+3iLnPxMRzAWnN3scNyjCOIeYEd1NvJAbPagfVfOueMOtzHC1OdlAwELsN/SD7n2p\n\
+narbqP7BAgMBAAECggEATa6Y3OTCGTljfmwVQaq6TTOKNwznX4xsoRcdbKX9OIyO\n\
+SxES+4zxz+or1oNriLRAKaiZd/NO0+W66Poiu4BW8A9pnGqC/QjKcoCIhKN3WDr8\n\
+SUCMSbPVsoyXi9DO9lJmTJS/Aj+Oq8GpOYZFPxDgolYZQ1IsWIPT+0Y7zQu7g0J+\n\
+KveY0f1Mia31Kkq5kDNkTm0KZ/Melef6w5STVaua7vkgzH2vsPSS4t6hJp8tCCs7\n\
+HN6fu4NZCVdlV+CQ5/ULcno2iJEWfX4ZLoNPuz3k5ICMOo9xkSZfyFRqUYfCza19\n\
+IRRTOllgTPMBdnDcmF1WgEDW4kn9lo/ANtjka6d55QKBgQD/wYjfRIlyujsHW02l\n\
+gONIcIpdMAbkXSOUwfzCvC4SEPBDXfphazHrhrpskFqtE0B7zpnJNUmMNDwYTrK0\n\
+2I0tMY+DDw9eCCr9XFiSh7pNFEUCwE8bOOFbxSt/+xM7c612oqUOkxNV0weqsIBS\n\
+n6lNvlr2/po4TOoK0j/psV2LmwKBgQC/tlbqpilNdiPQrzv2nBfq1YHfqBa7TFJE\n\
+psLDueZ7ecTzYkg+qPs5Psfk6RvGIXk1RWg+E5Z3Ot5itO0CcR104L5t7fMdpriS\n\
+zuoFnWaqcSluGlmG+WtiYu9IfN/s8xsypBDW0D08frFhUrh8CCi0mVBlaREWDn8r\n\
+Dl4UVS6q0wKBgQCl59SzCJGk87uw9QB0eRx29FI9SxddcjHPoNsnM80q+QPyn3b5\n\
+VQEoCNjL7gR0O4XcClRmWoPgSE4ncn2opMVH6NtwqAdO9ztz6UCnpRYsRBbURw3J\n\
+2ecOkeO6/JMoQMzopW8u+idTyDYz+pTzhBDelroJeXVvSi2UYXkGToEhOwKBgFqw\n\
+TOlvdPZZvpOHcZw1NvM10NwWTbqIXhpvsI6aMDeU4OApS/eoRD9OPY1B4IuXZhkX\n\
+HjrPVUxNosmawMt46vBRKIQkHe+W4JVCIF5LmTdjlK+q81LwRiYimwL1X5BdaC5K\n\
+glS76Vvmqs5ZLUAvM+JK7EcsrpJ6hRm/EC4aJZtVAoGAPSm45Biz1Yn+rm5xGuOj\n\
+uTq2TCAPcQWBcXliO+XaefinXt2C4Nz+n+o89r7fdkxDaxKKEeZuAwT4UZ5hG16r\n\
+xQkLSvpVEhyCIJ+UNg3X95GcumsBpJD8MiNaVlgYEylZz6J/aFNRxjbNMVRIqm0j\n\
+X+95GP6zw1z8EDq0LRXI1vI=\n\
+-----END PRIVATE KEY-----\n";
+
+    // The API resolves config.https.sslPolicy.certs (certificate UUID strings)
+    // into full SSLCertConfig objects before pushing to the node. This is the
+    // exact shape edge receives now: sslPolicy.id is required, each cert carries
+    // PEM strings in certData/keyData.
+    #[test]
+    fn https_config_parses_api_resolved_ssl_policy() {
+        let https: HTTPSConfig = serde_json::from_value(serde_json::json!({
+            "isOn": true,
+            "listen": [{"protocol": "https", "portRange": "443"}],
+            "sslPolicy": {
+                "id": 1002003,
+                "isOn": true,
+                "http2Enabled": true,
+                "minVersion": "TLSv1.2",
+                "certs": [{
+                    "id": 987654,
+                    "isOn": true,
+                    "isDefault": true,
+                    "certData": TEST_CERT_PEM,
+                    "keyData": TEST_KEY_PEM,
+                    "dnsNames": ["apitest.example.com"]
+                }]
+            }
+        }))
+        .expect("api-resolved sslPolicy shape should parse");
+
+        let policy = https.ssl_policy.expect("sslPolicy should be present");
+        assert_eq!(policy.id, 1002003);
+        assert!(policy.is_on);
+        assert_eq!(policy.certs.len(), 1);
+        let cert = &policy.certs[0];
+        assert_eq!(cert.id, 987654);
+        assert!(cert.is_on);
+        assert!(cert.is_default);
+        assert_eq!(
+            cert.cert_data_json.as_ref().and_then(|v| v.as_str()),
+            Some(TEST_CERT_PEM)
+        );
+        assert_eq!(
+            cert.key_data_json.as_ref().and_then(|v| v.as_str()),
+            Some(TEST_KEY_PEM)
+        );
+        assert_eq!(cert.dns_names, vec!["apitest.example.com".to_string()]);
+    }
+
+    // Regression: the previous payload wrote bare certificate UUID strings and
+    // no sslPolicy.id — both violate the edge model (SSLPolicyConfig.id has no
+    // serde default, SSLCertConfig.id is a required i64), so the whole https
+    // block failed to deserialise and certs never reached the node.
+    #[test]
+    fn https_config_rejects_legacy_cert_id_list() {
+        let err = serde_json::from_value::<HTTPSConfig>(serde_json::json!({
+            "isOn": true,
+            "listen": [{"protocol": "https", "portRange": "443"}],
+            "sslPolicy": {
+                "isOn": true,
+                "certs": ["b7f6e4a1-9c3d-4e5f-8a2b-1c0d2e3f4a5b"]
+            }
+        }))
+        .expect_err("legacy certs-as-id-strings shape must not parse");
+        assert!(
+            err.to_string().contains("id"),
+            "unexpected error: {err}"
+        );
     }
 }

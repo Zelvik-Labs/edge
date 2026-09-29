@@ -75,6 +75,9 @@ static CACHED_HOSTNAME: Lazy<String> = Lazy::new(|| {
 pub static NODE_LOG_SENDER: OnceCell<mpsc::Sender<pb::NodeLog>> = OnceCell::new();
 static NUMERIC_NODE_ID: AtomicI64 = AtomicI64::new(0);
 static GLOBAL_ACCESS_LOG_ON: AtomicBool = AtomicBool::new(true);
+// 采样率（百万分率）：1_000_000 = 全量。配置值 f64(0-1) 换算为原子整数。
+static GLOBAL_ACCESS_LOG_SAMPLE_PPM: AtomicU64 = AtomicU64::new(1_000_000);
+static ACCESS_LOG_SAMPLED_SEQ: AtomicU64 = AtomicU64::new(0);
 static REQUEST_ID_TIMESTAMP: AtomicI64 = AtomicI64::new(0);
 static REQUEST_ID_COUNTER: AtomicI32 = AtomicI32::new(1_000_000);
 pub fn init_global_log_bus(
@@ -101,6 +104,28 @@ pub fn get_numeric_node_id() -> i64 {
 
 pub fn set_global_access_log_on(is_on: bool) {
     GLOBAL_ACCESS_LOG_ON.store(is_on, Ordering::Relaxed);
+}
+
+/// sample_rate ∈ [0,1]；计数器步进方式实现确定性均匀采样。
+pub fn set_access_log_sample_rate(sample_rate: f64) {
+    let ppm = if sample_rate >= 1.0 {
+        1_000_000
+    } else if sample_rate <= 0.0 {
+        0
+    } else {
+        (sample_rate.clamp(0.0, 1.0) * 1_000_000.0) as u64
+    };
+    GLOBAL_ACCESS_LOG_SAMPLE_PPM.store(ppm, Ordering::Relaxed);
+}
+
+/// 按全局采样率决定是否保留本日志。
+fn access_log_sample_keep() -> bool {
+    let ppm = GLOBAL_ACCESS_LOG_SAMPLE_PPM.load(Ordering::Relaxed);
+    if ppm >= 1_000_000 {
+        return true;
+    }
+    let seq = ACCESS_LOG_SAMPLED_SEQ.fetch_add(1, Ordering::Relaxed) % 1_000_000;
+    seq < ppm
 }
 
 fn unix_epoch_millis_now() -> i64 {
@@ -359,6 +384,10 @@ pub fn log_access(session: &Session, ctx: &ProxyCTX) {
             debug!("ACCESS_LOG: blocked by enable_client_closed=false (499)");
             return;
         }
+    }
+    if !access_log_sample_keep() {
+        debug!("ACCESS_LOG: dropped by sampleRate");
+        return;
     }
     let sender = match LOG_SENDER.get() {
         Some(s) => s,
@@ -1009,7 +1038,7 @@ fn l4_passthrough_log_sender(
     if access_log_ref.is_some_and(|access_log| !access_log.is_on) {
         return None;
     }
-    if !GLOBAL_ACCESS_LOG_ON.load(Ordering::Relaxed) {
+    if !GLOBAL_ACCESS_LOG_ON.load(Ordering::Relaxed) || !access_log_sample_keep() {
         return None;
     }
     LOG_SENDER.get()

@@ -1530,6 +1530,12 @@ impl ConfigStore {
                 .map(|cfg| cfg.is_on)
                 .unwrap_or(false),
         );
+        crate::logging::set_access_log_sample_rate(
+            lock.global_access_log
+                .as_ref()
+                .map(|cfg| cfg.sample_rate)
+                .unwrap_or(1.0),
+        );
         let live_server_ids: HashSet<i64> = lock
             .all_servers
             .iter()
@@ -2494,6 +2500,7 @@ mod tests {
                     enable_server_not_found: true,
                     firewall_only: false,
                     enable_client_closed: false,
+                    sample_rate: 1.0,
                 }),
             )
             .await;
