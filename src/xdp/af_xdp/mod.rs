@@ -5,8 +5,8 @@ use bytes::Bytes;
 use dashmap::DashMap;
 #[cfg(any(test, target_os = "linux"))]
 use smoltcp::iface::{
-    Config as SmoltcpConfig, Interface as SmoltcpInterface, PollIngressSingleResult, SocketHandle,
-    SocketSet,
+    Config as SmoltcpConfig, Interface as SmoltcpInterface, PollIngressSingleResult, PollResult,
+    SocketHandle, SocketSet,
 };
 #[cfg(any(test, target_os = "linux"))]
 use smoltcp::phy::{
@@ -106,6 +106,11 @@ pub(crate) const AF_XDP_TCP_INGRESS_QUEUE_MAX: usize = 4096;
 /// emit→wire dwell folded into RTT samples as ~2.4 s on an ~80 ms path).
 #[cfg(any(test, target_os = "linux"))]
 pub(crate) const AF_XDP_TCP_EGRESS_EMIT_CAP: usize = 512;
+/// Bound on `poll_egress` passes per reactor round: one pass dispatches
+/// each socket once (~1 frame/socket), so the pass count is also the
+/// per-round emit ceiling per socket until the shared emit cap engages.
+#[cfg(any(test, target_os = "linux"))]
+pub(crate) const AF_XDP_TCP_EGRESS_ROUND_PASSES: usize = 256;
 /// EN-17: dirty-mark entries drained from the shared wake set per round.
 /// The set itself is hard-bounded by the session limit (one entry per live
 /// flow); the budget caps per-round drain work, leftovers stay queued.

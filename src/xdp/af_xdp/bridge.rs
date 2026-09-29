@@ -1069,6 +1069,11 @@ pub(crate) async fn run_queue_bridge_loop(
     // safety bound on housekeeping latency when nothing is armed.
     pub(crate) const AF_XDP_IDLE_WAIT_FLOOR: Duration = Duration::from_micros(10);
     pub(crate) const AF_XDP_IDLE_WAIT_CAP: Duration = Duration::from_secs(1);
+    // Waits at or below the tokio timer granularity (~1 ms slot) cannot
+    // sleep accurately — `tokio::sleep` rounds them up and paced flows
+    // stall a full ~1.3 ms per burst. At or under this threshold the
+    // loop skips the event wait and spins instead.
+    pub(crate) const AF_XDP_IDLE_SPIN_THRESHOLD: Duration = Duration::from_millis(1);
     pub(crate) const AF_XDP_STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
     let AfXdpQueueCtx {
@@ -2303,11 +2308,19 @@ pub(crate) async fn run_queue_bridge_loop(
                 .unwrap_or(wait_cap)
                 .clamp(AF_XDP_IDLE_WAIT_FLOOR, wait_cap);
             let wake_notify = tcp_reactor.wake_notify();
+            // Sub-millisecond waits cannot go through `tokio::sleep`:
+            // the timer wheel's smallest slot is ~1 ms, so every short
+            // pacing deadline (µs-scale on a fast paced flow) rounds up
+            // to ~1.3 ms — observed live as ~64 KiB bursts separated by
+            // ~1.3 ms sleeps, capping a 500 MB/s-paced flow at ~50 MB/s.
+            // Skip the event wait entirely and spin the next round; the
+            // spin only lasts as long as the short deadline itself.
             // `is_closed` guards are load-bearing: a receiver whose
             // sender was dropped resolves `recv()` instantly every poll
             // (e.g. per-queue `fwd_rx` for all but the first queue — its
             // sender is dropped by the iface_fwd map), which would turn
             // the idle wait into a hot loop on exactly those queues.
+            if wait > AF_XDP_IDLE_SPIN_THRESHOLD {
             tokio::select! {
                 _ = tokio::time::sleep(wait) => {}
                 item = downstream_rx.recv(), if !downstream_rx.is_closed() => {
@@ -2339,6 +2352,7 @@ pub(crate) async fn run_queue_bridge_loop(
                         None => std::future::pending::<()>().await,
                     }
                 } => {}
+            }
             }
         }
         // The busy path above never awaits; without an explicit yield the

@@ -1478,10 +1478,25 @@ impl AfXdpTcpReactor {
         // close, loss-free) rather than being emitted, stamped "sent"
         // on the scoreboard, and left to age in a queue where their
         // dwell folds into RTT/pacing accounting.
-        if self.device.egress.len() < AF_XDP_TCP_EGRESS_EMIT_CAP {
-            let _ = self
+        // Loop the egress pass: one `poll_egress` dispatches each socket
+        // exactly once (~1 frame/socket/round ≈ MSS/135µs ≈ 11 MB/s
+        // observed on a clean path). cwnd, remote window, remote pace
+        // due and the device queue bound the burst naturally; the pass
+        // repeats until no socket has emit-worthy work or the emit cap
+        // engages. The pass count bounds the total work — a socket can
+        // fill the queue in one round without starving the pump.
+        let mut egress_rounds = 0usize;
+        while self.device.egress.len() < AF_XDP_TCP_EGRESS_EMIT_CAP
+            && egress_rounds < AF_XDP_TCP_EGRESS_ROUND_PASSES
+        {
+            match self
                 .iface
-                .poll_egress(now, &mut self.device, &mut self.sockets);
+                .poll_egress(now, &mut self.device, &mut self.sockets)
+            {
+                PollResult::None => break,
+                PollResult::SocketStateChanged => {}
+            }
+            egress_rounds += 1;
         }
         self.pump_sessions(now);
         self.release_budget_backpressure();

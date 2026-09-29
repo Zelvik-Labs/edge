@@ -357,10 +357,31 @@ impl ExtTransport {
     }
 
     /// Advance the pacing gate after a new-data send of `len` bytes.
+    /// The bucket accumulates: a due already in the past carries its
+    /// credit forward (`due + len/rate`) instead of restarting the
+    /// interval at `now`. Emit loops coarser than the pace interval
+    /// otherwise serialize to ~1 segment per poll round — every round
+    /// resets the clock and the credit a stalled emitter earned while
+    /// waiting is lost.
     pub fn pace_after_send(&mut self, now: Instant, len: usize) {
         self.next_send_due = self.cc.pacing_rate().filter(|&r| r > 0).map(|rate| {
             let us = (len as u64).saturating_mul(1_000_000) / rate;
-            now + Duration::from_micros(us.max(1))
+            // Carry the schedule forward from the previous due: a due
+            // already in the past means the emitter is behind schedule
+            // and may fire again immediately (next due still < now).
+            // Resetting the base at `now` would silently erase that
+            // catch-up credit — every emit stall would then permanently
+            // cost a whole pace interval, and a paced sender serialized
+            // to ~1 segment per poll round could never refill the pipe.
+            // Cap the carried credit at ~64KiB of pacing delay (the
+            // classic TSO burst quantum): unbounded debt would let a
+            // long stall release a wire flood no clock measured.
+            let max_credit = Duration::from_micros(65_536_u64.saturating_mul(1_000_000) / rate);
+            let base = self
+                .next_send_due
+                .unwrap_or(now)
+                .max(now - max_credit);
+            base + Duration::from_micros(us.max(1))
         });
     }
 
