@@ -64,6 +64,17 @@ tests at the end of `socket::tcp::test`.
   serially-older TSval are dropped once timestamps are negotiated.
   **Divergence:** the 24-day `TS.Recent` timeout escape is not
   implemented — a long-idle connection keeps rejecting stale TSval.
+  Additional corrections versus upstream:
+  - Segments at or below the cumulative receive edge
+    (`remote_seq_no + rx_buffer.len()`) are exempt from the stale-TSval
+    reject (RFC 7323 R3's `SEG.SEQ <= Last.ACK.sent` clause). Upstream
+    drops them, so once timestamps are negotiated an out-of-order
+    arrival advances `TS.Recent` and the hole-filling segment — with an
+    older TSval — is rejected forever: the hole never fills and the
+    resulting dupack stream keeps the peer in permanent recovery.
+  - `TS.Recent` is updated only per RFC 7323 R3 (in-order segment at
+    or below the receive edge carrying `TSval >= TS.Recent`) instead
+    of unconditionally on any accepted segment.
 - DSACK generation: a data segment entirely below the cumulative
   receive edge records `last_rx_duplicate_range`, emitted as the first
   SACK block of the next ACK.
@@ -78,6 +89,13 @@ tests at the end of `socket::tcp::test`.
 - Classic-ECN ECE: an ACK segment carrying `ecn_echo` calls
   `cc.on_ecn_ce` once per ACK (field passthrough only; no ECN
   negotiation — AccECN is T7).
+- Zero-window-probe emits are flagged as retransmits to the scoreboard:
+  the probe byte does not advance `remote_last_seq`, so the later real
+  emit covers the same seq — recording it as new data would push an
+  overlapping second `SentRecord` and double-count delivered bytes on
+  pop. The `retransmit` path (`revive`) matches only existing records
+  and no-ops on the frontier, leaving the real send to score the byte
+  exactly once.
 - `dispatch()`: `ext.timer_checks` (RACK/TLP deadlines) each dispatch;
   RTO expiry calls `ext.mark_all_lost` instead of rewinding
   `remote_last_seq`; the fast-retransmit timer does not arm
@@ -134,6 +152,15 @@ tests at the end of `socket::tcp::test`.
   fresh owned allocation, preserving `length` and re-basing `read_at`.
   Refuses `new_capacity == capacity` or `< length`; borrowed storage is
   promoted to owned on success.
+  `resize_preserving(new_capacity, preserve_len)` is the same
+  operation but copies `preserve_len >= length` logical elements —
+  the extra span covers bytes written into unallocated space and
+  recorded by the out-of-order assembler. Plain `resize` zeroed that
+  span while the assembler still recorded the ranges, so a grown
+  receive buffer later delivered zeroed holes into the application
+  stream (measured: byte-identical zero injection at the first
+  in-session growth, anytls TLS integrity failure, ~220 ms
+  connection death under jitter).
 - `src/socket/tcp.rs`: public APIs
   `grow_recv_buffer`/`grow_send_buffer` (ring resize passthrough),
   `rx_window_wire_cap` (`u16::MAX << remote_win_shift` — the largest
@@ -159,7 +186,8 @@ tests at the end of `socket::tcp::test`.
   the shrunken capacity.
   - `grow_recv_buffer` refuses a shrink below
     `len + assembler high-water mark` so parked out-of-order bytes can
-    never outlive the ring.
+    never outlive the ring, and resizes via `resize_preserving(len +
+    assembler_hi)` so the parked bytes survive growth too.
   - The ingest path clips each wire payload to the ring's writable
     span before the assembler records it; a fully-clipped segment gets
     an immediate ACK carrying the shrunken window, and the clipped
@@ -167,6 +195,14 @@ tests at the end of `socket::tcp::test`.
     TCP semantics for a reduced buffer, no silent corruption.
   - New tests `test_grow_recv_buffer_refuses_shrink_below_assembler`
     and `test_rx_ingest_clips_to_shrunk_capacity`.
+
+### build.rs
+
+- `ASSEMBLER_MAX_SEGMENT_COUNT` is 32 (upstream default 4) — the
+  assembler's `Err(TooManyHolesError)` path silently drops the
+  incoming payload, and under packet reordering (jitter, loss,
+  multipath) more than 4 disjoint receive ranges are routine. Each
+  wedged hole costs a full RTT of throughput until retransmit.
 
 ## `src/socket/tcp/congestion.rs`
 

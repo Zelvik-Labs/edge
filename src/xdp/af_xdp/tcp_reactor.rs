@@ -173,6 +173,19 @@ where
     }
 }
 
+/// RFC 7323 TSval clock for AF_XDP sockets — installing it on every socket
+/// (accepted + dialed) negotiates the timestamp option with TS-capable peers,
+/// which the fork then uses for PAWS stale-segment rejection, TSecr RTT
+/// sampling, and TSecr-Eifel loss undo in the ext transport scoreboard.
+/// smoltcp takes a bare `fn()` so the reactor clock can't be passed; a
+/// process-local millisecond epoch feeds it instead.
+#[cfg(target_os = "linux")]
+fn af_xdp_tsval() -> u32 {
+    static EPOCH: std::sync::LazyLock<std::time::Instant> =
+        std::sync::LazyLock::new(std::time::Instant::now);
+    EPOCH.elapsed().as_millis() as u32
+}
+
 pub(crate) fn virtual_l4_stream<S>(
     stream: S,
     client_addr: SocketAddr,
@@ -1768,6 +1781,10 @@ impl AfXdpTcpReactor {
         // encoding already covers the ceiling.
         socket.set_rx_window_shift_for_ceiling(AF_XDP_TCP_SOCKET_BUFFER_MAX);
         socket.set_nagle_enabled(false);
+        // RFC 7323 timestamps: without a generator the socket negotiates no
+        // TS option, which leaves the ext scoreboard's PAWS stale-segment
+        // rejection, TSecr RTTM and TSecr-Eifel undo permanently dead.
+        socket.set_tsval_generator(Some(af_xdp_tsval));
         // F8: AF_XDP TCP must run a real congestion controller — without an
         // explicit selection smoltcp silently falls back to NoControl
         // (window = usize::MAX), which XDP pps budgets cannot replace.
@@ -2003,6 +2020,7 @@ impl AfXdpTcpReactor {
         // the shift is fixed in our SYN, so it must be set pre-connect.
         socket.set_rx_window_shift_for_ceiling(AF_XDP_TCP_SOCKET_BUFFER_MAX);
         socket.set_nagle_enabled(false);
+        socket.set_tsval_generator(Some(af_xdp_tsval));
         // F8/T3/T5: dialed sessions run the same policy-selected external
         // controller as accepted ones — never NoControl.
         socket.set_congestion_control(SmoltcpTcp::CongestionControl::Cubic);
