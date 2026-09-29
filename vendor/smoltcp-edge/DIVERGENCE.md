@@ -40,7 +40,11 @@ tests at the end of `socket::tcp::test`.
 - RTT sampling: scoreboard first-tx timing (Karn-safe) with TSecr RTTM
   fallback when the sample stream is all retransmits.
 - Pacing gate (`next_send_due`) for new-data segments only — retransmits
-  and control traffic are exempt.
+  and control traffic are exempt. `pace_after_send` accumulates: a due
+  already in the past carries forward (`due + len/rate`) so a stalled
+  emitter keeps its earned credit, with the carry capped at ~64KiB of
+  pacing delay (the TSO burst quantum) so no unbounded debt releases a
+  wire flood.
 - App-limited marking on send-buffer drain; `on_idle_restart` once per
   idle gap ≥ srtt.
 - Observability counters: `dsack_events`, `rack_lost_bytes`.

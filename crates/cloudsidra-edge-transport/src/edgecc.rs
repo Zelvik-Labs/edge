@@ -626,9 +626,36 @@ impl EdgeCc {
         // ACK-clocked fallback paces off the raw delivery rate — which
         // ACK compression inflates orders of magnitude past the link.
         let rtt = self.model.base_rtt().or(self.last_srtt);
-        let (Some(bw), Some(base)) = (self.work_rate_bps(), rtt) else {
+        let (Some(bw), Some(base_wire)) = (self.work_rate_bps(), rtt) else {
             return false;
         };
+        // The inflight window must cover the real send→ACK→send
+        // turnaround, and on a poll-scheduled stack that turnaround is
+        // service latency, not wire time: measured live, ~350 µs of
+        // reactor round-trips against a ~20 µs wire RTT, and neither
+        // min_rtt nor per-segment srtt samples the scheduling gap.
+        // Sizing BDP off base_rtt alone under-fills the pipe by an
+        // order of magnitude (bw×base_rtt×gain ≈ 4–6 KB while the
+        // turnaround needs ~100 KB) and the flow then runs at
+        // cwnd/turnaround ≈ a few MB/s regardless of the pacing rate.
+        // Little's law measures it directly: while the window is full,
+        // `in_flight / bw` IS the control-loop turnaround, so the
+        // effective RTT is max(base_rtt, srtt, implied) — the window
+        // then grows ×gain while bound and settles once it covers the
+        // true pipe. The queue guardrail — not the window — owns the
+        // response to any queue this admits on congested paths.
+        let implied = if self.prev_in_flight > 0 {
+            Duration::from_micros(
+                (self.prev_in_flight as u128 * 1_000_000 / bw.max(1) as u128)
+                    .min(1_000_000) as u64,
+            )
+        } else {
+            Duration::from_micros(0)
+        };
+        let base = self
+            .last_srtt
+            .map(|s| s.max(base_wire).max(implied))
+            .unwrap_or(base_wire.max(implied));
         if bw == 0 {
             return false;
         }
