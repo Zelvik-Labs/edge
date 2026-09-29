@@ -5,17 +5,10 @@ name: Commit Hygiene
 #   no-new-suppression —— 禁止新增屏蔽警告的手段（scripts/git-hooks/check-suppression.sh）
 # 两者都与本地钩子/手工复核共用同一份规则脚本，避免两套标准漂移。
 #
-# 注意：main 目前没有分支保护，所以这些检查在直接 push 时只会"变红"，
-# 不会阻断推送。要让它真正拦人，需要在仓库设置里把 main 保护起来，
-# 并把上面两个检查都设为必需。
+# 注意：流水线只接受手动触发（workflow_dispatch），不随 push/PR 自动运行。
 
 on:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
   contents: read

@@ -1,11 +1,8 @@
 name: Release
 
-# Tags: pushing v* is the release decision; workflow_dispatch is the manual
-# escape hatch. main pushes intentionally do not run this matrix.
+# Releases run on manual dispatch only; no tag or branch triggers.
+
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 concurrency:
