@@ -1643,7 +1643,11 @@ impl<'a> Socket<'a> {
         if new_capacity < self.rx_buffer.len() + assembled_hi {
             return false;
         }
-        self.rx_buffer.resize(new_capacity)
+        // smoltcp-edge (T9): preserve the assembler's out-of-order span
+        // too — it lives in the unallocated ring region that plain
+        // `resize` would zero, turning every buffered burst into holes.
+        self.rx_buffer
+            .resize_preserving(new_capacity, self.rx_buffer.len() + assembled_hi)
     }
 
     /// smoltcp-edge (T9): grow the transmit buffer in place — no wire
@@ -2212,6 +2216,14 @@ impl<'a> Socket<'a> {
         // TS.Recent is a stale replay: drop it. SYN is exempt (RFC 7323
         // §5.4 reboot rule). The 24-day TS.Recent timeout escape is
         // intentionally not implemented — see DIVERGENCE.md.
+        //
+        // Segments at-or-below the cumulative receive edge are exempt:
+        // a hole-filler's tsval legitimately lags TS.Recent once an
+        // out-of-order segment has arrived (Linux's tcp_paws_discard
+        // disorder carve-out) — dropping it wedges the hole until the
+        // peer retransmits, which turns benign jitter reordering into a
+        // persistent loss stream.
+        let paws_rcv_nxt = self.remote_seq_no + self.rx_buffer.len();
         if self.state != State::SynSent
             && self.state != State::SynReceived
             && repr.control != TcpControl::Syn
@@ -2219,6 +2231,7 @@ impl<'a> Socket<'a> {
             && self.last_remote_tsval != 0
             && let Some(ts) = repr.timestamp
             && (ts.tsval.wrapping_sub(self.last_remote_tsval) as i32) < 0
+            && repr.seq_number > paws_rcv_nxt
         {
             net_debug!(
                 "PAWS reject: stale tsval {} < TS.Recent {}",
@@ -2836,9 +2849,22 @@ impl<'a> Socket<'a> {
             }
         }
 
-        // update last remote tsval
+        // update last remote tsval — RFC 7323 §5.3 R3: only when the
+        // segment's TSval is serially not older AND the segment sits
+        // at-or-below the cumulative receive edge. An out-of-order
+        // arrival must not advance TS.Recent, or the hole-filler behind
+        // it would carry a legitimately older tsval and PAWS-reject.
         if let Some(timestamp) = repr.timestamp {
-            self.last_remote_tsval = timestamp.tsval;
+            let at_or_below_edge =
+                repr.seq_number <= self.remote_seq_no + self.rx_buffer.len();
+            if at_or_below_edge
+                && (timestamp
+                    .tsval
+                    .wrapping_sub(self.last_remote_tsval) as i32)
+                    >= 0
+            {
+                self.last_remote_tsval = timestamp.tsval;
+            }
         }
 
         // update timers.
@@ -3743,9 +3769,14 @@ impl<'a> Socket<'a> {
         }
 
         // smoltcp-edge (T3): record every emitted payload byte on the
-        // scoreboard — including the zero-window probe's single byte,
-        // which occupies sequence space like any new-data send. Runs
-        // before the zero-window/keep-alive early returns below.
+        // scoreboard — except the zero-window probe. Its byte occupies
+        // sequence space but `remote_last_seq` is left intact, so the
+        // later real emit re-sends the same seq and would push a
+        // second, overlapping record (double-counted delivered bytes
+        // when both pop). Flagging the probe as a retransmit routes it
+        // to `revive`, which no-ops on frontier seq — the byte gets
+        // scored exactly once by the real send. Runs before the
+        // zero-window/keep-alive early returns below.
         if let Some(ext) = &mut self.ext_transport
             && !repr.payload.is_empty()
             && !is_keep_alive
@@ -3753,7 +3784,13 @@ impl<'a> Socket<'a> {
             let payload_len = repr.payload.len();
             let tsval = repr.timestamp.map(|t| t.tsval).unwrap_or(0);
             ext.note_send_resumed(cx.now());
-            ext.note_sent(cx.now(), repr.seq_number, payload_len, tsval, ext_retransmit);
+            ext.note_sent(
+                cx.now(),
+                repr.seq_number,
+                payload_len,
+                tsval,
+                ext_retransmit || is_zero_window_probe,
+            );
             if ext_retransmit {
                 // Retransmits bypass the pacing gate.
             } else {
@@ -11801,6 +11838,58 @@ mod test {
             })
         );
         assert_eq!(s.recv_queue(), 20);
+    }
+
+    #[test]
+    fn test_grow_recv_buffer_preserves_assembler_bytes() {
+        let mut s = socket_established();
+
+        // Park a 10-byte out-of-order tail behind a 10-byte hole —
+        // assembler owns seqs +11..+21 in the ring's unallocated span.
+        send!(
+            s,
+            TcpRepr {
+                seq_number: REMOTE_SEQ + 1 + 10,
+                ack_number: Some(LOCAL_SEQ + 1),
+                payload: &b"AAAAAAAAAA"[..],
+                ..SEND_TEMPL
+            },
+            Some(TcpRepr {
+                seq_number: LOCAL_SEQ + 1,
+                ack_number: Some(REMOTE_SEQ + 1),
+                window_len: 64,
+                ..RECV_TEMPL
+            })
+        );
+        assert_eq!(s.recv_queue(), 0);
+        assert!(!s.assembler.is_empty());
+
+        // Grow mid-connection — the parked bytes must survive in the
+        // same logical positions, not be replaced by zeroed storage.
+        assert!(s.grow_recv_buffer(128));
+        assert_eq!(s.recv_capacity(), 128);
+
+        // Fill the hole; the reassembled stream must carry the original
+        // payload, not zeros from a length-only resize copy.
+        send!(
+            s,
+            TcpRepr {
+                seq_number: REMOTE_SEQ + 1,
+                ack_number: Some(LOCAL_SEQ + 1),
+                payload: &b"BBBBBBBBBB"[..],
+                ..SEND_TEMPL
+            },
+            Some(TcpRepr {
+                seq_number: LOCAL_SEQ + 1,
+                ack_number: Some(REMOTE_SEQ + 1 + 20),
+                window_len: 108,
+                ..RECV_TEMPL
+            })
+        );
+        let mut buf = [0u8; 20];
+        assert_eq!(s.recv_slice(&mut buf), Ok(20));
+        assert_eq!(&buf[..10], b"BBBBBBBBBB");
+        assert_eq!(&buf[10..], b"AAAAAAAAAA");
     }
 
     #[test]

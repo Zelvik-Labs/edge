@@ -13,7 +13,12 @@ static CONFIGS: &[(&str, usize)] = &[
     ("IFACE_MAX_ROUTE_COUNT", 2),
     ("IFACE_MAX_PREFIX_COUNT", 1),
     ("FRAGMENTATION_BUFFER_SIZE", 1500),
-    ("ASSEMBLER_MAX_SEGMENT_COUNT", 4),
+    // smoltcp-edge: 32 contigs — the upstream default of 4 silently
+    // drops payload on Err(TooManyHolesError), and under packet
+    // reordering (jitter, multipath) more than 4 disjoint receive
+    // ranges are routine. Each extra hole wedged until retransmit
+    // costs a full RTT of throughput.
+    ("ASSEMBLER_MAX_SEGMENT_COUNT", 32),
     ("REASSEMBLY_BUFFER_SIZE", 1500),
     ("REASSEMBLY_BUFFER_COUNT", 1),
     ("IPV6_HBH_MAX_OPTIONS", 4),

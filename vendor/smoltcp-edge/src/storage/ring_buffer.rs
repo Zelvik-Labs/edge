@@ -105,17 +105,35 @@ impl<'a, T: 'a> RingBuffer<'a, T> {
     where
         T: Copy + Default,
     {
-        if new_capacity == self.capacity() || new_capacity < self.length {
+        self.resize_preserving(new_capacity, self.length)
+    }
+
+    /// smoltcp-edge (T9): like `resize`, but preserves `preserve_len`
+    /// logical elements (must be ≥ `len`). The extra span covers bytes
+    /// written into unallocated space and recorded by an out-of-band
+    /// structure — TCP's out-of-order assembler — which the plain
+    /// `length`-bounded copy would silently replace with zeros,
+    /// corrupting the stream once the holes it spans are filled.
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    pub fn resize_preserving(&mut self, new_capacity: usize, preserve_len: usize) -> bool
+    where
+        T: Copy + Default,
+    {
+        if new_capacity == self.capacity()
+            || new_capacity < preserve_len
+            || preserve_len < self.length
+            || preserve_len > self.capacity()
+        {
             return false;
         }
         let mut storage = alloc::vec::Vec::with_capacity(new_capacity);
         storage.resize(new_capacity, T::default());
-        let first_run = self.length.min(self.capacity() - self.read_at);
+        let first_run = preserve_len.min(self.capacity() - self.read_at);
         storage[..first_run]
             .copy_from_slice(&self.storage[self.read_at..self.read_at + first_run]);
-        let second_run = self.length - first_run;
+        let second_run = preserve_len - first_run;
         if second_run > 0 {
-            storage[first_run..self.length].copy_from_slice(&self.storage[..second_run]);
+            storage[first_run..preserve_len].copy_from_slice(&self.storage[..second_run]);
         }
         self.storage = storage.into();
         self.read_at = 0;
