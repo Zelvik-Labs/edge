@@ -402,6 +402,89 @@ fn obviously_virtual_interface(name: &str) -> bool {
     .any(|prefix| name.starts_with(prefix))
 }
 
+/// One network interface as reported to the control plane. The admin console
+/// lists every detected NIC so operators can pick which ones the XDP
+/// dataplane should attach — detection must not depend on XDP being enabled.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct NicProbe {
+    pub name: String,
+    pub mac: String,
+    #[serde(rename = "ips")]
+    pub ips: Vec<String>,
+    pub driver: String,
+    pub operstate: String,
+    #[serde(rename = "rxQueues")]
+    pub rx_queues: u32,
+    pub mtu: u32,
+    /// Eligible for XDP attach right now (physical-ish, not down, not a
+    /// known virtual prefix).
+    pub eligible: bool,
+}
+
+/// Enumerate every NIC on the node, not only XDP-attached ones.
+pub fn probe_node_interfaces() -> Vec<NicProbe> {
+    let mut nets: std::collections::BTreeMap<String, NicProbe> = Default::default();
+    let sys_nets = sysinfo::Networks::new_with_refreshed_list();
+    for (name, data) in sys_nets.iter() {
+        nets.insert(
+            name.clone(),
+            NicProbe {
+                name: name.clone(),
+                mac: data.mac_address().to_string(),
+                ips: data
+                    .ip_networks()
+                    .iter()
+                    .map(|net| net.addr.to_string())
+                    .collect(),
+                driver: String::new(),
+                operstate: String::new(),
+                rx_queues: 0,
+                mtu: 0,
+                eligible: false,
+            },
+        );
+    }
+    #[cfg(target_os = "linux")]
+    for entry in std::fs::read_dir("/sys/class/net")
+        .map(|d| d.flatten().collect::<Vec<_>>())
+        .unwrap_or_default()
+    {
+        let Some(name) = entry.file_name().to_str().map(str::to_string) else {
+            continue;
+        };
+        let probe = nets.entry(name.to_string()).or_insert_with(|| NicProbe {
+            name: name.to_string(),
+            mac: String::new(),
+            ips: Vec::new(),
+            driver: String::new(),
+            operstate: String::new(),
+            rx_queues: 0,
+            mtu: 0,
+            eligible: false,
+        });
+        let sys_path = entry.path();
+        probe.operstate = std::fs::read_to_string(sys_path.join("operstate"))
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+        probe.mtu = std::fs::read_to_string(sys_path.join("mtu"))
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(0);
+        probe.rx_queues = rx_queues_for_interface(name).len() as u32;
+        if probe.driver.is_empty()
+            && let Ok(target) = std::fs::read_link(sys_path.join("device/driver"))
+        {
+            probe.driver = target
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or_default()
+                .to_string();
+        }
+        probe.eligible = eligible_interface(name);
+    }
+    nets.into_values().collect()
+}
+
 #[cfg(target_os = "linux")]
 fn rx_queues_for_interface(name: &str) -> Vec<u32> {
     let queue_dir = Path::new("/sys/class/net").join(name).join("queues");

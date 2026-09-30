@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock as Lazy;
@@ -19,8 +20,6 @@ pub struct ApiConfig {
     pub node_id: String,
     #[serde(rename = "secret")]
     pub secret: String,
-    #[serde(rename = "billing.countInboundTraffic", default)]
-    pub billing_count_inbound_traffic: bool,
     #[serde(rename = "accessLogPipeline", default)]
     pub access_log_pipeline: AccessLogPipelineConfig,
     #[serde(rename = "relay", default)]
@@ -66,16 +65,28 @@ pub fn local_cache_sendfile_override() -> Option<bool> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+/// `enabled` gates the whole sysctl pass. `params` carries operator-tuned
+/// sysctl targets: keys matching a built-in plan entry replace its target,
+/// unknown keys are appended as additional sysctls. `skip` removes built-in
+/// keys outright. Applied at process start only — a pushed change is
+/// persisted but stays unacknowledged until restart (see
+/// `PreparedNodeApiPush::commit`).
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct KernelTuningConfig {
     #[serde(rename = "enabled", default = "default_kernel_tuning_enabled")]
     pub enabled: bool,
+    #[serde(rename = "params", default)]
+    pub params: BTreeMap<String, String>,
+    #[serde(rename = "skip", default)]
+    pub skip: Vec<String>,
 }
 
 impl Default for KernelTuningConfig {
     fn default() -> Self {
         Self {
             enabled: default_kernel_tuning_enabled(),
+            params: BTreeMap::new(),
+            skip: Vec::new(),
         }
     }
 }
@@ -84,6 +95,18 @@ impl KernelTuningConfig {
     pub fn normalized(&self) -> Self {
         Self {
             enabled: self.enabled,
+            params: self
+                .params
+                .iter()
+                .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+                .filter(|(k, v)| !k.is_empty() && !v.is_empty())
+                .collect(),
+            skip: self
+                .skip
+                .iter()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect(),
         }
     }
 }
@@ -289,15 +312,7 @@ impl ApiConfig {
             pushed.merge_into(&mut config);
         }
         STARTUP_PIPELINE.get_or_init(|| config.access_log_pipeline.normalized());
-        STARTUP_KERNEL_TUNING.get_or_init(|| config.kernel_tuning.enabled);
-        BILLING_INBOUND.store(
-            if config.billing_count_inbound_traffic {
-                1
-            } else {
-                0
-            },
-            Ordering::Relaxed,
-        );
+        STARTUP_KERNEL_TUNING.get_or_init(|| config.kernel_tuning.normalized());
         config.rpc_endpoints = validate_rpc_endpoints(config.rpc_endpoints)?;
         if config.rpc_endpoints.is_empty() {
             anyhow::bail!("no valid 'rpc.endpoints' in {:?}", path.as_ref());
@@ -547,8 +562,6 @@ kernelTuning:
 /// until restart, rather than claiming that fixed-capacity queues were resized.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct NodeApiPush {
-    #[serde(rename = "billing.countInboundTraffic", default)]
-    pub billing_count_inbound_traffic: Option<bool>,
     #[serde(default)]
     pub relay: Option<RelayConfig>,
     #[serde(rename = "kernelTuning", default)]
@@ -559,20 +572,9 @@ pub struct NodeApiPush {
     pub access_log_pipeline: Option<AccessLogPipelineConfig>,
 }
 static STARTUP_PIPELINE: std::sync::OnceLock<AccessLogPipelineConfig> = std::sync::OnceLock::new();
-static STARTUP_KERNEL_TUNING: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-static BILLING_INBOUND: AtomicI8 = AtomicI8::new(-1);
-pub fn effective_billing_count_inbound(local: bool) -> bool {
-    match BILLING_INBOUND.load(Ordering::Relaxed) {
-        0 => false,
-        1 => true,
-        _ => local,
-    }
-}
+static STARTUP_KERNEL_TUNING: std::sync::OnceLock<KernelTuningConfig> = std::sync::OnceLock::new();
 impl NodeApiPush {
     fn merge_into(&self, config: &mut ApiConfig) {
-        if let Some(value) = self.billing_count_inbound_traffic {
-            config.billing_count_inbound_traffic = value;
-        }
         if let Some(value) = &self.relay {
             config.relay = value.clone();
         }
@@ -612,14 +614,6 @@ impl NodeApiPush {
     }
     pub fn activate(config: &ApiConfig) {
         crate::tcp_proxy::configure_relay_from_api(config);
-        BILLING_INBOUND.store(
-            if config.billing_count_inbound_traffic {
-                1
-            } else {
-                0
-            },
-            Ordering::Relaxed,
-        );
         LOCAL_CACHE_SENDFILE.store(
             match config.cache.sendfile {
                 Some(true) => 1,
@@ -645,7 +639,7 @@ impl PreparedNodeApiPush {
             .is_some_and(|current| *current != self.config.access_log_pipeline.normalized())
             || STARTUP_KERNEL_TUNING
                 .get()
-                .is_some_and(|current| *current != self.config.kernel_tuning.enabled)
+                .is_some_and(|current| *current != self.config.kernel_tuning.normalized())
         {
             anyhow::bail!(
                 "restart required for accessLogPipeline/kernelTuning; validated override persisted, generation not acknowledged"
@@ -679,11 +673,14 @@ mod pushed_runtime_tests {
         )
         .unwrap();
         let push = NodeApiPush {
-            billing_count_inbound_traffic: Some(true),
+            relay: Some(RelayConfig {
+                zero_copy: true,
+                ..Default::default()
+            }),
             ..Default::default()
         };
         let prepared = push.prepare_at(&local, &dir).unwrap();
-        assert!(prepared.config.billing_count_inbound_traffic);
+        assert!(prepared.config.relay.zero_copy);
         assert!(!dir.join("control-plane-runtime.json").exists());
         assert!(prepared.temp.exists());
         let temp = prepared.temp.clone();

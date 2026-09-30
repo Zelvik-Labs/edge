@@ -3,26 +3,26 @@ use std::io;
 
 const NODE_LOG_TAG: &str = "kernel_tuning";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KernelParamTune {
-    pub key: &'static str,
-    pub target: &'static str,
+    pub key: String,
+    pub target: String,
     pub optional: bool,
 }
 
 impl KernelParamTune {
-    const fn exact(key: &'static str, target: &'static str) -> Self {
+    fn exact(key: &str, target: &str) -> Self {
         Self {
-            key,
-            target,
+            key: key.to_string(),
+            target: target.to_string(),
             optional: false,
         }
     }
 
-    const fn optional(key: &'static str, target: &'static str) -> Self {
+    fn optional(key: &str, target: &str) -> Self {
         Self {
-            key,
-            target,
+            key: key.to_string(),
+            target: target.to_string(),
             optional: true,
         }
     }
@@ -143,17 +143,58 @@ impl SysctlStore for ProcSysctlStore {
     }
 }
 
-pub fn apply_runtime_tuning_and_report() {
+/// A sysctl key is only safe to resolve under /proc/sys when every dotted
+/// segment is non-empty and free of separators — anything else could escape
+/// the sysctl root or target an unexpected path.
+fn sysctl_key_safe(key: &str) -> bool {
+    !key.is_empty()
+        && key.split('.').all(|seg| {
+            !seg.is_empty()
+                && seg
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        })
+}
+
+/// Resolved tuning plan: built-in defaults minus `skip`, with `params`
+/// overriding matching keys and adding sysctls the built-in plan does not
+/// cover. Unsafe keys are dropped here (before any /proc/sys access).
+pub fn effective_tuning_plan(
+    config: &crate::api_config::KernelTuningConfig,
+) -> Vec<KernelParamTune> {
+    let skip: std::collections::HashSet<&str> = config.skip.iter().map(String::as_str).collect();
+    let mut plan: Vec<KernelParamTune> = runtime_tuning_plan()
+        .into_iter()
+        .filter(|param| !skip.contains(param.key.as_str()))
+        .map(|mut param| {
+            if let Some(target) = config.params.get(&param.key) {
+                param.target = target.clone();
+            }
+            param
+        })
+        .collect();
+    let known: std::collections::HashSet<String> =
+        plan.iter().map(|param| param.key.clone()).collect();
+    for (key, target) in &config.params {
+        if !known.contains(key) && sysctl_key_safe(key) {
+            plan.push(KernelParamTune::exact(key, target));
+        }
+    }
+    plan
+}
+
+pub fn apply_runtime_tuning_and_report(config: &crate::api_config::KernelTuningConfig) {
     #[cfg(target_os = "linux")]
     {
         tracing::info!("Starting runtime kernel parameter tuning...");
         let store = ProcSysctlStore;
-        let reports = apply_runtime_tuning_with_store(&store);
+        let reports = apply_runtime_tuning_with_store(&store, config);
         report_all(&reports);
     }
 
     #[cfg(not(target_os = "linux"))]
     {
+        let _ = config;
         let reports = vec![KernelTuningReport {
             key: "kernel_tuning".to_string(),
             old: None,
@@ -166,8 +207,11 @@ pub fn apply_runtime_tuning_and_report() {
     }
 }
 
-pub fn apply_runtime_tuning_with_store(store: &impl SysctlStore) -> Vec<KernelTuningReport> {
-    let mut reports = runtime_tuning_plan()
+pub fn apply_runtime_tuning_with_store(
+    store: &impl SysctlStore,
+    config: &crate::api_config::KernelTuningConfig,
+) -> Vec<KernelTuningReport> {
+    let mut reports = effective_tuning_plan(config)
         .into_iter()
         .map(|param| apply_param(store, param))
         .collect::<Vec<_>>();
@@ -176,11 +220,11 @@ pub fn apply_runtime_tuning_with_store(store: &impl SysctlStore) -> Vec<KernelTu
 }
 
 fn apply_param(store: &impl SysctlStore, param: KernelParamTune) -> KernelTuningReport {
-    if !store.exists(param.key) {
+    if !store.exists(&param.key) {
         return KernelTuningReport {
-            key: param.key.to_string(),
+            key: param.key.clone(),
             old: None,
-            target: param.target.to_string(),
+            target: param.target.clone(),
             final_value: None,
             status: KernelTuningStatus::SkippedMissing,
             reason: if param.optional {
@@ -191,13 +235,13 @@ fn apply_param(store: &impl SysctlStore, param: KernelParamTune) -> KernelTuning
         };
     }
 
-    let old = match store.read(param.key) {
+    let old = match store.read(&param.key) {
         Ok(value) => normalize_sysctl_value(&value),
         Err(err) => {
             return KernelTuningReport {
-                key: param.key.to_string(),
+                key: param.key.clone(),
                 old: None,
-                target: param.target.to_string(),
+                target: param.target.clone(),
                 final_value: None,
                 status: KernelTuningStatus::FailedRead,
                 reason: err.to_string(),
@@ -205,10 +249,10 @@ fn apply_param(store: &impl SysctlStore, param: KernelParamTune) -> KernelTuning
         }
     };
 
-    let target = normalize_sysctl_value(param.target);
+    let target = normalize_sysctl_value(&param.target);
     if old == target {
         return KernelTuningReport {
-            key: param.key.to_string(),
+            key: param.key.clone(),
             old: Some(old.clone()),
             target,
             final_value: Some(old),
@@ -217,9 +261,9 @@ fn apply_param(store: &impl SysctlStore, param: KernelParamTune) -> KernelTuning
         };
     }
 
-    if let Err(err) = store.write(param.key, param.target) {
+    if let Err(err) = store.write(&param.key, &param.target) {
         return KernelTuningReport {
-            key: param.key.to_string(),
+            key: param.key.clone(),
             old: Some(old.clone()),
             target,
             final_value: Some(old),
@@ -232,7 +276,7 @@ fn apply_param(store: &impl SysctlStore, param: KernelParamTune) -> KernelTuning
         };
     }
 
-    match store.read(param.key) {
+    match store.read(&param.key) {
         Ok(value) => {
             let final_value = normalize_sysctl_value(&value);
             let status = if final_value == target {
@@ -250,7 +294,7 @@ fn apply_param(store: &impl SysctlStore, param: KernelParamTune) -> KernelTuning
                 "runtime value differs after write".to_string()
             };
             KernelTuningReport {
-                key: param.key.to_string(),
+                key: param.key.clone(),
                 old: Some(old),
                 target,
                 final_value: Some(final_value),
@@ -259,7 +303,7 @@ fn apply_param(store: &impl SysctlStore, param: KernelParamTune) -> KernelTuning
             }
         }
         Err(err) => KernelTuningReport {
-            key: param.key.to_string(),
+            key: param.key.clone(),
             old: Some(old),
             target,
             final_value: None,
@@ -521,5 +565,33 @@ mod tests {
             report.key == "/etc/sysctl.d/99-bbr-tuning.conf"
                 && report.status == KernelTuningStatus::NotAppliedPersistentOnly
         }));
+    }
+
+    #[test]
+    fn effective_plan_overrides_skips_and_drops_unsafe_keys() {
+        use crate::api_config::KernelTuningConfig;
+        use std::collections::BTreeMap;
+
+        let params: BTreeMap<String, String> = [
+            ("net.core.somaxconn".to_string(), "131072".to_string()),
+            ("net.ipv4.udp_mem".to_string(), "1024 2048 4096".to_string()),
+            ("../escape".to_string(), "1".to_string()),
+        ]
+        .into_iter()
+        .collect();
+        let config = KernelTuningConfig {
+            enabled: true,
+            params,
+            skip: vec!["vm.swappiness".to_string()],
+        };
+        let plan = effective_tuning_plan(&config);
+        let by_key: std::collections::HashMap<&str, &KernelParamTune> =
+            plan.iter().map(|p| (p.key.as_str(), p)).collect();
+
+        assert_eq!(by_key["net.core.somaxconn"].target, "131072");
+        assert_eq!(by_key["net.ipv4.udp_mem"].target, "1024 2048 4096");
+        assert!(!by_key.contains_key("vm.swappiness"));
+        assert!(!by_key.contains_key("../escape"));
+        assert!(by_key.contains_key("net.core.rmem_max"));
     }
 }

@@ -25,4 +25,5 @@ message ServerBandwidthStat {
     int64 originTotalBytes = 18;
     int64 originAvgBytes = 19;
     int64 originAvgBits = 20;
+    int64 bytesIn = 21;
 }

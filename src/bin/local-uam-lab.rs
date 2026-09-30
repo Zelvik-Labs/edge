@@ -172,7 +172,6 @@ fn main() -> anyhow::Result<()> {
         rpc_disable_update: true,
         node_id: "1".to_string(),
         secret: SECRET.to_string(),
-        billing_count_inbound_traffic: false,
         access_log_pipeline: AccessLogPipelineConfig::default(),
         relay: Default::default(),
         kernel_tuning: Default::default(),

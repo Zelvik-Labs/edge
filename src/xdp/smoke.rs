@@ -1343,7 +1343,6 @@ async fn xdp_proxy_smoke_managers(
         rpc_disable_update: true,
         node_id: "1".to_string(),
         secret: "xdp-smoke-secret".to_string(),
-        billing_count_inbound_traffic: false,
         access_log_pipeline: crate::api_config::AccessLogPipelineConfig::default(),
         relay: crate::api_config::RelayConfig::default(),
         kernel_tuning: crate::api_config::KernelTuningConfig::default(),

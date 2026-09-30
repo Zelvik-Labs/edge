@@ -1040,7 +1040,6 @@ impl SharedRpcClient {
             rpc_disable_update: false,
             node_id: "1".into(),
             secret: "test".into(),
-            billing_count_inbound_traffic: false,
             access_log_pipeline: Default::default(),
             relay: Default::default(),
             kernel_tuning: Default::default(),

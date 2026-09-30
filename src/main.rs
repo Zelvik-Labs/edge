@@ -3677,7 +3677,9 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
 
     // Log Uploader
     if api_config.kernel_tuning.normalized().enabled {
-        cloudsidra_edge::kernel_tuning::apply_runtime_tuning_and_report();
+        cloudsidra_edge::kernel_tuning::apply_runtime_tuning_and_report(
+            &api_config.kernel_tuning.normalized(),
+        );
     } else {
         info!("Runtime kernel tuning disabled by api_config.kernelTuning.enabled=false");
         logging::report_node_log(

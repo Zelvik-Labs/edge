@@ -706,6 +706,36 @@ async fn handle_message(
             });
             return Ok(()); // Handled asynchronously
         }
+        "probeinterfaces" => {
+            let tx_cloned = tx.clone();
+            let msg_cloned = message.clone();
+
+            tokio::spawn(async move {
+                let Some(_admission) = crate::memory_governor::MEMORY_GOVERNOR
+                    .try_admit(crate::memory_governor::AdmissionClass::RpcStreamCommand)
+                else {
+                    crate::pipeline_metrics::increment(
+                        crate::pipeline_metrics::PipelineCounter::RpcStreamCommandRejected,
+                    );
+                    return;
+                };
+                let interfaces = crate::xdp_auto_config::probe_node_interfaces();
+                let payload = serde_json::json!({ "interfaces": interfaces });
+                let reply = pb::NodeStreamMessage {
+                    node_id,
+                    request_id: msg_cloned.request_id,
+                    code: msg_cloned.code.clone(),
+                    data_json: payload.to_string().into_bytes(),
+                    is_ok: true,
+                    message: "ok".to_string(),
+                    ..Default::default()
+                };
+                if msg_cloned.request_id > 0 {
+                    try_send_stream_reply(&tx_cloned, reply);
+                }
+            });
+            return Ok(()); // Handled asynchronously
+        }
         "getstat" => {
             let tx_cloned = tx.clone();
             let msg_cloned = message.clone();

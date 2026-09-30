@@ -2282,7 +2282,6 @@ mod tests {
             rpc_disable_update: true,
             node_id: "1".to_string(),
             secret: "test-secret".to_string(),
-            billing_count_inbound_traffic: false,
             access_log_pipeline: crate::api_config::AccessLogPipelineConfig::default(),
             relay: crate::api_config::RelayConfig::default(),
             kernel_tuning: crate::api_config::KernelTuningConfig::default(),

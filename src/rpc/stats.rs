@@ -156,13 +156,12 @@ pub async fn start_origin_health_reporter(api_config: ApiConfig) {
     }
 }
 
-fn billable_bytes(snapshot: &ServerStatusSnapshot, api_config: &ApiConfig) -> u64 {
-    if crate::api_config::effective_billing_count_inbound(api_config.billing_count_inbound_traffic)
-    {
-        snapshot.total_bytes()
-    } else {
-        snapshot.bytes_sent
-    }
+/// Billable volume is downstream egress only. Inbound request bytes are
+/// reported separately (`bytes_in`) so the control plane can apply the
+/// per-region billing direction at settlement time — the node never bakes
+/// the billing policy into its counters.
+fn billable_bytes(snapshot: &ServerStatusSnapshot) -> u64 {
+    snapshot.bytes_sent
 }
 
 const BANDWIDTH_REPORT_INTERVAL_SECS: u64 = 300;
@@ -194,6 +193,7 @@ struct BandwidthWindowStat {
     user_plan_id: i64,
     peak_bytes_per_sec: u64,
     total_bytes: u64,
+    bytes_in: u64,
     cached_bytes: u64,
     attack_bytes: u64,
     count_requests: u64,
@@ -229,6 +229,7 @@ struct StoredPendingBandwidthStat {
     bytes: i64,
     bits: i64,
     total_bytes: i64,
+    bytes_in: i64,
     cached_bytes: i64,
     attack_bytes: i64,
     count_requests: i64,
@@ -257,6 +258,7 @@ impl From<&PendingBandwidthStat> for StoredPendingBandwidthStat {
             bytes: stat.bytes,
             bits: stat.bits,
             total_bytes: stat.total_bytes,
+            bytes_in: stat.bytes_in,
             cached_bytes: stat.cached_bytes,
             attack_bytes: stat.attack_bytes,
             count_requests: stat.count_requests,
@@ -285,6 +287,7 @@ impl From<StoredPendingBandwidthStat> for PendingBandwidthStat {
                 bytes: value.bytes,
                 bits: value.bits,
                 total_bytes: value.total_bytes,
+                bytes_in: value.bytes_in,
                 cached_bytes: value.cached_bytes,
                 attack_bytes: value.attack_bytes,
                 count_requests: value.count_requests,
@@ -434,6 +437,7 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore, api_config: Api
                         bytes: bytes_per_sec as i64,
                         bits: (bytes_per_sec * 8) as i64,
                         total_bytes: stat.total_bytes as i64,
+                        bytes_in: stat.bytes_in as i64,
                         cached_bytes: stat.cached_bytes.min(stat.total_bytes) as i64,
                         attack_bytes: stat.attack_bytes.min(stat.total_bytes) as i64,
                         count_requests: stat.count_requests as i64,
@@ -500,7 +504,7 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore, api_config: Api
             }
 
             let origin_total_bytes = delta.origin_bytes_received + delta.origin_bytes_sent;
-            let billable_bytes = billable_bytes(&delta, &api_config);
+            let billable_bytes = billable_bytes(&delta);
             let peak_bytes_per_sec = billable_bytes / BANDWIDTH_SAMPLE_INTERVAL_SECS;
             let stat = window_stats
                 .entry(delta.server_id)
@@ -516,6 +520,7 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore, api_config: Api
             stat.user_plan_id = delta.user_plan_id;
             stat.peak_bytes_per_sec = stat.peak_bytes_per_sec.max(peak_bytes_per_sec);
             stat.total_bytes += billable_bytes;
+            stat.bytes_in += delta.bytes_received;
             stat.cached_bytes += delta.cached_bytes;
             stat.attack_bytes += delta.attack_bytes;
             stat.count_requests += delta.total_requests;
@@ -677,7 +682,7 @@ pub async fn start_daily_stat_reporter(config_store: ConfigStore, api_config: Ap
             stat.created_at = created_at;
             stat.check_traffic_limiting = check_traffic_limiting;
             stat.plan_id = delta.plan_id;
-            stat.bytes += billable_bytes(&delta, &api_config) as i64;
+            stat.bytes += billable_bytes(&delta) as i64;
             stat.cached_bytes += delta.cached_bytes as i64;
             stat.count_requests += delta.total_requests as i64;
             stat.count_cached_requests += delta.count_cached_requests as i64;
