@@ -97,6 +97,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     embed_xdp_ebpf_object()?;
+
+    let node_control_proto = "proto/cloudsidra/node_control.proto";
+    if std::path::Path::new(node_control_proto).exists() {
+        println!("cargo:rerun-if-changed={}", node_control_proto);
+        tonic_prost_build::configure()
+            .build_client(true)
+            .build_server(true)
+            .compile_protos(&[node_control_proto], &["proto/cloudsidra"])?;
+    }
     Ok(())
 }
 
@@ -293,6 +302,5 @@ fn embed_xdp_ebpf_object() -> Result<(), Box<dyn std::error::Error>> {
         .into());
     };
     fs::copy(&source, &dest)?;
-    println!("cargo:rustc-env=CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT={}", dest.display());
-    Ok(())
+    println!("cargo:rustc-env=CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT={}", dest.display());    Ok(())
 }

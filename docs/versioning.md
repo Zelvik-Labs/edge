@@ -1,6 +1,7 @@
 # 版本号规划
 
 `cloud-node-rust` 是上游基石，`CloudSidra-Edge` 是重新命名后的独立产品。版本策略采用 **CloudSidra 统一方案**（与 API / Admin / User / Agent / Portal 一致），不再使用本仓库独立 SemVer。
+> 迁移说明：`0.1.0` 仅表示代码来源 provenance（cloud-node-rust 1.2.2 @ 631e5c7）；正式版本与兼容关系以 CloudSidra-Docs 的全局兼容矩阵为准。
 
 ## 版本模型
 
@@ -23,3 +24,5 @@
 从 `cloud-node-rust 1.x` 到 `CloudSidra-Edge` 是**产品迁移**，禁止安装器按普通数值版本比较处理：必须识别谱系（`cloud-node-rust-v1`）、备份、记录来源、验证配置/数据并保留回滚路径。历史 `v0.1.x`/`v1.x` 标签与发布说明已归档至 `release-notes/archive/`，不再作为版本比较依据。
 
 完整来源和协议字段见 [VERSION-MANIFEST.toml](../VERSION-MANIFEST.toml)。
+
+上游一次性导入记录见 [ORIGIN.md](../ORIGIN.md)（commit 以 VERSION-MANIFEST 清单为准而非本仓 git log）。与规划 NodeControl 的 RPC/字段对照见 [node-control-mapping.md](node-control-mapping.md)。

@@ -1,0 +1,8 @@
+{
+  "node_id": "node-fixture-1",
+  "software_version": "2026.1.08.0",
+  "capabilities_json": "{\"http3\":true}",
+  "region": "cn-test",
+  "comm_mode": "tls",
+  "cert_fingerprint": "sha256:fixture"
+}

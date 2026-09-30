@@ -54,9 +54,10 @@ API 为用户/站点/节点签发带版本和过期时间的配额租约。Edge 
 
 ### E-01 基线记录
 
-- 记录 upstream project/version/commit、当前产品版本、构建来源和迁移说明。
-- 为历史 configs/api_node.yaml、gRPC、日志格式建立 fixture。
-- 验收：旧配置可启动，版本来源可追溯，cargo check/test 通过。
+- 记录 upstream project/version/commit、当前产品版本、构建来源和迁移说明：见 [`ORIGIN.md`](../ORIGIN.md)、[`VERSION-MANIFEST.toml`](../VERSION-MANIFEST.toml)、[`docs/versioning.md`](versioning.md)。
+- 规划 NodeControl 与现有 proto 对照：[`docs/node-control-mapping.md`](node-control-mapping.md)（交叉链接 [CloudSidra-Docs `03-api-contracts.md`](../../CloudSidra-Docs/docs/03-api-contracts.md)）。
+- 历史 `configs/api_node.yaml`、gRPC、日志格式的 fixture **路径说明**（脱敏示例与单测内联 YAML，不提交真实 secret）：见对照文档「Fixture 路径」；完整 patch 状态机测试目录留待 E-03。
+- 验收：旧配置可 `cargo check`；版本来源可追溯。本阶段不实现完整 patch 状态机。
 
 ### E-02 配置模型隔离
 
