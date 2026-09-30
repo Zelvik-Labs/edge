@@ -90,6 +90,7 @@ they exist.
 | Vendored pingora | `cargo check --manifest-path pingora-main/Cargo.toml -p pingora-core -p pingora-http -p pingora-cache -p pingora-proxy --all-targets` |
 | Project tooling | `cargo xtask <subcommand>` |
 | macOS → Linux release | `bash scripts/build-release-local.sh [--all-bins]` |
+| 构建产物清理（每次构建后必跑） | `bash scripts/clean-build-artifacts.sh` |
 
 **Local and CI use different CPU baselines.** `.cargo/config.toml` sets
 `rustflags = ["-C", "target-cpu=native"]`; CI overrides with
