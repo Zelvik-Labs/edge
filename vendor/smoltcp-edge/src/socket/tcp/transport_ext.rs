@@ -141,6 +141,10 @@ pub(crate) struct ExtTransport {
     pub rtt: RttState,
     /// Sender scoreboard, ordered by `end_seq`; head ≈ SND.UNA edge.
     board: VecDeque<SentRecord>,
+    /// Count of `lost`-marked records on the board — lets `next_lost`
+    /// early-out on the clean path instead of scanning every record
+    /// per dispatch (O(cwnd/mss) per packet on a healthy path).
+    lost_records: usize,
     /// Bytes genuinely in flight (Σ len of `in_pipe()` records).
     pub pipe: usize,
     /// RFC 8985 `RACK.xmit_ts`.
@@ -185,6 +189,7 @@ impl ExtTransport {
             sampler: RateSampler::new(),
             rtt: RttState::new(),
             board: VecDeque::new(),
+            lost_records: 0,
             pipe: 0,
             rack_delivered_at: None,
             rack_delivered_end: TcpSeqNumber(0),
@@ -260,6 +265,7 @@ impl ExtTransport {
                 rec.retransmitted = true;
                 rec.tsval = tsval;
                 if was_lost {
+                    self.lost_records = self.lost_records.saturating_sub(1);
                     self.pipe += rec.len();
                 }
             }
@@ -317,6 +323,9 @@ impl ExtTransport {
     /// confirmed prefix must not be re-sent. The socket maps `seq` back
     /// to a tx_buffer offset.
     pub fn next_lost(&self, mss: usize, una: TcpSeqNumber) -> Option<(TcpSeqNumber, usize)> {
+        if self.lost_records == 0 {
+            return None;
+        }
         self.board
             .iter()
             .find(|r| r.lost && !r.sacked && r.end_seq > una)
@@ -396,6 +405,7 @@ impl ExtTransport {
                 continue;
             }
             rec.lost = true;
+            self.lost_records += 1;
             lost += rec.len();
         }
         self.pipe = 0;
@@ -459,6 +469,7 @@ impl ExtTransport {
             }
             if to_std(now - rec.last_tx) >= reo {
                 rec.lost = true;
+                self.lost_records += 1;
                 self.pipe = self.pipe.saturating_sub(rec.len());
                 lost += rec.len();
                 self.rack_lost_bytes += rec.len() as u64;
@@ -538,6 +549,9 @@ impl ExtTransport {
             if rec.in_pipe() {
                 self.pipe = self.pipe.saturating_sub(rec.len());
             }
+            if rec.lost {
+                self.lost_records = self.lost_records.saturating_sub(1);
+            }
             if !rec.delivered_to_sampler {
                 self.scratch.push(rec.to_tx_record(base));
             }
@@ -555,41 +569,51 @@ impl ExtTransport {
             }
         }
 
-        // --- apply SACK ranges ---------------------------------------
-        for range in sack_ranges.iter().flatten() {
-            let (l, r) = (TcpSeqNumber(range.0 as i32), TcpSeqNumber(range.1 as i32));
+        // --- apply SACK ranges + deliver newly-sacked records ---------
+        // One board pass instead of ranges×board plus a second delivery
+        // sweep: each unsacked record is tested against the ≤3 ranges;
+        // records landing in a range are marked and join this ACK's
+        // delivery set in the same pass. `sacked ⇒ delivered_to_sampler`
+        // holds at entry (a retransmitted record never clears `sacked`),
+        // so records already sacked short-circuit, and an ACK with no
+        // SACK blocks skips the pass entirely.
+        if sack_ranges.iter().any(Option::is_some) {
             for rec in self.board.iter_mut() {
-                if rec.sacked || rec.end_seq <= l || rec.seq >= r {
-                    continue;
+                if !rec.sacked {
+                    let hit = sack_ranges.iter().flatten().any(|&(l, r)| {
+                        rec.end_seq > TcpSeqNumber(l as i32) && rec.seq < TcpSeqNumber(r as i32)
+                    });
+                    if hit {
+                        let was_in_pipe = rec.in_pipe();
+                        if rec.lost {
+                            // Arrival evidence cancels a lost mark — a
+                            // reordered original must not be retransmitted
+                            // later.
+                            rec.lost = false;
+                            self.lost_records = self.lost_records.saturating_sub(1);
+                        }
+                        rec.sacked = true;
+                        if was_in_pipe {
+                            self.pipe = self.pipe.saturating_sub(rec.len());
+                        }
+                    }
                 }
-                let was_in_pipe = rec.in_pipe();
-                rec.sacked = true;
-                // Arrival evidence cancels a lost mark — a reordered
-                // original must not be retransmitted later.
-                rec.lost = false;
-                if was_in_pipe {
-                    self.pipe = self.pipe.saturating_sub(rec.len());
+                if rec.sacked && !rec.delivered_to_sampler {
+                    rec.delivered_to_sampler = true;
+                    self.scratch.push(rec.to_tx_record(base));
+                    if anchor
+                        .as_ref()
+                        .map(|a| rec.last_tx >= a.last_tx)
+                        .unwrap_or(true)
+                    {
+                        anchor = Some(Anchor {
+                            last_tx: rec.last_tx,
+                            end_seq: rec.end_seq,
+                            retransmitted: rec.retransmitted,
+                            tsval: rec.tsval,
+                        });
+                    }
                 }
-            }
-        }
-        // Newly-sacked records join this ACK's delivery set exactly once.
-        for rec in self.board.iter_mut() {
-            if !rec.sacked || rec.delivered_to_sampler {
-                continue;
-            }
-            rec.delivered_to_sampler = true;
-            self.scratch.push(rec.to_tx_record(base));
-            if anchor
-                .as_ref()
-                .map(|a| rec.last_tx >= a.last_tx)
-                .unwrap_or(true)
-            {
-                anchor = Some(Anchor {
-                    last_tx: rec.last_tx,
-                    end_seq: rec.end_seq,
-                    retransmitted: rec.retransmitted,
-                    tsval: rec.tsval,
-                });
             }
         }
 
@@ -638,6 +662,7 @@ impl ExtTransport {
                                 continue;
                             }
                             rec.lost = true;
+                            self.lost_records += 1;
                             self.pipe = self.pipe.saturating_sub(rec.len());
                             lost_now += rec.len();
                         }
@@ -660,6 +685,7 @@ impl ExtTransport {
                                     <= now
                         }) {
                             rec.lost = true;
+                            self.lost_records += 1;
                             self.pipe = self.pipe.saturating_sub(rec.len());
                             lost_now += rec.len();
                         }
