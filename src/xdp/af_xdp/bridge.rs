@@ -1230,6 +1230,10 @@ pub(crate) async fn run_queue_bridge_loop(
         std::collections::VecDeque::new();
     let mut early_requests: std::collections::VecDeque<AfXdpReactorRequest> =
         std::collections::VecDeque::new();
+    // Steered frames grabbed by an idle-wake recv — drained into the next
+    // round's `frames` so they flow through the normal packet path.
+    let mut early_steer: std::collections::VecDeque<Vec<u8>> =
+        std::collections::VecDeque::new();
     // T5/T6: transport policy comes from the lease owner — on an adopted
     // reload that is the live manager's config (the compatibility gate
     // already rejected any transport change, so old == new here). The
@@ -1636,6 +1640,7 @@ pub(crate) async fn run_queue_bridge_loop(
         // Steered frames from sibling workers merge into this round's
         // RX set — the steer check below hashes them to this worker
         // again, so they flow through the normal path untouched.
+        frames.extend(early_steer.drain(..));
         for _ in 0..AF_XDP_TCP_INGRESS_BUDGET {
             match steer_rx.try_recv() {
                 Ok(frame) => frames.push(frame),
@@ -2548,7 +2553,7 @@ pub(crate) async fn run_queue_bridge_loop(
                 }
                 item = steer_rx.recv(), if !steer_rx.is_closed() => {
                     if let Some(item) = item {
-                        frames.push(item);
+                        early_steer.push_back(item);
                     }
                 }
                 _ = wake_notify.notified() => {}
