@@ -471,6 +471,7 @@ impl TcpProxyManager {
         client_addr: SocketAddr,
         server: Arc<ServerConfig>,
         listen_addr: SocketAddr,
+        client_flow: Option<crate::xdp::af_xdp::AfXdpTcpFlowKey>,
     ) -> anyhow::Result<()>
     where
         S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -509,7 +510,7 @@ impl TcpProxyManager {
             server,
             context,
             Some(cancel_rx),
-            RelayOptions::af_xdp_tcp(),
+            RelayOptions::af_xdp_tcp(client_flow),
         )
         .await
     }
@@ -1551,6 +1552,28 @@ impl TcpProxyManager {
         crate::origin_state::ORIGIN_STATE_MANAGER.record_success(context.origin_id);
         drop(origin_connect_permit);
         #[cfg(target_os = "linux")]
+        {
+            // Layer-4 fast path: when both legs ride AF_XDP, queue a
+            // splice promotion — established and quiescent legs move to
+            // kernel-side header rewrite and this relay drains to EOF.
+            if let (Some(client_flow), crate::toa::UpstreamL4Stream::AfXdp(backend)) =
+                (relay_options.af_xdp_client_flow, &backend_stream)
+                && crate::xdp::af_xdp::splice_promotion_enabled()
+                && let Some(registry) = crate::xdp::af_xdp_dial_registry()
+                && let (Ok(backend_local), Ok(backend_peer)) =
+                    (backend.local_addr(), backend.peer_addr())
+            {
+                crate::xdp::af_xdp::maybe_promote_splice(
+                    client_flow,
+                    crate::xdp::af_xdp::AfXdpTcpFlowKey {
+                        local_addr: backend_local,
+                        peer_addr: backend_peer,
+                    },
+                    registry,
+                );
+            }
+        }
+        #[cfg(target_os = "linux")]
         AF_XDP_TCP_PROXY_DIAG_RELAY_START.fetch_add(1, Ordering::Relaxed);
         let res = stream_bidirectional_with_metrics_options(
             context.sid,
@@ -2085,6 +2108,9 @@ pub(crate) struct RelayOptions {
     strict_close_on_eof: bool,
     enforce_pressure_idle_timeout: bool,
     cancel_rx: Option<watch::Receiver<crate::l4_connection_registry::ConnectionCancelReason>>,
+    /// Accepted leg's flow key — eBPF splice promotion needs it to find
+    /// the owning reactor once the upstream leg lands on AF_XDP too.
+    af_xdp_client_flow: Option<crate::xdp::af_xdp::AfXdpTcpFlowKey>,
 }
 
 impl Default for RelayOptions {
@@ -2093,6 +2119,7 @@ impl Default for RelayOptions {
             strict_close_on_eof: true,
             enforce_pressure_idle_timeout: true,
             cancel_rx: None,
+            af_xdp_client_flow: None,
         }
     }
 }
@@ -2103,14 +2130,16 @@ impl RelayOptions {
             strict_close_on_eof: true,
             enforce_pressure_idle_timeout: false,
             cancel_rx: None,
+            af_xdp_client_flow: None,
         }
     }
 
-    fn af_xdp_tcp() -> Self {
+    fn af_xdp_tcp(client_flow: Option<crate::xdp::af_xdp::AfXdpTcpFlowKey>) -> Self {
         Self {
             strict_close_on_eof: true,
             enforce_pressure_idle_timeout: true,
             cancel_rx: None,
+            af_xdp_client_flow: client_flow,
         }
     }
 
@@ -3566,7 +3595,7 @@ mod tests {
     #[test]
     fn sni_passthrough_disables_only_pressure_idle_timeout() {
         assert!(RelayOptions::default().enforce_pressure_idle_timeout);
-        assert!(RelayOptions::af_xdp_tcp().enforce_pressure_idle_timeout);
+        assert!(RelayOptions::af_xdp_tcp(None).enforce_pressure_idle_timeout);
         assert!(!RelayOptions::sni_passthrough().enforce_pressure_idle_timeout);
     }
 

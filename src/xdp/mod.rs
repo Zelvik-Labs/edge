@@ -2155,6 +2155,43 @@ impl XdpManager {
                 1,
             );
         }
+        self.sweep_splice_entries();
+    }
+
+    /// Reap splice rules past their deadline: FIN/RST seen (CLOSING,
+    /// short grace so the close handshake completes on the fast path)
+    /// or fully idle. A reaped key that belonged to a lease unwinds the
+    /// whole pair and releases the backend dial claim (source port +
+    /// XDP_OUT_CT row); an unleashed key is promotion-crash debris.
+    #[cfg(target_os = "linux")]
+    fn sweep_splice_entries(&self) {
+        let registry = self.dial_registry.lock().clone();
+        let Some(registry) = registry else {
+            return;
+        };
+        let reaped = {
+            let mut guard = self.ebpf.lock();
+            match guard.as_mut() {
+                Some(ebpf) => linux::sweep_splice_map(
+                    ebpf,
+                    std::time::Duration::from_secs(7200),
+                    std::time::Duration::from_secs(30),
+                ),
+                None => Ok(Vec::new()),
+            }
+        };
+        let reaped = match reaped {
+            Ok(keys) => keys,
+            Err(err) => {
+                tracing::warn!("XDP splice map sweep failed: {err}");
+                return;
+            }
+        };
+        for key in &reaped {
+            if let Some(backend_flow) = registry.splice_lease_for_key(key) {
+                registry.teardown_splice(&backend_flow);
+            }
+        }
     }
 
     /// EN-08: reap idle per-source rate buckets (bounded per pass).
@@ -2209,6 +2246,35 @@ impl XdpManager {
         let mut guard = self.ebpf.lock();
         match guard.as_mut() {
             Some(ebpf) => linux::remove_out_ct(ebpf, key),
+            None => anyhow::bail!("XDP eBPF program is not loaded"),
+        }
+    }
+
+    /// Install one established-flow splice rule (one direction of a
+    /// promoted userspace-TCP session).
+    #[cfg(target_os = "linux")]
+    pub(crate) fn upsert_splice(
+        &self,
+        key: cloudsidra_edge_xdp_common::XdpOutCtKey,
+        value: cloudsidra_edge_xdp_common::XdpTcpSpliceValue,
+    ) -> anyhow::Result<()> {
+        let mut guard = self.ebpf.lock();
+        match guard.as_mut() {
+            Some(ebpf) => linux::upsert_splice(ebpf, key, value),
+            None => anyhow::bail!("XDP eBPF program is not loaded"),
+        }
+    }
+
+    /// Remove one splice rule — promotion rollback, teardown, and the
+    /// periodic sweep all funnel here.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn remove_splice(
+        &self,
+        key: &cloudsidra_edge_xdp_common::XdpOutCtKey,
+    ) -> anyhow::Result<()> {
+        let mut guard = self.ebpf.lock();
+        match guard.as_mut() {
+            Some(ebpf) => linux::remove_splice(ebpf, key),
             None => anyhow::bail!("XDP eBPF program is not loaded"),
         }
     }

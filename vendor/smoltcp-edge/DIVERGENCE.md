@@ -183,6 +183,12 @@ tests at the end of `socket::tcp::test`.
 - New field `rx_win_shift_floor: u8` — persists the configured ceiling
   shift across `reset()` (which otherwise re-derives the shift from
   current capacity and would silently drop a pre-handshake ceiling).
+- `src/socket/tcp.rs`: splice-promotion accessors
+  `wire_snd_nxt`/`wire_rcv_nxt` (wire seq bases incl. buffered bytes),
+  `flight_bytes` (public `flight_size`), `ts_negotiated`, and
+  `win_scale_pair` (effective `(peer, own)` shifts, 0/0 unnegotiated).
+  Read-only; the AF_XDP splice fast path uses them to anchor the two
+  legs' ISN-space translations and to refuse promotion unless quiescent.
   `reset()` now computes `max(capacity-derived shift, floor)`; with
   the floor at its default 0 the computation is byte-for-byte
   upstream.

@@ -30,7 +30,8 @@ use cloudsidra_edge_xdp_common::{
     XdpIpv6Key, XdpLocalIpv4Key, XdpLocalIpv6Key, XdpOutCtKey, XdpOutCtValue, XdpPendingCap,
     XdpPortProtoKey, XdpQueueKey,
     XdpQuicDcidKey, XdpRateBucket, XdpRateLimitConfig, XdpRuleValue, XdpSnatRevKey,
-    XdpSnatRevValue, XdpUdpCtKey, XdpUdpCtValue, XdpUdpFwdKey, XdpUdpFwdRule,
+    XdpSnatRevValue, XdpTcpSpliceValue, XdpUdpCtKey, XdpUdpCtValue, XdpUdpFwdKey,
+    XdpUdpFwdRule, XDP_SPLICE_STATE_CLOSING,
 };
 use core::mem;
 use network_types::{
@@ -206,6 +207,19 @@ static XDP_PENDING_CAP: Array<XdpPendingCap> = Array::with_max_entries(1, 0);
 static XDP_OUT_CT: HashMap<XdpOutCtKey, XdpOutCtValue> =
     HashMap::<XdpOutCtKey, XdpOutCtValue>::with_max_entries(65_536, 0);
 
+/// Established-flow splice table: once a userspace-TCP session has both
+/// legs quiescent, userspace installs one rule per wire direction and the
+/// kernel dataplane takes over forwarding — header rewrite plus the
+/// constant seq/ack translation bridging the two sockets' ISN spaces,
+/// XDP_TX straight back out the ingress interface. Keys are the arriving
+/// packet's own (dst, dst_port, src, src_port), so the client->backend
+/// leg (dst = VIP proxy port) and the backend->client leg (dst = dialed
+/// tuple) live side by side under the same shape. Userspace owns insert
+/// and delete; like XDP_OUT_CT the map is pinned for reload continuity.
+#[map(name = "XDP_TCP_SPLICE")]
+static XDP_TCP_SPLICE: HashMap<XdpOutCtKey, XdpTcpSpliceValue> =
+    HashMap::<XdpOutCtKey, XdpTcpSpliceValue>::with_max_entries(65_536, 0);
+
 /// EN-10 lifecycle feedback channel: a bounded ring of `XdpFlowEvent`
 /// records published to userspace. Emission is advisory — a full ring only
 /// increments `flow_event_lost`; kernel maps stay authoritative for flow
@@ -257,7 +271,12 @@ struct NatScratch {
     redir_flags: u32,
     redir_proto: u8,
     redir_l4off: u16,
-    redir_pad: u8,
+    /// Established-flow splice ack-floor passthrough marker — mirrors
+    /// NatScratch.splice_passthrough in the shared ABI: set by the
+    /// slot-17 worker when a splice rule's ack-floor routes the packet
+    /// back to userspace, read+cleared by the TCP4 work program so the
+    /// probe is skipped for that packet.
+    splice_passthrough: u8,
     /// Worker context stashed before the dispatch -> work tail call: offsets
     /// are re-validated against packet bounds inside the worker program, so
     /// only plain scalars need to cross the call.
@@ -342,6 +361,12 @@ const XDP_DISPATCH_ICMP_CT_V6: u32 = 15;
 /// second verifier-expensive callsite, so it runs behind one more tail
 /// call with its own 1M-insn budget.
 const XDP_DISPATCH_ICMP_CT_V6_INNER: u32 = 16;
+/// Established-flow TCP splice worker: the header rewrite plus the
+/// 40-slot option scan blow the TCP4 work program's verifier budget
+/// inline, so the work program does only the cheap map probe and hops
+/// here on a hit. Like the challenge worker, a missing slot falls back
+/// to the normal path rather than dropping.
+const XDP_DISPATCH_TCP4_SPLICE: u32 = 17;
 /// Sentinel action returned by the Control branches so the tail call to the
 /// ICMP out-CT worker fires at program scope — kernel 6.1 rejects
 /// tail_call inside bpf2bpf subprogs without BTF. Never a real action.
@@ -916,6 +941,42 @@ fn try_tcp4_challenge(ctx: &XdpContext) -> Result<u32, ()> {
     }
 }
 
+/// Established-flow splice worker (dispatch slot 17). Reached only on a
+/// `tcp_splice_hit_v4` probe hit inside the TCP4 work program — the
+/// parked work context still describes this frame. A stale-map miss
+/// (entry torn down between probe and hop) resumes the normal work
+/// program rather than dropping.
+#[xdp]
+pub fn xdp_tcp4_splice(ctx: XdpContext) -> u32 {
+    match try_tcp4_splice_work(&ctx) {
+        Ok(action) => {
+            count_action(action);
+            action
+        }
+        Err(_) => {
+            counter_parse_error();
+            xdp_action::XDP_PASS
+        }
+    }
+}
+
+fn try_tcp4_splice_work(ctx: &XdpContext) -> Result<u32, ()> {
+    let (ip_offset, l4_offset, _, local_flags, proto, ifindex) = work_ctx()?;
+    let now_ns = unsafe { bpf_ktime_get_ns() };
+    if let Some(action) = try_tcp_splice_v4(ctx, ip_offset, l4_offset, now_ns)? {
+        return Ok(action);
+    }
+    unsafe { XDP_DISPATCH.tail_call(ctx, XDP_DISPATCH_NAT_TCP4_WORK) };
+    let policy = unsafe { XDP_INTERFACE_POLICY.get(&ifindex) };
+    Ok(maybe_redirect_scratch(
+        ctx,
+        policy,
+        local_flags,
+        proto,
+        l4_offset,
+    ))
+}
+
 fn try_nat_tcp_dispatch(ctx: &XdpContext) -> Result<u32, ()> {
     let (_, ip_offset, proto, l4_offset, packet_len, ifindex, policy, local_flags) =
         parse_frame::<4>(ctx)?;
@@ -940,12 +1001,393 @@ fn try_nat_tcp_dispatch(ctx: &XdpContext) -> Result<u32, ()> {
     ))
 }
 
+/// Established-flow splice fast path (IPv4). Userspace promotes a
+/// userspace-TCP session once both its smoltcp legs are quiescent by
+/// writing one rule per wire direction; a hit rewrites the frame into
+/// the sibling leg's tuple — Ethernet, addresses, ports, and the
+/// constant seq/ack translations bridging the two sockets' ISN spaces —
+/// then hairpins it out the ingress interface. The payload is never
+/// touched: TCP is a byte stream, so positional deltas keep both peers'
+/// sequence spaces consistent. A miss costs one hash lookup and falls
+/// through to the normal NAT/OUT-CT/redirect classification.
+/// Cheap probe half of the splice: key build + map lookup, no rewrite.
+/// Kept separate so the TCP4 work program pays only ~30 insns per
+/// packet; the hit path tail-calls the slot-17 worker.
+#[inline(never)]
+fn tcp_splice_hit_v4(
+    ctx: &XdpContext,
+    ip_offset: usize,
+    l4_offset: usize,
+) -> Result<bool, ()> {
+    let (ip_offset, l4_offset) = bound_work_offsets(ip_offset, l4_offset);
+    let tcp = ptr_at::<TcpHdr>(ctx, l4_offset)?;
+    let ip = ptr_at::<Ipv4Hdr>(ctx, ip_offset)?;
+    let src_addr = unsafe { (*ip).src_addr };
+    let dst_addr = unsafe { (*ip).dst_addr };
+    let src_port = unsafe { u16::from_ne_bytes((*tcp).source) };
+    let dst_port = unsafe { u16::from_ne_bytes((*tcp).dest) };
+    let key = XdpOutCtKey {
+        local_addr: v4_embed(u32::from_be_bytes(dst_addr)),
+        remote_addr: v4_embed(u32::from_be_bytes(src_addr)),
+        local_port_be: dst_port,
+        remote_port_be: src_port,
+        family: 4,
+        proto: 6,
+        _pad: [0; 2],
+    };
+    Ok(unsafe { XDP_TCP_SPLICE.get(&key) }.is_some())
+}
+
+#[inline(never)]
+fn try_tcp_splice_v4(
+    ctx: &XdpContext,
+    ip_offset: usize,
+    l4_offset: usize,
+    now_mono_ns: u64,
+) -> Result<Option<u32>, ()> {
+    let (ip_offset, l4_offset) = bound_work_offsets(ip_offset, l4_offset);
+    let tcp = ptr_at::<TcpHdr>(ctx, l4_offset)?;
+    let ip = ptr_at::<Ipv4Hdr>(ctx, ip_offset)?;
+    let src_addr = unsafe { (*ip).src_addr };
+    let dst_addr = unsafe { (*ip).dst_addr };
+    let src_port = unsafe { u16::from_ne_bytes((*tcp).source) };
+    let dst_port = unsafe { u16::from_ne_bytes((*tcp).dest) };
+    let key = XdpOutCtKey {
+        local_addr: v4_embed(u32::from_be_bytes(dst_addr)),
+        remote_addr: v4_embed(u32::from_be_bytes(src_addr)),
+        local_port_be: dst_port,
+        remote_port_be: src_port,
+        family: 4,
+        proto: 6,
+        _pad: [0; 2],
+    };
+    let Some(splice) = XDP_TCP_SPLICE.get_ptr_mut(&key) else {
+        return Ok(None);
+    };
+    // SAFETY: pointer into the map value for `key`; fields are read out
+    // into registers before the mutating header writes below.
+    let splice = unsafe { &mut *splice };
+    splice.last_seen_ns = now_mono_ns;
+    let closing = unsafe { (*tcp).fin() } == 1 || unsafe { (*tcp).rst() } == 1;
+    if closing {
+        splice.state = XDP_SPLICE_STATE_CLOSING;
+    }
+    let new_src_be = u32::from_be_bytes([
+        splice.new_src_addr[0],
+        splice.new_src_addr[1],
+        splice.new_src_addr[2],
+        splice.new_src_addr[3],
+    ]);
+    let new_dst_be = u32::from_be_bytes([
+        splice.new_dst_addr[0],
+        splice.new_dst_addr[1],
+        splice.new_dst_addr[2],
+        splice.new_dst_addr[3],
+    ]);
+    let new_src_port = splice.new_src_port_be;
+    let new_dst_port = splice.new_dst_port_be;
+    let seq_delta = splice.seq_delta;
+    let ack_delta = splice.ack_delta;
+    let ack_floor = splice.ack_floor;
+    let ts_nego = splice.ts_nego;
+    let wnd_shift = splice.wnd_shift;
+    let next_hop = splice.next_hop_mac;
+    let seq = unsafe { u32::from_be_bytes((*tcp).seq) };
+    let ackno = unsafe { u32::from_be_bytes((*tcp).ack_seq) };
+    let ack = unsafe { (*tcp).ack() } == 1;
+    let syn = unsafe { (*tcp).syn() } == 1;
+    let scratch = nat_scratch()?;
+
+    // A bare SYN on a spliced tuple is a NEW connection reusing the
+    // 4-tuple — its ISN space is unrelated to the installed deltas, so
+    // rewriting would inject garbage into the sibling stream. Retire
+    // the whole stale pair (the sibling key is the rewritten tuple
+    // stored in this entry) and hand the SYN to userspace, where a
+    // fresh session takes over; later packets then miss the map until
+    // userspace re-promotes. An established splice never legitimately
+    // sees a SYN without ACK — the handshake finished long ago.
+    if syn && !ack {
+        let sib = XdpOutCtKey {
+            local_addr: splice.new_src_addr,
+            remote_addr: splice.new_dst_addr,
+            local_port_be: splice.new_src_port_be,
+            remote_port_be: splice.new_dst_port_be,
+            family: 4,
+            proto: 6,
+            _pad: [0; 2],
+        };
+        let _ = XDP_TCP_SPLICE.remove(&sib);
+        let _ = XDP_TCP_SPLICE.remove(&key);
+        unsafe { (*scratch).splice_passthrough = 1 };
+        counter_splice_passthrough();
+        return Ok(None);
+    }
+    // A SYN+ACK on a spliced tuple can only be a straggler from a
+    // reused connection as well — never rewrite it.
+    if syn {
+        unsafe { (*scratch).splice_passthrough = 1 };
+        counter_splice_passthrough();
+        return Ok(None);
+    }
+
+    let ihl = unsafe { (*ip).ihl() as usize };
+    let total_len = unsafe { (*ip).tot_len() as usize };
+    let tcp_doff = unsafe { (*tcp).doff() as usize } * 4;
+    let payload_len = total_len.saturating_sub(ihl + tcp_doff) as u32;
+    let seq_consuming = payload_len != 0
+        || unsafe { (*tcp).fin() } == 1
+        || unsafe { (*tcp).rst() } == 1;
+    // Tail-drain floor: *pure* acks at or below ack_floor still belong
+    // to the smoltcp session draining its pre-splice tail — route the
+    // packet back through the work program's userspace path (skipping
+    // the splice probe via the passthrough flag) so the socket can
+    // confirm or retransmit the tail. Seq-consuming packets never
+    // gate: a retransmission below the splice boundary rewrites onto
+    // positions the sibling already consumed, which TCP dedup absorbs
+    // — and if userspace dropped bytes mid-flight, forwarding the
+    // retransmit is the only way the hole ever refills (routing it to
+    // a retired session instead deadlocks the peer at its floor).
+    // A splice-side packet whose ack is still low forwards the stale
+    // ack harmlessly, and the drain deadline retires the userspace
+    // session regardless.
+    if !seq_consuming && ack && ack_floor != 0 {
+        if (ackno.wrapping_sub(ack_floor) as i32) <= 0 {
+            unsafe { (*scratch).splice_passthrough = 1 };
+            counter_splice_passthrough();
+            return Ok(None);
+        }
+        // The peer just acked spliced bytes — the floor's drain job is
+        // over. Disarm it in the entry: the wrap-space compare reads a
+        // floor more than 2 GiB behind the ack as "below" again, which
+        // would permanently misroute every pure ack to a session that
+        // no longer exists. Clearing it once crossed makes the gate
+        // provably dead long before that distance is reachable.
+        splice.ack_floor = 0;
+    }
+
+    // Ethernet: dst becomes the sibling leg's next hop; src stays this
+    // interface's own address (the inbound dst MAC) — same convention as
+    // the NAT reply rewrite.
+    eth_rewrite(ctx, next_hop)?;
+
+    let ip_hdr = ptr_at_mut::<Ipv4Hdr>(ctx, ip_offset)?;
+    unsafe {
+        (*ip_hdr).src_addr = new_src_be.to_be_bytes();
+        (*ip_hdr).dst_addr = new_dst_be.to_be_bytes();
+    }
+    ipv4_csum_update(
+        ctx,
+        ip_offset,
+        u32::from_ne_bytes(src_addr),
+        u32::from_ne_bytes(new_src_be.to_be_bytes()),
+    )?;
+    ipv4_csum_update(
+        ctx,
+        ip_offset,
+        u32::from_ne_bytes(dst_addr),
+        u32::from_ne_bytes(new_dst_be.to_be_bytes()),
+    )?;
+
+    unsafe {
+        (*scratch).csum_old = [u32::from_ne_bytes(src_addr), 0, 0, 0];
+        (*scratch).csum_new = [u32::from_ne_bytes(new_src_be.to_be_bytes()), 0, 0, 0];
+    }
+    let tcp_hdr = ptr_at_mut::<TcpHdr>(ctx, l4_offset)?;
+    unsafe { (*tcp_hdr).source = new_src_port.to_ne_bytes() };
+    tcp_csum_update(
+        ctx,
+        scratch,
+        l4_offset,
+        csum_aux(1, src_port, new_src_port),
+    )?;
+    unsafe {
+        (*scratch).csum_old = [u32::from_ne_bytes(dst_addr), 0, 0, 0];
+        (*scratch).csum_new = [u32::from_ne_bytes(new_dst_be.to_be_bytes()), 0, 0, 0];
+    }
+    let tcp_hdr = ptr_at_mut::<TcpHdr>(ctx, l4_offset)?;
+    unsafe { (*tcp_hdr).dest = new_dst_port.to_ne_bytes() };
+    tcp_csum_update(
+        ctx,
+        scratch,
+        l4_offset,
+        csum_aux(1, dst_port, new_dst_port),
+    )?;
+
+    // Sequence-space translation: every byte position maps by the fixed
+    // deltas userspace anchored at promotion. The ack field tracks the
+    // reverse direction's stream, so it shifts by the opposite delta;
+    // SACK block edges live in the same space as ack.
+    if seq_delta != 0 {
+        tcp_patch_u32(ctx, l4_offset, 4, seq.wrapping_add(seq_delta as u32))?;
+    }
+    if ack && ack_delta != 0 {
+        tcp_patch_u32(ctx, l4_offset, 8, ackno.wrapping_add(ack_delta as u32))?;
+    }
+    // Window rescale: the packet's sender scaled this field by its own
+    // negotiated shift; the rewritten destination decodes with the
+    // shift the edge announced on the receiving leg. Positive shift
+    // saturates at u16::MAX; negative floors at 1 so a live window can
+    // never be rounded shut (a true zero stays zero).
+    if wnd_shift != 0 {
+        let mut wb = [0u8; 2];
+        pkt_load(ctx, l4_offset + 14, &mut wb)?;
+        let w = u16::from_be_bytes(wb);
+        let w_new = if w == 0 {
+            0
+        } else if wnd_shift > 0 {
+            (u32::from(w) << (wnd_shift as u32)).min(u16::MAX as u32) as u16
+        } else {
+            (w >> (-(wnd_shift as i32)) as u32).max(1)
+        };
+        if w_new != w {
+            tcp_patch_u16(ctx, l4_offset, 14, w_new)?;
+        }
+    }
+    splice_tcp_options(ctx, l4_offset, ts_nego, ack_delta)?;
+    counter_tcp_splice_tx();
+    Ok(Some(xdp_action::XDP_TX))
+}
+
+/// Option scan for a spliced packet over the bounded 40-byte option
+/// area: TS options (kind 8) are NOP'd out — PAWS is endpoint-clock
+/// relative and two ISN spaces have unrelated clock bases — and each
+/// SACK (kind 5) block edge translates by `ack_delta`, the same byte
+/// space as the ack field. Malformed or truncated options stop the scan;
+/// they still forward with their headers translated.
+#[inline(never)]
+fn splice_tcp_options(
+    ctx: &XdpContext,
+    l4_offset: usize,
+    ts_nego: u8,
+    ack_delta: i32,
+) -> Result<(), ()> {
+    let doff = match pkt_u8(ctx, l4_offset + 12) {
+        Ok(b) => (b >> 4) as usize,
+        Err(()) => return Err(()),
+    };
+    if doff <= 5 {
+        return Ok(());
+    }
+    let opt_end = (doff & 0xf) * 4;
+    let mut off = 20usize;
+    // Worst case is forty 1-byte options; the fixed trip count keeps the
+    // verifier's `off` bound closed.
+    for _ in 0..40 {
+        // Pin the loop-head state like ipv6_transport_offset: the AND
+        // mask is a single unfoldable ALU op bounding `off`, so the
+        // back-edge state converges instead of LLVM verifying all 40
+        // iterations (observed: 1M-insn blowout on kernel 6.1).
+        off &= 0x3f;
+        if off + 2 > opt_end {
+            break;
+        }
+        let kind = pkt_u8(ctx, l4_offset + off)?;
+        if kind == 0 {
+            break;
+        }
+        if kind == 1 {
+            off += 1;
+            continue;
+        }
+        let len = pkt_u8(ctx, l4_offset + off + 1)? as usize;
+        if len < 2 || off + len > opt_end {
+            break;
+        }
+        if kind == 8 && len == 10 && ts_nego != 0 {
+            // 10-byte TS -> ten NOPs; the two u32 + one u16 patches keep
+            // writes inside the option and fix the checksum per field.
+            tcp_patch_u32(ctx, l4_offset, off, u32::from_be_bytes([1, 1, 1, 1]))?;
+            tcp_patch_u32(ctx, l4_offset, off + 4, u32::from_be_bytes([1, 1, 1, 1]))?;
+            tcp_patch_u16(ctx, l4_offset, off + 8, u16::from_be_bytes([1, 1]))?;
+        } else if kind == 5 && len >= 10 && ack_delta != 0 {
+            // Each 8-byte SACK block is (left, right) sequence edges.
+            // len caps at 34, so at most four blocks.
+            let mut block = 0usize;
+            for _ in 0..4 {
+                block &= 0x3;
+                let edge = off + 2 + block * 8;
+                if edge + 8 > off + len {
+                    break;
+                }
+                let mut left_b = [0u8; 4];
+                pkt_load(ctx, l4_offset + edge, &mut left_b)?;
+                let left = u32::from_be_bytes(left_b).wrapping_add(ack_delta as u32);
+                tcp_patch_u32(ctx, l4_offset, edge, left)?;
+                let mut right_b = [0u8; 4];
+                pkt_load(ctx, l4_offset + edge + 4, &mut right_b)?;
+                let right = u32::from_be_bytes(right_b).wrapping_add(ack_delta as u32);
+                tcp_patch_u32(ctx, l4_offset, edge + 4, right)?;
+                block += 1;
+            }
+        }
+        off += len;
+    }
+    Ok(())
+}
+
+/// Same helper-based patch discipline as [`tcp_patch_u32`], for the
+/// 2-byte TS tail and other narrow fields.
+fn tcp_patch_u16(
+    ctx: &XdpContext,
+    l4_offset: usize,
+    field_off: usize,
+    new_val: u16,
+) -> Result<(), ()> {
+    let new_bytes = new_val.to_be_bytes();
+    let mut old_b = [0u8; 2];
+    pkt_load(ctx, l4_offset + field_off, &mut old_b)?;
+    let mut old_w = u32::from(u16::from_ne_bytes(old_b));
+    let mut new_w = u32::from(u16::from_ne_bytes(new_bytes));
+    let diff = csum_diff_u32(&mut old_w, &mut new_w);
+    pkt_store(ctx, l4_offset + field_off, &new_bytes)?;
+    let mut cb = [0u8; 2];
+    pkt_load(ctx, l4_offset + 16, &mut cb)?;
+    let old_check = u16::from_ne_bytes(cb);
+    pkt_store(
+        ctx,
+        l4_offset + 16,
+        &csum_apply_diff(old_check, diff).to_ne_bytes(),
+    )?;
+    Ok(())
+}
+
+fn counter_tcp_splice_tx() {
+    if let Some(counters) = counters() {
+        counters.tcp_splice_tx = counters.tcp_splice_tx.saturating_add(1);
+    }
+}
+
+fn counter_splice_passthrough() {
+    if let Some(counters) = counters() {
+        counters.tcp_splice_passthrough = counters.tcp_splice_passthrough.saturating_add(1);
+    }
+}
+
 fn try_nat_tcp4_work(ctx: &XdpContext) -> Result<u32, ()> {
     let (ip_offset, l4_offset, packet_len, local_flags, proto, ifindex) = work_ctx()?;
     let policy = unsafe { XDP_INTERFACE_POLICY.get(&ifindex) };
     let now_ns = unsafe { bpf_ktime_get_ns() };
     let scratch = nat_scratch()?;
     unsafe { (*scratch).forge_op = XDP_FORGE_OP_NONE };
+    // Promoted userspace-TCP flows skip NAT/conntrack classification
+    // entirely. The probe is deliberately cheap — one hash lookup per
+    // inbound TCP packet, hit rate ~0 on nodes without splices — and
+    // the rewrite itself runs in the slot-17 worker under its own
+    // verifier budget (the option scan would blow this program's 1M
+    // state limit inline).
+    // A splice worker that routed this packet back for tail-drain
+    // delivery marks the per-CPU scratch — the probe would just hit the
+    // same rule again and tail-call loop until the limit.
+    let splice_passthrough = unsafe { (*scratch).splice_passthrough };
+    unsafe { (*scratch).splice_passthrough = 0 };
+    if splice_passthrough == 0 && tcp_splice_hit_v4(ctx, ip_offset, l4_offset)? {
+        if let Some(counters) = counters() {
+            counters.tcp_splice_probe = counters.tcp_splice_probe.saturating_add(1);
+        }
+        unsafe { XDP_DISPATCH.tail_call(ctx, XDP_DISPATCH_TCP4_SPLICE) };
+        // Slot empty on a stale object: the entry exists but cannot
+        // fire — keep the flow on the normal userspace path.
+    }
     if let Some(action) = try_tcp_nat_v4(ctx, ip_offset, l4_offset, packet_len, now_ns)? {
         return Ok(action);
     }

@@ -951,6 +951,31 @@ pub(crate) fn tcp_flags_from_ip_packet(ip_packet: &[u8]) -> Option<u8> {
     Some(ip_packet[l4_offset + 13])
 }
 
+/// TCP header fields a splice promotion needs from a parked inbound
+/// frame: wire sequence number, payload byte count, and control flags
+/// (SYN/FIN consume a sequence position each).
+#[cfg(any(test, target_os = "linux"))]
+pub(crate) fn tcp_seq_bounds_from_ip_packet(
+    ip_packet: &[u8],
+) -> Option<(u32, u32, u8)> {
+    let (protocol, l4_offset, packet_end) = ip_transport_bounds(ip_packet)?;
+    if protocol != IP_PROTO_TCP || l4_offset + TCP_MIN_HEADER_LEN > packet_end {
+        return None;
+    }
+    let seq = u32::from_be_bytes([
+        ip_packet[l4_offset + 4],
+        ip_packet[l4_offset + 5],
+        ip_packet[l4_offset + 6],
+        ip_packet[l4_offset + 7],
+    ]);
+    let header_len = usize::from(ip_packet[l4_offset + 12] >> 4) * 4;
+    if header_len < TCP_MIN_HEADER_LEN || l4_offset + header_len > packet_end {
+        return None;
+    }
+    let payload = (packet_end - l4_offset - header_len) as u32;
+    Some((seq, payload, ip_packet[l4_offset + 13]))
+}
+
 pub(crate) fn ip_transport_bounds(ip_packet: &[u8]) -> Option<(u8, usize, usize)> {
     match ip_packet.first()? >> 4 {
         4 => {

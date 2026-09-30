@@ -316,6 +316,18 @@ pub struct XdpCounters {
     /// Counted separately from `out_ct_hit` so the PMTU path stays
     /// observable on its own.
     pub out_ct_icmp: u64,
+    /// Frames forwarded by the established-flow splice fast path
+    /// (XDP_TCP_SPLICE hit → tuple/seq rewrite → XDP_TX). Counted
+    /// separately from `tcp_fwd_tx` — those are direct-forward rules.
+    pub tcp_splice_tx: u64,
+    /// Probe hits in the TCP4 work program — every packet that matched
+    /// a splice entry, whether it then rewrote or routed to userspace
+    /// for tail-drain delivery.
+    pub tcp_splice_probe: u64,
+    /// Packets a splice entry routed to userspace (sub-floor
+    /// retransmits and pre-splice-tail acks), as opposed to the
+    /// spliced `tcp_splice_tx`.
+    pub tcp_splice_passthrough: u64,
 }
 
 /// Per-IP fixed-window rate limit configuration written by userspace.
@@ -560,6 +572,65 @@ pub struct XdpCookieKey {
     pub prev: [u8; 16],
 }
 
+/// Fast-path splice rule for an established userspace-TCP flow: the wire
+/// 4-tuple the packet arrives with (same layout as `XdpOutCtKey`,
+/// local = packet dst, remote = packet src) maps to the sibling leg's
+/// tuple, plus the constant sequence translations bridging the two
+/// sockets' independent ISN spaces. Userspace installs one entry per
+/// direction once both legs are quiescent; the eBPF fast path then
+/// rewrites headers and hairpins the frame out the same interface
+/// (XDP_TX) without touching the payload.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct XdpTcpSpliceValue {
+    /// Last packet timestamp for the userspace idle sweep.
+    pub last_seen_ns: u64,
+    /// Owning userspace session's server/flow identity for attribution
+    /// in lifecycle events.
+    pub server_id: i64,
+    /// Rewritten destination IP (sibling leg's peer endpoint).
+    pub new_dst_addr: [u8; 16],
+    /// Rewritten source IP (sibling leg's local endpoint).
+    pub new_src_addr: [u8; 16],
+    /// Resolved next-hop MAC for the rewritten destination.
+    pub next_hop_mac: [u8; 6],
+    pub new_dst_port_be: u16,
+    pub new_src_port_be: u16,
+    /// Tail-drain floor: inbound packets whose ack field is <= this
+    /// value still acknowledge bytes the smoltcp tail is draining — the
+    /// datapath routes them to userspace instead of splicing so the
+    /// userspace socket can confirm, retransmit, and retire. Bytes
+    /// above the floor belong to the spliced stream. Once the userspace
+    /// tail is fully drained every live ack exceeds the floor and the
+    /// rule becomes dormant.
+    pub ack_floor: u32,
+    /// Added to the wire TCP sequence number.
+    pub seq_delta: i32,
+    /// Added to the wire acknowledgment number and to every SACK block
+    /// edge (same byte-stream space as `ack`).
+    pub ack_delta: i32,
+    /// XDP_SPLICE_STATE_* — OPEN until FIN/RST marks CLOSING.
+    pub state: u8,
+    /// Flow negotiated TCP timestamps — the datapath NOPs TS options
+    /// out so mismatched endpoint clock bases can never trip PAWS.
+    pub ts_nego: u8,
+    /// Window-field rescale: the sender of a rewritten packet scaled
+    /// its advertised window by its own negotiated shift, while the
+    /// rewritten destination decodes with the shift the edge announced
+    /// on the receiving leg. `src_scale - dst_wire_scale` — positive
+    /// shifts the field left (saturated), negative right (floor 1
+    /// unless the field is already 0).
+    pub wnd_shift: i8,
+    /// Tail padding to the 8-byte struct alignment (80B total).
+    pub _pad: [u8; 5],
+}
+
+/// Splice rule live — packets are rewritten and forwarded.
+pub const XDP_SPLICE_STATE_OPEN: u8 = 0;
+/// Splice rule saw FIN/RST — still forwarding (the close handshake must
+/// transit) but reaped by the userspace sweep after a short grace.
+pub const XDP_SPLICE_STATE_CLOSING: u8 = 1;
+
 /// SNAT reverse-binding key: backend replies arrive addressed to
 /// (listen_addr, snat_port); the value restores the client tuple.
 #[repr(C)]
@@ -675,7 +746,12 @@ pub struct NatScratch {
     pub redir_flags: u32,
     pub redir_proto: u8,
     pub redir_l4off: u16,
-    pub redir_pad: u8,
+    /// Established-flow splice ack-floor passthrough: the slot-17
+    /// worker set this when a splice rule's ack-floor routed the packet
+    /// back to the work program — the probe is skipped for this packet
+    /// so the tail-drain path reaches userspace instead of tail-call
+    /// looping on the same rule. Cleared by the work program on read.
+    pub splice_passthrough: u8,
     /// Worker context stashed before the dispatch -> work tail call. Offsets
     /// are re-validated against packet bounds inside the worker program.
     pub work_ip_off: u32,
@@ -783,7 +859,18 @@ pub struct NatScratch {
 /// icmp_inner_end staging (440->448B), XDP_DISPATCH max_entries 16->20 for
 /// the ICMPv6 inner-claim worker (slot 16); xdp_main_v4/v6_work (slots
 /// 12/13) and xdp_icmp_ct_v4/v6 (slots 14/15) tail-call programs added.
-pub const XDP_ABI_VERSION: u32 = 17;
+/// v18: established-flow splice fast path — new XDP_TCP_SPLICE map
+/// (XdpOutCtKey -> XdpTcpSpliceValue, per-generation), XdpCounters
+/// +tcp_splice_tx (312->320B).
+/// v19: splice tail-drain — XdpTcpSpliceValue +ack_floor (72->80B),
+/// NatScratch redir_pad renamed splice_passthrough (size unchanged).
+/// v20: splice observability — XdpCounters +tcp_splice_probe/
+/// tcp_splice_passthrough (320->336B).
+/// v21: splice resilience — XdpTcpSpliceValue -seq_floor (size kept
+/// 80B via padding) so sub-boundary retransmits splice as dedup'd
+/// refills instead of starving a drained hole; bare SYN on a spliced
+/// tuple now evicts the stale pair and falls through to userspace.
+pub const XDP_ABI_VERSION: u32 = 21;
 
 /// Path that owns a flow's transport state (architecture §4.4 PathBinding).
 /// A flow has exactly one owner for its lifetime; packets may not migrate a
@@ -1028,9 +1115,10 @@ const _: () = assert!(core::mem::size_of::<XdpBudgetConfig>() == 72);
 const _: () = assert!(core::mem::size_of::<XdpBudgetBucket>() == 96);
 const _: () = assert!(core::mem::size_of::<XdpSvcBucket>() == 16);
 const _: () = assert!(core::mem::size_of::<XdpPendingCap>() == 24);
-const _: () = assert!(core::mem::size_of::<XdpCounters>() == 312);
+const _: () = assert!(core::mem::size_of::<XdpCounters>() == 336);
 const _: () = assert!(core::mem::size_of::<XdpOutCtKey>() == 40);
 const _: () = assert!(core::mem::size_of::<XdpOutCtValue>() == 8);
+const _: () = assert!(core::mem::size_of::<XdpTcpSpliceValue>() == 80);
 const _: () = assert!(core::mem::size_of::<XdpUdpCtKey>() == 40);
 const _: () = assert!(core::mem::size_of::<XdpUdpCtValue>() == 72);
 const _: () = assert!(core::mem::size_of::<XdpUdpFwdRule>() == 48);
@@ -1074,6 +1162,7 @@ unsafe_impl_aya_pod!(
     XdpUdpCtValue,
     XdpOutCtKey,
     XdpOutCtValue,
+    XdpTcpSpliceValue,
     XdpSnatRevKey,
     XdpSnatRevValue,
     XdpFlowAcct,

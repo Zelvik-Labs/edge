@@ -1879,6 +1879,45 @@ impl<'a> Socket<'a> {
         self.rx_buffer.len()
     }
 
+    /// smoltcp-edge (T4-splice): wire position the next emitted data byte
+    /// occupies (`local_seq_no` + queued tx bytes). Splice promotion
+    /// anchors the sibling leg's send base to this.
+    pub fn wire_snd_nxt(&self) -> u32 {
+        (self.local_seq_no + self.tx_buffer.len()).0 as u32
+    }
+
+    /// smoltcp-edge (T4-splice): wire position of the next inbound byte
+    /// the peer may send (`remote_seq_no` + buffered rx bytes).
+    pub fn wire_rcv_nxt(&self) -> u32 {
+        (self.remote_seq_no + self.rx_buffer.len()).0 as u32
+    }
+
+    /// smoltcp-edge (T4-splice): octets transmitted but not yet ACKed.
+    /// Promotion requires zero — an in-flight byte's wire position is
+    /// owned by this socket, not the splice mapping.
+    pub fn flight_bytes(&self) -> usize {
+        self.flight_size()
+    }
+
+    /// smoltcp-edge (T4-splice): whether TCP timestamps were negotiated
+    /// — we emit TS (generator installed) and have seen the peer's.
+    pub fn ts_negotiated(&self) -> bool {
+        self.tsval_generator.is_some() && self.last_remote_tsval != 0
+    }
+
+    /// smoltcp-edge (T4-splice): the effective window scales of this
+    /// leg as `(peer_shift, own_shift)`, each 0 when unnegotiated. A
+    /// spliced packet's window field was encoded by its sender using
+    /// `sender.peer_shift`, while the sibling leg decodes with the
+    /// shift the sibling's peer negotiated — promotion rescales by the
+    /// difference (`sender.0 - receiver.1`).
+    pub fn win_scale_pair(&self) -> (u8, u8) {
+        match self.remote_win_scale {
+            Some(peer) => (peer, self.remote_win_shift),
+            None => (0, 0),
+        }
+    }
+
     fn set_state(&mut self, state: State) {
         if self.state != state {
             tcp_trace!("state={}=>{}", self.state, state);

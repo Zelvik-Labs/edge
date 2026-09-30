@@ -310,6 +310,26 @@ pub(crate) struct AfXdpTcpSession {
     pub(crate) egress_rx: Option<mpsc::Receiver<AfXdpTcpChargedBytes>>,
     pub(crate) pending_ingress: AfXdpTcpChargedBytes,
     pub(crate) pending_egress: AfXdpTcpChargedBytes,
+    /// Splice-promotion flush boundary (`None` while idle): inbound
+    /// frames whose sequence space ends at or below this wire position
+    /// still feed the socket — everything beyond it parks in
+    /// `splice_parked`. The boundary splits the byte stream: positions
+    /// below it belong to smoltcp (they drain out the app pipe and onto
+    /// the sibling wire as the pre-splice tail), positions at or above
+    /// it belong to the eBPF splice once the map entry lands.
+    pub(crate) splice_boundary: Option<u32>,
+    /// Post-promotion drain anchor (`None` while unspliced): the splice
+    /// map owns the wire and this session keeps pumping only to deliver
+    /// and confirm its pre-splice tail. Retired once every queue
+    /// empties — or when the drain deadline passes (a peer that jumped
+    /// its ack straight past the floor without a re-deliverable ACK
+    /// would otherwise pin the session forever).
+    pub(crate) splice_drain_since: Option<SmoltcpInstant>,
+    /// Inbound frames parked at or beyond `splice_boundary`. On commit
+    /// they are dropped wholesale — the splice wire recovers their
+    /// content via the peer's retransmit (they were never ACKed). On
+    /// abort they replay through the normal ingress path.
+    pub(crate) splice_parked: std::collections::VecDeque<AfXdpTcpIngressFrame>,
     pub(crate) created_at: SmoltcpInstant,
     pub(crate) last_activity: SmoltcpInstant,
     /// EN-27: last *inbound-packet* activity. Unlike `last_activity`
@@ -819,6 +839,10 @@ pub(crate) struct AfXdpTcpReactor {
     /// port and XDP_OUT_CT row through this handle.
     #[cfg(target_os = "linux")]
     dial_registry: Option<Arc<AfXdpDialRegistry>>,
+    /// This queue's request sender — sessions register it with the dial
+    /// registry so splice orchestration can reach the owning reactor.
+    #[cfg(target_os = "linux")]
+    self_tx: Option<mpsc::Sender<AfXdpReactorRequest>>,
     /// T5: transport-controller selection for AF_XDP-terminated flows —
     /// `cubic` is the validated default; `edgecc` installs the decision
     /// layer (with worker-local aggregate + path priors when enabled).
@@ -919,6 +943,8 @@ impl AfXdpTcpReactor {
             idle_profile_refreshed_at: SmoltcpInstant::from_millis(0),
             #[cfg(target_os = "linux")]
             dial_registry: None,
+            #[cfg(target_os = "linux")]
+            self_tx: None,
             transport_controller: crate::runtime_mode::XdpTransportController::default(),
             trusted_ecn: false,
             aggregate: None,
@@ -1544,6 +1570,38 @@ impl AfXdpTcpReactor {
         flow: AfXdpTcpFlowKey,
         ip_packet: Bytes,
     ) -> bool {
+        #[cfg(target_os = "linux")]
+        if let Some(session) = self.sessions.get_mut(&flow)
+            && let Some(boundary) = session.splice_boundary
+        {
+            // Flush mode: the boundary splits pre-splice content (still
+            // smoltcp's) from splice-domain content — the peer
+            // retransmits parked bytes through the live splice after
+            // promotion. Pure-ACK frames carry no sequence positions
+            // and always feed; control flags park with the data —
+            // a FIN beyond the boundary is splice traffic.
+            let beyond = match tcp_seq_bounds_from_ip_packet(&ip_packet) {
+                Some((_, 0, flags)) => flags & 0x07 != 0,
+                Some((seq, payload, _)) => {
+                    (seq.wrapping_add(payload).wrapping_sub(boundary) as i32) > 0
+                }
+                None => false,
+            };
+            if beyond {
+                if session.splice_parked.len() >= AF_XDP_TCP_INGRESS_QUEUE_MAX {
+                    AF_XDP_TCP_DIAG_INGRESS_QUEUE_DROPPED.fetch_add(1, Ordering::Relaxed);
+                    return false;
+                }
+                session
+                    .splice_parked
+                    .push_back(AfXdpTcpIngressFrame {
+                        route,
+                        flow,
+                        ip_packet,
+                    });
+                return true;
+            }
+        }
         if self.device.ingress.len() >= AF_XDP_TCP_INGRESS_QUEUE_MAX {
             #[cfg(target_os = "linux")]
             AF_XDP_TCP_DIAG_INGRESS_QUEUE_DROPPED.fetch_add(1, Ordering::Relaxed);
@@ -2002,6 +2060,9 @@ impl AfXdpTcpReactor {
             egress_rx: None,
             pending_ingress: AfXdpTcpChargedBytes::empty(),
             pending_egress: AfXdpTcpChargedBytes::empty(),
+            splice_boundary: None,
+            splice_drain_since: None,
+            splice_parked: std::collections::VecDeque::new(),
             created_at: now,
             last_activity: now,
             last_peer_activity: now,
@@ -2031,6 +2092,7 @@ impl AfXdpTcpReactor {
         };
         let count_pre_proxy = !session.proxy_started;
         self.sessions.insert(flow, session);
+        self.bind_session_tx(&flow);
         if count_pre_proxy {
             self.note_pre_proxy_admitted(peer_ip);
         }
@@ -2092,6 +2154,7 @@ impl AfXdpTcpReactor {
         self.ingress_stalled.remove(&flow);
         #[cfg(target_os = "linux")]
         self.drop_session_snapshot(&flow);
+        self.unbind_session_tx(&flow);
         if let Some(session) = self.sessions.remove(&flow) {
             let socket = self
                 .sockets
@@ -2147,6 +2210,225 @@ impl AfXdpTcpReactor {
     #[cfg(target_os = "linux")]
     pub(crate) fn set_dial_registry(&mut self, registry: Arc<AfXdpDialRegistry>) {
         self.dial_registry = Some(registry);
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn set_request_tx(&mut self, tx: mpsc::Sender<AfXdpReactorRequest>) {
+        self.self_tx = Some(tx);
+    }
+
+    /// Session lifecycle ↔ splice demux: every live session advertises
+    /// its owning queue's request channel so the promotion orchestrator
+    /// (which knows only flow keys) can reach this reactor.
+    #[cfg(target_os = "linux")]
+    fn bind_session_tx(&self, flow: &AfXdpTcpFlowKey) {
+        if let (Some(registry), Some(tx)) = (&self.dial_registry, &self.self_tx) {
+            registry.bind_session(*flow, tx.clone());
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn unbind_session_tx(&self, flow: &AfXdpTcpFlowKey) {
+        if let Some(registry) = &self.dial_registry {
+            registry.unbind_session(flow);
+        }
+    }
+
+    /// Established-flow splice promotion, phase 1: capture the leg's
+    /// static wire properties — next hop, window-scale pair, TS flag,
+    /// VLAN depth — plus its wire bases at boundary time (diagnostic;
+    /// the map math uses the poll-time `snd_nxt`, not these).
+    #[cfg(target_os = "linux")]
+    fn splice_leg_snapshot(
+        session: &AfXdpTcpSession,
+        socket: &SmoltcpTcp::Socket<'static>,
+    ) -> Option<AfXdpSpliceLeg> {
+        if !(session.proxy_started || session.dialed)
+            || socket.state() != SmoltcpTcp::State::Established
+        {
+            return None;
+        }
+        Some(AfXdpSpliceLeg {
+            // link meta follows the inbound-wire convention: source_mac is
+            // the peer's address, i.e. the next hop for emitted frames.
+            next_hop_mac: session.route.link.source_mac,
+            rcv_nxt: socket.wire_rcv_nxt(),
+            win_shift: socket.win_scale_pair(),
+            ts_nego: socket.ts_negotiated(),
+            vlan_tags: session.route.link.vlan_tag_count,
+        })
+    }
+
+    /// Serve a SpliceBegin: arm flush mode — the boundary is the leg's
+    /// current receive edge, so everything the peer already committed
+    /// stays smoltcp's (it drains through the app pipe onto the sibling
+    /// wire as the pre-splice tail) and everything beyond parks. Frames
+    /// for this flow still queued in the device ingress ring are
+    /// triaged the same way: sub-boundary content re-feeds, beyond it
+    /// parks.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn splice_begin(
+        &mut self,
+        flow: &AfXdpTcpFlowKey,
+        reply: tokio::sync::oneshot::Sender<Option<AfXdpSpliceLeg>>,
+    ) {
+        let eligible = self
+            .sessions
+            .get(flow)
+            .map(|session| {
+                session.splice_boundary.is_none()
+                    && session.splice_drain_since.is_none()
+                    && (session.proxy_started || session.dialed)
+                    && self
+                        .sockets
+                        .get::<SmoltcpTcp::Socket<'static>>(session.socket)
+                        .state()
+                        == SmoltcpTcp::State::Established
+            })
+            .unwrap_or(false);
+        if !eligible {
+            let _ = reply.send(None);
+            return;
+        }
+        let Some(session) = self.sessions.get_mut(flow) else {
+            let _ = reply.send(None);
+            return;
+        };
+        let socket = self
+            .sockets
+            .get::<SmoltcpTcp::Socket<'static>>(session.socket);
+        let boundary = socket.wire_rcv_nxt();
+        session.splice_boundary = Some(boundary);
+        // Triage frames for this flow already queued in the device
+        // ring: sub-boundary content and pure ACKs keep feeding (the
+        // queue tail loses their relative order against other flows,
+        // which TCP reordering tolerates); beyond-boundary content
+        // parks for the commit/abort verdict.
+        let (hits, rest) = std::mem::take(&mut self.device.ingress)
+            .into_iter()
+            .partition(|frame: &AfXdpTcpIngressFrame| frame.flow == *flow);
+        self.device.ingress = rest;
+        for frame in hits {
+            let beyond = match tcp_seq_bounds_from_ip_packet(&frame.ip_packet) {
+                Some((_, 0, flags)) => flags & 0x07 != 0,
+                Some((seq, payload, _)) => {
+                    (seq.wrapping_add(payload).wrapping_sub(boundary) as i32) > 0
+                }
+                None => false,
+            };
+            if beyond {
+                session.splice_parked.push_back(frame);
+            } else {
+                self.device.ingress.push_back(frame);
+            }
+        }
+        let leg = Self::splice_leg_snapshot(session, socket);
+        if leg.is_none() {
+            // State raced after the eligibility check — disarm flush
+            // and replay anything parked.
+            self.splice_unfreeze(flow, false);
+        }
+        let _ = reply.send(leg);
+    }
+
+    /// Serve a SplicePoll: `Some(snd_nxt)` once the flush is done —
+    /// the socket consumed exactly up to the boundary and the whole
+    /// pre-splice pipeline into the sibling socket is empty (recv
+    /// queue, channel-bound pending, ingress channel, egress channel,
+    /// pending egress). The residual blind spot is a chunk held
+    /// mid-flight inside the relay task for the ~µs between a channel
+    /// pop and the matching push — a wrong boundary then surfaces as a
+    /// connection reset, never silent corruption.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn splice_poll(
+        &mut self,
+        flow: &AfXdpTcpFlowKey,
+        reply: tokio::sync::oneshot::Sender<Option<u32>>,
+    ) {
+        let answer = self
+            .sessions
+            .get(flow)
+            .and_then(|session| {
+                let socket = self
+                    .sockets
+                    .get::<SmoltcpTcp::Socket<'static>>(session.socket);
+                let ready = socket.state() == SmoltcpTcp::State::Established
+                    && session.splice_boundary.is_some_and(|b| b == socket.wire_rcv_nxt())
+                    && socket.recv_queue() == 0
+                    && session.pending_ingress.is_empty()
+                    && session.pending_egress.is_empty()
+                    && session
+                        .ingress_tx
+                        .as_ref()
+                        .is_none_or(|tx| tx.capacity() == AF_XDP_TCP_STREAM_CHANNEL_DEPTH)
+                    && session
+                        .egress_rx
+                        .as_ref()
+                        .is_none_or(|rx| rx.is_empty());
+                ready.then(|| socket.wire_snd_nxt())
+            });
+        let _ = reply.send(answer);
+    }
+
+    /// Clear flush mode. `commit` (map entries live): drop every parked
+    /// frame — their positions are splice-domain now and the peer
+    /// retransmits them through the splice — and arm drain mode so the
+    /// session retires once its tail confirms. `!commit` (abort):
+    /// replay the parked frames through the normal ingress path.
+    #[cfg(target_os = "linux")]
+    fn splice_unfreeze(&mut self, flow: &AfXdpTcpFlowKey, commit: bool) {
+        let mut frames = Vec::new();
+        if let Some(session) = self.sessions.get_mut(flow) {
+            session.splice_boundary = None;
+            if commit {
+                session.splice_parked.clear();
+            } else {
+                frames.extend(session.splice_parked.drain(..));
+            }
+        }
+        for frame in frames {
+            if !self.enqueue_ingress(frame.route, frame.flow, frame.ip_packet) {
+                break;
+            }
+        }
+        self.mark_hot(*flow);
+    }
+
+    /// Phase 2, run after the splice map entries are live: `commit`
+    /// arms drain mode — the splice owns the wire and this session
+    /// keeps pumping only to deliver and confirm its pre-splice tail;
+    /// `!commit` aborts the promotion and the leg returns to the
+    /// smoltcp path. Either way the freeze is released and the parked
+    /// frames replay through the normal ingress path. `false` means
+    /// the session vanished mid-promotion — the caller tears the map
+    /// entries down.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn splice_commit(&mut self, flow: &AfXdpTcpFlowKey, commit: bool) -> bool {
+        if !self.sessions.contains_key(flow) {
+            return false;
+        }
+        if commit
+            && let Some(session) = self.sessions.get_mut(flow)
+        {
+            session.splice_drain_since = Some(SmoltcpInstant::now());
+        }
+        self.splice_unfreeze(flow, commit);
+        true
+    }
+
+    /// Retire a splice-drained session *without* an abort — the spliced
+    /// wire continues the flow peers already have; a RST here would
+    /// kill a healthy connection. The session's channel ends drop with
+    /// it, so the relay task sees a clean EOF.
+    #[cfg(target_os = "linux")]
+    fn splice_retire(&mut self, flow: &AfXdpTcpFlowKey) {
+        self.ingress_stalled.remove(flow);
+        self.drop_session_snapshot(flow);
+        self.unbind_session_tx(flow);
+        if let Some(session) = self.sessions.remove(flow) {
+            let _ = self.sockets.remove(session.socket);
+        }
+        self.publish_session_gauges();
     }
 
     /// T4: open an outbound connection through this reactor. The caller
@@ -2243,6 +2525,9 @@ impl AfXdpTcpReactor {
             egress_rx: None,
             pending_ingress: AfXdpTcpChargedBytes::empty(),
             pending_egress: AfXdpTcpChargedBytes::empty(),
+            splice_boundary: None,
+            splice_drain_since: None,
+            splice_parked: std::collections::VecDeque::new(),
             created_at: now,
             last_activity: now,
             last_peer_activity: now,
@@ -2262,6 +2547,7 @@ impl AfXdpTcpReactor {
             growth_retry_after: None,
         };
         self.sessions.insert(flow, session);
+        self.bind_session_tx(&flow);
         self.mark_hot(flow);
         self.publish_session_gauges();
         #[cfg(target_os = "linux")]
@@ -2387,6 +2673,7 @@ impl AfXdpTcpReactor {
             budget_stall,
         );
         stream.set_wake_notify(wake_notify);
+        let client_flow = stream.flow;
         match session.proxy_class {
             AfXdpTcpProxyClass::TcpPlain | AfXdpTcpProxyClass::TcpTls => {
                 let Some(tcp_manager) = tcp_manager else {
@@ -2409,7 +2696,13 @@ impl AfXdpTcpReactor {
                             .await
                     } else {
                         tcp_manager
-                            .handle_af_xdp_tcp_stream(stream, peer_addr, server, listen_addr)
+                            .handle_af_xdp_tcp_stream(
+                                stream,
+                                peer_addr,
+                                server,
+                                listen_addr,
+                                client_flow,
+                            )
                             .await
                     };
                     if let Err(err) = result {
@@ -2436,7 +2729,7 @@ impl AfXdpTcpReactor {
                 AF_XDP_TCP_DIAG_PROXY_STARTED.fetch_add(1, Ordering::Relaxed);
                 spawn_session_task(&proxy_rt, async move {
                     if let Err(err) = http_manager
-                        .handle_af_xdp_http_stream(stream, peer_addr, listen_port, kind)
+                        .handle_af_xdp_http_stream(stream, peer_addr, listen_port, kind, client_flow)
                         .await
                     {
                         tracing::debug!(
@@ -2678,6 +2971,8 @@ impl AfXdpTcpReactor {
         let Some(session) = self.sessions.get_mut(&flow) else {
             return;
         };
+        #[cfg(target_os = "linux")]
+        let mut splice_drained = false;
         {
             let socket = self
                 .sockets
@@ -3066,6 +3361,26 @@ impl AfXdpTcpReactor {
                 }
                 session.closing = true;
             }
+            #[cfg(target_os = "linux")]
+            if let Some(drain_since) = session.splice_drain_since {
+                // Splice tail drain: every byte the session owed the
+                // wire at promotion has been delivered and ACKed — or
+                // the drain deadline passed (the peer's first
+                // post-splice ACK can jump past the ack-floor without
+                // re-delivering the tail). Either way the spliced
+                // stream is unaffected; the session retires quietly.
+                splice_drained = (session.pending_ingress.is_empty()
+                    && session.pending_egress.is_empty()
+                    && socket.send_queue() == 0
+                    && socket.recv_queue() == 0
+                    && socket.flight_bytes() == 0)
+                    || session_idle_for(now, drain_since)
+                        >= AF_XDP_TCP_SPLICE_DRAIN_MAX;
+            }
+        }
+        #[cfg(target_os = "linux")]
+        if splice_drained {
+            self.splice_retire(&flow);
         }
     }
 
@@ -3258,6 +3573,7 @@ impl AfXdpTcpReactor {
             self.ingress_stalled.remove(&flow);
             #[cfg(target_os = "linux")]
             self.drop_session_snapshot(&flow);
+            self.unbind_session_tx(&flow);
             if let Some(mut session) = self.sessions.remove(&flow) {
                 if !session.proxy_started && !session.dialed {
                     self.note_pre_proxy_departed(flow.peer_addr.ip());
