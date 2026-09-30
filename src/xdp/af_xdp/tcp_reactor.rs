@@ -246,10 +246,50 @@ pub(crate) struct AfXdpTcpIngressFrame {
     pub(crate) ip_packet: Bytes,
 }
 
+/// One emitted IP packet heading for the wire. `Ip` is the owned-bytes
+/// path (always available); `Umem` is the desc-first path where smoltcp
+/// serialized the packet straight into the queue's UMEM after the link
+/// header — sending it costs no copy at all.
+#[cfg(any(test, target_os = "linux"))]
+pub(crate) enum AfXdpTcpEgressPacket {
+    Ip(Vec<u8>),
+    #[cfg(target_os = "linux")]
+    Umem {
+        frame: crate::xdp::linux::AfXdpUmemTx,
+        /// Link-header length — the IP packet starts at this offset in
+        /// `frame`'s wire bytes.
+        hdr_len: u16,
+    },
+}
+
+#[cfg(any(test, target_os = "linux"))]
+impl AfXdpTcpEgressPacket {
+    /// The IP packet inside this egress unit — for `Umem` a slice into
+    /// the UMEM wire frame after the link header.
+    pub(crate) fn ip_packet(&self) -> &[u8] {
+        match self {
+            Self::Ip(packet) => packet,
+            #[cfg(target_os = "linux")]
+            Self::Umem { frame, hdr_len } => &frame.wire_frame()[usize::from(*hdr_len)..],
+        }
+    }
+}
+
+/// Deref to the IP packet bytes — keeps the many indexing/slicing uses
+/// of the old `Vec<u8>` field (tests, parsers) working unchanged.
+#[cfg(any(test, target_os = "linux"))]
+impl std::ops::Deref for AfXdpTcpEgressPacket {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        self.ip_packet()
+    }
+}
+
 #[cfg(any(test, target_os = "linux"))]
 pub(crate) struct AfXdpTcpEgressFrame {
     pub(crate) route: Option<AfXdpRouteMeta>,
-    pub(crate) ip_packet: Vec<u8>,
+    pub(crate) packet: AfXdpTcpEgressPacket,
     /// smoltcp emit instant (µs). The scoreboard stamps send records
     /// when the segment is emitted — a frame that dwells inside the
     /// dataplane afterwards still samples RTT at ACK time, folding
@@ -472,6 +512,12 @@ pub(crate) struct SmoltcpAfXdpDevice {
     pub(crate) egress: Vec<AfXdpTcpEgressFrame>,
     pub(crate) current_route: Option<AfXdpRouteMeta>,
     pub(crate) max_transmission_unit: usize,
+    /// Desc-first emit allocator — when set, `TxToken::consume`
+    /// serializes packets straight into the queue's UMEM instead of an
+    /// owned `Vec` (saves the emit→vec→UMEM copy and the per-packet
+    /// allocation). Lives only on the queue's reactor thread.
+    #[cfg(target_os = "linux")]
+    pub(crate) tx_alloc: Option<crate::xdp::linux::AfXdpTxFrameAlloc>,
 }
 
 #[cfg(any(test, target_os = "linux"))]
@@ -482,6 +528,8 @@ impl SmoltcpAfXdpDevice {
             egress: Vec::new(),
             current_route: None,
             max_transmission_unit,
+            #[cfg(target_os = "linux")]
+            tx_alloc: None,
         }
     }
 
@@ -521,6 +569,8 @@ pub(crate) struct SmoltcpAfXdpRxToken {
 pub(crate) struct SmoltcpAfXdpTxToken<'a> {
     pub(crate) route: Option<AfXdpRouteMeta>,
     pub(crate) egress: &'a mut Vec<AfXdpTcpEgressFrame>,
+    #[cfg(target_os = "linux")]
+    pub(crate) tx_alloc: Option<&'a mut crate::xdp::linux::AfXdpTxFrameAlloc>,
     /// Dispatch instant — the emit-time stamp written into queued
     /// egress frames so the bridge can bound their dataplane dwell.
     pub(crate) now_us: i64,
@@ -556,6 +606,8 @@ impl SmoltcpDevice for SmoltcpAfXdpDevice {
             SmoltcpAfXdpTxToken {
                 route: Some(frame.route),
                 egress: &mut self.egress,
+                #[cfg(target_os = "linux")]
+                tx_alloc: self.tx_alloc.as_mut(),
                 now_us: timestamp.total_micros(),
             },
         ))
@@ -565,6 +617,8 @@ impl SmoltcpDevice for SmoltcpAfXdpDevice {
         Some(SmoltcpAfXdpTxToken {
             route: self.current_route.clone(),
             egress: &mut self.egress,
+            #[cfg(target_os = "linux")]
+            tx_alloc: self.tx_alloc.as_mut(),
             now_us: timestamp.total_micros(),
         })
     }
@@ -604,19 +658,90 @@ impl RxToken for SmoltcpAfXdpRxToken {
 }
 
 #[cfg(any(test, target_os = "linux"))]
+impl SmoltcpAfXdpTxToken<'_> {
+    /// Desc-first emit: serialize the packet straight into a UMEM wire
+    /// frame — link header in front, IP payload behind it — so the send
+    /// path produces the descriptor without any copy. Returns `Err(f)`
+    /// when the UMEM path cannot serve this emit (no allocator, no
+    /// route, stash empty, oversized packet); the caller then runs the
+    /// owned-Vec fallback with the same closure.
+    #[cfg(target_os = "linux")]
+    fn consume_into_umem<R, F>(&mut self, len: usize, f: F) -> Result<R, F>
+    where
+        F: FnOnce(&mut [u8]) -> R,
+    {
+        let (Some(alloc), Some(route)) = (self.tx_alloc.as_mut(), self.route.as_ref()) else {
+            return Err(f);
+        };
+        let hdr_len = route.link.reply_eth_header_len();
+        let Some(mut frame) = alloc.begin_wire_frame(hdr_len + len) else {
+            return Err(f);
+        };
+        let result = {
+            let buf = frame.wire_frame_mut();
+            debug_assert_eq!(buf.len(), hdr_len + len);
+            let result = f(&mut buf[hdr_len..hdr_len + len]);
+            let ethertype = match buf[hdr_len] >> 4 {
+                4 => ETHERTYPE_IPV4,
+                6 => ETHERTYPE_IPV6,
+                // Medium::Ip emits v4/v6 only — this arm is unreachable in
+                // practice; on the impossible input the frame simply drops
+                // (its descriptor returns to the stash) and TCP
+                // retransmits, matching any other post-emit drop.
+                _ => return Ok(result),
+            };
+            let mut hdr = [0u8; 22];
+            let n = crate::xdp::linux::write_reply_eth_header(&route.link, ethertype, &mut hdr);
+            debug_assert_eq!(n, hdr_len);
+            buf[..hdr_len].copy_from_slice(&hdr[..hdr_len]);
+            result
+        };
+        self.egress.push(AfXdpTcpEgressFrame {
+            route: Some(route.clone()),
+            packet: AfXdpTcpEgressPacket::Umem {
+                frame,
+                hdr_len: hdr_len as u16,
+            },
+            enqueued_us: self.now_us,
+        });
+        Ok(result)
+    }
+}
+
+#[cfg(any(test, target_os = "linux"))]
 impl TxToken for SmoltcpAfXdpTxToken<'_> {
     fn consume<R, F>(self, len: usize, f: F) -> R
     where
         F: FnOnce(&mut [u8]) -> R,
     {
-        let mut packet = vec![0u8; len];
-        let result = f(&mut packet);
-        self.egress.push(AfXdpTcpEgressFrame {
-            route: self.route,
-            ip_packet: packet,
-            enqueued_us: self.now_us,
-        });
-        result
+        #[cfg(target_os = "linux")]
+        {
+            let mut token = self;
+            match token.consume_into_umem(len, f) {
+                Ok(result) => result,
+                Err(f) => {
+                    let mut packet = vec![0u8; len];
+                    let result = f(&mut packet);
+                    token.egress.push(AfXdpTcpEgressFrame {
+                        route: token.route.take(),
+                        packet: AfXdpTcpEgressPacket::Ip(packet),
+                        enqueued_us: token.now_us,
+                    });
+                    result
+                }
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            let mut packet = vec![0u8; len];
+            let result = f(&mut packet);
+            self.egress.push(AfXdpTcpEgressFrame {
+                route: self.route,
+                packet: AfXdpTcpEgressPacket::Ip(packet),
+                enqueued_us: self.now_us,
+            });
+            result
+        }
     }
 }
 
@@ -1462,7 +1587,7 @@ impl AfXdpTcpReactor {
         clock
     }
 
-    pub(crate) fn poll(&mut self) -> Vec<(AfXdpRouteMeta, Vec<u8>, i64)> {
+    pub(crate) fn poll(&mut self) -> Vec<(AfXdpRouteMeta, AfXdpTcpEgressPacket, i64)> {
         self.poll_with_egress_budget(usize::MAX)
     }
 
@@ -1474,7 +1599,7 @@ impl AfXdpTcpReactor {
     pub(crate) fn poll_with_egress_budget(
         &mut self,
         egress_budget: usize,
-    ) -> Vec<(AfXdpRouteMeta, Vec<u8>, i64)> {
+    ) -> Vec<(AfXdpRouteMeta, AfXdpTcpEgressPacket, i64)> {
         let now = SmoltcpInstant::from_micros(self.clock.now_micros());
         self.poll_at(now, egress_budget)
     }
@@ -1483,7 +1608,7 @@ impl AfXdpTcpReactor {
     pub(crate) fn poll_at_for_test(
         &mut self,
         now: SmoltcpInstant,
-    ) -> Vec<(AfXdpRouteMeta, Vec<u8>, i64)> {
+    ) -> Vec<(AfXdpRouteMeta, AfXdpTcpEgressPacket, i64)> {
         self.poll_at(now, usize::MAX)
     }
 
@@ -1491,7 +1616,7 @@ impl AfXdpTcpReactor {
         &mut self,
         now: SmoltcpInstant,
         egress_budget: usize,
-    ) -> Vec<(AfXdpRouteMeta, Vec<u8>, i64)> {
+    ) -> Vec<(AfXdpRouteMeta, AfXdpTcpEgressPacket, i64)> {
         // §2.6: arbitration tick — merge/split hysteresis, probe leasing,
         // tiered allocation. No-op when aggregation isn't configured.
         self.tick_aggregate(now);
@@ -1543,17 +1668,17 @@ impl AfXdpTcpReactor {
         let mut egress = Vec::with_capacity(frames.len());
         for frame in frames {
             let route = frame.route.or_else(|| {
-                reply_flow_key_from_ip_packet(&frame.ip_packet).and_then(|flow| {
+                reply_flow_key_from_ip_packet(frame.packet.ip_packet()).and_then(|flow| {
                     self.sessions
                         .get(&flow)
                         .map(|session| session.route.clone())
                 })
             });
             match route {
-                Some(route) => egress.push((route, frame.ip_packet, frame.enqueued_us)),
+                Some(route) => egress.push((route, frame.packet, frame.enqueued_us)),
                 None => tracing::debug!(
                     "AF_XDP TCP reactor dropped egress packet without route bytes={}",
-                    frame.ip_packet.len()
+                    frame.packet.ip_packet().len()
                 ),
             }
         }
@@ -1588,6 +1713,13 @@ impl AfXdpTcpReactor {
     #[cfg(target_os = "linux")]
     pub(crate) fn has_held_egress(&self) -> bool {
         !self.device.egress.is_empty()
+    }
+
+    /// Install the desc-first emit allocator: subsequent emits serialize
+    /// straight into this queue's UMEM (see `AfXdpTxFrameAlloc`).
+    #[cfg(target_os = "linux")]
+    pub(crate) fn set_tx_alloc(&mut self, alloc: crate::xdp::linux::AfXdpTxFrameAlloc) {
+        self.device.tx_alloc = Some(alloc);
     }
 
     /// Shared notify the stream tasks signal when they queue egress —
@@ -1675,7 +1807,7 @@ impl AfXdpTcpReactor {
         }
         self.device.egress.push(AfXdpTcpEgressFrame {
             route: None,
-            ip_packet,
+            packet: AfXdpTcpEgressPacket::Ip(ip_packet),
             enqueued_us: self.clock.now_micros(),
         });
     }

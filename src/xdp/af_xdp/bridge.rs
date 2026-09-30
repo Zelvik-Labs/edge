@@ -40,7 +40,45 @@ pub(crate) enum PendingTxKind {
         ecn: Option<u8>,
     },
     /// Already-encoded L2 frame (TCP egress / cross-interface forward).
-    Frame(Vec<u8>),
+    Frame(AfXdpTxUnit),
+}
+
+/// Fully encoded wire frame awaiting TX. `Vec` is the encode-into-scratch
+/// path; `Umem` is the desc-first emit — the frame already lives in the
+/// queue's UMEM, so deferring or producing it costs no copy. A dropped
+/// `Umem` unit returns its descriptor to the emit stash.
+#[cfg(target_os = "linux")]
+pub(crate) enum AfXdpTxUnit {
+    Vec(Vec<u8>),
+    Umem(linux::AfXdpUmemTx),
+}
+
+#[cfg(target_os = "linux")]
+impl AfXdpTxUnit {
+    fn as_slice(&self) -> &[u8] {
+        match self {
+            Self::Vec(frame) => frame,
+            Self::Umem(tx) => tx.wire_frame(),
+        }
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        match self {
+            Self::Vec(frame) => frame,
+            Self::Umem(tx) => tx.wire_frame_mut(),
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.as_slice().len()
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl From<Vec<u8>> for AfXdpTxUnit {
+    fn from(frame: Vec<u8>) -> Self {
+        Self::Vec(frame)
+    }
 }
 
 /// T8/T9: a deferred TX unit with scheduler metadata. `flow`/`tier` feed
@@ -80,8 +118,9 @@ impl PendingTx {
         }
     }
 
-    fn frame(frame: Vec<u8>, now_us: u64) -> Self {
-        let (flow, tier, ecn) = frame_sched_meta(&frame);
+    fn frame(frame: impl Into<AfXdpTxUnit>, now_us: u64) -> Self {
+        let frame = frame.into();
+        let (flow, tier, ecn) = frame_sched_meta(frame.as_slice());
         Self {
             flow,
             tier,
@@ -111,7 +150,7 @@ impl PendingTx {
                 }
                 _ => false,
             },
-            PendingTxKind::Frame(f) => frame_mark_ce(f),
+            PendingTxKind::Frame(f) => frame_mark_ce(f.as_mut_slice()),
         }
     }
 }
@@ -393,7 +432,12 @@ fn send_pending_tx(
     p: &mut PendingTx,
 ) -> anyhow::Result<bool> {
     match &mut p.kind {
-        PendingTxKind::Frame(frame) => queue_handle.send_raw_frame(frame),
+        PendingTxKind::Frame(frame) => match frame {
+            AfXdpTxUnit::Vec(frame) => queue_handle.send_raw_frame(frame),
+            // &mut keeps a ring-full `Ok(false)` deferrable — the unit
+            // returns into `p` still armed with its descriptor.
+            AfXdpTxUnit::Umem(tx) => queue_handle.send_umem_tx(tx),
+        },
         PendingTxKind::Udp {
             link,
             listen_addr,
@@ -1131,6 +1175,14 @@ pub(crate) async fn run_queue_bridge_loop(
     // T4: the reactor releases demux/CT/port state itself when a dialed
     // session reaps — never leave it to the caller.
     tcp_reactor.set_dial_registry(dial_registry.clone());
+    // Desc-first emit: smoltcp serializes egress packets straight into
+    // this queue's UMEM instead of an owned Vec. The stash is the shared
+    // descriptor pool the emitter pops frames from and dropped frames
+    // return to; it is refilled from `free_frames` each round, so the
+    // cell never leaves this thread.
+    let tx_stash: linux::AfXdpTxStash =
+        std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    tcp_reactor.set_tx_alloc(queue_handle.tx_alloc(tx_stash.clone()));
     // Event-driven idle wait sources. The socket is bound with
     // XDP_USE_NEED_WAKEUP, so a POLLIN poll on the fd is also what wakes
     // the NIC driver after fill-ring starvation — readability signals
@@ -1252,14 +1304,22 @@ pub(crate) async fn run_queue_bridge_loop(
             // hung session. Abort every live smoltcp session and flush
             // the resulting RST frames before dropping the socket.
             let aborted = tcp_reactor.abort_all_sessions();
-            let egress = tcp_reactor.poll();
+            let mut egress = tcp_reactor.poll();
             let mut sent = 0usize;
-            for (route, ip_packet, _) in &egress {
-                if encode_ip_reply_frame(&route.link, ip_packet, &mut encode_scratch).is_some()
-                    && queue_handle
-                        .send_raw_frame(&encode_scratch)
-                        .unwrap_or(false)
-                {
+            for (route, packet, _) in &mut egress {
+                let ok = match packet {
+                    AfXdpTcpEgressPacket::Ip(ip_packet) => {
+                        encode_ip_reply_frame(&route.link, ip_packet, &mut encode_scratch)
+                            .is_some()
+                            && queue_handle
+                                .send_raw_frame(&encode_scratch)
+                                .unwrap_or(false)
+                    }
+                    AfXdpTcpEgressPacket::Umem { frame, .. } => {
+                        queue_handle.send_umem_tx(frame).unwrap_or(false)
+                    }
+                };
+                if ok {
                     sent += 1;
                 }
             }
@@ -2108,11 +2168,15 @@ pub(crate) async fn run_queue_bridge_loop(
         // surplus inside smoltcp queueing where socket send buffers close
         // the peer window (loss-free) instead of shedding wire frames.
         let egress_budget = AF_XDP_TX_RETRY_CAP.saturating_sub(pending_tx_count);
+        // Refill the desc-first emit stash (also drains frames returned
+        // by dropped units above the target). Bounded so RX fill keeps
+        // the bulk of `free_frames`.
+        queue_handle.refill_tx_stash(&tx_stash, AF_XDP_TCP_EGRESS_EMIT_CAP);
         let tcp_egress = tcp_reactor.poll_with_egress_budget(egress_budget);
         let tcp_egress_frames = tcp_egress.len();
         #[cfg(target_os = "linux")]
         AF_XDP_TCP_DIAG_EGRESS_FRAMES.fetch_add(tcp_egress_frames as u64, Ordering::Relaxed);
-        for (route, ip_packet, enqueued_us) in tcp_egress {
+        for (route, packet, enqueued_us) in tcp_egress {
             // Dwell measurement: the emit-time stamp stays attached for
             // observability — frames past the bound are still shipped
             // (emit backpressure in the reactor bounds the queue, no
@@ -2123,7 +2187,10 @@ pub(crate) async fn run_queue_bridge_loop(
             if route.interface != own_interface {
                 // Cross-interface forwarding needs an owned frame; the
                 // reactor-side scratch clone only happens on this path.
-                match tcp_reactor.encode_egress_frame(&route, &ip_packet) {
+                // For Umem units this reads the wire frame back out of
+                // the queue's UMEM — rare enough not to matter.
+                let ip_packet = packet.ip_packet();
+                match tcp_reactor.encode_egress_frame(&route, ip_packet) {
                     Some(frame) => {
                         if let Some(tx) = iface_fwd.get(route.interface.as_ref()) {
                             // T8: the forward channel is bounded — a Full
@@ -2166,143 +2233,252 @@ pub(crate) async fn run_queue_bridge_loop(
             // send newer frames directly — that would reorder its byte
             // stream on the wire. Defer behind its own queued head; the
             // egress budget above guarantees the store has room.
-            let (sched_flow, ..) = frame_sched_meta_ip(&ip_packet);
-            let wire_len = route.link.reply_eth_header_len() + ip_packet.len();
+            //
             // Reuse the round's `tx_now` — one clock read per loop
             // iteration, not one per frame (frames in a batch are µs
             // apart; per-frame reads showed up as ~1.8% vdso time).
             //
             // T8 shaping gate (D-G2): a token deficit defers the frame;
             // only a full retry queue sheds (counted).
-            if pending_tx.contains_key(&sched_flow)
-                || matches!(
-                    sched.charge(tx_now, sched_flow, wire_len as u64),
-                    cloudsidra_edge_transport::sched::Admit::Wait(_)
-                )
-            {
-                let Some(pending) = encode_pending_frame(
-                    &route.link,
-                    &ip_packet,
-                    &mut encode_scratch,
-                    enqueued_us,
-                ) else {
-                    tracing::debug!(
-                        "AF_XDP TCP reactor failed to encode egress frame interface={} queue={} bytes={}",
-                        route.interface.as_ref(),
-                        route.queue,
-                        ip_packet.len()
-                    );
-                    continue;
-                };
-                if queue_deferred_tx(
-                    &mut pending_tx,
-                    &mut pending_tx_count,
-                    &mut sched,
-                    tx_now,
-                    pending,
-                ) {
-                    congested = true;
-                } else {
-                    congested = true;
-                    congested_drops = congested_drops.saturating_add(1);
-                    tracing::debug!(
-                        "AF_XDP TX retry queue full on {} queue {}; shedding TCP egress frame bytes={}",
-                        own_interface.as_ref(),
-                        queue_handle.queue,
-                        wire_len
-                    );
-                }
-                continue;
-            }
-            let sent = queue_handle.send_ip_frame(&route.link, &ip_packet);
-            match sent {
-                Ok(Some(true)) => {
-                    congested = false;
-                    tx_failures.record(AfXdpTxStatus::Sent);
-                }
-                Ok(None) => {
-                    tracing::debug!(
-                        "AF_XDP TCP reactor failed to encode egress frame interface={} queue={} bytes={}",
-                        route.interface.as_ref(),
-                        route.queue,
-                        ip_packet.len()
-                    );
-                }
-                Ok(Some(false)) => {
-                    // T8: ring full while flushing reactor egress is
-                    // backpressure — defer to the next round; only a full
-                    // retry queue sheds, and smoltcp retransmit covers
-                    // real loss either way.
-                    let Some(pending) = encode_pending_frame(
-                        &route.link,
-                        &ip_packet,
-                        &mut encode_scratch,
-                        enqueued_us,
-                    ) else {
-                        tracing::debug!(
-                            "AF_XDP TCP reactor failed to encode egress frame interface={} queue={} bytes={}",
-                            route.interface.as_ref(),
-                            route.queue,
-                            ip_packet.len()
-                        );
-                        continue;
-                    };
-                    if queue_deferred_tx(
-                        &mut pending_tx,
-                        &mut pending_tx_count,
-                        &mut sched,
-                        tx_now,
-                        pending,
-                    ) {
-                        congested = true;
+            match packet {
+                AfXdpTcpEgressPacket::Ip(ip_packet) => {
+                    let (sched_flow, ..) = frame_sched_meta_ip(&ip_packet);
+                    let wire_len = route.link.reply_eth_header_len() + ip_packet.len();
+                    if pending_tx.contains_key(&sched_flow)
+                        || matches!(
+                            sched.charge(tx_now, sched_flow, wire_len as u64),
+                            cloudsidra_edge_transport::sched::Admit::Wait(_)
+                        )
+                    {
+                        let Some(pending) = encode_pending_frame(
+                            &route.link,
+                            &ip_packet,
+                            &mut encode_scratch,
+                            enqueued_us,
+                        ) else {
+                            tracing::debug!(
+                                "AF_XDP TCP reactor failed to encode egress frame interface={} queue={} bytes={}",
+                                route.interface.as_ref(),
+                                route.queue,
+                                ip_packet.len()
+                            );
+                            continue;
+                        };
+                        if queue_deferred_tx(
+                            &mut pending_tx,
+                            &mut pending_tx_count,
+                            &mut sched,
+                            tx_now,
+                            pending,
+                        ) {
+                            congested = true;
+                        } else {
+                            congested = true;
+                            congested_drops = congested_drops.saturating_add(1);
+                            tracing::debug!(
+                                "AF_XDP TX retry queue full on {} queue {}; shedding TCP egress frame bytes={}",
+                                own_interface.as_ref(),
+                                queue_handle.queue,
+                                wire_len
+                            );
+                        }
                         continue;
                     }
-                    congested = true;
-                    congested_drops = congested_drops.saturating_add(1);
-                    if tx_failures.record(AfXdpTxStatus::Backpressured) {
-                        let (tx_ring_empty, tx_invalid, tx_completed) = queue_handle
-                            .xdp_stats()
-                            .unwrap_or((u64::MAX, u64::MAX, u64::MAX));
-                        tracing::warn!(
-                            "AF_XDP TCP egress TX backpressure on {} queue {} persisted for {AF_XDP_MAX_CONSECUTIVE_TX_FAILURES} consecutive frames; queue stays up and sheds new work until the ring drains (tx_inflight={} free_frames={} tx_ring_empty={} tx_invalid={} tx_completed={})",
-                            own_interface.as_ref(),
-                            queue_handle.queue,
-                            queue_handle.tx_inflight(),
-                            queue_handle.free_frames_len(),
-                            tx_ring_empty,
-                            tx_invalid,
-                            tx_completed,
-                        );
-                    } else {
-                        tracing::debug!(
-                            "AF_XDP TCP reactor could not send frame interface={} queue={} bytes={}",
-                            route.interface.as_ref(),
-                            route.queue,
-                            wire_len
-                        );
+                    let sent = queue_handle.send_ip_frame(&route.link, &ip_packet);
+                    match sent {
+                        Ok(Some(true)) => {
+                            congested = false;
+                            tx_failures.record(AfXdpTxStatus::Sent);
+                        }
+                        Ok(None) => {
+                            tracing::debug!(
+                                "AF_XDP TCP reactor failed to encode egress frame interface={} queue={} bytes={}",
+                                route.interface.as_ref(),
+                                route.queue,
+                                ip_packet.len()
+                            );
+                        }
+                        Ok(Some(false)) => {
+                            // T8: ring full while flushing reactor egress is
+                            // backpressure — defer to the next round; only a full
+                            // retry queue sheds, and smoltcp retransmit covers
+                            // real loss either way.
+                            let Some(pending) = encode_pending_frame(
+                                &route.link,
+                                &ip_packet,
+                                &mut encode_scratch,
+                                enqueued_us,
+                            ) else {
+                                tracing::debug!(
+                                    "AF_XDP TCP reactor failed to encode egress frame interface={} queue={} bytes={}",
+                                    route.interface.as_ref(),
+                                    route.queue,
+                                    ip_packet.len()
+                                );
+                                continue;
+                            };
+                            if queue_deferred_tx(
+                                &mut pending_tx,
+                                &mut pending_tx_count,
+                                &mut sched,
+                                tx_now,
+                                pending,
+                            ) {
+                                congested = true;
+                                continue;
+                            }
+                            congested = true;
+                            congested_drops = congested_drops.saturating_add(1);
+                            if tx_failures.record(AfXdpTxStatus::Backpressured) {
+                                let (tx_ring_empty, tx_invalid, tx_completed) = queue_handle
+                                    .xdp_stats()
+                                    .unwrap_or((u64::MAX, u64::MAX, u64::MAX));
+                                tracing::warn!(
+                                    "AF_XDP TCP egress TX backpressure on {} queue {} persisted for {AF_XDP_MAX_CONSECUTIVE_TX_FAILURES} consecutive frames; queue stays up and sheds new work until the ring drains (tx_inflight={} free_frames={} tx_ring_empty={} tx_invalid={} tx_completed={})",
+                                    own_interface.as_ref(),
+                                    queue_handle.queue,
+                                    queue_handle.tx_inflight(),
+                                    queue_handle.free_frames_len(),
+                                    tx_ring_empty,
+                                    tx_invalid,
+                                    tx_completed,
+                                );
+                            } else {
+                                tracing::debug!(
+                                    "AF_XDP TCP reactor could not send frame interface={} queue={} bytes={}",
+                                    route.interface.as_ref(),
+                                    route.queue,
+                                    wire_len
+                                );
+                            }
+                        }
+                        Err(err) => {
+                            tracing::debug!(
+                                "AF_XDP TCP reactor TX failed interface={} queue={} bytes={}: {}",
+                                route.interface.as_ref(),
+                                route.queue,
+                                wire_len,
+                                err
+                            );
+                            if tx_failures.record(AfXdpTxStatus::Failed) {
+                                lease.owner().disable_queue_redirect_for_fault(
+                                    &own_interface,
+                                    queue_handle.queue,
+                                    format!(
+                                        "AF_XDP TCP reactor TX failed repeatedly after {AF_XDP_MAX_CONSECUTIVE_TX_FAILURES} attempts: {err}"
+                                    ),
+                                );
+                                return;
+                            }
+                        }
                     }
                 }
-                Err(err) => {
-                    tracing::debug!(
-                        "AF_XDP TCP reactor TX failed interface={} queue={} bytes={}: {}",
-                        route.interface.as_ref(),
-                        route.queue,
-                        wire_len,
-                        err
-                    );
-                    if tx_failures.record(AfXdpTxStatus::Failed) {
-                        lease.owner().disable_queue_redirect_for_fault(
-                            &own_interface,
-                            queue_handle.queue,
-                            format!(
-                                "AF_XDP TCP reactor TX failed repeatedly after {AF_XDP_MAX_CONSECUTIVE_TX_FAILURES} attempts: {err}"
-                            ),
-                        );
-                        return;
+                AfXdpTcpEgressPacket::Umem { mut frame, .. } => {
+                    // Desc-first emit: the wire frame is already resident
+                    // in this queue's UMEM — sched meta and wire length
+                    // come straight off it, and deferring moves the unit
+                    // (descriptor and all) into the retry store.
+                    let wire_len = frame.wire_frame().len();
+                    let (sched_flow, ..) = frame_sched_meta(frame.wire_frame());
+                    if pending_tx.contains_key(&sched_flow)
+                        || matches!(
+                            sched.charge(tx_now, sched_flow, wire_len as u64),
+                            cloudsidra_edge_transport::sched::Admit::Wait(_)
+                        )
+                    {
+                        if queue_deferred_tx(
+                            &mut pending_tx,
+                            &mut pending_tx_count,
+                            &mut sched,
+                            tx_now,
+                            PendingTx::frame(AfXdpTxUnit::Umem(frame), enqueued_us.max(0) as u64),
+                        ) {
+                            congested = true;
+                        } else {
+                            congested = true;
+                            congested_drops = congested_drops.saturating_add(1);
+                            tracing::debug!(
+                                "AF_XDP TX retry queue full on {} queue {}; shedding TCP egress frame bytes={}",
+                                own_interface.as_ref(),
+                                queue_handle.queue,
+                                wire_len
+                            );
+                        }
+                        continue;
+                    }
+                    match queue_handle.send_umem_tx(&mut frame) {
+                        Ok(true) => {
+                            congested = false;
+                            tx_failures.record(AfXdpTxStatus::Sent);
+                        }
+                        Ok(false) => {
+                            // Ring/inflight backpressure — `frame` still
+                            // owns its descriptor; park the unit.
+                            if queue_deferred_tx(
+                                &mut pending_tx,
+                                &mut pending_tx_count,
+                                &mut sched,
+                                tx_now,
+                                PendingTx::frame(
+                                    AfXdpTxUnit::Umem(frame),
+                                    enqueued_us.max(0) as u64,
+                                ),
+                            ) {
+                                congested = true;
+                                continue;
+                            }
+                            congested = true;
+                            congested_drops = congested_drops.saturating_add(1);
+                            if tx_failures.record(AfXdpTxStatus::Backpressured) {
+                                let (tx_ring_empty, tx_invalid, tx_completed) = queue_handle
+                                    .xdp_stats()
+                                    .unwrap_or((u64::MAX, u64::MAX, u64::MAX));
+                                tracing::warn!(
+                                    "AF_XDP TCP egress TX backpressure on {} queue {} persisted for {AF_XDP_MAX_CONSECUTIVE_TX_FAILURES} consecutive frames; queue stays up and sheds new work until the ring drains (tx_inflight={} free_frames={} tx_ring_empty={} tx_invalid={} tx_completed={})",
+                                    own_interface.as_ref(),
+                                    queue_handle.queue,
+                                    queue_handle.tx_inflight(),
+                                    queue_handle.free_frames_len(),
+                                    tx_ring_empty,
+                                    tx_invalid,
+                                    tx_completed,
+                                );
+                            } else {
+                                tracing::debug!(
+                                    "AF_XDP TCP reactor could not send frame interface={} queue={} bytes={}",
+                                    route.interface.as_ref(),
+                                    route.queue,
+                                    wire_len
+                                );
+                            }
+                        }
+                        Err(err) => {
+                            tracing::debug!(
+                                "AF_XDP TCP reactor TX failed interface={} queue={} bytes={}: {}",
+                                route.interface.as_ref(),
+                                route.queue,
+                                wire_len,
+                                err
+                            );
+                            if tx_failures.record(AfXdpTxStatus::Failed) {
+                                lease.owner().disable_queue_redirect_for_fault(
+                                    &own_interface,
+                                    queue_handle.queue,
+                                    format!(
+                                        "AF_XDP TCP reactor TX failed repeatedly after {AF_XDP_MAX_CONSECUTIVE_TX_FAILURES} attempts: {err}"
+                                    ),
+                                );
+                                return;
+                            }
+                        }
                     }
                 }
             }
         }
+        // Descriptor bookkeeping: frames dropped by shed paths returned
+        // theirs to the stash; pull the surplus back so `free_frames`
+        // reflects what is genuinely available to TX/fill.
+        queue_handle.refill_tx_stash(&tx_stash, AF_XDP_TCP_EGRESS_EMIT_CAP);
 
         // Kick the kernel TX path once per round whenever this round
         // produced frames. Gating the kick on the TX producer flag alone
