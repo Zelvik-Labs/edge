@@ -69,6 +69,7 @@ pub struct CompiledRewriteRule {
     ref_is_on: Option<bool>,
     pattern: Option<Arc<Regex>>,
     replace: Option<String>,
+    global: bool,
     with_query: bool,
     mode: String,
     redirect_status: u16,
@@ -83,8 +84,12 @@ impl CompiledRewriteRule {
             id: rule.id.unwrap_or_default(),
             is_on: rule.is_on,
             ref_is_on,
-            pattern: rule.pattern.as_deref().and_then(compile_rewrite_pattern),
+            pattern: rule
+                .pattern
+                .as_deref()
+                .and_then(|pattern| compile_rewrite_pattern(pattern, &rule.flags)),
             replace: rule.replace.clone(),
+            global: rule.flags.contains('g'),
             with_query: rule.with_query,
             mode: rule.mode.as_deref().unwrap_or("proxy").to_string(),
             redirect_status: rewrite_redirect_status(rule.redirect_status),
@@ -621,7 +626,9 @@ pub fn evaluate_compiled_host_redirects(
     None
 }
 
-fn compile_rewrite_pattern(pattern: &str) -> Option<Arc<Regex>> {
+fn compile_rewrite_pattern(pattern: &str, flags: &str) -> Option<Arc<Regex>> {
+    let pattern = flagged_pattern(pattern, flags);
+    let pattern = pattern.as_str();
     let compiled = if pattern == "*" {
         Regex::new("^/(.*)$")
     } else {
@@ -631,7 +638,9 @@ fn compile_rewrite_pattern(pattern: &str) -> Option<Arc<Regex>> {
     Some(Arc::new(compiled))
 }
 
-fn rewrite_pattern_regex(pattern: &str) -> Option<Arc<Regex>> {
+fn rewrite_pattern_regex(pattern: &str, flags: &str) -> Option<Arc<Regex>> {
+    let pattern = flagged_pattern(pattern, flags);
+    let pattern = pattern.as_str();
     if pattern == "*" {
         return crate::bounded_regex_cache::get_or_compile("^/(.*)$");
     }
@@ -748,13 +757,7 @@ pub fn evaluate_compiled_rewrites(
             let path = uri.split('?').next().unwrap_or(&uri);
 
             if let Some(captures) = re.captures(path) {
-                let matched = captures.get(0).expect("captures always include full match");
-                let replacement = expand_rewrite_replacement(re, &captures, replace.as_str());
-                let mut replaced =
-                    String::with_capacity(path.len() - matched.as_str().len() + replacement.len());
-                replaced.push_str(&path[..matched.start()]);
-                replaced.push_str(&replacement);
-                replaced.push_str(&path[matched.end()..]);
+                let replaced = replace_rewrite_matches(re, path, replace, &captures, rule.global);
 
                 let final_url = if rule.with_query && !raw_query.is_empty() {
                     if replaced.contains('?') {
@@ -893,7 +896,7 @@ pub fn evaluate_rewrites_with_cond(
                 continue;
             };
 
-            let Some(re) = rewrite_pattern_regex(pattern) else {
+            let Some(re) = rewrite_pattern_regex(pattern, &rule.flags) else {
                 debug!("Invalid rewrite pattern: {}", pattern);
                 continue;
             };
@@ -901,13 +904,13 @@ pub fn evaluate_rewrites_with_cond(
             let path = uri.split('?').next().unwrap_or(&uri);
 
             if let Some(captures) = re.captures(path) {
-                let matched = captures.get(0).expect("captures always include full match");
-                let replacement = expand_rewrite_replacement(&re, &captures, replace.as_str());
-                let mut replaced =
-                    String::with_capacity(path.len() - matched.as_str().len() + replacement.len());
-                replaced.push_str(&path[..matched.start()]);
-                replaced.push_str(&replacement);
-                replaced.push_str(&path[matched.end()..]);
+                let replaced = replace_rewrite_matches(
+                    &re,
+                    path,
+                    replace,
+                    &captures,
+                    rule.flags.contains('g'),
+                );
 
                 let final_url = if rule.with_query && !raw_query.is_empty() {
                     if replaced.contains('?') {
@@ -1350,9 +1353,63 @@ pub fn evaluate_host_redirects(
     None
 }
 
+fn flagged_pattern(pattern: &str, flags: &str) -> String {
+    let pattern = if pattern == "*" { "^/(.*)$" } else { pattern };
+    let supported: String = flags
+        .chars()
+        .filter(|flag| matches!(flag, 'i' | 'm' | 's' | 'U'))
+        .collect();
+    if supported.is_empty() {
+        pattern.to_string()
+    } else {
+        format!("(?{supported}){pattern}")
+    }
+}
+
+fn replace_rewrite_matches(
+    regex: &Regex,
+    path: &str,
+    replacement: &str,
+    first: &regex::Captures<'_>,
+    global: bool,
+) -> String {
+    let mut output = String::with_capacity(path.len());
+    let mut cursor = 0;
+    let mut append = |captures: &regex::Captures<'_>| {
+        let matched = captures.get(0).expect("captures include full match");
+        output.push_str(&path[cursor..matched.start()]);
+        output.push_str(&expand_rewrite_replacement(regex, captures, replacement));
+        cursor = matched.end();
+    };
+    if global {
+        for captures in regex.captures_iter(path) {
+            append(&captures);
+        }
+    } else {
+        append(first);
+    }
+    output.push_str(&path[cursor..]);
+    output
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn global_rewrite_flag_replaces_every_match_with_capture_expansion() {
+        let regex = Regex::new(&flagged_pattern("old(\\d)", "ig")).unwrap();
+        let path = "/OLD1/old2";
+        let first = regex.captures(path).unwrap();
+        assert_eq!(
+            replace_rewrite_matches(&regex, path, "new${1}", &first, true),
+            "/new1/new2"
+        );
+        assert_eq!(
+            replace_rewrite_matches(&regex, path, "new${1}", &first, false),
+            "/new1/old2"
+        );
+    }
 
     #[test]
     fn rewrite_works_without_refs() {

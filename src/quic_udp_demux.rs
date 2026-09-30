@@ -2277,6 +2277,7 @@ mod tests {
         let waf_state = Arc::new(crate::firewall::state::WafStateManager::new());
         let cert_selector = Arc::new(crate::ssl::DynamicCertSelector::new());
         let api_config = Arc::new(crate::api_config::ApiConfig {
+            rpc_tls: Default::default(),
             rpc_endpoints: Vec::new(),
             rpc_disable_update: true,
             node_id: "1".to_string(),

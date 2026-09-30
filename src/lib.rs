@@ -38,6 +38,8 @@ pub mod memory_shed;
 pub mod memory_ticket;
 pub mod metrics;
 pub mod net_bind;
+#[cfg(feature = "node-control")]
+pub mod node_control;
 pub mod origin_h3;
 pub mod origin_h3_pool;
 pub mod origin_h3_state;
@@ -58,8 +60,6 @@ pub mod resource_budget;
 pub mod rewrite;
 pub mod routing;
 pub mod rpc;
-#[cfg(feature = "node-control")]
-pub mod node_control;
 pub mod runtime_mode;
 pub mod special_defense;
 pub mod ssl;
@@ -75,3 +75,5 @@ pub mod xdp;
 pub mod xdp_auto_config;
 pub mod xdp_config_wizard;
 pub mod xdp_netdev_tuning;
+
+pub mod traffic_shaping;

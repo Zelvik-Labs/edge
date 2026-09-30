@@ -484,6 +484,7 @@ mod tests {
 
     fn api_config() -> ApiConfig {
         ApiConfig {
+            rpc_tls: Default::default(),
             rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
             rpc_disable_update: false,
             node_id: "1".to_string(),
@@ -837,6 +838,7 @@ mod node_log_uploader_tests {
 
     fn sample_api_config() -> ApiConfig {
         ApiConfig {
+            rpc_tls: Default::default(),
             rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
             rpc_disable_update: false,
             node_id: "1".to_string(),

@@ -14,7 +14,11 @@ use cloudsidra_edge::ssl::DynamicCertSelector;
 use std::io::Read;
 
 fn real_api_config_from_env() -> anyhow::Result<Option<ApiConfig>> {
-    if std::env::var("CLOUDSIDRA_EDGE_REAL_API_TEST").ok().as_deref() != Some("1") {
+    if std::env::var("CLOUDSIDRA_EDGE_REAL_API_TEST")
+        .ok()
+        .as_deref()
+        != Some("1")
+    {
         eprintln!("skip real API config test: set CLOUDSIDRA_EDGE_REAL_API_TEST=1 to enable");
         return Ok(None);
     }
@@ -37,6 +41,7 @@ fn real_api_config_from_env() -> anyhow::Result<Option<ApiConfig>> {
     let secret = std::env::var("CLOUDSIDRA_EDGE_TEST_SECRET")?;
 
     Ok(Some(ApiConfig {
+        rpc_tls: Default::default(),
         rpc_endpoints: endpoints,
         rpc_disable_update: false,
         node_id,
@@ -350,6 +355,14 @@ async fn real_api_config_can_be_fetched_parsed_and_applied() -> anyhow::Result<(
         return Ok(());
     };
 
+    if let Err(error) = tracing_subscriber::fmt()
+        .with_env_filter("cloudsidra_edge=debug")
+        .with_test_writer()
+        .try_init()
+    {
+        eprintln!("real API test tracing initialization: {error}");
+    }
+
     let config_store = ConfigStore::new();
     let health_manager = GlobalHealthManager::new(4);
     let cert_selector = Arc::new(DynamicCertSelector::new());
@@ -391,7 +404,7 @@ async fn real_api_config_can_be_fetched_parsed_and_applied() -> anyhow::Result<(
     let mut task_version = 0;
     let mut config_version = -1;
 
-    tokio::time::timeout(
+    let applied = tokio::time::timeout(
         Duration::from_secs(30),
         fetch_and_apply_config(FetchConfigArgs {
             client: &mut node_service,
@@ -406,6 +419,11 @@ async fn real_api_config_can_be_fetched_parsed_and_applied() -> anyhow::Result<(
     )
     .await
     .map_err(|_| anyhow::anyhow!("real API config fetch timed out"))?;
+
+    assert!(
+        applied,
+        "real API configuration was rejected; inspect apply diagnostics"
+    );
 
     assert!(
         config_version > 0,
@@ -508,7 +526,9 @@ async fn real_api_config_can_be_fetched_parsed_and_applied() -> anyhow::Result<(
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn real_api_grpc_documentation_snapshot() -> anyhow::Result<()> {
     if !require_real_doc_snapshot() {
-        eprintln!("skip real API documentation snapshot: set CLOUDSIDRA_EDGE_REAL_API_DOC_SNAPSHOT=1");
+        eprintln!(
+            "skip real API documentation snapshot: set CLOUDSIDRA_EDGE_REAL_API_DOC_SNAPSHOT=1"
+        );
         return Ok(());
     }
     let Some(api_config) = real_api_config_from_env()? else {

@@ -1,14 +1,16 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicI8, Ordering};
 use std::sync::LazyLock as Lazy;
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicI8, Ordering};
 
 static RUNTIME_RPC_ENDPOINTS: Lazy<RwLock<Option<Vec<String>>>> = Lazy::new(|| RwLock::new(None));
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ApiConfig {
+    #[serde(rename = "rpc.tls", default)]
+    pub rpc_tls: RpcTlsConfig,
     #[serde(rename = "rpc.endpoints", default)]
     pub rpc_endpoints: Vec<String>,
     #[serde(rename = "rpc.disableUpdate", default)]
@@ -27,6 +29,18 @@ pub struct ApiConfig {
     pub kernel_tuning: KernelTuningConfig,
     #[serde(rename = "cache", default)]
     pub cache: LocalCacheConfig,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct RpcTlsConfig {
+    #[serde(rename = "caFile", default)]
+    pub ca_file: Option<PathBuf>,
+    #[serde(rename = "certFile", default)]
+    pub cert_file: Option<PathBuf>,
+    #[serde(rename = "keyFile", default)]
+    pub key_file: Option<PathBuf>,
+    #[serde(rename = "serverName", default)]
+    pub server_name: Option<String>,
 }
 
 /// Node-local cache overrides. Every field is a tri-state: absent means
@@ -129,7 +143,7 @@ impl RelayConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct AccessLogPipelineConfig {
     #[serde(
         rename = "queueCapacity",
@@ -267,6 +281,23 @@ impl ApiConfig {
     pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let content = fs::read_to_string(&path)?;
         let mut config: ApiConfig = serde_yaml::from_str(&content)?;
+        let override_path = crate::paths::NodePaths::current()
+            .config_dir()
+            .join("control-plane-runtime.json");
+        if override_path.exists() {
+            let pushed: NodeApiPush = serde_json::from_slice(&fs::read(&override_path)?)?;
+            pushed.merge_into(&mut config);
+        }
+        STARTUP_PIPELINE.get_or_init(|| config.access_log_pipeline.normalized());
+        STARTUP_KERNEL_TUNING.get_or_init(|| config.kernel_tuning.enabled);
+        BILLING_INBOUND.store(
+            if config.billing_count_inbound_traffic {
+                1
+            } else {
+                0
+            },
+            Ordering::Relaxed,
+        );
         config.rpc_endpoints = validate_rpc_endpoints(config.rpc_endpoints)?;
         if config.rpc_endpoints.is_empty() {
             anyhow::bail!("no valid 'rpc.endpoints' in {:?}", path.as_ref());
@@ -508,5 +539,157 @@ kernelTuning:
         let endpoint = "http://36.134.185.75:8001";
 
         assert_eq!(validate_rpc_endpoint(endpoint).unwrap(), endpoint);
+    }
+}
+
+/// Persisted separately from local credentials so removing an override restores
+/// the original operator configuration. Startup-only changes remain unacknowledged
+/// until restart, rather than claiming that fixed-capacity queues were resized.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct NodeApiPush {
+    #[serde(rename = "billing.countInboundTraffic", default)]
+    pub billing_count_inbound_traffic: Option<bool>,
+    #[serde(default)]
+    pub relay: Option<RelayConfig>,
+    #[serde(rename = "kernelTuning", default)]
+    pub kernel_tuning: Option<KernelTuningConfig>,
+    #[serde(default)]
+    pub cache: Option<LocalCacheConfig>,
+    #[serde(rename = "accessLogPipeline", default)]
+    pub access_log_pipeline: Option<AccessLogPipelineConfig>,
+}
+static STARTUP_PIPELINE: std::sync::OnceLock<AccessLogPipelineConfig> = std::sync::OnceLock::new();
+static STARTUP_KERNEL_TUNING: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+static BILLING_INBOUND: AtomicI8 = AtomicI8::new(-1);
+pub fn effective_billing_count_inbound(local: bool) -> bool {
+    match BILLING_INBOUND.load(Ordering::Relaxed) {
+        0 => false,
+        1 => true,
+        _ => local,
+    }
+}
+impl NodeApiPush {
+    fn merge_into(&self, config: &mut ApiConfig) {
+        if let Some(value) = self.billing_count_inbound_traffic {
+            config.billing_count_inbound_traffic = value;
+        }
+        if let Some(value) = &self.relay {
+            config.relay = value.clone();
+        }
+        if let Some(value) = &self.kernel_tuning {
+            config.kernel_tuning = value.clone();
+        }
+        if let Some(value) = &self.cache {
+            config.cache = value.clone();
+        }
+        if let Some(value) = &self.access_log_pipeline {
+            config.access_log_pipeline = value.clone();
+        }
+    }
+    pub fn prepare(&self) -> anyhow::Result<PreparedNodeApiPush> {
+        let paths = ApiConfig::default_paths();
+        let path = paths
+            .iter()
+            .find(|path| path.exists())
+            .ok_or_else(|| anyhow::anyhow!("local API configuration missing"))?;
+        self.prepare_at(path, &crate::paths::NodePaths::current().config_dir())
+    }
+    fn prepare_at(&self, path: &Path, dir: &Path) -> anyhow::Result<PreparedNodeApiPush> {
+        let mut config: ApiConfig = serde_yaml::from_slice(&fs::read(path)?)?;
+        self.merge_into(&mut config);
+        fs::create_dir_all(dir)?;
+        let target = dir.join("control-plane-runtime.json");
+        let temp = dir.join(format!(
+            "control-plane-runtime.{}.tmp",
+            uuid::Uuid::new_v4()
+        ));
+        fs::write(&temp, serde_json::to_vec(self)?)?;
+        Ok(PreparedNodeApiPush {
+            config,
+            target,
+            temp,
+        })
+    }
+    pub fn activate(config: &ApiConfig) {
+        crate::tcp_proxy::configure_relay_from_api(config);
+        BILLING_INBOUND.store(
+            if config.billing_count_inbound_traffic {
+                1
+            } else {
+                0
+            },
+            Ordering::Relaxed,
+        );
+        LOCAL_CACHE_SENDFILE.store(
+            match config.cache.sendfile {
+                Some(true) => 1,
+                Some(false) => 0,
+                None => -1,
+            },
+            Ordering::Relaxed,
+        );
+    }
+}
+
+/// The staging file is never read at startup. A failed XDP generation drops it.
+pub struct PreparedNodeApiPush {
+    pub config: ApiConfig,
+    target: PathBuf,
+    temp: PathBuf,
+}
+impl PreparedNodeApiPush {
+    pub fn commit(&self) -> anyhow::Result<()> {
+        fs::rename(&self.temp, &self.target)?;
+        if STARTUP_PIPELINE
+            .get()
+            .is_some_and(|current| *current != self.config.access_log_pipeline.normalized())
+            || STARTUP_KERNEL_TUNING
+                .get()
+                .is_some_and(|current| *current != self.config.kernel_tuning.enabled)
+        {
+            anyhow::bail!(
+                "restart required for accessLogPipeline/kernelTuning; validated override persisted, generation not acknowledged"
+            );
+        }
+        Ok(())
+    }
+}
+impl Drop for PreparedNodeApiPush {
+    fn drop(&mut self) {
+        if let Err(err) = fs::remove_file(&self.temp)
+            && err.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::error!("runtime staging cleanup failed: {}", err);
+        }
+    }
+}
+
+#[cfg(test)]
+mod pushed_runtime_tests {
+    use super::*;
+    #[test]
+    fn failed_generation_never_publishes_its_staged_override() {
+        let dir =
+            std::env::temp_dir().join(format!("cloudsidra-runtime-test-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        let local = dir.join("api.yaml");
+        fs::write(
+            &local,
+            "nodeId: '1'\nsecret: fixture\nrpc.endpoints: ['http://127.0.0.1:8001']\n",
+        )
+        .unwrap();
+        let push = NodeApiPush {
+            billing_count_inbound_traffic: Some(true),
+            ..Default::default()
+        };
+        let prepared = push.prepare_at(&local, &dir).unwrap();
+        assert!(prepared.config.billing_count_inbound_traffic);
+        assert!(!dir.join("control-plane-runtime.json").exists());
+        assert!(prepared.temp.exists());
+        let temp = prepared.temp.clone();
+        drop(prepared);
+        assert!(!temp.exists());
+        assert!(!dir.join("control-plane-runtime.json").exists());
+        fs::remove_dir_all(dir).unwrap();
     }
 }

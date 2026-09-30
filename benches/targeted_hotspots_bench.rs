@@ -159,6 +159,7 @@ fn ssl_cert_config() -> SSLCertConfig {
     let cert = include_str!("../pingora-main/pingora-core/examples/keys/server/cert.pem");
     let key = include_str!("../pingora-main/pingora-core/examples/keys/server/key.pem");
     SSLCertConfig {
+        ocsp: true,
         id: 1,
         is_on: true,
         is_default: true,
@@ -170,6 +171,7 @@ fn ssl_cert_config() -> SSLCertConfig {
 
 fn ssl_policy() -> SSLPolicyConfig {
     SSLPolicyConfig {
+        ocsp: true,
         id: 1,
         is_on: true,
         certs: Vec::new(),

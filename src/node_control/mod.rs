@@ -1,4 +1,4 @@
-//! CloudSidra `NodeControl` v1 skeleton.
+//! CloudSidra `NodeControl` v1 authenticated snapshot transport.
 //!
 //! Isolated from the HTTP/cache/WAF/XDP data plane. Legacy
 //! `pb.NodeService.find_current_node_config` remains the migration-window
@@ -16,6 +16,8 @@ pub mod health;
 pub mod patch;
 pub mod register;
 pub mod store;
+#[cfg(feature = "node-control")]
+pub mod transport;
 
 pub use apply::{ApplyError, ApplyMachine, Phase, PhaseStatus};
 pub use desired::{DesiredRelease, desired_release};
@@ -71,6 +73,8 @@ mod proto_tests {
             release_id: String::new(),
             signature_digest: vec![],
             snapshot_required: true,
+            snapshot_json: vec![],
+            snapshot_hmac: vec![],
         };
         assert!(resp.snapshot_required);
     }

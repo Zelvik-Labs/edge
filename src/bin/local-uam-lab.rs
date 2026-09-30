@@ -167,6 +167,7 @@ fn main() -> anyhow::Result<()> {
     cloudsidra_edge::firewall::state::start_gc_task(waf_state.clone());
 
     let api_config = Arc::new(ApiConfig {
+        rpc_tls: Default::default(),
         rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
         rpc_disable_update: true,
         node_id: "1".to_string(),
@@ -476,6 +477,7 @@ fn waf_policy(action: &str, method: Option<&str>, life_seconds: i32) -> HTTPFire
         inbound: Some(HTTPFirewallInboundConfig {
             is_on: true,
             groups: vec![HTTPFirewallRuleGroup {
+                mode: String::new(),
                 id: 1,
                 is_on: true,
                 name: "lab challenge group".to_string(),

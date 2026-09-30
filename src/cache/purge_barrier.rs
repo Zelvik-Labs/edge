@@ -163,8 +163,9 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn writer_waits_for_active_reader() {
-        let read_guard = acquire_cache_purge_read_guard().await;
-        let write_task = tokio::spawn(acquire_cache_purge_write_guard());
+        let barrier: &'static PurgeBarrier = Box::leak(Box::new(PurgeBarrier::new()));
+        let read_guard = barrier.read().await;
+        let write_task = tokio::spawn(barrier.write());
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         assert!(!write_task.is_finished());
         drop(read_guard);
@@ -173,19 +174,21 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn readers_do_not_barge_a_pending_writer() {
-        let read_guard = acquire_cache_purge_read_guard().await;
-        let write_task = tokio::spawn(acquire_cache_purge_write_guard());
+        let barrier: &'static PurgeBarrier = Box::leak(Box::new(PurgeBarrier::new()));
+        let read_guard = barrier.read().await;
+        let write_task = tokio::spawn(barrier.write());
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         // The writer is pending; a new reader must not be granted.
-        assert!(try_acquire_cache_purge_read_guard().is_none());
+        assert!(barrier.try_read().is_none());
         drop(read_guard);
         let _write_guard = write_task.await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn readers_proceed_after_writer_releases() {
-        let write_guard = acquire_cache_purge_write_guard().await;
-        let read_task = tokio::spawn(acquire_cache_purge_read_guard());
+        let barrier: &'static PurgeBarrier = Box::leak(Box::new(PurgeBarrier::new()));
+        let write_guard = barrier.write().await;
+        let read_task = tokio::spawn(barrier.read());
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         assert!(!read_task.is_finished());
         drop(write_guard);
@@ -194,8 +197,9 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn cancelled_writer_releases_pending_readers() {
-        let read_guard = acquire_cache_purge_read_guard().await;
-        let write_task = tokio::spawn(acquire_cache_purge_write_guard());
+        let barrier: &'static PurgeBarrier = Box::leak(Box::new(PurgeBarrier::new()));
+        let read_guard = barrier.read().await;
+        let write_task = tokio::spawn(barrier.write());
         // Let the writer set the flag and enter the drain loop.
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         // Cancel the writer mid-drain: the flag must be cleared by the
@@ -206,20 +210,21 @@ mod tests {
         // guard while awaiting another acquisition deadlocks against any
         // pending writer (same hold-and-wait rule as RwLock).
         drop(read_guard);
-        let new_reader = acquire_cache_purge_read_guard().await;
+        let new_reader = barrier.read().await;
         drop(new_reader);
-        let _write_guard = acquire_cache_purge_write_guard().await;
+        let _write_guard = barrier.write().await;
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn concurrent_readers_do_not_starve_writer() {
-        let _write_guard = acquire_cache_purge_write_guard().await;
+        let barrier: &'static PurgeBarrier = Box::leak(Box::new(PurgeBarrier::new()));
+        let _write_guard = barrier.write().await;
         drop(_write_guard);
         let mut readers = Vec::new();
         for _ in 0..16 {
-            readers.push(acquire_cache_purge_read_guard().await);
+            readers.push(barrier.read().await);
         }
         drop(readers);
-        let _write_guard = acquire_cache_purge_write_guard().await;
+        let _write_guard = barrier.write().await;
     }
 }

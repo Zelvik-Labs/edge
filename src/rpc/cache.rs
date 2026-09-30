@@ -400,11 +400,21 @@ pub(crate) fn purge_targets_for_server(
     for target in targets {
         match target {
             PurgeTarget::Key(key) => {
-                expanded.extend(
-                    with_scheme_counterpart(key)
-                        .into_iter()
-                        .map(PurgeTarget::Key),
-                );
+                let generation = server_cache_for_path(server, url.path())
+                    .and_then(|cache| cache.cache_policy.as_ref())
+                    .and_then(|policy| policy.options.as_ref())
+                    .and_then(|options| options.get("cacheGeneration"))
+                    .and_then(|value| value.as_i64());
+                for mut candidate in with_scheme_counterpart(key) {
+                    if let Some(generation) = generation {
+                        crate::cache::bind_cache_generation(
+                            &mut candidate,
+                            server.numeric_id(),
+                            generation,
+                        )
+                    }
+                    expanded.push(PurgeTarget::Key(candidate));
+                }
             }
             PurgeTarget::Prefix(prefix) => {
                 if is_dangerous_purge_prefix(&prefix) {
@@ -652,6 +662,32 @@ mod tests {
             }
         }))
         .unwrap()
+    }
+
+    #[test]
+    fn automatic_generation_preserves_directory_purge_and_matches_exact_key() {
+        let mut server = server_with_cache_key();
+        server
+            .web
+            .as_mut()
+            .unwrap()
+            .cache
+            .as_mut()
+            .unwrap()
+            .cache_policy =
+            Some(serde_json::from_value(json!({"id":1,"options":{"cacheGeneration":17}})).unwrap());
+        let keys =
+            purge_targets_for_server(&server, "key", "https://a.example.com/assets/a.css").unwrap();
+        let mut expected = "https://cache.example.com/assets/a.css".to_string();
+        crate::cache::bind_cache_generation(&mut expected, server.numeric_id(), 17);
+        assert!(keys.contains(&PurgeTarget::Key(expected)));
+        assert_eq!(
+            purge_targets_for_server(&server, "dir", "https://a.example.com/assets/").unwrap(),
+            vec![
+                PurgeTarget::Prefix("http://cache.example.com/assets/*".into()),
+                PurgeTarget::Prefix("https://cache.example.com/assets/*".into())
+            ]
+        );
     }
 
     #[test]

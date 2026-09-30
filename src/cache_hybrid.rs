@@ -219,6 +219,10 @@ pub(crate) fn parse_stale_directive_from_headers(
     if forbids_stale {
         return Some(0);
     }
+    cache_control_delta_from_headers(headers, directive)
+}
+
+fn cache_control_delta_from_headers(headers: &http::HeaderMap, directive: &str) -> Option<u64> {
     headers
         .get_all("cache-control")
         .iter()
@@ -3053,8 +3057,7 @@ impl TinyUfoL1 {
         // retain-after-swap, keys inserted mid-rebuild resolve against the
         // new cache and survive; keys whose entries died with the old cache
         // are dropped.
-        self.keys
-            .retain(|key| new_cache.get_stale(key).0.is_some());
+        self.keys.retain(|key| new_cache.get_stale(key).0.is_some());
         for key in kept {
             if new_cache.get_stale(&key).0.is_some() {
                 self.keys.insert(key);
@@ -4017,6 +4020,31 @@ impl HybridStorage {
         Self::compute_memory_budget()
     }
 
+    /// Validate fallible filesystem work before switching the node snapshot.
+    pub fn prepare_policy(policy: &crate::config_models::HTTPCachePolicy) -> std::io::Result<()> {
+        if let Some(options) = &policy.options {
+            if let Some(dir) = options.get("dir").and_then(|value| value.as_str()) {
+                std::fs::create_dir_all(dir)?;
+            }
+            if let Some(dirs) = options.get("subDirs").and_then(|value| value.as_array()) {
+                for dir in dirs {
+                    if let Some(dir) = dir.as_str() {
+                        std::fs::create_dir_all(dir)?;
+                    }
+                }
+            }
+            if options
+                .get("restoreLocalStorage")
+                .and_then(|value| value.as_bool())
+                == Some(true)
+                && !options.contains_key("dir")
+            {
+                std::fs::create_dir_all(crate::paths::NodePaths::current().cache_dir())?;
+            }
+        }
+        Ok(())
+    }
+
     pub async fn apply_policy(&self, policy: &crate::config_models::HTTPCachePolicy) {
         let val = if policy.r#type == "memory" {
             POLICY_MEMORY
@@ -4025,8 +4053,26 @@ impl HybridStorage {
         };
         self.policy_type.store(val, Ordering::Relaxed);
 
+        if policy.capacity.is_none()
+            && policy
+                .options
+                .as_ref()
+                .and_then(|options| options.get("restoreLocalStorage"))
+                .and_then(|value| value.as_bool())
+                == Some(true)
+        {
+            let bytes = 10 * 1024 * 1024 * 1024;
+            self.max_disk_bytes.store(bytes, Ordering::Relaxed);
+            crate::memory_governor::MEMORY_GOVERNOR
+                .set_disk_class_budget(crate::memory_governor::DiskLedgerClass::CacheL2, bytes);
+        }
         if let Some(capacity) = &policy.capacity {
             let bytes = crate::config_models::SizeCapacity::from_json(capacity).to_bytes();
+            let bytes = if bytes == 0 {
+                10 * 1024 * 1024 * 1024
+            } else {
+                bytes
+            };
             if bytes > 0 {
                 self.max_disk_bytes
                     .store(bytes as u64, std::sync::atomic::Ordering::Relaxed);
@@ -4088,7 +4134,18 @@ impl HybridStorage {
             let main_dir = options
                 .get("dir")
                 .and_then(|v| v.as_str())
-                .map(PathBuf::from);
+                .map(PathBuf::from)
+                .or_else(|| {
+                    if options
+                        .get("restoreLocalStorage")
+                        .and_then(|value| value.as_bool())
+                        == Some(true)
+                    {
+                        Some(crate::paths::NodePaths::current().cache_dir())
+                    } else {
+                        None
+                    }
+                });
             let sub_dirs = options
                 .get("subDirs")
                 .and_then(|v| v.as_array())
@@ -4114,6 +4171,14 @@ impl HybridStorage {
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false); // Default to false for 10M+ files safety unless explicitly ON.
 
+            // Behavior overrides also apply to legacy policies that retain
+            // their current directory/shard map.
+            self.l2
+                .enable_sendfile
+                .store(enable_sendfile, Ordering::Relaxed);
+            self.l2
+                .enable_file_cache
+                .store(enable_file_cache, Ordering::Relaxed);
             if let Some(main) = main_dir {
                 info!(
                     "RPC_CACHE: Updating cache configuration (Sendfile: {}{}, HandleCache: {})",
@@ -6748,14 +6813,13 @@ mod tests {
             });
 
             let first_result = first.finish().await.expect("finish first fill");
-            let mut second = match tokio::time::timeout(std::time::Duration::from_secs(1), second)
-                .await
-            {
-                Ok(Ok(Ok(handler))) => handler,
-                Ok(Ok(Err(err))) => panic!("second memory miss handler: {err}"),
-                Ok(Err(err)) => panic!("second miss task: {err}"),
-                Err(_) => panic!("second miss handler should not remain blocked"),
-            };
+            let mut second =
+                match tokio::time::timeout(std::time::Duration::from_secs(1), second).await {
+                    Ok(Ok(Ok(handler))) => handler,
+                    Ok(Ok(Err(err))) => panic!("second memory miss handler: {err}"),
+                    Ok(Err(err)) => panic!("second miss task: {err}"),
+                    Err(_) => panic!("second miss handler should not remain blocked"),
+                };
             if matches!(first_result, MissFinishType::Created(0)) {
                 // A concurrent invalidation discarded the first fill — retry.
                 continue;
@@ -6887,14 +6951,9 @@ mod tests {
         // Per-owner asserts isolate this test from other tests' charges on
         // the shared global ledger.
         let owner_bytes = |key: &str| {
-            gov.resident_owner_bytes(
-                crate::memory_governor::ResidentCategory::NegativeCache,
-                key,
-            )
+            gov.resident_owner_bytes(crate::memory_governor::ResidentCategory::NegativeCache, key)
         };
-        let charged_keys: Vec<String> = (0..8)
-            .map(|i| format!("{unique}-charged-{i}"))
-            .collect();
+        let charged_keys: Vec<String> = (0..8).map(|i| format!("{unique}-charged-{i}")).collect();
         // Charge exactly like negative_cache_insert_with_capacity, but
         // bypass its pressure gate so the test does not depend on the host's
         // live memory level.
@@ -6985,10 +7044,7 @@ mod tests {
             )
         };
 
-        index_surrogate_keys(
-            &[("Surrogate-Key".to_string(), tag.clone())],
-            &hash,
-        );
+        index_surrogate_keys(&[("Surrogate-Key".to_string(), tag.clone())], &hash);
         let member_owner = format!("{tag}\0{hash}");
         // The indexer may legitimately skip under pressure/capacity; only
         // assert the refund when the membership was actually created.
@@ -7081,9 +7137,7 @@ mod tests {
         let mk_entry = |suffix: &str, created: i64| TinyUfoL1Entry {
             cache_key: format!("salvage-{suffix}"),
             data: bytes::Bytes::from(vec![b'x'; 600]),
-            response_header: Arc::new(
-                pingora_http::ResponseHeader::build(200, None).unwrap(),
-            ),
+            response_header: Arc::new(pingora_http::ResponseHeader::build(200, None).unwrap()),
             fresh_until: now + 60,
             created_at: created,
             stale_while_revalidate_secs: 0,
@@ -7103,7 +7157,11 @@ mod tests {
             ("newest", now),
         ] {
             let key = format!("salvage-{suffix}");
-            l1.put(&key, mk_entry(suffix, created), std::time::Duration::from_secs(60));
+            l1.put(
+                &key,
+                mk_entry(suffix, created),
+                std::time::Duration::from_secs(60),
+            );
         }
         assert_eq!(l1.stats().0, 4);
 
@@ -7147,9 +7205,7 @@ mod tests {
         let minimal = TinyUfoL1Entry {
             cache_key: "w".to_string(),
             data: bytes::Bytes::from_static(b"x"),
-            response_header: Arc::new(
-                pingora_http::ResponseHeader::build(200, None).unwrap(),
-            ),
+            response_header: Arc::new(pingora_http::ResponseHeader::build(200, None).unwrap()),
             ..entry
         };
         assert_eq!(TinyUfoL1::entry_weight_units("w", &minimal), 1);
@@ -7164,9 +7220,7 @@ mod tests {
             TinyUfoL1Entry {
                 cache_key: "clear-me".to_string(),
                 data: bytes::Bytes::from_static(b"payload"),
-                response_header: Arc::new(
-                    pingora_http::ResponseHeader::build(200, None).unwrap(),
-                ),
+                response_header: Arc::new(pingora_http::ResponseHeader::build(200, None).unwrap()),
                 fresh_until: now + 60,
                 created_at: now,
                 stale_while_revalidate_secs: 0,
@@ -7280,5 +7334,63 @@ mod tests {
             "reconcile must refund the orphaned charge, got {}",
             stats.bytes_refunded
         );
+    }
+}
+
+/// Origin freshness with shared-cache precedence and elapsed age accounting.
+pub(crate) fn origin_cache_ttl(
+    headers: &http::HeaderMap,
+    now: std::time::SystemTime,
+) -> Option<u64> {
+    let now = chrono::DateTime::<chrono::Utc>::from(now).timestamp();
+    let date = headers
+        .get("date")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| chrono::DateTime::parse_from_rfc2822(value).ok())
+        .map(|date| date.timestamp());
+    let apparent_age = date
+        .map(|date| now.saturating_sub(date).max(0) as u64)
+        .unwrap_or(0);
+    let age = headers
+        .get("age")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(0)
+        .max(apparent_age);
+    if let Some(lifetime) = cache_control_delta_from_headers(headers, "s-maxage")
+        .or_else(|| cache_control_delta_from_headers(headers, "max-age"))
+    {
+        return Some(lifetime.saturating_sub(age));
+    }
+    let expires = headers
+        .get("expires")?
+        .to_str()
+        .ok()
+        .and_then(|value| chrono::DateTime::parse_from_rfc2822(value).ok())?
+        .timestamp();
+    let lifetime = expires.saturating_sub(date.unwrap_or(now)).max(0) as u64;
+    Some(lifetime.saturating_sub(age))
+}
+#[cfg(test)]
+mod origin_freshness_tests {
+    use super::*;
+    #[test]
+    fn shared_max_age_precedes_expires_and_elapsed_age_is_subtracted() {
+        let mut headers = http::HeaderMap::new();
+        headers.insert("cache-control", "max-age=300, s-maxage=60".parse().unwrap());
+        headers.insert("age", "15".parse().unwrap());
+        headers.insert("date", "Wed, 30 Sep 2026 10:00:00 GMT".parse().unwrap());
+        headers.insert("expires", "Wed, 30 Sep 2026 11:00:00 GMT".parse().unwrap());
+        let now = std::time::UNIX_EPOCH
+            + std::time::Duration::from_secs(
+                chrono::DateTime::parse_from_rfc2822("Wed, 30 Sep 2026 10:00:20 GMT")
+                    .unwrap()
+                    .timestamp() as u64,
+            );
+        assert_eq!(origin_cache_ttl(&headers, now), Some(40));
+        headers.remove("cache-control");
+        assert_eq!(origin_cache_ttl(&headers, now), Some(3580));
+        headers.insert("expires", "Wed, 30 Sep 2026 09:00:00 GMT".parse().unwrap());
+        assert_eq!(origin_cache_ttl(&headers, now), Some(0));
     }
 }

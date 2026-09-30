@@ -46,6 +46,8 @@ message GetDesiredReleaseResponse {
   EnvelopeMeta meta = 1;
   string release_id = 2;
   bytes signature_digest = 3;
+  bytes snapshot_json = 5; // canonical scoped nodeJSON; omitted when base_version is current
+  bytes snapshot_hmac = 6; // HMAC-SHA256(node secret, big-endian version || snapshot_json)
   bool snapshot_required = 4;
 }
 

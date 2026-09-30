@@ -530,6 +530,7 @@ impl CompiledFirewallDirection {
 
 #[derive(Clone, Debug)]
 pub struct CompiledRuleGroup {
+    pub mode: String,
     pub id: i64,
     pub is_on: bool,
     pub preset: Option<PresetGroup>,
@@ -543,6 +544,7 @@ impl CompiledRuleGroup {
         let request_prefilter = CompiledGroupRequestPrefilter::compile(&sets);
         Self {
             id: group.id,
+            mode: group.mode.clone(),
             is_on: group.is_on,
             preset: group.code.as_deref().and_then(PresetGroup::compile),
             sets,
@@ -2182,6 +2184,11 @@ fn evaluate_compiled_policy_inner(
             {
                 fill_action_from_policy(&mut matched, policy, group.id, set.id);
                 crate::firewall::apply_observe_mode(&policy.raw, &mut matched);
+                if group.mode == "observe" {
+                    tracing::info!(policy_id = policy.id, group_id = group.id, set_id = set.id, action = %matched.action_code, "WAF observed rule match");
+                    current_group_idx += 1;
+                    continue;
+                }
 
                 if matched.action_code == "allow" {
                     match matched.allow_scope.as_deref() {
@@ -2222,6 +2229,15 @@ fn evaluate_compiled_policy_inner(
             if result.matched {
                 let mut action = crate::firewall::default_block_action(policy.id, group.id);
                 crate::firewall::apply_observe_mode(&policy.raw, &mut action);
+                if group.mode == "observe" {
+                    tracing::info!(
+                        policy_id = policy.id,
+                        group_id = group.id,
+                        "WAF observed group match"
+                    );
+                    current_group_idx += 1;
+                    continue;
+                }
                 return Some(action);
             }
         }
@@ -2303,11 +2319,27 @@ fn evaluate_compiled_outbound_policy_inner(
             {
                 fill_action_from_policy(&mut matched, policy, group.id, set.id);
                 crate::firewall::apply_observe_mode(&policy.raw, &mut matched);
+                if group.mode == "observe" {
+                    tracing::info!(
+                        policy_id = policy.id,
+                        group_id = group.id,
+                        "WAF observed outbound rule match"
+                    );
+                    continue;
+                }
                 return Some(matched);
             }
             if result.matched {
                 let mut action = crate::firewall::default_block_action(policy.id, group.id);
                 crate::firewall::apply_observe_mode(&policy.raw, &mut action);
+                if group.mode == "observe" {
+                    tracing::info!(
+                        policy_id = policy.id,
+                        group_id = group.id,
+                        "WAF observed group match"
+                    );
+                    continue;
+                }
                 return Some(action);
             }
         }
@@ -3156,6 +3188,7 @@ mod tests {
             "cmdInjection",
         ] {
             let group = CompiledRuleGroup::compile(&HTTPFirewallRuleGroup {
+                mode: String::new(),
                 id: 1,
                 is_on: true,
                 name: String::new(),
@@ -3337,6 +3370,7 @@ mod tests {
 
     fn test_group(code: Option<&str>, sets: Vec<HTTPFirewallRuleSet>) -> HTTPFirewallRuleGroup {
         HTTPFirewallRuleGroup {
+            mode: String::new(),
             id: 10,
             is_on: true,
             name: String::new(),

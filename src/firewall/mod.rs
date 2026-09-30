@@ -201,6 +201,11 @@ fn evaluate_policy_inner(
                     fill_action_options(policy, &mut matched);
 
                     apply_observe_mode(policy, &mut matched);
+                    if group.mode == "observe" {
+                        tracing::info!(policy_id = policy.id, group_id = group.id, set_id = set.id, action = %matched.action_code, "WAF observed rule match");
+                        current_group_idx += 1;
+                        continue;
+                    }
 
                     // Flow Control: ALLOW Scope
                     if matched.action_code == "allow" {
@@ -244,6 +249,15 @@ fn evaluate_policy_inner(
                 if result.matched {
                     let mut action = default_block_action(policy.id, group.id);
                     apply_observe_mode(policy, &mut action);
+                    if group.mode == "observe" {
+                        tracing::info!(
+                            policy_id = policy.id,
+                            group_id = group.id,
+                            "WAF observed group match"
+                        );
+                        current_group_idx += 1;
+                        continue;
+                    }
                     return Some(action);
                 }
             }
@@ -376,12 +390,29 @@ fn evaluate_outbound_policy_inner(
                     fill_action_options(policy, &mut matched);
 
                     apply_observe_mode(policy, &mut matched);
+                    if group.mode == "observe" {
+                        tracing::info!(
+                            policy_id = policy.id,
+                            group_id = group.id,
+                            set_id = set.id,
+                            "WAF observed outbound match"
+                        );
+                        continue;
+                    }
 
                     return Some(matched);
                 }
                 if result.matched {
                     let mut action = default_block_action(policy.id, group.id);
                     apply_observe_mode(policy, &mut action);
+                    if group.mode == "observe" {
+                        tracing::info!(
+                            policy_id = policy.id,
+                            group_id = group.id,
+                            "WAF observed outbound group match"
+                        );
+                        continue;
+                    }
                     return Some(action);
                 }
             }

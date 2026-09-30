@@ -65,12 +65,8 @@ fn h3_retry_reserve(pps: u64, now_secs: u64) -> bool {
         } else {
             (now_secs << 32) | 1
         };
-        match H3_RETRY_WINDOW.compare_exchange_weak(
-            cur,
-            next,
-            Ordering::Relaxed,
-            Ordering::Relaxed,
-        ) {
+        match H3_RETRY_WINDOW.compare_exchange_weak(cur, next, Ordering::Relaxed, Ordering::Relaxed)
+        {
             Ok(_) => return true,
             Err(actual) => cur = actual,
         }
@@ -302,11 +298,12 @@ impl Http3ProxyManager {
                     // Initials are explicitly ignored — refusing would be
                     // another unbudgeted reply.
                     let now_secs = crate::utils::time::now_timestamp() as u64;
-                    if !h3_retry_reserve(policy.as_ref().map_or(
-                        H3_RETRY_DEFAULT_PPS,
-                        |p| p.retry_pps_limit(),
-                    ), now_secs)
-                    {
+                    if !h3_retry_reserve(
+                        policy
+                            .as_ref()
+                            .map_or(H3_RETRY_DEFAULT_PPS, |p| p.retry_pps_limit()),
+                        now_secs,
+                    ) {
                         H3_RETRY_LIMITED.fetch_add(1, Ordering::Relaxed);
                         H3_IGNORED_INCOMING.fetch_add(1, Ordering::Relaxed);
                         connecting.ignore();
@@ -430,9 +427,7 @@ impl Http3ProxyManager {
             // keeps quinn's stock controller — non-XDP contract
             // unchanged (§A.4).
             #[cfg(target_os = "linux")]
-            if _af_xdp_scoped
-                && let Some(factory) = crate::xdp::xdp_quic_cc_factory()
-            {
+            if _af_xdp_scoped && let Some(factory) = crate::xdp::xdp_quic_cc_factory() {
                 transport_config.congestion_controller_factory(factory);
             }
             let stream_cap = per_conn_limit.min(u32::MAX as usize) as u32;
@@ -924,15 +919,14 @@ mod tests {
         server.abort();
     }
 
-    async fn test_manager(
-        policy: crate::config_models::HTTP3Policy,
-    ) -> Arc<Http3ProxyManager> {
+    async fn test_manager(policy: crate::config_models::HTTP3Policy) -> Arc<Http3ProxyManager> {
         let store = crate::config::ConfigStore::new();
         store.test_set_http3_policy(policy);
         let cert_selector = Arc::new(DynamicCertSelector::new());
         crate::ssl::sync_certs(
             &cert_selector,
             &[crate::config_models::SSLCertConfig {
+                ocsp: true,
                 id: 1,
                 is_on: true,
                 is_default: true,
@@ -947,13 +941,13 @@ mod tests {
         )
         .await;
         let api_config = Arc::new(crate::api_config::ApiConfig {
+            rpc_tls: Default::default(),
             rpc_endpoints: Vec::new(),
             rpc_disable_update: true,
             node_id: "1".to_string(),
             secret: "h3-test".to_string(),
             billing_count_inbound_traffic: false,
-            access_log_pipeline:
-                crate::api_config::AccessLogPipelineConfig::default(),
+            access_log_pipeline: crate::api_config::AccessLogPipelineConfig::default(),
             relay: crate::api_config::RelayConfig::default(),
             kernel_tuning: crate::api_config::KernelTuningConfig::default(),
             cache: Default::default(),
@@ -995,8 +989,7 @@ mod tests {
         })
         .await;
         let server_config = manager.build_quinn_server_config().await.unwrap();
-        let endpoint =
-            Endpoint::server(server_config, "127.0.0.1:0".parse().unwrap()).unwrap();
+        let endpoint = Endpoint::server(server_config, "127.0.0.1:0".parse().unwrap()).unwrap();
         let addr = endpoint.local_addr().unwrap();
         let (_tx, rx) = tokio::sync::watch::channel(false);
         let runner = {
@@ -1020,15 +1013,15 @@ mod tests {
 
         // Budget now disables issuance (retryPps=0): a fresh unvalidated
         // endpoint is explicitly ignored — connect stalls with no reply.
-        manager.config_store.test_set_http3_policy(
-            crate::config_models::HTTP3Policy {
+        manager
+            .config_store
+            .test_set_http3_policy(crate::config_models::HTTP3Policy {
                 is_on: true,
                 port: 0,
                 address_validation: "always".to_string(),
                 retry_pps: Some(0),
                 ..Default::default()
-            },
-        );
+            });
         let ignored0 = H3_IGNORED_INCOMING.load(Ordering::Relaxed);
         let limited0 = H3_RETRY_LIMITED.load(Ordering::Relaxed);
         let client2 = test_client_endpoint();

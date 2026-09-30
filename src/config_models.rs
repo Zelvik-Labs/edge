@@ -341,7 +341,10 @@ pub struct HTTP3Policy {
     pub port: i32,
     #[serde(rename = "supportMobileBrowsers", default)]
     pub support_mobile_browsers: bool,
-    #[serde(rename = "addressValidation", default = "default_http3_address_validation")]
+    #[serde(
+        rename = "addressValidation",
+        default = "default_http3_address_validation"
+    )]
     pub address_validation: String,
     /// Node-wide ceiling on QUIC Retry responses per second, shared by
     /// every H3 listener (never multiplied per listener/worker). `0`
@@ -756,6 +759,8 @@ pub struct NodeConfigPayload {
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct NodeRuntimePush {
     #[serde(default)]
+    pub api: Option<crate::api_config::NodeApiPush>,
+    #[serde(default)]
     pub xdp: Option<crate::runtime_mode::XdpConfig>,
 }
 
@@ -1038,6 +1043,10 @@ impl ServerConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct TrafficLimitConfig {
+    #[serde(rename = "downlinkMbps", default)]
+    pub downlink_mbps: f64,
+    #[serde(rename = "uplinkMbps", default)]
+    pub uplink_mbps: f64,
     #[serde(rename = "isOn", default)]
     pub is_on: bool,
     #[serde(rename = "dailySize", default)]
@@ -1101,8 +1110,10 @@ pub struct HTTPConfig {
     pub listen: Vec<NetworkAddressConfig>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SSLPolicyConfig {
+    #[serde(default = "default_true")]
+    pub ocsp: bool,
     pub id: i64,
     #[serde(rename = "isOn", default)]
     pub is_on: bool,
@@ -1114,6 +1125,20 @@ pub struct SSLPolicyConfig {
     pub min_version: String,
     #[serde(default)]
     pub hsts: Option<HSTSConfig>,
+}
+
+impl Default for SSLPolicyConfig {
+    fn default() -> Self {
+        Self {
+            ocsp: true,
+            id: 0,
+            is_on: false,
+            certs: Vec::new(),
+            http2_enabled: false,
+            min_version: String::new(),
+            hsts: None,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -1326,6 +1351,8 @@ pub struct HTTPRedirectToHttpsConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct HTTPShutdownConfig {
+    #[serde(rename = "activateAt", default)]
+    pub activate_at: i64,
     #[serde(rename = "isOn", default)]
     pub is_on: bool,
     #[serde(rename = "isPrior", default)]
@@ -1481,6 +1508,8 @@ impl HTTPRemoteAddrConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct HTTPRequestLimitConfig {
+    #[serde(default)]
+    pub rate: u32,
     #[serde(rename = "isOn", default)]
     pub is_on: bool,
     #[serde(rename = "isPrior", default)]
@@ -1979,6 +2008,8 @@ pub struct GRPCConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct CCPolicy {
+    #[serde(rename = "requestsPerMinute", default)]
+    pub requests_per_minute: u32,
     #[serde(rename = "isOn", default)]
     pub is_on: bool,
     #[serde(rename = "maxQPS", default)]
@@ -2002,6 +2033,7 @@ pub struct CCPolicy {
 impl From<&HTTPCCPolicy> for CCPolicy {
     fn from(policy: &HTTPCCPolicy) -> Self {
         Self {
+            requests_per_minute: 0,
             is_on: policy.is_on,
             max_qps: policy.max_qps,
             per_ip_max_qps: policy.max_qps_per_ip,
@@ -2209,8 +2241,25 @@ pub struct HTTPRewriteRef {
     pub is_on: bool,
 }
 
+fn deserialize_rewrite_flags<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<String, D::Error> {
+    let flags = Option::<String>::deserialize(deserializer)?.unwrap_or_default();
+    if flags
+        .chars()
+        .any(|flag| !matches!(flag, 'i' | 'm' | 's' | 'U' | 'g'))
+    {
+        return Err(serde::de::Error::custom(
+            "rewrite flags support only i, m, s, U, g",
+        ));
+    }
+    Ok(flags)
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct HTTPRewriteRule {
+    #[serde(default, deserialize_with = "deserialize_rewrite_flags")]
+    pub flags: String,
     pub id: Option<i64>,
     #[serde(rename = "isOn", default)]
     pub is_on: bool,
@@ -2627,6 +2676,8 @@ impl HTTPFirewallRegionConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct HTTPFirewallRuleGroup {
+    #[serde(default)]
+    pub mode: String,
     pub id: i64,
     #[serde(rename = "isOn", default)]
     pub is_on: bool,
@@ -2941,6 +2992,8 @@ pub struct HTTPHeaderReplaceConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct HTTPPageConfig {
+    #[serde(rename = "contentType", default)]
+    pub content_type: Option<String>,
     pub id: i64,
     #[serde(rename = "isOn", default)]
     pub is_on: bool,
@@ -2978,6 +3031,8 @@ impl HTTPPageConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct HTTPCompressionConfig {
+    #[serde(rename = "minLength", default)]
+    pub min_length: Option<Value>,
     #[serde(rename = "isOn", default)]
     pub is_on: bool,
     pub brotli: Option<HTTPCompressionSubConfig>,
@@ -3000,6 +3055,8 @@ pub struct IPListRef {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SSLCertConfig {
+    #[serde(default = "default_true")]
+    pub ocsp: bool,
     pub id: i64,
     #[serde(rename = "isOn", default)]
     pub is_on: bool,
@@ -3402,14 +3459,24 @@ impl SizeCapacity {
 }
 
 pub fn parse_life_to_seconds(v: &Value) -> u64 {
+    if let Some(seconds) = v.as_u64().or_else(|| {
+        v.as_f64()
+            .filter(|n| n.is_finite() && *n >= 0.0)
+            .map(|n| n as u64)
+    }) {
+        return seconds;
+    }
+    if let Some(seconds) = v.as_str().and_then(|text| text.parse::<u64>().ok()) {
+        return seconds;
+    }
     if let Some(count) = v.get("count").and_then(|c| c.as_u64()) {
         let unit = v.get("unit").and_then(|u| u.as_str()).unwrap_or("s");
         return if unit.eq_ignore_ascii_case("m") || unit.eq_ignore_ascii_case("min") {
-            count * 60
+            count.saturating_mul(60)
         } else if unit.eq_ignore_ascii_case("h") || unit.eq_ignore_ascii_case("hour") {
-            count * 3600
+            count.saturating_mul(3600)
         } else if unit.eq_ignore_ascii_case("d") || unit.eq_ignore_ascii_case("day") {
-            count * 86400
+            count.saturating_mul(86400)
         } else {
             count
         };
@@ -3557,7 +3624,11 @@ mod tests {
             }
         }))
         .expect("runtime.xdp should parse as XdpConfig");
-        let xdp = payload.runtime.expect("runtime section").xdp.expect("xdp section");
+        let xdp = payload
+            .runtime
+            .expect("runtime section")
+            .xdp
+            .expect("xdp section");
         assert!(xdp.enabled);
         assert_eq!(xdp.attach_mode, crate::runtime_mode::XdpAttachMode::Drv);
         assert_eq!(xdp.interfaces.len(), 1);
@@ -4323,9 +4394,6 @@ X+95GP6zw1z8EDq0LRXI1vI=\n\
             }
         }))
         .expect_err("legacy certs-as-id-strings shape must not parse");
-        assert!(
-            err.to_string().contains("id"),
-            "unexpected error: {err}"
-        );
+        assert!(err.to_string().contains("id"), "unexpected error: {err}");
     }
 }

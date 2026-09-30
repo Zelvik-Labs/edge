@@ -139,6 +139,7 @@ impl RpcClient {
                 }
             };
 
+            let endpoint = Self::configure_tls(endpoint, api_config)?;
             let channel = Self::configure_endpoint(endpoint, profile).connect().await;
 
             match channel {
@@ -174,6 +175,13 @@ impl RpcClient {
             Err(_) => return false,
         };
 
+        let endpoint = match Self::configure_tls(endpoint, api_config) {
+            Ok(endpoint) => endpoint,
+            Err(err) => {
+                tracing::warn!("RPC TLS configuration failed: {err}");
+                return false;
+            }
+        };
         let channel = match Self::configure_endpoint(endpoint, RpcConnectionProfile::PingProbe)
             .connect()
             .await
@@ -196,6 +204,35 @@ impl RpcClient {
 
     pub fn channel(&self) -> Channel {
         self.channel.clone()
+    }
+
+    fn configure_tls(endpoint: Endpoint, api: &ApiConfig) -> anyhow::Result<Endpoint> {
+        let cfg = &api.rpc_tls;
+        if endpoint.uri().scheme_str() != Some("https") {
+            if cfg.cert_file.is_some() || cfg.key_file.is_some() || cfg.ca_file.is_some() {
+                anyhow::bail!("RPC TLS credentials require an https endpoint");
+            }
+            return Ok(endpoint);
+        }
+        use tonic::transport::{Certificate, ClientTlsConfig, Identity};
+        let mut tls = ClientTlsConfig::new().with_native_roots();
+        if let Some(path) = &cfg.ca_file {
+            tls = tls.ca_certificate(Certificate::from_pem(std::fs::read(path)?));
+        }
+        if let Some(name) = &cfg.server_name {
+            tls = tls.domain_name(name);
+        }
+        match (&cfg.cert_file, &cfg.key_file) {
+            (Some(cert), Some(key)) => {
+                tls = tls.identity(Identity::from_pem(
+                    std::fs::read(cert)?,
+                    std::fs::read(key)?,
+                ));
+            }
+            (None, None) => {}
+            _ => anyhow::bail!("RPC client TLS requires both certFile and keyFile"),
+        }
+        Ok(endpoint.tls_config(tls)?)
     }
 
     fn configure_endpoint(endpoint: Endpoint, profile: RpcConnectionProfile) -> Endpoint {
@@ -252,6 +289,25 @@ impl RpcClient {
             );
             Ok(req)
         }
+    }
+
+    #[cfg(feature = "node-control")]
+    pub fn node_control_service(
+        &self,
+    ) -> crate::node_control::proto::node_control_client::NodeControlClient<
+        tonic::service::interceptor::InterceptedService<
+            Channel,
+            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+        >,
+    > {
+        crate::node_control::proto::node_control_client::NodeControlClient::with_interceptor(
+            self.channel.clone(),
+            Self::interceptor(&self.api_config, None),
+        )
+        .send_compressed(CompressionEncoding::Gzip)
+        .accept_compressed(CompressionEncoding::Gzip)
+        .max_decoding_message_size(RPC_MAX_MESSAGE_BYTES)
+        .max_encoding_message_size(RPC_MAX_MESSAGE_BYTES)
     }
 
     pub fn node_service(
@@ -909,7 +965,8 @@ impl SharedRpcClient {
         if let Some(state) = guard.as_ref() {
             // Check if endpoints have changed — if so, dynamically update (mirrors Go's UpdateConfig)
             if state.current_endpoints != endpoints {
-                Self::apply_endpoint_changes(
+                Self::apply_endpoint_changes_with_config(
+                    api_config,
                     &state.endpoint_tx,
                     &state.current_endpoints,
                     &endpoints,
@@ -927,7 +984,7 @@ impl SharedRpcClient {
 
         // Slow path: build new balance_channel with all endpoints
         let (channel, endpoint_tx) = Channel::balance_channel::<String>(1024);
-        Self::apply_endpoint_changes(&endpoint_tx, &[], &endpoints)?;
+        Self::apply_endpoint_changes_with_config(api_config, &endpoint_tx, &[], &endpoints)?;
 
         SHARED_RPC.store(Arc::new(Some(SharedRpcState {
             channel: channel.clone(),
@@ -953,7 +1010,12 @@ impl SharedRpcClient {
 
         let guard = SHARED_RPC.load();
         if let Some(state) = guard.as_ref() {
-            Self::apply_endpoint_changes(&state.endpoint_tx, &state.current_endpoints, &endpoints)?;
+            Self::apply_endpoint_changes_with_config(
+                api_config,
+                &state.endpoint_tx,
+                &state.current_endpoints,
+                &endpoints,
+            )?;
             let mut new_state = (*state).clone();
             new_state.current_endpoints = endpoints.clone();
             SHARED_RPC.store(Arc::new(Some(new_state)));
@@ -966,7 +1028,29 @@ impl SharedRpcClient {
 
     /// Dynamically insert/remove endpoints on the balance_channel.
     /// This mirrors Go's `init()` which replaces the `conns` slice.
+    #[cfg(test)]
     fn apply_endpoint_changes(
+        endpoint_tx: &Sender<Change<String, Endpoint>>,
+        old_endpoints: &[String],
+        new_endpoints: &[String],
+    ) -> anyhow::Result<()> {
+        let api = ApiConfig {
+            rpc_tls: Default::default(),
+            rpc_endpoints: new_endpoints.to_vec(),
+            rpc_disable_update: false,
+            node_id: "1".into(),
+            secret: "test".into(),
+            billing_count_inbound_traffic: false,
+            access_log_pipeline: Default::default(),
+            relay: Default::default(),
+            kernel_tuning: Default::default(),
+            cache: Default::default(),
+        };
+        Self::apply_endpoint_changes_with_config(&api, endpoint_tx, old_endpoints, new_endpoints)
+    }
+
+    fn apply_endpoint_changes_with_config(
+        api: &ApiConfig,
         endpoint_tx: &Sender<Change<String, Endpoint>>,
         old_endpoints: &[String],
         new_endpoints: &[String],
@@ -984,7 +1068,7 @@ impl SharedRpcClient {
         // Insert new endpoints
         for new_ep in new_endpoints {
             if !old_endpoints.contains(new_ep) {
-                let endpoint = Self::build_endpoint(new_ep)?;
+                let endpoint = RpcClient::configure_tls(Self::build_endpoint(new_ep)?, api)?;
                 endpoint_tx
                     .try_send(Change::Insert(new_ep.clone(), endpoint))
                     .map_err(|err| {

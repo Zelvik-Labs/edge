@@ -15,8 +15,8 @@ compatibility_lineage = "cloud-node-rust-v1"
 
 [features]
 default = ["node-control"]
-# NodeControl client/types and apply/patch skeleton. Does not replace
-# pb.NodeService.findCurrentNodeConfig during the migration window.
+# Prefer signed NodeControl full snapshots and structured health. Legacy
+# configuration RPCs remain compatible with APIs returning Unimplemented.
 node-control = []
 
 [[bin]]
@@ -73,7 +73,7 @@ brotli = "8.0.4"
 tar = "0.4.46"
 tokio = { version = "1.53.1", features = ["full"] }
 tokio-stream = "0.1.19"
-tonic = { version = "0.14.6", features = ["gzip"] }
+tonic = { version = "0.14.6", features = ["gzip", "tls-ring", "tls-native-roots"] }
 tonic-prost = "0.14.6"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

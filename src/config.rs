@@ -379,12 +379,16 @@ fn dedup_ssl_certs(certs: Vec<SSLCertConfig>) -> Vec<SSLCertConfig> {
             e.insert(cert);
             continue;
         }
+        let ocsp = cert.ocsp || by_id.get(&cert.id).is_some_and(|existing| existing.ocsp);
         let replace = by_id
             .get(&cert.id)
             .map(|existing| cert_data_score(&cert) > cert_data_score(existing))
             .unwrap_or(true);
         if replace {
+            cert.ocsp = ocsp;
             by_id.insert(cert.id, cert);
+        } else if let Some(existing) = by_id.get_mut(&cert.id) {
+            existing.ocsp = ocsp;
         }
     }
 

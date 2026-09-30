@@ -150,21 +150,15 @@ impl L4Connect for UpstreamL4Connector {
         )
         .await
         .map_err(|err| {
-            let timed_out = err
-                .chain()
-                .any(|cause| cause.downcast_ref::<tokio::time::error::Elapsed>().is_some());
+            let timed_out = err.chain().any(|cause| {
+                cause
+                    .downcast_ref::<tokio::time::error::Elapsed>()
+                    .is_some()
+            });
             if timed_out {
-                pingora_core::Error::because(
-                    ConnectTimedout,
-                    "timed out connecting upstream",
-                    err,
-                )
+                pingora_core::Error::because(ConnectTimedout, "timed out connecting upstream", err)
             } else {
-                pingora_core::Error::because(
-                    ConnectError,
-                    "failed to connect upstream",
-                    err,
-                )
+                pingora_core::Error::because(ConnectError, "failed to connect upstream", err)
             }
         })?;
         if let Some(header) = crate::proxy_protocol::build_header(
@@ -254,6 +248,7 @@ pub struct ProxyCTX {
     pub response_headers: LazyResponseHeaders,
     pub response_body_len: usize,
     pub response_body_buffer: LazyBytes,
+    pre_shaped_upload_bytes: usize,
     pub request_body: LazyBytes,
     pub has_outbound_waf_body_rules: bool,
     pub outbound_waf_body_evaluated: bool,
@@ -410,6 +405,7 @@ impl Default for ProxyCTX {
             response_headers: LazyResponseHeaders::default(),
             response_body_len: 0,
             response_body_buffer: LazyBytes::default(),
+            pre_shaped_upload_bytes: 0,
             request_body: LazyBytes::default(),
             has_outbound_waf_body_rules: false,
             outbound_waf_body_evaluated: false,
@@ -654,21 +650,13 @@ fn sweep_http_request_parse_marks() {
 /// parsed request, which errs toward recording an early-close L4 event
 /// (fail-closed for the defense signal).
 fn insert_http_request_parse_mark(client_addr: impl ToString) {
-    insert_http_request_parse_mark_with_capacity(
-        client_addr,
-        http_request_parse_mark_capacity(),
-    );
+    insert_http_request_parse_mark_with_capacity(client_addr, http_request_parse_mark_capacity());
 }
 
-fn insert_http_request_parse_mark_with_capacity(
-    client_addr: impl ToString,
-    capacity: usize,
-) {
+fn insert_http_request_parse_mark_with_capacity(client_addr: impl ToString, capacity: usize) {
     sweep_http_request_parse_marks();
     let key = http_request_parse_mark_key(client_addr);
-    if !HTTP_REQUEST_PARSE_MARKS.contains_key(&key)
-        && HTTP_REQUEST_PARSE_MARKS.len() >= capacity
-    {
+    if !HTTP_REQUEST_PARSE_MARKS.contains_key(&key) && HTTP_REQUEST_PARSE_MARKS.len() >= capacity {
         HTTP_REQUEST_PARSE_MARKS.retain(|_, ts| {
             crate::utils::time::now_timestamp_millis().saturating_sub(*ts)
                 <= HTTP_REQUEST_PARSE_MARK_TTL_MS
@@ -3055,6 +3043,9 @@ impl EdgeProxy {
         shutdown: &crate::compiled::CompiledShutdownPlan,
     ) -> Result<bool> {
         session.as_downstream_mut().set_keepalive(None);
+        if shutdown.activate_at > chrono::Utc::now().timestamp() {
+            return Ok(false);
+        }
         if let Some((target, redirect_status)) = shutdown.redirect_target() {
             let mut resp = pingora_http::ResponseHeader::build(redirect_status, None).unwrap();
             Self::insert_location_header(&mut resp, target);
@@ -3098,7 +3089,7 @@ impl EdgeProxy {
         ctx: &mut ProxyCTX,
         shutdown: &crate::config_models::HTTPShutdownConfig,
     ) -> Result<bool> {
-        if !shutdown.is_on {
+        if !shutdown.is_on || shutdown.activate_at > chrono::Utc::now().timestamp() {
             return Ok(false);
         }
         session.as_downstream_mut().set_keepalive(None);
@@ -4316,11 +4307,21 @@ impl EdgeProxy {
                 ctx.response_headers.clear();
                 ctx.response_headers.insert(
                     "content-type".to_string(),
-                    "text/html; charset=utf-8".to_string(),
+                    page.content_type
+                        .as_deref()
+                        .filter(|value| !value.is_empty())
+                        .unwrap_or("text/html; charset=utf-8")
+                        .to_string(),
                 );
                 let mut resp = pingora_http::ResponseHeader::build(final_status, None).unwrap();
-                resp.insert_header("content-type", "text/html; charset=utf-8")
-                    .unwrap();
+                resp.insert_header(
+                    "content-type",
+                    page.content_type
+                        .as_deref()
+                        .filter(|value| !value.is_empty())
+                        .unwrap_or("text/html; charset=utf-8"),
+                )
+                .unwrap();
                 ctx.response_headers_size = resp
                     .headers
                     .iter()
@@ -4675,7 +4676,13 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                 ctx.client_ip,
                 policy.per_ip_max_qps as u32,
             );
-        if total_qps_exceeded || per_ip_qps_exceeded {
+        let minute_exceeded = policy.requests_per_minute > 0
+            && !self.waf_state.check_ip_minute_limit(
+                scope_server_id,
+                ctx.client_ip,
+                policy.requests_per_minute,
+            );
+        if total_qps_exceeded || per_ip_qps_exceeded || minute_exceeded {
             if policy.block_ip {
                 let ban = if policy.block_ip_duration > 0 {
                     policy.block_ip_duration as i64
@@ -5460,6 +5467,18 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
             return Ok(false);
         }
 
+        let rate = compiled_request_limit
+            .map(|limit| limit.rate)
+            .or_else(|| raw_request_limit.map(|limit| limit.rate))
+            .unwrap_or(0);
+        if rate > 0
+            && !self
+                .waf_state
+                .check_rate_limit(server.numeric_id() ^ (1_i64 << 59), rate)
+        {
+            ctx.response_status = 429;
+            return self.respond_status_with_pages(session, ctx, 429).await;
+        }
         ctx.request_limit_out_bandwidth_bytes = compiled_request_limit
             .map(|request_limit| request_limit.out_bandwidth_per_conn_bytes)
             .or_else(|| {
@@ -5515,36 +5534,46 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
         &self,
         body_len: usize,
         ctx: &mut ProxyCTX,
-    ) -> Option<std::time::Duration> {
+    ) -> Result<Option<std::time::Duration>> {
+        let site_delay = ctx
+            .server
+            .as_ref()
+            .and_then(|server| {
+                server
+                    .traffic_limit
+                    .as_ref()
+                    .filter(|limit| limit.is_on)
+                    .map(|limit| (server.numeric_id(), limit.downlink_mbps))
+            })
+            .map(|(id, rate)| crate::traffic_shaping::reserve(id, false, rate, body_len))
+            .transpose()
+            .map_err(|err| pingora::Error::explain(pingora::ErrorType::InternalError, err))?;
         let limit = ctx.request_limit_out_bandwidth_bytes;
-        if limit <= 0 || body_len == 0 {
-            return None;
-        }
-
-        let now = std::time::Instant::now();
-        let window_start = ctx
-            .request_limit_out_bandwidth_window_start
-            .get_or_insert(now);
-
-        if now.duration_since(*window_start) >= std::time::Duration::from_secs(1) {
-            *window_start = now;
-            ctx.request_limit_out_bandwidth_sent = 0;
-        }
-
-        ctx.request_limit_out_bandwidth_sent += body_len as i64;
-        if ctx.request_limit_out_bandwidth_sent < limit {
-            return None;
-        }
-
-        let elapsed = now.duration_since(*window_start);
-        ctx.request_limit_out_bandwidth_sent = 0;
-        *window_start = now;
-
-        if elapsed < std::time::Duration::from_secs(1) {
-            Some(std::time::Duration::from_secs(1) - elapsed)
+        let connection_delay = if limit > 0 && body_len > 0 {
+            let now = std::time::Instant::now();
+            let start = ctx
+                .request_limit_out_bandwidth_window_start
+                .get_or_insert(now);
+            let elapsed = now.saturating_duration_since(*start);
+            if elapsed.as_secs_f64() * limit as f64 >= ctx.request_limit_out_bandwidth_sent as f64 {
+                *start = now;
+                ctx.request_limit_out_bandwidth_sent = 0;
+            }
+            ctx.request_limit_out_bandwidth_sent = ctx
+                .request_limit_out_bandwidth_sent
+                .saturating_add(body_len as i64);
+            let due = std::time::Duration::from_secs_f64(
+                ctx.request_limit_out_bandwidth_sent as f64 / limit as f64,
+            );
+            Some(due.saturating_sub(now.saturating_duration_since(*start)))
         } else {
             None
-        }
+        };
+        Ok(site_delay
+            .into_iter()
+            .chain(connection_delay)
+            .max()
+            .filter(|delay| !delay.is_zero()))
     }
 
     fn apply_charset_to_response(
@@ -7530,6 +7559,22 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
         session.as_mut().enable_retry_buffering();
         let mut buffered = Vec::with_capacity(content_length.unwrap_or(0).min(limit));
         while let Some(chunk) = session.read_request_body().await? {
+            if let Some(server) = ctx.server.as_ref()
+                && let Some(limit) = server.traffic_limit.as_ref().filter(|limit| limit.is_on)
+            {
+                let delay = crate::traffic_shaping::reserve(
+                    server.numeric_id(),
+                    true,
+                    limit.uplink_mbps,
+                    chunk.len(),
+                )
+                .map_err(|err| pingora::Error::explain(pingora::ErrorType::InternalError, err))?;
+                if !delay.is_zero() {
+                    tokio::time::sleep(delay).await;
+                }
+                ctx.pre_shaped_upload_bytes =
+                    ctx.pre_shaped_upload_bytes.saturating_add(chunk.len());
+            }
             if buffered.len().saturating_add(chunk.len()) > limit {
                 return Ok(true);
             }
@@ -7799,7 +7844,8 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
 
         if request_body_needed && ctx.request_body.is_empty() {
             if ctx.request_body_waf_permit.is_none() {
-                let Some(permit) = Self::admit_workspace(ctx, AdmissionClass::RequestBodyWaf) else {
+                let Some(permit) = Self::admit_workspace(ctx, AdmissionClass::RequestBodyWaf)
+                else {
                     ctx.response_status = 503;
                     ctx.errors
                         .get_or_insert_with(Vec::new)
@@ -8678,11 +8724,7 @@ impl ProxyHttp for EdgeProxy {
         }
     }
 
-    async fn early_request_filter(
-        &self,
-        session: &mut Session,
-        ctx: &mut Self::CTX,
-    ) -> Result<()> {
+    async fn early_request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<()> {
         // Resolve the connection's admission ticket once per request: the
         // registry indexes buckets by the transport peer address, which is
         // exactly what `client_addr()` returns.
@@ -8712,6 +8754,32 @@ impl ProxyHttp for EdgeProxy {
             // buffers. One relaxed atomic load when inactive.
             session.as_downstream_mut().set_keepalive(None);
             crate::memory_shed::note_keepalive_shed();
+        }
+        Ok(())
+    }
+
+    async fn request_body_filter(
+        &self,
+        _session: &mut Session,
+        body: &mut Option<Bytes>,
+        _end: bool,
+        ctx: &mut Self::CTX,
+    ) -> Result<()> {
+        if let (Some(server), Some(body)) = (ctx.server.as_ref(), body.as_ref())
+            && let Some(limit) = server.traffic_limit.as_ref().filter(|limit| limit.is_on)
+        {
+            let previously_shaped = ctx.pre_shaped_upload_bytes.min(body.len());
+            ctx.pre_shaped_upload_bytes -= previously_shaped;
+            let delay = crate::traffic_shaping::reserve(
+                server.numeric_id(),
+                true,
+                limit.uplink_mbps,
+                body.len() - previously_shaped,
+            )
+            .map_err(|err| pingora::Error::explain(pingora::ErrorType::InternalError, err))?;
+            if !delay.is_zero() {
+                tokio::time::sleep(delay).await;
+            }
         }
         Ok(())
     }
@@ -9644,6 +9712,15 @@ impl ProxyHttp for EdgeProxy {
                 // is user-controlled when a custom key template is used and
                 // can collide with a GET key.
                 let method = session.req_header().method.as_str();
+                if let Some(generation) = ctx
+                    .cache_policy
+                    .as_ref()
+                    .and_then(|policy| policy.options.as_ref())
+                    .and_then(|options| options.get("cacheGeneration"))
+                    .and_then(|value| value.as_i64())
+                {
+                    crate::cache::bind_cache_generation(&mut key, s.numeric_id(), generation);
+                }
                 if method.eq_ignore_ascii_case("HEAD") && !ctx.cache_purge_authorized {
                     crate::cache::append_cache_method_variant(&mut key, method);
                 }
@@ -9839,6 +9916,48 @@ impl ProxyHttp for EdgeProxy {
         upstream_response: &mut pingora::http::ResponseHeader,
         ctx: &mut Self::CTX,
     ) -> Result<()> {
+        if let Some(module) = session
+            .downstream_modules_ctx
+            .get_mut::<pingora::modules::http::compression::ResponseCompression>()
+        {
+            module.adjust_level(0);
+            if let Some(config) = ctx
+                .server
+                .as_ref()
+                .and_then(|server| server.web.as_ref())
+                .and_then(|web| web.compression.as_ref())
+                .filter(|config| config.is_on)
+            {
+                let minimum = config
+                    .min_length
+                    .as_ref()
+                    .map(crate::config_models::SizeCapacity::from_json)
+                    .map(|size| size.to_bytes())
+                    .unwrap_or(0)
+                    .max(0) as u64;
+                let length = upstream_response
+                    .headers
+                    .get("content-length")
+                    .and_then(|value| value.to_str().ok())
+                    .and_then(|value| value.parse::<u64>().ok());
+                if length.is_none_or(|length| length >= minimum) {
+                    use pingora::protocols::http::compression::Algorithm;
+                    if let Some(codec) = config.gzip.as_ref().filter(|codec| codec.is_on) {
+                        module.adjust_algorithm_level(
+                            Algorithm::Gzip,
+                            codec.level.clamp(1, 9) as u32,
+                        );
+                    }
+                    if let Some(codec) = config.brotli.as_ref().filter(|codec| codec.is_on) {
+                        module.adjust_algorithm_level(
+                            Algorithm::Brotli,
+                            codec.level.clamp(1, 11) as u32,
+                        );
+                    }
+                    module.request_filter(session.downstream_session.req_header());
+                }
+            }
+        }
         ctx.response_status = upstream_response.status.as_u16();
         ctx.ttfb = Some(ctx.start_time.elapsed());
         // A HIT never passes through upstream_response_filter, so keep this
@@ -10354,7 +10473,7 @@ impl ProxyHttp for EdgeProxy {
             .unwrap_or(true)
         {
             let phase = session.cache.phase();
-            let x_cache = if !session.cache.enabled() && !session.cache.bypassing() {
+            let mut x_cache = if !session.cache.enabled() && !session.cache.bypassing() {
                 "BYPASS".to_string()
             } else {
                 match phase {
@@ -10370,6 +10489,26 @@ impl ProxyHttp for EdgeProxy {
                     _ => phase.as_str().to_uppercase(),
                 }
             };
+            if ctx
+                .cache_policy
+                .as_ref()
+                .and_then(|policy| policy.options.as_ref())
+                .and_then(|options| options.get("xCacheHeaderMode"))
+                .and_then(|value| value.as_str())
+                == Some("full")
+            {
+                use std::fmt::Write;
+                write!(
+                    &mut x_cache,
+                    "; node={}; server={}",
+                    self.api_config.node_id,
+                    ctx.server
+                        .as_ref()
+                        .map(|server| server.numeric_id())
+                        .unwrap_or(0)
+                )
+                .expect("String write cannot fail");
+            }
             upstream_response
                 .insert_header("x-cache", x_cache.clone())
                 .unwrap();
@@ -10790,7 +10929,7 @@ impl ProxyHttp for EdgeProxy {
         let mut remaining = body_len;
         while remaining > 0 {
             let n = remaining.min(CHUNK) as usize;
-            if let Some(d) = self.response_bandwidth_delay(n, ctx) {
+            if let Some(d) = self.response_bandwidth_delay(n, ctx)? {
                 delay += d;
             }
             remaining -= n as u64;
@@ -10809,7 +10948,7 @@ impl ProxyHttp for EdgeProxy {
         if session.cache.phase() == pingora_cache::CachePhase::Hit {
             if let Some(chunk) = body {
                 ctx.response_body_len += chunk.len();
-                return Ok(self.response_bandwidth_delay(chunk.len(), ctx));
+                return self.response_bandwidth_delay(chunk.len(), ctx);
             }
             return Ok(None);
         }
@@ -10822,7 +10961,7 @@ impl ProxyHttp for EdgeProxy {
             ctx.response_body_buffer.clear();
             if let Some(chunk) = body.as_ref() {
                 ctx.response_body_len += chunk.len();
-                return Ok(self.response_bandwidth_delay(chunk.len(), ctx));
+                return self.response_bandwidth_delay(chunk.len(), ctx);
             }
             return Ok(None);
         }
@@ -11094,7 +11233,7 @@ impl ProxyHttp for EdgeProxy {
         let mut delay = None;
         if let Some(chunk) = body.as_ref() {
             ctx.response_body_len += chunk.len();
-            delay = self.response_bandwidth_delay(chunk.len(), ctx);
+            delay = self.response_bandwidth_delay(chunk.len(), ctx)?;
         }
         Ok(delay)
     }
@@ -11255,7 +11394,7 @@ impl ProxyHttp for EdgeProxy {
                 body_size
             };
 
-            let (policy_matches, max_object_size, ttl, allow_chunked) =
+            let (policy_matches, max_object_size, mut ttl, allow_chunked) =
                 if let Some(compiled_ref) = &ctx.compiled_cache_ref {
                     let compiled_policy = ctx.compiled_cache_policy.as_deref();
                     let allow_chunked = compiled_ref
@@ -11372,6 +11511,51 @@ impl ProxyHttp for EdgeProxy {
                 ));
             }
 
+            let options = ctx
+                .cache_policy
+                .as_ref()
+                .and_then(|policy| policy.options.as_ref());
+            if options
+                .and_then(|options| options.get("respectOriginCacheControl"))
+                .and_then(|value| value.as_bool())
+                == Some(true)
+                && let Some(origin_ttl) = crate::cache_hybrid::origin_cache_ttl(
+                    &resp.headers,
+                    std::time::SystemTime::now(),
+                )
+            {
+                ttl = origin_ttl;
+                if ttl == 0 {
+                    return Ok(pingora_cache::RespCacheable::Uncacheable(
+                        pingora_cache::NoCacheReason::Custom("OriginExpired"),
+                    ));
+                }
+            }
+            let write_limit = options
+                .and_then(|options| options.get("ipWriteLimitCount"))
+                .and_then(|value| value.as_u64())
+                .unwrap_or(0)
+                .min(u32::MAX as u64) as u32;
+            let write_window = options
+                .and_then(|options| options.get("ipWriteLimitWindowSeconds"))
+                .and_then(|value| value.as_u64())
+                .unwrap_or(60);
+            if write_limit > 0
+                && !self.waf_state.check_cache_write_limit(
+                    ctx.server
+                        .as_ref()
+                        .map(|server| server.numeric_id())
+                        .unwrap_or(0),
+                    ctx.client_ip,
+                    write_limit,
+                    write_window,
+                )
+            {
+                return Ok(pingora_cache::RespCacheable::Uncacheable(
+                    pingora_cache::NoCacheReason::Custom("CacheWriteRateExceeded"),
+                ));
+            }
+
             // A 5xx response is only allowed when the selected rule listed
             // that exact status. Carry this decision into the cache backend;
             // status alone is insufficient once a response reaches L1/L2 or
@@ -11400,11 +11584,15 @@ impl ProxyHttp for EdgeProxy {
 
             let now = std::time::SystemTime::now();
             let fresh_until = now + std::time::Duration::from_secs(ttl);
-            let stale_while_revalidate_secs =
-                crate::cache_hybrid::parse_stale_directive_from_headers(
-                    &resp.headers,
-                    "stale-while-revalidate",
-                )
+            let stale_while_revalidate_secs = options
+                .and_then(|options| options.get("staleWhileRevalidateSeconds"))
+                .and_then(|value| value.as_u64())
+                .or_else(|| {
+                    crate::cache_hybrid::parse_stale_directive_from_headers(
+                        &resp.headers,
+                        "stale-while-revalidate",
+                    )
+                })
                 .unwrap_or(0)
                 .min(u32::MAX as u64) as u32;
             let stale_if_error_secs = crate::cache_hybrid::parse_stale_directive_from_headers(
@@ -12168,14 +12356,8 @@ mod tests {
     fn http_request_parse_marks_respect_capacity_bound() {
         let base = super::HTTP_REQUEST_PARSE_MARKS.len();
         let capacity = base + 4;
-        super::insert_http_request_parse_mark_with_capacity(
-            "203.0.113.10:50001",
-            capacity,
-        );
-        super::insert_http_request_parse_mark_with_capacity(
-            "203.0.113.11:50002",
-            capacity,
-        );
+        super::insert_http_request_parse_mark_with_capacity("203.0.113.10:50001", capacity);
+        super::insert_http_request_parse_mark_with_capacity("203.0.113.11:50002", capacity);
         assert!(super::HTTP_REQUEST_PARSE_MARKS.len() <= capacity);
         // Once the table is at capacity, new keys are dropped (the force
         // sweep finds nothing stale since all entries are fresh).
@@ -12189,13 +12371,8 @@ mod tests {
             "parse-mark table must stay under its capacity bound"
         );
         // Existing keys still refresh in place even at capacity.
-        super::insert_http_request_parse_mark_with_capacity(
-            "203.0.113.10:50001",
-            capacity,
-        );
-        assert!(
-            super::HTTP_REQUEST_PARSE_MARKS.contains_key("203.0.113.10:50001"),
-        );
+        super::insert_http_request_parse_mark_with_capacity("203.0.113.10:50001", capacity);
+        assert!(super::HTTP_REQUEST_PARSE_MARKS.contains_key("203.0.113.10:50001"),);
         // Cleanup so the global table does not leak into other tests.
         super::HTTP_REQUEST_PARSE_MARKS.remove("203.0.113.10:50001");
         super::HTTP_REQUEST_PARSE_MARKS.remove("203.0.113.11:50002");

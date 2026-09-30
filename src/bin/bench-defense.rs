@@ -108,10 +108,9 @@ fn main() -> anyhow::Result<()> {
             detail: "BENCH_KERNEL_FILTER=off".to_string(),
         }
     } else {
-        let filter =
-            runtime.block_on(cloudsidra_edge::firewall::kernel::build_filter(Some(
-                &kernel_filter_mode,
-            )));
+        let filter = runtime.block_on(cloudsidra_edge::firewall::kernel::build_filter(Some(
+            &kernel_filter_mode,
+        )));
         let status = filter.status();
         waf_state.set_kernel_filter(filter);
         status
@@ -128,6 +127,7 @@ fn main() -> anyhow::Result<()> {
     cloudsidra_edge::metrics::start_pressure_updater();
 
     let api_config = Arc::new(ApiConfig {
+        rpc_tls: Default::default(),
         rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
         rpc_disable_update: true,
         node_id: "1".to_string(),
@@ -149,6 +149,7 @@ fn main() -> anyhow::Result<()> {
         std::fs::read_to_string(&key_path),
     ) {
         let certs = vec![SSLCertConfig {
+            ocsp: true,
             id: 1,
             is_on: true,
             is_default: true,
@@ -447,6 +448,7 @@ fn build_servers(
     cc.http = Some(http_listen(http_port));
     let mut cc_web = base_web();
     cc_web.cc_policy = Some(CCPolicy {
+        requests_per_minute: 0,
         is_on: true,
         max_qps: cc_total_qps,
         per_ip_max_qps: cc_per_ip_qps,
@@ -611,6 +613,7 @@ fn waf_block_policy() -> HTTPFirewallPolicy {
             is_on: true,
             groups: vec![
                 HTTPFirewallRuleGroup {
+                    mode: String::new(),
                     id: 1,
                     is_on: true,
                     name: "deny path".to_string(),
@@ -635,6 +638,7 @@ fn waf_block_policy() -> HTTPFirewallPolicy {
                     }],
                 },
                 HTTPFirewallRuleGroup {
+                    mode: String::new(),
                     id: 2,
                     is_on: true,
                     name: "deny ua".to_string(),

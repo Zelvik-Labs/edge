@@ -534,8 +534,7 @@ async fn dial_smoke_inner(
     let mut send_tick = if send_interval.is_zero() {
         None
     } else {
-        let mut tick =
-            tokio::time::interval_at(tokio::time::Instant::now(), send_interval);
+        let mut tick = tokio::time::interval_at(tokio::time::Instant::now(), send_interval);
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         Some(tick)
     };
@@ -553,14 +552,12 @@ async fn dial_smoke_inner(
             // takes the reload fast-path and proves nothing about the
             // prepare→commit→handover contract (same trick as
             // proxy_reload_smoke).
-            let mut runtime =
-                crate::runtime_mode::RuntimeConfig::current().unwrap_or_default();
+            let mut runtime = crate::runtime_mode::RuntimeConfig::current().unwrap_or_default();
             if let Some(tables) = manager.effective_state_tables.read().clone() {
                 runtime.xdp.state_tables = Some(tables);
             }
             if runtime.xdp == manager.config {
-                runtime.xdp.admission =
-                    Some(crate::runtime_mode::XdpAdmissionSettings::default());
+                runtime.xdp.admission = Some(crate::runtime_mode::XdpAdmissionSettings::default());
             }
             crate::runtime_mode::RuntimeConfig::set_current(runtime);
             reload_started_ms = Some(session_established.elapsed().as_millis() as u64);
@@ -632,8 +629,7 @@ async fn dial_smoke_inner(
             Ok(Err(err)) => {
                 if io_error.is_none() {
                     io_error = Some(err.to_string());
-                    io_error_at_ms =
-                        Some(session_established.elapsed().as_millis() as u64);
+                    io_error_at_ms = Some(session_established.elapsed().as_millis() as u64);
                     io_error_before_reload_end =
                         reload_started_ms.is_some() && reload_finished_ms.is_none();
                 }
@@ -1188,7 +1184,8 @@ async fn start_xdp_smoke_sni_backend(
     )
     .collect::<Result<Vec<CertificateDer<'static>>, _>>()?;
     let key = rustls_pemfile::private_key(
-        &mut include_bytes!("../../pingora-main/pingora-core/examples/keys/server/key.pem").as_slice(),
+        &mut include_bytes!("../../pingora-main/pingora-core/examples/keys/server/key.pem")
+            .as_slice(),
     )?
     .ok_or_else(|| anyhow::anyhow!("xdp smoke SNI backend key is missing"))?;
     let mut tls_config = rustls::ServerConfig::builder_with_provider(
@@ -1267,7 +1264,8 @@ async fn start_xdp_smoke_quic_backend(
     )
     .collect::<Result<Vec<CertificateDer<'static>>, _>>()?;
     let key = rustls_pemfile::private_key(
-        &mut include_bytes!("../../pingora-main/pingora-core/examples/keys/server/key.pem").as_slice(),
+        &mut include_bytes!("../../pingora-main/pingora-core/examples/keys/server/key.pem")
+            .as_slice(),
     )?
     .ok_or_else(|| anyhow::anyhow!("xdp smoke QUIC backend key is missing"))?;
     let mut tls_config = rustls::ServerConfig::builder_with_provider(
@@ -1340,6 +1338,7 @@ async fn xdp_proxy_smoke_managers(
     let cert_selector = std::sync::Arc::new(crate::ssl::DynamicCertSelector::new());
     crate::ssl::sync_certs(&cert_selector, &[xdp_proxy_smoke_ssl_cert()]).await;
     let api_config = std::sync::Arc::new(crate::api_config::ApiConfig {
+        rpc_tls: Default::default(),
         rpc_endpoints: Vec::new(),
         rpc_disable_update: true,
         node_id: "1".to_string(),
@@ -1703,6 +1702,7 @@ fn xdp_proxy_smoke_reverse_proxy(
 #[cfg(target_os = "linux")]
 fn xdp_proxy_smoke_ssl_cert() -> crate::config_models::SSLCertConfig {
     crate::config_models::SSLCertConfig {
+        ocsp: true,
         id: 7104,
         is_on: true,
         is_default: true,

@@ -1,0 +1,454 @@
+{
+  "enableIPLists": true,
+  "id": 1,
+  "servers": [
+    {
+      "enableProxyProtocol": false,
+      "http": {
+        "isOn": true,
+        "listen": [
+          {
+            "portRange": "443",
+            "protocol": "http"
+          }
+        ]
+      },
+      "https": {
+        "http3Enabled": false,
+        "isOn": true,
+        "listen": [
+          {
+            "portRange": "443",
+            "protocol": "https"
+          }
+        ],
+        "sslPolicy": {
+          "certs": [],
+          "hsts": {
+            "domains": [],
+            "includeSubDomains": true,
+            "isOn": true,
+            "maxAge": 5184000,
+            "preload": false
+          },
+          "http2Enabled": true,
+          "id": 123,
+          "isOn": true,
+          "minVersion": "TLSv1.2",
+          "ocsp": true
+        }
+      },
+      "id": 123,
+      "reverseProxy": {
+        "backupOrigins": [
+          {
+            "addr": "https://origin-bak.contract.example",
+            "followHost": true,
+            "followPort": false,
+            "http2Enabled": false,
+            "http3Enabled": false,
+            "id": 1,
+            "isOn": true,
+            "name": "https://origin-bak.contract.example",
+            "proxyProtocol": {
+              "isOn": false,
+              "version": 2
+            },
+            "requestHost": "",
+            "requestHostExcludingPort": true,
+            "requestHostType": 0,
+            "weight": 50
+          }
+        ],
+        "isOn": true,
+        "primaryOrigins": [
+          {
+            "addr": "https://origin.contract.example",
+            "followHost": true,
+            "followPort": false,
+            "http2Enabled": false,
+            "http3Enabled": false,
+            "id": 1,
+            "isOn": true,
+            "name": "https://origin.contract.example",
+            "proxyProtocol": {
+              "isOn": false,
+              "version": 2
+            },
+            "requestHost": "",
+            "requestHostExcludingPort": true,
+            "requestHostType": 0,
+            "weight": 100
+          }
+        ],
+        "requestHost": "",
+        "requestHostExcludingPort": true,
+        "requestHostType": 0,
+        "scheduling": {
+          "code": "polling",
+          "options": {}
+        }
+      },
+      "trafficLimit": {
+        "downlinkMbps": 8,
+        "isOn": true,
+        "uplinkMbps": 4
+      },
+      "web": {
+        "auth": {
+          "isOn": true,
+          "policyRefs": [
+            {
+              "authPolicy": {
+                "id": 1,
+                "isOn": true,
+                "params": {
+                  "users": [
+                    {
+                      "password": "fixture-only",
+                      "username": "test"
+                    }
+                  ]
+                },
+                "type": "basicAuth"
+              },
+              "isOn": true
+            }
+          ]
+        },
+        "cache": {
+          "cachePolicy": {
+            "addStatusHeader": true,
+            "cacheRefs": [
+              {
+                "allowPartialContent": true,
+                "conds": {
+                  "connector": "and",
+                  "groups": [
+                    {
+                      "conds": [
+                        {
+                          "isCaseInsensitive": false,
+                          "isRequest": true,
+                          "isReverse": false,
+                          "operator": "file ext",
+                          "param": "${requestPathLowerExtension}",
+                          "value": "css,js"
+                        }
+                      ],
+                      "connector": "and",
+                      "isOn": true
+                    }
+                  ],
+                  "isOn": true
+                },
+                "isOn": true,
+                "life": 60,
+                "methods": [
+                  "GET"
+                ]
+              },
+              {
+                "allowPartialContent": true,
+                "isOn": true,
+                "life": 300,
+                "maxSize": null,
+                "methods": [
+                  "GET",
+                  "HEAD"
+                ]
+              }
+            ],
+            "capacity": 8192,
+            "enabled": true,
+            "id": 4341433169545170,
+            "maxItemSize": null,
+            "name": "cluster-cache",
+            "options": {
+              "autoPurgeOnUpdate": true,
+              "cacheGeneration": 3388921847357774,
+              "dir": "/tmp/cloudsidra-contract-cache",
+              "ipWriteLimitCount": 5,
+              "ipWriteLimitWindowSeconds": 60,
+              "memoryCapacity": "4096",
+              "respectOriginCacheControl": true,
+              "restoreLocalStorage": true,
+              "staleWhileRevalidateSeconds": 20,
+              "subDirs": [],
+              "xCacheHeaderMode": "full"
+            },
+            "type": "file"
+          },
+          "isOn": true
+        },
+        "ccPolicy": {
+          "isOn": true,
+          "requestsPerMinute": 30
+        },
+        "compression": {
+          "brotli": {
+            "isOn": true,
+            "level": 6
+          },
+          "gzip": {
+            "isOn": true,
+            "level": 6
+          },
+          "isOn": true,
+          "minLength": "2KB"
+        },
+        "enableGlobalPages": true,
+        "firewallPolicy": {
+          "id": 1740530621741065,
+          "inbound": {
+            "groups": [
+              {
+                "id": 3115535417551053,
+                "isOn": true,
+                "mode": "observe",
+                "name": "forced",
+                "sets": [
+                  {
+                    "actions": [
+                      {
+                        "code": "block",
+                        "options": {
+                          "body": "denied",
+                          "status": 403
+                        }
+                      }
+                    ],
+                    "connector": "and",
+                    "id": 1,
+                    "isOn": true,
+                    "name": "observe badbot",
+                    "rules": [
+                      {
+                        "isCaseInsensitive": false,
+                        "operator": "contains",
+                        "param": "${userAgent}",
+                        "value": "badbot"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": 1740530621741065,
+                "isOn": true,
+                "mode": "defense",
+                "name": "site-custom",
+                "sets": []
+              },
+              {
+                "id": 1,
+                "isOn": true,
+                "name": "geo-asn-acl",
+                "sets": [
+                  {
+                    "actions": [
+                      {
+                        "code": "block",
+                        "options": {
+                          "body": "Access denied by geo policy",
+                          "status": 403
+                        }
+                      }
+                    ],
+                    "connector": "or",
+                    "id": 1,
+                    "ignoreLocal": true,
+                    "ignoreSearchEngine": false,
+                    "isOn": true,
+                    "name": "geo-asn-acl",
+                    "rules": [
+                      {
+                        "isCaseInsensitive": false,
+                        "isReverse": false,
+                        "operator": "eq string",
+                        "param": "geoCountryName",
+                        "paramFilters": [],
+                        "value": "United States"
+                      },
+                      {
+                        "isCaseInsensitive": false,
+                        "isReverse": false,
+                        "operator": "eq",
+                        "param": "asnNumber",
+                        "paramFilters": [],
+                        "value": "1234"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "isOn": true,
+            "region": {
+              "allowCountryIds": [],
+              "allowProvinceIds": [],
+              "allowSearchEngine": false,
+              "denyCountryHTML": "Access denied by geo policy",
+              "denyCountryIds": [
+                2
+              ],
+              "denyProvinceHTML": "Access denied by geo policy",
+              "denyProvinceIds": [],
+              "exceptURLPatterns": [],
+              "isOn": true,
+              "onlyURLPatterns": []
+            }
+          },
+          "isOn": true,
+          "mode": "defense",
+          "name": "site-waf"
+        },
+        "firewallRef": {
+          "firewallPolicyId": 1740530621741065,
+          "isOn": true
+        },
+        "hls": {
+          "isOn": false
+        },
+        "hostRedirects": [
+          {
+            "afterHost": "contract.example",
+            "domainsBefore": [
+              "old.example"
+            ],
+            "isOn": true,
+            "keepRequestURI": true,
+            "type": "domain"
+          }
+        ],
+        "maxQPS": 0,
+        "optimization": {
+          "css": {
+            "isOn": true
+          },
+          "html": {
+            "isOn": true
+          },
+          "javascript": {
+            "isOn": true
+          }
+        },
+        "pages": [
+          {
+            "body": "fixture forbidden",
+            "contentType": "text/plain",
+            "id": 1,
+            "isOn": true,
+            "status": 403
+          }
+        ],
+        "redirectToHttps": {
+          "host": "",
+          "isOn": true,
+          "status": 301
+        },
+        "referers": {
+          "allowDomains": [
+            "contract.example"
+          ],
+          "allowEmpty": false,
+          "denyDomains": [],
+          "isOn": true
+        },
+        "requestHeaderPolicy": {
+          "deleteHeaders": [
+            "X-Remove"
+          ],
+          "isOn": true,
+          "setHeaders": [
+            {
+              "isOn": true,
+              "name": "X-Real-IP",
+              "value": "${remoteAddr}"
+            },
+            {
+              "isOn": true,
+              "name": "X-Forwarded-For",
+              "value": "${remoteAddr}"
+            },
+            {
+              "isOn": true,
+              "name": "X-Forwarded-Host",
+              "value": "${host}"
+            },
+            {
+              "isOn": true,
+              "name": "X-Forwarded-Proto",
+              "value": "${scheme}"
+            },
+            {
+              "isOn": true,
+              "name": "X-Test",
+              "value": "fixture"
+            }
+          ]
+        },
+        "requestLimit": {
+          "isOn": true,
+          "maxConns": 20,
+          "rate": 10
+        },
+        "responseHeaderPolicy": {
+          "deleteHeaders": [
+            "Server"
+          ],
+          "isOn": true,
+          "setHeaders": [
+            {
+              "isOn": true,
+              "name": "X-Response",
+              "value": "fixture"
+            }
+          ]
+        },
+        "rewriteRules": [
+          {
+            "flags": "i",
+            "id": 1,
+            "isOn": true,
+            "pattern": "^/OLD/(.*)$",
+            "replace": "/new/$1"
+          }
+        ],
+        "shutdown": {
+          "inSeconds": 5,
+          "isOn": true
+        },
+        "uam": {
+          "isOn": false
+        },
+        "userAgent": {
+          "filters": [
+            {
+              "action": "allow",
+              "keywords": [
+                "browser"
+              ]
+            },
+            {
+              "action": "deny",
+              "keywords": [
+                "badbot"
+              ]
+            }
+          ],
+          "isOn": true
+        },
+        "webp": {
+          "isOn": false
+        },
+        "websocket": {
+          "allowAll": true,
+          "allowAllOrigins": true,
+          "isOn": true
+        }
+      }
+    }
+  ],
+  "version": 7
+}

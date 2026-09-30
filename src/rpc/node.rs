@@ -106,12 +106,16 @@ fn dedup_ssl_certs(
             e.insert(cert);
             continue;
         }
+        let ocsp = cert.ocsp || by_id.get(&cert.id).is_some_and(|existing| existing.ocsp);
         let replace = by_id
             .get(&cert.id)
             .map(|existing| cert_data_score(&cert) > cert_data_score(existing))
             .unwrap_or(true);
         if replace {
+            cert.ocsp = ocsp;
             by_id.insert(cert.id, cert);
+        } else if let Some(existing) = by_id.get_mut(&cert.id) {
+            existing.ocsp = ocsp;
         }
     }
 
@@ -433,7 +437,17 @@ where
         use_data_map: true,
     });
 
-    match crate::rpc::track_rpc(client.find_current_node_config(req)).await {
+    #[cfg(feature = "node-control")]
+    let result =
+        match crate::node_control::transport::fetch_snapshot(api_config, fetch_version).await {
+            Err(err) if err.code() == tonic::Code::Unimplemented => {
+                crate::rpc::track_rpc(client.find_current_node_config(req)).await
+            }
+            result => result,
+        };
+    #[cfg(not(feature = "node-control"))]
+    let result = crate::rpc::track_rpc(client.find_current_node_config(req)).await;
+    match result {
         Ok(resp) => {
             let config_resp = resp.into_inner();
             // config_resp.timestamp is a Unix timestamp used as an RPC cursor
@@ -1114,6 +1128,77 @@ where
                     let cache_policy_count = cache_policies.len();
                     let waf_policy_count = firewall_policies.len();
                     let page_count = payload.global_pages.len() + payload.http_pages_policies.len();
+                    for policy in &cache_policies {
+                        if let Err(err) = crate::cache_hybrid::HybridStorage::prepare_policy(policy)
+                        {
+                            warn!(
+                                "RPC_NODE: cache policy filesystem validation failed: {}",
+                                err
+                            );
+                            return false;
+                        }
+                    }
+                    // Do not acknowledge a generation until its XDP settings apply.
+                    // Failure leaves the cursor/hash unchanged so the next poll retries.
+                    if let Some(runtime_push) = payload.runtime.take() {
+                        let prepared_api = match runtime_push.api.unwrap_or_default().prepare() {
+                            Ok(config) => config,
+                            Err(err) => {
+                                warn!("RPC_NODE: runtime.api override rejected: {}", err);
+                                crate::rpc::logs::report_node_log_with_context(
+                                    api_config,
+                                    "error",
+                                    "RPC_NODE",
+                                    &err.to_string(),
+                                    None,
+                                    Some("runtimeApplyFailed"),
+                                    None,
+                                )
+                                .await;
+                                return false;
+                            }
+                        };
+                        let xdp = match runtime_push.xdp {
+                            Some(xdp) => xdp,
+                            None => match crate::runtime_mode::RuntimeConfig::load_default() {
+                                Ok(local) => local.xdp,
+                                Err(err) => {
+                                    warn!("RPC_NODE: cannot restore local runtime config: {}", err);
+                                    return false;
+                                }
+                            },
+                        };
+                        let previous_xdp = crate::runtime_mode::RuntimeConfig::current()
+                            .unwrap_or_default()
+                            .xdp;
+                        if let Err(err) = crate::xdp::apply_pushed_xdp_config(xdp).await {
+                            warn!("RPC_NODE: runtime.xdp override rejected: {}", err);
+                            return false;
+                        }
+                        if let Err(err) = prepared_api.commit() {
+                            if let Err(rollback) =
+                                crate::xdp::apply_pushed_xdp_config(previous_xdp).await
+                            {
+                                tracing::error!(
+                                    "RPC_NODE: XDP rollback failed after runtime persistence error: {}",
+                                    rollback
+                                );
+                            }
+                            warn!("RPC_NODE: runtime.api commit failed: {}", err);
+                            crate::rpc::logs::report_node_log_with_context(
+                                api_config,
+                                "error",
+                                "RPC_NODE",
+                                &err.to_string(),
+                                None,
+                                Some("runtimeApplyFailed"),
+                                None,
+                            )
+                            .await;
+                            return false;
+                        }
+                        crate::api_config::NodeApiPush::activate(&prepared_api.config);
+                    }
                     let deleted_contents = config_store.get_deleted_contents().await;
                     config_store
                         .update_config(
@@ -1175,22 +1260,6 @@ where
                         let mut last_hash = LAST_CONFIG_HASH.write();
                         *last_hash = current_hash;
                     }
-                    // 控制面下发的节点级运行时参数（runtime.xdp 等）：
-                    // runtime 段出现 = 控制面接管 xdp；xdp 子键缺席 = 回退本地
-                    // api_node.yaml，让管理端"清除覆盖"能真正还原本地配置。
-                    // 校验/热应用失败不阻塞站点配置提交——reload 内部已回滚，
-                    // 旧 generation 保持服务，失败在日志与 XDP 状态中可见。
-                    if let Some(runtime_push) = payload.runtime.take() {
-                        let xdp = match runtime_push.xdp {
-                            Some(xdp) => xdp,
-                            None => crate::runtime_mode::RuntimeConfig::load_default()
-                                .map(|local| local.xdp)
-                                .unwrap_or_default(),
-                        };
-                        if let Err(err) = crate::xdp::apply_pushed_xdp_config(xdp).await {
-                            warn!("RPC_NODE: runtime.xdp override rejected: {}", err);
-                        }
-                    }
                     if kernel_filter.available() {
                         waf_state.set_kernel_filter(kernel_filter);
                     }
@@ -1200,7 +1269,12 @@ where
                             .apply_policy(cache_policy)
                             .await;
                     }
-                    crate::ssl::sync_certs(cert_selector, &all_certs).await;
+                    crate::ssl::sync_certs_for_servers(
+                        cert_selector,
+                        &all_certs,
+                        &config_store.get_all_servers_sync(),
+                    )
+                    .await;
                     crate::logging::set_numeric_node_id(numeric_id);
                     config_store.set_global_stat_upload(
                         payload
@@ -1316,8 +1390,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
         }
 
         sys.refresh_all(); // Refresh everything
-        let (traffic_out, traffic_in, connections) =
-            crate::metrics::METRICS.get_node_totals();
+        let (traffic_out, traffic_in, connections) = crate::metrics::METRICS.get_node_totals();
         let rpc_snap = crate::metrics::METRICS.rpc.snapshot();
         let rpc_total_requests = rpc_snap.total_requests;
         let rpc_total_errors = rpc_snap.total_errors;
@@ -1529,6 +1602,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
 
         let status = serde_json::json!({
             "buildVersion": env!("CARGO_PKG_VERSION"),
+            "runtimeDir": crate::paths::NodePaths::current().runtime_root(),
             "buildVersionCode": build_version_code(),
             "configVersion": config_store.get_config_version().await,
             "os": std::env::consts::OS,
@@ -1575,6 +1649,18 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             "isHealthy": true,
         });
 
+        #[cfg(feature = "node-control")]
+        if let Err(err) = crate::node_control::transport::report_health(
+            &api_config,
+            config_store.get_config_version().await,
+            &status,
+        )
+        .await
+            && err.code() != tonic::Code::Unimplemented
+        {
+            warn!("NodeControl structured health report failed: {}", err);
+        }
+
         if let Ok(shared) = SharedRpcClient::get(&api_config).await {
             let client = shared.as_rpc_client();
             let mut service = client.node_service();
@@ -1602,8 +1688,7 @@ pub async fn report_node_online_once(
 
     let mut sys = sysinfo::System::new_all();
     sys.refresh_all();
-    let (traffic_out, traffic_in, connections) =
-        crate::metrics::METRICS.get_node_totals();
+    let (traffic_out, traffic_in, connections) = crate::metrics::METRICS.get_node_totals();
     let rpc_snap = crate::metrics::METRICS.rpc.snapshot();
     let rpc_total_requests = rpc_snap.total_requests;
     let rpc_total_errors = rpc_snap.total_errors;
@@ -1716,8 +1801,7 @@ pub async fn start_node_value_reporter(config_store: Arc<ConfigStore>, api_confi
         sys.refresh_all();
         // ... (rest of the logic)
 
-        let (traffic_out, traffic_in, connections) =
-            crate::metrics::METRICS.get_node_totals();
+        let (traffic_out, traffic_in, connections) = crate::metrics::METRICS.get_node_totals();
         let load = sysinfo::System::load_average();
 
         let (total_memory, used_memory) = crate::memory_governor::reported_memory_totals();

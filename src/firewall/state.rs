@@ -3,7 +3,11 @@ use crate::firewall::kernel::{KernelFilter, KernelFilterRange, KernelFilterSnaps
 use crate::firewall::persistence::FirewallBlockRecord;
 use arc_swap::ArcSwap;
 use dashmap::{DashMap, mapref::entry::Entry};
-use governor::{Quota, RateLimiter, clock::DefaultClock, state::{InMemoryState, NotKeyed}};
+use governor::{
+    Quota, RateLimiter,
+    clock::DefaultClock,
+    state::{InMemoryState, NotKeyed},
+};
 use ipnet::IpNet;
 use std::collections::{BinaryHeap, HashMap};
 use std::net::IpAddr;
@@ -168,6 +172,7 @@ pub(crate) struct TrackedLimiter {
     pub last_seen: AtomicI64,
     /// The QPS value baked into `limiter`'s Quota at construction time.
     pub quota_value: AtomicU32,
+    pub quota_window_secs: AtomicU64,
 }
 
 impl TrackedLimiter {
@@ -179,7 +184,13 @@ impl TrackedLimiter {
             limiter,
             last_seen: AtomicI64::new(crate::utils::time::now_timestamp()),
             quota_value: AtomicU32::new(quota_value),
+            quota_window_secs: AtomicU64::new(1),
         }
+    }
+
+    fn with_window(mut self, seconds: u64) -> Self {
+        self.quota_window_secs = AtomicU64::new(seconds);
+        self
     }
 
     fn touch(&self) {
@@ -629,10 +640,7 @@ impl WafStateManager {
         }
     }
 
-    fn snapshot_global_ips(
-        map: &BoundedScopedMap<(i64, IpAddr)>,
-        now: i64,
-    ) -> Vec<(IpAddr, i64)> {
+    fn snapshot_global_ips(map: &BoundedScopedMap<(i64, IpAddr)>, now: i64) -> Vec<(IpAddr, i64)> {
         let mut out = Vec::new();
         map.for_each(|(scope, ip), expiry| {
             if scope == 0 && expiry > now {
@@ -856,9 +864,7 @@ impl WafStateManager {
         now: i64,
     ) -> bool {
         let snapshot = snapshots.load();
-        snapshot
-            .get(&0)
-            .is_some_and(|s| s.overlaps(net, now))
+        snapshot.get(&0).is_some_and(|s| s.overlaps(net, now))
             || (server_id != 0
                 && snapshot
                     .get(&server_id)
@@ -972,8 +978,14 @@ impl WafStateManager {
 
     pub fn apply_list_black_ip_until(&self, server_id: i64, ip: IpAddr, expiry: i64) {
         let ip = canonical_lookup_ip(ip);
-        let evicted =
-            self.mutate_ip_kind(KIND_BLOCK, &self.list_blocks, "list_blocks", server_id, ip, expiry);
+        let evicted = self.mutate_ip_kind(
+            KIND_BLOCK,
+            &self.list_blocks,
+            "list_blocks",
+            server_id,
+            ip,
+            expiry,
+        );
         for (_, evict_ip) in evicted {
             self.reconcile_kernel_ip(evict_ip);
         }
@@ -1013,8 +1025,14 @@ impl WafStateManager {
 
     pub fn apply_white_ip_until(&self, server_id: i64, ip: IpAddr, expiry: i64) {
         let ip = canonical_lookup_ip(ip);
-        let evicted =
-            self.mutate_ip_kind(KIND_WHITE, &self.whitelists, "whitelists", server_id, ip, expiry);
+        let evicted = self.mutate_ip_kind(
+            KIND_WHITE,
+            &self.whitelists,
+            "whitelists",
+            server_id,
+            ip,
+            expiry,
+        );
         for (_, evict_ip) in evicted {
             self.reconcile_kernel_ip(evict_ip);
         }
@@ -1100,8 +1118,14 @@ impl WafStateManager {
 
     pub fn apply_gray_ip_until(&self, server_id: i64, ip: IpAddr, expiry: i64) {
         // Graylists do not feed the kernel filter — evictions need no reconcile.
-        let _ =
-            self.mutate_ip_kind(KIND_GRAY, &self.graylists, "graylists", server_id, ip, expiry);
+        let _ = self.mutate_ip_kind(
+            KIND_GRAY,
+            &self.graylists,
+            "graylists",
+            server_id,
+            ip,
+            expiry,
+        );
     }
 
     pub fn apply_gray_network_until(&self, server_id: i64, net: IpNet, expiry: i64) {
@@ -1288,8 +1312,14 @@ impl WafStateManager {
                 }
             }
         } else {
-            let evicted =
-                self.mutate_ip_kind(KIND_BLOCK, &self.blocks, "blocks", key_server_id, ip, expiry);
+            let evicted = self.mutate_ip_kind(
+                KIND_BLOCK,
+                &self.blocks,
+                "blocks",
+                key_server_id,
+                ip,
+                expiry,
+            );
             for (evict_server_id, evict_ip) in &evicted {
                 self.kernel_blocks.remove(&(*evict_server_id, *evict_ip));
                 self.reconcile_kernel_ip(*evict_ip);
@@ -1565,6 +1595,41 @@ impl WafStateManager {
     }
 
     pub fn check_ip_rate_limit(&self, server_id: i64, ip: IpAddr, max_qps: u32) -> bool {
+        self.check_ip_rate_limit_window(server_id, ip, max_qps, 1)
+    }
+
+    pub fn check_ip_minute_limit(&self, server_id: i64, ip: IpAddr, requests: u32) -> bool {
+        self.check_ip_rate_limit_window(server_id ^ (1_i64 << 60), ip, requests, 60)
+    }
+
+    pub fn check_cache_write_limit(
+        &self,
+        server: i64,
+        ip: IpAddr,
+        count: u32,
+        seconds: u64,
+    ) -> bool {
+        self.check_ip_rate_limit_window(server ^ (1_i64 << 58), ip, count, seconds.max(1))
+    }
+
+    fn check_ip_rate_limit_window(
+        &self,
+        server_id: i64,
+        ip: IpAddr,
+        max_qps: u32,
+        seconds: u64,
+    ) -> bool {
+        let make_quota = || {
+            Quota::with_period(std::time::Duration::from_nanos(
+                seconds
+                    .saturating_mul(1_000_000_000)
+                    .checked_div(max_qps as u64)
+                    .unwrap_or(1)
+                    .max(1),
+            ))
+            .expect("positive quota period")
+            .allow_burst(NonZeroU32::new(max_qps).expect("nonzero quota"))
+        };
         if max_qps == 0 {
             return true;
         }
@@ -1594,32 +1659,36 @@ impl WafStateManager {
                                 );
                                 return false;
                             }
-                            let quota = Quota::per_second(NonZeroU32::new(max_qps).unwrap());
-                            entry.insert(TrackedLimiter::new(
-                                Arc::new(RateLimiter::direct(quota)),
-                                max_qps,
-                            ))
+                            let quota = make_quota();
+                            entry.insert(
+                                TrackedLimiter::new(Arc::new(RateLimiter::direct(quota)), max_qps)
+                                    .with_window(seconds),
+                            )
                         }
                     }
                 } else {
-                    let quota = Quota::per_second(NonZeroU32::new(max_qps).unwrap());
-                    entry.insert(TrackedLimiter::new(
-                        Arc::new(RateLimiter::direct(quota)),
-                        max_qps,
-                    ))
+                    let quota = make_quota();
+                    entry.insert(
+                        TrackedLimiter::new(Arc::new(RateLimiter::direct(quota)), max_qps)
+                            .with_window(seconds),
+                    )
                 }
             }
         };
-        if entry.quota_value.load(Ordering::Relaxed) != max_qps {
+        if entry.quota_value.load(Ordering::Relaxed) != max_qps
+            || entry.quota_window_secs.load(Ordering::Relaxed) != seconds
+        {
             drop(entry);
             match self.ip_limiters.entry(key) {
                 Entry::Occupied(mut current) => {
-                    if current.get().quota_value.load(Ordering::Relaxed) != max_qps {
-                        let quota = Quota::per_second(NonZeroU32::new(max_qps).unwrap());
-                        let _ = current.insert(TrackedLimiter::new(
-                            Arc::new(RateLimiter::direct(quota)),
-                            max_qps,
-                        ));
+                    if current.get().quota_value.load(Ordering::Relaxed) != max_qps
+                        || current.get().quota_window_secs.load(Ordering::Relaxed) != seconds
+                    {
+                        let quota = make_quota();
+                        let _ = current.insert(
+                            TrackedLimiter::new(Arc::new(RateLimiter::direct(quota)), max_qps)
+                                .with_window(seconds),
+                        );
                     }
                     entry = current.into_ref();
                 }
@@ -1630,11 +1699,11 @@ impl WafStateManager {
                     ) {
                         return false;
                     }
-                    let quota = Quota::per_second(NonZeroU32::new(max_qps).unwrap());
-                    entry = current.insert(TrackedLimiter::new(
-                        Arc::new(RateLimiter::direct(quota)),
-                        max_qps,
-                    ));
+                    let quota = make_quota();
+                    entry = current.insert(
+                        TrackedLimiter::new(Arc::new(RateLimiter::direct(quota)), max_qps)
+                            .with_window(seconds),
+                    );
                 }
             }
         }
@@ -1793,11 +1862,7 @@ impl WafStateManager {
     /// first; if the map is still full the earliest-expiring live rows are
     /// removed in a batch. Returns the keys actually evicted so callers can
     /// reconcile derived state (kernel filter, network/range snapshots).
-    fn evict_scoped_state_room<K>(
-        map: &DashMap<K, i64>,
-        capacity: usize,
-        now: i64,
-    ) -> Vec<K>
+    fn evict_scoped_state_room<K>(map: &DashMap<K, i64>, capacity: usize, now: i64) -> Vec<K>
     where
         K: Copy + Eq + std::hash::Hash,
     {
@@ -2063,11 +2128,7 @@ impl WafStateManager {
         evicted
     }
 
-    fn remove_scoped_ip(
-        map: &BoundedScopedMap<(i64, IpAddr)>,
-        server_id: i64,
-        ip: IpAddr,
-    ) {
+    fn remove_scoped_ip(map: &BoundedScopedMap<(i64, IpAddr)>, server_id: i64, ip: IpAddr) {
         map.remove(&(server_id, ip));
     }
 
@@ -2090,12 +2151,8 @@ impl WafStateManager {
             map.insert(key, expiry);
             return Vec::new();
         }
-        let evicted = Self::evict_for_scoped_state(
-            map,
-            map_name,
-            Self::scoped_state_map_capacity(),
-            now,
-        );
+        let evicted =
+            Self::evict_for_scoped_state(map, map_name, Self::scoped_state_map_capacity(), now);
         if map.len() < Self::scoped_state_map_capacity() {
             map.insert(key, expiry);
         }
@@ -2106,11 +2163,7 @@ impl WafStateManager {
         map.remove(&(server_id, net));
     }
 
-    fn contains_any_scoped_ip(
-        map: &BoundedScopedMap<(i64, IpAddr)>,
-        ip: IpAddr,
-        now: i64,
-    ) -> bool {
+    fn contains_any_scoped_ip(map: &BoundedScopedMap<(i64, IpAddr)>, ip: IpAddr, now: i64) -> bool {
         let mut found = false;
         map.for_each(|(_, entry_ip), expiry| {
             if entry_ip == ip && now < expiry {
@@ -2142,12 +2195,8 @@ impl WafStateManager {
         let key = (server_id, net);
         let mut evicted = Vec::new();
         if !map.contains_key(&key) {
-            evicted = Self::evict_for_scoped_state(
-                map,
-                map_name,
-                Self::scoped_state_map_capacity(),
-                now,
-            );
+            evicted =
+                Self::evict_for_scoped_state(map, map_name, Self::scoped_state_map_capacity(), now);
             if map.len() >= Self::scoped_state_map_capacity() {
                 if !evicted.is_empty() {
                     // Evictions happened but the new entry was refused — the
@@ -2406,12 +2455,8 @@ impl WafStateManager {
         }
         let key = (server_id, range);
         if !map.contains_key(&key) {
-            let evicted = Self::evict_for_scoped_state(
-                map,
-                map_name,
-                Self::scoped_state_map_capacity(),
-                now,
-            );
+            let evicted =
+                Self::evict_for_scoped_state(map, map_name, Self::scoped_state_map_capacity(), now);
             if map.len() >= Self::scoped_state_map_capacity() {
                 if !evicted.is_empty() {
                     // Refused insert but evictions happened — rebuild so the
@@ -2830,27 +2875,15 @@ mod tests {
         assert_eq!(map.len(), 4);
 
         // Updating an existing key never evicts, even at capacity.
-        let evicted = WafStateManager::apply_scoped_ip_with_capacity(
-            &map,
-            "test",
-            7,
-            ip(1),
-            now + 500,
-            cap,
-        );
+        let evicted =
+            WafStateManager::apply_scoped_ip_with_capacity(&map, "test", 7, ip(1), now + 500, cap);
         assert!(evicted.is_empty());
         assert_eq!(map.len(), 4);
 
         // A brand-new key at capacity evicts exactly one live entry: the
         // sampled-earliest-expiry victim (probe-window or corner scan).
-        let evicted = WafStateManager::apply_scoped_ip_with_capacity(
-            &map,
-            "test",
-            7,
-            ip(9),
-            now + 900,
-            cap,
-        );
+        let evicted =
+            WafStateManager::apply_scoped_ip_with_capacity(&map, "test", 7, ip(9), now + 900, cap);
         assert_eq!(evicted.len(), 1, "at cap an insert must evict one entry");
         let (victim_scope, victim_ip) = evicted[0];
         assert_eq!(victim_scope, 7);
@@ -2868,28 +2901,15 @@ mod tests {
         let cap = 4;
 
         for n in 1..=3u8 {
-            WafStateManager::apply_scoped_ip_with_capacity(
-                &map,
-                "test",
-                7,
-                ip(n),
-                now + 60,
-                cap,
-            );
+            WafStateManager::apply_scoped_ip_with_capacity(&map, "test", 7, ip(n), now + 60, cap);
         }
         // Plant an expired row directly — the bounded insert refuses
         // already-expired writes, so seed it by hand.
         map.seed_unchecked((7, ip(0)), now - 1);
         assert_eq!(map.len(), 4);
 
-        let evicted = WafStateManager::apply_scoped_ip_with_capacity(
-            &map,
-            "test",
-            7,
-            ip(9),
-            now + 60,
-            cap,
-        );
+        let evicted =
+            WafStateManager::apply_scoped_ip_with_capacity(&map, "test", 7, ip(9), now + 60, cap);
         // Invariants: the bound holds and the insert lands. Within a probe
         // window expired rows always sort first (expiry <= now < live), so
         // the expired row is reclaimed whenever it is sampled; a live
@@ -2939,7 +2959,10 @@ mod tests {
         let ip: IpAddr = "203.0.113.7".parse().unwrap();
         state.apply_black_ip_until(7, ip, now + 3600);
         assert!(state.is_blocked(ip, 7));
-        assert!(!state.is_blocked(ip, 999), "scope-7 entry must not match scope 999");
+        assert!(
+            !state.is_blocked(ip, 999),
+            "scope-7 entry must not match scope 999"
+        );
         state.apply_white_ip_until(7, ip, now + 3600);
         assert!(state.is_whitelisted(ip, 7));
         assert!(!state.is_whitelisted(ip, 999));
@@ -2969,13 +2992,23 @@ mod tests {
             state.apply_white_ip_until(0, IpAddr::from([10, 9, 1, n]), now + 3600);
         }
         state.rebuild_ip_read_snapshot();
-        assert_eq!(state.ip_delta.load().len(), 0, "rebuild swaps in a fresh delta");
+        assert_eq!(
+            state.ip_delta.load().len(),
+            0,
+            "rebuild swaps in a fresh delta"
+        );
         for n in 0..100u8 {
             let blocked: IpAddr = IpAddr::from([10, 9, 0, n]);
             let white: IpAddr = IpAddr::from([10, 9, 1, n]);
             assert!(state.is_blocked(blocked, 3));
-            assert!(!state.is_blocked(blocked, 4), "scope-3 block must not leak to scope 4");
-            assert!(state.is_whitelisted(white, 5), "global whitelist matches any scope");
+            assert!(
+                !state.is_blocked(blocked, 4),
+                "scope-3 block must not leak to scope 4"
+            );
+            assert!(
+                state.is_whitelisted(white, 5),
+                "global whitelist matches any scope"
+            );
         }
     }
 
@@ -3080,7 +3113,12 @@ mod tests {
         );
         // Spot-check both early (snapshot-era) and late (delta-era) writes.
         let early = IpAddr::from([10, 0, 0, 1]);
-        let late = IpAddr::from([10, (IP_DELTA_CAP >> 16) as u8, ((IP_DELTA_CAP + 63) >> 8) as u8, (IP_DELTA_CAP + 63) as u8]);
+        let late = IpAddr::from([
+            10,
+            (IP_DELTA_CAP >> 16) as u8,
+            ((IP_DELTA_CAP + 63) >> 8) as u8,
+            (IP_DELTA_CAP + 63) as u8,
+        ]);
         assert!(state.is_blocked(early, 1));
         assert!(state.is_blocked(late, 1));
     }

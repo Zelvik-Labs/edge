@@ -241,6 +241,17 @@ const CACHE_METHOD_KEY_MARKER: &str = "@__cloudsidra_edge_method:";
 const CACHE_ENCODING_KEY_MARKER: &str = "@__cloudsidra_edge_ce:";
 const CACHE_WEBP_KEY_MARKER: &str = "@__cloudsidra_edge_webp:";
 
+/// Bind automatic invalidation to both the site and complete custom key.
+pub(crate) fn bind_cache_generation(key: &mut String, server_id: i64, generation: i64) {
+    use std::fmt::Write;
+    let digest = format!("{:x}", md5_legacy::compute(key.as_bytes()));
+    write!(
+        key,
+        "@__cloudsidra_edge_config:{server_id}:{generation}:{digest}"
+    )
+    .expect("writing a String cannot fail");
+}
+
 /// Append the authenticated method marker used for method-specific cache
 /// variants.  A plain `@method:HEAD` suffix is user-controlled when a custom
 /// cache-key template is configured, so it can make a GET key collide with a

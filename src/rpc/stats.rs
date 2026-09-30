@@ -157,7 +157,8 @@ pub async fn start_origin_health_reporter(api_config: ApiConfig) {
 }
 
 fn billable_bytes(snapshot: &ServerStatusSnapshot, api_config: &ApiConfig) -> u64 {
-    if api_config.billing_count_inbound_traffic {
+    if crate::api_config::effective_billing_count_inbound(api_config.billing_count_inbound_traffic)
+    {
         snapshot.total_bytes()
     } else {
         snapshot.bytes_sent

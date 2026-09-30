@@ -495,6 +495,7 @@ impl CompiledAuthPolicy {
 
 #[derive(Clone, Debug)]
 pub struct CompiledRequestLimitPlan {
+    pub rate: u32,
     pub max_body_bytes: i64,
     pub max_conns: i32,
     pub max_conns_per_ip: i32,
@@ -504,6 +505,7 @@ pub struct CompiledRequestLimitPlan {
 impl CompiledRequestLimitPlan {
     fn compile(config: &HTTPRequestLimitConfig) -> Option<Self> {
         config.is_on.then_some(Self {
+            rate: config.rate,
             max_body_bytes: config.max_body_bytes_value(),
             max_conns: config.max_conns,
             max_conns_per_ip: config.max_conns_per_ip,
@@ -556,6 +558,7 @@ impl CompiledCharsetPlan {
 
 #[derive(Clone, Debug)]
 pub struct CompiledShutdownPlan {
+    pub activate_at: i64,
     pub status: u16,
     pub body_type: String,
     pub url: String,
@@ -568,6 +571,7 @@ impl CompiledShutdownPlan {
             return None;
         }
         Some(Self {
+            activate_at: config.activate_at,
             status: u16::try_from(config.status)
                 .ok()
                 .filter(|code| (100..=599).contains(code))

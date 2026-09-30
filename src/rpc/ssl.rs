@@ -70,9 +70,17 @@ async fn sync_ocsp_once(
                 }
 
                 for ocsp in &batch {
-                    cert_selector
-                        .update_ocsp(ocsp.ssl_cert_id, ocsp.data.clone())
-                        .await;
+                    if let Err(error) = cert_selector
+                        .update_ocsp_with_expiry(
+                            ocsp.ssl_cert_id,
+                            ocsp.data.clone(),
+                            ocsp.expires_at,
+                        )
+                        .await
+                    {
+                        warn!(cert_id = ocsp.ssl_cert_id, %error, "Failed to retain OCSP response");
+                        return false;
+                    }
                     if ocsp.version > *version {
                         *version = ocsp.version;
                     }

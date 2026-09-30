@@ -18,6 +18,7 @@ type CertCacheMap = Arc<RwLock<HashMap<i64, (String, Arc<CertPair>)>>>;
 pub struct DynamicCertSelector {
     snapshot: Arc<ArcSwap<CertSnapshot>>,
     cache: CertCacheMap,
+    ocsp_records: Arc<RwLock<HashMap<i64, OcspRecord>>>,
 }
 
 impl std::fmt::Debug for DynamicCertSelector {
@@ -38,10 +39,28 @@ struct CertSnapshot {
 pub struct CertPair {
     pub id: i64,
     certified_key: Arc<CertifiedKey>,
-    resolved_key: Arc<ArcSwap<CertifiedKey>>,
     cert_bytes: Vec<u8>,
     key_bytes: Vec<u8>,
-    ocsp: Arc<ArcSwap<Vec<u8>>>,
+    ocsp: Arc<ArcSwap<OcspState>>,
+    ocsp_enabled: bool,
+}
+
+#[derive(Clone, Debug)]
+struct OcspRecord {
+    data: Vec<u8>,
+    expires_at: i64,
+}
+
+impl OcspRecord {
+    fn valid(&self) -> bool {
+        self.expires_at > chrono::Utc::now().timestamp() && !self.data.is_empty()
+    }
+}
+
+#[derive(Debug, Default)]
+struct OcspState {
+    record: Option<OcspRecord>,
+    key: Option<Arc<CertifiedKey>>,
 }
 
 impl Default for DynamicCertSelector {
@@ -56,17 +75,45 @@ impl DynamicCertSelector {
         Self {
             snapshot: Arc::new(ArcSwap::from_pointee(CertSnapshot::default())),
             cache: Arc::new(RwLock::new(HashMap::new())),
+            ocsp_records: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    pub async fn update_ocsp(&self, cert_id: i64, data: Vec<u8>) {
-        let cache = self.cache.read().unwrap_or_else(|e| e.into_inner());
-        for (_, pair) in cache.values() {
-            if pair.id == cert_id {
-                pair.ocsp.store(Arc::new(data.clone()));
-                pair.refresh_resolved_key();
-            }
+    pub async fn update_ocsp_with_expiry(
+        &self,
+        cert_id: i64,
+        data: Vec<u8>,
+        expires_at: i64,
+    ) -> anyhow::Result<()> {
+        anyhow::ensure!(data.len() <= 1024 * 1024, "OCSP response exceeds 1 MiB");
+        let mut records = self.ocsp_records.write().unwrap_or_else(|e| e.into_inner());
+        records.retain(|_, record| record.valid());
+        let record = OcspRecord { data, expires_at };
+        if record.valid() {
+            anyhow::ensure!(
+                records.contains_key(&cert_id) || records.len() < 10_000,
+                "OCSP retention capacity exceeded"
+            );
+            let retained_bytes: usize = records
+                .iter()
+                .filter(|(id, _)| **id != cert_id)
+                .map(|(_, record)| record.data.len())
+                .sum();
+            anyhow::ensure!(
+                retained_bytes + record.data.len() <= 64 * 1024 * 1024,
+                "OCSP retention exceeds 64 MiB"
+            );
         }
+        let cache = self.cache.read().unwrap_or_else(|e| e.into_inner());
+        if let Some((_, pair)) = cache.get(&cert_id) {
+            pair.apply_ocsp(&record);
+        }
+        if record.valid() {
+            records.insert(cert_id, record);
+        } else {
+            records.remove(&cert_id);
+        }
+        Ok(())
     }
 
     pub async fn export_default_pem(&self) -> Option<(Vec<u8>, Vec<u8>)> {
@@ -173,15 +220,26 @@ pub fn build_rustls_server_config(
 
 impl CertPair {
     fn resolved_certified_key(&self) -> Arc<CertifiedKey> {
-        Arc::clone(&*self.resolved_key.load())
+        let state = self.ocsp.load();
+        if self.ocsp_enabled
+            && state.record.as_ref().is_some_and(OcspRecord::valid)
+            && let Some(key) = &state.key
+        {
+            return key.clone();
+        }
+        self.certified_key.clone()
     }
 
-    fn refresh_resolved_key(&self) {
-        self.resolved_key
-            .store(Arc::new(build_resolved_certified_key(
-                &self.certified_key,
-                self.ocsp.load().as_ref(),
-            )));
+    fn apply_ocsp(&self, record: &OcspRecord) {
+        self.ocsp.store(Arc::new(OcspState {
+            record: Some(record.clone()),
+            key: record.valid().then(|| {
+                Arc::new(build_resolved_certified_key(
+                    &self.certified_key,
+                    &record.data,
+                ))
+            }),
+        }));
     }
 }
 
@@ -198,11 +256,34 @@ fn serialize_pair_pem(pair: &Arc<CertPair>) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
     (
         pair.cert_bytes.clone(),
         pair.key_bytes.clone(),
-        pair.ocsp.load().as_ref().clone(),
+        if pair.ocsp_enabled {
+            pair.ocsp
+                .load()
+                .record
+                .as_ref()
+                .filter(|record| record.valid())
+                .map(|record| record.data.clone())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        },
     )
 }
 
 pub async fn sync_certs(cert_selector: &DynamicCertSelector, certs: &[SSLCertConfig]) {
+    sync_certs_for_servers(cert_selector, certs, &[]).await;
+}
+
+pub async fn sync_certs_for_servers(
+    cert_selector: &DynamicCertSelector,
+    certs: &[SSLCertConfig],
+    servers: &[Arc<crate::config_models::ServerConfig>],
+) {
+    // Same lock order as OCSP updates: retain records through snapshot publication.
+    let records = cert_selector
+        .ocsp_records
+        .read()
+        .unwrap_or_else(|e| e.into_inner());
     let mut new_exact = HashMap::new();
     let mut new_wildcard = HashMap::new();
     let mut default_pair: Option<Arc<CertPair>> = None;
@@ -210,7 +291,10 @@ pub async fn sync_certs(cert_selector: &DynamicCertSelector, certs: &[SSLCertCon
     let mut new_cache = HashMap::new();
 
     let (stats_parsed, stats_reused, stats_parsed_fresh) = {
-        let old_cache = cert_selector.cache.read().unwrap_or_else(|e| e.into_inner());
+        let old_cache = cert_selector
+            .cache
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         let mut parsed = 0;
         let mut reused = 0;
         let mut parsed_fresh = 0;
@@ -237,8 +321,7 @@ pub async fn sync_certs(cert_selector: &DynamicCertSelector, certs: &[SSLCertCon
             };
 
             let current_fingerprint =
-                fnv_hash64_bytes([cert_bytes.as_slice(), key_bytes.as_slice()].as_slice())
-                    .to_string();
+                fnv_hash64_bytes(&[cert_bytes.as_slice(), key_bytes.as_slice()]).to_string();
 
             let pair = if let Some((old_fp, old_pair)) = old_cache.get(&cert_id)
                 && *old_fp == current_fingerprint
@@ -264,8 +347,18 @@ pub async fn sync_certs(cert_selector: &DynamicCertSelector, certs: &[SSLCertCon
                 }
             };
 
+            if let Some(record) = records.get(&cert_id) {
+                pair.apply_ocsp(record);
+            }
             parsed += 1;
             new_cache.insert(cert_id, (current_fingerprint, pair.clone()));
+            let pair = if cert_cfg.ocsp {
+                pair
+            } else {
+                let mut view = (*pair).clone();
+                view.ocsp_enabled = false;
+                Arc::new(view)
+            };
 
             if cert_cfg.is_default {
                 default_pair = Some(pair.clone());
@@ -296,13 +389,59 @@ pub async fn sync_certs(cert_selector: &DynamicCertSelector, certs: &[SSLCertCon
         (parsed, reused, parsed_fresh)
     };
 
-    let new_snapshot = CertSnapshot {
+    let mut new_snapshot = CertSnapshot {
         exact: new_exact,
         wildcard: new_wildcard,
         default: default_pair.or(fallback_pair),
     };
+    // An unstapled view is per hostname: shared certificates retain their
+    // cached staple for other sites. Publish all views in one snapshot.
+    for server in servers.iter().filter(|server| server.is_on) {
+        let Some(policy) = server
+            .https
+            .as_ref()
+            .filter(|https| https.is_on)
+            .and_then(|https| https.ssl_policy.as_ref())
+            .filter(|policy| policy.is_on)
+        else {
+            continue;
+        };
+        let pair = policy
+            .certs
+            .iter()
+            .filter(|cert| cert.is_on)
+            .find_map(|cert| {
+                if cert.id > 0 {
+                    return new_cache.get(&cert.id).map(|(_, pair)| pair.clone());
+                }
+                // Inline certificates receive synthetic IDs when collected; match
+                // their actual material rather than the original zero ID.
+                let cert_bytes = cert_value_to_bytes(cert.cert_data_json.as_ref()?)?;
+                let key_bytes = cert_value_to_bytes(cert.key_data_json.as_ref()?)?;
+                let fingerprint = fnv_hash64_bytes(&[&cert_bytes, &key_bytes]).to_string();
+                new_cache
+                    .values()
+                    .find(|(candidate, _)| *candidate == fingerprint)
+                    .map(|(_, pair)| pair.clone())
+            });
+        for name in crate::rpc::utils::server_runtime_names(server) {
+            let name = name.to_ascii_lowercase();
+            if let Some(pair) = &pair {
+                let mut view = (**pair).clone();
+                view.ocsp_enabled = policy.ocsp;
+                if name.starts_with("*.") {
+                    new_snapshot.wildcard.insert(name, Arc::new(view));
+                } else {
+                    new_snapshot.exact.insert(name, Arc::new(view));
+                }
+            }
+        }
+    }
     let default_present = new_snapshot.default.is_some();
-    let mut cache_lock = cert_selector.cache.write().unwrap_or_else(|e| e.into_inner());
+    let mut cache_lock = cert_selector
+        .cache
+        .write()
+        .unwrap_or_else(|e| e.into_inner());
     *cache_lock = new_cache;
     cert_selector.snapshot.store(Arc::new(new_snapshot));
 
@@ -325,18 +464,14 @@ fn parse_cert_pair(
     let provider = default_crypto_provider();
     let certified_key = CertifiedKey::from_der(cert_chain, key, &provider)?;
     let certified_key = Arc::new(certified_key);
-    let resolved_key = Arc::new(ArcSwap::from_pointee(build_resolved_certified_key(
-        certified_key.as_ref(),
-        &[],
-    )));
 
     Ok(CertPair {
         id: cert_id,
         certified_key,
-        resolved_key,
         cert_bytes,
         key_bytes,
-        ocsp: Arc::new(ArcSwap::from_pointee(Vec::new())),
+        ocsp: Arc::new(ArcSwap::from_pointee(OcspState::default())),
+        ocsp_enabled: true,
     })
 }
 

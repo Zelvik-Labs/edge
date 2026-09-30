@@ -16,7 +16,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 /// verified eBPF bytecode at the XDP hook, so the program must ship as an ELF
 /// object — embedding it keeps binary and program versioned atomically.
 #[cfg(target_os = "linux")]
-const XDP_EBPF_EMBEDDED: &[u8] = aya::include_bytes_aligned!(env!("CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT"));
+const XDP_EBPF_EMBEDDED: &[u8] =
+    aya::include_bytes_aligned!(env!("CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT"));
 #[cfg(target_os = "linux")]
 const XDP_BPF_PIN_DIR: &str = "/sys/fs/bpf/cloudsidra-edge-xdp";
 
@@ -843,12 +844,13 @@ impl XdpManager {
             // The daemon never purges pinned state implicitly: an
             // ABI-incompatible state map is a migration boundary and must
             // surface as an explicit fallback reason, not silent state loss.
-            let atomic_reattach = predecessor
-                .filter(|_| adopt_lease.is_some())
-                .map(|old| linux::AtomicReattach {
-                    xsk_withdrawn: old.xsk_withdrawn.lock().clone(),
-                    dataplane_restored: self.attach_dataplane_restored.clone(),
-                });
+            let atomic_reattach =
+                predecessor
+                    .filter(|_| adopt_lease.is_some())
+                    .map(|old| linux::AtomicReattach {
+                        xsk_withdrawn: old.xsk_withdrawn.lock().clone(),
+                        dataplane_restored: self.attach_dataplane_restored.clone(),
+                    });
             self.attach_committed.store(false, Ordering::Relaxed);
             self.attach_dataplane_restored
                 .store(false, Ordering::Relaxed);
@@ -876,8 +878,7 @@ impl XdpManager {
                         .store(attached_program.owner_epoch, Ordering::Relaxed);
                     self.imported_flows
                         .store(attached_program.imported_flows, Ordering::Relaxed);
-                    *self.effective_state_tables.write() =
-                        attached_program.effective_state_tables;
+                    *self.effective_state_tables.write() = attached_program.effective_state_tables;
                     // The committed map-memory credential lives as long as
                     // this generation's dataplane — dropping it here would
                     // free ledger bytes the kernel still pins.
@@ -967,12 +968,7 @@ impl XdpManager {
                 let detail = format!("runtime xdp.enabled=false; detach failed: {err}");
                 self.set_fallback_reason(detail.clone());
                 tracing::warn!("{detail}");
-                crate::logging::report_node_log(
-                    "warn".to_string(),
-                    "xdp".to_string(),
-                    detail,
-                    0,
-                );
+                crate::logging::report_node_log("warn".to_string(), "xdp".to_string(), detail, 0);
                 self.persist_status_blocking();
                 return;
             }
@@ -2225,7 +2221,10 @@ impl XdpManager {
     }
 
     #[cfg(target_os = "linux")]
-    pub(crate) fn set_dial_registry(&self, registry: Option<std::sync::Arc<af_xdp::AfXdpDialRegistry>>) {
+    pub(crate) fn set_dial_registry(
+        &self,
+        registry: Option<std::sync::Arc<af_xdp::AfXdpDialRegistry>>,
+    ) {
         // Replacing/clearing the registry drains the previous
         // generation's XDP_OUT_CT rows so stale entries can never steer
         // replies into queues whose XSKs are gone.
@@ -2682,9 +2681,7 @@ impl XdpManager {
     /// while it is still live. `None` when no bridge ever spawned (sockets
     /// staged but no workers) or the lease was already retired.
     #[cfg(target_os = "linux")]
-    fn live_dataplane_lease(
-        &self,
-    ) -> Option<std::sync::Arc<AfXdpDataplaneLease>> {
+    fn live_dataplane_lease(&self) -> Option<std::sync::Arc<AfXdpDataplaneLease>> {
         let lease = self.af_xdp.lock().as_ref()?.lease.clone()?;
         if lease.is_retired() {
             None
@@ -2736,8 +2733,10 @@ impl XdpManager {
         }
         *self.dial_registry.lock() = registry;
         *self.dial_guard.lock() = old.dial_guard.lock().take();
-        self.dial_guard_hits
-            .store(old.dial_guard_hits.load(Ordering::Relaxed), Ordering::Relaxed);
+        self.dial_guard_hits.store(
+            old.dial_guard_hits.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
         *self.dial_guard_detail.lock() = old.dial_guard_detail.lock().clone();
         self.proxy_redirect_enabled.store(
             old.proxy_redirect_enabled.load(Ordering::Relaxed),
@@ -2897,11 +2896,7 @@ fn scaled_rate_limit_config(
     divisor: u64,
 ) -> cloudsidra_edge_xdp_common::XdpRateLimitConfig {
     let scaled = |pps: u64| {
-        if pps == 0 {
-            0
-        } else {
-            (pps / divisor).max(1)
-        }
+        if pps == 0 { 0 } else { (pps / divisor).max(1) }
     };
     cloudsidra_edge_xdp_common::XdpRateLimitConfig {
         udp_pps: scaled(base.udp_pps),
@@ -2960,9 +2955,7 @@ pub(crate) fn af_xdp_dial_registry() -> Option<std::sync::Arc<af_xdp::AfXdpDialR
 #[cfg(target_os = "linux")]
 pub(crate) fn afxdp_upstream_selected() -> bool {
     RuntimeConfig::current()
-        .map(|runtime| {
-            runtime.xdp.upstream_mode() == crate::runtime_mode::XdpUpstreamMode::Afxdp
-        })
+        .map(|runtime| runtime.xdp.upstream_mode() == crate::runtime_mode::XdpUpstreamMode::Afxdp)
         .unwrap_or(false)
 }
 
@@ -2971,8 +2964,8 @@ pub(crate) fn afxdp_upstream_selected() -> bool {
 /// pinned to EdgeCC like the TCP dataplane; callers keep quinn's stock
 /// controller only on non-XDP-scoped endpoints (§A.4 contract).
 #[cfg(target_os = "linux")]
-pub(crate) fn xdp_quic_cc_factory(
-) -> Option<Arc<dyn quinn::congestion::ControllerFactory + Send + Sync>> {
+pub(crate) fn xdp_quic_cc_factory()
+-> Option<Arc<dyn quinn::congestion::ControllerFactory + Send + Sync>> {
     let settings = RuntimeConfig::current()
         .and_then(|runtime| runtime.xdp.transport.clone())
         .unwrap_or_default()
@@ -3094,8 +3087,10 @@ pub async fn ensure_current_xdp_auto_config() -> anyhow::Result<()> {
 #[cfg(target_os = "linux")]
 #[derive(Debug, Default)]
 struct FlowEventLedger {
-    entries:
-        std::collections::HashMap<(cloudsidra_edge_xdp_common::XdpFlowKey, u64), FlowEventLedgerEntry>,
+    entries: std::collections::HashMap<
+        (cloudsidra_edge_xdp_common::XdpFlowKey, u64),
+        FlowEventLedgerEntry,
+    >,
     evicted: u64,
 }
 
@@ -3435,7 +3430,9 @@ pub async fn detach(purge_state: bool) -> anyhow::Result<()> {
         #[cfg(target_os = "linux")]
         {
             let removed = linux::purge_pinned_state();
-            tracing::warn!("xdp detach --purge-state removed {removed} pinned eBPF maps; all conntrack/SNAT/pending/accounting/cookie state is lost");
+            tracing::warn!(
+                "xdp detach --purge-state removed {removed} pinned eBPF maps; all conntrack/SNAT/pending/accounting/cookie state is lost"
+            );
         }
         #[cfg(not(target_os = "linux"))]
         {
@@ -3456,10 +3453,15 @@ pub async fn apply_pushed_xdp_config(xdp: XdpConfig) -> anyhow::Result<()> {
     if runtime.xdp == xdp {
         return Ok(());
     }
+    let previous = runtime.clone();
     runtime.xdp = xdp;
     runtime.validate()?;
     RuntimeConfig::set_current(runtime);
-    reload_from_runtime().await
+    if let Err(err) = reload_from_runtime().await {
+        RuntimeConfig::set_current(previous);
+        return Err(err);
+    }
+    Ok(())
 }
 
 pub async fn reload_from_runtime() -> anyhow::Result<()> {
@@ -3516,9 +3518,7 @@ pub async fn reload_from_runtime() -> anyhow::Result<()> {
             // then re-attach the previous object.
             let committed = manager.attach_committed.load(Ordering::Relaxed);
             #[cfg(target_os = "linux")]
-            let dataplane_restored = manager
-                .attach_dataplane_restored
-                .load(Ordering::Relaxed);
+            let dataplane_restored = manager.attach_dataplane_restored.load(Ordering::Relaxed);
             #[cfg(not(target_os = "linux"))]
             let dataplane_restored = false;
             // Release the failed generation's handles first: under a clean
@@ -3564,9 +3564,7 @@ pub async fn reload_from_runtime() -> anyhow::Result<()> {
                     *old_manager.af_xdp.lock() = None;
                 }
                 if let Err(reattach_err) = old_manager.initialize().await {
-                    tracing::warn!(
-                        "XDP reload rollback re-attach failed: {reattach_err}"
-                    );
+                    tracing::warn!("XDP reload rollback re-attach failed: {reattach_err}");
                 }
             }
             old_manager.persist_status_blocking();

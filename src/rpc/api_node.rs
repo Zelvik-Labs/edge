@@ -105,9 +105,6 @@ pub async fn sync_updating_server_list_once(
     {
         Ok(resp) => {
             let resp = resp.into_inner();
-            if resp.max_id > *last_id {
-                *last_id = resp.max_id;
-            }
 
             if !resp.servers_json.is_empty() {
                 match serde_json::from_slice::<Vec<crate::config_models::ServerConfig>>(
@@ -164,6 +161,7 @@ pub async fn sync_updating_server_list_once(
                     }
                 }
             }
+            *last_id = (*last_id).max(resp.max_id);
             true
         }
         Err(e) => {
@@ -185,7 +183,8 @@ pub async fn sync_updating_server_list_once(
 
 async fn refresh_certificates(config_store: &ConfigStore, cert_selector: &DynamicCertSelector) {
     let certs = config_store.collect_ssl_config().await;
-    crate::ssl::sync_certs(cert_selector, &certs).await;
+    crate::ssl::sync_certs_for_servers(cert_selector, &certs, &config_store.get_all_servers_sync())
+        .await;
 }
 
 pub async fn sync_api_nodes(api_config: &ApiConfig) -> bool {

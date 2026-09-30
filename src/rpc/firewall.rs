@@ -25,11 +25,14 @@ pub async fn notify_firewall_event(args: NotifyFirewallEventArgs<'_>) {
     } = args;
     let client = match crate::rpc::client::SharedRpcClient::get(api_config).await {
         Ok(s) => s.as_rpc_client(),
-        Err(_) => return,
+        Err(err) => {
+            tracing::warn!("firewall event connection failed: {}", err);
+            return;
+        }
     };
     let mut service = client.firewall_service();
 
-    let _ = crate::rpc::track_rpc(service.notify_http_firewall_event(
+    if let Err(err) = crate::rpc::track_rpc(service.notify_http_firewall_event(
         pb::NotifyHttpFirewallEventRequest {
             server_id,
             http_firewall_policy_id: policy_id,
@@ -41,5 +44,8 @@ pub async fn notify_firewall_event(args: NotifyFirewallEventArgs<'_>) {
             source_user_agent,
         },
     ))
-    .await;
+    .await
+    {
+        tracing::warn!("firewall event reporting failed: {}", err);
+    }
 }
