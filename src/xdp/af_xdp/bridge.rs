@@ -457,6 +457,9 @@ pub(crate) struct AfXdpQueueCtx {
     /// T4: dial requests and cross-queue reply injects for this queue's
     /// TCP reactor — drained once per poll round under a bounded budget.
     pub(crate) request_rx: mpsc::Receiver<AfXdpReactorRequest>,
+    /// The reactor's own request sender — the dial registry demuxes
+    /// splice orchestration to a session's owning queue through it.
+    pub(crate) request_tx: mpsc::Sender<AfXdpReactorRequest>,
     /// T4: shared dial registry — reply demux lookups plus the reactor's
     /// release-on-reap hook.
     pub(crate) dial_registry: Arc<AfXdpDialRegistry>,
@@ -804,7 +807,11 @@ pub(crate) async fn spawn_queue_reactors(
         let (fwd_tx, fwd_rx) = mpsc::channel::<AfXdpForward>(AF_XDP_DOWNSTREAM_QUEUE);
         let (request_tx, request_rx) =
             mpsc::channel::<AfXdpReactorRequest>(AF_XDP_REACTOR_REQUEST_QUEUE);
-        dial_registry.register_queue(&queue_handle.interface, queue_handle.queue, request_tx);
+        dial_registry.register_queue(
+            &queue_handle.interface,
+            queue_handle.queue,
+            request_tx.clone(),
+        );
         iface_fwd
             .entry(queue_handle.interface.clone())
             .or_insert(fwd_tx);
@@ -817,6 +824,7 @@ pub(crate) async fn spawn_queue_reactors(
             downstream_rx,
             fwd_rx,
             request_rx,
+            request_tx,
             dial_registry: dial_registry.clone(),
             udp_routes: udp_routes.clone(),
             iface_fwd: Arc::new(HashMap::new()),
@@ -1151,6 +1159,7 @@ pub(crate) async fn run_queue_bridge_loop(
         mut downstream_rx,
         mut fwd_rx,
         mut request_rx,
+        request_tx,
         dial_registry,
         udp_routes,
         iface_fwd,
@@ -1175,6 +1184,7 @@ pub(crate) async fn run_queue_bridge_loop(
     // T4: the reactor releases demux/CT/port state itself when a dialed
     // session reaps — never leave it to the caller.
     tcp_reactor.set_dial_registry(dial_registry.clone());
+    tcp_reactor.set_request_tx(request_tx);
     // Desc-first emit: smoltcp serializes egress packets straight into
     // this queue's UMEM instead of an owned Vec. The stash is the shared
     // descriptor pool the emitter pops frames from and dropped frames
@@ -1615,6 +1625,24 @@ pub(crate) async fn run_queue_bridge_loop(
                     // T4-7: ICMP error quoting a dialed flow — clamp the
                     // session's send MSS to the reported next-hop MTU.
                     tcp_reactor.apply_pmtu(&flow, mtu);
+                }
+                Some(AfXdpReactorRequest::SpliceBegin { flow, reply }) => {
+                    tcp_reactor.splice_begin(&flow, reply);
+                }
+                Some(AfXdpReactorRequest::SplicePoll { flow, reply }) => {
+                    tcp_reactor.splice_poll(&flow, reply);
+                }
+                Some(AfXdpReactorRequest::SpliceEnd {
+                    flow,
+                    commit,
+                    reply,
+                }) => {
+                    // Either verdict releases the promotion freeze:
+                    // commit arms drain mode, !commit puts the leg
+                    // back on the smoltcp path — both replay the
+                    // frames parked during the snapshot window.
+                    let answer = tcp_reactor.splice_commit(&flow, commit);
+                    let _ = reply.send(answer);
                 }
                 None => break,
             }

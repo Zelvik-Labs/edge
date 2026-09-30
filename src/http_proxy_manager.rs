@@ -211,7 +211,13 @@ impl<T> SniPassthroughStream for T where T: AsyncRead + AsyncWrite + Unpin {}
 enum SniPassthroughClient {
     Tcp(TcpStream),
     #[cfg(any(test, target_os = "linux"))]
-    Stream(Box<dyn SniPassthroughStream + Send>),
+    Stream {
+        stream: Box<dyn SniPassthroughStream + Send>,
+        /// Accepted leg's wire key when the client leg rides AF_XDP —
+        /// the splice promotion orchestrator needs it to reach the
+        /// owning reactor.
+        client_flow: Option<crate::xdp::af_xdp::AfXdpTcpFlowKey>,
+    },
 }
 
 #[cfg(any(test, target_os = "linux"))]
@@ -1522,6 +1528,7 @@ impl HttpProxyManager {
         client_addr: SocketAddr,
         listen_port: u16,
         kind: AfXdpHttpPortKind,
+        client_flow: Option<crate::xdp::af_xdp::AfXdpTcpFlowKey>,
     ) -> anyhow::Result<()>
     where
         S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -1546,10 +1553,11 @@ impl HttpProxyManager {
                     client_addr,
                     listen_port,
                     kind,
+                    client_flow,
                 )
                 .await;
         }
-        self.handle_af_xdp_http_stream_inner(client_stream, client_addr, listen_port, kind)
+        self.handle_af_xdp_http_stream_inner(client_stream, client_addr, listen_port, kind, client_flow)
             .await
     }
 
@@ -1560,6 +1568,7 @@ impl HttpProxyManager {
         client_addr: SocketAddr,
         listen_port: u16,
         kind: AfXdpHttpPortKind,
+        client_flow: Option<crate::xdp::af_xdp::AfXdpTcpFlowKey>,
     ) -> anyhow::Result<()>
     where
         S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -1620,6 +1629,7 @@ impl HttpProxyManager {
                         route.host,
                         server,
                         Some(sni_cancel_rx),
+                        client_flow,
                     )
                     .await
                 } else {
@@ -1870,6 +1880,10 @@ impl HttpProxyManager {
     }
 
     #[cfg(any(test, target_os = "linux"))]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "per-connection params stay flat like the sibling passthrough_tcp entry"
+    )]
     async fn handle_sni_passthrough_stream<S>(
         &self,
         client_stream: S,
@@ -1878,12 +1892,16 @@ impl HttpProxyManager {
         sni_host: String,
         server: Arc<ServerConfig>,
         cancel_rx: Option<watch::Receiver<crate::l4_connection_registry::ConnectionCancelReason>>,
+        client_flow: Option<crate::xdp::af_xdp::AfXdpTcpFlowKey>,
     ) -> anyhow::Result<()>
     where
         S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     {
         self.handle_sni_passthrough_inner(
-            SniPassthroughClient::Stream(Box::new(client_stream)),
+            SniPassthroughClient::Stream {
+                stream: Box::new(client_stream),
+                client_flow,
+            },
             client_addr,
             listen_port,
             sni_host,
@@ -2175,7 +2193,27 @@ impl HttpProxyManager {
                 .await
             }
             #[cfg(any(test, target_os = "linux"))]
-            SniPassthroughClient::Stream(client_stream) => {
+            SniPassthroughClient::Stream {
+                stream: client_stream,
+                client_flow,
+            } => {
+                #[cfg(target_os = "linux")]
+                if let (Some(client_flow), crate::toa::UpstreamL4Stream::AfXdp(backend)) =
+                    (client_flow, &backend_stream)
+                    && crate::xdp::af_xdp::splice_promotion_enabled()
+                    && let Some(registry) = crate::xdp::af_xdp_dial_registry()
+                    && let (Ok(backend_local), Ok(backend_peer)) =
+                        (backend.local_addr(), backend.peer_addr())
+                {
+                    crate::xdp::af_xdp::maybe_promote_splice(
+                        client_flow,
+                        crate::xdp::af_xdp::AfXdpTcpFlowKey {
+                            local_addr: backend_local,
+                            peer_addr: backend_peer,
+                        },
+                        registry,
+                    );
+                }
                 crate::tcp_proxy::stream_sni_passthrough_bidirectional_with_metrics_cancelable_stream(
                     server_id,
                     client_stream,

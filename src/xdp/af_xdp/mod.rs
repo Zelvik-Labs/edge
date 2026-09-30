@@ -143,6 +143,14 @@ pub(crate) const AF_XDP_TCP_BUDGET_STALL_MAX: usize = 2 * AF_XDP_TCP_MAX_SESSION
 pub(crate) const AF_XDP_TCP_SWEEP_INTERVAL: Duration = Duration::from_millis(250);
 #[cfg(any(test, target_os = "linux"))]
 pub(crate) const AF_XDP_TCP_SESSION_IDLE_TIMEOUT: Duration = Duration::from_secs(300);
+/// Bounds a spliced session's tail drain: once the splice map owns the
+/// wire the smoltcp session keeps pumping only until its pre-splice
+/// bytes are delivered and ACKed. A peer whose first post-splice ACK
+/// jumped past the ack-floor without a re-deliverable tail ACK would
+/// otherwise pin the session forever — the deadline retires it and the
+/// spliced wire is unaffected either way.
+#[cfg(any(test, target_os = "linux"))]
+pub(crate) const AF_XDP_TCP_SPLICE_DRAIN_MAX: Duration = Duration::from_secs(2);
 /// T9: a session parked on the queue-ledger budget dies after this long
 /// regardless of arriving packets. Without it the stall is an immortal
 /// zombie: client retransmissions keep refreshing `last_activity`, idle
@@ -749,6 +757,8 @@ mod bridge;
 #[cfg(target_os = "linux")]
 mod dial;
 mod parser;
+#[cfg(target_os = "linux")]
+mod splice;
 mod tcp_reactor;
 
 pub use bridge::{AfXdpRuntime, runtime, start_proxy_bridge, start_udp_bridge};
@@ -756,6 +766,8 @@ pub use bridge::{AfXdpRuntime, runtime, start_proxy_bridge, start_udp_bridge};
 pub(crate) use bridge::*;
 #[cfg(target_os = "linux")]
 pub(crate) use dial::*;
+#[cfg(target_os = "linux")]
+pub(crate) use splice::*;
 #[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
 pub(crate) use parser::*;
 pub use parser::{

@@ -37,6 +37,65 @@ pub(crate) enum AfXdpReactorRequest {
         flow: AfXdpTcpFlowKey,
         mtu: Option<u32>,
     },
+    /// Established-flow splice promotion, phase 1: snapshot the leg's
+    /// wire state inside the owning reactor and mark the session so any
+    /// later activity fails the commit. `None` answer = not promotable
+    /// (wrong state, in-flight bytes, app pending bytes, or too fresh).
+    SpliceBegin {
+        flow: AfXdpTcpFlowKey,
+        reply: tokio::sync::oneshot::Sender<Option<AfXdpSpliceLeg>>,
+    },
+    /// Mid-promotion flush probe: `Some(snd_nxt)` once the leg's
+    /// pre-splice pipeline has fully drained to the splice boundary —
+    /// the orchestrator then installs the map entries from the two
+    /// legs' paired answers.
+    SplicePoll {
+        flow: AfXdpTcpFlowKey,
+        reply: tokio::sync::oneshot::Sender<Option<u32>>,
+    },
+    /// Phase 2, run after the splice map entries are live: `commit`
+    /// unfreezes the leg and arms drain mode — the smoltcp session
+    /// keeps pumping until its pre-splice tail is delivered and
+    /// confirmed, then retires quietly. `commit=false` just unfreezes
+    /// and replays the parked frames — the flow stays on the smoltcp
+    /// path. The answer is `false` when the session vanished mid-
+    /// promotion; the caller then tears the map entries down.
+    SpliceEnd {
+        flow: AfXdpTcpFlowKey,
+        commit: bool,
+        reply: tokio::sync::oneshot::Sender<bool>,
+    },
+}
+
+/// One leg's wire state captured atomically inside its owning reactor
+/// at `SpliceBegin`: the endpoint tuple is `flow`, `next_hop_mac` is the
+/// rewrite target for spliced frames on this leg's wire, and the seq
+/// bases anchor the fixed ISN-space translations.
+#[cfg(target_os = "linux")]
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct AfXdpSpliceLeg {
+    pub(crate) next_hop_mac: [u8; 6],
+    /// Wire seq of the next inbound byte this socket expects.
+    pub(crate) rcv_nxt: u32,
+    /// `(peer_scale, own_shift)` — the scale the peer announced (its
+    /// receive-side shift) and the shift this socket applies to the
+    /// window field it emits; `(0, 0)` when unnegotiated.
+    pub(crate) win_shift: (u8, u8),
+    /// Flow negotiated TCP timestamps — spliced frames NOP the option
+    /// out rather than bridging two unrelated clock bases.
+    pub(crate) ts_nego: bool,
+    /// VLAN tag depth on this leg's route — promotion refuses tagged
+    /// legs (tag push/pop is not part of the splice rewrite).
+    pub(crate) vlan_tags: u8,
+}
+
+/// Bookkeeping for a promoted pair: both map keys plus the dialed
+/// backend flow whose port claim must stay reserved until teardown.
+#[cfg(target_os = "linux")]
+pub(crate) struct AfXdpSpliceLease {
+    pub(crate) client_key: cloudsidra_edge_xdp_common::XdpOutCtKey,
+    pub(crate) backend_key: cloudsidra_edge_xdp_common::XdpOutCtKey,
+    pub(crate) backend_flow: AfXdpTcpFlowKey,
 }
 
 /// T4: owner record for a node-dialed flow — the queue reactor holding
@@ -68,6 +127,14 @@ pub(crate) struct AfXdpDialRegistry {
     manager: parking_lot::RwLock<Arc<XdpManager>>,
     owners: DashMap<AfXdpTcpFlowKey, AfXdpDialOwner>,
     queues: DashMap<(String, u32), mpsc::Sender<AfXdpReactorRequest>>,
+    /// Every live TCP session's owning reactor channel — accepted legs
+    /// included — so splice orchestration can reach the owning queue
+    /// without knowing which interface/queue a flow arrived on.
+    session_tx: DashMap<AfXdpTcpFlowKey, mpsc::Sender<AfXdpReactorRequest>>,
+    /// Promoted splice pairs keyed by backend-leg flow: teardown drops
+    /// both map entries and releases the backend dial claim (source
+    /// port + XDP_OUT_CT row) once the entries are gone.
+    splices: DashMap<AfXdpTcpFlowKey, AfXdpSpliceLease>,
     port_cursor: AtomicU32,
     /// T4: resolved outbound routes (interface/source/MACs) keyed by
     /// target IP. `resolve_outbound_route` shells out to `ip` three
@@ -117,6 +184,8 @@ impl AfXdpDialRegistry {
             port_span: port_end.saturating_sub(port_base).saturating_add(1),
             owners: DashMap::new(),
             queues: DashMap::new(),
+            session_tx: DashMap::new(),
+            splices: DashMap::new(),
             route_cache: DashMap::new(),
             // Randomized start spreads the probe cursor so back-to-back
             // dials do not serialize on the same port order.
@@ -148,6 +217,13 @@ impl AfXdpDialRegistry {
         tx: mpsc::Sender<AfXdpReactorRequest>,
     ) {
         self.queues.insert((interface.to_string(), queue), tx);
+    }
+
+    /// The live manager generation — splice orchestration writes map
+    /// entries through it so a dataplane reload writes to the current
+    /// eBPF object, not a detached one.
+    pub(crate) fn manager(&self) -> Arc<XdpManager> {
+        self.manager.read().clone()
     }
 
     /// Flow→owner lookup for the reply demux: `None` means the tuple was
@@ -609,16 +685,100 @@ impl AfXdpDialRegistry {
         self.release(flow);
     }
 
+    /// Record which reactor channel owns a TCP session (accepted or
+    /// dialed) — the splice orchestrator's only route to a leg.
+    pub(crate) fn bind_session(
+        &self,
+        flow: AfXdpTcpFlowKey,
+        tx: mpsc::Sender<AfXdpReactorRequest>,
+    ) {
+        self.session_tx.insert(flow, tx);
+    }
+
+    /// Session teardown counterpart of `bind_session` — idempotent.
+    pub(crate) fn unbind_session(&self, flow: &AfXdpTcpFlowKey) {
+        self.session_tx.remove(flow);
+    }
+
+    /// Send a reactor request to a session's owning queue. `false` means
+    /// the session is gone or its reactor died — the caller treats that
+    /// like a `None`/`false` answer.
+    pub(crate) fn session_request(
+        &self,
+        flow: &AfXdpTcpFlowKey,
+        request: AfXdpReactorRequest,
+    ) -> bool {
+        let Some(tx) = self.session_tx.get(flow) else {
+            return false;
+        };
+        match tx.try_send(request) {
+            Ok(()) => true,
+            Err(mpsc::error::TrySendError::Full(_)) => false,
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                self.session_tx.remove(flow);
+                false
+            }
+        }
+    }
+
+    /// Record a promoted splice pair — teardown and the idle sweep key
+    /// off the backend leg, whose dial claim outlives the userspace
+    /// session until the map entries are reaped.
+    pub(crate) fn register_splice(&self, lease: AfXdpSpliceLease) {
+        self.splices.insert(lease.backend_flow, lease);
+    }
+
+    /// Drop a splice pair's map entries and release the backend dial
+    /// claim — promotion rollback, commit-time close, and sweep all
+    /// funnel here.
+    pub(crate) fn teardown_splice(&self, backend_flow: &AfXdpTcpFlowKey) {
+        let Some((_, lease)) = self.splices.remove(backend_flow) else {
+            return;
+        };
+        let manager = self.manager.read().clone();
+        if let Err(err) = manager.remove_splice(&lease.client_key) {
+            tracing::warn!("XDP splice client-leg rule removal failed: {err}");
+        }
+        if let Err(err) = manager.remove_splice(&lease.backend_key) {
+            tracing::warn!("XDP splice backend-leg rule removal failed: {err}");
+        }
+        self.release(&lease.backend_flow);
+    }
+
+    /// Lease lookup for the sweep — `Some` when `key` is either
+    /// direction of a live splice pair.
+    pub(crate) fn splice_lease_for_key(
+        &self,
+        key: &cloudsidra_edge_xdp_common::XdpOutCtKey,
+    ) -> Option<AfXdpTcpFlowKey> {
+        self.splices.iter().find_map(|entry| {
+            let lease = entry.value();
+            if lease.client_key == *key || lease.backend_key == *key {
+                Some(lease.backend_flow)
+            } else {
+                None
+            }
+        })
+    }
+
     /// Generation teardown: remove every registered flow's XDP_OUT_CT
     /// row and pending owner so a withdrawn bridge leaves no rows
     /// steering replies into dead XSK queues. Removal errors are logged,
     /// never swallowed silently.
     pub(crate) fn drain(&self) {
+        // Splices first: teardown releases each backend dial claim,
+        // which also owns that flow's row and port.
+        let splice_flows: Vec<AfXdpTcpFlowKey> =
+            self.splices.iter().map(|entry| *entry.key()).collect();
+        for flow in &splice_flows {
+            self.teardown_splice(flow);
+        }
         let flows: Vec<AfXdpTcpFlowKey> =
             self.owners.iter().map(|entry| *entry.key()).collect();
         for flow in &flows {
             self.release(flow);
         }
+        self.session_tx.clear();
     }
 }
 

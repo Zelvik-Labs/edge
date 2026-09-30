@@ -1625,6 +1625,12 @@ pub async fn attach(
         // The ICMPv6 worker's quoted-packet half — a second ext-header
         // walk callsite would double the outer worker's verifier budget.
         (16, "xdp_icmp_ct_v6_inner"),
+        // T4-splice: established-flow rewrite worker — the header patch
+        // chain plus 40-slot option scan exceeds the TCP4 work program's
+        // verifier budget, so the probe tail-calls here on a hit. An
+        // empty slot just leaves promoted entries unfired (flows stay
+        // on the userspace path).
+        (17, "xdp_tcp4_splice"),
     ] {
         let fd = match ebpf.program_mut(name) {
             Some(sub_program) => {
@@ -1679,6 +1685,7 @@ pub async fn attach(
         (14, "xdp_icmp_ct_v4"),
         (15, "xdp_icmp_ct_v6"),
         (16, "xdp_icmp_ct_v6_inner"),
+        (17, "xdp_tcp4_splice"),
     ] {
         let Some(sub_program) = ebpf.program_mut(name) else {
             continue;
@@ -2817,6 +2824,91 @@ pub fn remove_out_ct(ebpf: &mut aya::Ebpf, key: &XdpOutCtKey) -> anyhow::Result<
     Ok(())
 }
 
+/// Established-flow splice (L4 fast path): install one rewrite rule.
+/// Called once per wire direction after both legs verified quiescent —
+/// the entry takes effect on the next inbound frame on that tuple.
+pub fn upsert_splice(
+    ebpf: &mut aya::Ebpf,
+    key: XdpOutCtKey,
+    value: cloudsidra_edge_xdp_common::XdpTcpSpliceValue,
+) -> anyhow::Result<()> {
+    let map = ebpf
+        .map_mut("XDP_TCP_SPLICE")
+        .ok_or_else(|| anyhow::anyhow!("missing map XDP_TCP_SPLICE"))?;
+    let mut map = AyaHashMap::<
+        _,
+        XdpOutCtKey,
+        cloudsidra_edge_xdp_common::XdpTcpSpliceValue,
+    >::try_from(map)?;
+    map.insert(key, value, 0)?;
+    Ok(())
+}
+
+/// Remove a splice rule — promotion rollback, session reap, and the
+/// idle/CLOSING sweep all funnel here.
+pub fn remove_splice(ebpf: &mut aya::Ebpf, key: &XdpOutCtKey) -> anyhow::Result<()> {
+    let map = ebpf
+        .map_mut("XDP_TCP_SPLICE")
+        .ok_or_else(|| anyhow::anyhow!("missing map XDP_TCP_SPLICE"))?;
+    let mut map = AyaHashMap::<
+        _,
+        XdpOutCtKey,
+        cloudsidra_edge_xdp_common::XdpTcpSpliceValue,
+    >::try_from(map)?;
+    map.remove(key)?;
+    Ok(())
+}
+
+/// Sweep splice rules: CLOSING entries past the FIN/RST grace and OPEN
+/// entries past the idle deadline are removed. Removed keys are
+/// returned so the caller can unwind the matching dial claims — the
+/// backend leg's source port stays reserved while its rule lives.
+pub fn sweep_splice_map(
+    ebpf: &mut aya::Ebpf,
+    idle: std::time::Duration,
+    closing_grace: std::time::Duration,
+) -> anyhow::Result<Vec<XdpOutCtKey>> {
+    use cloudsidra_edge_xdp_common::XDP_SPLICE_STATE_CLOSING;
+    let now_ns = monotonic_now_ns();
+    let idle_ns = idle.as_nanos().min(u64::MAX as u128) as u64;
+    let closing_ns = closing_grace.as_nanos().min(u64::MAX as u128) as u64;
+    let mut reaped = Vec::new();
+    let Some(map) = ebpf.map_mut("XDP_TCP_SPLICE") else {
+        return Ok(reaped);
+    };
+    let mut map = AyaHashMap::<
+        _,
+        XdpOutCtKey,
+        cloudsidra_edge_xdp_common::XdpTcpSpliceValue,
+    >::try_from(map)?;
+    let mut stale: Vec<(XdpOutCtKey, u64, u8)> = Vec::new();
+    for entry in map.iter() {
+        let (key, value) = entry?;
+        stale.push((key, value.last_seen_ns, value.state));
+    }
+    for (key, last_seen_ns, state) in stale {
+        let age = now_ns.saturating_sub(last_seen_ns);
+        let dead = if state == XDP_SPLICE_STATE_CLOSING {
+            age >= closing_ns
+        } else {
+            age >= idle_ns
+        };
+        if !dead {
+            continue;
+        }
+        // Re-check before removal — a packet may have refreshed the
+        // entry between the scan and the reap.
+        let still_stale = map
+            .get(&key, 0)
+            .map(|v| v.last_seen_ns == last_seen_ns)
+            .unwrap_or(false);
+        if still_stale && map.remove(&key).is_ok() {
+            reaped.push(key);
+        }
+    }
+    Ok(reaped)
+}
+
 /// Program explicit UDP direct-forward rules. Each entry needs a resolved
 /// backend address and a next-hop MAC (from config or the neighbor table).
 /// Unresolvable entries are skipped with a warning so the listen tuple
@@ -2970,7 +3062,7 @@ pub(super) fn udp_forward_entry(
     ))
 }
 
-fn v4_embed(addr: std::net::Ipv4Addr) -> [u8; 16] {
+pub(crate) fn v4_embed(addr: std::net::Ipv4Addr) -> [u8; 16] {
     let mut out = [0u8; 16];
     out[..4].copy_from_slice(&addr.octets());
     out
@@ -3417,7 +3509,7 @@ fn state_table_override(name: &str, config: &XdpConfig) -> Option<u32> {
 
 fn bpf_map_specs(
     config: &XdpConfig,
-) -> [(&'static str, aya::maps::MapType, u32, u32, u32); 37] {
+) -> [(&'static str, aya::maps::MapType, u32, u32, u32); 38] {
     use aya::maps::MapType;
     use cloudsidra_edge_xdp_common::*;
     use core::mem::size_of;
@@ -3535,6 +3627,16 @@ fn bpf_map_specs(
             MapType::Hash,
             size_of::<XdpOutCtKey>() as u32,
             size_of::<XdpOutCtValue>() as u32,
+            65_536,
+        ),
+        // Established-flow splice rules: one entry per wire direction,
+        // written at promotion and swept at close — per-generation like
+        // the dial claims that own the backend-leg tuples.
+        (
+            "XDP_TCP_SPLICE",
+            MapType::Hash,
+            size_of::<XdpOutCtKey>() as u32,
+            size_of::<cloudsidra_edge_xdp_common::XdpTcpSpliceValue>() as u32,
             65_536,
         ),
         (
@@ -4595,7 +4697,7 @@ fn monotonic_deadline_ns(expires_at: i64) -> u64 {
     now_mono_ns.saturating_add(ttl_secs.saturating_mul(1_000_000_000))
 }
 
-fn monotonic_now_ns() -> u64 {
+pub(crate) fn monotonic_now_ns() -> u64 {
     let mut ts = libc::timespec {
         tv_sec: 0,
         tv_nsec: 0,
