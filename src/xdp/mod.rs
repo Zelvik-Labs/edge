@@ -2976,7 +2976,7 @@ pub(crate) fn xdp_quic_cc_factory(
     let settings = RuntimeConfig::current()
         .and_then(|runtime| runtime.xdp.transport.clone())
         .unwrap_or_default()
-        .production_pinned();
+        .resolved();
     Some(
         Arc::new(crate::quic_cc::XdpTransportControllerFactory::new(settings))
             as Arc<dyn quinn::congestion::ControllerFactory + Send + Sync>,

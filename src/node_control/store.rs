@@ -29,14 +29,14 @@ fn parse_i64_map<T: Clone>(raw: &HashMap<String, T>) -> HashMap<i64, T> {
         .collect()
 }
 
-fn index_servers(
-    servers: &[ServerConfig],
-) -> (
+type ServerIndex = (
     Vec<Arc<ServerConfig>>,
     HashMap<String, Arc<ServerConfig>>,
     HashMap<String, Arc<crate::lb_factory::AnyLoadBalancer>>,
     HashMap<i64, Arc<crate::lb_factory::AnyLoadBalancer>>,
-) {
+);
+
+fn index_servers(servers: &[ServerConfig]) -> ServerIndex {
     let mut all_servers = Vec::new();
     let mut by_name = HashMap::new();
     let mut routes = HashMap::new();
@@ -101,23 +101,23 @@ pub async fn apply_node_payload(
     let mut domain_mismatch_action = None;
     let mut global_http: Option<GlobalHTTPAllConfig> = None;
 
-    if let Some(gsc) = &payload.global_server_config {
-        if let Some(http_all) = &gsc.http_all {
-            allow_lan_ip = http_all.allow_lan_ip;
-            force_ln_request = http_all.force_ln_request;
-            ln_method = http_all.ln_request_scheduling_method.clone();
-            supports_low_version_http = http_all.supports_low_version_http;
-            match_cert_from_all_servers = http_all.match_cert_from_all_servers;
-            server_name = http_all.server_name.clone();
-            enable_server_addr_variable = http_all.enable_server_addr_variable;
-            request_origins_with_encodings = http_all.request_origins_with_encodings;
-            xff_max_addresses = http_all.xff_max_addresses;
-            match_domain_strictly = http_all.match_domain_strictly;
-            node_ip_show_page = http_all.node_ip_show_page;
-            node_ip_page_html = http_all.node_ip_page_html.clone();
-            domain_mismatch_action = http_all.domain_mismatch_action.clone();
-            global_http = Some(http_all.clone());
-        }
+    if let Some(gsc) = &payload.global_server_config
+        && let Some(http_all) = &gsc.http_all
+    {
+        allow_lan_ip = http_all.allow_lan_ip;
+        force_ln_request = http_all.force_ln_request;
+        ln_method = http_all.ln_request_scheduling_method.clone();
+        supports_low_version_http = http_all.supports_low_version_http;
+        match_cert_from_all_servers = http_all.match_cert_from_all_servers;
+        server_name = http_all.server_name.clone();
+        enable_server_addr_variable = http_all.enable_server_addr_variable;
+        request_origins_with_encodings = http_all.request_origins_with_encodings;
+        xff_max_addresses = http_all.xff_max_addresses;
+        match_domain_strictly = http_all.match_domain_strictly;
+        node_ip_show_page = http_all.node_ip_show_page;
+        node_ip_page_html = http_all.node_ip_page_html.clone();
+        domain_mismatch_action = http_all.domain_mismatch_action.clone();
+        global_http = Some(http_all.clone());
     }
 
     let node_cluster_id = payload.node_cluster.as_ref().map(|c| c.id).unwrap_or(0);

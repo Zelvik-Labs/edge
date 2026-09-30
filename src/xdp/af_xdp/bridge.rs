@@ -1188,7 +1188,7 @@ pub(crate) async fn run_queue_bridge_loop(
         .config
         .transport
         .as_ref()
-        .map(|settings| settings.production_pinned())
+        .map(|settings| settings.resolved())
         .unwrap_or_default();
     tcp_reactor.set_transport_policy(&policy);
     let mut consecutive_poll_errors = 0u32;
