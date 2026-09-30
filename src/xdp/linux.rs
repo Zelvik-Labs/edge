@@ -548,6 +548,105 @@ impl AfXdpQueueHandle {
         result
     }
 
+    /// Stamps the link reply header directly into the UMEM frame ahead of
+    /// `ip_packet` — saves the intermediate whole-frame copy the
+    /// encode-into-scratch path pays per packet.
+    #[cfg(target_os = "linux")]
+    pub(super) fn send_ip_frame(
+        &mut self,
+        link: &super::af_xdp::AfXdpLinkMeta,
+        ip_packet: &[u8],
+    ) -> anyhow::Result<Option<bool>> {
+        let ethertype = match ip_packet.first().map(|b| b >> 4) {
+            Some(4) => super::af_xdp::ETHERTYPE_IPV4,
+            Some(6) => super::af_xdp::ETHERTYPE_IPV6,
+            _ => return Ok(None),
+        };
+        self.reclaim_tx_completions();
+        if self.tx_inflight >= AF_XDP_TX_INFLIGHT_CAP {
+            return Ok(Some(false));
+        }
+        let Some(mut desc) = self.free_frames.pop() else {
+            return Ok(Some(false));
+        };
+        desc.set_options(0);
+        let mut hdr = [0u8; 22];
+        let mut n = 0usize;
+        // Same field order as `encode_reply_eth_header` (reply
+        // direction: `source_mac` occupies the wire dst slot).
+        hdr[n..n + 6].copy_from_slice(&link.source_mac);
+        n += 6;
+        hdr[n..n + 6].copy_from_slice(&link.destination_mac);
+        n += 6;
+        for tag in link
+            .vlan_tags
+            .iter()
+            .take(usize::from(link.vlan_tag_count.min(2)))
+        {
+            hdr[n..n + 2].copy_from_slice(&tag.tpid.to_be_bytes());
+            n += 2;
+            hdr[n..n + 2].copy_from_slice(&tag.tci.to_be_bytes());
+            n += 2;
+        }
+        hdr[n..n + 2].copy_from_slice(&ethertype.to_be_bytes());
+        n += 2;
+        {
+            // SAFETY: `desc` was taken from this queue's free list and therefore
+            // belongs to this UMEM. It is not submitted to any ring while we hold
+            // this mutable frame view.
+            let (_, mut data) = unsafe { self.umem.frame_mut(&mut desc) };
+            let mut cursor = data.cursor();
+            // `set_pos(0)` not `zero_out()`: the kernel transmits exactly
+            // `pos` bytes, so clearing the tail was a per-frame memset of
+            // stale data that never reaches the wire.
+            cursor.set_pos(0);
+            use std::io::Write as _;
+            match cursor.write_vectored(&[
+                std::io::IoSlice::new(&hdr[..n]),
+                std::io::IoSlice::new(ip_packet),
+            ]) {
+                Ok(written) if written == n + ip_packet.len() => {}
+                _ => {
+                    self.free_frames.push(desc);
+                    return Ok(Some(false));
+                }
+            }
+        }
+        let sent = self.produce_tx_desc(desc, None);
+        Ok(Some(sent))
+    }
+
+    /// Shared tail of the TX submit paths: produce the descriptor and
+    /// defer the driver kick to `flush_tx_kick`.
+    ///
+    /// SAFETY contract is identical to `submit_raw_frame`: `desc` must be
+    /// a frame of this queue's UMEM, populated and not submitted elsewhere.
+    #[cfg(target_os = "linux")]
+    fn produce_tx_desc(&mut self, desc: FrameDesc, pcap_frame: Option<&[u8]>) -> bool {
+        // SAFETY: upheld by the callers, which popped `desc` off this
+        // queue's free list after writing the frame contents.
+        match unsafe { self.tx.produce_one(&desc) } {
+            1 => {
+                self.tx_inflight += 1;
+                if let (Some(w), Some(frame)) = (self.pcap.as_mut(), pcap_frame) {
+                    Self::pcap_write(w, frame);
+                }
+                // The driver kick is deferred to `flush_tx_kick` (one
+                // sendto per loop round): the producer flag does not
+                // reliably reflect a stalled TX ring on virtio_net, so
+                // gating the kick on `needs_wakeup` strands frames until
+                // an unrelated NAPI run flushes them (observed: ~1-3s
+                // reply bursts on kernel 6.12/virtio_net).
+                self.tx_kick_pending = true;
+                true
+            }
+            _ => {
+                self.free_frames.push(desc);
+                false
+            }
+        }
+    }
+
     pub(super) fn send_raw_frame(&mut self, frame: &[u8]) -> anyhow::Result<bool> {
         self.reclaim_tx_completions();
         if self.tx_inflight >= AF_XDP_TX_INFLIGHT_CAP {
@@ -602,7 +701,9 @@ impl AfXdpQueueHandle {
             // this mutable frame view.
             let (_, mut data) = unsafe { self.umem.frame_mut(&mut desc) };
             let mut cursor = data.cursor();
-            cursor.zero_out();
+            // `set_pos(0)` not `zero_out()`: the kernel transmits exactly
+            // `pos` bytes — the tail memset never reached the wire.
+            cursor.set_pos(0);
             if let Err(err) = cursor.write_all(frame) {
                 self.free_frames.push(desc);
                 return Err(err.into());
@@ -610,26 +711,7 @@ impl AfXdpQueueHandle {
         }
         // SAFETY: `desc` describes a frame from this queue's UMEM. After successful
         // submission it is not reused until returned by the completion queue.
-        match unsafe { self.tx.produce_one(&desc) } {
-            1 => {
-                self.tx_inflight += 1;
-                if let Some(w) = self.pcap.as_mut() {
-                    Self::pcap_write(w, frame);
-                }
-                // The driver kick is deferred to `flush_tx_kick` (one
-                // sendto per loop round): the producer flag does not
-                // reliably reflect a stalled TX ring on virtio_net, so
-                // gating the kick on `needs_wakeup` strands frames until
-                // an unrelated NAPI run flushes them (observed: ~1-3s
-                // reply bursts on kernel 6.12/virtio_net).
-                self.tx_kick_pending = true;
-                Ok(true)
-            }
-            _ => {
-                self.free_frames.push(desc);
-                Ok(false)
-            }
-        }
+        Ok(self.produce_tx_desc(desc, Some(frame)))
     }
 
     /// Append one frame to the debug pcap (see the `pcap` field).

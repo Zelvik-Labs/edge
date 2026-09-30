@@ -3320,7 +3320,12 @@ fn af_xdp_tcp_stream_drop_signals_reactor() {
         else {
             panic!("expected TCP proxy frame");
         };
-        (flow, std::sync::Arc::new(dashmap::DashMap::new()))
+        (
+            flow,
+            std::sync::Arc::new(dashmap::DashMap::with_hasher(
+                ahash::RandomState::default(),
+            )),
+        )
     };
     let parts = af_xdp::AfXdpTcpStream::channel_pair_with_wake(
         8,

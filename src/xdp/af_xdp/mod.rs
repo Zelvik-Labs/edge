@@ -42,8 +42,8 @@ const IPV4_MIN_HEADER_LEN: usize = 20;
 const IPV6_HEADER_LEN: usize = 40;
 const TCP_MIN_HEADER_LEN: usize = 20;
 const UDP_HEADER_LEN: usize = 8;
-const ETHERTYPE_IPV4: u16 = 0x0800;
-const ETHERTYPE_IPV6: u16 = 0x86dd;
+pub(crate) const ETHERTYPE_IPV4: u16 = 0x0800;
+pub(crate) const ETHERTYPE_IPV6: u16 = 0x86dd;
 const ETHERTYPE_VLAN: u16 = 0x8100;
 const ETHERTYPE_QINQ: u16 = 0x88a8;
 const ETHERTYPE_QINQ_9100: u16 = 0x9100;
@@ -94,6 +94,16 @@ pub(crate) const AF_XDP_TCP_PUMP_BUDGET: usize = 512;
 /// stays queued for the next round (queue itself is bounded separately).
 #[cfg(any(test, target_os = "linux"))]
 pub(crate) const AF_XDP_TCP_INGRESS_BUDGET: usize = 512;
+/// Per-IP L4 verdict reuse window — the full WAF chain (two managers ×
+/// whitelist/blocklist snapshot walks plus a wall-clock read) previously
+/// ran once per RX frame. A fresh block still cuts the flow inside one
+/// window, and the eBPF-side rule map enforces the same verdicts.
+#[cfg(any(test, target_os = "linux"))]
+pub(crate) const AF_XDP_L4_VERDICT_TTL_US: i64 = 100_000;
+/// Hard bound on cached L4 verdicts — a SYN-flood IP fanout must not grow
+/// the map unbounded; overflow resets the cache and re-evaluates.
+#[cfg(any(test, target_os = "linux"))]
+pub(crate) const AF_XDP_L4_VERDICT_CAP: usize = 8192;
 /// EN-17: bound on queued-but-unprocessed ingress packets per reactor.
 /// Overflow is an explicit, counted refusal — never silent memory growth.
 #[cfg(any(test, target_os = "linux"))]
@@ -443,7 +453,7 @@ fn tcp_top_held_json(n: usize) -> serde_json::Value {
             (held, row.clone())
         })
         .collect();
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.sort_by_key(|a| std::cmp::Reverse(a.0));
     serde_json::json!(scored
         .into_iter()
         .take(n)
@@ -487,7 +497,7 @@ fn tcp_top_active_json(n: usize) -> serde_json::Value {
             (active, row.clone())
         })
         .collect();
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.sort_by_key(|a| std::cmp::Reverse(a.0));
     serde_json::json!(scored
         .into_iter()
         .take(n)

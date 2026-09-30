@@ -27,7 +27,12 @@ tests at the end of `socket::tcp::test`.
   `app_limited`); `pipe` follows Linux `tcp_packets_in_flight` semantics
   (SACKed and lost-marked records leave the pipe; retransmission re-enters).
 - SACK block consumption + DSACK detection (first SACK block below the
-  cumulative edge, RFC 2883 §4).
+  cumulative edge, RFC 2883 §4). The per-ACK SACK sweep and the
+  delivery-report sweep run as a single pass over the scoreboard.
+- `lost_records: usize` — running count of lost-marked board entries;
+  `next_lost` early-outs on zero instead of scanning the whole board
+  per packet (O(cwnd/mss) on a healthy path — measured ~5% of reactor
+  CPU at ~150 MB/s).
 - Frontier loss marking on 3 dupacks (Linux `tcp_mark_head_lost` analogue);
   without SACK the gap head alone is marked (classic fast retransmit).
 - RACK (RFC 8985) time-based marking with adaptive reorder window

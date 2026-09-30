@@ -198,11 +198,29 @@ fn frame_sched_meta(frame: &[u8]) -> (u64, u8, u8) {
         return (0, 1, 0);
     };
     let ethertype = u16::from_be_bytes([frame[l3 - 2], frame[l3 - 1]]);
+    sched_meta_from_ip(&frame[l3..], ethertype)
+}
+
+/// Same as [`frame_sched_meta`] on a bare IP packet (no L2 header) —
+/// reactor egress frames carry the IP datagram before the link reply
+/// header is stamped, so the shaper must classify at L3 directly.
+#[cfg(target_os = "linux")]
+fn frame_sched_meta_ip(ip_packet: &[u8]) -> (u64, u8, u8) {
+    let ethertype = match ip_packet.first().map(|b| b >> 4) {
+        Some(4) => 0x0800,
+        Some(6) => 0x86dd,
+        _ => return (0, 1, 0),
+    };
+    sched_meta_from_ip(ip_packet, ethertype)
+}
+
+#[cfg(target_os = "linux")]
+fn sched_meta_from_ip(ip: &[u8], ethertype: u16) -> (u64, u8, u8) {
     let (proto, l4, l4_total, src, dst): (u8, usize, usize, &[u8], &[u8]) = match ethertype {
         0x0800 => {
-            let Some(ip) = frame.get(l3..) else {
+            if ip.len() < 20 {
                 return (0, 1, 0);
-            };
+            }
             let ihl = usize::from(ip[0] & 0x0f) * 4;
             if ihl < 20 || ip.len() < ihl {
                 return (0, 1, 0);
@@ -210,16 +228,13 @@ fn frame_sched_meta(frame: &[u8]) -> (u64, u8, u8) {
             let total = usize::from(u16::from_be_bytes([ip[2], ip[3]]));
             (
                 ip[9],
-                l3 + ihl,
+                ihl,
                 total.saturating_sub(ihl),
-                &frame[l3 + 12..l3 + 16],
-                &frame[l3 + 16..l3 + 20],
+                &ip[12..16],
+                &ip[16..20],
             )
         }
         0x86dd => {
-            let Some(ip) = frame.get(l3..) else {
-                return (0, 1, 0);
-            };
             if ip.len() < 40 {
                 return (0, 1, 0);
             }
@@ -230,21 +245,15 @@ fn frame_sched_meta(frame: &[u8]) -> (u64, u8, u8) {
                 return (0, 1, 0);
             }
             let plen = usize::from(u16::from_be_bytes([ip[4], ip[5]]));
-            (
-                proto,
-                l3 + 40,
-                plen,
-                &frame[l3 + 8..l3 + 24],
-                &frame[l3 + 24..l3 + 40],
-            )
+            (proto, 40, plen, &ip[8..24], &ip[24..40])
         }
         _ => return (0, 1, 0),
     };
     let ecn = match ethertype {
-        0x0800 => frame[l3 + 1] & 0b11,
-        _ => (frame[l3 + 1] >> 4) & 0b11,
+        0x0800 => ip[1] & 0b11,
+        _ => (ip[1] >> 4) & 0b11,
     };
-    let Some(seg) = frame.get(l4..l4 + 4) else {
+    let Some(seg) = ip.get(l4..l4 + 4) else {
         return (0, 1, 0);
     };
     let mut h = 0xcbf2_9ce4_8422_2325u64;
@@ -253,7 +262,7 @@ fn frame_sched_meta(frame: &[u8]) -> (u64, u8, u8) {
     h = fnv1a(h, dst);
     h = fnv1a(h, seg);
     let tier = if proto == 6 {
-        match frame.get(l4 + 12) {
+        match ip.get(l4 + 12) {
             Some(&off_flags) => {
                 let tcp_hlen = usize::from(off_flags >> 4) * 4;
                 if tcp_hlen >= 20 && l4_total <= tcp_hlen {
@@ -358,6 +367,23 @@ fn queue_deferred_tx(
     pending.entry(p.flow).or_default().push_back(p);
     *total += 1;
     true
+}
+
+/// Encode a reactor egress IP packet into `scratch` and stage it as a
+/// `PendingTx` — used only on the ordering/backpressure paths; the hot
+/// path writes `ip_packet` straight into UMEM via `send_ip_frame`.
+#[cfg(target_os = "linux")]
+fn encode_pending_frame(
+    link: &AfXdpLinkMeta,
+    ip_packet: &[u8],
+    scratch: &mut Vec<u8>,
+    enqueued_us: i64,
+) -> Option<PendingTx> {
+    encode_ip_reply_frame(link, ip_packet, scratch)?;
+    Some(PendingTx::frame(
+        scratch.clone(),
+        enqueued_us.max(0) as u64,
+    ))
 }
 
 /// T8: send one deferred entry — same semantics as the live paths.
@@ -2136,32 +2162,44 @@ pub(crate) async fn run_queue_bridge_loop(
                 }
                 continue;
             }
-            // EN-17: encode straight into the bridge scratch — `send_raw_frame`
-            // only borrows it, so no per-frame clone on the hot TX path.
-            if encode_ip_reply_frame(&route.link, &ip_packet, &mut encode_scratch).is_none() {
-                tracing::debug!(
-                    "AF_XDP TCP reactor failed to encode egress frame interface={} queue={} bytes={}",
-                    route.interface.as_ref(),
-                    route.queue,
-                    ip_packet.len()
-                );
-                continue;
-            }
             // Per-flow ordering: a flow with deferred frames must not
             // send newer frames directly — that would reorder its byte
             // stream on the wire. Defer behind its own queued head; the
             // egress budget above guarantees the store has room.
-            let (sched_flow, ..) = frame_sched_meta(&encode_scratch);
-            let tx_now = cloudsidra_edge_transport::TransportInstant::from_micros(
-                tx_clock.now_micros().max(0) as u64,
-            );
-            if pending_tx.contains_key(&sched_flow) {
+            let (sched_flow, ..) = frame_sched_meta_ip(&ip_packet);
+            let wire_len = route.link.reply_eth_header_len() + ip_packet.len();
+            // Reuse the round's `tx_now` — one clock read per loop
+            // iteration, not one per frame (frames in a batch are µs
+            // apart; per-frame reads showed up as ~1.8% vdso time).
+            //
+            // T8 shaping gate (D-G2): a token deficit defers the frame;
+            // only a full retry queue sheds (counted).
+            if pending_tx.contains_key(&sched_flow)
+                || matches!(
+                    sched.charge(tx_now, sched_flow, wire_len as u64),
+                    cloudsidra_edge_transport::sched::Admit::Wait(_)
+                )
+            {
+                let Some(pending) = encode_pending_frame(
+                    &route.link,
+                    &ip_packet,
+                    &mut encode_scratch,
+                    enqueued_us,
+                ) else {
+                    tracing::debug!(
+                        "AF_XDP TCP reactor failed to encode egress frame interface={} queue={} bytes={}",
+                        route.interface.as_ref(),
+                        route.queue,
+                        ip_packet.len()
+                    );
+                    continue;
+                };
                 if queue_deferred_tx(
                     &mut pending_tx,
                     &mut pending_tx_count,
                     &mut sched,
                     tx_now,
-                    PendingTx::frame(encode_scratch.clone(), enqueued_us.max(0) as u64),
+                    pending,
                 ) {
                     congested = true;
                 } else {
@@ -2171,56 +2209,50 @@ pub(crate) async fn run_queue_bridge_loop(
                         "AF_XDP TX retry queue full on {} queue {}; shedding TCP egress frame bytes={}",
                         own_interface.as_ref(),
                         queue_handle.queue,
-                        encode_scratch.len()
+                        wire_len
                     );
                 }
                 continue;
             }
-            // T8 shaping gate (D-G2): token deficit defers the encoded
-            // frame; only a full retry queue sheds (counted).
-            if matches!(
-                sched.charge(
-                    tx_now,
-                    sched_flow,
-                    encode_scratch.len() as u64,
-                ),
-                cloudsidra_edge_transport::sched::Admit::Wait(_)
-            ) {
-                if !queue_deferred_tx(
-                    &mut pending_tx,
-                    &mut pending_tx_count,
-                    &mut sched,
-                    tx_now,
-                    PendingTx::frame(encode_scratch.clone(), enqueued_us.max(0) as u64),
-                ) {
-                    congested = true;
-                    congested_drops = congested_drops.saturating_add(1);
-                    tracing::debug!(
-                        "AF_XDP TX retry queue full on {} queue {}; shedding TCP egress frame bytes={}",
-                        own_interface.as_ref(),
-                        queue_handle.queue,
-                        encode_scratch.len()
-                    );
-                }
-                continue;
-            }
-            let sent = queue_handle.send_raw_frame(&encode_scratch);
+            let sent = queue_handle.send_ip_frame(&route.link, &ip_packet);
             match sent {
-                Ok(true) => {
+                Ok(Some(true)) => {
                     congested = false;
                     tx_failures.record(AfXdpTxStatus::Sent);
                 }
-                Ok(false) => {
+                Ok(None) => {
+                    tracing::debug!(
+                        "AF_XDP TCP reactor failed to encode egress frame interface={} queue={} bytes={}",
+                        route.interface.as_ref(),
+                        route.queue,
+                        ip_packet.len()
+                    );
+                }
+                Ok(Some(false)) => {
                     // T8: ring full while flushing reactor egress is
                     // backpressure — defer to the next round; only a full
                     // retry queue sheds, and smoltcp retransmit covers
                     // real loss either way.
+                    let Some(pending) = encode_pending_frame(
+                        &route.link,
+                        &ip_packet,
+                        &mut encode_scratch,
+                        enqueued_us,
+                    ) else {
+                        tracing::debug!(
+                            "AF_XDP TCP reactor failed to encode egress frame interface={} queue={} bytes={}",
+                            route.interface.as_ref(),
+                            route.queue,
+                            ip_packet.len()
+                        );
+                        continue;
+                    };
                     if queue_deferred_tx(
                         &mut pending_tx,
                         &mut pending_tx_count,
                         &mut sched,
                         tx_now,
-                        PendingTx::frame(encode_scratch.clone(), enqueued_us.max(0) as u64),
+                        pending,
                     ) {
                         congested = true;
                         continue;
@@ -2246,7 +2278,7 @@ pub(crate) async fn run_queue_bridge_loop(
                             "AF_XDP TCP reactor could not send frame interface={} queue={} bytes={}",
                             route.interface.as_ref(),
                             route.queue,
-                            encode_scratch.len()
+                            wire_len
                         );
                     }
                 }
@@ -2255,7 +2287,7 @@ pub(crate) async fn run_queue_bridge_loop(
                         "AF_XDP TCP reactor TX failed interface={} queue={} bytes={}: {}",
                         route.interface.as_ref(),
                         route.queue,
-                        encode_scratch.len(),
+                        wire_len,
                         err
                     );
                     if tx_failures.record(AfXdpTxStatus::Failed) {

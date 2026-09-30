@@ -13,6 +13,16 @@ pub struct AfXdpTcpChargedBytes {
     _permit: Option<StaticTcpQueueBytePermit>,
 }
 
+/// Flow-keyed maps on the per-packet/per-write path use `ahash` instead
+/// of SipHash: keys are attacker-chosen tuples, but the per-instance
+/// seeded ahash keeps the collision resistance while cutting the
+/// per-lookup cost (SipHash showed ~3-5% of the reactor core at
+/// ~150 MB/s single-stream).
+pub(crate) type AfXdpTcpWakeSet = DashMap<AfXdpTcpFlowKey, (), ahash::RandomState>;
+type AfXdpFlowMap<V> = std::collections::HashMap<AfXdpTcpFlowKey, V, ahash::RandomState>;
+type AfXdpFlowSet = std::collections::HashSet<AfXdpTcpFlowKey, ahash::RandomState>;
+type AfXdpIpMap<V> = std::collections::HashMap<std::net::IpAddr, V, ahash::RandomState>;
+
 impl AfXdpTcpChargedBytes {
     pub(crate) fn empty() -> Self {
         Self {
@@ -87,7 +97,7 @@ pub struct AfXdpTcpStream {
     outgoing_tx: Option<mpsc::Sender<AfXdpTcpChargedBytes>>,
     /// EN-17: after queueing egress bytes the stream marks its flow dirty in
     /// the shared wake set so the session is pumped without a table scan.
-    wake: Option<(AfXdpTcpFlowKey, Arc<DashMap<AfXdpTcpFlowKey, ()>>)>,
+    wake: Option<(AfXdpTcpFlowKey, Arc<AfXdpTcpWakeSet>)>,
     /// Optional interrupt for the reactor's event-driven idle wait —
     /// without it a queued egress write would only be noticed at the next
     /// poll round.
@@ -608,7 +618,7 @@ pub(crate) struct AfXdpTcpReactor {
     iface: SmoltcpInterface,
     sockets: SocketSet<'static>,
     device: SmoltcpAfXdpDevice,
-    sessions: HashMap<AfXdpTcpFlowKey, AfXdpTcpSession>,
+    sessions: AfXdpFlowMap<AfXdpTcpSession>,
     /// EN-17: sessions with observed work (ingress packet or egress wake).
     /// Entries are dedup'd by `AfXdpTcpSession.hot`; stale keys are skipped.
     hot_sessions: std::collections::VecDeque<AfXdpTcpFlowKey>,
@@ -624,7 +634,7 @@ pub(crate) struct AfXdpTcpReactor {
     /// queueing egress bytes. Hard-bounded by `session_limit` (at most one
     /// entry per live flow plus in-flight stale keys), insert is lossless
     /// (no "full" path), and the map key dedups at enqueue time.
-    pub(crate) wake_set: Arc<DashMap<AfXdpTcpFlowKey, ()>>,
+    pub(crate) wake_set: Arc<AfXdpTcpWakeSet>,
     /// Streams signal this when they queue egress — the bridge's
     /// event-driven idle wait wakes on it immediately instead of polling.
     wake_notify: Arc<tokio::sync::Notify>,
@@ -649,7 +659,7 @@ pub(crate) struct AfXdpTcpReactor {
     /// EN-17/F3: sessions that stopped draining `socket.recv` because the
     /// queue byte budget was exhausted. Re-marked hot (bounded retry) once
     /// the ledger has headroom again; TCP window shrinks meanwhile.
-    ingress_stalled: std::collections::HashSet<AfXdpTcpFlowKey>,
+    ingress_stalled: AfXdpFlowSet,
     /// Accepted sessions that have not started proxying yet (handshake or
     /// first payload pending). This is the noise class — bounded by
     /// `pre_proxy_budget()` and churned oldest-first under pressure so
@@ -657,7 +667,7 @@ pub(crate) struct AfXdpTcpReactor {
     pre_proxy_sessions: usize,
     /// Per-source-IP count of the same unverified class — bounds
     /// single-source half-open churn independently of the global budget.
-    pre_proxy_per_ip: HashMap<std::net::IpAddr, usize>,
+    pre_proxy_per_ip: AfXdpIpMap<usize>,
     session_limit: usize,
     /// T1: monotonic µs transport clock — all protocol time (smoltcp
     /// instants, sweep cadence, idle reaping) derives from it; wall clock
@@ -688,6 +698,12 @@ pub(crate) struct AfXdpTcpReactor {
     aggregate: Option<
         std::rc::Rc<std::cell::RefCell<cloudsidra_edge_transport::Aggregate>>,
     >,
+    /// Per-peer-IP L4 verdict cache — the full WAF verdict chain (two
+    /// managers × whitelist/blocklist snapshot walks plus a wall-clock
+    /// read) ran once per RX frame. Entries only need re-evaluation on a
+    /// short cadence: a newly blocked peer is cut within one window, and
+    /// the eBPF-side rule map carries the same verdicts regardless.
+    l4_verdicts: AfXdpIpMap<(bool, i64)>,
     /// T6: worker-local bounded path-prior table (§2.2 长期先验).
     path_table:
         std::rc::Rc<std::cell::RefCell<cloudsidra_edge_transport::PathTable>>,
@@ -740,12 +756,12 @@ impl AfXdpTcpReactor {
         let mut iface =
             SmoltcpInterface::new(config, &mut device, SmoltcpInstant::from_millis(0));
         iface.set_any_ip(true);
-        let wake_set = Arc::new(DashMap::new());
+        let wake_set = Arc::new(DashMap::with_hasher(ahash::RandomState::default()));
         Self {
             iface,
             sockets: SocketSet::new(Vec::new()),
             device,
-            sessions: HashMap::new(),
+            sessions: AfXdpFlowMap::default(),
             hot_sessions: std::collections::VecDeque::new(),
             hot_deadline: std::collections::VecDeque::new(),
             wake_set,
@@ -756,15 +772,16 @@ impl AfXdpTcpReactor {
             last_sweep: SmoltcpInstant::from_millis(0),
             last_retain: SmoltcpInstant::from_millis(0),
             budget_stall: Arc::new(parking_lot::Mutex::new(Vec::new())),
-            ingress_stalled: std::collections::HashSet::new(),
+            ingress_stalled: AfXdpFlowSet::default(),
             pre_proxy_sessions: 0,
-            pre_proxy_per_ip: HashMap::new(),
+            pre_proxy_per_ip: AfXdpIpMap::default(),
             session_limit: session_limit.max(1),
             clock: TransportClock::real(),
             label: String::new(),
             tx_scratch: Vec::with_capacity(2048),
             tcp_manager,
             http_manager,
+            l4_verdicts: AfXdpIpMap::default(),
             cached_pressure_level: crate::l4_defense::L4PressureLevel::Normal,
             cached_proxy_idle_timeout: AF_XDP_TCP_SESSION_IDLE_TIMEOUT,
             idle_profile_refreshed_at: SmoltcpInstant::from_millis(0),
@@ -1192,14 +1209,26 @@ impl AfXdpTcpReactor {
         None
     }
 
-    pub(crate) fn is_l4_blocked(&self, ip: IpAddr) -> bool {
-        self.tcp_manager
+    pub(crate) fn is_l4_blocked(&mut self, ip: IpAddr) -> bool {
+        let now_us = self.clock.now_micros();
+        if let Some(&(verdict, at)) = self.l4_verdicts.get(&ip)
+            && now_us - at < AF_XDP_L4_VERDICT_TTL_US
+        {
+            return verdict;
+        }
+        let verdict = self
+            .tcp_manager
             .as_ref()
             .is_some_and(|manager| manager.af_xdp_is_l4_blocked(ip))
             || self
                 .http_manager
                 .as_ref()
-                .is_some_and(|manager| manager.af_xdp_is_l4_blocked(ip))
+                .is_some_and(|manager| manager.af_xdp_is_l4_blocked(ip));
+        if self.l4_verdicts.len() >= AF_XDP_L4_VERDICT_CAP {
+            self.l4_verdicts.clear();
+        }
+        self.l4_verdicts.insert(ip, (verdict, now_us));
+        verdict
     }
 
     pub(crate) fn record_l4_event_for_ip(
@@ -2199,7 +2228,7 @@ impl AfXdpTcpReactor {
         tcp_manager: Option<Arc<crate::tcp_proxy::TcpProxyManager>>,
         http_manager: Option<Arc<crate::http_proxy_manager::HttpProxyManager>>,
         session: &mut AfXdpTcpSession,
-        wake_set: Arc<DashMap<AfXdpTcpFlowKey, ()>>,
+        wake_set: Arc<AfXdpTcpWakeSet>,
         wake_notify: Arc<tokio::sync::Notify>,
         budget_stall: AfXdpTcpBudgetStallSet,
         proxy_rt: Option<tokio::runtime::Handle>,
@@ -3505,7 +3534,7 @@ impl AfXdpTcpStream {
     pub fn channel_pair_with_wake(
         buffer: usize,
         flow: AfXdpTcpFlowKey,
-        wake_set: Arc<DashMap<AfXdpTcpFlowKey, ()>>,
+        wake_set: Arc<AfXdpTcpWakeSet>,
         budget_stall: AfXdpTcpBudgetStallSet,
     ) -> AfXdpTcpStreamParts {
         let mut parts = Self::channel_pair_with_budget(buffer, budget_stall);
