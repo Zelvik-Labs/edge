@@ -1890,7 +1890,7 @@ fn af_xdp_tcp_reactor_resolves_egress_route_before_reaping_session() {
 
     assert!(egress
         .iter()
-        .any(|(egress_route, ip_packet, _)| *egress_route == route && *ip_packet == reply_packet));
+        .any(|(egress_route, ip_packet, _)| *egress_route == route && ip_packet.ip_packet() == reply_packet.as_slice()));
     assert_eq!(reactor.session_count(), 0);
 }
 
@@ -3682,7 +3682,13 @@ fn ipv4_tcp_payload_frame(vlan: bool, seq: u32, ack: u32, payload: &[u8]) -> Vec
 /// the client's ACK/data segments must acknowledge it for smoltcp to
 /// accept them into the receive buffer.
 #[cfg(any(test, target_os = "linux"))]
-fn synack_seq(egress: &[(af_xdp::AfXdpRouteMeta, Vec<u8>, i64)]) -> u32 {
+fn synack_seq(
+    egress: &[(
+        af_xdp::AfXdpRouteMeta,
+        af_xdp::AfXdpTcpEgressPacket,
+        i64,
+    )],
+) -> u32 {
     let (_, ip_packet, _) = egress
         .first()
         .expect("reactor emitted no SYN-ACK frame");

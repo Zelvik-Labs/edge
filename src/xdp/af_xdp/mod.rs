@@ -21,6 +21,8 @@ use smoltcp::wire::{
     HardwareAddress, IpAddress as SmoltcpIpAddress, IpCidr as SmoltcpIpCidr, IpEndpoint,
     IpListenEndpoint,
 };
+#[cfg(any(test, target_os = "linux"))]
+use std::collections::HashMap;
 use std::future::Future;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};

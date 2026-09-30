@@ -470,7 +470,7 @@ pub fn probe_node_interfaces() -> Vec<NicProbe> {
             .ok()
             .and_then(|s| s.trim().parse().ok())
             .unwrap_or(0);
-        probe.rx_queues = rx_queues_for_interface(name).len() as u32;
+        probe.rx_queues = rx_queues_for_interface(&name).len() as u32;
         if probe.driver.is_empty()
             && let Ok(target) = std::fs::read_link(sys_path.join("device/driver"))
         {
@@ -480,7 +480,7 @@ pub fn probe_node_interfaces() -> Vec<NicProbe> {
                 .unwrap_or_default()
                 .to_string();
         }
-        probe.eligible = eligible_interface(name);
+        probe.eligible = eligible_interface(&name);
     }
     nets.into_values().collect()
 }

@@ -27,7 +27,7 @@ use xsk_rs::{CompQueue, FillQueue, FrameDesc, RxQueue, Socket, TxQueue, Umem};
 
 const AF_XDP_FRAME_COUNT: u32 = 4096;
 const AF_XDP_RING_SIZE: u32 = 2048;
-const AF_XDP_RX_BATCH: usize = 64;
+const AF_XDP_RX_BATCH: usize = 256;
 /// Bound on TX descriptors held by the kernel (produced to the TX ring but
 /// not yet completed). The NIC's own transmit queue already provides the
 /// pipeline — descriptors beyond it only sit in the xsk ring adding delay
@@ -376,6 +376,167 @@ impl AfXdpRuntimeHandle {
     }
 }
 
+/// Free-descriptor stash shared between the queue's send path and the
+/// smoltcp-side desc-first emitter. The bridge refills the stash from
+/// `free_frames` each round and drains the surplus back, so descriptors
+/// held by unsent emit frames always have a home to return to. The cell
+/// only ever lives on the queue's reactor thread, so `Rc`/`RefCell`
+/// suffice.
+#[cfg(target_os = "linux")]
+pub(crate) type AfXdpTxStash = std::rc::Rc<std::cell::RefCell<Vec<FrameDesc>>>;
+
+/// Emit-side UMEM allocator: pops descriptors off the shared stash and
+/// exposes whole wire frames (link header + IP payload) for in-place
+/// writes. Created inside the queue's reactor loop by the bridge —
+/// cloning is cheap (the UMEM is a shared mmap).
+#[cfg(target_os = "linux")]
+#[derive(Clone)]
+pub(crate) struct AfXdpTxFrameAlloc {
+    umem: Umem,
+    stash: AfXdpTxStash,
+}
+
+#[cfg(target_os = "linux")]
+impl AfXdpTxFrameAlloc {
+    pub(crate) fn new(umem: &Umem, stash: AfXdpTxStash) -> Self {
+        Self {
+            umem: umem.clone(),
+            stash,
+        }
+    }
+
+    /// Reserve one frame for `wire_len` bytes and set its descriptor
+    /// length. The caller then writes exactly `wire_len` bytes through
+    /// `AfXdpUmemTx::wire_frame_mut` — header first, payload after.
+    /// `None` when the stash is empty or the frame cannot hold the
+    /// packet; the caller falls back to the owned-Vec emit path.
+    pub(crate) fn begin_wire_frame(&mut self, wire_len: usize) -> Option<AfXdpUmemTx> {
+        let mut desc = self.stash.borrow_mut().pop()?;
+        desc.set_options(0);
+        let fits = {
+            // SAFETY: `desc` came from this queue's stash and belongs to
+            // this UMEM; it is not submitted to any ring while the frame
+            // is being populated.
+            let (_, mut data) = unsafe { self.umem.frame_mut(&mut desc) };
+            let mut cursor = data.cursor();
+            cursor.set_pos(wire_len);
+            cursor.pos() == wire_len
+        };
+        if !fits {
+            self.stash.borrow_mut().push(desc);
+            return None;
+        }
+        Some(AfXdpUmemTx {
+            umem: self.umem.clone(),
+            stash: self.stash.clone(),
+            desc: Some(desc),
+        })
+    }
+}
+
+/// A wire frame (link header + IP packet) already resident in the
+/// queue's UMEM, awaiting TX production. Dropping an unsent frame
+/// returns its descriptor to the stash so deferred or shed frames never
+/// leak UMEM capacity.
+#[cfg(target_os = "linux")]
+pub(crate) struct AfXdpUmemTx {
+    umem: Umem,
+    stash: AfXdpTxStash,
+    desc: Option<FrameDesc>,
+}
+
+#[cfg(target_os = "linux")]
+impl AfXdpUmemTx {
+    /// Full wire frame contents as they will appear on the wire.
+    pub(crate) fn wire_frame(&self) -> &[u8] {
+        let desc = self
+            .desc
+            .as_ref()
+            .expect("AfXdpUmemTx accessed after into_desc");
+        // SAFETY: `desc` belongs to this queue's UMEM and is not
+        // submitted while `self` holds it; the view is tied to the
+        // `&self` borrow.
+        unsafe { self.umem.frame(desc) }.1.contents()
+    }
+
+    /// Mutable view for post-emit rewrites (e.g. CoDel CE marking).
+    pub(crate) fn wire_frame_mut(&mut self) -> &mut [u8] {
+        let desc = self
+            .desc
+            .as_mut()
+            .expect("AfXdpUmemTx accessed after take_desc");
+        // SAFETY: `desc` belongs to this queue's UMEM and is not
+        // submitted while `self` holds it.
+        let mut data = unsafe { self.umem.frame_mut(desc) }.1;
+        let len = data.contents().len();
+        let ptr = data.contents_mut().as_mut_ptr();
+        // SAFETY: `ptr` points into the shared UMEM mmap, valid for `len`
+        // bytes; `&mut self` guarantees no other reference to this frame
+        // exists, so the returned slice is exclusively owned by the
+        // caller's borrow of `self` (the DataMut handle itself only
+        // reborrows, which is why it cannot hand out the frame's true
+        // lifetime).
+        unsafe { std::slice::from_raw_parts_mut(ptr, len) }
+    }
+
+    /// The descriptor backing this frame (for TX production; a `Copy`
+    /// — ownership stays with `self` until `take_desc`).
+    pub(crate) fn desc(&self) -> &FrameDesc {
+        self.desc
+            .as_ref()
+            .expect("AfXdpUmemTx accessed after take_desc")
+    }
+
+    /// Detach the descriptor for the TX producer, disarming the
+    /// drop-time stash return. The producer's failure arm pushes the
+    /// descriptor straight back onto `free_frames`, so no path leaks.
+    pub(crate) fn take_desc(&mut self) -> FrameDesc {
+        self.desc
+            .take()
+            .expect("AfXdpUmemTx::take_desc on consumed frame")
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for AfXdpUmemTx {
+    fn drop(&mut self) {
+        if let Some(desc) = self.desc.take() {
+            self.stash.borrow_mut().push(desc);
+        }
+    }
+}
+
+/// Reply-direction Ethernet header — shared by `send_ip_frame` and the
+/// desc-first emit path. Field order matches
+/// `encode_reply_eth_header`: `source_mac` occupies the wire
+/// destination slot on replies. Returns the header length
+/// (14 + 4·vlan_tag_count).
+#[cfg(target_os = "linux")]
+pub(crate) fn write_reply_eth_header(
+    link: &super::af_xdp::AfXdpLinkMeta,
+    ethertype: u16,
+    hdr: &mut [u8; 22],
+) -> usize {
+    let mut n = 0usize;
+    hdr[n..n + 6].copy_from_slice(&link.source_mac);
+    n += 6;
+    hdr[n..n + 6].copy_from_slice(&link.destination_mac);
+    n += 6;
+    for tag in link
+        .vlan_tags
+        .iter()
+        .take(usize::from(link.vlan_tag_count.min(2)))
+    {
+        hdr[n..n + 2].copy_from_slice(&tag.tpid.to_be_bytes());
+        n += 2;
+        hdr[n..n + 2].copy_from_slice(&tag.tci.to_be_bytes());
+        n += 2;
+    }
+    hdr[n..n + 2].copy_from_slice(&ethertype.to_be_bytes());
+    n += 2;
+    n
+}
+
 #[derive(Debug)]
 pub(crate) struct AfXdpQueueHandle {
     pub(super) interface: String,
@@ -571,25 +732,7 @@ impl AfXdpQueueHandle {
         };
         desc.set_options(0);
         let mut hdr = [0u8; 22];
-        let mut n = 0usize;
-        // Same field order as `encode_reply_eth_header` (reply
-        // direction: `source_mac` occupies the wire dst slot).
-        hdr[n..n + 6].copy_from_slice(&link.source_mac);
-        n += 6;
-        hdr[n..n + 6].copy_from_slice(&link.destination_mac);
-        n += 6;
-        for tag in link
-            .vlan_tags
-            .iter()
-            .take(usize::from(link.vlan_tag_count.min(2)))
-        {
-            hdr[n..n + 2].copy_from_slice(&tag.tpid.to_be_bytes());
-            n += 2;
-            hdr[n..n + 2].copy_from_slice(&tag.tci.to_be_bytes());
-            n += 2;
-        }
-        hdr[n..n + 2].copy_from_slice(&ethertype.to_be_bytes());
-        n += 2;
+        let n = write_reply_eth_header(link, ethertype, &mut hdr);
         {
             // SAFETY: `desc` was taken from this queue's free list and therefore
             // belongs to this UMEM. It is not submitted to any ring while we hold
@@ -614,6 +757,50 @@ impl AfXdpQueueHandle {
         }
         let sent = self.produce_tx_desc(desc, None);
         Ok(Some(sent))
+    }
+
+    /// Produce the descriptor held by `tx` — the desc-first emit path:
+    /// smoltcp serialized the IP packet straight into UMEM (after the
+    /// link header the emitter stamped), so sending costs no copy at
+    /// all. `Ok(false)` leaves `tx` intact so the caller can defer it —
+    /// the descriptor is only detached on a successful produce.
+    #[cfg(target_os = "linux")]
+    pub(super) fn send_umem_tx(&mut self, tx: &mut AfXdpUmemTx) -> anyhow::Result<bool> {
+        self.reclaim_tx_completions();
+        if self.tx_inflight >= AF_XDP_TX_INFLIGHT_CAP {
+            return Ok(false);
+        }
+        let frame = if self.pcap.is_some() {
+            let mut scratch = std::mem::take(&mut self.tx_scratch);
+            scratch.clear();
+            scratch.extend_from_slice(tx.wire_frame());
+            scratch
+        } else {
+            Vec::new()
+        };
+        // Produce the descriptor the frame still owns: on a failed
+        // produce `tx` stays fully armed so the caller's defer keeps a
+        // valid frame (unlike `produce_tx_desc`, which returns the
+        // descriptor to `free_frames` on failure).
+        let desc = *tx.desc();
+        // SAFETY: `desc` belongs to this queue's UMEM, was populated by
+        // the desc-first emitter, and is not submitted anywhere else.
+        let sent = match unsafe { self.tx.produce_one(&desc) } {
+            1 => {
+                self.tx_inflight += 1;
+                if let (Some(w), true) = (self.pcap.as_mut(), !frame.is_empty()) {
+                    Self::pcap_write(w, &frame);
+                }
+                let _ = tx.take_desc();
+                self.tx_kick_pending = true;
+                true
+            }
+            _ => false,
+        };
+        if self.pcap.is_some() {
+            self.tx_scratch = frame;
+        }
+        Ok(sent)
     }
 
     /// Shared tail of the TX submit paths: produce the descriptor and
@@ -670,6 +857,34 @@ impl AfXdpQueueHandle {
     #[cfg(target_os = "linux")]
     pub(crate) fn free_frames_len(&self) -> usize {
         self.free_frames.len()
+    }
+
+    /// Desc-first emit allocator sharing this queue's UMEM and the
+    /// reactor's descriptor stash (see `AfXdpTxStash`).
+    #[cfg(target_os = "linux")]
+    pub(super) fn tx_alloc(&self, stash: AfXdpTxStash) -> AfXdpTxFrameAlloc {
+        AfXdpTxFrameAlloc::new(&self.umem, stash)
+    }
+
+    /// Move free descriptors into/out of the emit stash. Called by the
+    /// bridge each round: refills up to `target` before pumping and
+    /// returns the surplus after, so descriptors only park in the stash
+    /// while emit frames may need them.
+    #[cfg(target_os = "linux")]
+    pub(super) fn refill_tx_stash(&mut self, stash: &AfXdpTxStash, target: usize) {
+        let mut stash = stash.borrow_mut();
+        while stash.len() < target {
+            let Some(desc) = self.free_frames.pop() else {
+                break;
+            };
+            stash.push(desc);
+        }
+        while stash.len() > target {
+            let Some(desc) = stash.pop() else {
+                break;
+            };
+            self.free_frames.push(desc);
+        }
     }
 
     /// Kernel-side XSK statistics (XDP_STATISTICS getsockopt) —
