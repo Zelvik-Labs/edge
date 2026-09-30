@@ -744,6 +744,19 @@ pub struct NodeConfigPayload {
     pub node_cluster: Option<NodeClusterConfig>,
     #[serde(rename = "kernelFirewallMode", default)]
     pub kernel_firewall_mode: Option<String>,
+    /// 控制面下发的节点级运行时覆盖（形状 = `RuntimeConfig`）。
+    /// 缺席 = 节点继续用本地 api_node.yaml；出现在 payload 中即整体替换
+    /// 对应运行时段（内存语义，不回写本地文件）。
+    #[serde(rename = "runtime", default)]
+    pub runtime: Option<NodeRuntimePush>,
+}
+
+/// nodeJSON `runtime` 段的信封：`xdp` 复用 `RuntimeConfig`/`XdpConfig`
+/// 的 serde 契约；`xdp` 缺席时不动本地 XDP 配置。
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct NodeRuntimePush {
+    #[serde(default)]
+    pub xdp: Option<crate::runtime_mode::XdpConfig>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -3530,6 +3543,34 @@ mod tests {
             "skipSetCookie": "false"
         }));
         assert!(string_false.is_err());
+    }
+
+    #[test]
+    fn runtime_push_section_parses_xdp_override() {
+        let payload: NodeConfigPayload = serde_json::from_value(serde_json::json!({
+            "runtime": {
+                "xdp": {
+                    "enabled": true,
+                    "attachMode": "drv",
+                    "interfaces": [{ "name": "eth0", "mode": "proxy", "queues": [0, 1] }]
+                }
+            }
+        }))
+        .expect("runtime.xdp should parse as XdpConfig");
+        let xdp = payload.runtime.expect("runtime section").xdp.expect("xdp section");
+        assert!(xdp.enabled);
+        assert_eq!(xdp.attach_mode, crate::runtime_mode::XdpAttachMode::Drv);
+        assert_eq!(xdp.interfaces.len(), 1);
+        assert_eq!(xdp.interfaces[0].name, "eth0");
+        assert_eq!(xdp.interfaces[0].queues, vec![0, 1]);
+
+        // runtime 缺席 = 无控制面覆盖；空 runtime = 接管但回退本地段。
+        let absent: NodeConfigPayload =
+            serde_json::from_value(serde_json::json!({})).expect("absent runtime should parse");
+        assert!(absent.runtime.is_none());
+        let empty: NodeConfigPayload =
+            serde_json::from_value(serde_json::json!({"runtime": {}})).expect("empty runtime");
+        assert!(empty.runtime.expect("runtime").xdp.is_none());
     }
 
     #[test]

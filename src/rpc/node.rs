@@ -1175,6 +1175,22 @@ where
                         let mut last_hash = LAST_CONFIG_HASH.write();
                         *last_hash = current_hash;
                     }
+                    // 控制面下发的节点级运行时参数（runtime.xdp 等）：
+                    // runtime 段出现 = 控制面接管 xdp；xdp 子键缺席 = 回退本地
+                    // api_node.yaml，让管理端"清除覆盖"能真正还原本地配置。
+                    // 校验/热应用失败不阻塞站点配置提交——reload 内部已回滚，
+                    // 旧 generation 保持服务，失败在日志与 XDP 状态中可见。
+                    if let Some(runtime_push) = payload.runtime.take() {
+                        let xdp = match runtime_push.xdp {
+                            Some(xdp) => xdp,
+                            None => crate::runtime_mode::RuntimeConfig::load_default()
+                                .map(|local| local.xdp)
+                                .unwrap_or_default(),
+                        };
+                        if let Err(err) = crate::xdp::apply_pushed_xdp_config(xdp).await {
+                            warn!("RPC_NODE: runtime.xdp override rejected: {}", err);
+                        }
+                    }
                     if kernel_filter.available() {
                         waf_state.set_kernel_filter(kernel_filter);
                     }

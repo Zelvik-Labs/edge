@@ -3445,6 +3445,23 @@ pub async fn detach(purge_state: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Apply a control-plane pushed `runtime.xdp` override (nodeJSON).
+/// The pushed section replaces the local `xdp` config wholesale — the
+/// control plane is source of truth for pushed keys. In-memory only: the
+/// local api_node.yaml is untouched, matching the proxy-ports sync
+/// semantics. `validate` runs before publish; a failed reload keeps the
+/// previous generation serving (see `reload_from_runtime` rollback).
+pub async fn apply_pushed_xdp_config(xdp: XdpConfig) -> anyhow::Result<()> {
+    let mut runtime = RuntimeConfig::current().unwrap_or_default();
+    if runtime.xdp == xdp {
+        return Ok(());
+    }
+    runtime.xdp = xdp;
+    runtime.validate()?;
+    RuntimeConfig::set_current(runtime);
+    reload_from_runtime().await
+}
+
 pub async fn reload_from_runtime() -> anyhow::Result<()> {
     ensure_current_xdp_auto_config().await?;
     let runtime_config = RuntimeConfig::current()

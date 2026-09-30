@@ -19,8 +19,13 @@ pub struct AfXdpTcpChargedBytes {
 /// per-lookup cost (SipHash showed ~3-5% of the reactor core at
 /// ~150 MB/s single-stream).
 pub(crate) type AfXdpTcpWakeSet = DashMap<AfXdpTcpFlowKey, (), ahash::RandomState>;
+// Consumers below are linux-gated in lib builds but exercised by tests on
+// every platform — match that gate or macOS reports dead-code warnings.
+#[cfg(any(test, target_os = "linux"))]
 type AfXdpFlowMap<V> = std::collections::HashMap<AfXdpTcpFlowKey, V, ahash::RandomState>;
+#[cfg(any(test, target_os = "linux"))]
 type AfXdpFlowSet = std::collections::HashSet<AfXdpTcpFlowKey, ahash::RandomState>;
+#[cfg(any(test, target_os = "linux"))]
 type AfXdpIpMap<V> = std::collections::HashMap<std::net::IpAddr, V, ahash::RandomState>;
 
 impl AfXdpTcpChargedBytes {
@@ -188,8 +193,10 @@ where
 /// which the fork then uses for PAWS stale-segment rejection, TSecr RTT
 /// sampling, and TSecr-Eifel loss undo in the ext transport scoreboard.
 /// smoltcp takes a bare `fn()` so the reactor clock can't be passed; a
-/// process-local millisecond epoch feeds it instead.
-#[cfg(target_os = "linux")]
+/// process-local millisecond epoch feeds it instead. Used by the socket
+/// setup below — which builds on linux always and elsewhere under test —
+/// so the gate must match, not just `target_os = "linux"`.
+#[cfg(any(test, target_os = "linux"))]
 fn af_xdp_tsval() -> u32 {
     static EPOCH: std::sync::LazyLock<std::time::Instant> =
         std::sync::LazyLock::new(std::time::Instant::now);
