@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, mpsc as std_mpsc};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use tracing_subscriber::fmt::MakeWriter;
 
 // Per-request cache hits do many small allocations (headers, metadata,
@@ -37,7 +37,7 @@ use cloudsidra_edge::runtime_mode::{
     RuntimeConfig, XdpAttachMode, XdpFallbackMode, XdpRuntimeMode,
 };
 use cloudsidra_edge::ssl::DynamicCertSelector;
-use cloudsidra_edge::{firewall, log_uploader, logging, rpc, tcp_proxy, udp_proxy};
+use cloudsidra_edge::{firewall, logging, rpc, tcp_proxy, udp_proxy};
 
 struct LocalLogTimer;
 
@@ -3565,6 +3565,9 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         hm_start.start().await;
     });
 
+    if let Err(e)=cloudsidra_edge::telemetry::initialize(){error!("telemetry spool initialization failed: {}",e);cloudsidra_edge::telemetry::record_gap("core",cloudsidra_edge::utils::time::now_timestamp(),&e.to_string());}
+ let telemetry_core_api=api_config.clone();rt.spawn(cloudsidra_edge::telemetry::replay(telemetry_core_api,true));
+ let telemetry_detail_api=api_config.clone();rt.spawn(cloudsidra_edge::telemetry::replay(telemetry_detail_api,false));
     // 3. Start Background Syncers
     let cs = config_store.clone();
     let ac = api_config.clone();
@@ -3620,33 +3623,28 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         rpc::start_metrics_reporter(cs_s, ac_s).await;
     });
 
-    let ac_nv = api_config.clone();
     let cs_nv = config_store.clone();
     spawn_staggered(&rt, Duration::from_secs(7), async move {
-        rpc::start_node_value_reporter(cs_nv, ac_nv).await;
+        rpc::start_node_value_reporter(cs_nv).await;
     });
 
-    let ac_bw = api_config.clone();
     let cs_bw = (*config_store).clone();
     spawn_staggered(&rt, Duration::from_secs(10), async move {
-        rpc::start_bandwidth_reporter(cs_bw, ac_bw).await;
+        rpc::start_bandwidth_reporter(cs_bw).await;
     });
 
-    let ac_ds = api_config.clone();
     let cs_ds = (*config_store).clone();
     spawn_staggered(&rt, Duration::from_secs(11), async move {
-        rpc::start_daily_stat_reporter(cs_ds, ac_ds).await;
+        rpc::start_daily_stat_reporter(cs_ds).await;
     });
 
-    let ac_ms = api_config.clone();
     let cs_ms = config_store.clone();
     spawn_staggered(&rt, Duration::from_secs(12), async move {
-        rpc::start_metric_stat_reporter(cs_ms, ac_ms).await;
+        rpc::start_metric_stat_reporter(cs_ms).await;
     });
 
-    let ac_ti = api_config.clone();
     spawn_staggered(&rt, Duration::from_secs(14), async move {
-        rpc::start_top_ip_stat_reporter(ac_ti).await;
+        rpc::start_top_ip_stat_reporter().await;
     });
 
     let ac_ma = api_config.clone();
@@ -3691,21 +3689,8 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     }
     report_l4_performance_summary(&api_config);
 
-    let uploader = log_uploader::LogUploader::new(log_rx, api_config.clone(), access_log_pipeline);
-    spawn_staggered(&rt, Duration::from_secs(10), async move {
-        uploader.start().await;
-    });
-
-    let node_uploader = log_uploader::NodeLogUploader::new(
-        node_log_rx,
-        api_config.clone(),
-        100,
-        Duration::from_secs(5),
-    );
-    spawn_staggered(&rt, Duration::from_secs(12), async move {
-        node_uploader.start().await;
-    });
-
+    rt.spawn(cloudsidra_edge::telemetry::access_logs(log_rx));
+    rt.spawn(cloudsidra_edge::telemetry::node_logs(node_log_rx));
     spawn_staggered(&rt, Duration::from_secs(16), async move {
         cloudsidra_edge::utils::ntp::start_auto_ntp_syncer().await;
     });

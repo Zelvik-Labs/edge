@@ -2092,6 +2092,7 @@ impl AfXdpTcpReactor {
         };
         let count_pre_proxy = !session.proxy_started;
         self.sessions.insert(flow, session);
+        #[cfg(target_os = "linux")]
         self.bind_session_tx(&flow);
         if count_pre_proxy {
             self.note_pre_proxy_admitted(peer_ip);
@@ -2154,6 +2155,7 @@ impl AfXdpTcpReactor {
         self.ingress_stalled.remove(&flow);
         #[cfg(target_os = "linux")]
         self.drop_session_snapshot(&flow);
+        #[cfg(target_os = "linux")]
         self.unbind_session_tx(&flow);
         if let Some(session) = self.sessions.remove(&flow) {
             let socket = self
@@ -2547,6 +2549,7 @@ impl AfXdpTcpReactor {
             growth_retry_after: None,
         };
         self.sessions.insert(flow, session);
+        #[cfg(target_os = "linux")]
         self.bind_session_tx(&flow);
         self.mark_hot(flow);
         self.publish_session_gauges();
@@ -3573,6 +3576,7 @@ impl AfXdpTcpReactor {
             self.ingress_stalled.remove(&flow);
             #[cfg(target_os = "linux")]
             self.drop_session_snapshot(&flow);
+            #[cfg(target_os = "linux")]
             self.unbind_session_tx(&flow);
             if let Some(mut session) = self.sessions.remove(&flow) {
                 if !session.proxy_started && !session.dialed {

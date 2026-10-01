@@ -583,6 +583,7 @@ impl RuntimeDistinctIpTracker {
 
 /// Metrics for a specific server (site)
 pub struct ServerMetrics {
+ pub count_errors: AtomicU64,
     pub user_id: AtomicI64,
     pub user_plan_id: AtomicI64,
     pub plan_id: AtomicI64,
@@ -649,6 +650,7 @@ impl ServerMetrics {
 
     fn with_server_count(max_servers: u64) -> Self {
         Self {
+ count_errors:AtomicU64::new(0),
             user_id: AtomicI64::new(0),
             user_plan_id: AtomicI64::new(0),
             plan_id: AtomicI64::new(0),
@@ -670,6 +672,7 @@ impl ServerMetrics {
     pub fn snapshot(&self) -> ServerStatusSnapshot {
         ServerStatusSnapshot {
             server_id: 0, // set by caller
+            count_errors: self.count_errors.load(Ordering::Relaxed),
             user_id: self.user_id.load(Ordering::Relaxed),
             user_plan_id: self.user_plan_id.load(Ordering::Relaxed),
             plan_id: self.plan_id.load(Ordering::Relaxed),
@@ -704,6 +707,7 @@ fn decrement_active_connections(counter: &AtomicI64) {
 #[derive(Clone)]
 pub struct ServerStatusSnapshot {
     pub server_id: i64,
+    pub count_errors: u64,
     pub user_id: i64,
     pub user_plan_id: i64,
     pub plan_id: i64,
@@ -1446,6 +1450,7 @@ pub async fn start_persistence_flusher() {
             let last = last_values
                 .entry(server_id)
                 .or_insert_with(|| ServerStatusSnapshot {
+                    count_errors: 0,
                     server_id,
                     user_id: 0,
                     user_plan_id: 0,

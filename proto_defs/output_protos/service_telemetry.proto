@@ -1,0 +1,37 @@
+syntax = "proto3";
+package pb;
+option go_package = "./pb";
+
+// A successful receipt means the configured backend has durably accepted
+// the complete batch. Enqueueing in API memory is never a receipt.
+service TelemetryService {
+  rpc uploadBatch(TelemetryBatch) returns (TelemetryReceipt);
+}
+
+message TelemetryBatch {
+  uint32 schemaVersion = 1;
+  string batchId = 2;
+  string bootId = 3;
+  uint64 sequence = 4;
+  // Fixed allowlist; payload is the corresponding existing protobuf request.
+  string kind = 5;
+  bytes payload = 6;
+  int64 occurredAt = 7;
+  string assignmentVersion = 8;
+  string routeVersion = 9;
+  int64 windowStart = 10;
+  bool windowComplete = 11;
+  bool hasGap = 12;
+  string gapReason = 13;
+  string gapKind = 14;
+  map<int64, uint64> errorCounts = 15;
+  string sourceBootId = 16;
+  int64 segmentStartedAt = 17;
+}
+
+message TelemetryReceipt {
+  string batchId = 1;
+  uint64 sequence = 2;
+  string backend = 3;
+  int64 durableAt = 4;
+}

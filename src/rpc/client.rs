@@ -362,6 +362,9 @@ impl RpcClient {
         .max_encoding_message_size(RPC_NODE_STREAM_MESSAGE_BYTES)
     }
 
+    pub fn telemetry_service(&self)->pb::telemetry_service_client::TelemetryServiceClient<tonic::service::interceptor::InterceptedService<Channel,impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static>>{
+ pb::telemetry_service_client::TelemetryServiceClient::with_interceptor(self.channel.clone(),Self::interceptor(&self.api_config,Some("node"))).send_compressed(CompressionEncoding::Gzip).accept_compressed(CompressionEncoding::Gzip).max_decoding_message_size(RPC_MAX_MESSAGE_BYTES).max_encoding_message_size(RPC_MAX_MESSAGE_BYTES)
+    }
     pub fn server_service(
         &self,
     ) -> pb::server_service_client::ServerServiceClient<

@@ -1276,6 +1276,7 @@ where
                     )
                     .await;
                     crate::logging::set_numeric_node_id(numeric_id);
+ crate::telemetry::set_binding(payload.telemetry.clone());
                     config_store.set_global_stat_upload(
                         payload
                             .global_server_config
@@ -1641,6 +1642,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             "cacheTotalMemorySize": cache_stats.memory_bytes,
             "resourceGovernor": resource_governor,
             "pipelines": pipelines,
+ "telemetry":crate::telemetry::snapshot(),
             "l4Defense": l4_defense,
             "xdp": xdp_status,
             "updatedAt": now,
@@ -1780,7 +1782,7 @@ fn is_unsupported_node_type_error(err: &tonic::Status) -> bool {
     err.message().contains("not supported node type")
 }
 
-pub async fn start_node_value_reporter(config_store: Arc<ConfigStore>, api_config: ApiConfig) {
+pub async fn start_node_value_reporter(config_store: Arc<ConfigStore>) {
     info!("Node Value Reporter service started. Interval: 60s");
     let mut sys = sysinfo::System::new_all();
     sys.refresh_all();
@@ -1995,21 +1997,7 @@ pub async fn start_node_value_reporter(config_store: Arc<ConfigStore>, api_confi
             .collect();
 
         let node_value_items_count = node_value_items.len();
-        if let Ok(shared) = SharedRpcClient::get(&api_config).await {
-            let client = shared.as_rpc_client();
-            let mut service = client.node_value_service();
-            match crate::rpc::track_rpc(
-                service.create_node_values(pb::CreateNodeValuesRequest { node_value_items }),
-            )
-            .await
-            {
-                Ok(_) => debug!(
-                    "Successfully reported {} node values with items: {}",
-                    node_value_items_count,
-                    selected_items.join(",")
-                ),
-                Err(e) => warn!("Error reporting node values: {}", e),
-            }
-        }
+        if let Err(e)=crate::telemetry::enqueue("node_metric",&pb::CreateNodeValuesRequest{node_value_items},0,false).await{warn!("Error persisting {} node values: {}",node_value_items_count,e);crate::telemetry::record_gap("node_metric",created_at,&e.to_string());}
+
     }
 }

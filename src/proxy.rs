@@ -9328,7 +9328,13 @@ impl ProxyHttp for EdgeProxy {
                 let bytes_received = session.body_bytes_read() as u64;
                 let body_bytes_sent = session.body_bytes_sent() as u64;
                 let bytes_sent = body_bytes_sent + ctx.response_headers_size as u64 + 20;
-                let is_cached = ctx.cache_hit.unwrap_or(false);
+                if ctx.response_status >= 400
+                    && let Some(m) = ctx.server_metrics.as_ref()
+                {
+                    m.count_errors
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+ let is_cached = ctx.cache_hit.unwrap_or(false);
                 let is_attack = ctx.waf_action.is_some();
                 crate::metrics::record::request_end_without_active(
                     server_id,

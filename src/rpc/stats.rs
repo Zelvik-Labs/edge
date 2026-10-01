@@ -166,7 +166,6 @@ fn billable_bytes(snapshot: &ServerStatusSnapshot) -> u64 {
 
 const BANDWIDTH_REPORT_INTERVAL_SECS: u64 = 300;
 const BANDWIDTH_SAMPLE_INTERVAL_SECS: u64 = 2;
-const STAT_RETRY_RETENTION_SECS: i64 = 1200;
 const BANDWIDTH_ALGO_AVG: &str = "avg";
 
 fn bandwidth_bytes_per_sec(stat: &BandwidthWindowStat, config_store: &ConfigStore) -> u64 {
@@ -191,6 +190,8 @@ struct BandwidthWindowStat {
     user_id: i64,
     server_id: i64,
     user_plan_id: i64,
+    #[serde(default)]
+    count_errors: u64,
     peak_bytes_per_sec: u64,
     total_bytes: u64,
     bytes_in: u64,
@@ -206,17 +207,42 @@ struct BandwidthWindowStat {
     count_ips: u64,
 }
 
-#[derive(Clone)]
-struct PendingBandwidthStat {
-    queued_at: i64,
-    stat: pb::ServerBandwidthStat,
+/// A fully accumulated window that could not enter the durable queue yet.
+/// The data is complete — it is never a gap; it is re-offered oldest first.
+struct PendingWindow {
+    window_start: i64,
+    segment_started_at: i64,
+    source_boot: String,
+    stats: Vec<pb::ServerBandwidthStat>,
+    error_counts: HashMap<i64, u64>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
 struct StoredBandwidthState {
     current_window: String,
     window_stats: Vec<BandwidthWindowStat>,
+    #[serde(default)]
+    pending_windows: Vec<StoredPendingWindow>,
+    #[serde(default)]
+    boot: String,
+    #[serde(default)]
+    segment_started_at: i64,
+    // Legacy field kept only for decode compatibility with pre-spool states.
+    #[serde(default)]
     pending_stats: Vec<StoredPendingBandwidthStat>,
+}
+
+/// A fully accumulated window that could not enter the durable queue yet.
+/// The data is complete — it is never a gap; it is re-offered oldest first.
+#[derive(Clone, Default, Serialize, Deserialize)]
+struct StoredPendingWindow {
+    window_start: i64,
+    segment_started_at: i64,
+    #[serde(default)]
+    source_boot: String,
+    stats: Vec<StoredPendingBandwidthStat>,
+    #[serde(default)]
+    error_counts: Vec<(i64, u64)>,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -246,11 +272,10 @@ struct StoredPendingBandwidthStat {
 
 const BANDWIDTH_STATE_STORAGE_KEY: &str = "STAT_BANDWIDTH_STATE_V1";
 
-impl From<&PendingBandwidthStat> for StoredPendingBandwidthStat {
-    fn from(value: &PendingBandwidthStat) -> Self {
-        let stat = &value.stat;
+impl From<&pb::ServerBandwidthStat> for StoredPendingBandwidthStat {
+    fn from(stat: &pb::ServerBandwidthStat) -> Self {
         Self {
-            queued_at: value.queued_at,
+            queued_at: 0,
             user_id: stat.user_id,
             server_id: stat.server_id,
             day: stat.day.clone(),
@@ -275,46 +300,77 @@ impl From<&PendingBandwidthStat> for StoredPendingBandwidthStat {
     }
 }
 
-impl From<StoredPendingBandwidthStat> for PendingBandwidthStat {
+impl From<StoredPendingBandwidthStat> for pb::ServerBandwidthStat {
     fn from(value: StoredPendingBandwidthStat) -> Self {
         Self {
-            queued_at: value.queued_at,
-            stat: pb::ServerBandwidthStat {
-                user_id: value.user_id,
-                server_id: value.server_id,
-                day: value.day,
-                time_at: value.time_at,
-                bytes: value.bytes,
-                bits: value.bits,
-                total_bytes: value.total_bytes,
-                bytes_in: value.bytes_in,
-                cached_bytes: value.cached_bytes,
-                attack_bytes: value.attack_bytes,
-                count_requests: value.count_requests,
-                count_cached_requests: value.count_cached_requests,
-                count_attack_requests: value.count_attack_requests,
-                user_plan_id: value.user_plan_id,
-                count_websocket_connections: value.count_websocket_connections,
-                origin_total_bytes: value.origin_total_bytes,
-                origin_avg_bytes: value.origin_avg_bytes,
-                origin_avg_bits: value.origin_avg_bits,
-                count_i_ps: value.count_i_ps,
-                node_region_id: value.node_region_id,
-                ..Default::default()
-            },
+            user_id: value.user_id,
+            server_id: value.server_id,
+            day: value.day,
+            time_at: value.time_at,
+            bytes: value.bytes,
+            bits: value.bits,
+            total_bytes: value.total_bytes,
+            bytes_in: value.bytes_in,
+            cached_bytes: value.cached_bytes,
+            attack_bytes: value.attack_bytes,
+            count_requests: value.count_requests,
+            count_cached_requests: value.count_cached_requests,
+            count_attack_requests: value.count_attack_requests,
+            user_plan_id: value.user_plan_id,
+            count_websocket_connections: value.count_websocket_connections,
+            origin_total_bytes: value.origin_total_bytes,
+            origin_avg_bytes: value.origin_avg_bytes,
+            origin_avg_bits: value.origin_avg_bits,
+            count_i_ps: value.count_i_ps,
+            node_region_id: value.node_region_id,
+            ..Default::default()
         }
     }
 }
 
+impl From<&PendingWindow> for StoredPendingWindow {
+    fn from(value: &PendingWindow) -> Self {
+        Self {
+            window_start: value.window_start,
+            segment_started_at: value.segment_started_at,
+            source_boot: value.source_boot.clone(),
+            stats: value.stats.iter().map(StoredPendingBandwidthStat::from).collect(),
+            error_counts: value.error_counts.iter().map(|(k, v)| (*k, *v)).collect(),
+        }
+    }
+}
+
+impl From<StoredPendingWindow> for PendingWindow {
+    fn from(value: StoredPendingWindow) -> Self {
+        Self {
+            window_start: value.window_start,
+            segment_started_at: value.segment_started_at,
+            source_boot: value.source_boot,
+            stats: value.stats.into_iter().map(pb::ServerBandwidthStat::from).collect(),
+            error_counts: value.error_counts.into_iter().collect(),
+        }
+    }
+}
+
+/// Window accumulation lives in the same durable Mace store as the upload
+/// queue (`state:` keys) — never the legacy non-synced metric store.
 fn load_bandwidth_state() -> (
     String,
     HashMap<i64, BandwidthWindowStat>,
-    Vec<PendingBandwidthStat>,
+    Vec<PendingWindow>,
+    String,
+    i64,
 ) {
-    let Some(state) = crate::metrics::storage::STORAGE
-        .get_json::<StoredBandwidthState>(BANDWIDTH_STATE_STORAGE_KEY)
-    else {
-        return (String::new(), HashMap::new(), Vec::new());
+    let empty = || (String::new(), HashMap::new(), Vec::new(), String::new(), 0);
+    let Ok(Some(raw)) = crate::telemetry::load_state(BANDWIDTH_STATE_STORAGE_KEY) else {
+        return empty();
+    };
+    let state: StoredBandwidthState = match serde_json::from_slice(&raw) {
+        Ok(state) => state,
+        Err(e) => {
+            warn!("bandwidth window state decode failed: {}", e);
+            return empty();
+        }
     };
 
     let now = crate::utils::time::now_local();
@@ -334,36 +390,184 @@ fn load_bandwidth_state() -> (
         state.current_window
     };
 
-    let now_ts = crate::utils::time::now_timestamp();
-    let pending_stats = state
-        .pending_stats
+    // Legacy `pending_stats` (pre-spool state) is dropped: its entries were
+    // either already uploaded or their windows surface as incomplete.
+    let pending_windows = state
+        .pending_windows
         .into_iter()
-        .map(PendingBandwidthStat::from)
-        .filter(|item| now_ts - item.queued_at <= STAT_RETRY_RETENTION_SECS)
+        .map(PendingWindow::from)
         .collect();
 
-    (current_window, window_stats, pending_stats)
+    (
+        current_window,
+        window_stats,
+        pending_windows,
+        state.boot,
+        state.segment_started_at,
+    )
 }
 
-fn persist_bandwidth_state(
+async fn persist_bandwidth_state(
     current_window: &str,
     window_stats: &HashMap<i64, BandwidthWindowStat>,
-    pending_stats: &[PendingBandwidthStat],
+    pending_windows: &[PendingWindow],
+    segment_started_at: i64,
 ) {
-    if current_window.is_empty() && window_stats.is_empty() && pending_stats.is_empty() {
-        crate::metrics::storage::STORAGE.delete_key(BANDWIDTH_STATE_STORAGE_KEY);
-        return;
-    }
-
     let state = StoredBandwidthState {
         current_window: current_window.to_string(),
         window_stats: window_stats.values().cloned().collect(),
-        pending_stats: pending_stats
-            .iter()
-            .map(StoredPendingBandwidthStat::from)
-            .collect(),
+        pending_windows: pending_windows.iter().map(StoredPendingWindow::from).collect(),
+        boot: crate::telemetry::process_boot().to_string(),
+        segment_started_at,
+        pending_stats: Vec::new(),
     };
-    let _ = crate::metrics::storage::STORAGE.put_json(BANDWIDTH_STATE_STORAGE_KEY, &state);
+    match serde_json::to_vec(&state) {
+        Ok(raw) => {
+            if let Err(e) = crate::telemetry::save_state(BANDWIDTH_STATE_STORAGE_KEY, raw).await {
+                warn!("bandwidth window state persist failed: {}", e);
+            }
+        }
+        Err(e) => warn!("bandwidth window state encode failed: {}", e),
+    }
+}
+
+/// `day`(YYYYMMDD) + `time_at`(HHMM) as produced by the reporter — the same
+/// local-time rendering the control plane parses back for window identity.
+fn parse_window_start(day: &str, time_at: &str) -> i64 {
+    chrono::NaiveDateTime::parse_from_str(&format!("{}{}", day, time_at), "%Y%m%d%H%M")
+        .ok()
+        .and_then(|dt| dt.and_local_timezone(chrono::Local).single())
+        .map(|dt| dt.timestamp())
+        .unwrap_or(0)
+}
+
+fn bandwidth_stat_pb(stat: &BandwidthWindowStat, config_store: &ConfigStore, node_region_id: i64) -> pb::ServerBandwidthStat {
+    let bytes_per_sec = bandwidth_bytes_per_sec(stat, config_store);
+    pb::ServerBandwidthStat {
+        user_id: stat.user_id,
+        server_id: stat.server_id,
+        day: stat.day.clone(),
+        time_at: stat.time_at.clone(),
+        bytes: bytes_per_sec as i64,
+        bits: (bytes_per_sec * 8) as i64,
+        total_bytes: stat.total_bytes as i64,
+        bytes_in: stat.bytes_in as i64,
+        cached_bytes: stat.cached_bytes.min(stat.total_bytes) as i64,
+        attack_bytes: stat.attack_bytes.min(stat.total_bytes) as i64,
+        count_requests: stat.count_requests as i64,
+        count_cached_requests: stat.count_cached_requests as i64,
+        count_attack_requests: stat.count_attack_requests as i64,
+        user_plan_id: stat.user_plan_id,
+        count_websocket_connections: stat.count_websocket_connections as i64,
+        origin_total_bytes: stat.origin_total_bytes as i64,
+        origin_avg_bytes: stat.origin_avg_bytes as i64,
+        origin_avg_bits: stat.origin_avg_bits as i64,
+        count_i_ps: crate::metrics::daily::UNIQUE_IP_TRACKER.count(stat.server_id, &stat.day),
+        node_region_id,
+        ..Default::default()
+    }
+}
+
+fn drain_bandwidth_window(
+    config_store: &ConfigStore,
+    window_stats: &mut HashMap<i64, BandwidthWindowStat>,
+    window_start: i64,
+    segment_started_at: i64,
+    node_region_id: i64,
+    source_boot: String,
+) -> PendingWindow {
+    let mut error_counts = HashMap::new();
+    let stats = window_stats
+        .drain()
+        .map(|(_, stat)| {
+            if stat.count_errors > 0 {
+                error_counts.insert(stat.server_id, stat.count_errors);
+            }
+            bandwidth_stat_pb(&stat, config_store, node_region_id)
+        })
+        .collect();
+    PendingWindow {
+        window_start,
+        segment_started_at,
+        source_boot,
+        stats,
+        error_counts,
+    }
+}
+
+async fn enqueue_window_batch(window: &PendingWindow, complete: bool) -> anyhow::Result<()> {
+    let request = pb::UploadServerBandwidthStatsRequest {
+        server_bandwidth_stats: window.stats.clone(),
+    };
+    let mut batch = pb::TelemetryBatch {
+        kind: "bandwidth".into(),
+        payload: prost::Message::encode_to_vec(&request),
+        occurred_at: crate::utils::time::now_timestamp(),
+        window_start: window.window_start,
+        window_complete: complete,
+        error_counts: window.error_counts.clone(),
+        segment_started_at: window.segment_started_at,
+        ..Default::default()
+    };
+    if !window.source_boot.is_empty() {
+        batch.source_boot_id = window.source_boot.clone();
+    }
+    crate::telemetry::enqueue_prepared(batch).await
+}
+
+/// A window that closed while the process was down keeps partial coverage:
+/// upload the accumulation as its own boot segment (never a completion
+/// marker) and flag the downtime remainder as unrecoverable.
+async fn flush_stale_window(
+    config_store: &ConfigStore,
+    current_window: &mut String,
+    window_stats: &mut HashMap<i64, BandwidthWindowStat>,
+    stored_boot: &str,
+    segment_started_at: i64,
+) {
+    if current_window.is_empty() {
+        return;
+    }
+    let now = crate::utils::time::now_local();
+    let day = now.format("%Y%m%d").to_string();
+    let minute_floor = (now.minute() / 5) * 5;
+    let live_key = format!("{}@{:02}{:02}", day, now.hour(), minute_floor);
+    if *current_window == live_key {
+        return;
+    }
+    let node_region_id = config_store.get_node_region_id().await;
+    let window_start = window_stats
+        .values()
+        .next()
+        .map(|stat| parse_window_start(&stat.day, &stat.time_at))
+        .unwrap_or(0);
+    let window = drain_bandwidth_window(
+        config_store,
+        window_stats,
+        window_start,
+        segment_started_at,
+        node_region_id,
+        stored_boot.to_string(),
+    );
+    if let Err(e) = enqueue_window_batch(&window, false).await {
+        warn!("stale bandwidth window could not reach the durable queue: {}", e);
+    }
+    // The downtime span is permanent loss: emit a gap batch whose range covers
+    // the stale window so settlement for it stays paused.
+    let gap = pb::TelemetryBatch {
+        kind: "gap".into(),
+        has_gap: true,
+        gap_kind: "bandwidth".into(),
+        gap_reason: "node restarted before window close; downtime coverage unrecoverable"
+            .into(),
+        window_start,
+        occurred_at: crate::utils::time::now_timestamp(),
+        ..Default::default()
+    };
+    if let Err(e) = crate::telemetry::enqueue_prepared(gap).await {
+        warn!("restart gap marker could not be persisted: {}", e);
+    }
+    *current_window = String::new();
 }
 
 fn snapshot_delta(
@@ -378,6 +582,7 @@ fn snapshot_delta(
 
     ServerStatusSnapshot {
         server_id: current.server_id,
+        count_errors: delta(|s| s.count_errors),
         user_id: current.user_id,
         user_plan_id: current.user_plan_id,
         plan_id: current.plan_id,
@@ -396,12 +601,26 @@ fn snapshot_delta(
     }
 }
 
-pub async fn start_bandwidth_reporter(config_store: ConfigStore, api_config: ApiConfig) {
+pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(
         BANDWIDTH_SAMPLE_INTERVAL_SECS,
     ));
     let mut last_snapshots: HashMap<i64, ServerStatusSnapshot> = HashMap::new();
-    let (mut current_window, mut window_stats, mut pending_stats) = load_bandwidth_state();
+    let (
+        mut current_window,
+        mut window_stats,
+        mut pending_windows,
+        stored_boot,
+        mut segment_started_at,
+    ) = load_bandwidth_state();
+    flush_stale_window(
+        &config_store,
+        &mut current_window,
+        &mut window_stats,
+        &stored_boot,
+        segment_started_at,
+    )
+    .await;
 
     loop {
         interval.tick().await;
@@ -420,74 +639,41 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore, api_config: Api
 
         if current_window.is_empty() {
             current_window = window_key.clone();
+            segment_started_at = window_started_at;
         } else if current_window != window_key {
             let node_region_id = config_store.get_node_region_id().await;
-            let now_ts = crate::utils::time::now_timestamp();
-            pending_stats.retain(|item| now_ts - item.queued_at <= STAT_RETRY_RETENTION_SECS);
-            let mut upload_items = std::mem::take(&mut pending_stats);
-            upload_items.extend(window_stats.drain().map(|(_, stat)| {
-                let bytes_per_sec = bandwidth_bytes_per_sec(&stat, &config_store);
-                PendingBandwidthStat {
-                    queued_at: window_started_at - BANDWIDTH_REPORT_INTERVAL_SECS as i64,
-                    stat: pb::ServerBandwidthStat {
-                        user_id: stat.user_id,
-                        server_id: stat.server_id,
-                        day: stat.day.clone(),
-                        time_at: stat.time_at,
-                        bytes: bytes_per_sec as i64,
-                        bits: (bytes_per_sec * 8) as i64,
-                        total_bytes: stat.total_bytes as i64,
-                        bytes_in: stat.bytes_in as i64,
-                        cached_bytes: stat.cached_bytes.min(stat.total_bytes) as i64,
-                        attack_bytes: stat.attack_bytes.min(stat.total_bytes) as i64,
-                        count_requests: stat.count_requests as i64,
-                        count_cached_requests: stat.count_cached_requests as i64,
-                        count_attack_requests: stat.count_attack_requests as i64,
-                        user_plan_id: stat.user_plan_id,
-                        count_websocket_connections: stat.count_websocket_connections as i64,
-                        origin_total_bytes: stat.origin_total_bytes as i64,
-                        origin_avg_bytes: stat.origin_avg_bytes as i64,
-                        origin_avg_bits: stat.origin_avg_bits as i64,
-                        count_i_ps: crate::metrics::daily::UNIQUE_IP_TRACKER
-                            .count(stat.server_id, &stat.day),
-                        node_region_id,
-                        ..Default::default()
-                    },
+            let closed_start = window_started_at - BANDWIDTH_REPORT_INTERVAL_SECS as i64;
+            // The closed window is pushed as a pending entry before draining:
+            // a spool that cannot accept it keeps complete data for the next
+            // rollover instead of dropping it.
+            pending_windows.push(drain_bandwidth_window(
+                &config_store,
+                &mut window_stats,
+                closed_start,
+                segment_started_at,
+                node_region_id,
+                String::new(),
+            ));
+            let mut sent = 0;
+            while sent < pending_windows.len() {
+                if enqueue_window_batch(&pending_windows[sent], true)
+                    .await
+                    .is_err()
+                {
+                    break;
                 }
-            }));
-            if !upload_items.is_empty() {
-                let stats: Vec<_> = upload_items.iter().map(|item| item.stat.clone()).collect();
-                let client = match SharedRpcClient::get(&api_config).await {
-                    Ok(shared) => shared.as_rpc_client(),
-                    Err(e) => {
-                        warn!("Bandwidth reporter failed to connect: {}", e);
-                        pending_stats = upload_items;
-                        current_window = window_key;
-                        persist_bandwidth_state(
-                            &current_window,
-                            &window_stats,
-                            pending_stats.as_slice(),
-                        );
-                        continue;
-                    }
-                };
-                let mut service = client.bandwidth_stat_service();
-                let result = crate::rpc::track_rpc(service.upload_server_bandwidth_stats(
-                    pb::UploadServerBandwidthStatsRequest {
-                        server_bandwidth_stats: stats,
-                    },
-                ))
-                .await;
-                if let Err(e) = result {
-                    warn!("Failed to upload bandwidth stats: {}", e);
-                    pending_stats = upload_items;
-                } else {
-                    pending_stats.clear();
-                }
-                persist_bandwidth_state(&current_window, &window_stats, pending_stats.as_slice());
+                sent += 1;
             }
+            pending_windows.drain(..sent);
             current_window = window_key.clone();
-            persist_bandwidth_state(&current_window, &window_stats, pending_stats.as_slice());
+            segment_started_at = window_started_at;
+            persist_bandwidth_state(
+                &current_window,
+                &window_stats,
+                &pending_windows,
+                segment_started_at,
+            )
+            .await;
         }
 
         for snap_tuple in snapshots {
@@ -518,6 +704,7 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore, api_config: Api
                 });
             stat.user_id = delta.user_id;
             stat.user_plan_id = delta.user_plan_id;
+            stat.count_errors += delta.count_errors;
             stat.peak_bytes_per_sec = stat.peak_bytes_per_sec.max(peak_bytes_per_sec);
             stat.total_bytes += billable_bytes;
             stat.bytes_in += delta.bytes_received;
@@ -532,11 +719,17 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore, api_config: Api
             stat.origin_avg_bits = (stat.origin_total_bytes * 8) / BANDWIDTH_REPORT_INTERVAL_SECS;
             stat.count_ips = stat.count_ips.max(delta.count_ips);
         }
-        persist_bandwidth_state(&current_window, &window_stats, pending_stats.as_slice());
+        persist_bandwidth_state(
+            &current_window,
+            &window_stats,
+            &pending_windows,
+            segment_started_at,
+        )
+        .await;
     }
 }
 
-pub async fn start_daily_stat_reporter(config_store: ConfigStore, api_config: ApiConfig) {
+pub async fn start_daily_stat_reporter(config_store: ConfigStore) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(
         BANDWIDTH_SAMPLE_INTERVAL_SECS,
     ));
@@ -568,11 +761,6 @@ pub async fn start_daily_stat_reporter(config_store: ConfigStore, api_config: Ap
         } else if current_window != window_key {
             let min_day = (now - ChronoDuration::days(2)).format("%Y%m%d").to_string();
             crate::metrics::daily::UNIQUE_IP_TRACKER.cleanup_before(&min_day);
-
-            let now_ts = crate::utils::time::now_timestamp();
-            pending_stats.retain(|item| now_ts - item.created_at <= STAT_RETRY_RETENTION_SECS);
-            pending_domain_stats
-                .retain(|item| now_ts - item.created_at <= STAT_RETRY_RETENTION_SECS);
 
             let mut stats: Vec<_> = std::mem::take(&mut pending_stats);
             stats.extend(window_stats.drain().map(|(_, mut stat)| {
@@ -616,32 +804,16 @@ pub async fn start_daily_stat_reporter(config_store: ConfigStore, api_config: Ap
             }
 
             if !stats.is_empty() || !domain_stats.is_empty() {
-                let client = match SharedRpcClient::get(&api_config).await {
-                    Ok(shared) => shared.as_rpc_client(),
-                    Err(e) => {
-                        warn!("Daily stat reporter failed to connect: {}", e);
-                        pending_stats = stats;
-                        pending_domain_stats = domain_stats;
-                        current_window = window_key;
-                        continue;
-                    }
+                let request = pb::UploadServerDailyStatsRequest {
+                    stats: stats.clone(),
+                    domain_stats: domain_stats.clone(),
                 };
-                let mut service = client.daily_stat_service();
-
-                if let Err(e) = crate::rpc::track_rpc(service.upload_server_daily_stats(
-                    pb::UploadServerDailyStatsRequest {
-                        stats: stats.clone(),
-                        domain_stats: domain_stats.clone(),
-                    },
-                ))
-                .await
-                {
-                    warn!("Failed to upload daily stats: {}", e);
+                // A full spool keeps the drained window in memory — pending
+                // entries are never aged out, they are re-offered next window.
+                if let Err(e) = crate::telemetry::enqueue("daily", &request, 0, false).await {
+                    warn!("Failed to persist daily stats: {}", e);
                     pending_stats = stats;
                     pending_domain_stats = domain_stats;
-                } else {
-                    pending_stats.clear();
-                    pending_domain_stats.clear();
                 }
             }
             current_window = window_key.clone();
@@ -860,10 +1032,7 @@ fn build_metric_uploads_for_item(
     requests
 }
 
-pub async fn start_metric_stat_reporter(
-    config_store: Arc<crate::config::ConfigStore>,
-    api_config: ApiConfig,
-) {
+pub async fn start_metric_stat_reporter(config_store: Arc<crate::config::ConfigStore>) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
     let mut values_cache: HashMap<String, f32> = HashMap::new();
 
@@ -873,15 +1042,6 @@ pub async fn start_metric_stat_reporter(
         if metric_items.is_empty() {
             continue;
         }
-
-        let client = match SharedRpcClient::get(&api_config).await {
-            Ok(shared) => shared.as_rpc_client(),
-            Err(e) => {
-                warn!("Metric stat reporter failed to connect: {}", e);
-                continue;
-            }
-        };
-        let mut service = client.metric_stat_service();
 
         let samples = crate::metrics::aggregator::METRIC_STAT_AGGREGATOR.flush();
         if samples.is_empty() {
@@ -908,9 +1068,9 @@ pub async fn start_metric_stat_reporter(
             for req in build_metric_uploads_for_item(&item, &time_key, &samples, &mut values_cache)
             {
                 let server_id = req.server_id;
-                if let Err(e) = crate::rpc::track_rpc(service.upload_metric_stats(req)).await {
+                if let Err(e) = crate::telemetry::enqueue("metric_stat", &req, 0, false).await {
                     warn!(
-                        "Failed to upload metric stats for server {} item {}: {}",
+                        "Failed to persist metric stats for server {} item {}: {}",
                         server_id, item.id, e
                     );
                     upload_succeeded = false;
@@ -1008,7 +1168,6 @@ pub async fn start_metrics_aggregator_reporter(config_store: ConfigStore, api_co
             }
         };
         let mut node_service = client.node_service();
-        let mut server_service = client.server_service();
 
         match node_service
             .find_node_level_info(pb::FindNodeLevelInfoRequest {})
@@ -1171,16 +1330,14 @@ pub async fn start_metrics_aggregator_reporter(config_store: ConfigStore, api_co
             HttpRequestStatUploadLimits::from_config(&config_store.get_global_stat_upload_sync());
         trim_http_request_stat_rows_with_limits(&mut req, upload_limits);
 
-        let upload_result =
-            crate::rpc::track_rpc(server_service.upload_server_http_request_stat(req)).await;
-        if let Err(e) = upload_result {
-            warn!("Failed to upload HTTP request stats: {}", e);
+        if let Err(e) = crate::telemetry::enqueue("request_stat", &req, 0, false).await {
+            warn!("Failed to persist HTTP request stats: {}", e);
             crate::metrics::aggregator::HTTP_REQUEST_STAT_AGGREGATOR.restore(samples);
         }
     }
 }
 
-pub async fn start_top_ip_stat_reporter(api_config: ApiConfig) {
+pub async fn start_top_ip_stat_reporter() {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
 
     loop {
@@ -1189,18 +1346,6 @@ pub async fn start_top_ip_stat_reporter(api_config: ApiConfig) {
         if rows.is_empty() {
             continue;
         }
-
-        let client = match SharedRpcClient::get(&api_config).await {
-            Ok(shared) => shared.as_rpc_client(),
-            Err(e) => {
-                warn!("Top IP stat reporter failed to connect: {}", e);
-                // Upload never happened: give the counts back to the tracker
-                // so the next window re-attempts them.
-                crate::metrics::top_ip::TOP_IP_TRACKER.restore(&rows);
-                continue;
-            }
-        };
-        let mut service = client.server_top_ip_stat_service();
 
         let now = crate::utils::time::now_local();
         let day = now.format("%Y%m%d").to_string();
@@ -1222,12 +1367,15 @@ pub async fn start_top_ip_stat_reporter(api_config: ApiConfig) {
             })
             .collect();
 
-        if let Err(e) = crate::rpc::track_rpc(
-            service.upload_server_top_ip_stats(pb::UploadServerTopIpStatsRequest { stats }),
+        if let Err(e) = crate::telemetry::enqueue(
+            "top_ip",
+            &pb::UploadServerTopIpStatsRequest { stats },
+            0,
+            false,
         )
         .await
         {
-            warn!("Failed to upload top IP stats: {}", e);
+            warn!("Failed to persist top IP stats: {}", e);
             crate::metrics::top_ip::TOP_IP_TRACKER.restore(&rows);
         }
     }
@@ -1436,39 +1584,35 @@ mod tests {
 
     #[test]
     fn bandwidth_pending_stat_round_trips_storage_shape() {
-        let pending = PendingBandwidthStat {
-            queued_at: 123,
-            stat: pb::ServerBandwidthStat {
-                user_id: 1,
-                server_id: 2,
-                day: "20260621".to_string(),
-                time_at: "1200".to_string(),
-                bytes: 3,
-                bits: 24,
-                total_bytes: 4,
-                cached_bytes: 5,
-                attack_bytes: 6,
-                count_requests: 7,
-                count_cached_requests: 8,
-                count_attack_requests: 9,
-                user_plan_id: 10,
-                count_websocket_connections: 11,
-                origin_total_bytes: 12,
-                origin_avg_bytes: 13,
-                origin_avg_bits: 14,
-                count_i_ps: 15,
-                node_region_id: 16,
-                ..Default::default()
-            },
+        let stat = pb::ServerBandwidthStat {
+            user_id: 1,
+            server_id: 2,
+            day: "20260621".to_string(),
+            time_at: "1200".to_string(),
+            bytes: 3,
+            bits: 24,
+            total_bytes: 4,
+            cached_bytes: 5,
+            attack_bytes: 6,
+            count_requests: 7,
+            count_cached_requests: 8,
+            count_attack_requests: 9,
+            user_plan_id: 10,
+            count_websocket_connections: 11,
+            origin_total_bytes: 12,
+            origin_avg_bytes: 13,
+            origin_avg_bits: 14,
+            count_i_ps: 15,
+            node_region_id: 16,
+            ..Default::default()
         };
 
-        let restored = PendingBandwidthStat::from(StoredPendingBandwidthStat::from(&pending));
+        let restored = pb::ServerBandwidthStat::from(StoredPendingBandwidthStat::from(&stat));
 
-        assert_eq!(restored.queued_at, pending.queued_at);
-        assert_eq!(restored.stat.server_id, pending.stat.server_id);
-        assert_eq!(restored.stat.total_bytes, pending.stat.total_bytes);
-        assert_eq!(restored.stat.count_i_ps, pending.stat.count_i_ps);
-        assert_eq!(restored.stat.node_region_id, pending.stat.node_region_id);
+        assert_eq!(restored.server_id, stat.server_id);
+        assert_eq!(restored.total_bytes, stat.total_bytes);
+        assert_eq!(restored.count_i_ps, stat.count_i_ps);
+        assert_eq!(restored.node_region_id, stat.node_region_id);
     }
 
     #[test]
