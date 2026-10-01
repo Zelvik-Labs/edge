@@ -215,7 +215,7 @@ pub(crate) const AF_XDP_TCP_PRE_PROXY_PER_IP_LIMIT: usize = 64;
 /// SYN retrain sequence; a session still not Established past it is
 /// aborted and the dial answered with a timeout, never left lingering.
 #[cfg(any(test, target_os = "linux"))]
-pub(crate) const AF_XDP_TCP_DIAL_TIMEOUT: Duration = Duration::from_secs(4);
+pub(crate) const AF_XDP_TCP_DIAL_TIMEOUT: Duration = Duration::from_secs(32);
 /// T4/T4-5 (D-B1): default reserved source-port span for node-dialed
 /// AF_XDP flows. The kernel guard carves this range out of
 /// `ip_local_reserved_ports` so no kernel socket can claim a tuple that
