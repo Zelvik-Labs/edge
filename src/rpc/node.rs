@@ -1141,7 +1141,8 @@ where
                     // Do not acknowledge a generation until its XDP settings apply.
                     // Failure leaves the cursor/hash unchanged so the next poll retries.
                     if let Some(runtime_push) = payload.runtime.take() {
-                        let prepared_api = match runtime_push.api.unwrap_or_default().prepare() {
+                        let api_push = runtime_push.api.unwrap_or_default();
+                        let prepared_api = match api_push.prepare() {
                             Ok(config) => config,
                             Err(err) => {
                                 warn!("RPC_NODE: runtime.api override rejected: {}", err);
@@ -1197,7 +1198,7 @@ where
                             .await;
                             return false;
                         }
-                        crate::api_config::NodeApiPush::activate(&prepared_api.config);
+                        api_push.activate(&prepared_api.config);
                     }
                     let deleted_contents = config_store.get_deleted_contents().await;
                     config_store

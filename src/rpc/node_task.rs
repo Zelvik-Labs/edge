@@ -46,7 +46,26 @@ pub async fn sync_node_tasks(
             for task in tasks {
                 info!("Processing NodeTask: {} (Type: {})", task.id, task.r#type);
                 let task_type = task.r#type.as_str();
+                // The admin may embed a target version as upgradeNode@{"version":…}.
+                let mut pending_upgrade_restart = false;
+                let mut task_error = String::new();
                 let success = match task_type {
+                    t if crate::node_upgrade::parse_upgrade_task_version(t).is_some() => {
+                        // The upgrade payload is downloaded from the admin
+                        // management address over plain HTTP(S); the gRPC
+                        // channel only carried this task reference.
+                        match crate::node_upgrade::execute_node_upgrade(api_config, t).await {
+                            Ok(needs_restart) => {
+                                pending_upgrade_restart = needs_restart;
+                                true
+                            }
+                            Err(err) => {
+                                warn!("NodeTask {} upgrade failed: {}", task.id, err);
+                                task_error = format!("{err:#}");
+                                false
+                            }
+                        }
+                    }
                     "configChanged"
                     | "ddosProtectionChanged"
                     | "globalServerConfigChanged"
@@ -119,7 +138,7 @@ pub async fn sync_node_tasks(
                         )
                         .await
                     }
-                    "upgradeNode" | "installNode" | "startNode" => {
+                    "installNode" | "startNode" => {
                         // updateNodeIsInstalled requires admin credentials on cloud API,
                         // so we cannot mark this from the node side. cloudsidra-edge does not
                         // execute these lifecycle tasks locally, so acknowledge them to
@@ -161,8 +180,10 @@ pub async fn sync_node_tasks(
                         is_ok: success,
                         error: if success {
                             "".to_string()
-                        } else {
+                        } else if task_error.is_empty() {
                             "Task failed".to_string()
+                        } else {
+                            task_error.clone()
                         },
                     },
                 ))
@@ -172,6 +193,16 @@ pub async fn sync_node_tasks(
                 if reported {
                     if task.version > *task_version {
                         *task_version = task.version;
+                    }
+                    if pending_upgrade_restart {
+                        // Report-before-restart ordering: the admin records the
+                        // task as done, then this process exits under its
+                        // service manager and the new binary comes up.
+                        info!("NodeTask {} installed a new binary; restarting service", task.id);
+                        if let Err(err) = crate::node_upgrade::schedule_upgrade_restart() {
+                            warn!("Failed to schedule service restart after upgrade: {}", err);
+                        }
+                        return;
                     }
                 } else {
                     warn!("Failed to report NodeTask {} completion", task.id);

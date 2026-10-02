@@ -15,7 +15,6 @@ use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, mpsc as std_mpsc};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tokio::io::AsyncWriteExt;
 use tracing::{error, info, warn};
 use tracing_subscriber::fmt::MakeWriter;
 
@@ -1947,18 +1946,18 @@ struct UpgradeOptions {
     no_restart: bool,
 }
 
-const XDP_EBPF_OBJECT_NAME: &str = "cloudsidra-edge-xdp-ebpf.o";
+use cloudsidra_edge::node_upgrade::{
+    XDP_EBPF_OBJECT_NAME, backup_current_binary, detect_release_asset, download_to_file,
+    extract_release_payload, install_xdp_ebpf_object_to_runtime, replace_binary,
+};
+#[cfg(test)]
+use cloudsidra_edge::node_upgrade::select_release_asset;
+
 #[cfg(target_os = "linux")]
 const CLOUDSIDRA_EDGE_SYSTEMD_SERVICE: &str = "cloudsidra-edge.service";
 #[cfg(target_os = "linux")]
 const CLOUDSIDRA_EDGE_SYSTEMD_SERVICE_PATH: &str = "/etc/systemd/system/cloudsidra-edge.service";
 const CLOUDSIDRA_EDGE_WRAPPER_PATH: &str = "/usr/bin/cloudsidra-edge";
-
-#[derive(Debug)]
-struct ExtractedReleasePayload {
-    binary: PathBuf,
-    xdp_ebpf_object: Option<PathBuf>,
-}
 
 #[derive(Debug, PartialEq, Eq)]
 struct XdpObjectRepair {
@@ -1999,92 +1998,6 @@ fn apply_github_mirror(download_url: &str, github_mirror: Option<&str>) -> Strin
     format!("{}/{}", mirror.trim_end_matches('/'), download_url)
 }
 
-fn cpuinfo_has_flag(cpuinfo: &str, flag: &str) -> bool {
-    cpuinfo
-        .split(|ch: char| ch.is_ascii_whitespace() || ch == ':')
-        .any(|part| part == flag)
-}
-
-fn select_release_asset(
-    arch: &str,
-    cpuinfo: &str,
-    glibc_older_than_228: bool,
-) -> anyhow::Result<&'static str> {
-    match arch {
-        "x86_64" | "amd64" => {
-            if glibc_older_than_228 {
-                anyhow::bail!(
-                    "x86_64 systems with glibc older than 2.28 are not supported by official release assets"
-                );
-            }
-            if !cpuinfo_has_flag(cpuinfo, "sse4_2") {
-                anyhow::bail!(
-                    "x86_64 CPU without SSE4.2 is not supported by official release assets"
-                );
-            }
-            if cpuinfo_has_flag(cpuinfo, "avx512f") {
-                Ok("CloudSidra-Edge-linux-x64-v4-avx512.tar.gz")
-            } else if cpuinfo_has_flag(cpuinfo, "avx2") {
-                Ok("CloudSidra-Edge-linux-x64-v3-avx2.tar.gz")
-            } else {
-                Ok("CloudSidra-Edge-linux-x64-v2-sse4.2.tar.gz")
-            }
-        }
-        "aarch64" | "arm64" => {
-            if cpuinfo.to_ascii_lowercase().contains("neoverse-n1") {
-                Ok("CloudSidra-Edge-linux-arm64-neoverse-n1.tar.gz")
-            } else {
-                Ok("CloudSidra-Edge-linux-arm64-generic.tar.gz")
-            }
-        }
-        other => anyhow::bail!("unsupported architecture for official release assets: {other}"),
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn glibc_is_older_than_228() -> bool {
-    let Ok(output) = Command::new("ldd").arg("--version").output() else {
-        return false;
-    };
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let Some(first_line) = stdout.lines().next() else {
-        return false;
-    };
-    let Some(version) = first_line.split_whitespace().find(|part| {
-        part.chars().next().is_some_and(|ch| ch.is_ascii_digit()) && part.contains('.')
-    }) else {
-        return false;
-    };
-    let mut parts = version.split('.');
-    let major = parts
-        .next()
-        .and_then(|value| value.parse::<u32>().ok())
-        .unwrap_or(999);
-    let minor = parts
-        .next()
-        .and_then(|value| {
-            value
-                .chars()
-                .take_while(|ch| ch.is_ascii_digit())
-                .collect::<String>()
-                .parse::<u32>()
-                .ok()
-        })
-        .unwrap_or(999);
-    major < 2 || (major == 2 && minor < 28)
-}
-
-#[cfg(not(target_os = "linux"))]
-fn glibc_is_older_than_228() -> bool {
-    false
-}
-
-fn detect_release_asset() -> anyhow::Result<&'static str> {
-    let arch = std::env::consts::ARCH;
-    let cpuinfo = fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
-    select_release_asset(arch, &cpuinfo, glibc_is_older_than_228())
-}
-
 fn unix_timestamp() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -2092,112 +2005,8 @@ fn unix_timestamp() -> u64 {
         .unwrap_or(0)
 }
 
-async fn download_to_file(url: &str, target: &Path) -> anyhow::Result<()> {
-    let client = reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(20))
-        .timeout(Duration::from_secs(600))
-        .user_agent(format!("cloudsidra-edge/{}", env!("CARGO_PKG_VERSION")))
-        .build()?;
-    let mut response = client.get(url).send().await?;
-    if !response.status().is_success() {
-        anyhow::bail!("download failed with HTTP status {}", response.status());
-    }
-
-    let mut file = tokio::fs::File::create(target).await?;
-    while let Some(chunk) = response.chunk().await? {
-        file.write_all(&chunk).await?;
-    }
-    file.flush().await?;
-    Ok(())
-}
-
-fn archive_path_parts(path: &Path) -> Vec<String> {
-    path.components()
-        .filter_map(|component| match component {
-            std::path::Component::Normal(part) => Some(part.to_string_lossy().into_owned()),
-            _ => None,
-        })
-        .collect()
-}
-
-fn extract_release_payload(
-    archive_path: &Path,
-    target_dir: &Path,
-) -> anyhow::Result<ExtractedReleasePayload> {
-    let archive_file = fs::File::open(archive_path)?;
-    let gz = flate2::read::GzDecoder::new(archive_file);
-    let mut archive = tar::Archive::new(gz);
-    let binary = target_dir.join("cloudsidra-edge");
-    let xdp_ebpf_object = target_dir.join(XDP_EBPF_OBJECT_NAME);
-    let mut found_binary = false;
-    let mut found_xdp_ebpf_object = false;
-
-    for entry in archive.entries()? {
-        let mut entry = entry?;
-        let path = entry.path()?.into_owned();
-        let parts = archive_path_parts(&path);
-        if parts == ["cloudsidra-edge"] {
-            entry.unpack(&binary)?;
-            if !binary.is_file() {
-                anyhow::bail!("release archive cloudsidra-edge entry is not a regular file");
-            }
-            found_binary = true;
-        } else if parts == ["data", XDP_EBPF_OBJECT_NAME] {
-            entry.unpack(&xdp_ebpf_object)?;
-            if !xdp_ebpf_object.is_file() {
-                anyhow::bail!("release archive XDP eBPF object entry is not a regular file");
-            }
-            found_xdp_ebpf_object = true;
-        }
-    }
-
-    if !found_binary {
-        anyhow::bail!("release archive does not contain cloudsidra-edge");
-    }
-
-    Ok(ExtractedReleasePayload {
-        binary,
-        xdp_ebpf_object: found_xdp_ebpf_object.then_some(xdp_ebpf_object),
-    })
-}
-
 fn prompt_upgrade_confirmation() -> anyhow::Result<bool> {
     prompt_yes_no(t("upgrade.proceed"), false)
-}
-
-fn backup_current_binary(
-    install_binary: &Path,
-    backup_dir: &Path,
-    version: &str,
-) -> anyhow::Result<PathBuf> {
-    fs::create_dir_all(backup_dir)?;
-    let file_name = install_binary
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("cloudsidra-edge");
-    let backup_path = backup_dir.join(format!("{file_name}.{version}.{}.backup", unix_timestamp()));
-    fs::copy(install_binary, &backup_path)?;
-    Ok(backup_path)
-}
-
-fn replace_binary(source: &Path, install_binary: &Path) -> anyhow::Result<()> {
-    let parent = install_binary
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("install binary has no parent directory"))?;
-    fs::create_dir_all(parent)?;
-    let new_path = install_binary.with_extension("upgrade-new");
-    fs::copy(source, &new_path)?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&new_path)?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&new_path, perms)?;
-    }
-
-    fs::rename(&new_path, install_binary)?;
-    Ok(())
 }
 
 fn runtime_dir_candidate(path: &Path) -> bool {
@@ -2400,28 +2209,6 @@ fn runtime_root_for_upgrade(install_binary: &Path) -> anyhow::Result<PathBuf> {
         std::env::current_dir().ok(),
         install_binary,
     )
-}
-
-fn install_xdp_ebpf_object_to_runtime(
-    source: &Path,
-    runtime_root: &Path,
-) -> anyhow::Result<PathBuf> {
-    let data_dir = runtime_root.join("data");
-    fs::create_dir_all(&data_dir)?;
-    let dest = data_dir.join(XDP_EBPF_OBJECT_NAME);
-    let new_path = data_dir.join(format!("{XDP_EBPF_OBJECT_NAME}.upgrade-new"));
-    fs::copy(source, &new_path)?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&new_path)?.permissions();
-        perms.set_mode(0o644);
-        fs::set_permissions(&new_path, perms)?;
-    }
-
-    fs::rename(&new_path, &dest)?;
-    Ok(dest)
 }
 
 fn install_xdp_ebpf_object(

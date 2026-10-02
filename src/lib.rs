@@ -40,6 +40,7 @@ pub mod metrics;
 pub mod net_bind;
 #[cfg(feature = "node-control")]
 pub mod node_control;
+pub mod node_upgrade;
 pub mod origin_h3;
 pub mod origin_h3_pool;
 pub mod origin_h3_state;

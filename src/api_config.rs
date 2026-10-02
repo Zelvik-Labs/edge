@@ -7,6 +7,9 @@ use std::sync::RwLock;
 use std::sync::atomic::{AtomicI8, Ordering};
 
 static RUNTIME_RPC_ENDPOINTS: Lazy<RwLock<Option<Vec<String>>>> = Lazy::new(|| RwLock::new(None));
+// Admin-configured package download bases pushed via runtime.api.update; takes
+// precedence over the local yaml `update.endpoints` and rpc endpoints.
+static RUNTIME_UPDATE_ENDPOINTS: Lazy<RwLock<Option<Vec<String>>>> = Lazy::new(|| RwLock::new(None));
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ApiConfig {
@@ -28,6 +31,16 @@ pub struct ApiConfig {
     pub kernel_tuning: KernelTuningConfig,
     #[serde(rename = "cache", default)]
     pub cache: LocalCacheConfig,
+}
+
+/// Update distribution endpoints carried by `runtime.api.update` pushes: the
+/// admin management address(es) the node downloads upgrade packages from over
+/// plain HTTP(S). Not a local yaml section — the control plane owns it (admin
+/// platform_setting `edge.updateEndpoints`).
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct UpdateConfig {
+    #[serde(rename = "endpoints", default)]
+    pub endpoints: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
@@ -309,6 +322,15 @@ impl ApiConfig {
             .join("control-plane-runtime.json");
         if override_path.exists() {
             let pushed: NodeApiPush = serde_json::from_slice(&fs::read(&override_path)?)?;
+            // The pushed update base never enters ApiConfig itself; it only
+            // feeds the runtime override consulted by package downloads.
+            Self::set_runtime_update_endpoints(
+                pushed
+                    .update
+                    .as_ref()
+                    .map(|update| update.endpoints.clone())
+                    .unwrap_or_default(),
+            );
             pushed.merge_into(&mut config);
         }
         STARTUP_PIPELINE.get_or_init(|| config.access_log_pipeline.normalized());
@@ -372,6 +394,27 @@ impl ApiConfig {
             .and_then(|guard| guard.clone())
             .filter(|endpoints| !endpoints.is_empty())
             .unwrap_or_else(|| self.rpc_endpoints.clone())
+    }
+
+    /// HTTP(S) base URLs serving node upgrade packages. The admin pushes the
+    /// download base via `runtime.api.update` over the RPC channel (persisted
+    /// to control-plane-runtime.json); without a push the node derives the
+    /// address from `rpc.endpoints`, which is correct whenever the same admin
+    /// origin fronts both the gRPC channel and the package download endpoint.
+    pub fn effective_update_endpoints(&self) -> Vec<String> {
+        RUNTIME_UPDATE_ENDPOINTS
+            .read()
+            .ok()
+            .and_then(|guard| guard.clone())
+            .filter(|endpoints| !endpoints.is_empty())
+            .unwrap_or_else(|| self.effective_rpc_endpoints())
+    }
+
+    pub fn set_runtime_update_endpoints(endpoints: Vec<String>) {
+        let endpoints = validate_rpc_endpoints(endpoints).unwrap_or_default();
+        if let Ok(mut guard) = RUNTIME_UPDATE_ENDPOINTS.write() {
+            *guard = (!endpoints.is_empty()).then_some(endpoints);
+        }
     }
 
     pub fn set_runtime_rpc_endpoints(endpoints: Vec<String>) -> anyhow::Result<()> {
@@ -570,6 +613,10 @@ pub struct NodeApiPush {
     pub cache: Option<LocalCacheConfig>,
     #[serde(rename = "accessLogPipeline", default)]
     pub access_log_pipeline: Option<AccessLogPipelineConfig>,
+    /// Admin-configured package update base (DB: platform_setting
+    /// edge.updateEndpoints), pushed through the RPC channel.
+    #[serde(default)]
+    pub update: Option<UpdateConfig>,
 }
 static STARTUP_PIPELINE: std::sync::OnceLock<AccessLogPipelineConfig> = std::sync::OnceLock::new();
 static STARTUP_KERNEL_TUNING: std::sync::OnceLock<KernelTuningConfig> = std::sync::OnceLock::new();
@@ -612,7 +659,14 @@ impl NodeApiPush {
             temp,
         })
     }
-    pub fn activate(config: &ApiConfig) {
+    pub fn activate(&self, config: &ApiConfig) {
+        // 管理端下发的包下载基址即时生效（升级任务执行时才读取）。
+        ApiConfig::set_runtime_update_endpoints(
+            self.update
+                .as_ref()
+                .map(|update| update.endpoints.clone())
+                .unwrap_or_default(),
+        );
         crate::tcp_proxy::configure_relay_from_api(config);
         LOCAL_CACHE_SENDFILE.store(
             match config.cache.sendfile {
@@ -688,5 +742,47 @@ mod pushed_runtime_tests {
         assert!(!temp.exists());
         assert!(!dir.join("control-plane-runtime.json").exists());
         fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod update_endpoint_tests {
+    use super::*;
+
+    // Single test for the whole lifecycle: RUNTIME_UPDATE_ENDPOINTS is a
+    // process-global push override, so splitting into parallel tests would race.
+    #[test]
+    fn update_endpoints_follow_pushed_value_then_rpc_fallback() {
+        let config: ApiConfig = serde_yaml::from_str(
+            r#"
+rpc.endpoints:
+  - https://api.example.com:9090
+nodeId: "1"
+secret: "secret"
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.effective_update_endpoints(),
+            vec!["https://api.example.com:9090".to_string()]
+        );
+
+        let push = NodeApiPush {
+            update: Some(UpdateConfig {
+                endpoints: vec!["https://admin.example.com".to_string()],
+            }),
+            ..Default::default()
+        };
+        push.activate(&config);
+        assert_eq!(
+            config.effective_update_endpoints(),
+            vec!["https://admin.example.com".to_string()]
+        );
+
+        ApiConfig::set_runtime_update_endpoints(Vec::new());
+        assert_eq!(
+            config.effective_update_endpoints(),
+            vec!["https://api.example.com:9090".to_string()]
+        );
     }
 }
