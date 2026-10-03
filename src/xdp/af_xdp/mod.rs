@@ -147,7 +147,7 @@ pub(crate) const AF_XDP_TCP_SESSION_IDLE_TIMEOUT: Duration = Duration::from_secs
 /// jumped past the ack-floor without a re-deliverable tail ACK would
 /// otherwise pin the session forever — the deadline retires it and the
 /// spliced wire is unaffected either way.
-#[cfg(any(test, target_os = "linux"))]
+#[cfg(target_os = "linux")]
 pub(crate) const AF_XDP_TCP_SPLICE_DRAIN_MAX: Duration = Duration::from_secs(2);
 /// T9: a session parked on the queue-ledger budget dies after this long
 /// regardless of arriving packets. Without it the stall is an immortal

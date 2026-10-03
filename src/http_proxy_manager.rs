@@ -2197,6 +2197,9 @@ impl HttpProxyManager {
                 stream: client_stream,
                 client_flow,
             } => {
+                // Splice promotion consumes the flow key on Linux only.
+                #[cfg(not(target_os = "linux"))]
+                let _ = client_flow;
                 #[cfg(target_os = "linux")]
                 if let (Some(client_flow), crate::toa::UpstreamL4Stream::AfXdp(backend)) =
                     (client_flow, &backend_stream)

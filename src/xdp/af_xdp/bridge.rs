@@ -468,7 +468,7 @@ pub(crate) struct AfXdpQueueCtx {
     /// must see every queue's learned L2 routes.
     pub(crate) udp_routes: Arc<DashMap<(SocketAddr, SocketAddr), AfXdpUdpRouteEntry>>,
     /// First channel per interface for cross-interface forwarding.
-    pub(crate) iface_fwd: Arc<HashMap<String, mpsc::Sender<AfXdpForward>>>,
+    pub(crate) iface_fwd: Arc<std::collections::HashMap<String, mpsc::Sender<AfXdpForward>>>,
     /// F1: dataplane lease — workers gate on this, never on manager
     /// staleness, so a compatible reload keeps sessions polling while the
     /// manager generation changes underneath them.
@@ -780,14 +780,14 @@ pub(crate) async fn spawn_queue_reactors(
     let dial_registry = Arc::new(AfXdpDialRegistry::new(manager.clone()));
     // One forwarding channel per queue; the first sender per interface is
     // the cross-interface forward target.
-    let mut iface_fwd: HashMap<String, mpsc::Sender<AfXdpForward>> = HashMap::new();
+    let mut iface_fwd: std::collections::HashMap<String, mpsc::Sender<AfXdpForward>> = std::collections::HashMap::new();
     // Worker steering channels: one bounded channel per queue, every
     // worker keeps the sender list for ITS interface's group so a frame
     // can hop to its owning worker in O(1). Ordered by queue index.
     let mut steer_receivers: Vec<mpsc::Receiver<Vec<u8>>> =
         Vec::with_capacity(queue_handles.len());
-    let mut steer_senders_by_iface: HashMap<String, Vec<mpsc::Sender<Vec<u8>>>> =
-        HashMap::new();
+    let mut steer_senders_by_iface: std::collections::HashMap<String, Vec<mpsc::Sender<Vec<u8>>>> =
+        std::collections::HashMap::new();
     for queue_handle in &queue_handles {
         let (steer_tx, steer_rx) = mpsc::channel::<Vec<u8>>(AF_XDP_REACTOR_REQUEST_QUEUE);
         steer_receivers.push(steer_rx);
@@ -796,7 +796,7 @@ pub(crate) async fn spawn_queue_reactors(
             .or_default()
             .push(steer_tx);
     }
-    let mut iface_queue_ordinal: HashMap<String, usize> = HashMap::new();
+    let mut iface_queue_ordinal: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     let mut steer_receivers = steer_receivers.into_iter();
     let mut contexts = Vec::with_capacity(queue_handles.len());
     for queue_handle in &queue_handles {
@@ -827,7 +827,7 @@ pub(crate) async fn spawn_queue_reactors(
             request_tx,
             dial_registry: dial_registry.clone(),
             udp_routes: udp_routes.clone(),
-            iface_fwd: Arc::new(HashMap::new()),
+            iface_fwd: Arc::new(std::collections::HashMap::new()),
             lease: lease.clone(),
             egress_rate_bps: None,
             proxy_rt: tokio::runtime::Handle::current(),

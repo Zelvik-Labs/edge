@@ -954,7 +954,7 @@ pub(crate) fn tcp_flags_from_ip_packet(ip_packet: &[u8]) -> Option<u8> {
 /// TCP header fields a splice promotion needs from a parked inbound
 /// frame: wire sequence number, payload byte count, and control flags
 /// (SYN/FIN consume a sequence position each).
-#[cfg(any(test, target_os = "linux"))]
+#[cfg(target_os = "linux")]
 pub(crate) fn tcp_seq_bounds_from_ip_packet(
     ip_packet: &[u8],
 ) -> Option<(u32, u32, u8)> {

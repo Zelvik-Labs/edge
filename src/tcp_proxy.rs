@@ -2110,6 +2110,8 @@ pub(crate) struct RelayOptions {
     cancel_rx: Option<watch::Receiver<crate::l4_connection_registry::ConnectionCancelReason>>,
     /// Accepted leg's flow key — eBPF splice promotion needs it to find
     /// the owning reactor once the upstream leg lands on AF_XDP too.
+    /// Splice promotion is a Linux dataplane feature.
+    #[cfg(target_os = "linux")]
     af_xdp_client_flow: Option<crate::xdp::af_xdp::AfXdpTcpFlowKey>,
 }
 
@@ -2119,6 +2121,7 @@ impl Default for RelayOptions {
             strict_close_on_eof: true,
             enforce_pressure_idle_timeout: true,
             cancel_rx: None,
+            #[cfg(target_os = "linux")]
             af_xdp_client_flow: None,
         }
     }
@@ -2130,15 +2133,20 @@ impl RelayOptions {
             strict_close_on_eof: true,
             enforce_pressure_idle_timeout: false,
             cancel_rx: None,
+            #[cfg(target_os = "linux")]
             af_xdp_client_flow: None,
         }
     }
 
     fn af_xdp_tcp(client_flow: Option<crate::xdp::af_xdp::AfXdpTcpFlowKey>) -> Self {
+        // The flow key only feeds eBPF splice promotion — a Linux path.
+        #[cfg(not(target_os = "linux"))]
+        let _ = client_flow;
         Self {
             strict_close_on_eof: true,
             enforce_pressure_idle_timeout: true,
             cancel_rx: None,
+            #[cfg(target_os = "linux")]
             af_xdp_client_flow: client_flow,
         }
     }

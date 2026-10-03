@@ -317,6 +317,7 @@ pub(crate) struct AfXdpTcpSession {
     /// below it belong to smoltcp (they drain out the app pipe and onto
     /// the sibling wire as the pre-splice tail), positions at or above
     /// it belong to the eBPF splice once the map entry lands.
+    #[cfg(target_os = "linux")]
     pub(crate) splice_boundary: Option<u32>,
     /// Post-promotion drain anchor (`None` while unspliced): the splice
     /// map owns the wire and this session keeps pumping only to deliver
@@ -324,11 +325,13 @@ pub(crate) struct AfXdpTcpSession {
     /// empties — or when the drain deadline passes (a peer that jumped
     /// its ack straight past the floor without a re-deliverable ACK
     /// would otherwise pin the session forever).
+    #[cfg(target_os = "linux")]
     pub(crate) splice_drain_since: Option<SmoltcpInstant>,
     /// Inbound frames parked at or beyond `splice_boundary`. On commit
     /// they are dropped wholesale — the splice wire recovers their
     /// content via the peer's retransmit (they were never ACKed). On
     /// abort they replay through the normal ingress path.
+    #[cfg(target_os = "linux")]
     pub(crate) splice_parked: std::collections::VecDeque<AfXdpTcpIngressFrame>,
     pub(crate) created_at: SmoltcpInstant,
     pub(crate) last_activity: SmoltcpInstant,
@@ -2060,8 +2063,11 @@ impl AfXdpTcpReactor {
             egress_rx: None,
             pending_ingress: AfXdpTcpChargedBytes::empty(),
             pending_egress: AfXdpTcpChargedBytes::empty(),
+            #[cfg(target_os = "linux")]
             splice_boundary: None,
+            #[cfg(target_os = "linux")]
             splice_drain_since: None,
+            #[cfg(target_os = "linux")]
             splice_parked: std::collections::VecDeque::new(),
             created_at: now,
             last_activity: now,
@@ -2527,8 +2533,11 @@ impl AfXdpTcpReactor {
             egress_rx: None,
             pending_ingress: AfXdpTcpChargedBytes::empty(),
             pending_egress: AfXdpTcpChargedBytes::empty(),
+            #[cfg(target_os = "linux")]
             splice_boundary: None,
+            #[cfg(target_os = "linux")]
             splice_drain_since: None,
+            #[cfg(target_os = "linux")]
             splice_parked: std::collections::VecDeque::new(),
             created_at: now,
             last_activity: now,
