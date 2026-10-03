@@ -258,7 +258,7 @@ impl RpcClient {
         let secret = api_config.secret.clone();
         let type_str = node_type.unwrap_or("node");
         move |mut req: Request<()>| {
-            // Control-plane RPC authentication is Goedge-compatible: the token
+            // Control-plane RPC authentication is upstream-compatible: the token
             // role must remain "node". `type_str` is only an optional metadata
             // hint for newer API nodes.
             let token = generate_token(&node_id, &secret, "node").unwrap_or_default();

@@ -10,7 +10,7 @@ CloudSidra Edge 的本地配置很少，主要配置来自控制面。节点本�
 rpc.endpoints: [ "http://127.0.0.1:8001" ]
 nodeId: "your-node-id"
 secret: "your-node-secret"
-# 可选，默认 false，保持 FlexCDN/GoEdge 只按下行计费口径
+# 可选，默认 false，只按下行计费
 billing.countInboundTraffic: false
 # 可选，默认 false。SNI/TCP relay 默认使用稳定 async copy 路径。
 relay:

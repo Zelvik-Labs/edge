@@ -125,8 +125,6 @@ CloudSidra Edge 已接入主要边缘节点能力，并持续优化以下方向�
 
 感谢 Cloudflare 开源 Pingora，为本项目提供了高质量的网络框架基础。
 
-同时感谢 FlexCDN 在协议设计、生产行为验证和长期工程实践上的参考与支持。
-
 ## 开源协议
 
 本项目基于 Apache License 2.0 协议开源。

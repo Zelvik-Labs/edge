@@ -93,7 +93,7 @@ cloudsidra-edge upgrade --version v1.1.7 --github-base-url https://github.exampl
 
 ## 进程和目录
 
-默认运行目录采用 GoEdge/FlexCDN 风格的三类目录：
+默认运行目录采用三类目录：
 
 - `configs/api_node.yaml`：API 节点连接配置。
 - `data/cloudsidra-edge.pid`：后台进程 PID 文件。
