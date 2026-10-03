@@ -19,7 +19,7 @@
         "isOn": true,
         "listen": [
           {
-            "portRange": "443",
+            "portRange": "80",
             "protocol": "http"
           }
         ]
@@ -204,7 +204,7 @@
             "name": "cluster-cache",
             "options": {
               "autoPurgeOnUpdate": true,
-              "cacheGeneration": 902279990871855,
+              "cacheGeneration": 2004728708719082,
               "dir": "/tmp/cloudsidra-contract-cache",
               "ipWriteLimitCount": 5,
               "ipWriteLimitWindowSeconds": 60,
