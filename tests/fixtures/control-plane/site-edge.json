@@ -3,7 +3,18 @@
   "id": 1,
   "servers": [
     {
-      "enableProxyProtocol": false,
+      "enableProxyProtocol": true,
+      "grpc": {
+        "isOn": true,
+        "maxReceiveMessageSize": {
+          "count": 4,
+          "unit": "mb"
+        },
+        "maxSendMessageSize": {
+          "count": 4,
+          "unit": "mb"
+        }
+      },
       "http": {
         "isOn": true,
         "listen": [
@@ -39,6 +50,25 @@
         }
       },
       "id": 123,
+      "locations": [
+        {
+          "isOn": true,
+          "pattern": "/api/",
+          "patternType": "prefix",
+          "priority": 0,
+          "reverseProxy": {
+            "isOn": true,
+            "primaryOrigins": [
+              {
+                "addr": "https://api.origin.example",
+                "id": 1,
+                "isOn": true,
+                "weight": 10
+              }
+            ]
+          }
+        }
+      ],
       "reverseProxy": {
         "backupOrigins": [
           {
@@ -90,11 +120,24 @@
         }
       },
       "trafficLimit": {
+        "dailySize": {
+          "count": 10,
+          "unit": "gb"
+        },
         "downlinkMbps": 8,
         "isOn": true,
         "uplinkMbps": 4
       },
       "web": {
+        "accessLogRef": {
+          "fields": [
+            6,
+            10,
+            20,
+            43
+          ],
+          "isOn": true
+        },
         "auth": {
           "isOn": true,
           "policyRefs": [
@@ -166,7 +209,7 @@
             "name": "cluster-cache",
             "options": {
               "autoPurgeOnUpdate": true,
-              "cacheGeneration": 3388921847357774,
+              "cacheGeneration": 3781326664149617,
               "dir": "/tmp/cloudsidra-contract-cache",
               "ipWriteLimitCount": 5,
               "ipWriteLimitWindowSeconds": 60,
@@ -182,12 +225,30 @@
           "isOn": true
         },
         "ccPolicy": {
+          "blockIP": false,
+          "blockIPDuration": 0,
           "isOn": true,
-          "requestsPerMinute": 30
+          "maxBandwidth": 50,
+          "maxQPS": 100,
+          "noLog": false,
+          "pageDuration": 5,
+          "perIPMaxQPS": 10,
+          "requestsPerMinute": 30,
+          "showPage": true
+        },
+        "charset": {
+          "charset": "utf-8",
+          "force": true,
+          "isOn": true,
+          "isUpper": false
         },
         "compression": {
           "brotli": {
             "isOn": true,
+            "level": 6
+          },
+          "deflate": {
+            "isOn": false,
             "level": 6
           },
           "gzip": {
@@ -308,7 +369,9 @@
           "isOn": true
         },
         "hls": {
-          "isOn": false
+          "encrypting": {
+            "isOn": true
+          }
         },
         "hostRedirects": [
           {
@@ -317,20 +380,35 @@
               "old.example"
             ],
             "isOn": true,
+            "keepArgs": true,
             "keepRequestURI": true,
-            "type": "domain"
+            "matchPrefix": false,
+            "statusCode": 301
           }
         ],
-        "maxQPS": 0,
+        "maxQPS": 1000,
         "optimization": {
           "css": {
-            "isOn": true
+            "isOn": true,
+            "keepCSS2": false,
+            "precision": 0
           },
           "html": {
-            "isOn": true
+            "isOn": true,
+            "keepComments": false,
+            "keepConditionalComments": false,
+            "keepDefaultAttrVals": false,
+            "keepDocumentTags": false,
+            "keepEndTags": false,
+            "keepQuotes": false,
+            "keepWhitespace": false
           },
+          "isOn": true,
           "javascript": {
-            "isOn": true
+            "isOn": true,
+            "keepVarNames": false,
+            "precision": 0,
+            "version": 0
           }
         },
         "pages": [
@@ -339,12 +417,20 @@
             "contentType": "text/plain",
             "id": 1,
             "isOn": true,
-            "status": 403
+            "newStatus": 0,
+            "status": 403,
+            "url": ""
           }
         ],
+        "preferWWW": "",
         "redirectToHttps": {
+          "domains": [
+            "contract.example"
+          ],
+          "exceptDomains": [],
           "host": "",
           "isOn": true,
+          "port": 443,
           "status": 301
         },
         "referers": {
@@ -352,14 +438,30 @@
             "contract.example"
           ],
           "allowEmpty": false,
+          "allowSameDomain": true,
+          "checkOrigin": false,
           "denyDomains": [],
           "isOn": true
+        },
+        "remoteAddr": {
+          "isOn": true,
+          "requestHeaderName": "X-Client-IP",
+          "type": "requestHeader",
+          "values": []
         },
         "requestHeaderPolicy": {
           "deleteHeaders": [
             "X-Remove"
           ],
           "isOn": true,
+          "replaceHeaders": [
+            {
+              "id": 1,
+              "isOn": true,
+              "name": "X-Old",
+              "newValue": "new"
+            }
+          ],
           "setHeaders": [
             {
               "isOn": true,
@@ -390,14 +492,34 @@
         },
         "requestLimit": {
           "isOn": true,
+          "maxBodyBytes": {
+            "count": 10,
+            "unit": "mb"
+          },
           "maxConns": 20,
+          "maxConnsPerIP": 5,
           "rate": 10
         },
         "responseHeaderPolicy": {
+          "cors": {
+            "allowHeaders": [
+              "Authorization"
+            ],
+            "allowMethods": [
+              "GET",
+              "POST"
+            ],
+            "allowOrigin": "https://contract.example",
+            "exposeHeaders": [],
+            "isOn": true,
+            "maxAge": 3600,
+            "optionsMethodOnly": false
+          },
           "deleteHeaders": [
             "Server"
           ],
           "isOn": true,
+          "replaceHeaders": [],
           "setHeaders": [
             {
               "isOn": true,
@@ -410,17 +532,29 @@
           {
             "flags": "i",
             "id": 1,
+            "isBreak": false,
             "isOn": true,
+            "mode": "redirect",
             "pattern": "^/OLD/(.*)$",
-            "replace": "/new/$1"
+            "redirectStatus": 302,
+            "replace": "/new/$1",
+            "withQuery": true
           }
         ],
+        "root": "",
         "shutdown": {
-          "inSeconds": 5,
+          "isOn": false
+        },
+        "statRef": {
           "isOn": true
         },
+        "trailingSlash": "",
         "uam": {
-          "isOn": false
+          "isOn": true,
+          "keyLife": 3600,
+          "minQPSPerIP": 0,
+          "mode": "pow",
+          "powDifficulty": 5
         },
         "userAgent": {
           "filters": [
@@ -440,12 +574,28 @@
           "isOn": true
         },
         "webp": {
-          "isOn": false
+          "extensions": [
+            "jpg"
+          ],
+          "isOn": true,
+          "maxLength": {
+            "count": 10,
+            "unit": "mb"
+          },
+          "mimeTypes": [
+            "image/jpeg"
+          ],
+          "minLength": {
+            "count": 1,
+            "unit": "kb"
+          }
         },
         "websocket": {
-          "allowAll": true,
           "allowAllOrigins": true,
-          "isOn": true
+          "allowedOrigins": [],
+          "isOn": true,
+          "requestOrigin": "",
+          "requestSameOrigin": false
         }
       }
     }
