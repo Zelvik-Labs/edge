@@ -3056,20 +3056,8 @@ impl EdgeProxy {
 
         let body = if shutdown.body_type == "html" {
             self.render_page_template(session, ctx, &shutdown.body, shutdown.status)
-        } else if shutdown.url.is_empty() {
-            "The site have been shutdown.".to_string()
         } else {
-            let path = std::path::Path::new(&shutdown.url);
-            if !path.starts_with("pages") && !path.starts_with("/pages") {
-                format!("404 page not found: '{}'", shutdown.url)
-            } else {
-                match tokio::fs::read_to_string(path).await {
-                    Ok(content) => {
-                        self.render_page_template(session, ctx, &content, shutdown.status)
-                    }
-                    Err(_) => format!("404 page not found: '{}'", shutdown.url),
-                }
-            }
+            "The site have been shutdown.".to_string()
         };
 
         let mut resp = pingora_http::ResponseHeader::build(shutdown.status, None).unwrap();
@@ -3117,18 +3105,8 @@ impl EdgeProxy {
 
         let body = if body_type == "html" {
             self.render_page_template(session, ctx, &shutdown.body, status)
-        } else if shutdown.url.is_empty() {
-            "The site have been shutdown.".to_string()
         } else {
-            let path = std::path::Path::new(&shutdown.url);
-            if !path.starts_with("pages") && !path.starts_with("/pages") {
-                format!("404 page not found: '{}'", shutdown.url)
-            } else {
-                match tokio::fs::read_to_string(path).await {
-                    Ok(content) => self.render_page_template(session, ctx, &content, status),
-                    Err(_) => format!("404 page not found: '{}'", shutdown.url),
-                }
-            }
+            "The site have been shutdown.".to_string()
         };
 
         let mut resp = pingora_http::ResponseHeader::build(status, None).unwrap();
