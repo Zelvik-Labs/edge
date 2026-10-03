@@ -94,10 +94,25 @@ pub async fn fetch_snapshot(
         if doc.get("version").and_then(|value| value.as_i64()) != Some(meta.base_version) {
             return Err(Status::data_loss("NodeControl snapshot version mismatch"));
         }
+        // 快照已过 HMAC 认证——其中的 releaseSigning 公钥可信，先钉扎再验签。
+        if let Some(signing) = doc
+            .pointer("/runtime/api/releaseSigning")
+            .and_then(|value| serde_json::from_value::<crate::api_config::ReleaseSigningPush>(value.clone()).ok())
+        {
+            crate::api_config::install_release_signing_key(&signing);
+        }
     } else if meta.base_version != version {
         return Err(Status::data_loss(
             "NodeControl version changed without snapshot",
         ));
+    }
+    // release 级验签：公钥已知时 signature_digest 必须匹配 release_id；
+    // 公钥缺席（旧 API）时跳过并在 verify 内告警。
+    if !response.release_id.is_empty() {
+        crate::api_config::verify_release_signature(&response.release_id, &response.signature_digest)
+            .map_err(|code| {
+                Status::new(code, "NodeControl release signature_digest mismatch")
+            })?;
     }
     Ok(tonic::Response::new(pb::FindCurrentNodeConfigResponse {
         is_changed: response.snapshot_required,

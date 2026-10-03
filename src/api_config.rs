@@ -600,6 +600,16 @@ kernelTuning:
     }
 }
 
+/// 平台 release 验签公钥：随 runtime.api 推送并经 control-plane-runtime.json
+/// 持久化；节点用它校验 GetDesiredReleaseResponse.signature_digest（Ed25519）。
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ReleaseSigningPush {
+    #[serde(default)]
+    pub algorithm: String,
+    #[serde(rename = "publicKey", default)]
+    pub public_key: String,
+}
+
 /// Persisted separately from local credentials so removing an override restores
 /// the original operator configuration. Startup-only changes remain unacknowledged
 /// until restart, rather than claiming that fixed-capacity queues were resized.
@@ -617,9 +627,57 @@ pub struct NodeApiPush {
     /// edge.updateEndpoints), pushed through the RPC channel.
     #[serde(default)]
     pub update: Option<UpdateConfig>,
+    /// 平台签名公钥（hex ed25519）。快照 HMAC 已认证本段内容，公钥来源可信。
+    #[serde(rename = "releaseSigning", default)]
+    pub release_signing: Option<ReleaseSigningPush>,
 }
 static STARTUP_PIPELINE: std::sync::OnceLock<AccessLogPipelineConfig> = std::sync::OnceLock::new();
 static STARTUP_KERNEL_TUNING: std::sync::OnceLock<KernelTuningConfig> = std::sync::OnceLock::new();
+
+/// 已确认的 release 验签公钥：首随认证快照下发，之后持久化在
+/// control-plane-runtime.json；每次 NodeApiPush 合并都刷新钉扎值。
+static RELEASE_SIGNING_PUBKEY: std::sync::RwLock<Option<Vec<u8>>> =
+    std::sync::RwLock::new(None);
+
+/// install_release_signing_key pins the hex-ed25519 public key carried in a
+/// NodeApiPush. Malformed material is ignored — verification then stays off
+/// and the caller still sees an explicit "no key" warn in verify paths.
+pub fn install_release_signing_key(push: &ReleaseSigningPush) {
+    if !push.algorithm.eq_ignore_ascii_case("ed25519") {
+        return;
+    }
+    match hex::decode(push.public_key.trim()) {
+        Ok(key) if key.len() == 32 => {
+            if let Ok(mut slot) = RELEASE_SIGNING_PUBKEY.write() {
+                *slot = Some(key);
+            }
+        }
+        _ => tracing::warn!("ignoring malformed releaseSigning.publicKey in pushed runtime"),
+    }
+}
+
+/// release_signing_pubkey returns the pinned platform key, if any.
+pub fn release_signing_pubkey() -> Option<Vec<u8>> {
+    RELEASE_SIGNING_PUBKEY.read().ok().and_then(|key| key.clone())
+}
+
+/// verify_release_signature checks `signature_digest` as an Ed25519 signature
+/// over `release_id` against the pinned platform key.
+/// 返回 Err 仅当公钥已知且签名不匹配——公钥未知（旧 API 未下发）时跳过并告警。
+pub fn verify_release_signature(release_id: &str, digest: &[u8]) -> Result<(), tonic::Code> {
+    use aws_lc_rs::signature::{UnparsedPublicKey, ED25519};
+    let Some(key) = release_signing_pubkey() else {
+        tracing::warn!("no release signing key pinned; skipping signature_digest verification");
+        return Ok(());
+    };
+    if digest.is_empty() {
+        return Ok(());
+    }
+    UnparsedPublicKey::new(&ED25519, key.as_slice())
+        .verify(release_id.as_bytes(), digest)
+        .map_err(|_| tonic::Code::DataLoss)
+}
+
 impl NodeApiPush {
     fn merge_into(&self, config: &mut ApiConfig) {
         if let Some(value) = &self.relay {
@@ -633,6 +691,9 @@ impl NodeApiPush {
         }
         if let Some(value) = &self.access_log_pipeline {
             config.access_log_pipeline = value.clone();
+        }
+        if let Some(push) = &self.release_signing {
+            install_release_signing_key(push);
         }
     }
     pub fn prepare(&self) -> anyhow::Result<PreparedNodeApiPush> {
@@ -742,6 +803,48 @@ mod pushed_runtime_tests {
         assert!(!temp.exists());
         assert!(!dir.join("control-plane-runtime.json").exists());
         fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod release_signing_tests {
+    use super::*;
+    use aws_lc_rs::signature::{KeyPair, Ed25519KeyPair};
+
+    // 一次生成覆盖本模块全部用例：公钥十六进制 + 对 release_id 签名。
+    fn seeded_keypair() -> (Ed25519KeyPair, Vec<u8>) {
+        let doc = Ed25519KeyPair::generate_pkcs8(&aws_lc_rs::rand::SystemRandom::new()).unwrap();
+        let pair = Ed25519KeyPair::from_pkcs8(doc.as_ref()).unwrap();
+        let pubkey = pair.public_key().as_ref().to_vec();
+        (pair, pubkey)
+    }
+
+    // 全局钉扎槽单测内串行——并行 #[test] 会互相覆盖 RELEASE_SIGNING_PUBKEY。
+    #[test]
+    fn pinned_key_verifies_release_signature() {
+        let (pair, pubkey) = seeded_keypair();
+        install_release_signing_key(&ReleaseSigningPush {
+            algorithm: "ed25519".into(),
+            public_key: hex::encode(&pubkey),
+        });
+        assert_eq!(release_signing_pubkey().as_deref(), Some(pubkey.as_slice()));
+
+        let sig = pair.sign(b"rel-42").as_ref().to_vec();
+        assert!(verify_release_signature("rel-42", &sig).is_ok());
+        assert!(verify_release_signature("rel-43", &sig).is_err());
+        // 空 digest = 无 release 可验，不误拒
+        assert!(verify_release_signature("rel-42", &[]).is_ok());
+
+        // 非法/非 ed25519 输入不破坏已钉扎的 key
+        install_release_signing_key(&ReleaseSigningPush {
+            algorithm: "ed25519".into(),
+            public_key: "zz".into(),
+        });
+        install_release_signing_key(&ReleaseSigningPush {
+            algorithm: "rsa".into(),
+            public_key: hex::encode([0u8; 32]),
+        });
+        assert!(verify_release_signature("rel-42", &sig).is_ok());
     }
 }
 
