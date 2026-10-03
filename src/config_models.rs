@@ -476,28 +476,6 @@ pub struct HTTPPagesPolicy {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
-pub struct DataMapConfig {
-    #[serde(rename = "Map", default, deserialize_with = "deserialize_null_default")]
-    pub r#map: std::collections::HashMap<String, Value>,
-    #[serde(flatten, default)]
-    pub extra: std::collections::HashMap<String, Value>,
-}
-
-impl DataMapConfig {
-    pub fn len(&self) -> usize {
-        self.r#map.len() + self.extra.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.r#map.is_empty() && self.extra.is_empty()
-    }
-
-    pub fn get(&self, key: &str) -> Option<&Value> {
-        self.r#map.get(key).or_else(|| self.extra.get(key))
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct GlobalHTTPAllConfig {
     #[serde(rename = "forceLnRequest", default)]
     pub force_ln_request: bool,
@@ -636,8 +614,6 @@ pub struct NodeConfigPayload {
         deserialize_with = "deserialize_null_default"
     )]
     pub servers: Vec<ServerConfig>,
-    #[serde(rename = "dataMap")]
-    pub data_map: Option<DataMapConfig>,
     #[serde(
         rename = "metricItems",
         default,

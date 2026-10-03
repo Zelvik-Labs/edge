@@ -853,7 +853,7 @@ discover_legacy_units() {
         units+=("$unit")
     done < <(systemctl list-unit-files --type=service --no-legend --no-pager 2>/dev/null \
         | awk '{print $1}' \
-        | grep -E '^(cloud-node|edge-node|flexcdn|goedge|cloudsidra-edge)(-rust)?\.service$' || true)
+        | grep -E '^cloudsidra-edge(-rust)?\.service$' || true)
 
     for unit_file in \
         /etc/systemd/system/*.service \
@@ -863,7 +863,7 @@ discover_legacy_units() {
         [ -e "$unit_file" ] || continue
         unit="$(basename "$unit_file")"
         case "$unit" in
-            cloud-node*.service|edge-node*.service|flexcdn*.service|goedge*.service|cloudsidra-edge*.service)
+            cloudsidra-edge*.service)
                 units+=("$unit")
                 ;;
         esac

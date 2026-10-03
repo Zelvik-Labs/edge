@@ -721,7 +721,7 @@ pub async fn fetch_live_node_config_payload() -> anyhow::Result<NodeConfigPayloa
             version: -1,
             compress: true,
             node_task_version: 0,
-            use_data_map: true,
+            use_data_map: false,
         },
     )))
     .await?;

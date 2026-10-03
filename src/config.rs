@@ -339,8 +339,6 @@ fn cert_data_score(cert: &SSLCertConfig) -> usize {
             Some(serde_json::Value::String(s)) => {
                 if s.contains("-----BEGIN ") {
                     4
-                } else if s.contains("GOEDGE_DATA_MAP:") || s.contains("_DATA_MAP:") {
-                    1
                 } else if s.trim().len() >= 128 {
                     3
                 } else {

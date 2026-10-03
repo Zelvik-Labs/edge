@@ -375,7 +375,7 @@ async fn real_api_config_can_be_fetched_parsed_and_applied() -> anyhow::Result<(
             version: -1,
             compress: true,
             node_task_version: 0,
-            use_data_map: true,
+            use_data_map: false,
         }),
     )
     .await
@@ -555,7 +555,7 @@ async fn real_api_grpc_documentation_snapshot() -> anyhow::Result<()> {
             version: -1,
             compress: true,
             node_task_version: 0,
-            use_data_map: true,
+            use_data_map: false,
         }),
     )
     .await

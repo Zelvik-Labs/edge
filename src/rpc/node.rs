@@ -61,8 +61,6 @@ fn cert_data_score(cert: &crate::config_models::SSLCertConfig) -> usize {
             Some(serde_json::Value::String(s)) => {
                 if s.contains("-----BEGIN ") {
                     4
-                } else if s.contains("GOEDGE_DATA_MAP:") || s.contains("_DATA_MAP:") {
-                    1
                 } else if s.trim().len() >= 128 {
                     3
                 } else {
@@ -126,17 +124,6 @@ fn dedup_ssl_certs(
         .collect()
 }
 
-fn cert_has_data_map_ref(cert: &crate::config_models::SSLCertConfig) -> bool {
-    fn has_ref(value: &Option<serde_json::Value>) -> bool {
-        value
-            .as_ref()
-            .and_then(|value| value.as_str())
-            .map(|value| value.contains("_DATA_MAP:"))
-            .unwrap_or(false)
-    }
-
-    has_ref(&cert.cert_data_json) || has_ref(&cert.key_data_json)
-}
 
 fn collect_enabled_ssl_certs(
     global_certs: &[crate::config_models::SSLCertConfig],
@@ -434,7 +421,7 @@ where
         version: fetch_version,
         compress: true,
         node_task_version: *task_version,
-        use_data_map: true,
+        use_data_map: false,
     });
 
     #[cfg(feature = "node-control")]
@@ -566,7 +553,7 @@ where
                         *config_version
                     };
                     let numeric_id = payload.id.unwrap_or(0);
-                    let mut payload_servers = std::mem::take(&mut payload.servers);
+                    let payload_servers = std::mem::take(&mut payload.servers);
 
                     debug!(
                         "Successfully parsed NodeConfigPayload. Numeric ID: {}, Server count: {}",
@@ -783,134 +770,6 @@ where
                         }
                     }
 
-                    let has_data_map_refs = payload.ssl_certs.iter().any(cert_has_data_map_ref)
-                        || payload
-                            .ssl_policy
-                            .as_ref()
-                            .is_some_and(|policy| policy.certs.iter().any(cert_has_data_map_ref))
-                        || payload_servers.iter().any(|server| {
-                            server
-                                .https
-                                .as_ref()
-                                .and_then(|https| https.ssl_policy.as_ref())
-                                .is_some_and(|policy| {
-                                    policy.certs.iter().any(cert_has_data_map_ref)
-                                })
-                        });
-
-                    if let Some(dm) = &payload.data_map {
-                        tracing::debug!(
-                            "RPC_NODE: DataMap found with {} entries. Restoring certificates...",
-                            dm.len()
-                        );
-                        let mut restored_count = 0;
-                        let mut restore_cert = |cert: &mut crate::config_models::SSLCertConfig| {
-                            use base64::{Engine as _, engine::general_purpose};
-                            fn value_to_ref_string(value: &serde_json::Value) -> Option<String> {
-                                fn decode_ref_candidate(raw: &str) -> Option<String> {
-                                    let encoded = raw.strip_prefix("base64:").unwrap_or(raw);
-                                    general_purpose::STANDARD
-                                        .decode(encoded.trim())
-                                        .or_else(|_| {
-                                            general_purpose::STANDARD_NO_PAD.decode(encoded.trim())
-                                        })
-                                        .ok()
-                                        .map(|decoded| {
-                                            String::from_utf8_lossy(&decoded).to_string()
-                                        })
-                                }
-
-                                match value {
-                                    serde_json::Value::String(s) => {
-                                        if s.contains("GOEDGE_DATA_MAP:")
-                                            || s.contains("_DATA_MAP:")
-                                        {
-                                            return Some(s.clone());
-                                        }
-                                        if let Some(decoded) = decode_ref_candidate(s)
-                                            && (decoded.contains("GOEDGE_DATA_MAP:")
-                                                || decoded.contains("_DATA_MAP:"))
-                                        {
-                                            return Some(decoded);
-                                        }
-                                        Some(s.clone())
-                                    }
-                                    serde_json::Value::Array(items) => {
-                                        let mut bytes = Vec::with_capacity(items.len());
-                                        for item in items {
-                                            let byte = item.as_u64()?;
-                                            if byte > u8::MAX as u64 {
-                                                return None;
-                                            }
-                                            bytes.push(byte as u8);
-                                        }
-                                        Some(String::from_utf8_lossy(&bytes).to_string())
-                                    }
-                                    _ => None,
-                                }
-                            }
-                            let mut process_field = |val: &mut Option<serde_json::Value>| {
-                                if let Some(current) = val {
-                                    let Some(raw_ref) = value_to_ref_string(current) else {
-                                        return;
-                                    };
-
-                                    if raw_ref.contains("GOEDGE_DATA_MAP:")
-                                        || raw_ref.contains("_DATA_MAP:")
-                                    {
-                                        if let Some(real_val) = dm.get(&raw_ref) {
-                                            *val = Some(real_val.clone());
-                                            restored_count += 1;
-                                        } else {
-                                            tracing::warn!(
-                                                "RPC_NODE: DataMap reference {} not found in map",
-                                                raw_ref
-                                            );
-                                        }
-                                    }
-                                }
-                            };
-                            process_field(&mut cert.cert_data_json);
-                            process_field(&mut cert.key_data_json);
-                        };
-
-                        for cert in &mut payload.ssl_certs {
-                            restore_cert(cert);
-                        }
-                        if let Some(policy) = &mut payload.ssl_policy {
-                            for cert in &mut policy.certs {
-                                restore_cert(cert);
-                            }
-                        }
-                        for server in &mut payload_servers {
-                            if let Some(https) = &mut server.https
-                                && let Some(policy) = &mut https.ssl_policy
-                            {
-                                for cert in &mut policy.certs {
-                                    restore_cert(cert);
-                                }
-                            }
-                            if let Some(rp) = &mut server.reverse_proxy {
-                                for origin in rp
-                                    .primary_origins
-                                    .iter_mut()
-                                    .chain(rp.backup_origins.iter_mut())
-                                {
-                                    if let Some(cert) = &mut origin.cert {
-                                        restore_cert(cert);
-                                    }
-                                }
-                            }
-                        }
-                        tracing::debug!(
-                            "RPC_NODE: Restored {} fields from DataMap",
-                            restored_count
-                        );
-                    } else if has_data_map_refs {
-                        tracing::warn!(
-                            "RPC_NODE: DataMap references found but NO DataMap in payload. Certificates will fail to parse."
-                        );
-                    }
 
                     let node_level = payload.level;
                     let parent_nodes = Arc::new(
