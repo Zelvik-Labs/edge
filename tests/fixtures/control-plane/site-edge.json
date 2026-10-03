@@ -204,7 +204,7 @@
             "name": "cluster-cache",
             "options": {
               "autoPurgeOnUpdate": true,
-              "cacheGeneration": 687776827598374,
+              "cacheGeneration": 902279990871855,
               "dir": "/tmp/cloudsidra-contract-cache",
               "ipWriteLimitCount": 5,
               "ipWriteLimitWindowSeconds": 60,
@@ -417,7 +417,6 @@
             "url": ""
           }
         ],
-        "preferWWW": "",
         "redirectToHttps": {
           "domains": [
             "contract.example"
@@ -536,14 +535,12 @@
             "withQuery": true
           }
         ],
-        "root": "",
         "shutdown": {
           "isOn": false
         },
         "statRef": {
           "isOn": true
         },
-        "trailingSlash": "",
         "uam": {
           "isOn": true,
           "keyLife": 3600,
