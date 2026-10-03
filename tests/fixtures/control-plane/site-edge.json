@@ -130,12 +130,7 @@
       },
       "web": {
         "accessLogRef": {
-          "fields": [
-            6,
-            10,
-            20,
-            43
-          ],
+          "fields": [],
           "isOn": true
         },
         "auth": {
@@ -209,7 +204,7 @@
             "name": "cluster-cache",
             "options": {
               "autoPurgeOnUpdate": true,
-              "cacheGeneration": 3781326664149617,
+              "cacheGeneration": 687776827598374,
               "dir": "/tmp/cloudsidra-contract-cache",
               "ipWriteLimitCount": 5,
               "ipWriteLimitWindowSeconds": 60,
