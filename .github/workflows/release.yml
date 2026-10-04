@@ -248,7 +248,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ORIGINAL_BINARY="cloudsidra-edge"
+          # Cargo [[bin]] name 区分大小写：产物是 CloudSidra-Edge，包内重命名为小写。
+          ORIGINAL_BINARY="CloudSidra-Edge"
           TARGET_BINARY="cloudsidra-edge"
           PACKAGE_NAME="CloudSidra-Edge-${{ matrix.name }}"
 

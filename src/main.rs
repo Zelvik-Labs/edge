@@ -1717,7 +1717,14 @@ fn cmdline_contains_management_command(cmdline: &[u8]) -> bool {
 
 #[cfg(any(target_os = "linux", test))]
 fn is_cloudsidra_edge_binary_name(name: &str) -> bool {
-    matches!(name, "cloudsidra-edge" | "cloud-node" | "cloud-node-rust")
+    // "CloudSidra-Edge" is the Cargo artifact name (target/release/CloudSidra-Edge);
+    // release tarballs rename it to "cloudsidra-edge". Both must be recognized or
+    // check_running misses the daemon, removes its live pid file, and restart
+    // leaves two instances split-brained on the same config.
+    matches!(
+        name,
+        "cloudsidra-edge" | "CloudSidra-Edge" | "cloud-node" | "cloud-node-rust"
+    )
 }
 
 #[cfg(target_os = "linux")]
