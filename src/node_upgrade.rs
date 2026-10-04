@@ -29,6 +29,19 @@ fn unix_timestamp() -> u64 {
         .unwrap_or(0)
 }
 
+/// Path to the on-disk executable file. On Linux, once the running binary's
+/// file has been replaced or removed (an earlier atomic swap, a package
+/// manager replacing the file), /proc/self/exe reports "<path> (deleted)",
+/// which neither canonicalize() nor Command::new() can use. Strip the marker
+/// so callers operate on the install path where the new binary now lives.
+fn current_exe_install_path() -> anyhow::Result<PathBuf> {
+    let exe = std::env::current_exe()?;
+    match exe.to_str().and_then(|p| p.strip_suffix(" (deleted)")) {
+        Some(stripped) => Ok(PathBuf::from(stripped)),
+        None => Ok(exe),
+    }
+}
+
 fn cpuinfo_has_flag(cpuinfo: &str, flag: &str) -> bool {
     cpuinfo
         .split(|ch: char| ch.is_ascii_whitespace() || ch == ':')
@@ -348,7 +361,7 @@ pub async fn execute_node_upgrade(
         }
         let payload = extract_release_payload(&archive_path, &tmp_dir)?;
 
-        let install_binary = std::env::current_exe()?.canonicalize()?;
+        let install_binary = current_exe_install_path()?.canonicalize()?;
         let backup_dir = PathBuf::from(DEFAULT_BACKUP_DIR);
         let backup = backup_current_binary(&install_binary, &backup_dir, &meta.version)?;
         info!("current binary backed up to {}", backup.display());
@@ -439,7 +452,7 @@ pub fn schedule_upgrade_restart() -> anyhow::Result<()> {
             return Ok(());
         }
     }
-    Command::new(std::env::current_exe()?)
+    Command::new(current_exe_install_path()?)
         .arg("restart")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
