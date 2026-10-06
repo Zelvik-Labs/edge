@@ -101,9 +101,7 @@ impl TimingWheel {
     pub fn new() -> Self {
         Self {
             now_us: 0,
-            slots: std::array::from_fn(|_| {
-                (0..SLOTS).map(|_| VecDeque::new()).collect()
-            }),
+            slots: std::array::from_fn(|_| (0..SLOTS).map(|_| VecDeque::new()).collect()),
             slot_min: [[u64::MAX; SLOTS]; LEVELS],
             generation: 0,
             len: 0,
@@ -146,7 +144,10 @@ impl TimingWheel {
         self.slot_min[level][slot] = self.slot_min[level][slot].min(due_us);
         self.len += 1;
         self.min_due_us = self.min_due_us.min(due_us);
-        WheelToken { generation: g, due_us }
+        WheelToken {
+            generation: g,
+            due_us,
+        }
     }
 
     /// Advance the wheel epoch; cascade every coarse slot whose covered
@@ -307,7 +308,8 @@ pub struct MinHeapSched {
 impl MinHeapSched {
     pub fn schedule(&mut self, flow: FlowId, due: TransportInstant) {
         self.seq += 1;
-        self.heap.push(std::cmp::Reverse((due.micros(), self.seq, flow)));
+        self.heap
+            .push(std::cmp::Reverse((due.micros(), self.seq, flow)));
     }
     pub fn pop_due(&mut self, now: TransportInstant) -> Option<FlowId> {
         if let Some(&std::cmp::Reverse((due, _, _))) = self.heap.peek()
@@ -570,7 +572,13 @@ impl Scheduler {
 
     /// Grant a bounded worker lease against the node budget (§4
     /// worker 有界租约). Bounded bytes + expiry + generation.
-    pub fn grant_lease(&mut self, worker: u32, bytes: u64, ttl: Duration, now: TransportInstant) -> Lease {
+    pub fn grant_lease(
+        &mut self,
+        worker: u32,
+        bytes: u64,
+        ttl: Duration,
+        now: TransportInstant,
+    ) -> Lease {
         self.lease_gen += 1;
         let lease = Lease {
             bytes,

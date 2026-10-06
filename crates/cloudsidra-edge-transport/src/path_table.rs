@@ -22,8 +22,8 @@
 //!   and calls `lookup` with each candidate key — keeping this table
 //!   a plain map avoids hiding per-prefix merge policy here).
 
-use crate::edgecc::PathPrior;
 use crate::TransportInstant;
+use crate::edgecc::PathPrior;
 use std::collections::BTreeMap;
 use std::net::IpAddr;
 use std::time::Duration;
@@ -168,8 +168,7 @@ impl PathTable {
                     e.bw_bps += g * (s.bw_bps as f64 - e.bw_bps);
                 }
                 if s.base_rtt > Duration::ZERO {
-                    e.base_rtt_us +=
-                        g * (s.base_rtt.as_micros() as f64 - e.base_rtt_us);
+                    e.base_rtt_us += g * (s.base_rtt.as_micros() as f64 - e.base_rtt_us);
                 }
                 e.p_rand += g * (s.p_rand - e.p_rand);
                 e.alpha += g * (s.alpha - e.alpha);
@@ -193,10 +192,7 @@ impl PathTable {
                         p_rand: s.p_rand,
                         alpha: s.alpha,
                         reorder: s.reorder,
-                        connect_rtt_us: s
-                            .connect_rtt
-                            .map(|c| c.as_micros() as f64)
-                            .unwrap_or(0.0),
+                        connect_rtt_us: s.connect_rtt.map(|c| c.as_micros() as f64).unwrap_or(0.0),
                         fail_rate: if s.failed { 1.0 } else { 0.0 },
                         samples: 1,
                         updated_at: now.micros(),
@@ -259,12 +255,20 @@ impl PathTable {
         match (base, dst) {
             (IpAddr::V4(b), IpAddr::V4(d)) => {
                 let bits = len.min(32);
-                let mask = if bits == 0 { 0 } else { u32::MAX << (32 - bits) };
+                let mask = if bits == 0 {
+                    0
+                } else {
+                    u32::MAX << (32 - bits)
+                };
                 (u32::from(*b) & mask) == (u32::from(*d) & mask)
             }
             (IpAddr::V6(b), IpAddr::V6(d)) => {
                 let bits = len.min(128);
-                let mask = if bits == 0 { 0 } else { u128::MAX << (128 - bits) };
+                let mask = if bits == 0 {
+                    0
+                } else {
+                    u128::MAX << (128 - bits)
+                };
                 (u128::from(*b) & mask) == (u128::from(*d) & mask)
             }
             _ => false,
@@ -363,13 +367,11 @@ mod tests {
         assert_eq!(p.bw_bps, 5_000_000);
         assert!(p.confidence > 0.0 && p.confidence < 1.0);
         // Aged 4 half-lives: confidence should be ~1/16 of sample part.
-        let old = TransportInstant::from_micros(
-            1_000_000 + 4 * CONFIDENCE_HALF_LIFE.as_micros() as u64,
-        );
+        let old =
+            TransportInstant::from_micros(1_000_000 + 4 * CONFIDENCE_HALF_LIFE.as_micros() as u64);
         // TTL not yet hit (4×900s = 3600s boundary) — just under.
-        let just = TransportInstant::from_micros(
-            1_000_000 + Duration::from_secs(3599).as_micros() as u64,
-        );
+        let just =
+            TransportInstant::from_micros(1_000_000 + Duration::from_secs(3599).as_micros() as u64);
         let p2 = t.lookup(&key(0), just);
         // confidence decayed below MIN_CONFIDENCE → None.
         assert!(p2.is_none() || p2.unwrap().confidence < 0.2);
@@ -388,11 +390,7 @@ mod tests {
             ..Default::default()
         };
         for i in 0..8 {
-            t.record(
-                key(0),
-                empty,
-                TransportInstant::from_micros(1_000_000 + i),
-            );
+            t.record(key(0), empty, TransportInstant::from_micros(1_000_000 + i));
         }
         let p = t.lookup(&key(0), now).expect("prior survives");
         assert_eq!(p.bw_bps, 5_000_000);

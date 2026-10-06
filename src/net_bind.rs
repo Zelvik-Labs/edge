@@ -174,15 +174,14 @@ impl UdpBatchReceiver {
                 unsafe {
                     *storage.view_as::<libc::sockaddr_storage>() = *address;
                 }
-                let peer_addr =
-                    unsafe { SockAddr::new(storage, message.msg_hdr.msg_namelen) }
-                        .as_socket()
-                        .ok_or_else(|| {
-                            io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                "UDP recvmmsg returned a non-IP peer address",
-                            )
-                        })?;
+                let peer_addr = unsafe { SockAddr::new(storage, message.msg_hdr.msg_namelen) }
+                    .as_socket()
+                    .ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "UDP recvmmsg returned a non-IP peer address",
+                        )
+                    })?;
                 let len = message.msg_len as usize;
                 datagrams.push(ReceivedUdpDatagram {
                     peer_addr,

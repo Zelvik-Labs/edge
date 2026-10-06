@@ -194,7 +194,7 @@ impl AfXdpDialRegistry {
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.subsec_nanos())
                     .unwrap_or(0))
-                    .max(1),
+                .max(1),
             ),
         }
     }
@@ -297,10 +297,7 @@ impl AfXdpDialRegistry {
             self.owners.remove(flow);
             return;
         };
-        match tx.try_send(AfXdpReactorRequest::PmtuUpdate {
-            flow: *flow,
-            mtu,
-        }) {
+        match tx.try_send(AfXdpReactorRequest::PmtuUpdate { flow: *flow, mtu }) {
             Ok(()) => {}
             Err(mpsc::error::TrySendError::Full(_)) => {
                 tracing::warn!(
@@ -405,9 +402,7 @@ impl AfXdpDialRegistry {
         }
         let route = tokio::task::spawn_blocking(move || linux::resolve_outbound_route(target))
             .await
-            .map_err(|err| {
-                io::Error::other(format!("AF_XDP route resolution task failed: {err}"))
-            })?
+            .map_err(|err| io::Error::other(format!("AF_XDP route resolution task failed: {err}")))?
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::NotFound,
@@ -416,8 +411,7 @@ impl AfXdpDialRegistry {
             })?;
         let route = Arc::new(route);
         if self.route_cache.len() >= AF_XDP_DIAL_ROUTE_CACHE_MAX {
-            self.route_cache
-                .retain(|_, entry| entry.expires_at > now);
+            self.route_cache.retain(|_, entry| entry.expires_at > now);
             if self.route_cache.len() >= AF_XDP_DIAL_ROUTE_CACHE_MAX
                 && let Some(oldest) = self
                     .route_cache
@@ -462,9 +456,7 @@ impl AfXdpDialRegistry {
         let (queue, request_tx) = self.pick_queue(&interface, remote).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotConnected,
-                format!(
-                    "AF_XDP dial to {remote}: no live reactor queue on interface {interface}"
-                ),
+                format!("AF_XDP dial to {remote}: no live reactor queue on interface {interface}"),
             )
         })?;
         let owner = AfXdpDialOwner {
@@ -773,8 +765,7 @@ impl AfXdpDialRegistry {
         for flow in &splice_flows {
             self.teardown_splice(flow);
         }
-        let flows: Vec<AfXdpTcpFlowKey> =
-            self.owners.iter().map(|entry| *entry.key()).collect();
+        let flows: Vec<AfXdpTcpFlowKey> = self.owners.iter().map(|entry| *entry.key()).collect();
         for flow in &flows {
             self.release(flow);
         }
@@ -969,8 +960,7 @@ impl AfXdpUdpSocket {
         match rx.poll_recv(cx) {
             std::task::Poll::Ready(Some(AfXdpUdpIngress::Datagram(datagram))) => {
                 crate::udp_proxy::note_udp_sock_ingress_age_ms(
-                    crate::udp_proxy::udp_activity_now_ms()
-                        .saturating_sub(datagram.enqueued_ms),
+                    crate::udp_proxy::udp_activity_now_ms().saturating_sub(datagram.enqueued_ms),
                 );
                 let len = datagram.payload.len().min(buf.len());
                 buf[..len].copy_from_slice(&datagram.payload[..len]);
@@ -1002,8 +992,7 @@ impl AfXdpUdpSocket {
             Some(AfXdpUdpIngress::IcmpError { mtu }) => Err(self.icmp_error(mtu)),
             Some(AfXdpUdpIngress::Datagram(datagram)) => {
                 crate::udp_proxy::note_udp_sock_ingress_age_ms(
-                    crate::udp_proxy::udp_activity_now_ms()
-                        .saturating_sub(datagram.enqueued_ms),
+                    crate::udp_proxy::udp_activity_now_ms().saturating_sub(datagram.enqueued_ms),
                 );
                 Ok(datagram.payload)
             }
@@ -1036,8 +1025,7 @@ impl AfXdpUdpSocket {
                 1280
             };
             let mtu = mtu.max(floor);
-            self.path_mtu
-                .store(mtu as usize, Ordering::Relaxed);
+            self.path_mtu.store(mtu as usize, Ordering::Relaxed);
             // EMSGSIZE once, kernel error-queue style.
             return io::Error::from_raw_os_error(libc::EMSGSIZE);
         }
@@ -1239,7 +1227,12 @@ mod tests {
             udp_tx: None,
         };
         let tcp_flow = registry
-            .claim_flow(source, "198.51.100.6:443".parse().unwrap(), &tcp_owner, None)
+            .claim_flow(
+                source,
+                "198.51.100.6:443".parse().unwrap(),
+                &tcp_owner,
+                None,
+            )
             .expect("tcp claim");
         registry.notify_icmp(&tcp_flow, Some(1280));
         assert!(matches!(

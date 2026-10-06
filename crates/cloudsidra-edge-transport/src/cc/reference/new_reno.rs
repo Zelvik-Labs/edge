@@ -9,9 +9,9 @@
 
 use super::super::parts::Prr;
 use super::super::{CcSnapshot, CongestionController};
+use crate::TransportInstant;
 use crate::rate_sample::RateSample;
 use crate::rtt::RttState;
-use crate::TransportInstant;
 use std::time::Duration;
 
 const MODE_SS: &str = "slow_start";
@@ -99,10 +99,14 @@ impl CongestionController for NewRenoRef {
         }
 
         if self.prr.active {
-            if let Some(cwnd) =
-                self.prr
-                    .on_ack(rs.delivered, rs.cum_ack, in_flight, self.ssthresh, self.mss, rs.now)
-            {
+            if let Some(cwnd) = self.prr.on_ack(
+                rs.delivered,
+                rs.cum_ack,
+                in_flight,
+                self.ssthresh,
+                self.mss,
+                rs.now,
+            ) {
                 self.cwnd = cwnd;
                 if !self.prr.active {
                     self.mode = MODE_CA;
@@ -153,7 +157,13 @@ impl CongestionController for NewRenoRef {
         }
     }
 
-    fn on_ecn_ce(&mut self, now: TransportInstant, _ce_bytes: u64, _delivered: u64, in_flight: u64) {
+    fn on_ecn_ce(
+        &mut self,
+        now: TransportInstant,
+        _ce_bytes: u64,
+        _delivered: u64,
+        in_flight: u64,
+    ) {
         // RFC 3168: reduce once per window; the stack reports CE events as
         // they arrive — repeats inside the same RTT are folded away here.
         if self.ce_responded_at.is_some() {

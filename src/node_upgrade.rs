@@ -173,12 +173,18 @@ pub fn extract_release_payload(
         let path = entry.path()?.into_owned();
         let parts = archive_path_parts(&path);
         if parts == ["cloudsidra-edge"] {
+            if found_binary || !entry.header().entry_type().is_file() {
+                anyhow::bail!("release binary must be a unique regular file");
+            }
             entry.unpack(&binary)?;
             if !binary.is_file() {
                 anyhow::bail!("release archive cloudsidra-edge entry is not a regular file");
             }
             found_binary = true;
         } else if parts == ["data", XDP_EBPF_OBJECT_NAME] {
+            if found_xdp_ebpf_object || !entry.header().entry_type().is_file() {
+                anyhow::bail!("release XDP object must be a unique regular file");
+            }
             entry.unpack(&xdp_ebpf_object)?;
             if !xdp_ebpf_object.is_file() {
                 anyhow::bail!("release archive XDP eBPF object entry is not a regular file");
@@ -195,6 +201,229 @@ pub fn extract_release_payload(
         binary,
         xdp_ebpf_object: found_xdp_ebpf_object.then_some(xdp_ebpf_object),
     })
+}
+
+/// Reject malformed/wrong-machine payloads and probe the program before installation.
+pub fn validate_release_payload(
+    payload: &ExtractedReleasePayload,
+    version: &str,
+) -> anyhow::Result<()> {
+    use std::io::Read;
+    fn elf(path: &Path, machine: u16, types: &[u16]) -> anyhow::Result<()> {
+        let mut header = [0u8; 64];
+        fs::File::open(path)?.read_exact(&mut header)?;
+        if &header[..4] != b"\x7fELF"
+            || header[4] != 2
+            || header[5] != 1
+            || header[6] != 1
+            || u16::from_le_bytes([header[18], header[19]]) != machine
+            || !types.contains(&u16::from_le_bytes([header[16], header[17]]))
+        {
+            anyhow::bail!("invalid ELF format or architecture: {}", path.display());
+        }
+        Ok(())
+    }
+    let machine = match std::env::consts::ARCH {
+        "x86_64" => 62,
+        "aarch64" => 183,
+        other => anyhow::bail!("unsupported upgrade architecture: {other}"),
+    };
+    elf(&payload.binary, machine, &[2, 3])?;
+    let object = payload
+        .xdp_ebpf_object
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("release archive is missing the XDP eBPF object"))?;
+    elf(object, 247, &[1])?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&payload.binary, fs::Permissions::from_mode(0o755))?;
+    }
+    let mut probe = Command::new(&payload.binary)
+        .arg("--version")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()?;
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    loop {
+        if probe.try_wait()?.is_some() {
+            break;
+        }
+        if std::time::Instant::now() >= deadline {
+            probe.kill()?;
+            probe.wait()?;
+            anyhow::bail!("release binary version probe timed out");
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let output = probe.wait_with_output()?;
+    let text = String::from_utf8(output.stdout)?;
+    let reported = text
+        .trim()
+        .strip_prefix("cloudsidra-edge ")
+        .ok_or_else(|| {
+            anyhow::anyhow!("release binary did not report a CloudSidra-Edge version")
+        })?;
+    if !output.status.success()
+        || (version != "latest" && reported != version.trim_start_matches('v'))
+    {
+        anyhow::bail!("release version probe failed: requested {version}, reported {reported}");
+    }
+    Ok(())
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct UpgradeInstallation {
+    binary: PathBuf,
+    binary_backup: PathBuf,
+    object: PathBuf,
+    object_backup: Option<PathBuf>,
+    pub manifest: PathBuf,
+    #[serde(default)]
+    task_id: Option<i64>,
+}
+
+impl UpgradeInstallation {
+    pub fn rollback(&self) -> anyhow::Result<()> {
+        // Restore both members before restarting the old executable.
+        if let Some(backup) = &self.object_backup {
+            let root = self
+                .object
+                .parent()
+                .and_then(Path::parent)
+                .ok_or_else(|| anyhow::anyhow!("invalid object destination"))?;
+            install_xdp_ebpf_object_to_runtime(backup, root)?;
+        } else if self.object.exists() {
+            fs::remove_file(&self.object)?;
+        }
+        replace_binary(&self.binary_backup, &self.binary)?;
+        fs::write(self.manifest.with_extension("result"), b"rolled-back\n")?;
+        Ok(())
+    }
+    pub fn restart_with_rollback(&self) -> anyhow::Result<()> {
+        let restart = || -> anyhow::Result<()> {
+            let status = Command::new("systemctl")
+                .args(["restart", "cloudsidra-edge.service"])
+                .status()?;
+            if !status.success() {
+                anyhow::bail!("service restart failed: {status}");
+            }
+            // Startup failures may occur after systemctl returns. Require stability.
+            for _ in 0..15 {
+                std::thread::sleep(Duration::from_secs(1));
+                if !Command::new("systemctl")
+                    .args(["is-active", "--quiet", "cloudsidra-edge.service"])
+                    .status()?
+                    .success()
+                {
+                    anyhow::bail!("upgraded service did not remain active");
+                }
+            }
+            Ok(())
+        };
+        if let Err(error) = restart() {
+            let stopped = Command::new("systemctl")
+                .args(["stop", "cloudsidra-edge.service"])
+                .status()?;
+            if !stopped.success() {
+                anyhow::bail!(
+                    "upgrade failed ({error}); service stop failed, manual recovery required"
+                );
+            }
+            self.rollback()?;
+            restart().map_err(|restore| {
+                anyhow::anyhow!("upgrade failed ({error}); rollback restart failed: {restore}")
+            })?;
+            anyhow::bail!("upgrade failed and previous binary/eBPF restored: {error}");
+        }
+        fs::write(self.manifest.with_extension("result"), b"process-stable\n")?;
+        Ok(())
+    }
+}
+
+pub fn install_release_payload(
+    payload: &ExtractedReleasePayload,
+    binary: &Path,
+    root: &Path,
+    backup_dir: &Path,
+    version: &str,
+) -> anyhow::Result<UpgradeInstallation> {
+    validate_release_payload(payload, version)?;
+    let dir = backup_dir.join(uuid::Uuid::new_v4().to_string());
+    fs::create_dir_all(&dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
+    }
+    let binary_backup = backup_current_binary(binary, &dir, version)?;
+    let object = root.join("data").join(XDP_EBPF_OBJECT_NAME);
+    let object_backup = if object.exists() {
+        let backup = dir.join(XDP_EBPF_OBJECT_NAME);
+        fs::copy(&object, &backup)?;
+        Some(backup)
+    } else {
+        None
+    };
+    let state = UpgradeInstallation {
+        binary: binary.to_path_buf(),
+        binary_backup,
+        object,
+        object_backup,
+        manifest: dir.join("upgrade.json"),
+        task_id: None,
+    };
+    fs::write(&state.manifest, serde_json::to_vec(&state)?)?;
+    let result = (|| -> anyhow::Result<()> {
+        install_xdp_ebpf_object_to_runtime(
+            payload.xdp_ebpf_object.as_ref().expect("validated payload"),
+            root,
+        )?;
+        replace_binary(&payload.binary, binary)?;
+        Ok(())
+    })();
+    if let Err(error) = result {
+        state.rollback().map_err(|restore| {
+            anyhow::anyhow!("install failed ({error}); rollback failed: {restore}")
+        })?;
+        return Err(error);
+    }
+    Ok(state)
+}
+
+pub fn run_upgrade_guard(manifest: &Path) -> anyhow::Result<()> {
+    let state: UpgradeInstallation = serde_json::from_slice(&fs::read(manifest)?)?;
+    let result = state.restart_with_rollback();
+    if let Some(task_id) = state.task_id {
+        let config_path = ApiConfig::default_paths()
+            .into_iter()
+            .find(|p| p.exists())
+            .ok_or_else(|| {
+                anyhow::anyhow!("upgrade task result not reported: API config missing")
+            })?;
+        let config = ApiConfig::load(config_path)?;
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?
+            .block_on(async {
+                let client = crate::rpc::client::RpcClient::new(&config).await?;
+                let mut service = client.node_task_service();
+                service
+                    .report_node_task_done(crate::pb::ReportNodeTaskDoneRequest {
+                        node_task_id: task_id,
+                        is_ok: result.is_ok(),
+                        error: result
+                            .as_ref()
+                            .err()
+                            .map(|e| format!("{e:#}"))
+                            .unwrap_or_default(),
+                    })
+                    .await?;
+                Ok::<(), anyhow::Error>(())
+            })?;
+    }
+    result
 }
 
 pub fn backup_current_binary(
@@ -291,6 +520,7 @@ pub fn parse_upgrade_task_version(task_type: &str) -> Option<Option<String>> {
 pub async fn execute_node_upgrade(
     api_config: &ApiConfig,
     task_type: &str,
+    task_id: i64,
 ) -> anyhow::Result<bool> {
     let Some(target_version) = parse_upgrade_task_version(task_type) else {
         anyhow::bail!("not an upgradeNode task: {task_type}");
@@ -323,7 +553,7 @@ pub async fn execute_node_upgrade(
     let (base, meta) = resolved
         .ok_or_else(|| last_err.unwrap_or_else(|| anyhow::anyhow!("no usable update endpoint")))?;
 
-    if meta.version == env!("CARGO_PKG_VERSION") {
+    if meta.version.trim_start_matches('v') == env!("CARGO_PKG_VERSION") {
         info!(
             "node already runs {} ({}); upgrade task is a no-op",
             meta.version, meta.filename
@@ -362,19 +592,21 @@ pub async fn execute_node_upgrade(
         let payload = extract_release_payload(&archive_path, &tmp_dir)?;
 
         let install_binary = current_exe_install_path()?.canonicalize()?;
-        let backup_dir = PathBuf::from(DEFAULT_BACKUP_DIR);
-        let backup = backup_current_binary(&install_binary, &backup_dir, &meta.version)?;
-        info!("current binary backed up to {}", backup.display());
-
-        replace_binary(&payload.binary, &install_binary)?;
-        info!("installed new binary at {}", install_binary.display());
-
-        if let Some(object) = payload.xdp_ebpf_object.as_deref() {
-            let runtime_root = crate::paths::NodePaths::current().runtime_root().to_path_buf();
-            match install_xdp_ebpf_object_to_runtime(object, &runtime_root) {
-                Ok(dest) => info!("installed XDP eBPF object to {}", dest.display()),
-                Err(err) => warn!("XDP eBPF object install failed: {err}"),
-            }
+        let root = crate::paths::NodePaths::current()
+            .runtime_root()
+            .to_path_buf();
+        let mut installation = install_release_payload(
+            &payload,
+            &install_binary,
+            &root,
+            Path::new(DEFAULT_BACKUP_DIR),
+            &meta.version,
+        )?;
+        installation.task_id = Some(task_id);
+        fs::write(&installation.manifest, serde_json::to_vec(&installation)?)?;
+        if let Err(error) = schedule_upgrade_restart(&installation.manifest) {
+            installation.rollback()?;
+            return Err(error);
         }
         Ok::<(), anyhow::Error>(())
     }
@@ -432,38 +664,81 @@ fn urlencoding(value: &str) -> String {
 /// is detached: under systemd, PID1 stops this unit and starts the new binary;
 /// without systemd the spawned `restart` subcommand stops this process and
 /// daemonizes a fresh instance.
-pub fn schedule_upgrade_restart() -> anyhow::Result<()> {
-    #[cfg(target_os = "linux")]
-    {
-        let unit_exists = Command::new("systemctl")
-            .args(["cat", "cloudsidra-edge.service"])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map(|status| status.success())
-            .unwrap_or(false);
-        if unit_exists {
-            Command::new("systemctl")
-                .args(["restart", "cloudsidra-edge.service"])
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()?;
-            return Ok(());
-        }
+fn schedule_upgrade_restart(manifest: &Path) -> anyhow::Result<()> {
+    // A transient unit survives the edge unit stopping and owns recovery.
+    let state: UpgradeInstallation = serde_json::from_slice(&fs::read(manifest)?)?;
+    let unit = format!("cloudsidra-edge-upgrade-{}", uuid::Uuid::new_v4());
+    let status = Command::new("systemd-run")
+        .args(["--collect", "--unit", &unit])
+        .arg(format!(
+            "--setenv=CLOUDSIDRA_EDGE_HOME={}",
+            state
+                .object
+                .parent()
+                .and_then(Path::parent)
+                .ok_or_else(|| anyhow::anyhow!("invalid upgrade runtime root"))?
+                .display()
+        ))
+        .arg(&state.binary_backup)
+        .arg("upgrade-guard")
+        .arg("--manifest")
+        .arg(manifest)
+        .status()?;
+    if !status.success() {
+        anyhow::bail!("failed to schedule supervised upgrade: {status}");
     }
-    Command::new(current_exe_install_path()?)
-        .arg("restart")
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejects_non_elf_before_installing() {
+        let dir = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        fs::create_dir_all(&dir).unwrap();
+        let binary = dir.join("new");
+        fs::write(&binary, b"not an executable").unwrap();
+        let installed = dir.join("installed");
+        fs::write(&installed, b"old binary").unwrap();
+        let payload = ExtractedReleasePayload {
+            binary,
+            xdp_ebpf_object: None,
+        };
+        assert!(
+            install_release_payload(&payload, &installed, &dir, &dir.join("backup"), "26.9.0")
+                .is_err()
+        );
+        assert_eq!(fs::read(&installed).unwrap(), b"old binary");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn rollback_restores_both_package_members() {
+        let dir = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        fs::create_dir_all(dir.join("data")).unwrap();
+        let binary = dir.join("installed");
+        let binary_backup = dir.join("binary.old");
+        let object = dir.join("data").join(XDP_EBPF_OBJECT_NAME);
+        let object_backup = dir.join("object.old");
+        fs::write(&binary, b"new binary").unwrap();
+        fs::write(&binary_backup, b"old binary").unwrap();
+        fs::write(&object, b"new object").unwrap();
+        fs::write(&object_backup, b"old object").unwrap();
+        let state = UpgradeInstallation {
+            binary: binary.clone(),
+            binary_backup,
+            object: object.clone(),
+            object_backup: Some(object_backup),
+            manifest: dir.join("upgrade.json"),
+            task_id: None,
+        };
+        state.rollback().unwrap();
+        assert_eq!(fs::read(binary).unwrap(), b"old binary");
+        assert_eq!(fs::read(object).unwrap(), b"old object");
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn parses_upgrade_task_versions() {

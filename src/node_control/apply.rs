@@ -101,7 +101,8 @@ impl ApplyMachine {
         digest: Vec<u8>,
         payload: Vec<u8>,
     ) {
-        self.journal.install_snapshot(release_id, seq, digest, payload);
+        self.journal
+            .install_snapshot(release_id, seq, digest, payload);
         self.prepared = None;
         self.validated = false;
         self.last_completed = Some(Phase::Apply);
@@ -304,9 +305,7 @@ mod tests {
         };
         m.step(Phase::Prepare, good.clone()).unwrap();
         m.step(Phase::Validate, good.clone()).unwrap();
-        m.step_with_store(Phase::Apply, good, &store)
-            .await
-            .unwrap();
+        m.step_with_store(Phase::Apply, good, &store).await.unwrap();
         assert_eq!(store.get_config_version().await, 2);
         assert!(store.get_server_sync("new.example.test").is_some());
 
@@ -318,7 +317,10 @@ mod tests {
         };
         m.step(Phase::Prepare, bad.clone()).unwrap();
         m.step(Phase::Validate, bad.clone()).unwrap();
-        let err = m.step_with_store(Phase::Apply, bad, &store).await.unwrap_err();
+        let err = m
+            .step_with_store(Phase::Apply, bad, &store)
+            .await
+            .unwrap_err();
         assert!(matches!(err, ApplyError::Store(_)));
         assert_eq!(store.get_config_version().await, 2);
         assert_eq!(m.journal().last_seq(), 2);

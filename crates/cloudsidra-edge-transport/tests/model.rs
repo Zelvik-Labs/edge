@@ -3,10 +3,10 @@
 //! gradient, extra_acked, two-column loss + burst + causal test +
 //! p_rand, alpha, lt_bw policer, delay_signal_quality.
 
+use cloudsidra_edge_transport::TransportInstant;
 use cloudsidra_edge_transport::model::PathModel;
 use cloudsidra_edge_transport::rate_sample::RateSample;
 use cloudsidra_edge_transport::rtt::RttState;
-use cloudsidra_edge_transport::TransportInstant;
 use std::time::Duration;
 
 const MSS: u64 = 1460;
@@ -140,7 +140,17 @@ fn qdelay_and_gradient_track_queue_growth() {
         r.sample(Duration::from_micros(15_000));
     }
     for i in 0..20u64 {
-        let (s, f) = rs(200_000 + i * 15_000, MSS, MSS, 15_000, 15_000, 0, 0, false, 8 * MSS);
+        let (s, f) = rs(
+            200_000 + i * 15_000,
+            MSS,
+            MSS,
+            15_000,
+            15_000,
+            0,
+            0,
+            false,
+            8 * MSS,
+        );
         m.on_rate_sample(&s, f, &r);
     }
     let qd = m.qdelay();
@@ -165,7 +175,17 @@ fn extra_acked_counts_ack_aggregation() {
     assert_eq!(m.extra_acked(), 0);
     // Compressed ACK: 8 segments acked over a 4ms interval — the model
     // expected ~4×MSS; the extra 4×MSS is aggregation over-count.
-    let (s, f) = rs(30_000, 8 * MSS, 8 * MSS, 10_000, 4_000, 0, 0, false, 8 * MSS);
+    let (s, f) = rs(
+        30_000,
+        8 * MSS,
+        8 * MSS,
+        10_000,
+        4_000,
+        0,
+        0,
+        false,
+        8 * MSS,
+    );
     m.on_rate_sample(&s, f, &rtt);
     assert!(m.extra_acked() > 0, "compressed ACK must feed extra_acked");
 }
@@ -236,7 +256,17 @@ fn causal_test_compares_post_speedup_loss_to_baseline() {
     m.note_speedup(t(200_000), Duration::from_secs(1));
     for i in 0..40u64 {
         let lost = if i % 5 == 0 { MSS } else { 0 };
-        let (s, f) = rs(200_000 + i * 1_000, MSS, MSS, 10_000, 1_000, lost, 0, false, 0);
+        let (s, f) = rs(
+            200_000 + i * 1_000,
+            MSS,
+            MSS,
+            10_000,
+            1_000,
+            lost,
+            0,
+            false,
+            0,
+        );
         m.on_rate_sample(&s, f, &rtt);
     }
     let c = m.loss_causation().unwrap();

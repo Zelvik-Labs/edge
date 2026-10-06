@@ -4,10 +4,10 @@
 //! All comparisons are mechanism assertions (state/transitions), not
 //! throughput rankings — T10 owns the ranking.
 
+use cloudsidra_edge_transport::CongestionController;
 use cloudsidra_edge_transport::cc::reference::{Bbr3Ref, LossBlindRef};
 use cloudsidra_edge_transport::edgecc::{EdgeCc, PathPrior, Tier};
-use cloudsidra_edge_transport::CongestionController;
-use cloudsidra_edge_transport::sim::{run, Aqm, Policer, SimConfig, SimResult};
+use cloudsidra_edge_transport::sim::{Aqm, Policer, SimConfig, SimResult, run};
 use std::time::Duration;
 
 const MSS: u64 = 1460;
@@ -70,9 +70,7 @@ fn edgecc_survives_random_loss_paths() {
         assert!(
             res.completed,
             "edgecc failed at loss={loss}: delivered={} drops={} rtos={}",
-            res.delivered_bytes,
-            res.drops,
-            res.rto_events
+            res.delivered_bytes, res.drops, res.rto_events
         );
     }
 }
@@ -229,8 +227,7 @@ fn bbr3_ref_completes_matrix() {
             assert!(
                 res.completed,
                 "bbr3 failed rtt={rtt:?} {mbps}Mbit drops={} rtos={}",
-                res.drops,
-                res.rto_events
+                res.drops, res.rto_events
             );
         }
     }

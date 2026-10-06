@@ -2,11 +2,11 @@
 //! class, RTT decay, DSACK negative evidence, D-D2 public-CE weight
 //! cap, queue_estimate.
 
-use cloudsidra_edge_transport::inference::{weights, Inference, PUBLIC_CE_LO_CAP};
+use cloudsidra_edge_transport::TransportInstant;
+use cloudsidra_edge_transport::inference::{Inference, PUBLIC_CE_LO_CAP, weights};
 use cloudsidra_edge_transport::model::PathModel;
 use cloudsidra_edge_transport::rate_sample::RateSample;
 use cloudsidra_edge_transport::rtt::RttState;
-use cloudsidra_edge_transport::TransportInstant;
 use std::time::Duration;
 
 const MSS: u64 = 1460;
@@ -52,7 +52,14 @@ fn accecn_ce_raises_belief_proportionally() {
     // 20% CE fraction.
     let s = rs(300_000, 10 * MSS, 10_000, 0, 2 * MSS);
     m.on_rate_sample(&s, 8 * MSS, &rtt);
-    let b = inf.on_rate_sample(&s, &m, 8 * MSS, 0, Duration::from_millis(5), Duration::from_millis(10));
+    let b = inf.on_rate_sample(
+        &s,
+        &m,
+        8 * MSS,
+        0,
+        Duration::from_millis(5),
+        Duration::from_millis(10),
+    );
     assert!(b > 0.5, "CE evidence should push belief up, got {b}");
 }
 
@@ -65,7 +72,14 @@ fn public_ce_contribution_is_capped() {
     for i in 0..10u64 {
         let s = rs(300_000 + i * 1_000, 10 * MSS, 10_000, 0, 10 * MSS);
         m.on_rate_sample(&s, 8 * MSS, &rtt);
-        inf.on_rate_sample(&s, &m, 8 * MSS, 0, Duration::from_secs(60), Duration::from_millis(10));
+        inf.on_rate_sample(
+            &s,
+            &m,
+            8 * MSS,
+            0,
+            Duration::from_secs(60),
+            Duration::from_millis(10),
+        );
     }
     assert!(
         inf.log_odds() <= PUBLIC_CE_LO_CAP + 1e-9,
@@ -83,8 +97,22 @@ fn trusted_link_ce_gets_full_weight() {
     for i in 0..10u64 {
         let s = rs(300_000 + i * 1_000, 10 * MSS, 10_000, 0, 10 * MSS);
         m.on_rate_sample(&s, 8 * MSS, &rtt);
-        pub_inf.on_rate_sample(&s, &m, 8 * MSS, 0, Duration::from_secs(60), Duration::from_millis(10));
-        tru_inf.on_rate_sample(&s, &m, 8 * MSS, 0, Duration::from_secs(60), Duration::from_millis(10));
+        pub_inf.on_rate_sample(
+            &s,
+            &m,
+            8 * MSS,
+            0,
+            Duration::from_secs(60),
+            Duration::from_millis(10),
+        );
+        tru_inf.on_rate_sample(
+            &s,
+            &m,
+            8 * MSS,
+            0,
+            Duration::from_secs(60),
+            Duration::from_millis(10),
+        );
     }
     assert!(
         tru_inf.log_odds() > pub_inf.log_odds(),
@@ -131,11 +159,25 @@ fn belief_decays_toward_zero_per_rtt() {
     let mut inf = Inference::new(true);
     let s = rs(300_000, 10 * MSS, 10_000, 0, 5 * MSS);
     m.on_rate_sample(&s, 0, &rtt);
-    let b0 = inf.on_rate_sample(&s, &m, 8 * MSS, 0, Duration::from_secs(60), Duration::from_millis(10));
+    let b0 = inf.on_rate_sample(
+        &s,
+        &m,
+        8 * MSS,
+        0,
+        Duration::from_secs(60),
+        Duration::from_millis(10),
+    );
     // 10 RTTs of silence.
     let s2 = rs(400_000, 0, 10_000, 0, 0);
     m.on_rate_sample(&s2, 0, &rtt);
-    let b1 = inf.on_rate_sample(&s2, &m, 0, 0, Duration::from_secs(60), Duration::from_millis(10));
+    let b1 = inf.on_rate_sample(
+        &s2,
+        &m,
+        0,
+        0,
+        Duration::from_secs(60),
+        Duration::from_millis(10),
+    );
     assert!(b1 < b0, "belief must decay: {b0} -> {b1}");
 }
 
@@ -145,7 +187,14 @@ fn spurious_retx_is_negative_evidence() {
     let mut inf = Inference::new(true);
     let s = rs(300_000, 10 * MSS, 10_000, 0, 5 * MSS);
     m.on_rate_sample(&s, 0, &rtt);
-    let before = inf.on_rate_sample(&s, &m, 8 * MSS, 0, Duration::from_secs(60), Duration::from_millis(10));
+    let before = inf.on_rate_sample(
+        &s,
+        &m,
+        8 * MSS,
+        0,
+        Duration::from_secs(60),
+        Duration::from_millis(10),
+    );
     inf.note_spurious_retx();
     assert!(inf.log_odds() < 0.0 || inf.belief() < before);
 }
@@ -199,7 +248,14 @@ fn plateau_evidence_requires_rising_inflight() {
     for i in 0..6u64 {
         let s = rs(300_000 + i * 1_000, MSS, 10_000, 0, 0);
         m.on_rate_sample(&s, 20 * MSS, &rtt);
-        let b = inf.on_rate_sample(&s, &m, 20 * MSS, MSS as i64, Duration::from_secs(60), Duration::from_millis(10));
+        let b = inf.on_rate_sample(
+            &s,
+            &m,
+            20 * MSS,
+            MSS as i64,
+            Duration::from_secs(60),
+            Duration::from_millis(10),
+        );
         prev_belief = b;
     }
     // Same samples with inflight *not* rising → no plateau evidence.
@@ -208,7 +264,14 @@ fn plateau_evidence_requires_rising_inflight() {
     for i in 0..6u64 {
         let s = rs(300_000 + i * 1_000, MSS, 10_000, 0, 0);
         m2.on_rate_sample(&s, 20 * MSS, &rtt2);
-        inf2.on_rate_sample(&s, &m2, 20 * MSS, 0, Duration::from_secs(60), Duration::from_millis(10));
+        inf2.on_rate_sample(
+            &s,
+            &m2,
+            20 * MSS,
+            0,
+            Duration::from_secs(60),
+            Duration::from_millis(10),
+        );
     }
     assert!(
         prev_belief > inf2.belief(),

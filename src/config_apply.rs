@@ -605,9 +605,8 @@ mod tests {
         assert_eq!(decoded, json.len() as u64);
         drop(payload);
         // Exact fit: the EOF probe must still let the parse complete.
-        let (_, _, decoded) =
-            parse_node_config_from_reader_budgeted(&json[..], json.len() as u64)
-                .expect("exact-fit decode must succeed");
+        let (_, _, decoded) = parse_node_config_from_reader_budgeted(&json[..], json.len() as u64)
+            .expect("exact-fit decode must succeed");
         assert_eq!(decoded, json.len() as u64);
         // Over budget: the stream aborts instead of decoding further.
         assert!(

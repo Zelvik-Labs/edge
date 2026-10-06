@@ -200,7 +200,10 @@ pub(crate) fn ranges_to_map(ranges: &[KernelFilterRange]) -> BTreeMap<RangeKey, 
 }
 
 #[cfg(target_os = "linux")]
-pub(crate) fn configured_queue_statuses(config: &XdpConfig, detail: impl Into<String>) -> Vec<XdpQueueStatus> {
+pub(crate) fn configured_queue_statuses(
+    config: &XdpConfig,
+    detail: impl Into<String>,
+) -> Vec<XdpQueueStatus> {
     let detail = detail.into();
     config
         .interfaces

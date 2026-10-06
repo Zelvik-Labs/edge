@@ -233,7 +233,10 @@ impl RateSampler {
             interval,
             rtt,
             is_app_limited: last.is_app_limited
-                && self.delivered <= self.app_limited_mark.max(last.delivered_at_send + last.len()),
+                && self.delivered
+                    <= self
+                        .app_limited_mark
+                        .max(last.delivered_at_send + last.len()),
             prior_in_flight,
             acked_sacked: newly_acked.iter().map(TxRecord::len).sum(),
             cum_ack,

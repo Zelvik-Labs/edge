@@ -12,9 +12,9 @@
 //!   algorithms**) — NewRenoRef/CubicRef today, Bbr3Ref/LossBlindRef in
 //!   T5 via parameter-pinning of the same code.
 
+use crate::TransportInstant;
 use crate::rate_sample::RateSample;
 use crate::rtt::RttState;
-use crate::TransportInstant;
 use std::time::Duration;
 
 pub mod parts;

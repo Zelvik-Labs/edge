@@ -54,7 +54,13 @@ fn cell(delay_ms: u64, policer_mbps: u64, burst_bytes: u64, link_mbps: u64) {
 
 fn main() {
     for (name, rtt, pm, burst, lm) in [
-        ("rtt80 policer10M burst64K link100M", 80u64, 10u64, 65536u64, 100u64),
+        (
+            "rtt80 policer10M burst64K link100M",
+            80u64,
+            10u64,
+            65536u64,
+            100u64,
+        ),
         ("rtt80 policer10M burst128K link100M", 80, 10, 131072, 100),
         ("rtt80 policer10M burst256K link100M", 80, 10, 262144, 100),
         ("rtt150 policer10M burst128K link100M", 150, 10, 131072, 100),

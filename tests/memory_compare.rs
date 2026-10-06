@@ -94,14 +94,24 @@ fn bench_metrics_cardinality_flood() {
         daily.record(7, 100, &domain, 10, 0, 1, 0, 0, 0);
     }
     let after_daily = rss_bytes();
-    report("daily_domain_tracker", after_top, after_daily, &format!("n={n}"));
+    report(
+        "daily_domain_tracker",
+        after_top,
+        after_daily,
+        &format!("n={n}"),
+    );
 
     let agg = MetricAggregator::new();
     for i in 0..n {
         agg.record(agg_key(&format!("city-{i}")), 10, 1, false);
     }
     let after_agg = rss_bytes();
-    report("metric_aggregator", after_daily, after_agg, &format!("n={n}"));
+    report(
+        "metric_aggregator",
+        after_daily,
+        after_agg,
+        &format!("n={n}"),
+    );
 
     // UniqueIpTracker persists each admitted row — keep N smaller.
     let uniq_n = env_n("BENCH_UNIQUE_N", 150_000);

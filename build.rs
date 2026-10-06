@@ -163,7 +163,10 @@ fn embed_xdp_ebpf_object() -> Result<(), Box<dyn std::error::Error>> {
     if target_os != "linux" {
         // XDP is Linux-only; emit a placeholder so include_bytes compiles.
         fs::write(&dest, b"")?;
-        println!("cargo:rustc-env=CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT={}", dest.display());
+        println!(
+            "cargo:rustc-env=CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT={}",
+            dest.display()
+        );
         return Ok(());
     }
 
@@ -185,15 +188,10 @@ fn embed_xdp_ebpf_object() -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(source) = std::env::var("CLOUDSIDRA_EDGE_XDP_EBPF_SOURCE") {
         let source_path = PathBuf::from(&source);
         let bytes = fs::read(&source_path).map_err(|err| {
-            format!(
-                "CLOUDSIDRA_EDGE_XDP_EBPF_SOURCE={source} is not readable: {err}"
-            )
+            format!("CLOUDSIDRA_EDGE_XDP_EBPF_SOURCE={source} is not readable: {err}")
         })?;
         if bytes.is_empty() {
-            return Err(format!(
-                "CLOUDSIDRA_EDGE_XDP_EBPF_SOURCE={source} is empty"
-            )
-            .into());
+            return Err(format!("CLOUDSIDRA_EDGE_XDP_EBPF_SOURCE={source} is empty").into());
         }
         if let Ok(expected) = std::env::var("CLOUDSIDRA_EDGE_XDP_EBPF_SHA256") {
             let expected = expected.trim().to_ascii_lowercase();
@@ -208,7 +206,10 @@ fn embed_xdp_ebpf_object() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         fs::copy(&source_path, &dest)?;
-        println!("cargo:rustc-env=CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT={}", dest.display());
+        println!(
+            "cargo:rustc-env=CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT={}",
+            dest.display()
+        );
         return Ok(());
     }
 
@@ -253,10 +254,7 @@ fn embed_xdp_ebpf_object() -> Result<(), Box<dyn std::error::Error>> {
             cmd.env_remove(key);
         }
     }
-    let built = cmd
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false);
+    let built = cmd.status().map(|status| status.success()).unwrap_or(false);
 
     let mut source = None;
     if built {
@@ -302,5 +300,9 @@ fn embed_xdp_ebpf_object() -> Result<(), Box<dyn std::error::Error>> {
         .into());
     };
     fs::copy(&source, &dest)?;
-    println!("cargo:rustc-env=CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT={}", dest.display());    Ok(())
+    println!(
+        "cargo:rustc-env=CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT={}",
+        dest.display()
+    );
+    Ok(())
 }

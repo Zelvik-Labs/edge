@@ -8,9 +8,9 @@
 
 use super::super::parts::{HyStart, HystartVerdict, Prr};
 use super::super::{CcSnapshot, CongestionController};
+use crate::TransportInstant;
 use crate::rate_sample::RateSample;
 use crate::rtt::RttState;
-use crate::TransportInstant;
 use std::time::Duration;
 
 const MODE_SS: &str = "slow_start";
@@ -102,9 +102,8 @@ impl CubicRef {
         self.k_seconds = (self.w_max_seg * (1.0 - CUBIC_BETA) / CUBIC_C).cbrt();
         self.epoch_start = None;
         self.epoch_min_rtt = None;
-        self.ssthresh = ((in_flight / 2).max(2 * self.mss)).max(
-            (self.cwnd as f64 * CUBIC_BETA) as u64,
-        );
+        self.ssthresh =
+            ((in_flight / 2).max(2 * self.mss)).max((self.cwnd as f64 * CUBIC_BETA) as u64);
         self.cwnd = (self.cwnd as f64 * CUBIC_BETA) as u64;
         self.cwnd = self.cwnd.max(2 * self.mss);
     }
@@ -149,10 +148,14 @@ impl CongestionController for CubicRef {
         }
 
         if self.prr.active {
-            if let Some(cwnd) =
-                self.prr
-                    .on_ack(rs.delivered, rs.cum_ack, in_flight, self.ssthresh, self.mss, rs.now)
-            {
+            if let Some(cwnd) = self.prr.on_ack(
+                rs.delivered,
+                rs.cum_ack,
+                in_flight,
+                self.ssthresh,
+                self.mss,
+                rs.now,
+            ) {
                 self.cwnd = cwnd;
                 if !self.prr.active {
                     self.mode = MODE_CA;
@@ -175,10 +178,7 @@ impl CongestionController for CubicRef {
                 }
                 // RFC 3465 ABC L=2 per ACK event.
                 self.cwnd = self.cwnd.saturating_add(rs.acked_sacked.min(2 * self.mss));
-                match self
-                    .hystart
-                    .on_ack(rs.rtt, rs.cum_ack, self.sent_total)
-                {
+                match self.hystart.on_ack(rs.rtt, rs.cum_ack, self.sent_total) {
                     HystartVerdict::Exit => {
                         self.leave_slow_start(rs.now, "hystart");
                         return;
@@ -200,7 +200,10 @@ impl CongestionController for CubicRef {
                 }
                 let cwnd_seg = (self.cwnd / self.mss).max(1) as f64;
                 let acked_seg = (rs.acked_sacked / self.mss).max(1) as f64;
-                let rtt_est = self.epoch_min_rtt.or(rs.rtt).unwrap_or(Duration::from_millis(1));
+                let rtt_est = self
+                    .epoch_min_rtt
+                    .or(rs.rtt)
+                    .unwrap_or(Duration::from_millis(1));
                 // Friendly region wins when W_est exceeds the cubic curve.
                 let target = self.w_cubic(t).max(self.w_est(t, rtt_est));
                 if target > cwnd_seg {
@@ -244,7 +247,13 @@ impl CongestionController for CubicRef {
         }
     }
 
-    fn on_ecn_ce(&mut self, now: TransportInstant, _ce_bytes: u64, _delivered: u64, in_flight: u64) {
+    fn on_ecn_ce(
+        &mut self,
+        now: TransportInstant,
+        _ce_bytes: u64,
+        _delivered: u64,
+        in_flight: u64,
+    ) {
         if self.ce_responded_at.is_some() {
             return;
         }

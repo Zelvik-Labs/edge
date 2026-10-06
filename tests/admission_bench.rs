@@ -70,7 +70,10 @@ fn bench_admission_throughput() {
                 for _ in 0..iters {
                     let permit = if pooled {
                         bucket
-                            .spend(class, cloudsidra_edge::memory_governor::class_estimated_bytes(class))
+                            .spend(
+                                class,
+                                cloudsidra_edge::memory_governor::class_estimated_bytes(class),
+                            )
                             .map(cloudsidra_edge::memory_ticket::WorkspacePermit::Pooled)
                     } else {
                         MEMORY_GOVERNOR

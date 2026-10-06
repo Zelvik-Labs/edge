@@ -332,7 +332,10 @@ async fn bind_backend_socket(
     if let Some(addr) = preferred
         && let Ok(socket) = UdpSocket::bind(addr).await
     {
-        debug!("UDP session {} reused upstream address {}", session_id, addr);
+        debug!(
+            "UDP session {} reused upstream address {}",
+            session_id, addr
+        );
         return Ok(socket);
     }
     UdpSocket::bind(fallback_addr).await
@@ -595,11 +598,7 @@ struct InflightLeaderGuard<'a> {
 impl Drop for InflightLeaderGuard<'_> {
     fn drop(&mut self) {
         {
-            let mut result = self
-                .flight
-                .result
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut result = self.flight.result.lock().unwrap_or_else(|e| e.into_inner());
             if result.is_none() {
                 *result = Some(Err(Arc::new(anyhow::anyhow!(
                     "UDP DNS lookup cancelled before completing"
@@ -662,26 +661,23 @@ impl UdpDnsResolutionCache {
             };
             // Bound a blackholed resolver: getaddrinfo retries can otherwise
             // pin the inflight entry (and every follower) for tens of seconds.
-            let result = tokio::time::timeout(
-                Duration::from_secs(15),
-                lookup(lookup_addr.clone()),
-            )
-            .await
-            .map_err(|_| {
-                anyhow::anyhow!("UDP backend address {} resolution timed out", lookup_addr)
-            })
-            .and_then(|outcome| outcome)
-            .and_then(|addrs| {
-                if addrs.is_empty() {
-                    Err(anyhow::anyhow!(
-                        "UDP backend address {} resolved no addresses",
-                        lookup_addr
-                    ))
-                } else {
-                    Ok(Arc::new(addrs))
-                }
-            })
-            .map_err(Arc::new);
+            let result = tokio::time::timeout(Duration::from_secs(15), lookup(lookup_addr.clone()))
+                .await
+                .map_err(|_| {
+                    anyhow::anyhow!("UDP backend address {} resolution timed out", lookup_addr)
+                })
+                .and_then(|outcome| outcome)
+                .and_then(|addrs| {
+                    if addrs.is_empty() {
+                        Err(anyhow::anyhow!(
+                            "UDP backend address {} resolved no addresses",
+                            lookup_addr
+                        ))
+                    } else {
+                        Ok(Arc::new(addrs))
+                    }
+                })
+                .map_err(Arc::new);
             if let Ok(addrs) = &result {
                 self.cache.insert(key.clone(), addrs.clone());
             }
@@ -693,7 +689,12 @@ impl UdpDnsResolutionCache {
             }
         } else {
             loop {
-                if let Some(result) = flight.result.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+                if let Some(result) = flight
+                    .result
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone()
+                {
                     return match result {
                         Ok(addrs) => select_udp_backend_addr(&addrs, &lookup_addr, client_ip),
                         Err(err) => Err(anyhow::anyhow!(err.to_string())),
@@ -703,11 +704,8 @@ impl UdpDnsResolutionCache {
                 // result published between the check above and our first poll
                 // of `notified()` would sleep forever. Re-check on a bounded
                 // interval instead of trusting the wake alone.
-                let _ = tokio::time::timeout(
-                    Duration::from_secs(1),
-                    flight.notify.notified(),
-                )
-                .await;
+                let _ =
+                    tokio::time::timeout(Duration::from_secs(1), flight.notify.notified()).await;
             }
         }
     }
@@ -1714,7 +1712,12 @@ impl UdpProxyManager {
         if !is_creator {
             loop {
                 let notified = flight.notify.notified();
-                if let Some(result) = flight.result.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+                if let Some(result) = flight
+                    .result
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone()
+                {
                     return result.map_err(|err| anyhow::anyhow!(err.to_string()));
                 }
                 notified.await;
@@ -1939,12 +1942,9 @@ impl UdpProxyManager {
         // One-shot reuse: a session recreated for the same key after churn
         // tries to keep the previous upstream port so tuple-pinned peers keep
         // working. The entry is consumed whether the rebind succeeds or not.
-        let preferred_backend_bind = recent_upstream_ports
-            .remove(&key)
-            .and_then(|(_, entry)| {
-                (entry.recorded_at.elapsed() <= UDP_UPSTREAM_PORT_REUSE_TTL)
-                    .then_some(entry.local_addr)
-            });
+        let preferred_backend_bind = recent_upstream_ports.remove(&key).and_then(|(_, entry)| {
+            (entry.recorded_at.elapsed() <= UDP_UPSTREAM_PORT_REUSE_TTL).then_some(entry.local_addr)
+        });
         self.sessions.insert(key, session.clone());
 
         self.spawn_session_work(async move {
@@ -2636,9 +2636,7 @@ mod tests {
                         key,
                         "cancelled.example:18443".to_string(),
                         "127.0.0.1".parse().unwrap(),
-                        |_| async {
-                            panic!("follower must not become leader mid-flight")
-                        },
+                        |_| async { panic!("follower must not become leader mid-flight") },
                     )
                     .await
             })
@@ -3220,9 +3218,7 @@ mod tests {
         let (shutdown_tx, shutdown) = watch::channel(false);
         let session = UdpSession {
             id: 1,
-            client_addr: Arc::new(ArcSwap::from_pointee(
-                "127.0.0.1:50000".parse().unwrap(),
-            )),
+            client_addr: Arc::new(ArcSwap::from_pointee("127.0.0.1:50000".parse().unwrap())),
             listen_port: 443,
             backend_addr: "127.0.0.1:20000".parse().unwrap(),
             origin_id: 1,

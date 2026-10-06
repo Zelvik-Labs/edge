@@ -340,8 +340,7 @@ mod linux {
     static IPTABLES_QUEUE_DROPPED: AtomicU64 = AtomicU64::new(0);
     static IPTABLES_QUEUE_LAST_WARNING: AtomicI64 = AtomicI64::new(0);
     static IP6TABLES_AVAILABLE: AtomicBool = AtomicBool::new(false);
-    type KernelSnapshotProvider =
-        std::sync::Arc<dyn Fn() -> KernelFilterSnapshot + Send + Sync>;
+    type KernelSnapshotProvider = std::sync::Arc<dyn Fn() -> KernelFilterSnapshot + Send + Sync>;
     static KERNEL_SNAPSHOT_PROVIDER: OnceLock<std::sync::Mutex<Option<KernelSnapshotProvider>>> =
         OnceLock::new();
 

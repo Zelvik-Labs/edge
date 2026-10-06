@@ -1442,9 +1442,8 @@ impl TcpProxyManager {
                 self.record_backend_connect_failure(client_addr, &server, &mut context);
                 return Err(err.into());
             }
-            let backend_stream = backend_stream.into_pingora_stream(
-                backend_peer_addr.unwrap_or(client_addr),
-            );
+            let backend_stream =
+                backend_stream.into_pingora_stream(backend_peer_addr.unwrap_or(client_addr));
             let backend_stream = pingora_core::protocols::tls::client::handshake(
                 &tls_connector,
                 &host,
@@ -1899,7 +1898,9 @@ pub fn configure_relay_tcp_socket(stream: &TcpStream) {
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn apply_tcp_keepalive_timers(fd: std::os::unix::io::RawFd) {
-    let keepalive = *RELAY_KEEPALIVE_CACHE.read().unwrap_or_else(|e| e.into_inner());
+    let keepalive = *RELAY_KEEPALIVE_CACHE
+        .read()
+        .unwrap_or_else(|e| e.into_inner());
     let idle = keepalive.0 as libc::c_int;
     #[cfg(target_os = "linux")]
     let intvl = keepalive.1 as libc::c_int;
@@ -1947,7 +1948,9 @@ fn apply_tcp_keepalive_timers(fd: std::os::unix::io::RawFd) {
 /// Refresh cached relay keepalive timers after config reload.
 pub fn refresh_relay_keepalive_cache(config: &crate::api_config::RelayConfig) {
     let relay = config.normalized();
-    *RELAY_KEEPALIVE_CACHE.write().unwrap_or_else(|e| e.into_inner()) = (
+    *RELAY_KEEPALIVE_CACHE
+        .write()
+        .unwrap_or_else(|e| e.into_inner()) = (
         relay.tcp_keepalive_idle_secs,
         relay.tcp_keepalive_interval_secs,
         relay.tcp_keepalive_probes,

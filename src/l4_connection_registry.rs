@@ -152,15 +152,18 @@ impl L4ConnectionRegistry {
         }
     }
 
-    pub fn register(
-        &self,
-        addr: SocketAddr,
-        protocol: L4ConnectionProtocol,
-    ) -> L4ConnectionGuard {
+    pub fn register(&self, addr: SocketAddr, protocol: L4ConnectionProtocol) -> L4ConnectionGuard {
         let ip = addr.ip();
         let id = NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
-        self.by_addr
-            .insert(addr, (id, Arc::new(TicketBucket::new(std::sync::LazyLock::force(&crate::memory_governor::MEMORY_GOVERNOR)))));
+        self.by_addr.insert(
+            addr,
+            (
+                id,
+                Arc::new(TicketBucket::new(std::sync::LazyLock::force(
+                    &crate::memory_governor::MEMORY_GOVERNOR,
+                ))),
+            ),
+        );
         let (cancel_tx, cancel_rx) = watch::channel(ConnectionCancelReason::None);
         self.by_key.insert(
             (ip, protocol, id),
@@ -305,8 +308,7 @@ mod tests {
         let ip = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 9));
         let other = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 10));
         let guard = register(SocketAddr::new(ip, 40001), L4ConnectionProtocol::Http2);
-        let _other_guard =
-            register(SocketAddr::new(other, 40002), L4ConnectionProtocol::Http2);
+        let _other_guard = register(SocketAddr::new(other, 40002), L4ConnectionProtocol::Http2);
         let mut rx = guard.cancel_receiver();
 
         assert_eq!(drain_ip(ip), 1);

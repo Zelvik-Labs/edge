@@ -43,10 +43,7 @@ const SENT_MARKERS_CAP: usize = 4096;
 
 /// Build the policy-selected transport controller for a QUIC
 /// connection. `mss` is the datagram budget (quinn `current_mtu`).
-fn build_inner(
-    settings: &XdpTransportSettings,
-    mss: u64,
-) -> Box<dyn CongestionController> {
+fn build_inner(settings: &XdpTransportSettings, mss: u64) -> Box<dyn CongestionController> {
     match settings.controller {
         XdpTransportController::Cubic => Box::new(tcc::CubicRef::new(mss)),
         XdpTransportController::NewReno => Box::new(tcc::NewRenoRef::new(mss)),
@@ -136,14 +133,9 @@ impl QuinnTransportCc {
         };
         let prior_in_flight = self.in_flight;
         self.cum_acked = self.cum_acked.saturating_add(bytes);
-        let rs = self.sampler.on_ack(
-            tnow,
-            &[rec],
-            0,
-            0,
-            prior_in_flight,
-            self.cum_acked,
-        );
+        let rs = self
+            .sampler
+            .on_ack(tnow, &[rec], 0, 0, prior_in_flight, self.cum_acked);
         self.in_flight = self.in_flight.saturating_sub(bytes);
         self.inner.on_rate_sample(&rs, self.in_flight, &self.rtt);
     }
@@ -156,11 +148,7 @@ impl Controller for QuinnTransportCc {
             .insert(now, self.sampler.delivered_marker());
         if self.sent_markers.len() > SENT_MARKERS_CAP {
             // Drop the oldest quarter — those packets resolved long ago.
-            let cutoff = self
-                .sent_markers
-                .keys()
-                .nth(SENT_MARKERS_CAP / 4)
-                .copied();
+            let cutoff = self.sent_markers.keys().nth(SENT_MARKERS_CAP / 4).copied();
             if let Some(cut) = cutoff {
                 self.sent_markers = self.sent_markers.split_off(&cut);
             }
@@ -435,7 +423,11 @@ mod tests {
         let mut c = build(XdpTransportController::Edgecc);
         let now = Instant::now();
         for i in 0..(SENT_MARKERS_CAP + 512) {
-            c.on_sent(now + Duration::from_micros(i as u64), u64::from(MSS), i as u64);
+            c.on_sent(
+                now + Duration::from_micros(i as u64),
+                u64::from(MSS),
+                i as u64,
+            );
         }
         assert!(
             c.sent_markers.len() <= SENT_MARKERS_CAP,

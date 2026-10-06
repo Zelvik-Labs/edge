@@ -218,9 +218,9 @@ where
     #[cfg(windows)]
     use std::os::windows::io::AsRawSocket;
 
-    let mut stream = pingora_core::protocols::l4::stream::Stream::from(
-        VirtualSocketStream::new(Box::new(AfXdpVirtualSocket::new(stream))),
-    );
+    let mut stream = pingora_core::protocols::l4::stream::Stream::from(VirtualSocketStream::new(
+        Box::new(AfXdpVirtualSocket::new(stream)),
+    ));
     #[cfg(unix)]
     let digest = SocketDigest::from_raw_fd(stream.as_raw_fd());
     #[cfg(windows)]
@@ -515,8 +515,7 @@ impl AfXdpTcpAdmissionFailureTracker {
                 false
             }
             AfXdpTcpIngestStatus::IgnoredUnknownFlow => false,
-            AfXdpTcpIngestStatus::RefusedAtCapacity
-            | AfXdpTcpIngestStatus::IngressQueueFull => {
+            AfXdpTcpIngestStatus::RefusedAtCapacity | AfXdpTcpIngestStatus::IngressQueueFull => {
                 self.consecutive_refusals = self.consecutive_refusals.saturating_add(1);
                 self.consecutive_refusals == self.max_consecutive_refusals
             }
@@ -854,9 +853,7 @@ pub(crate) struct AfXdpTcpReactor {
     trusted_ecn: bool,
     /// T6: worker-local shared-bottleneck aggregate (EdgeCC only).
     /// `Rc<RefCell>` — never a cross-worker lock, never on the ACK path.
-    aggregate: Option<
-        std::rc::Rc<std::cell::RefCell<cloudsidra_edge_transport::Aggregate>>,
-    >,
+    aggregate: Option<std::rc::Rc<std::cell::RefCell<cloudsidra_edge_transport::Aggregate>>>,
     /// Per-peer-IP L4 verdict cache — the full WAF verdict chain (two
     /// managers × whitelist/blocklist snapshot walks plus a wall-clock
     /// read) ran once per RX frame. Entries only need re-evaluation on a
@@ -864,8 +861,7 @@ pub(crate) struct AfXdpTcpReactor {
     /// the eBPF-side rule map carries the same verdicts regardless.
     l4_verdicts: AfXdpIpMap<(bool, i64)>,
     /// T6: worker-local bounded path-prior table (§2.2 长期先验).
-    path_table:
-        std::rc::Rc<std::cell::RefCell<cloudsidra_edge_transport::PathTable>>,
+    path_table: std::rc::Rc<std::cell::RefCell<cloudsidra_edge_transport::PathTable>>,
     /// Aggregate arbitration tick watermark (~100ms periods).
     last_agg_period: SmoltcpInstant,
     /// Runtime that owns per-session L7 proxy tasks (TLS, HTTP, upstream
@@ -898,8 +894,7 @@ impl AfXdpTcpReactor {
         http_manager: Option<Arc<crate::http_proxy_manager::HttpProxyManager>>,
         session_limit: usize,
     ) -> Self {
-        let mut reactor =
-            Self::new_with_session_limit(tcp_manager, http_manager, session_limit);
+        let mut reactor = Self::new_with_session_limit(tcp_manager, http_manager, session_limit);
         reactor.test_auto_start_proxy = true;
         reactor
     }
@@ -912,8 +907,7 @@ impl AfXdpTcpReactor {
         let mut device = SmoltcpAfXdpDevice::new(1500);
         let mut config = SmoltcpConfig::new(HardwareAddress::Ip);
         config.random_seed = crate::utils::time::now_timestamp() as u64;
-        let mut iface =
-            SmoltcpInterface::new(config, &mut device, SmoltcpInstant::from_millis(0));
+        let mut iface = SmoltcpInterface::new(config, &mut device, SmoltcpInstant::from_millis(0));
         iface.set_any_ip(true);
         let wake_set = Arc::new(DashMap::with_hasher(ahash::RandomState::default()));
         Self {
@@ -1020,20 +1014,14 @@ impl AfXdpTcpReactor {
     /// Tests only (T9): a session's current ledger-held socket buffer
     /// charge — initial pair + every growth step.
     #[cfg(test)]
-    pub(crate) fn session_socket_buf_charge(
-        &self,
-        flow: &AfXdpTcpFlowKey,
-    ) -> Option<u64> {
+    pub(crate) fn session_socket_buf_charge(&self, flow: &AfXdpTcpFlowKey) -> Option<u64> {
         self.sessions.get(flow).map(|s| s.socket_buf_charge_bytes())
     }
 
     /// Tests only (T9): a session socket's current receive-buffer
     /// capacity — proves in-session growth landed.
     #[cfg(test)]
-    pub(crate) fn session_recv_capacity(
-        &self,
-        flow: &AfXdpTcpFlowKey,
-    ) -> Option<usize> {
+    pub(crate) fn session_recv_capacity(&self, flow: &AfXdpTcpFlowKey) -> Option<usize> {
         self.sessions.get(flow).map(|s| {
             self.sockets
                 .get::<SmoltcpTcp::Socket<'static>>(s.socket)
@@ -1057,9 +1045,7 @@ impl AfXdpTcpReactor {
     ) -> Option<cloudsidra_edge_transport::PathPrior> {
         let (dst_prefix, prefix_len) = match peer {
             IpAddr::V4(v4) => (
-                IpAddr::V4(std::net::Ipv4Addr::from(
-                    u32::from(v4) & 0xffff_ff00,
-                )),
+                IpAddr::V4(std::net::Ipv4Addr::from(u32::from(v4) & 0xffff_ff00)),
                 24,
             ),
             IpAddr::V6(v6) => (
@@ -1099,13 +1085,10 @@ impl AfXdpTcpReactor {
         let est = self
             .path_prior(peer, local)
             .filter(|p| p.confidence > 0.0 && p.bw_bps > 0)
-            .map(|p| {
-                (p.bw_bps as f64 * p.base_rtt.as_secs_f64() * 2.0) as usize
-            })
+            .map(|p| (p.bw_bps as f64 * p.base_rtt.as_secs_f64() * 2.0) as usize)
             .unwrap_or(FLOOR);
         let live = self.contender_sessions().saturating_add(1);
-        let per_conn_dir = (tcp_buffer_pool_budget() / (live * 2))
-            .min(usize::MAX as u64) as usize;
+        let per_conn_dir = (tcp_buffer_pool_budget() / (live * 2)).min(usize::MAX as u64) as usize;
         // The upper bound is ALSO the socket ceiling: a path prior with an
         // inflated bw×rtt product must not size the initial allocation past
         // what the socket can ever use — observed live as a single fresh
@@ -1135,9 +1118,7 @@ impl AfXdpTcpReactor {
     /// even a minimal socket pair — the caller must refuse the session;
     /// allocating uncharged buffers would break the accounting
     /// invariant `Σ buffer capacity + queued payload ≤ budget`.
-    fn reserve_socket_buffers(
-        want_per_dir: usize,
-    ) -> Option<(usize, StaticTcpQueueBytePermit)> {
+    fn reserve_socket_buffers(want_per_dir: usize) -> Option<(usize, StaticTcpQueueBytePermit)> {
         /// Same floor as `socket_buffer_bytes` — ~3 MSS of progress.
         const MIN_VIABLE: usize = 4 * 1024;
         let mut size = want_per_dir.max(MIN_VIABLE);
@@ -1189,8 +1170,8 @@ impl AfXdpTcpReactor {
         {
             return;
         }
-        let fair_share = (tcp_buffer_pool_budget() / (live_sessions.max(1) * 2))
-            .min(usize::MAX as u64) as usize;
+        let fair_share =
+            (tcp_buffer_pool_budget() / (live_sessions.max(1) * 2)).min(usize::MAX as u64) as usize;
         if rx_demand {
             session.rx_growth_probe = 0;
             let cap = socket.recv_capacity();
@@ -1247,8 +1228,7 @@ impl AfXdpTcpReactor {
         }
         let mut delta = limit - current;
         loop {
-            if let Some(permit) = MEMORY_GOVERNOR.try_reserve_tcp_queue_bytes(delta)
-            {
+            if let Some(permit) = MEMORY_GOVERNOR.try_reserve_tcp_queue_bytes(delta) {
                 return Some((delta, permit));
             }
             if delta <= AF_XDP_TCP_BUFFER_GROW_MIN_DELTA {
@@ -1300,9 +1280,7 @@ impl AfXdpTcpReactor {
     /// (fresh samples validate priors — §2.2 fresh-sample contract).
     /// Static: the reap path calls this while `self.sockets` is borrowed.
     pub(crate) fn record_path_sample(
-        table: &std::rc::Rc<
-            std::cell::RefCell<cloudsidra_edge_transport::PathTable>,
-        >,
+        table: &std::rc::Rc<std::cell::RefCell<cloudsidra_edge_transport::PathTable>>,
         clock_us: i64,
         peer: IpAddr,
         local: IpAddr,
@@ -1311,9 +1289,7 @@ impl AfXdpTcpReactor {
     ) {
         let (dst_prefix, prefix_len) = match peer {
             IpAddr::V4(v4) => (
-                IpAddr::V4(std::net::Ipv4Addr::from(
-                    u32::from(v4) & 0xffff_ff00,
-                )),
+                IpAddr::V4(std::net::Ipv4Addr::from(u32::from(v4) & 0xffff_ff00)),
                 24,
             ),
             IpAddr::V6(v6) => (
@@ -1329,9 +1305,7 @@ impl AfXdpTcpReactor {
             dst_prefix,
             prefix_len,
         };
-        let now = cloudsidra_edge_transport::TransportInstant::from_micros(
-            clock_us.max(0) as u64,
-        );
+        let now = cloudsidra_edge_transport::TransportInstant::from_micros(clock_us.max(0) as u64);
         table.borrow_mut().record(
             key,
             cloudsidra_edge_transport::PathSample {
@@ -1362,9 +1336,7 @@ impl AfXdpTcpReactor {
         {
             return Some(match kind {
                 crate::http_proxy_manager::AfXdpHttpPortKind::Http => AfXdpTcpProxyClass::Http,
-                crate::http_proxy_manager::AfXdpHttpPortKind::Https => {
-                    AfXdpTcpProxyClass::Https
-                }
+                crate::http_proxy_manager::AfXdpHttpPortKind::Https => AfXdpTcpProxyClass::Https,
             });
         }
         None
@@ -1400,21 +1372,13 @@ impl AfXdpTcpReactor {
         detail: String,
     ) {
         if let Some(tcp_manager) = self.tcp_manager.as_ref() {
-            let _ = tcp_manager.record_af_xdp_l4_event_with_pressure(
-                ip,
-                kind,
-                pressure_level,
-                detail,
-            );
+            let _ =
+                tcp_manager.record_af_xdp_l4_event_with_pressure(ip, kind, pressure_level, detail);
             return;
         }
         if let Some(http_manager) = self.http_manager.as_ref() {
-            let _ = http_manager.record_af_xdp_l4_event_with_pressure(
-                ip,
-                kind,
-                pressure_level,
-                detail,
-            );
+            let _ =
+                http_manager.record_af_xdp_l4_event_with_pressure(ip, kind, pressure_level, detail);
         }
     }
 
@@ -1595,13 +1559,11 @@ impl AfXdpTcpReactor {
                     AF_XDP_TCP_DIAG_INGRESS_QUEUE_DROPPED.fetch_add(1, Ordering::Relaxed);
                     return false;
                 }
-                session
-                    .splice_parked
-                    .push_back(AfXdpTcpIngressFrame {
-                        route,
-                        flow,
-                        ip_packet,
-                    });
+                session.splice_parked.push_back(AfXdpTcpIngressFrame {
+                    route,
+                    flow,
+                    ip_packet,
+                });
                 return true;
             }
         }
@@ -1927,11 +1889,7 @@ impl AfXdpTcpReactor {
     /// Test hook: stage an unflushed app-egress chunk — the shape a
     /// send-buffer-full session presents to `session_still_active`.
     #[cfg(test)]
-    pub(crate) fn force_pending_egress_for_test(
-        &mut self,
-        flow: &AfXdpTcpFlowKey,
-        bytes: Bytes,
-    ) {
+    pub(crate) fn force_pending_egress_for_test(&mut self, flow: &AfXdpTcpFlowKey, bytes: Bytes) {
         if let Some(session) = self.sessions.get_mut(flow) {
             session.pending_egress = AfXdpTcpChargedBytes::charged(bytes)
                 .expect("test ledger must cover pending egress");
@@ -1940,10 +1898,7 @@ impl AfXdpTcpReactor {
 
     /// Tests only: bytes still waiting for socket send-buffer room.
     #[cfg(test)]
-    pub(crate) fn session_pending_egress_bytes(
-        &self,
-        flow: &AfXdpTcpFlowKey,
-    ) -> Option<usize> {
+    pub(crate) fn session_pending_egress_bytes(&self, flow: &AfXdpTcpFlowKey) -> Option<usize> {
         self.sessions.get(flow).map(|s| s.pending_egress.len())
     }
 
@@ -1954,9 +1909,7 @@ impl AfXdpTcpReactor {
         flow: &AfXdpTcpFlowKey,
     ) -> Option<(usize, usize)> {
         self.sessions.get(flow).map(|s| {
-            let socket = self
-                .sockets
-                .get::<SmoltcpTcp::Socket<'static>>(s.socket);
+            let socket = self.sockets.get::<SmoltcpTcp::Socket<'static>>(s.socket);
             (socket.send_queue(), socket.send_capacity())
         })
     }
@@ -2001,8 +1954,7 @@ impl AfXdpTcpReactor {
             AF_XDP_TCP_DIAG_PRE_PROXY_REFUSED.fetch_add(1, Ordering::Relaxed);
             return false;
         }
-        if self.pre_proxy_sessions >= self.pre_proxy_budget()
-            && !self.evict_oldest_pre_proxy(None)
+        if self.pre_proxy_sessions >= self.pre_proxy_budget() && !self.evict_oldest_pre_proxy(None)
         {
             #[cfg(target_os = "linux")]
             AF_XDP_TCP_DIAG_PRE_PROXY_REFUSED.fetch_add(1, Ordering::Relaxed);
@@ -2041,9 +1993,7 @@ impl AfXdpTcpReactor {
         socket.set_transport_controller(
             self.make_transport_controller(flow.peer_addr.ip(), flow.local_addr.ip()),
         );
-        if let Err(err) =
-            socket.listen(IpListenEndpoint::from(IpEndpoint::from(flow.local_addr)))
-        {
+        if let Err(err) = socket.listen(IpListenEndpoint::from(IpEndpoint::from(flow.local_addr))) {
             tracing::debug!(
                 "AF_XDP TCP reactor failed to listen local={} peer={}: {:?}",
                 flow.local_addr,
@@ -2353,28 +2303,24 @@ impl AfXdpTcpReactor {
         flow: &AfXdpTcpFlowKey,
         reply: tokio::sync::oneshot::Sender<Option<u32>>,
     ) {
-        let answer = self
-            .sessions
-            .get(flow)
-            .and_then(|session| {
-                let socket = self
-                    .sockets
-                    .get::<SmoltcpTcp::Socket<'static>>(session.socket);
-                let ready = socket.state() == SmoltcpTcp::State::Established
-                    && session.splice_boundary.is_some_and(|b| b == socket.wire_rcv_nxt())
-                    && socket.recv_queue() == 0
-                    && session.pending_ingress.is_empty()
-                    && session.pending_egress.is_empty()
-                    && session
-                        .ingress_tx
-                        .as_ref()
-                        .is_none_or(|tx| tx.capacity() == AF_XDP_TCP_STREAM_CHANNEL_DEPTH)
-                    && session
-                        .egress_rx
-                        .as_ref()
-                        .is_none_or(|rx| rx.is_empty());
-                ready.then(|| socket.wire_snd_nxt())
-            });
+        let answer = self.sessions.get(flow).and_then(|session| {
+            let socket = self
+                .sockets
+                .get::<SmoltcpTcp::Socket<'static>>(session.socket);
+            let ready = socket.state() == SmoltcpTcp::State::Established
+                && session
+                    .splice_boundary
+                    .is_some_and(|b| b == socket.wire_rcv_nxt())
+                && socket.recv_queue() == 0
+                && session.pending_ingress.is_empty()
+                && session.pending_egress.is_empty()
+                && session
+                    .ingress_tx
+                    .as_ref()
+                    .is_none_or(|tx| tx.capacity() == AF_XDP_TCP_STREAM_CHANNEL_DEPTH)
+                && session.egress_rx.as_ref().is_none_or(|rx| rx.is_empty());
+            ready.then(|| socket.wire_snd_nxt())
+        });
         let _ = reply.send(answer);
     }
 
@@ -2415,9 +2361,7 @@ impl AfXdpTcpReactor {
         if !self.sessions.contains_key(flow) {
             return false;
         }
-        if commit
-            && let Some(session) = self.sessions.get_mut(flow)
-        {
+        if commit && let Some(session) = self.sessions.get_mut(flow) {
             session.splice_drain_since = Some(SmoltcpInstant::now());
         }
         self.splice_unfreeze(flow, commit);
@@ -2456,7 +2400,10 @@ impl AfXdpTcpReactor {
         if self.sessions.contains_key(&flow) {
             let _ = req.reply.send(Err(io::Error::new(
                 io::ErrorKind::AddrInUse,
-                format!("AF_XDP dialed flow {} -> {} already exists", req.local, req.remote),
+                format!(
+                    "AF_XDP dialed flow {} -> {} already exists",
+                    req.local, req.remote
+                ),
             )));
             return;
         }
@@ -2691,8 +2638,7 @@ impl AfXdpTcpReactor {
                 let Some(tcp_manager) = tcp_manager else {
                     return false;
                 };
-                let Some((server, is_tls)) =
-                    tcp_manager.find_tcp_server_by_port_sync(listen_port)
+                let Some((server, is_tls)) = tcp_manager.find_tcp_server_by_port_sync(listen_port)
                 else {
                     return false;
                 };
@@ -2741,7 +2687,13 @@ impl AfXdpTcpReactor {
                 AF_XDP_TCP_DIAG_PROXY_STARTED.fetch_add(1, Ordering::Relaxed);
                 spawn_session_task(&proxy_rt, async move {
                     if let Err(err) = http_manager
-                        .handle_af_xdp_http_stream(stream, peer_addr, listen_port, kind, client_flow)
+                        .handle_af_xdp_http_stream(
+                            stream,
+                            peer_addr,
+                            listen_port,
+                            kind,
+                            client_flow,
+                        )
                         .await
                     {
                         tracing::debug!(
@@ -2796,10 +2748,7 @@ impl AfXdpTcpReactor {
     /// Test hook: the session's installed path-MTU cap (outer None =
     /// unknown flow, inner None = uncapped).
     #[cfg(test)]
-    pub(crate) fn session_path_mtu(
-        &self,
-        flow: &AfXdpTcpFlowKey,
-    ) -> Option<Option<usize>> {
+    pub(crate) fn session_path_mtu(&self, flow: &AfXdpTcpFlowKey) -> Option<Option<usize>> {
         let session = self.sessions.get(flow)?;
         Some(
             self.sockets
@@ -2840,8 +2789,7 @@ impl AfXdpTcpReactor {
         // already queued in the hot set are skipped (their pump comes via
         // the queue); sessions created mid-cycle are hot by construction and
         // join the next cycle.
-        if !self.sweep_active
-            && session_idle_for(now, self.last_sweep) >= AF_XDP_TCP_SWEEP_INTERVAL
+        if !self.sweep_active && session_idle_for(now, self.last_sweep) >= AF_XDP_TCP_SWEEP_INTERVAL
         {
             self.sweep_keys.clear();
             self.sweep_keys.extend(self.sessions.keys().copied());
@@ -2877,9 +2825,7 @@ impl AfXdpTcpReactor {
         // SWEEP_BATCH entries regardless of table size.
         if self.sweep_active {
             let mut swept = 0usize;
-            while self.sweep_pos < self.sweep_keys.len()
-                && swept < AF_XDP_TCP_SWEEP_BATCH_BUDGET
-            {
+            while self.sweep_pos < self.sweep_keys.len() && swept < AF_XDP_TCP_SWEEP_BATCH_BUDGET {
                 let flow = self.sweep_keys[self.sweep_pos];
                 self.sweep_pos += 1;
                 swept += 1;
@@ -3084,11 +3030,8 @@ impl AfXdpTcpReactor {
                     // class (spawn sets proxy_started). Disjoint field
                     // borrows: `session` borrows self.sessions while these
                     // counters are separate fields.
-                    self.pre_proxy_sessions =
-                        self.pre_proxy_sessions.saturating_sub(1);
-                    if let Some(count) =
-                        self.pre_proxy_per_ip.get_mut(&flow.peer_addr.ip())
-                    {
+                    self.pre_proxy_sessions = self.pre_proxy_sessions.saturating_sub(1);
+                    if let Some(count) = self.pre_proxy_per_ip.get_mut(&flow.peer_addr.ip()) {
                         *count = count.saturating_sub(1);
                         if *count == 0 {
                             self.pre_proxy_per_ip.remove(&flow.peer_addr.ip());
@@ -3149,8 +3092,7 @@ impl AfXdpTcpReactor {
             // control paces the sender to the consumer's rate. Without
             // this, ~140 busy sessions × channel backlog saturated the
             // queue ledger outright — measured live at 194 MiB pinned.
-            let drain_cap =
-                tcp_buffer_pool_budget() / (live_sessions.max(1) * 2);
+            let drain_cap = tcp_buffer_pool_budget() / (live_sessions.max(1) * 2);
             while socket.can_recv() {
                 // EN-17/F3: reserve queue bytes BEFORE consuming the socket
                 // buffer — `recv` is destructive, so a budget failure after
@@ -3217,18 +3159,14 @@ impl AfXdpTcpReactor {
                         session.last_activity = now;
                         // T9: a successful drain is real progress — both
                         // park clocks restart from here.
-                        if session.stalled_since.is_some()
-                            || session.cap_parked_since.is_some()
-                        {
+                        if session.stalled_since.is_some() || session.cap_parked_since.is_some() {
                             session.stalled_since = None;
                             session.cap_parked_since = None;
                             self.ingress_stalled.remove(&flow);
                         }
-                        session.rx_growth_probe =
-                            session.rx_growth_probe.saturating_add(n as u64);
+                        session.rx_growth_probe = session.rx_growth_probe.saturating_add(n as u64);
                         #[cfg(target_os = "linux")]
-                        AF_XDP_TCP_DIAG_SOCKET_RECV_BYTES
-                            .fetch_add(n as u64, Ordering::Relaxed);
+                        AF_XDP_TCP_DIAG_SOCKET_RECV_BYTES.fetch_add(n as u64, Ordering::Relaxed);
                         if let Some(ingress_tx) = session.ingress_tx.as_ref() {
                             match send_or_store_ingress(
                                 ingress_tx,
@@ -3353,8 +3291,7 @@ impl AfXdpTcpReactor {
             // charge just keeps the current size — never a refusal
             // mid-connection.
             let rx_demand = rx_fill
-                || session.rx_growth_probe.saturating_mul(2)
-                    >= socket.recv_capacity() as u64;
+                || session.rx_growth_probe.saturating_mul(2) >= socket.recv_capacity() as u64;
             let tx_demand = socket.send_queue() * 4 >= socket.send_capacity() * 3
                 || !session.pending_egress.is_empty();
             Self::grow_socket_buffers(socket, session, live_sessions, rx_demand, tx_demand, now);
@@ -3386,8 +3323,7 @@ impl AfXdpTcpReactor {
                     && socket.send_queue() == 0
                     && socket.recv_queue() == 0
                     && socket.flight_bytes() == 0)
-                    || session_idle_for(now, drain_since)
-                        >= AF_XDP_TCP_SPLICE_DRAIN_MAX;
+                    || session_idle_for(now, drain_since) >= AF_XDP_TCP_SPLICE_DRAIN_MAX;
             }
         }
         #[cfg(target_os = "linux")]
@@ -3716,19 +3652,19 @@ impl AfXdpTcpReactor {
         // table. Without this feed the table could fill to the refusal
         // limit while pressure stayed Normal, so the timeout ladder and
         // pre-proxy budget never tightened before capacity ran out.
-        self.cached_pressure_level = crate::l4_defense::current_pressure_level()
-            .max(af_xdp_session_occupancy_pressure_level(
-                self.sessions.len(),
-                self.session_limit,
-            ));
+        self.cached_pressure_level = crate::l4_defense::current_pressure_level().max(
+            af_xdp_session_occupancy_pressure_level(self.sessions.len(), self.session_limit),
+        );
         // Occupancy also tightens the established-session idle timeout:
         // a table under real pressure sheds its idlest verified sessions
         // first, so slow-drip keepalive traffic cannot hold the table.
         self.cached_proxy_idle_timeout = match self.cached_pressure_level {
-            crate::l4_defense::L4PressureLevel::Critical => effective_af_xdp_tcp_idle_timeout()
-                .min(Duration::from_secs(60)),
-            crate::l4_defense::L4PressureLevel::High => effective_af_xdp_tcp_idle_timeout()
-                .min(Duration::from_secs(120)),
+            crate::l4_defense::L4PressureLevel::Critical => {
+                effective_af_xdp_tcp_idle_timeout().min(Duration::from_secs(60))
+            }
+            crate::l4_defense::L4PressureLevel::High => {
+                effective_af_xdp_tcp_idle_timeout().min(Duration::from_secs(120))
+            }
             _ => effective_af_xdp_tcp_idle_timeout(),
         };
         self.idle_profile_refreshed_at = now;
@@ -3872,10 +3808,7 @@ pub(crate) fn af_xdp_tcp_session_limit_per_worker(node_limit: usize, worker_coun
 /// ~260 MiB, still ~2 MiB at the 16 MiB floor.
 #[cfg(any(test, target_os = "linux"))]
 pub(crate) fn tcp_buffer_pool_budget() -> u64 {
-    MEMORY_GOVERNOR
-        .tcp_queue_bytes_budget()
-        .saturating_mul(7)
-        / 8
+    MEMORY_GOVERNOR.tcp_queue_bytes_budget().saturating_mul(7) / 8
 }
 
 #[cfg(any(test, target_os = "linux"))]
@@ -3944,10 +3877,7 @@ pub(crate) fn proxy_bridge_should_idle(
     if downstream_budget_exhausted {
         return false;
     }
-    polled_packets == 0
-        && parsed_frames == 0
-        && downstream_datagrams == 0
-        && tcp_egress_frames == 0
+    polled_packets == 0 && parsed_frames == 0 && downstream_datagrams == 0 && tcp_egress_frames == 0
 }
 
 /// F1: worker liveness gate. Polling continues while the dataplane lease
@@ -3955,9 +3885,7 @@ pub(crate) fn proxy_bridge_should_idle(
 /// replacement under an adopted dataplane never stops a worker that still
 /// owns live sessions.
 #[cfg(any(test, target_os = "linux"))]
-pub(crate) fn proxy_bridge_should_continue(
-    lease: &crate::xdp::AfXdpDataplaneLease,
-) -> bool {
+pub(crate) fn proxy_bridge_should_continue(lease: &crate::xdp::AfXdpDataplaneLease) -> bool {
     if lease.is_retired() {
         return false;
     }
@@ -4015,7 +3943,10 @@ impl AfXdpTcpStream {
     /// allocated reserved-range source port.
     pub fn local_addr(&self) -> io::Result<SocketAddr> {
         self.flow.map(|flow| flow.local_addr).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::NotConnected, "AF_XDP stream has no flow endpoints")
+            io::Error::new(
+                io::ErrorKind::NotConnected,
+                "AF_XDP stream has no flow endpoints",
+            )
         })
     }
 
@@ -4023,7 +3954,10 @@ impl AfXdpTcpStream {
     /// is the upstream server.
     pub fn peer_addr(&self) -> io::Result<SocketAddr> {
         self.flow.map(|flow| flow.peer_addr).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::NotConnected, "AF_XDP stream has no flow endpoints")
+            io::Error::new(
+                io::ErrorKind::NotConnected,
+                "AF_XDP stream has no flow endpoints",
+            )
         })
     }
 

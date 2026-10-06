@@ -14,10 +14,10 @@
 //! stack); RTO covers tail loss. That is enough to exercise SS/CA,
 //! PRR recovery, HyStart++ and the sawtooth matrix.
 
+use crate::TransportInstant;
 use crate::cc::CongestionController;
 use crate::rate_sample::RateSampler;
 use crate::rtt::RttState;
-use crate::TransportInstant;
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BinaryHeap, VecDeque};
 use std::time::Duration;
@@ -206,11 +206,7 @@ impl MultiSimResult {
     /// All flows' trace rows merged in global time order (stable on
     /// flow index for identical timestamps).
     pub fn merged_trace(&self) -> Vec<&TraceRow> {
-        let mut rows: Vec<&TraceRow> = self
-            .flows
-            .iter()
-            .flat_map(|f| f.trace.iter())
-            .collect();
+        let mut rows: Vec<&TraceRow> = self.flows.iter().flat_map(|f| f.trace.iter()).collect();
         rows.sort_by_key(|r| (r.t_us, r.flow));
         rows
     }
@@ -221,13 +217,7 @@ impl MultiSimResult {
         for row in self.merged_trace() {
             out.push_str(&format!(
                 "{} f{} {:?} seq={} cwnd={} flight={} delivered={}\n",
-                row.t_us,
-                row.flow,
-                row.kind,
-                row.seq,
-                row.cwnd,
-                row.in_flight,
-                row.delivered_total
+                row.t_us, row.flow, row.kind, row.seq, row.cwnd, row.in_flight, row.delivered_total
             ));
         }
         out
@@ -266,13 +256,7 @@ impl SimResult {
         for row in &self.trace {
             out.push_str(&format!(
                 "{} f{} {:?} seq={} cwnd={} flight={} delivered={}\n",
-                row.t_us,
-                row.flow,
-                row.kind,
-                row.seq,
-                row.cwnd,
-                row.in_flight,
-                row.delivered_total
+                row.t_us, row.flow, row.kind, row.seq, row.cwnd, row.in_flight, row.delivered_total
             ));
         }
         out
@@ -383,7 +367,11 @@ pub enum LossModel {
     /// p ~ max(0, N(mean, sd)) (Box-Muller over the deterministic rng);
     /// within a period packets still drop independently. Models a
     /// link whose quality drifts rather than per-packet loss bursts.
-    NormalVarying { mean: f64, sd: f64, period: Duration },
+    NormalVarying {
+        mean: f64,
+        sd: f64,
+        period: Duration,
+    },
 }
 
 /// Shared forward-link state (all flows compete here).
@@ -603,10 +591,7 @@ impl<'a> Sim<'a> {
                 link_free_us: 0,
                 queued: VecDeque::new(),
                 queued_bytes: 0,
-                policer_tokens: cfg
-                    .policer
-                    .map(|p| p.burst_bytes as f64)
-                    .unwrap_or(0.0),
+                policer_tokens: cfg.policer.map(|p| p.burst_bytes as f64).unwrap_or(0.0),
                 policer_last_us: 0,
                 loss_bad_state: false,
                 loss_nv_p: 0.0,
@@ -629,8 +614,7 @@ impl<'a> Sim<'a> {
         // now", and admitting a backward timestamp would move the event
         // clock backwards (e.g. `now - policer_last_us` underflows).
         let at_us = at_us.max(self.now_us);
-        self.events
-            .push(Reverse((at_us, flow, self.event_ord, ev)));
+        self.events.push(Reverse((at_us, flow, self.event_ord, ev)));
     }
 
     /// Propagation delays in force for packets admitted at `now_us`.
@@ -743,9 +727,19 @@ impl<'a> Sim<'a> {
             // lost gap is the oldest unrecovered byte), then the next
             // unsent segment.
             enum Work {
-                Retx { seq: u64, len: u64, first_tx_at: TransportInstant },
-                New { seq: u64, len: u64, app_limited: bool },
-                AppStall { due: u64 },
+                Retx {
+                    seq: u64,
+                    len: u64,
+                    first_tx_at: TransportInstant,
+                },
+                New {
+                    seq: u64,
+                    len: u64,
+                    app_limited: bool,
+                },
+                AppStall {
+                    due: u64,
+                },
                 Blocked,
                 Done,
             }
@@ -773,7 +767,11 @@ impl<'a> Sim<'a> {
                         // data past the simulation deadline.
                         Work::Blocked
                     } else {
-                        Work::Retx { seq, len, first_tx_at }
+                        Work::Retx {
+                            seq,
+                            len,
+                            first_tx_at,
+                        }
                     }
                 } else if f.next_seq >= cfg.total_bytes {
                     Work::Done
@@ -791,8 +789,7 @@ impl<'a> Sim<'a> {
                                     let need = (f.next_seq + len) as u128;
                                     Work::AppStall {
                                         due: f.start_us
-                                            + (need * 1_000_000)
-                                                .div_ceil(rate.max(1) as u128)
+                                            + (need * 1_000_000).div_ceil(rate.max(1) as u128)
                                                 as u64,
                                     }
                                 } else {
@@ -986,8 +983,7 @@ impl<'a> Sim<'a> {
         }
         f.rx_pending_ack = Some(f.rx_next);
         f.rx_unacked_count += 1;
-        let send_now = f.rx_unacked_count >= cfg.ack_every.max(1)
-            || !f.rx_sacked.is_empty(); // gap → ack immediately (dupack)
+        let send_now = f.rx_unacked_count >= cfg.ack_every.max(1) || !f.rx_sacked.is_empty(); // gap → ack immediately (dupack)
         if send_now {
             let cum = f.rx_next;
             let sacked: Vec<(u64, u64)> = f.rx_sacked.iter().map(|(&s, &l)| (s, l)).collect();
@@ -1040,13 +1036,7 @@ impl<'a> Sim<'a> {
         }
     }
 
-    fn on_ack_arrive(
-        &mut self,
-        fi: usize,
-        cum: u64,
-        sacked: Vec<(u64, u64)>,
-        ce_total: u64,
-    ) {
+    fn on_ack_arrive(&mut self, fi: usize, cum: u64, sacked: Vec<(u64, u64)>, ce_total: u64) {
         let flow_id = fi as u32;
         let f = &mut self.flows[fi];
         let now = f.now(self.now_us);
@@ -1172,9 +1162,9 @@ impl<'a> Sim<'a> {
         }
         let ce_now = ce_total.saturating_sub(f.ce_bytes_reported);
         f.ce_bytes_reported = ce_total;
-        let rs =
-            f.sampler
-                .on_ack(now, &confirmed, lost_now, ce_now, prior_in_flight, cum);
+        let rs = f
+            .sampler
+            .on_ack(now, &confirmed, lost_now, ce_now, prior_in_flight, cum);
         if let Some(r) = rs.rtt {
             f.rtt.sample(r);
             f.result.rtt_samples_us.push(r.as_micros() as u64);
@@ -1311,8 +1301,7 @@ impl<'a> Sim<'a> {
             if has_work
                 && f.in_flight < f.cc.cwnd()
                 && (has_lost
-                    || (!f.send_due_armed
-                        && self.now_us + self.pace_quantum_us >= f.next_send_due))
+                    || (!f.send_due_armed && self.now_us + self.pace_quantum_us >= f.next_send_due))
             {
                 self.try_send(fi);
             }

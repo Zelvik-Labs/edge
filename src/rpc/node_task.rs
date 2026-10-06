@@ -54,7 +54,9 @@ pub async fn sync_node_tasks(
                         // The upgrade payload is downloaded from the admin
                         // management address over plain HTTP(S); the gRPC
                         // channel only carried this task reference.
-                        match crate::node_upgrade::execute_node_upgrade(api_config, t).await {
+                        match crate::node_upgrade::execute_node_upgrade(api_config, t, task.id)
+                            .await
+                        {
                             Ok(needs_restart) => {
                                 pending_upgrade_restart = needs_restart;
                                 true
@@ -174,6 +176,19 @@ pub async fn sync_node_tasks(
                     ip_list_manager.remove_list(list_id);
                 }
 
+                if pending_upgrade_restart {
+                    // Completion belongs to the independent supervisor after startup,
+                    // including a failure result if it restores the old package.
+                    info!(
+                        "NodeTask {} installation staged; supervisor will report restart result",
+                        task.id
+                    );
+                    if task.version > *task_version {
+                        *task_version = task.version;
+                    }
+                    return;
+                }
+
                 let reported = crate::rpc::track_rpc(task_service.report_node_task_done(
                     pb::ReportNodeTaskDoneRequest {
                         node_task_id: task.id,
@@ -193,16 +208,6 @@ pub async fn sync_node_tasks(
                 if reported {
                     if task.version > *task_version {
                         *task_version = task.version;
-                    }
-                    if pending_upgrade_restart {
-                        // Report-before-restart ordering: the admin records the
-                        // task as done, then this process exits under its
-                        // service manager and the new binary comes up.
-                        info!("NodeTask {} installed a new binary; restarting service", task.id);
-                        if let Err(err) = crate::node_upgrade::schedule_upgrade_restart() {
-                            warn!("Failed to schedule service restart after upgrade: {}", err);
-                        }
-                        return;
                     }
                 } else {
                     warn!("Failed to report NodeTask {} completion", task.id);

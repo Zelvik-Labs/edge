@@ -164,9 +164,11 @@ fn xdp_rule_sweeper_removes_expired_shadow_rules() {
         let state = manager.state.read();
         assert!(!state.blocked_ips.contains_key(&expired_ip));
         assert!(state.blocked_ips.contains_key(&active_ip));
-        assert!(!state
-            .blocked_networks
-            .contains_key(&expired_net.to_string()));
+        assert!(
+            !state
+                .blocked_networks
+                .contains_key(&expired_net.to_string())
+        );
         assert!(state.blocked_networks.contains_key(&active_net.to_string()));
         assert!(!state.blocked_ranges.contains_key(&expired_range));
         assert!(state.blocked_ranges.contains_key(&active_range));
@@ -261,11 +263,15 @@ fn xdp_reload_manager_replacement_preserves_active_rules() {
 #[test]
 fn xdp_manager_current_identity_changes_after_replacement() {
     let _guard = crate::runtime_mode::runtime_config_test_guard();
-    RuntimeConfig::set_current(RuntimeConfig { xdp: test_proxy_config("eth-old") });
+    RuntimeConfig::set_current(RuntimeConfig {
+        xdp: test_proxy_config("eth-old"),
+    });
     let old_manager = replace_manager_from_runtime();
     assert!(manager_is_current(&old_manager));
 
-    RuntimeConfig::set_current(RuntimeConfig { xdp: test_proxy_config("eth-new") });
+    RuntimeConfig::set_current(RuntimeConfig {
+        xdp: test_proxy_config("eth-new"),
+    });
     let new_manager = replace_manager_from_runtime();
 
     assert!(!manager_is_current(&old_manager));
@@ -276,14 +282,18 @@ fn xdp_manager_current_identity_changes_after_replacement() {
 fn xdp_runtime_disabled_replaces_stale_attached_manager() {
     let _guard = crate::runtime_mode::runtime_config_test_guard();
     let enabled_config = test_proxy_config("eth-stale");
-    RuntimeConfig::set_current(RuntimeConfig { xdp: enabled_config.clone() });
+    RuntimeConfig::set_current(RuntimeConfig {
+        xdp: enabled_config.clone(),
+    });
     let old_manager = replace_manager_from_runtime();
     mark_test_proxy_bridge_ready(&old_manager);
     assert!(old_manager.status().attached);
 
     let mut disabled_config = enabled_config;
     disabled_config.enabled = false;
-    RuntimeConfig::set_current(RuntimeConfig { xdp: disabled_config });
+    RuntimeConfig::set_current(RuntimeConfig {
+        xdp: disabled_config,
+    });
 
     let disabled_manager = manager_from_runtime();
     let status = disabled_manager.status();
@@ -301,7 +311,9 @@ fn xdp_proxy_bridge_lifecycle_survives_reload_and_stops_on_retire() {
     // lease that still owns sessions. The lease only yields to a real
     // teardown (retire) or a redirect shutdown on the *current* owner.
     let _guard = crate::runtime_mode::runtime_config_test_guard();
-    RuntimeConfig::set_current(RuntimeConfig { xdp: test_proxy_config("eth-old") });
+    RuntimeConfig::set_current(RuntimeConfig {
+        xdp: test_proxy_config("eth-old"),
+    });
     let old_manager = replace_manager_from_runtime();
     mark_test_proxy_bridge_ready(&old_manager);
     let lease = test_dataplane_lease(&old_manager);
@@ -309,7 +321,9 @@ fn xdp_proxy_bridge_lifecycle_survives_reload_and_stops_on_retire() {
 
     // Manager publish alone must not stop the dataplane — this was the
     // F1 freeze: workers exited at publish and orphaned live sessions.
-    RuntimeConfig::set_current(RuntimeConfig { xdp: test_proxy_config("eth-new") });
+    RuntimeConfig::set_current(RuntimeConfig {
+        xdp: test_proxy_config("eth-new"),
+    });
     let new_manager = replace_manager_from_runtime();
     mark_test_proxy_bridge_ready(&new_manager);
     assert!(af_xdp::proxy_bridge_should_continue(&lease));
@@ -384,40 +398,60 @@ fn apply_rule_diff_adds_removes_only_deltas() {
     let new_img = super::linux::rule_map_images(&new_state);
 
     // Exact v4 blocked: 192.0.2.1 removed, 192.0.2.3 added, 192.0.2.2 kept (no-op)
-    assert!(old_img
-        .blocked_v4
-        .contains_key(&u32::from_be_bytes([192, 0, 2, 1])));
-    assert!(old_img
-        .blocked_v4
-        .contains_key(&u32::from_be_bytes([192, 0, 2, 2])));
-    assert!(!old_img
-        .blocked_v4
-        .contains_key(&u32::from_be_bytes([192, 0, 2, 3])));
+    assert!(
+        old_img
+            .blocked_v4
+            .contains_key(&u32::from_be_bytes([192, 0, 2, 1]))
+    );
+    assert!(
+        old_img
+            .blocked_v4
+            .contains_key(&u32::from_be_bytes([192, 0, 2, 2]))
+    );
+    assert!(
+        !old_img
+            .blocked_v4
+            .contains_key(&u32::from_be_bytes([192, 0, 2, 3]))
+    );
 
-    assert!(!new_img
-        .blocked_v4
-        .contains_key(&u32::from_be_bytes([192, 0, 2, 1])));
-    assert!(new_img
-        .blocked_v4
-        .contains_key(&u32::from_be_bytes([192, 0, 2, 2])));
-    assert!(new_img
-        .blocked_v4
-        .contains_key(&u32::from_be_bytes([192, 0, 2, 3])));
+    assert!(
+        !new_img
+            .blocked_v4
+            .contains_key(&u32::from_be_bytes([192, 0, 2, 1]))
+    );
+    assert!(
+        new_img
+            .blocked_v4
+            .contains_key(&u32::from_be_bytes([192, 0, 2, 2]))
+    );
+    assert!(
+        new_img
+            .blocked_v4
+            .contains_key(&u32::from_be_bytes([192, 0, 2, 3]))
+    );
 
     // Exact v4 allowed: 198.51.100.2 added, 198.51.100.1 kept
-    assert!(old_img
-        .allowed_v4
-        .contains_key(&u32::from_be_bytes([198, 51, 100, 1])));
-    assert!(!old_img
-        .allowed_v4
-        .contains_key(&u32::from_be_bytes([198, 51, 100, 2])));
+    assert!(
+        old_img
+            .allowed_v4
+            .contains_key(&u32::from_be_bytes([198, 51, 100, 1]))
+    );
+    assert!(
+        !old_img
+            .allowed_v4
+            .contains_key(&u32::from_be_bytes([198, 51, 100, 2]))
+    );
 
-    assert!(new_img
-        .allowed_v4
-        .contains_key(&u32::from_be_bytes([198, 51, 100, 1])));
-    assert!(new_img
-        .allowed_v4
-        .contains_key(&u32::from_be_bytes([198, 51, 100, 2])));
+    assert!(
+        new_img
+            .allowed_v4
+            .contains_key(&u32::from_be_bytes([198, 51, 100, 1]))
+    );
+    assert!(
+        new_img
+            .allowed_v4
+            .contains_key(&u32::from_be_bytes([198, 51, 100, 2]))
+    );
 
     // LPM v4 blocked: 203.0.113.0/24 removed
     assert!(!old_img.blocked_v4_lpm.is_empty());
@@ -432,7 +466,9 @@ fn apply_rule_diff_adds_removes_only_deltas() {
 #[test]
 fn xdp_proxy_bridge_lifecycle_continues_only_when_ready() {
     let _guard = crate::runtime_mode::runtime_config_test_guard();
-    RuntimeConfig::set_current(RuntimeConfig { xdp: test_proxy_config("eth-new") });
+    RuntimeConfig::set_current(RuntimeConfig {
+        xdp: test_proxy_config("eth-new"),
+    });
     let new_manager = replace_manager_from_runtime();
     mark_test_proxy_bridge_ready(&new_manager);
     let lease = test_dataplane_lease(&new_manager);
@@ -484,12 +520,16 @@ fn xdp_range_to_nets_covers_only_requested_span() {
         let ip = IpAddr::V4(Ipv4Addr::new(203, 0, 113, last_octet));
         assert!(nets.iter().any(|net| net.contains(&ip)));
     }
-    assert!(!nets
-        .iter()
-        .any(|net| net.contains(&IpAddr::V4(Ipv4Addr::new(203, 0, 113, 9)))));
-    assert!(!nets
-        .iter()
-        .any(|net| net.contains(&IpAddr::V4(Ipv4Addr::new(203, 0, 113, 21)))));
+    assert!(
+        !nets
+            .iter()
+            .any(|net| net.contains(&IpAddr::V4(Ipv4Addr::new(203, 0, 113, 9))))
+    );
+    assert!(
+        !nets
+            .iter()
+            .any(|net| net.contains(&IpAddr::V4(Ipv4Addr::new(203, 0, 113, 21))))
+    );
 }
 
 #[test]
@@ -925,9 +965,11 @@ fn xdp_proxy_ready_requires_explicit_redirect_enable_after_xsk_registration() {
     assert!(status.interfaces[0].xsk_ready);
     assert!(!status.proxy_ready);
     assert!(!status.proxy_redirect_enabled);
-    assert!(status.interfaces[0]
-        .detail
-        .contains("redirect disabled until proxy bridge starts"));
+    assert!(
+        status.interfaces[0]
+            .detail
+            .contains("redirect disabled until proxy bridge starts")
+    );
 
     manager
         .proxy_redirect_enabled
@@ -1003,17 +1045,21 @@ fn xdp_proxy_degradation_disables_ready_queues() {
     assert!(!status.proxy_ready);
     assert_eq!(status.xsk_ready_queues, 0);
     assert!(status.proxy_fallback_reason.contains("redirect disabled"));
-    assert!(status.interfaces[0].xsk_queues[0]
-        .detail
-        .contains("redirect disabled"));
+    assert!(
+        status.interfaces[0].xsk_queues[0]
+            .detail
+            .contains("redirect disabled")
+    );
     assert_eq!(
         status.interfaces[0].xsk_queues[1].detail,
         "AF_XDP socket setup failed"
     );
-    assert!(status.interfaces[0]
-        .xsk_queues
-        .iter()
-        .all(|queue| !queue.registered && !queue.ready));
+    assert!(
+        status.interfaces[0]
+            .xsk_queues
+            .iter()
+            .all(|queue| !queue.registered && !queue.ready)
+    );
 }
 
 #[test]
@@ -1125,9 +1171,11 @@ fn xdp_map_sync_failure_status_is_fail_open() {
     assert!(!status.proxy_redirect_enabled);
     assert_eq!(status.xsk_ready_queues, 0);
     assert!(status.fallback_reason.contains("map sync failed"));
-    assert!(status
-        .proxy_fallback_reason
-        .contains("socket path is active"));
+    assert!(
+        status
+            .proxy_fallback_reason
+            .contains("socket path is active")
+    );
 }
 
 #[test]
@@ -1320,12 +1368,7 @@ fn af_xdp_tcp_stalled_session_reaped_at_deadline_despite_traffic() {
     // deadline proves the sweep is selective.
     clock.advance(af_xdp::AF_XDP_TCP_BUDGET_STALL_DEADLINE + Duration::from_millis(1));
     let now = smoltcp::time::Instant::from_micros(clock.now_micros());
-    assert!(reactor.ensure_session_at(
-        route,
-        flow,
-        af_xdp::AfXdpTcpProxyClass::TcpPlain,
-        now
-    ));
+    assert!(reactor.ensure_session_at(route, flow, af_xdp::AfXdpTcpProxyClass::TcpPlain, now));
     let healthy_frame = ipv4_tcp_syn_frame_with_source_port(false, 53401);
     let af_xdp::AfXdpProxyFrame::Tcp {
         route: healthy_route,
@@ -1528,17 +1571,41 @@ fn af_xdp_tcp_full_table_evicts_oldest_pre_proxy() {
     let mut reactor = af_xdp::AfXdpTcpReactor::new_with_session_limit(None, None, 2);
     let base_ms = crate::utils::time::now_timestamp_millis();
     let at = |offset_ms: i64| smoltcp::time::Instant::from_millis(base_ms + offset_ms);
-    let (route_a, flow_a, _) =
-        parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(false, 40000, [192, 0, 2, 1]));
-    let (route_b, flow_b, _) =
-        parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(false, 40001, [192, 0, 2, 2]));
-    let (route_c, flow_c, _) =
-        parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(false, 40002, [192, 0, 2, 3]));
-    assert!(reactor.ensure_session_at(route_a, flow_a, af_xdp::AfXdpTcpProxyClass::TcpPlain, at(0)));
-    assert!(reactor.ensure_session_at(route_b, flow_b, af_xdp::AfXdpTcpProxyClass::TcpPlain, at(10)));
+    let (route_a, flow_a, _) = parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(
+        false,
+        40000,
+        [192, 0, 2, 1],
+    ));
+    let (route_b, flow_b, _) = parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(
+        false,
+        40001,
+        [192, 0, 2, 2],
+    ));
+    let (route_c, flow_c, _) = parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(
+        false,
+        40002,
+        [192, 0, 2, 3],
+    ));
+    assert!(reactor.ensure_session_at(
+        route_a,
+        flow_a,
+        af_xdp::AfXdpTcpProxyClass::TcpPlain,
+        at(0)
+    ));
+    assert!(reactor.ensure_session_at(
+        route_b,
+        flow_b,
+        af_xdp::AfXdpTcpProxyClass::TcpPlain,
+        at(10)
+    ));
     assert_eq!(reactor.pre_proxy_session_count(), 2);
 
-    assert!(reactor.ensure_session_at(route_c, flow_c, af_xdp::AfXdpTcpProxyClass::TcpPlain, at(20)));
+    assert!(reactor.ensure_session_at(
+        route_c,
+        flow_c,
+        af_xdp::AfXdpTcpProxyClass::TcpPlain,
+        at(20)
+    ));
     assert_eq!(reactor.session_count(), 2);
     assert_eq!(reactor.pre_proxy_session_count(), 2);
     // The oldest unverified session was evicted, the newer one kept.
@@ -1560,10 +1627,16 @@ fn af_xdp_tcp_verified_sessions_are_never_evicted() {
     // table full of verified work refuses new admissions instead of
     // killing real flows.
     let mut reactor = af_xdp::AfXdpTcpReactor::new_with_session_limit_for_test(None, None, 2);
-    let (route_a, flow_a, packet_a) =
-        parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(false, 40000, [192, 0, 2, 1]));
-    let (route_b, flow_b, packet_b) =
-        parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(false, 40001, [192, 0, 2, 2]));
+    let (route_a, flow_a, packet_a) = parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(
+        false,
+        40000,
+        [192, 0, 2, 1],
+    ));
+    let (route_b, flow_b, packet_b) = parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(
+        false,
+        40001,
+        [192, 0, 2, 2],
+    ));
     assert_eq!(
         reactor.ingest(route_a, flow_a, packet_a),
         af_xdp::AfXdpTcpIngestStatus::Accepted
@@ -1574,8 +1647,11 @@ fn af_xdp_tcp_verified_sessions_are_never_evicted() {
     );
     assert_eq!(reactor.pre_proxy_session_count(), 0);
 
-    let (route_c, flow_c, _) =
-        parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(false, 40002, [192, 0, 2, 3]));
+    let (route_c, flow_c, _) = parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(
+        false,
+        40002,
+        [192, 0, 2, 3],
+    ));
     assert!(!reactor.ensure_session(route_c, flow_c, af_xdp::AfXdpTcpProxyClass::TcpPlain));
     assert_eq!(reactor.session_count(), 2);
     assert!(reactor.has_session(&flow_a));
@@ -1598,8 +1674,11 @@ fn af_xdp_tcp_per_ip_pre_proxy_cap_churns_oldest() {
     let base_ms = crate::utils::time::now_timestamp_millis();
     let mut first_flow = None;
     for port in 0..af_xdp::AF_XDP_TCP_PRE_PROXY_PER_IP_LIMIT as u16 {
-        let (route, flow, _) =
-            parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(false, 40000 + port, attacker));
+        let (route, flow, _) = parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(
+            false,
+            40000 + port,
+            attacker,
+        ));
         if first_flow.is_none() {
             first_flow = Some(flow);
         }
@@ -1617,9 +1696,8 @@ fn af_xdp_tcp_per_ip_pre_proxy_cap_churns_oldest() {
 
     // One more SYN from the same IP churns ITS oldest — admitted, count
     // pinned at the cap.
-    let (route, flow, _) = parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(
-        false, 41000, attacker,
-    ));
+    let (route, flow, _) =
+        parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(false, 41000, attacker));
     assert!(reactor.ensure_session_at(
         route,
         flow,
@@ -1634,8 +1712,11 @@ fn af_xdp_tcp_per_ip_pre_proxy_cap_churns_oldest() {
     assert!(reactor.has_session(&flow));
 
     // A different IP is unaffected by the attacker's saturated per-IP pool.
-    let (route, flow, _) =
-        parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(false, 42000, [192, 0, 2, 7]));
+    let (route, flow, _) = parse_tcp_syn_frame(&ipv4_tcp_syn_frame_with_source(
+        false,
+        42000,
+        [192, 0, 2, 7],
+    ));
     assert!(reactor.ensure_session(route, flow, af_xdp::AfXdpTcpProxyClass::TcpPlain));
 }
 
@@ -1888,9 +1969,12 @@ fn af_xdp_tcp_reactor_resolves_egress_route_before_reaping_session() {
     let now = smoltcp::time::Instant::from_millis(crate::utils::time::now_timestamp_millis() + 500);
     let egress = reactor.poll_at_for_test(now);
 
-    assert!(egress
-        .iter()
-        .any(|(egress_route, ip_packet, _)| *egress_route == route && ip_packet.ip_packet() == reply_packet.as_slice()));
+    assert!(
+        egress
+            .iter()
+            .any(|(egress_route, ip_packet, _)| *egress_route == route
+                && ip_packet.ip_packet() == reply_packet.as_slice())
+    );
     assert_eq!(reactor.session_count(), 0);
 }
 
@@ -1902,14 +1986,49 @@ fn ipv4_tcp_control_reply_frame(local_port: u16, seq: u32, ack: u32, flags: u8) 
     let mut frame = ethernet_header(0x0800, false);
     let total_len = 20 + 20;
     frame.extend_from_slice(&[
-        0x45, 0, (total_len >> 8) as u8, total_len as u8, 0, 1, 0, 0, 64, 6, 0, 0, 192, 0, 2, 10,
-        198, 51, 100, 5,
+        0x45,
+        0,
+        (total_len >> 8) as u8,
+        total_len as u8,
+        0,
+        1,
+        0,
+        0,
+        64,
+        6,
+        0,
+        0,
+        192,
+        0,
+        2,
+        10,
+        198,
+        51,
+        100,
+        5,
     ]);
     let [port_hi, port_lo] = local_port.to_be_bytes();
     frame.extend_from_slice(&[
-        0x01, 0xbb, port_hi, port_lo, (seq >> 24) as u8, (seq >> 16) as u8, (seq >> 8) as u8,
-        seq as u8, (ack >> 24) as u8, (ack >> 16) as u8, (ack >> 8) as u8, ack as u8, 0x50, flags,
-        0xff, 0xff, 0, 0, 0, 0,
+        0x01,
+        0xbb,
+        port_hi,
+        port_lo,
+        (seq >> 24) as u8,
+        (seq >> 16) as u8,
+        (seq >> 8) as u8,
+        seq as u8,
+        (ack >> 24) as u8,
+        (ack >> 16) as u8,
+        (ack >> 8) as u8,
+        ack as u8,
+        0x50,
+        flags,
+        0xff,
+        0xff,
+        0,
+        0,
+        0,
+        0,
     ]);
     write_ipv4_checksum(&mut frame, ethernet_header_len(false));
     write_tcp4_checksum(&mut frame, ethernet_header_len(false));
@@ -2232,9 +2351,11 @@ fn af_xdp_dial_registry_port_span_exhaustion_is_explicit() {
     let ports: std::collections::HashSet<u16> =
         claimed.iter().map(|f| f.local_addr.port()).collect();
     assert_eq!(ports.len(), registry.port_span as usize);
-    assert!(ports
-        .iter()
-        .all(|p| *p >= registry.port_base && *p < registry.port_base + registry.port_span));
+    assert!(
+        ports
+            .iter()
+            .all(|p| *p >= registry.port_base && *p < registry.port_base + registry.port_span)
+    );
     // The span is exhausted — the next claim fails, never wraps onto a
     // live tuple.
     assert!(registry.claim_flow(source, remote, &owner, None).is_none());
@@ -2347,7 +2468,12 @@ fn af_xdp_dial_registry_preferred_port_pinning() {
     // The same preferred port on a different remote is a distinct tuple —
     // it is honored, not treated as occupied.
     let flow2 = registry
-        .claim_flow(source, "192.0.2.11:53".parse().unwrap(), &owner, Some(preferred))
+        .claim_flow(
+            source,
+            "192.0.2.11:53".parse().unwrap(),
+            &owner,
+            Some(preferred),
+        )
         .expect("distinct tuple may share the preferred port");
     assert_eq!(flow2.local_addr.port(), preferred);
     // Occupied preferred tuple (same source, same remote) falls through
@@ -2372,8 +2498,12 @@ fn af_xdp_dial_registry_preferred_port_pinning() {
 fn xdp_out_ct_key_builds_family_correct_tuples() {
     let v4_local: std::net::SocketAddr = "198.51.100.5:39000".parse().unwrap();
     let v4_remote: std::net::SocketAddr = "192.0.2.10:443".parse().unwrap();
-    let key = linux::out_ct_key(v4_local, v4_remote, cloudsidra_edge_xdp_common::XDP_PROTO_TCP)
-        .expect("v4 pair");
+    let key = linux::out_ct_key(
+        v4_local,
+        v4_remote,
+        cloudsidra_edge_xdp_common::XDP_PROTO_TCP,
+    )
+    .expect("v4 pair");
     assert_eq!(key.family, 4);
     assert_eq!(key.proto, cloudsidra_edge_xdp_common::XDP_PROTO_TCP);
     assert_eq!(&key.local_addr[..4], &[198, 51, 100, 5]);
@@ -2383,13 +2513,27 @@ fn xdp_out_ct_key_builds_family_correct_tuples() {
 
     let v6_local: std::net::SocketAddr = "[2001:db8::5]:39000".parse().unwrap();
     let v6_remote: std::net::SocketAddr = "[2001:db8::10]:443".parse().unwrap();
-    let key = linux::out_ct_key(v6_local, v6_remote, cloudsidra_edge_xdp_common::XDP_PROTO_TCP)
-        .expect("v6 pair");
+    let key = linux::out_ct_key(
+        v6_local,
+        v6_remote,
+        cloudsidra_edge_xdp_common::XDP_PROTO_TCP,
+    )
+    .expect("v6 pair");
     assert_eq!(key.family, 6);
-    assert_eq!(key.local_addr, "2001:db8::5".parse::<Ipv6Addr>().unwrap().octets());
+    assert_eq!(
+        key.local_addr,
+        "2001:db8::5".parse::<Ipv6Addr>().unwrap().octets()
+    );
 
     // Mixed families can never be a wire flow — refused, not truncated.
-    assert!(linux::out_ct_key(v4_local, v6_remote, cloudsidra_edge_xdp_common::XDP_PROTO_TCP).is_none());
+    assert!(
+        linux::out_ct_key(
+            v4_local,
+            v6_remote,
+            cloudsidra_edge_xdp_common::XDP_PROTO_TCP
+        )
+        .is_none()
+    );
 }
 
 #[cfg(any(test, target_os = "linux"))]
@@ -2829,10 +2973,7 @@ async fn af_xdp_tcp_stream_bridges_bounded_channels() {
     assert_eq!(&read, b"lo");
 
     stream.write_all(b"world").await.unwrap();
-    assert_eq!(
-        &egress_rx.recv().await.unwrap()[..],
-        b"world"
-    );
+    assert_eq!(&egress_rx.recv().await.unwrap()[..], b"world");
 
     stream.shutdown().await.unwrap();
     assert!(egress_rx.recv().await.is_none());
@@ -2869,9 +3010,11 @@ async fn af_xdp_tcp_stream_chunks_large_writes_with_backpressure() {
     assert_eq!(chunks[0].len(), 16 * 1024);
     assert_eq!(chunks[1].len(), 16 * 1024);
     assert_eq!(chunks[2].len(), 8 * 1024);
-    assert!(chunks
-        .iter()
-        .all(|chunk| chunk.iter().all(|byte| *byte == 0x5a)));
+    assert!(
+        chunks
+            .iter()
+            .all(|chunk| chunk.iter().all(|byte| *byte == 0x5a))
+    );
 }
 
 #[tokio::test]
@@ -3027,10 +3170,7 @@ async fn af_xdp_tcp_stream_write_and_shutdown_signal_reactor_wake() {
     // grow the wake set — the entry is already pending.
     stream.shutdown().await.unwrap();
     assert_eq!(reactor.pending_wake_count(), 1);
-    assert_eq!(
-        &egress_rx.recv().await.unwrap()[..],
-        b"hello"
-    );
+    assert_eq!(&egress_rx.recv().await.unwrap()[..], b"hello");
 
     // The next poll drains the wake queue and marks the session hot.
     reactor.poll();
@@ -3097,11 +3237,8 @@ fn af_xdp_tcp_reactor_unstarted_sessions_go_cold_until_reaped() {
     // permanent heat here would spin the queue thread forever. The
     // cadence-gated reaper — not heat — is what prevents stranding.
     let frame = ipv4_tcp_syn_frame(false);
-    let af_xdp::AfXdpProxyFrame::Tcp {
-        route,
-        flow,
-        ..
-    } = af_xdp::parse_proxy_frame("eth0", 0, &frame).expect("valid TCP SYN frame")
+    let af_xdp::AfXdpProxyFrame::Tcp { route, flow, .. } =
+        af_xdp::parse_proxy_frame("eth0", 0, &frame).expect("valid TCP SYN frame")
     else {
         panic!("expected TCP proxy frame");
     };
@@ -3121,9 +3258,8 @@ fn af_xdp_tcp_reactor_unstarted_sessions_go_cold_until_reaped() {
 
     // Going cold does not strand the session: the retainer still collects
     // it once the pre-proxy idle timeout elapses.
-    let reap_at = smoltcp::time::Instant::from_millis(
-        crate::utils::time::now_timestamp_millis() + 4_001,
-    );
+    let reap_at =
+        smoltcp::time::Instant::from_millis(crate::utils::time::now_timestamp_millis() + 4_001);
     let _ = reactor.poll_at_for_test(reap_at);
     assert_eq!(reactor.session_count(), 0);
 }
@@ -3322,9 +3458,7 @@ fn af_xdp_tcp_stream_drop_signals_reactor() {
         };
         (
             flow,
-            std::sync::Arc::new(dashmap::DashMap::with_hasher(
-                ahash::RandomState::default(),
-            )),
+            std::sync::Arc::new(dashmap::DashMap::with_hasher(ahash::RandomState::default())),
         )
     };
     let parts = af_xdp::AfXdpTcpStream::channel_pair_with_wake(
@@ -3598,18 +3732,15 @@ async fn af_xdp_tcp_stream_channel_charge_releases_with_stream() {
         peer_addr: "192.0.2.10:53000".parse().unwrap(),
     };
     let af_xdp::AfXdpTcpStreamParts {
-        stream,
-        ingress_tx,
-        ..
+        stream, ingress_tx, ..
     } = af_xdp::AfXdpTcpStream::channel_pair_with_wake(
         8,
         flow,
         Default::default(),
         Default::default(),
     );
-    let payload =
-        af_xdp::AfXdpTcpChargedBytes::charged(bytes::Bytes::from_static(&[7u8; 8192]))
-            .expect("ledger must admit the test payload");
+    let payload = af_xdp::AfXdpTcpChargedBytes::charged(bytes::Bytes::from_static(&[7u8; 8192]))
+        .expect("ledger must admit the test payload");
     ingress_tx.try_send(payload).expect("channel has capacity");
     // Sender dropped (session reaped) — queued payloads keep their
     // charge while the receiver is alive.
@@ -3630,12 +3761,30 @@ fn ipv4_tcp_syn_frame_wscale(vlan: bool, wscale: u8) -> Vec<u8> {
     // kind=3 (wscale), len=3, shift, plus one NOP pad.
     let total_len = 20 + 24;
     frame.extend_from_slice(&[
-        0x45, 0, (total_len >> 8) as u8, total_len as u8, 0, 1, 0, 0, 64, 6, 0, 0, 192, 0, 2,
-        10, 198, 51, 100, 5,
+        0x45,
+        0,
+        (total_len >> 8) as u8,
+        total_len as u8,
+        0,
+        1,
+        0,
+        0,
+        64,
+        6,
+        0,
+        0,
+        192,
+        0,
+        2,
+        10,
+        198,
+        51,
+        100,
+        5,
     ]);
     frame.extend_from_slice(&[
-        0xcf, 0x08, 0x01, 0xbb, 0, 0, 0, 1, 0, 0, 0, 0, 0x60, 0x02, 0xff, 0xff, 0, 0, 0, 0, 3,
-        3, wscale, 1,
+        0xcf, 0x08, 0x01, 0xbb, 0, 0, 0, 1, 0, 0, 0, 0, 0x60, 0x02, 0xff, 0xff, 0, 0, 0, 0, 3, 3,
+        wscale, 1,
     ]);
     write_ipv4_checksum(&mut frame, ethernet_header_len(vlan));
     write_tcp4_checksum(&mut frame, ethernet_header_len(vlan));
@@ -3647,8 +3796,26 @@ fn ipv4_tcp_payload_frame(vlan: bool, seq: u32, ack: u32, payload: &[u8]) -> Vec
     let mut frame = ethernet_header(0x0800, vlan);
     let total_len = 20 + 20 + payload.len();
     frame.extend_from_slice(&[
-        0x45, 0, (total_len >> 8) as u8, total_len as u8, 0, 1, 0, 0, 64, 6, 0, 0, 192, 0, 2,
-        10, 198, 51, 100, 5,
+        0x45,
+        0,
+        (total_len >> 8) as u8,
+        total_len as u8,
+        0,
+        1,
+        0,
+        0,
+        64,
+        6,
+        0,
+        0,
+        192,
+        0,
+        2,
+        10,
+        198,
+        51,
+        100,
+        5,
     ]);
     frame.extend_from_slice(&[
         0xcf,
@@ -3682,16 +3849,8 @@ fn ipv4_tcp_payload_frame(vlan: bool, seq: u32, ack: u32, payload: &[u8]) -> Vec
 /// the client's ACK/data segments must acknowledge it for smoltcp to
 /// accept them into the receive buffer.
 #[cfg(any(test, target_os = "linux"))]
-fn synack_seq(
-    egress: &[(
-        af_xdp::AfXdpRouteMeta,
-        af_xdp::AfXdpTcpEgressPacket,
-        i64,
-    )],
-) -> u32 {
-    let (_, ip_packet, _) = egress
-        .first()
-        .expect("reactor emitted no SYN-ACK frame");
+fn synack_seq(egress: &[(af_xdp::AfXdpRouteMeta, af_xdp::AfXdpTcpEgressPacket, i64)]) -> u32 {
+    let (_, ip_packet, _) = egress.first().expect("reactor emitted no SYN-ACK frame");
     let tcp_off = ((ip_packet[0] & 0x0f) as usize) * 4;
     u32::from_be_bytes([
         ip_packet[tcp_off + 4],
@@ -3742,7 +3901,10 @@ fn af_xdp_tcp_buffer_grows_to_ceiling_on_fill() {
     // Complete the handshake and push >50% of the initial window.
     let our_ack = synack_seq(&egress).wrapping_add(1);
     let payload = vec![0x5au8; (initial_cap / 2) + 1460];
-    af_xdp_ingest_frame(&mut reactor, &ipv4_tcp_payload_frame(false, 2, our_ack, &payload));
+    af_xdp_ingest_frame(
+        &mut reactor,
+        &ipv4_tcp_payload_frame(false, 2, our_ack, &payload),
+    );
     reactor.poll();
 
     let grown_cap = reactor
@@ -3836,7 +3998,10 @@ fn af_xdp_tcp_quiet_session_keeps_small_buffers() {
     let our_ack = synack_seq(&egress).wrapping_add(1);
     // A single sub-threshold chunk (< cap/2 drained) must not grow.
     let chunk = vec![0x5au8; initial_cap / 4];
-    af_xdp_ingest_frame(&mut reactor, &ipv4_tcp_payload_frame(false, 2, our_ack, &chunk));
+    af_xdp_ingest_frame(
+        &mut reactor,
+        &ipv4_tcp_payload_frame(false, 2, our_ack, &chunk),
+    );
     reactor.poll();
 
     let cap = reactor
@@ -3950,7 +4115,10 @@ fn af_xdp_tcp_buffer_growth_capped_without_wscale() {
 
     let our_ack = synack_seq(&egress).wrapping_add(1);
     let payload = vec![0x5au8; (initial_cap / 2) + 1460];
-    af_xdp_ingest_frame(&mut reactor, &ipv4_tcp_payload_frame(false, 2, our_ack, &payload));
+    af_xdp_ingest_frame(
+        &mut reactor,
+        &ipv4_tcp_payload_frame(false, 2, our_ack, &payload),
+    );
     reactor.poll();
 
     let grown_cap = reactor
@@ -3985,12 +4153,7 @@ fn af_xdp_tcp_cap_parked_session_survives_stall_deadline() {
     else {
         panic!("expected TCP proxy frame");
     };
-    assert!(reactor.ensure_session_at(
-        route,
-        flow,
-        af_xdp::AfXdpTcpProxyClass::TcpPlain,
-        t0
-    ));
+    assert!(reactor.ensure_session_at(route, flow, af_xdp::AfXdpTcpProxyClass::TcpPlain, t0));
     reactor.force_cap_parked_since_for_test(&flow, t0);
 
     // Past the ledger-stall deadline a cap-parked session must still be
@@ -4038,7 +4201,10 @@ fn af_xdp_tcp_idle_session_returns_grown_buffers() {
 
     let our_ack = synack_seq(&egress).wrapping_add(1);
     let payload = vec![0x5au8; (initial_cap / 2) + 1460];
-    af_xdp_ingest_frame(&mut reactor, &ipv4_tcp_payload_frame(false, 2, our_ack, &payload));
+    af_xdp_ingest_frame(
+        &mut reactor,
+        &ipv4_tcp_payload_frame(false, 2, our_ack, &payload),
+    );
     reactor.poll();
     let grown_cap = reactor
         .session_recv_capacity(&flow)
@@ -4522,11 +4688,7 @@ fn ipv4_tcp_syn_frame_with_source_port(vlan: bool, source_port: u16) -> Vec<u8> 
 }
 
 #[cfg(any(test, target_os = "linux"))]
-fn ipv4_tcp_syn_frame_with_source(
-    vlan: bool,
-    source_port: u16,
-    source_ip: [u8; 4],
-) -> Vec<u8> {
+fn ipv4_tcp_syn_frame_with_source(vlan: bool, source_port: u16, source_ip: [u8; 4]) -> Vec<u8> {
     let mut frame = ethernet_header(0x0800, vlan);
     let total_len = 20 + 20;
     frame.extend_from_slice(&[
@@ -4584,8 +4746,26 @@ fn ipv4_tcp_ack_frame(vlan: bool, seq: u32, ack: u32) -> Vec<u8> {
     let mut frame = ethernet_header(0x0800, vlan);
     let total_len = 20 + 20;
     frame.extend_from_slice(&[
-        0x45, 0, (total_len >> 8) as u8, total_len as u8, 0, 1, 0, 0, 64, 6, 0, 0, 192, 0, 2, 10,
-        198, 51, 100, 5,
+        0x45,
+        0,
+        (total_len >> 8) as u8,
+        total_len as u8,
+        0,
+        1,
+        0,
+        0,
+        64,
+        6,
+        0,
+        0,
+        192,
+        0,
+        2,
+        10,
+        198,
+        51,
+        100,
+        5,
     ]);
     frame.extend_from_slice(&[
         0xcf,
@@ -4679,8 +4859,10 @@ fn write_tcp4_checksum(frame: &mut [u8], ip_offset: usize) {
 #[cfg(any(test, target_os = "linux"))]
 fn write_udp4_checksum(frame: &mut [u8], ip_offset: usize) {
     let udp_offset = ip_offset + 20;
-    let udp_len =
-        usize::from(u16::from_be_bytes([frame[udp_offset + 4], frame[udp_offset + 5]]));
+    let udp_len = usize::from(u16::from_be_bytes([
+        frame[udp_offset + 4],
+        frame[udp_offset + 5],
+    ]));
     frame[udp_offset + 6] = 0;
     frame[udp_offset + 7] = 0;
     let mut pseudo = Vec::with_capacity(12 + udp_len);
@@ -4979,7 +5161,7 @@ fn classify_malformed_tcp_flag_combos() {
         af_xdp::classify_frame(&ipv4_tcp_flags_frame(0x10, 5)),
         Supported
     ); // ACK
-       // ECN flags are legal: SYN|ECE|CWR must not be hurt.
+    // ECN flags are legal: SYN|ECE|CWR must not be hurt.
     assert_eq!(
         af_xdp::classify_frame(&ipv4_tcp_flags_frame(0xc2, 5)),
         Supported
@@ -5236,7 +5418,8 @@ fn kernel_bpf_budget_is_bounded_by_state_budget() {
 #[test]
 #[cfg(target_os = "linux")]
 fn pinned_spec_bytes_empty_pin_dir_is_zero() {
-    let dir = std::env::temp_dir().join(format!("cloudsidra-edge-test-pins-{}", std::process::id()));
+    let dir =
+        std::env::temp_dir().join(format!("cloudsidra-edge-test-pins-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     assert_eq!(
         linux::pinned_spec_bytes_at(&crate::runtime_mode::XdpConfig::default(), &dir),
@@ -5256,7 +5439,8 @@ fn pinned_spec_bytes_empty_pin_dir_is_zero() {
 #[cfg(target_os = "linux")]
 fn ensure_bpf_map_budget_charges_only_new_bytes() {
     let config = crate::runtime_mode::XdpConfig::default();
-    let dir = std::env::temp_dir().join(format!("cloudsidra-edge-test-pins-{}", std::process::id()));
+    let dir =
+        std::env::temp_dir().join(format!("cloudsidra-edge-test-pins-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let projected = linux::projected_bpf_map_bytes(&config);
 
@@ -5365,13 +5549,17 @@ fn auto_scale_without_pins_fits_defaults_and_returns_none() {
 #[cfg(target_os = "linux")]
 fn replace_manager_shares_dial_registry_during_prepare() {
     let _guard = crate::runtime_mode::runtime_config_test_guard();
-    RuntimeConfig::set_current(RuntimeConfig { xdp: test_proxy_config("eth-old") });
+    RuntimeConfig::set_current(RuntimeConfig {
+        xdp: test_proxy_config("eth-old"),
+    });
     let old_manager = replace_manager_from_runtime();
     mark_test_proxy_bridge_ready(&old_manager);
     let registry = std::sync::Arc::new(af_xdp::AfXdpDialRegistry::new(old_manager.clone()));
     *old_manager.dial_registry.lock() = Some(registry.clone());
 
-    RuntimeConfig::set_current(RuntimeConfig { xdp: test_proxy_config("eth-new") });
+    RuntimeConfig::set_current(RuntimeConfig {
+        xdp: test_proxy_config("eth-new"),
+    });
     let new_manager = replace_manager_from_runtime();
 
     assert!(
@@ -5396,13 +5584,14 @@ fn replace_manager_shares_dial_registry_during_prepare() {
 )]
 async fn reload_prepare_failure_keeps_previous_manager_serving() {
     let _guard = crate::runtime_mode::runtime_config_test_guard();
-    RuntimeConfig::set_current(RuntimeConfig { xdp: test_proxy_config("eth-old") });
+    RuntimeConfig::set_current(RuntimeConfig {
+        xdp: test_proxy_config("eth-old"),
+    });
     let old_manager = replace_manager_from_runtime();
     mark_test_proxy_bridge_ready(&old_manager);
     #[cfg(target_os = "linux")]
     {
-        let registry =
-            std::sync::Arc::new(af_xdp::AfXdpDialRegistry::new(old_manager.clone()));
+        let registry = std::sync::Arc::new(af_xdp::AfXdpDialRegistry::new(old_manager.clone()));
         *old_manager.dial_registry.lock() = Some(registry.clone());
     }
 
@@ -5466,7 +5655,9 @@ async fn reload_rejects_unattachable_config_with_serving_predecessor() {
 #[test]
 fn xdp_proxy_bridge_worker_lease_covers_startup_without_redirect() {
     let _guard = crate::runtime_mode::runtime_config_test_guard();
-    RuntimeConfig::set_current(RuntimeConfig { xdp: test_proxy_config("eth-new") });
+    RuntimeConfig::set_current(RuntimeConfig {
+        xdp: test_proxy_config("eth-new"),
+    });
     let manager = replace_manager_from_runtime();
     mark_test_proxy_bridge_ready(&manager);
     let lease = test_dataplane_lease(&manager);
@@ -5729,7 +5920,9 @@ fn icmpv6_error_frame(icmp_type: u8, mtu: u32, inner: &[u8]) -> Vec<u8> {
         58,
         64,
     ]);
-    frame.extend_from_slice(&[0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xaa]);
+    frame.extend_from_slice(&[
+        0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xaa,
+    ]);
     frame.extend_from_slice(&[0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9]);
     frame.extend_from_slice(&[icmp_type, 0, 0, 0]);
     frame.extend_from_slice(&mtu.to_be_bytes());
@@ -5808,9 +6001,7 @@ fn af_xdp_rx_checksum_accepts_valid_wire_frames() {
     let udp = ipv4_udp_frame(false, 0, b"hello");
     assert!(af_xdp::parse_l4_packet(&udp).is_some());
     let inner4 = inner_ipv4_udp_packet(42_001, 443);
-    assert!(
-        af_xdp::parse_icmp_error_frame(&icmpv4_error_frame(3, 4, 1400, &inner4)).is_some()
-    );
+    assert!(af_xdp::parse_icmp_error_frame(&icmpv4_error_frame(3, 4, 1400, &inner4)).is_some());
     let inner6 = inner_ipv6_udp_packet(43_002, 443, &[]);
     assert!(af_xdp::parse_icmp_error_frame(&icmpv6_error_frame(2, 1280, &inner6)).is_some());
 }
@@ -5865,9 +6056,7 @@ fn af_xdp_rx_checksum_udp4_zero_field_is_legal() {
 
 #[test]
 fn af_xdp_rx_checksum_udp6_requires_checksum() {
-    let udp = [
-        0xcf, 0x08, 0x01, 0xbb, 0, 11, 0, 0, b'h', b'i', b'!',
-    ];
+    let udp = [0xcf, 0x08, 0x01, 0xbb, 0, 11, 0, 0, b'h', b'i', b'!'];
     let frame = ipv6_ext_frame(17, &[], &udp);
     // Valid v6 UDP parses.
     assert!(af_xdp::parse_l4_packet(&frame).is_some());
@@ -6115,8 +6304,7 @@ fn xdp_transport_controller_selection_matches_policy() {
         (XdpTransportController::Edgecc, "edgecc"),
     ];
     for (controller, algo) in cases {
-        let mut reactor =
-            af_xdp::AfXdpTcpReactor::new_with_session_limit_for_test(None, None, 64);
+        let mut reactor = af_xdp::AfXdpTcpReactor::new_with_session_limit_for_test(None, None, 64);
         reactor.set_transport_policy(&XdpTransportSettings {
             controller,
             ..Default::default()
@@ -6132,8 +6320,7 @@ fn xdp_transport_edgecc_joins_worker_aggregate() {
     let peer: IpAddr = "203.0.113.7".parse().unwrap();
     let local: IpAddr = "192.0.2.10".parse().unwrap();
 
-    let mut reactor =
-        af_xdp::AfXdpTcpReactor::new_with_session_limit_for_test(None, None, 64);
+    let mut reactor = af_xdp::AfXdpTcpReactor::new_with_session_limit_for_test(None, None, 64);
     let _ = (peer, local); // addresses document the member key shape
     // Cubic policy: no aggregate is created.
     assert!(reactor.aggregate_periods().is_none());
@@ -6167,8 +6354,7 @@ fn xdp_transport_path_prior_round_trip() {
     let peer2: IpAddr = "203.0.113.200".parse().unwrap();
     let local: IpAddr = "192.0.2.10".parse().unwrap();
 
-    let reactor =
-        af_xdp::AfXdpTcpReactor::new_with_session_limit_for_test(None, None, 64);
+    let reactor = af_xdp::AfXdpTcpReactor::new_with_session_limit_for_test(None, None, 64);
     assert!(reactor.path_prior(peer, local).is_none());
 
     // Simulate a completed flow's terminal snapshot recorded through the
@@ -6225,8 +6411,7 @@ fn xdp_socket_buffer_sizing_uses_bdp_prior_and_budget_cap() {
 
     let peer: IpAddr = "203.0.113.7".parse().unwrap();
     let local: IpAddr = "192.0.2.10".parse().unwrap();
-    let reactor =
-        af_xdp::AfXdpTcpReactor::new_with_session_limit_for_test(None, None, 64);
+    let reactor = af_xdp::AfXdpTcpReactor::new_with_session_limit_for_test(None, None, 64);
 
     // No prior → 32KiB floor candidate.
     assert_eq!(reactor.socket_buffer_bytes(peer, local), 32 * 1024);
@@ -6265,10 +6450,8 @@ fn xdp_socket_buffer_sizing_uses_bdp_prior_and_budget_cap() {
     // 2 × 10MB/s × 50ms = 1MB — bounded by the live-session share of the
     // queue budget: the reactor holds zero sessions, so the incoming
     // socket may claim up to budget/(0+1)/2 per direction.
-    let budget_share = (crate::memory_governor::MEMORY_GOVERNOR
-        .tcp_queue_bytes_budget()
-        / 2)
-    .min(usize::MAX as u64) as usize;
+    let budget_share = (crate::memory_governor::MEMORY_GOVERNOR.tcp_queue_bytes_budget() / 2)
+        .min(usize::MAX as u64) as usize;
     let expect = (1_000_000usize).min(budget_share.max(4 * 1024));
     assert_eq!(reactor.socket_buffer_bytes(peer, local), expect);
 }
@@ -6292,8 +6475,7 @@ fn af_xdp_tcp_reactor_reap_persists_terminal_sample() {
     else {
         panic!("expected TCP proxy frame");
     };
-    let mut reactor =
-        af_xdp::AfXdpTcpReactor::new_with_session_limit_for_test(None, None, 1024);
+    let mut reactor = af_xdp::AfXdpTcpReactor::new_with_session_limit_for_test(None, None, 1024);
     assert_eq!(
         reactor.ingest(route, flow, ip_packet),
         af_xdp::AfXdpTcpIngestStatus::Accepted
@@ -6329,4 +6511,415 @@ fn af_xdp_tcp_reactor_reap_persists_terminal_sample() {
     // must not seed future startups on this prefix.
     assert_eq!(entry.bw_bps, 0.0);
     assert_eq!(entry.base_rtt_us, 0.0);
+}
+
+/// Reproduce the ACK-run port loss: a hot-reloaded config with
+/// `runtime.xdp` absent fell back to `load_default().xdp` — enabled but
+/// with empty proxy.ports — so the newly adopted manager carried zero
+/// business ports while the predecessor had been fully ready. The release
+/// confirmation guard must reject the empty-ports manager and accept the
+/// refilled one; no real kernel needed.
+#[cfg(feature = "node-control")]
+#[test]
+fn xdp_empty_ports_config_fails_dataplane_guard_then_refill_passes() {
+    let _guard = crate::runtime_mode::runtime_config_test_guard();
+    RuntimeConfig::set_current(RuntimeConfig {
+        xdp: test_proxy_config("eth-old"),
+    });
+    let old_manager = replace_manager_from_runtime();
+    mark_test_proxy_bridge_ready(&old_manager);
+    let expected = old_manager.config.proxy.ports.clone();
+    assert!(!expected.is_empty());
+    // the predecessor is genuinely ready — the guard accepts it
+    let status = old_manager.status();
+    assert!(
+        crate::node_control::transport::validate_release_dataplane_snapshot(&status, &expected)
+            .is_ok(),
+        "warm manager must satisfy the guard: {:?}",
+        status.proxy_fallback_reason
+    );
+
+    // reload applies a config whose xdp lost its ports (runtime.xdp absent
+    // in the pushed section -> local fallback carried empty proxy.ports)
+    let mut stripped = test_proxy_config("eth-old");
+    stripped.proxy.ports.clear();
+    RuntimeConfig::set_current(RuntimeConfig { xdp: stripped });
+    let new_manager = replace_manager_from_runtime();
+    mark_test_proxy_bridge_ready(&new_manager);
+    let status = new_manager.status();
+    assert!(
+        crate::node_control::transport::validate_release_dataplane_snapshot(&status, &expected)
+            .is_err(),
+        "empty-ports config must fail closed even with ready queues"
+    );
+
+    // the apply path's fill re-derives the ports from the live server list
+    let mut fixed = test_proxy_config("eth-old");
+    fixed.proxy.ports.clear();
+    crate::xdp_auto_config::fill_missing_xdp_proxy_ports(&mut fixed, &expected);
+    assert_eq!(fixed.proxy.ports, expected);
+    RuntimeConfig::set_current(RuntimeConfig { xdp: fixed });
+    let reloaded = replace_manager_from_runtime();
+    mark_test_proxy_bridge_ready(&reloaded);
+    assert!(
+        crate::node_control::transport::validate_release_dataplane_snapshot(
+            &reloaded.status(),
+            &expected
+        )
+        .is_ok()
+    );
+}
+
+/// Cleanup-before-bind ordering: `prepare_after_xsk_cleanup` runs cleanup
+/// first; a cleanup error means prepare is never invoked.
+#[cfg(target_os = "linux")]
+#[test]
+fn prepare_after_xsk_cleanup_orders_and_failcloses() {
+    let order = std::cell::RefCell::new(Vec::new());
+    let out: anyhow::Result<u8> = linux::prepare_after_xsk_cleanup(
+        || {
+            order.borrow_mut().push("cleanup");
+            Ok(())
+        },
+        || {
+            order.borrow_mut().push("bind");
+            Ok(7u8)
+        },
+    );
+    assert_eq!(out.unwrap(), 7);
+    assert_eq!(*order.borrow(), vec!["cleanup", "bind"]);
+
+    let called = std::cell::RefCell::new(false);
+    let out: anyhow::Result<u8> = linux::prepare_after_xsk_cleanup(
+        || Err(anyhow::anyhow!("clear failed")),
+        || {
+            *called.borrow_mut() = true;
+            Ok(1u8)
+        },
+    );
+    assert!(out.is_err());
+    assert!(!*called.borrow(), "cleanup failure must skip prepare");
+
+    let out: anyhow::Result<u8> =
+        linux::prepare_after_xsk_cleanup(|| Ok(()), || Err(anyhow::anyhow!("bind failed")));
+    let msg = format!("{:#}", out.unwrap_err());
+    assert!(
+        msg.contains("bind failed"),
+        "prepare error must propagate: {msg}"
+    );
+}
+
+/// Slot-walk order and early-stop semantics for the XSK map clearer.
+#[cfg(target_os = "linux")]
+#[test]
+fn clear_xsk_slots_order_and_first_error_stop() {
+    let visited = std::cell::RefCell::new(Vec::new());
+    linux::clear_xsk_slots_with(4, |i| {
+        visited.borrow_mut().push(i);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(*visited.borrow(), vec![0, 1, 2, 3]);
+
+    let visited = std::cell::RefCell::new(Vec::new());
+    let err = linux::clear_xsk_slots_with(4, |i| {
+        visited.borrow_mut().push(i);
+        if i == 1 {
+            Err(anyhow::anyhow!("unset failed"))
+        } else {
+            Ok(())
+        }
+    });
+    assert!(err.is_err());
+    assert_eq!(
+        *visited.borrow(),
+        vec![0, 1],
+        "walk must stop at first error"
+    );
+
+    // max=0 is a no-op, max beyond slots is the caller's contract
+    let visited = std::cell::RefCell::new(Vec::new());
+    linux::clear_xsk_slots_with(0, |i| {
+        visited.borrow_mut().push(i);
+        Ok(())
+    })
+    .unwrap();
+    assert!(visited.borrow().is_empty());
+}
+
+/// The narrow-absence converter accepts only an already-empty slot —
+/// ENOENT/KeyNotFound — and never hides real syscall errors.
+#[cfg(target_os = "linux")]
+#[test]
+fn xsk_unset_absence_is_narrow() {
+    assert!(linux::xsk_unset_is_absent(
+        &aya::maps::MapError::KeyNotFound
+    ));
+    assert!(linux::xsk_unset_is_absent(
+        &aya::maps::MapError::SyscallError(aya::sys::SyscallError {
+            call: "bpf_map_delete_elem",
+            io_error: std::io::Error::from_raw_os_error(libc::ENOENT),
+        })
+    ));
+    for errno in [libc::EBADF, libc::EINVAL] {
+        assert!(
+            !linux::xsk_unset_is_absent(&aya::maps::MapError::SyscallError(
+                aya::sys::SyscallError {
+                    call: "bpf_map_delete_elem",
+                    io_error: std::io::Error::from_raw_os_error(errno),
+                }
+            )),
+            "errno {errno} must not be treated as absent"
+        );
+    }
+    assert!(!linux::xsk_unset_is_absent(&aya::maps::MapError::IoError(
+        std::io::Error::from_raw_os_error(libc::EPERM)
+    )));
+}
+
+/// Retired-lease drain gate used by the rebind path: passes when no
+/// workers remain, fails when workers are still alive at the deadline,
+/// passes again after they exit. Pure async seam — no kernel needed.
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn af_xdp_lease_drain_gate() {
+    let manager = std::sync::Arc::new(XdpManager::new(XdpConfig {
+        enabled: true,
+        ..XdpConfig::default()
+    }));
+    let lease = test_dataplane_lease(&manager);
+    lease.retire();
+    assert!(lease.is_retired());
+    // no workers -> drains immediately
+    assert!(
+        lease
+            .wait_workers_drained(std::time::Duration::from_millis(50))
+            .await
+    );
+    // a live worker blocks the drain past the deadline
+    lease.worker_started();
+    assert!(
+        !lease
+            .wait_workers_drained(std::time::Duration::from_millis(60))
+            .await
+    );
+    // after the worker exits the drain completes
+    lease.worker_exited();
+    assert!(
+        lease
+            .wait_workers_drained(std::time::Duration::from_secs(1))
+            .await
+    );
+}
+
+/// Stale-ready regression: adopting a stop generation (ports emptied by
+/// config) must not inherit redirect/ready flags for sockets the new
+/// generation will never bridge. Positive: a real adoption with
+/// nonempty ports keeps them.
+#[cfg(target_os = "linux")]
+#[test]
+fn xdp_adopt_empty_ports_does_not_inherit_ready_flags() {
+    let make_ready = |ports: Vec<u16>| {
+        let mut cfg = test_proxy_config("eth0");
+        cfg.proxy.ports = ports
+            .into_iter()
+            .map(|port| crate::runtime_mode::XdpProxyPortConfig {
+                port,
+                ..Default::default()
+            })
+            .collect();
+        let manager = std::sync::Arc::new(XdpManager::new(cfg));
+        mark_test_proxy_bridge_ready(&manager);
+        let lease = test_dataplane_lease(&manager);
+        *manager.af_xdp.lock() = Some(linux::AfXdpRuntimeHandle::test_with_lease(
+            manager.xsk_status.read().clone(),
+            Some(lease.clone()),
+        ));
+        (manager, lease)
+    };
+    let mut stop_cfg = test_proxy_config("eth0");
+    stop_cfg.proxy.ports.clear();
+
+    // Stop generation adoption: zero business ports.
+    let (old_manager, lease) = make_ready(vec![80]);
+    let new_manager = std::sync::Arc::new(XdpManager::new(stop_cfg));
+    new_manager.adopt_af_xdp_runtime(&old_manager, &lease, Some(&new_manager));
+    assert!(!new_manager.proxy_redirect_enabled.load(Ordering::Relaxed));
+    let status = new_manager.status();
+    assert!(!status.proxy_ready);
+    assert_eq!(status.proxy_ports, 0);
+    assert!(std::sync::Arc::ptr_eq(&lease.owner(), &new_manager));
+
+    // Same-shaped adoption with nonempty ports keeps flags + readiness.
+    let (old_manager, lease) = make_ready(vec![443]);
+    let new_manager = std::sync::Arc::new(XdpManager::new({
+        let mut cfg = test_proxy_config("eth0");
+        cfg.proxy.ports = vec![crate::runtime_mode::XdpProxyPortConfig {
+            port: 443,
+            ..Default::default()
+        }];
+        cfg
+    }));
+    new_manager.adopt_af_xdp_runtime(&old_manager, &lease, Some(&new_manager));
+    assert!(new_manager.proxy_redirect_enabled.load(Ordering::Relaxed));
+    assert!(new_manager.status().proxy_ready);
+}
+
+/// Retirement bookkeeping: only the matching retired+drained lease is
+/// cleared; live workers, missing runtime, or a different lease are
+/// untouched. Configured/faulted/counters survive; public status shows
+/// the truth after retirement.
+#[cfg(target_os = "linux")]
+#[test]
+fn xdp_finish_retired_runtime_clears_only_matching_lease() {
+    let _guard = crate::runtime_mode::runtime_config_test_guard();
+    let previous_home = std::env::var_os("CLOUDSIDRA_EDGE_HOME");
+    let scratch = std::env::temp_dir().join(format!("xdp-retire-test-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&scratch).unwrap();
+    unsafe {
+        std::env::set_var("CLOUDSIDRA_EDGE_HOME", &scratch);
+    }
+
+    let mut cfg = test_proxy_config("eth0");
+    cfg.proxy.ports = vec![crate::runtime_mode::XdpProxyPortConfig {
+        port: 80,
+        ..Default::default()
+    }];
+    let manager = std::sync::Arc::new(XdpManager::new(cfg));
+    mark_test_proxy_bridge_ready(&manager);
+    let lease = test_dataplane_lease(&manager);
+    *manager.af_xdp.lock() = Some(linux::AfXdpRuntimeHandle::test_with_lease(
+        manager.xsk_status.read().clone(),
+        Some(lease.clone()),
+    ));
+
+    // Before retirement: no-op.
+    let xsk_ready = |m: &XdpManager| {
+        m.status()
+            .interfaces
+            .iter()
+            .flat_map(|interface| interface.xsk_queues.iter())
+            .all(|q| q.ready)
+    };
+    manager.finish_retired_af_xdp_runtime(&lease);
+    assert!(manager.proxy_redirect_enabled.load(Ordering::Relaxed));
+    assert!(xsk_ready(&manager));
+
+    // A live worker still draining: retire alone is not enough.
+    lease.worker_started();
+    lease.retire();
+    manager.finish_retired_af_xdp_runtime(&lease);
+    assert!(xsk_ready(&manager));
+
+    // Seed non-default counters + a fault bit before the drained finish —
+    // they must survive the bookkeeping.
+    {
+        let mut book = manager.xsk_status.write();
+        book[0].rx_dropped = 17;
+        book[0].faulted = true;
+    }
+    {
+        let mut runtime = manager.af_xdp.lock();
+        let status = &mut runtime.as_mut().unwrap().statuses[0];
+        status.rx_dropped = 17;
+        status.faulted = true;
+    }
+    // Last worker exited: sockets are gone and the book must say so.
+    lease.worker_exited();
+    manager.finish_retired_af_xdp_runtime(&lease);
+    let status = manager.status();
+    assert!(
+        status
+            .interfaces
+            .iter()
+            .flat_map(|interface| interface.xsk_queues.iter())
+            .all(|q| q.configured && !q.ready && !q.registered && !q.socket_created)
+    );
+    assert!(!status.proxy_ready);
+    assert!(!manager.proxy_redirect_enabled.load(Ordering::Relaxed));
+    assert!(
+        manager
+            .xsk_status
+            .read()
+            .iter()
+            .all(|q| q.rx_dropped == 17 && q.faulted)
+    );
+    assert!(
+        manager
+            .af_xdp
+            .lock()
+            .as_ref()
+            .unwrap()
+            .statuses
+            .iter()
+            .all(|q| {
+                q.rx_dropped == 17
+                    && q.faulted
+                    && q.configured
+                    && !q.ready
+                    && !q.registered
+                    && !q.socket_created
+            })
+    );
+
+    // A different lease identity must not clear the current runtime.
+    let fresh = test_dataplane_lease(&manager);
+    *manager.af_xdp.lock() = Some(linux::AfXdpRuntimeHandle::test_with_lease(
+        vec![XdpQueueStatus {
+            interface: "eth0".to_string(),
+            queue: 0,
+            configured: true,
+            socket_created: true,
+            registered: true,
+            ready: true,
+            detail: "fresh".to_string(),
+            ..Default::default()
+        }],
+        Some(fresh.clone()),
+    ));
+    let stale = test_dataplane_lease(&manager);
+    stale.retire();
+    // Public truth before the stale call: ready status + redirect set —
+    // a mismatched helper must not clear them.
+    *manager.xsk_status.write() = vec![XdpQueueStatus {
+        interface: "eth0".to_string(),
+        queue: 0,
+        configured: true,
+        socket_created: true,
+        registered: true,
+        ready: true,
+        detail: "fresh".to_string(),
+        ..Default::default()
+    }];
+    manager
+        .proxy_redirect_enabled
+        .store(true, Ordering::Relaxed);
+    manager.finish_retired_af_xdp_runtime(&stale);
+    let statuses = manager.af_xdp.lock().as_ref().unwrap().statuses.clone();
+    assert!(statuses.iter().all(|q| q.ready));
+    let status = manager.status();
+    assert!(
+        status
+            .interfaces
+            .iter()
+            .flat_map(|interface| interface.xsk_queues.iter())
+            .all(|q| q.ready)
+    );
+    assert!(manager.proxy_redirect_enabled.load(Ordering::Relaxed));
+
+    // No runtime at all: a no-op — no invented state, nothing cleared.
+    *manager.af_xdp.lock() = None;
+    let before = manager.status();
+    manager.finish_retired_af_xdp_runtime(&stale);
+    let after = manager.status();
+    assert_eq!(before.proxy_ready, after.proxy_ready);
+    assert!(manager.af_xdp.lock().is_none());
+
+    unsafe {
+        match previous_home {
+            Some(value) => std::env::set_var("CLOUDSIDRA_EDGE_HOME", value),
+            None => std::env::remove_var("CLOUDSIDRA_EDGE_HOME"),
+        }
+    }
+    let _ = std::fs::remove_dir_all(&scratch);
 }

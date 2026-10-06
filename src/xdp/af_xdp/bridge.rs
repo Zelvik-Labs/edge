@@ -1,5 +1,8 @@
 use super::*;
 
+#[cfg(target_os = "linux")]
+use std::os::fd::{AsRawFd, BorrowedFd};
+
 #[derive(Clone, Debug, Default)]
 pub struct AfXdpRuntime {
     pub enabled: bool,
@@ -419,10 +422,7 @@ fn encode_pending_frame(
     enqueued_us: i64,
 ) -> Option<PendingTx> {
     encode_ip_reply_frame(link, ip_packet, scratch)?;
-    Some(PendingTx::frame(
-        scratch.clone(),
-        enqueued_us.max(0) as u64,
-    ))
+    Some(PendingTx::frame(scratch.clone(), enqueued_us.max(0) as u64))
 }
 
 /// T8: send one deferred entry — same semantics as the live paths.
@@ -532,50 +532,58 @@ pub(crate) async fn start_proxy_bridge_inner(
         // EN-12: supervise the bridge across manager generations. A config
         // reload detaches the old manager — its workers exit on the stale
         // check — and the replacement manager owns fresh sockets that still
-        // need a bridge. Respawn only when the manager changed: a bridge
-        // dying under a still-current manager is a recorded hard failure,
-        // not a reason to hot-loop restarts.
+        // need a bridge. The supervisor lives for the process lifetime:
+        // a bridge returning under a still-current manager is a recorded
+        // hard failure (`last_attempted`), so the same generation is never
+        // hot-respawned, and an intentional zero-port teardown generation
+        // is parked rather than served — the gate simply keeps waiting for
+        // the next generation.
         let mut served = manager;
+        let mut last_attempted: Option<Arc<XdpManager>> = None;
         loop {
             // The settle gate applies to the *first* generation too:
             // `xdp.proxy.ports` is synced from the live control-plane
             // config tens of seconds after startup, so the initial manager
             // can still be mid-attach (or waiting on ports) with no AF_XDP
-            // runtime. Serving it now records a spurious permanent failure
-            // and the supervisor exits, leaving every later generation
-            // unbridged.
-            if served.config.enabled
-                && !served.attached.read().is_empty()
-                && af_xdp_runtime_settled(&served)
-            {
-                run_proxy_bridge(
+            // runtime. Serving it now records a spurious permanent
+            // failure; the gate keeps it parked until it settles.
+            if bridge_supervisor_should_start(&served, last_attempted.as_ref()) {
+                last_attempted = Some(served.clone());
+                // Run each generation's bridge as its own task: a panic or a
+                // wedged setup await inside `run_proxy_bridge` must not kill
+                // the supervisor itself — without this, one bad generation
+                // leaves every later generation permanently unserved with no
+                // surface signal. The generation stays recorded as attempted,
+                // so a poisoned generation is never retried in a hot loop.
+                let outcome = tokio::spawn(run_proxy_bridge(
                     served.clone(),
                     quic_demux.clone(),
                     tcp_manager.clone(),
                     http_manager.clone(),
-                )
+                ))
                 .await;
-                if manager_is_current(&served) {
-                    // The bridge stopped while its manager is still
-                    // current: the failure path already recorded an
-                    // explicit fallback reason. Do not hot-respawn.
-                    return;
+                if let Err(err) = outcome {
+                    let detail = format!(
+                        "AF_XDP proxy bridge task failed for a served generation: {err}; \
+                         dataplane left unserved, supervisor stays alive for the next generation"
+                    );
+                    tracing::error!("{detail}");
+                    served.set_proxy_fallback_reason(detail);
                 }
             }
-            // Disabled, unattached, or unsettled manager: wait for a
-            // generation that is worth serving — the next generation to
-            // become current and finish attaching (its AF_XDP runtime is
-            // only populated by `initialize`). Poll — manager identity
-            // changes are rare and the gap between generations is
-            // transient.
+            // Parked: wait for a generation worth serving — the next one
+            // to become current and finish attaching (its AF_XDP runtime
+            // is only populated by `initialize`), or the initial unsettled
+            // candidate becoming settled. Disabled, unattached, zero-port
+            // (intentional teardown), and already-attempted generations
+            // all keep waiting.
             loop {
                 tokio::time::sleep(Duration::from_millis(200)).await;
                 let current = manager_from_runtime();
                 if !Arc::ptr_eq(&current, &served) {
                     served = current;
                 }
-                let attached = !served.attached.read().is_empty();
-                if !served.config.enabled || (attached && af_xdp_runtime_settled(&served)) {
+                if bridge_supervisor_should_start(&served, last_attempted.as_ref()) {
                     break;
                 }
             }
@@ -590,7 +598,6 @@ pub(crate) async fn start_proxy_bridge_inner(
     }
 }
 
-#[allow(dead_code)]
 pub async fn start_udp_bridge(quic_demux: Arc<crate::quic_udp_demux::QuicUdpDemuxManager>) {
     start_proxy_bridge_inner(quic_demux, None, None).await;
 }
@@ -645,6 +652,31 @@ pub(crate) fn af_xdp_runtime_settled(manager: &Arc<XdpManager>) -> bool {
         .any(|interface| interface.mode == XdpRuntimeMode::Proxy)
         || manager.af_xdp.lock().is_some()
         || !manager.xsk_status.read().is_empty()
+}
+
+/// Supervisor gate: serve a manager generation at most once, and only
+/// when it has real business ports. `attempted` is the last generation
+/// the bridge ran for — a returned bridge under the same manager is a
+/// recorded hard failure, never a reason to hot-respawn. An intentional
+/// teardown generation (proxy.ports empty) is skipped entirely: no
+/// queues exist to consume, and serving it would retire the supervisor.
+/// Terminal socket failures still settle — one explicit run surfaces the
+/// recorded error.
+#[cfg(target_os = "linux")]
+pub(crate) fn bridge_supervisor_should_start(
+    manager: &Arc<XdpManager>,
+    attempted: Option<&Arc<XdpManager>>,
+) -> bool {
+    if attempted
+        .map(|prior| Arc::ptr_eq(prior, manager))
+        .unwrap_or(false)
+    {
+        return false;
+    }
+    manager.config.enabled
+        && !manager.attached.read().is_empty()
+        && !manager.config.proxy.ports.is_empty()
+        && af_xdp_runtime_settled(manager)
 }
 
 #[cfg(target_os = "linux")]
@@ -772,6 +804,11 @@ pub(crate) async fn spawn_queue_reactors(
     /// grow memory unboundedly.
     pub(crate) const AF_XDP_REACTOR_REQUEST_QUEUE: usize = 1024;
 
+    tracing::info!(
+        "AF_XDP proxy bridge serving generation: {} queue handle(s) acquired; installing dial guard before spawning reactors",
+        queue_handles.len()
+    );
+
     let online_cpus = num_cpus::get().max(1);
     let udp_routes = Arc::new(DashMap::new());
     // T4: one dial registry per bridge generation. Queues register their
@@ -780,12 +817,12 @@ pub(crate) async fn spawn_queue_reactors(
     let dial_registry = Arc::new(AfXdpDialRegistry::new(manager.clone()));
     // One forwarding channel per queue; the first sender per interface is
     // the cross-interface forward target.
-    let mut iface_fwd: std::collections::HashMap<String, mpsc::Sender<AfXdpForward>> = std::collections::HashMap::new();
+    let mut iface_fwd: std::collections::HashMap<String, mpsc::Sender<AfXdpForward>> =
+        std::collections::HashMap::new();
     // Worker steering channels: one bounded channel per queue, every
     // worker keeps the sender list for ITS interface's group so a frame
     // can hop to its owning worker in O(1). Ordered by queue index.
-    let mut steer_receivers: Vec<mpsc::Receiver<Vec<u8>>> =
-        Vec::with_capacity(queue_handles.len());
+    let mut steer_receivers: Vec<mpsc::Receiver<Vec<u8>>> = Vec::with_capacity(queue_handles.len());
     let mut steer_senders_by_iface: std::collections::HashMap<String, Vec<mpsc::Sender<Vec<u8>>>> =
         std::collections::HashMap::new();
     for queue_handle in &queue_handles {
@@ -796,14 +833,13 @@ pub(crate) async fn spawn_queue_reactors(
             .or_default()
             .push(steer_tx);
     }
-    let mut iface_queue_ordinal: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut iface_queue_ordinal: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
     let mut steer_receivers = steer_receivers.into_iter();
     let mut contexts = Vec::with_capacity(queue_handles.len());
     for queue_handle in &queue_handles {
         let (downstream_tx, downstream_rx) =
-            mpsc::channel::<crate::udp_proxy::DownstreamUdpDatagram>(
-                AF_XDP_DOWNSTREAM_QUEUE,
-            );
+            mpsc::channel::<crate::udp_proxy::DownstreamUdpDatagram>(AF_XDP_DOWNSTREAM_QUEUE);
         let (fwd_tx, fwd_rx) = mpsc::channel::<AfXdpForward>(AF_XDP_DOWNSTREAM_QUEUE);
         let (request_tx, request_rx) =
             mpsc::channel::<AfXdpReactorRequest>(AF_XDP_REACTOR_REQUEST_QUEUE);
@@ -848,6 +884,7 @@ pub(crate) async fn spawn_queue_reactors(
     let dial_publishable =
         manager.config.upstream_mode() == crate::runtime_mode::XdpUpstreamMode::Afxdp;
     if dial_publishable {
+        tracing::info!("AF_XDP proxy bridge installing dial guard");
         match manager.ensure_dial_guard().await {
             Ok(report) => {
                 tracing::info!(
@@ -887,11 +924,7 @@ pub(crate) async fn spawn_queue_reactors(
     manager.set_proxy_workers_starting(true);
     let mut joins: Vec<(String, u32, std::thread::JoinHandle<()>)> =
         Vec::with_capacity(queue_handles.len());
-    for (ordinal, (queue_handle, ctx)) in queue_handles
-        .into_iter()
-        .zip(contexts)
-        .enumerate()
-    {
+    for (ordinal, (queue_handle, ctx)) in queue_handles.into_iter().zip(contexts).enumerate() {
         let cpu = af_xdp_queue_cpu(
             &manager.config,
             &queue_handle.interface,
@@ -1084,8 +1117,11 @@ pub(crate) async fn spawn_queue_reactors(
         if joins.iter().all(|(_, _, join)| join.is_finished()) {
             // Every worker is gone — the socket generation is dead. Mark
             // the lease retired so the next manager generation rebuilds a
-            // fresh dataplane instead of inheriting a husk.
+            // fresh dataplane instead of inheriting a husk, then let the
+            // current lease owner clear that generation's now-gone socket
+            // bookkeeping (identity-checked inside).
             lease.retire();
+            lease.owner().finish_retired_af_xdp_runtime(&lease);
             return;
         }
         if !lease.is_retired() {
@@ -1097,11 +1133,18 @@ pub(crate) async fn spawn_queue_reactors(
             // lease, which may be a newer manager generation after an
             // adopted reload.
             let owner = lease.owner();
+            // An intentional teardown generation (XDP disabled or
+            // proxy.ports emptied by config) exits every worker — that is
+            // the designed stop, not a per-queue fault, so nothing is
+            // withdrawn or marked. Genuine queue exits on a running
+            // generation keep the precise existing fault path.
+            let intentional_teardown = !owner.config.enabled || owner.config.proxy.ports.is_empty();
             for (interface, queue, join) in &joins {
                 // Skip queues the worker already withdrew itself — its
                 // original fault detail is more precise than a generic
                 // "thread exited" reason.
-                if join.is_finished()
+                if !intentional_teardown
+                    && join.is_finished()
                     && reported_dead.insert((interface.clone(), *queue))
                     && !owner.xsk_queue_faulted(interface, *queue)
                 {
@@ -1190,8 +1233,7 @@ pub(crate) async fn run_queue_bridge_loop(
     // descriptor pool the emitter pops frames from and dropped frames
     // return to; it is refilled from `free_frames` each round, so the
     // cell never leaves this thread.
-    let tx_stash: linux::AfXdpTxStash =
-        std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let tx_stash: linux::AfXdpTxStash = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     tcp_reactor.set_tx_alloc(queue_handle.tx_alloc(tx_stash.clone()));
     // Event-driven idle wait sources. The socket is bound with
     // XDP_USE_NEED_WAKEUP, so a POLLIN poll on the fd is also what wakes
@@ -1201,49 +1243,38 @@ pub(crate) async fn run_queue_bridge_loop(
     // socket's permanently-ready EPOLLOUT keep the tokio IO driver hot,
     // so `readable()` resolved instantly every round and the queue
     // thread spun at 100% CPU with zero useful work.
-    let mut xsk_wake_rx = {
-        use std::os::fd::AsRawFd;
-        let (wake_tx, wake_rx) = tokio::sync::mpsc::channel::<()>(1);
-        let xsk_fd = queue_handle.rx.fd().as_raw_fd();
-        std::thread::Builder::new()
-            .name(format!("xsk-wake-{}", queue_handle.queue))
-            .spawn(move || loop {
-                let mut pfd = libc::pollfd {
-                    fd: xsk_fd,
-                    events: libc::POLLIN,
-                    revents: 0,
-                };
-                let r = unsafe { libc::poll(&mut pfd, 1, -1) };
-                if r < 0 {
-                    let err = std::io::Error::last_os_error();
-                    if err.kind() == std::io::ErrorKind::Interrupted {
-                        continue;
-                    }
-                    break;
-                }
-                if r == 0 {
-                    continue;
-                }
-                // Bridge loop gone (dataplane retired) — channel closed.
-                if wake_tx.blocking_send(()).is_err() {
-                    break;
-                }
-            })
-            .map(|_| wake_rx)
-            .ok()
+    // Owned wake worker: an unjoined poller would keep its duplicated
+    // socket fd (and the kernel queue registration it pins) alive after
+    // teardown, so the guard must live for the whole run and be shut
+    // down + joined on every exit path.
+    let mut xsk_wake = {
+        match wake::AfXdpWakeWorker::start(
+            // SAFETY: the fd is borrowed only for the F_DUPFD_CLOEXEC
+            // inside start() — the queue handle keeps owning the socket.
+            unsafe { BorrowedFd::borrow_raw(queue_handle.rx.fd().as_raw_fd()) },
+            format!("xsk-wake-{}", queue_handle.queue),
+        ) {
+            Ok(worker) => Some(worker),
+            Err(err) => {
+                lease.owner().disable_queue_redirect_for_fault(
+                    &queue_handle.interface,
+                    queue_handle.queue,
+                    format!("xsk wake thread failed to start: {err:#}"),
+                );
+                return;
+            }
+        }
     };
     // Items consumed by an idle-wake channel recv are stashed here and
     // processed first at their normal drain sites.
     let mut early_downstream: std::collections::VecDeque<crate::udp_proxy::DownstreamUdpDatagram> =
         std::collections::VecDeque::new();
-    let mut early_fwd: std::collections::VecDeque<AfXdpForward> =
-        std::collections::VecDeque::new();
+    let mut early_fwd: std::collections::VecDeque<AfXdpForward> = std::collections::VecDeque::new();
     let mut early_requests: std::collections::VecDeque<AfXdpReactorRequest> =
         std::collections::VecDeque::new();
     // Steered frames grabbed by an idle-wake recv — drained into the next
     // round's `frames` so they flow through the normal packet path.
-    let mut early_steer: std::collections::VecDeque<Vec<u8>> =
-        std::collections::VecDeque::new();
+    let mut early_steer: std::collections::VecDeque<Vec<u8>> = std::collections::VecDeque::new();
     // T5/T6: transport policy comes from the lease owner — on an adopted
     // reload that is the live manager's config (the compatibility gate
     // already rejected any transport change, so old == new here). The
@@ -1308,12 +1339,31 @@ pub(crate) async fn run_queue_bridge_loop(
     let tx_clock = crate::transport_clock::TransportClock::real();
     let mut last_status_refresh = std::time::Instant::now();
 
+    let mut wake_failed = false;
     loop {
+        // An unexpectedly dead wake poller means this queue's socket is
+        // no longer being woken — surface the worker's real error, mark
+        // only this queue faulty, then take the common abort/RST
+        // teardown path (never a bare return, never a global disable).
+        if let Some(worker) = xsk_wake.as_mut()
+            && worker.is_finished()
+        {
+            let detail = match worker.shutdown() {
+                Ok(()) => "xsk wake thread exited without error".to_string(),
+                Err(err) => format!("xsk wake thread exited: {err:#}"),
+            };
+            lease.owner().disable_queue_redirect_for_fault(
+                &queue_handle.interface,
+                queue_handle.queue,
+                detail,
+            );
+            wake_failed = true;
+        }
         // F1: the worker gates on the dataplane lease, not on manager
         // staleness — a compatible reload swaps the lease owner while
         // these sockets keep polling. The only exits are lease retire
         // (real teardown) or redirect disabled on the *current* owner.
-        if lease.is_retired() || !proxy_bridge_should_continue(&lease) {
+        if wake_failed || lease.is_retired() || !proxy_bridge_should_continue(&lease) {
             // Explicit teardown contract: never leave peers on a silently
             // hung session. Abort every live smoltcp session and flush
             // the resulting RST frames before dropping the socket.
@@ -1323,8 +1373,7 @@ pub(crate) async fn run_queue_bridge_loop(
             for (route, packet, _) in &mut egress {
                 let ok = match packet {
                     AfXdpTcpEgressPacket::Ip(ip_packet) => {
-                        encode_ip_reply_frame(&route.link, ip_packet, &mut encode_scratch)
-                            .is_some()
+                        encode_ip_reply_frame(&route.link, ip_packet, &mut encode_scratch).is_some()
                             && queue_handle
                                 .send_raw_frame(&encode_scratch)
                                 .unwrap_or(false)
@@ -1360,10 +1409,7 @@ pub(crate) async fn run_queue_bridge_loop(
             tx_clock.now_micros().max(0) as u64,
         );
         while let Some(flow) = sched.next(tx_now) {
-            let Some(mut head) = pending_tx
-                .get_mut(&flow)
-                .and_then(|q| q.pop_front())
-            else {
+            let Some(mut head) = pending_tx.get_mut(&flow).and_then(|q| q.pop_front()) else {
                 // Stale scheduler entry — flow's queue is already empty.
                 sched.complete(flow);
                 sched.remove_flow(flow);
@@ -1387,9 +1433,7 @@ pub(crate) async fn run_queue_bridge_loop(
             // Dwell measurement only: frames past the bound still ship —
             // the emit-side cap bounds queue depth so dwell can't reach
             // the seconds scale that was poisoning RTT samples.
-            if tx_now.micros().saturating_sub(head.enqueued_us) as i64
-                > AF_XDP_MAX_FRAME_DWELL_US
-            {
+            if tx_now.micros().saturating_sub(head.enqueued_us) as i64 > AF_XDP_MAX_FRAME_DWELL_US {
                 stale_dwells = stale_dwells.saturating_add(1);
             }
             let stamp = cloudsidra_edge_transport::codel::Stamp {
@@ -1416,11 +1460,7 @@ pub(crate) async fn run_queue_bridge_loop(
             if codel_dropped {
                 pending_tx_count -= 1;
                 aqm_drops = aqm_drops.saturating_add(1);
-                if pending_tx
-                    .get(&flow)
-                    .map(|q| q.is_empty())
-                    .unwrap_or(true)
-                {
+                if pending_tx.get(&flow).map(|q| q.is_empty()).unwrap_or(true) {
                     sched.complete(flow);
                     sched.remove_flow(flow);
                     pending_tx.remove(&flow);
@@ -1461,11 +1501,7 @@ pub(crate) async fn run_queue_bridge_loop(
                     }
                 }
             }
-            if pending_tx
-                .get(&flow)
-                .map(|q| q.is_empty())
-                .unwrap_or(true)
-            {
+            if pending_tx.get(&flow).map(|q| q.is_empty()).unwrap_or(true) {
                 sched.complete(flow);
                 sched.remove_flow(flow);
                 pending_tx.remove(&flow);
@@ -1475,26 +1511,22 @@ pub(crate) async fn run_queue_bridge_loop(
             last_status_refresh = std::time::Instant::now();
             let stats = queue_handle.rx.fd().xdp_statistics().ok();
             let owner = lease.owner();
-            owner.update_xsk_queue_status(
-                &queue_handle.interface,
-                queue_handle.queue,
-                |status| {
-                    if let Some(stats) = &stats {
-                        status.rx_dropped = stats.rx_dropped();
-                        status.rx_invalid_descs = stats.rx_invalid_descs();
-                        status.rx_ring_full = stats.rx_ring_full();
-                        status.tx_invalid_descs = stats.tx_invalid_descs();
-                    }
-                    status.congested_drops = congested_drops;
-                    status.admission_refusals = admission_refusals;
-                    status.aqm_drops = aqm_drops;
-                    status.aqm_ce_marks = aqm_ce_marks;
-                    status.tx_inflight = queue_handle.tx_inflight() as u64;
-                    status.stale_dwells = stale_dwells;
-                    status.steered_frames = steered_frames;
-                    status.steer_sheds = steer_sheds;
-                },
-            );
+            owner.update_xsk_queue_status(&queue_handle.interface, queue_handle.queue, |status| {
+                if let Some(stats) = &stats {
+                    status.rx_dropped = stats.rx_dropped();
+                    status.rx_invalid_descs = stats.rx_invalid_descs();
+                    status.rx_ring_full = stats.rx_ring_full();
+                    status.tx_invalid_descs = stats.tx_invalid_descs();
+                }
+                status.congested_drops = congested_drops;
+                status.admission_refusals = admission_refusals;
+                status.aqm_drops = aqm_drops;
+                status.aqm_ce_marks = aqm_ce_marks;
+                status.tx_inflight = queue_handle.tx_inflight() as u64;
+                status.stale_dwells = stale_dwells;
+                status.steered_frames = steered_frames;
+                status.steer_sheds = steer_sheds;
+            });
         }
         frames.clear();
         // EN-17: `poll_raw_once` on a queue handle only ever yields frames
@@ -2106,8 +2138,8 @@ pub(crate) async fn run_queue_bridge_loop(
             let pending = match fwd {
                 AfXdpForward::Udp(datagram) => {
                     let route = {
-                        let Some(entry) = udp_routes
-                            .get_mut(&(datagram.listen_addr, datagram.peer_addr))
+                        let Some(entry) =
+                            udp_routes.get_mut(&(datagram.listen_addr, datagram.peer_addr))
                         else {
                             continue;
                         };
@@ -2125,7 +2157,9 @@ pub(crate) async fn run_queue_bridge_loop(
                         tx_now.micros(),
                     )
                 }
-                AfXdpForward::TcpFrame(frame, enqueued_us) => PendingTx::frame(frame, enqueued_us.max(0) as u64),
+                AfXdpForward::TcpFrame(frame, enqueued_us) => {
+                    PendingTx::frame(frame, enqueued_us.max(0) as u64)
+                }
             };
             let pending_len = pending.len();
             if matches!(
@@ -2233,8 +2267,7 @@ pub(crate) async fn run_queue_bridge_loop(
                                 Ok(()) => {}
                                 Err(mpsc::error::TrySendError::Full(_)) => {
                                     congested = true;
-                                    congested_drops =
-                                        congested_drops.saturating_add(1);
+                                    congested_drops = congested_drops.saturating_add(1);
                                     tracing::debug!(
                                         "AF_XDP forward channel to interface {} full; shedding TCP egress frame bytes={}",
                                         route.interface.as_ref(),
@@ -2562,38 +2595,41 @@ pub(crate) async fn run_queue_bridge_loop(
             // sender is dropped by the iface_fwd map), which would turn
             // the idle wait into a hot loop on exactly those queues.
             if wait > AF_XDP_IDLE_SPIN_THRESHOLD {
-            tokio::select! {
-                _ = tokio::time::sleep(wait) => {}
-                item = downstream_rx.recv(), if !downstream_rx.is_closed() => {
-                    if let Some(item) = item {
-                        early_downstream.push_back(item);
-                    }
-                }
-                item = fwd_rx.recv(), if !fwd_rx.is_closed() => {
-                    if let Some(item) = item {
-                        early_fwd.push_back(item);
-                    }
-                }
-                item = request_rx.recv(), if !request_rx.is_closed() => {
-                    if let Some(item) = item {
-                        early_requests.push_back(item);
-                    }
-                }
-                item = steer_rx.recv(), if !steer_rx.is_closed() => {
-                    if let Some(item) = item {
-                        early_steer.push_back(item);
-                    }
-                }
-                _ = wake_notify.notified() => {}
-                _ = async {
-                    match &mut xsk_wake_rx {
-                        Some(rx) => {
-                            let _ = rx.recv().await;
+                tokio::select! {
+                    _ = tokio::time::sleep(wait) => {}
+                    item = downstream_rx.recv(), if !downstream_rx.is_closed() => {
+                        if let Some(item) = item {
+                            early_downstream.push_back(item);
                         }
-                        None => std::future::pending::<()>().await,
                     }
-                } => {}
-            }
+                    item = fwd_rx.recv(), if !fwd_rx.is_closed() => {
+                        if let Some(item) = item {
+                            early_fwd.push_back(item);
+                        }
+                    }
+                    item = request_rx.recv(), if !request_rx.is_closed() => {
+                        if let Some(item) = item {
+                            early_requests.push_back(item);
+                        }
+                    }
+                    item = steer_rx.recv(), if !steer_rx.is_closed() => {
+                        if let Some(item) = item {
+                            early_steer.push_back(item);
+                        }
+                    }
+                    _ = wake_notify.notified() => {}
+                    _ = async {
+                        match xsk_wake
+                            .as_mut()
+                            .and_then(|worker| worker.receiver_mut().as_mut())
+                        {
+                            Some(rx) => {
+                                let _ = rx.recv().await;
+                            }
+                            None => std::future::pending::<()>().await,
+                        }
+                    } => {}
+                }
             }
         }
         // The busy path above never awaits; without an explicit yield the
@@ -2654,14 +2690,16 @@ pub(crate) fn compact_udp_route_cache(
     );
 }
 
-
 #[cfg(all(test, target_os = "linux"))]
 mod sched_aqm_tests {
     use super::*;
-    use crate::runtime_mode::XdpInterfaceConfig;
-    use cloudsidra_edge_transport::codel::{Codel, CodelAction, Stamp, DEFAULT_INTERVAL, DEFAULT_TARGET};
-    use cloudsidra_edge_transport::sched::Scheduler;
+    use crate::runtime_mode::{XdpInterfaceConfig, XdpProxyConfig, XdpProxyPortConfig};
+    use crate::xdp::XdpQueueStatus;
     use cloudsidra_edge_transport::TransportInstant;
+    use cloudsidra_edge_transport::codel::{
+        Codel, CodelAction, DEFAULT_INTERVAL, DEFAULT_TARGET, Stamp,
+    };
+    use cloudsidra_edge_transport::sched::Scheduler;
 
     fn ipv4_frame(tos: u8, proto: u8, l4: &[u8], fix_checksum: bool) -> Vec<u8> {
         let mut f = Vec::with_capacity(14 + 20 + l4.len());
@@ -2757,10 +2795,8 @@ mod sched_aqm_tests {
     #[test]
     fn pending_scheduler_prioritizes_control_over_data() {
         let mut sched = Scheduler::new(None, AF_XDP_EGRESS_OVERHEAD_BYTES);
-        let mut pending: std::collections::HashMap<
-            u64,
-            std::collections::VecDeque<PendingTx>,
-        > = std::collections::HashMap::new();
+        let mut pending: std::collections::HashMap<u64, std::collections::VecDeque<PendingTx>> =
+            std::collections::HashMap::new();
         let mut total = 0usize;
         let now = TransportInstant::from_micros(1_000);
         let link = AfXdpLinkMeta {
@@ -2782,16 +2818,21 @@ mod sched_aqm_tests {
             now.micros(),
         );
         // Control-tier frame: pure TCP ACK.
-        let ctrl = PendingTx::frame(
-            ipv4_frame(0, 6, &tcp_segment(0, 0x10), false),
-            now.micros(),
-        );
+        let ctrl = PendingTx::frame(ipv4_frame(0, 6, &tcp_segment(0, 0x10), false), now.micros());
         // Enqueue data first — scheduler must still pick control first.
         assert!(queue_deferred_tx(
-            &mut pending, &mut total, &mut sched, now, data
+            &mut pending,
+            &mut total,
+            &mut sched,
+            now,
+            data
         ));
         assert!(queue_deferred_tx(
-            &mut pending, &mut total, &mut sched, now, ctrl
+            &mut pending,
+            &mut total,
+            &mut sched,
+            now,
+            ctrl
         ));
         let first = sched.next(now).expect("eligible flow");
         let head = pending[&first].front().expect("queued");
@@ -2813,9 +2854,7 @@ mod sched_aqm_tests {
                 let action = codel.dequeue(
                     TransportInstant::from_micros(t),
                     Stamp {
-                        enqueued_at: TransportInstant::from_micros(
-                            t.saturating_sub(20_000),
-                        ),
+                        enqueued_at: TransportInstant::from_micros(t.saturating_sub(20_000)),
                         ecn,
                     },
                     false,
@@ -2826,17 +2865,18 @@ mod sched_aqm_tests {
                 );
                 saw |= action == expect;
             }
-            assert!(saw, "ecn={ecn}: sustained >target sojourn never triggered the AQM");
+            assert!(
+                saw,
+                "ecn={ecn}: sustained >target sojourn never triggered the AQM"
+            );
         }
     }
 
     #[test]
     fn pending_queue_sheds_at_cap_and_counts() {
         let mut sched = Scheduler::new(None, AF_XDP_EGRESS_OVERHEAD_BYTES);
-        let mut pending: std::collections::HashMap<
-            u64,
-            std::collections::VecDeque<PendingTx>,
-        > = std::collections::HashMap::new();
+        let mut pending: std::collections::HashMap<u64, std::collections::VecDeque<PendingTx>> =
+            std::collections::HashMap::new();
         let mut total = 0usize;
         let now = TransportInstant::from_micros(1_000);
         let link = AfXdpLinkMeta {
@@ -2860,7 +2900,11 @@ mod sched_aqm_tests {
                 now.micros(),
             );
             assert!(queue_deferred_tx(
-                &mut pending, &mut total, &mut sched, now, p
+                &mut pending,
+                &mut total,
+                &mut sched,
+                now,
+                p
             ));
         }
         let overflow = PendingTx::udp(
@@ -2913,6 +2957,149 @@ mod sched_aqm_tests {
             ..Default::default()
         }];
         assert!(af_xdp_runtime_settled(&manager));
+    }
+
+    fn supervisor_ready_manager(ports: Vec<XdpProxyPortConfig>) -> Arc<XdpManager> {
+        let manager = Arc::new(XdpManager::new(XdpConfig {
+            enabled: true,
+            interfaces: vec![XdpInterfaceConfig {
+                name: "eth0".to_string(),
+                queues: vec![0],
+                mode: XdpRuntimeMode::Proxy,
+                ..XdpInterfaceConfig::default()
+            }],
+            proxy: XdpProxyConfig {
+                ports,
+                ..XdpProxyConfig::default()
+            },
+            ..XdpConfig::default()
+        }));
+        manager.attached.write().insert("eth0".to_string());
+        *manager.xsk_status.write() = vec![XdpQueueStatus {
+            interface: "eth0".to_string(),
+            queue: 0,
+            configured: true,
+            socket_created: true,
+            registered: true,
+            ready: true,
+            detail: "ready".to_string(),
+            ..Default::default()
+        }];
+        manager
+    }
+
+    #[test]
+    fn bridge_supervisor_gate_waits_for_first_settle() {
+        // Initial generation mid-attach: attached but unsettled (no
+        // queue status yet) -> not servable.
+        let manager = supervisor_ready_manager(vec![XdpProxyPortConfig {
+            port: 80,
+            ..XdpProxyPortConfig::default()
+        }]);
+        manager.xsk_status.write().clear();
+        assert!(!manager.attached.read().is_empty());
+        assert!(!af_xdp_runtime_settled(&manager));
+        assert!(!bridge_supervisor_should_start(&manager, None));
+        // The same generation settling later becomes servable exactly
+        // once — the gate waits, it does not permanently refuse.
+        *manager.xsk_status.write() = vec![XdpQueueStatus {
+            interface: "eth0".to_string(),
+            queue: 0,
+            configured: true,
+            socket_created: true,
+            registered: true,
+            ready: true,
+            detail: "ready".to_string(),
+            ..Default::default()
+        }];
+        assert!(bridge_supervisor_should_start(&manager, None));
+        assert!(!bridge_supervisor_should_start(&manager, Some(&manager)));
+    }
+
+    #[test]
+    fn bridge_supervisor_gate_skips_teardown_and_new_generations() {
+        // Intentional stop generation: settled and attached but zero
+        // business ports — must never be served.
+        let stopped = supervisor_ready_manager(vec![]);
+        assert!(!bridge_supervisor_should_start(&stopped, None));
+        // Resume generation (new Arc): servable.
+        let resumed = supervisor_ready_manager(vec![XdpProxyPortConfig {
+            port: 443,
+            ..XdpProxyPortConfig::default()
+        }]);
+        assert!(bridge_supervisor_should_start(&resumed, None));
+        // After the run attempt: same generation never respawns.
+        assert!(!bridge_supervisor_should_start(&resumed, Some(&resumed)));
+        // ... but the watcher stays alive for a later generation even
+        // after that failure.
+        let next = supervisor_ready_manager(vec![XdpProxyPortConfig {
+            port: 80,
+            ..XdpProxyPortConfig::default()
+        }]);
+        assert!(bridge_supervisor_should_start(&next, Some(&resumed)));
+    }
+
+    #[test]
+    fn bridge_supervisor_gate_rejects_unservable_generations() {
+        // Disabled manager is never served.
+        let disabled = Arc::new(XdpManager::new(XdpConfig {
+            enabled: false,
+            interfaces: vec![XdpInterfaceConfig {
+                name: "eth0".to_string(),
+                queues: vec![0],
+                mode: XdpRuntimeMode::Proxy,
+                ..XdpInterfaceConfig::default()
+            }],
+            proxy: XdpProxyConfig {
+                ports: vec![XdpProxyPortConfig {
+                    port: 80,
+                    ..XdpProxyPortConfig::default()
+                }],
+                ..XdpProxyConfig::default()
+            },
+            ..XdpConfig::default()
+        }));
+        disabled.attached.write().insert("eth0".to_string());
+        // Fully settled + ports configured: the only refusal must be the
+        // enabled bit itself, not an incidental unsettled state.
+        *disabled.xsk_status.write() = vec![XdpQueueStatus {
+            interface: "eth0".to_string(),
+            queue: 0,
+            configured: true,
+            socket_created: true,
+            registered: true,
+            ready: true,
+            detail: "ready".to_string(),
+            ..Default::default()
+        }];
+        assert!(af_xdp_runtime_settled(&disabled));
+        assert!(!disabled.config.proxy.ports.is_empty());
+        assert!(!bridge_supervisor_should_start(&disabled, None));
+        // Detached manager (attached set empty) is never served.
+        let detached = supervisor_ready_manager(vec![XdpProxyPortConfig {
+            port: 80,
+            ..XdpProxyPortConfig::default()
+        }]);
+        detached.attached.write().clear();
+        assert!(!bridge_supervisor_should_start(&detached, None));
+        // Terminal socket failure still settles -> one explicit run to
+        // surface the error, then never again.
+        let failed = supervisor_ready_manager(vec![XdpProxyPortConfig {
+            port: 80,
+            ..XdpProxyPortConfig::default()
+        }]);
+        *failed.xsk_status.write() = vec![XdpQueueStatus {
+            interface: "eth0".to_string(),
+            queue: 0,
+            configured: true,
+            socket_created: false,
+            registered: false,
+            ready: false,
+            detail: "AF_XDP socket setup failed".to_string(),
+            ..Default::default()
+        }];
+        assert!(bridge_supervisor_should_start(&failed, None));
+        assert!(!bridge_supervisor_should_start(&failed, Some(&failed)));
     }
 
     #[test]

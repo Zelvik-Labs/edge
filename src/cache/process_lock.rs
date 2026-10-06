@@ -164,7 +164,8 @@ fn cache_process_roots(roots: &[PathBuf]) -> Vec<PathBuf> {
 }
 
 fn cache_process_barrier_path(root: &Path) -> PathBuf {
-    root.join(".cloudsidra-edge-cache-locks").join("barrier.lock")
+    root.join(".cloudsidra-edge-cache-locks")
+        .join("barrier.lock")
 }
 
 fn cache_process_key_path(root: &Path, key_hash: &str) -> PathBuf {

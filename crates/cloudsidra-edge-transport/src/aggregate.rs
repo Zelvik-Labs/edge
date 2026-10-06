@@ -265,9 +265,7 @@ impl Aggregate {
             };
             if merged {
                 let c = self.compute_centroid(Some(id));
-                if c.members > 0
-                    && Self::correlation(&c, &stats).unwrap_or(0.0) < SPLIT_CORR
-                {
+                if c.members > 0 && Self::correlation(&c, &stats).unwrap_or(0.0) < SPLIT_CORR {
                     if let Some(m) = self.members.get_mut(&id) {
                         m.merged = false;
                         m.merge_votes = 0;
@@ -389,9 +387,9 @@ impl Aggregate {
             .map(|id| floor_frac(self.members[id].stats.tier))
             .sum::<f64>()
             .min(0.5);
-        let remainder = self.allowance.saturating_sub(
-            (self.allowance as f64 * floor_total_frac) as u64,
-        );
+        let remainder = self
+            .allowance
+            .saturating_sub((self.allowance as f64 * floor_total_frac) as u64);
         let total_w: f64 = merged
             .iter()
             .map(|id| weight(self.members[id].stats.tier))
@@ -516,12 +514,14 @@ mod tests {
         let agg = Aggregate::shared();
         let a = Aggregate::join(&agg).unwrap();
         let b = Aggregate::join(&agg).unwrap();
-        agg.borrow_mut().update_member(a.id, stats(1, 100.0, 10_000));
+        agg.borrow_mut()
+            .update_member(a.id, stats(1, 100.0, 10_000));
         agg.borrow_mut().update_member(b.id, stats(1, 95.0, 10_500));
         agg.borrow_mut().on_period();
         assert_eq!(agg.borrow().stats().merged, 0);
         for _ in 0..MERGE_CONFIRM + 1 {
-            agg.borrow_mut().update_member(a.id, stats(1, 100.0, 10_000));
+            agg.borrow_mut()
+                .update_member(a.id, stats(1, 100.0, 10_000));
             agg.borrow_mut().update_member(b.id, stats(1, 95.0, 10_500));
             agg.borrow_mut().on_period();
         }
@@ -534,16 +534,22 @@ mod tests {
         let a = Aggregate::join(&agg).unwrap();
         let b = Aggregate::join(&agg).unwrap();
         for _ in 0..MERGE_CONFIRM + 2 {
-            agg.borrow_mut().update_member(a.id, stats(1, 100.0, 10_000));
+            agg.borrow_mut()
+                .update_member(a.id, stats(1, 100.0, 10_000));
             agg.borrow_mut().update_member(b.id, stats(1, 95.0, 10_500));
             agg.borrow_mut().on_period();
         }
         assert_eq!(agg.borrow().stats().merged, 2);
-        agg.borrow_mut().update_member(b.id, stats(1, -500.0, 9_000_000));
+        agg.borrow_mut()
+            .update_member(b.id, stats(1, -500.0, 9_000_000));
         for _ in 0..4 {
             agg.borrow_mut().on_period();
         }
-        assert!(agg.borrow().stats().merged < 2, "split failed: {:?}", agg.borrow().stats());
+        assert!(
+            agg.borrow().stats().merged < 2,
+            "split failed: {:?}",
+            agg.borrow().stats()
+        );
     }
 
     #[test]
@@ -552,8 +558,10 @@ mod tests {
         let a = Aggregate::join(&agg).unwrap();
         let b = Aggregate::join(&agg).unwrap();
         for _ in 0..MERGE_CONFIRM + 2 {
-            agg.borrow_mut().update_member(a.id, stats(1, 100.0, 10_000));
-            agg.borrow_mut().update_member(b.id, stats(1, 100.0, 10_500));
+            agg.borrow_mut()
+                .update_member(a.id, stats(1, 100.0, 10_000));
+            agg.borrow_mut()
+                .update_member(b.id, stats(1, 100.0, 10_500));
             agg.borrow_mut().on_period();
         }
         assert_eq!(agg.borrow().stats().merged, 2);

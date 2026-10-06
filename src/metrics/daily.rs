@@ -245,15 +245,20 @@ mod tests {
         tracker.record_with_capacity(1, 100, "a.com", 5, 0, 1, 0, 0, 0, 2);
         let before = crate::pipeline_metrics::snapshot().metrics_cardinality_dropped;
         tracker.record_with_capacity(1, 100, "c.com", 10, 0, 1, 0, 0, 0, 2);
-        assert!(
-            crate::pipeline_metrics::snapshot().metrics_cardinality_dropped > before
-        );
+        assert!(crate::pipeline_metrics::snapshot().metrics_cardinality_dropped > before);
         assert_eq!(tracker.domains.len(), 2);
-        assert_eq!(tracker.domains.get(&DomainKey {
-            server_id: 1,
-            created_at: 100,
-            domain: "a.com".into(),
-        }).unwrap().bytes, 15);
+        assert_eq!(
+            tracker
+                .domains
+                .get(&DomainKey {
+                    server_id: 1,
+                    created_at: 100,
+                    domain: "a.com".into(),
+                })
+                .unwrap()
+                .bytes,
+            15
+        );
         // Flushing older days still releases capped state.
         let rows = tracker.flush_older_than(200);
         assert_eq!(rows.len(), 2);
@@ -262,7 +267,9 @@ mod tests {
 
     #[test]
     fn unique_ip_cardinality_cap_rejects_new_ips() {
-        let tracker = UniqueIpTracker { ips: DashSet::new() };
+        let tracker = UniqueIpTracker {
+            ips: DashSet::new(),
+        };
         let ip1: IpAddr = "192.0.2.1".parse().unwrap();
         let ip2: IpAddr = "192.0.2.2".parse().unwrap();
         let ip3: IpAddr = "192.0.2.3".parse().unwrap();
@@ -272,9 +279,7 @@ mod tests {
         tracker.record_with_capacity(1, "20260917", ip1, 2);
         let before = crate::pipeline_metrics::snapshot().metrics_cardinality_dropped;
         tracker.record_with_capacity(1, "20260917", ip3, 2);
-        assert!(
-            crate::pipeline_metrics::snapshot().metrics_cardinality_dropped > before
-        );
+        assert!(crate::pipeline_metrics::snapshot().metrics_cardinality_dropped > before);
         assert_eq!(tracker.ips.len(), 2);
         assert_eq!(tracker.count(1, "20260917"), 2);
         tracker.cleanup_before("20270917");

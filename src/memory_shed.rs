@@ -33,9 +33,7 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
-use crate::l4_connection_registry::{
-    self, ConnectionCancelReason,
-};
+use crate::l4_connection_registry::{self, ConnectionCancelReason};
 use crate::memory_governor::MemoryPressureLevel;
 
 /// Consecutive-Critical drain ladder: each *confirmed* Critical step
@@ -148,9 +146,7 @@ fn observe_pressure_at(level: MemoryPressureLevel, now_ms: u64) {
             // drain); later rungs require a fresh sample separated by
             // RUNG_MIN_INTERVAL_MS so a repeated stale observation cannot
             // escalate on its own.
-            if last_rung != u64::MAX
-                && now_ms.saturating_sub(last_rung) < RUNG_MIN_INTERVAL_MS
-            {
+            if last_rung != u64::MAX && now_ms.saturating_sub(last_rung) < RUNG_MIN_INTERVAL_MS {
                 return;
             }
             LAST_RUNG_AT_MS.store(now_ms, Ordering::Relaxed);
@@ -181,9 +177,12 @@ fn observe_pressure_at(level: MemoryPressureLevel, now_ms: u64) {
             // Suppression lifts and the ladder resets only once the level
             // has held below High for the full window — a single quiet
             // sample mid-incident must not de-escalate.
-            let since = match RECOVERY_SINCE_MS
-                .compare_exchange(u64::MAX, now_ms, Ordering::AcqRel, Ordering::Relaxed)
-            {
+            let since = match RECOVERY_SINCE_MS.compare_exchange(
+                u64::MAX,
+                now_ms,
+                Ordering::AcqRel,
+                Ordering::Relaxed,
+            ) {
                 Ok(_) => now_ms,
                 Err(existing) => existing,
             };
@@ -203,7 +202,10 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     fn addr(last: u8) -> SocketAddr {
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(198, 51, 100, last)), 41000 + last as u16)
+        SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(198, 51, 100, last)),
+            41000 + last as u16,
+        )
     }
 
     #[test]

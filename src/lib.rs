@@ -77,5 +77,5 @@ pub mod xdp_auto_config;
 pub mod xdp_config_wizard;
 pub mod xdp_netdev_tuning;
 
-pub mod traffic_shaping;
 pub mod telemetry;
+pub mod traffic_shaping;

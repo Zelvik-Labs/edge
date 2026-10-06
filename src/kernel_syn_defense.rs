@@ -137,8 +137,7 @@ async fn monitor_loop() {
                 .saturating_sub(prev.req_q_full_do_cookies),
             req_q_full_drop: current.req_q_full_drop.saturating_sub(prev.req_q_full_drop),
         };
-        let level =
-            crate::l4_defense::syn_pressure_level_hysteretic(pressure_from_delta(&delta));
+        let level = crate::l4_defense::syn_pressure_level_hysteretic(pressure_from_delta(&delta));
         LISTEN_OVERFLOWS_DELTA.store(delta.listen_overflows, Ordering::Relaxed);
         LISTEN_DROPS_DELTA.store(delta.listen_drops, Ordering::Relaxed);
         SYNCOOKIES_SENT_DELTA.store(delta.syncookies_sent, Ordering::Relaxed);
@@ -1618,16 +1617,12 @@ ct state invalid tcp dport @protected_tcp_ports drop comment "cloudsidra-edge sy
         assert!(joined.iter().any(|call| {
             call.contains("delete rule inet cloudsidra_edge_synproxy prerouting handle 11")
         }));
-        assert!(
-            joined
-                .iter()
-                .any(|call| call.contains("delete rule inet cloudsidra_edge_synproxy input handle 12"))
-        );
-        assert!(
-            joined
-                .iter()
-                .any(|call| call.contains("delete rule inet cloudsidra_edge_synproxy input handle 13"))
-        );
+        assert!(joined.iter().any(|call| {
+            call.contains("delete rule inet cloudsidra_edge_synproxy input handle 12")
+        }));
+        assert!(joined.iter().any(|call| {
+            call.contains("delete rule inet cloudsidra_edge_synproxy input handle 13")
+        }));
     }
 
     #[test]

@@ -202,20 +202,12 @@ mod af_xdp_quinn {
     impl UdpPoller for AfXdpUdpPoller {
         fn poll_writable(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
             let this = self.get_mut();
-            let mut pending = this
-                .pending
-                .lock()
-                .unwrap_or_else(|err| err.into_inner());
+            let mut pending = this.pending.lock().unwrap_or_else(|err| err.into_inner());
             if pending.is_none() {
                 let tx = this.tx.clone();
                 *pending = Some(Box::pin(async move { tx.reserve_owned().await }));
             }
-            match pending
-                .as_mut()
-                .expect("pending future")
-                .as_mut()
-                .poll(cx)
-            {
+            match pending.as_mut().expect("pending future").as_mut().poll(cx) {
                 Poll::Ready(Ok(_permit)) => {
                     *pending = None;
                     Poll::Ready(Ok(()))

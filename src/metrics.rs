@@ -198,7 +198,9 @@ fn compute_node_pressure(sys: &mut sysinfo::System) -> f32 {
         crate::memory_governor::MemoryPressureLevel::Critical => 0.90,
     };
 
-    ((conn_pressure * 0.7 + cpu_load * 0.3).min(1.0).max(memory_component)) as f32
+    ((conn_pressure * 0.7 + cpu_load * 0.3)
+        .min(1.0)
+        .max(memory_component)) as f32
 }
 
 pub mod aggregator;
@@ -583,7 +585,7 @@ impl RuntimeDistinctIpTracker {
 
 /// Metrics for a specific server (site)
 pub struct ServerMetrics {
- pub count_errors: AtomicU64,
+    pub count_errors: AtomicU64,
     pub user_id: AtomicI64,
     pub user_plan_id: AtomicI64,
     pub plan_id: AtomicI64,
@@ -650,7 +652,7 @@ impl ServerMetrics {
 
     fn with_server_count(max_servers: u64) -> Self {
         Self {
- count_errors:AtomicU64::new(0),
+            count_errors: AtomicU64::new(0),
             user_id: AtomicI64::new(0),
             user_plan_id: AtomicI64::new(0),
             plan_id: AtomicI64::new(0),
@@ -1411,17 +1413,15 @@ pub async fn start_persistence_flusher() {
             .saturating_add(crate::metrics::top_ip::TOP_IP_TRACKER.approximate_bytes())
             .saturating_add(crate::metrics::daily::DAILY_DOMAIN_TRACKER.approximate_bytes())
             .saturating_add(crate::metrics::daily::UNIQUE_IP_TRACKER.approximate_bytes());
-        crate::memory_governor::MEMORY_GOVERNOR
-            .set_metrics_aggregator_bytes(metrics_state_bytes);
+        crate::memory_governor::MEMORY_GOVERNOR.set_metrics_aggregator_bytes(metrics_state_bytes);
         // Observability-only guard: the metrics maps are unbounded by design
         // today, so surface a rate-limited warning when their estimated
         // footprint becomes a material share of the node budget. No samples
         // are dropped here — capping requires an explicit policy decision.
         {
             static LAST_METRICS_WARN: AtomicI64 = AtomicI64::new(0);
-            let snap = crate::memory_governor::MEMORY_GOVERNOR.snapshot(
-                crate::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads(),
-            );
+            let snap = crate::memory_governor::MEMORY_GOVERNOR
+                .snapshot(crate::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads());
             let floor = 64u64 * 1024 * 1024;
             let limit = (snap.memory_total_bytes / 8).max(floor);
             let now = crate::utils::time::now_timestamp();

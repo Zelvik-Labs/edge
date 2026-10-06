@@ -1,5 +1,5 @@
 //! Durable producer queues. API memory is not a delivery acknowledgement.
-use crate::{api_config::ApiConfig, pb, paths::NodePaths, rpc::client::SharedRpcClient};
+use crate::{api_config::ApiConfig, paths::NodePaths, pb, rpc::client::SharedRpcClient};
 use mace::{Bucket, BucketOptions, Mace, OpCode, Options};
 use parking_lot::Mutex;
 use prost::Message;
@@ -312,7 +312,12 @@ pub fn record_gap(kind: &str, at: i64, reason: &str) {
     if kind == "core" || kind == "bandwidth" {
         GAP_CORE.store(1, Ordering::Relaxed);
     }
-    error!(kind, reason, at, "TELEMETRY DATA GAP: service continues; affected billing windows must remain unsettled");
+    error!(
+        kind,
+        reason,
+        at,
+        "TELEMETRY DATA GAP: service continues; affected billing windows must remain unsettled"
+    );
     // Emit one durable gap marker per incident start; re-emits only after the
     // marker itself was acknowledged upstream (gap start resets on resolution).
     let start = GAP_START.load(Ordering::Relaxed);
@@ -328,7 +333,11 @@ fn escalate_capacity(level: u8, core: bool) {
         emit_meta(
             "alert",
             "capacity",
-            &format!("persistent {} buffer at {}% of budget", if core { "core" } else { "detail" }, level),
+            &format!(
+                "persistent {} buffer at {}% of budget",
+                if core { "core" } else { "detail" },
+                level
+            ),
             0,
             crate::utils::time::now_timestamp(),
         );
@@ -385,10 +394,7 @@ fn queue(kind: &str) -> anyhow::Result<Arc<Spool>> {
     )
 }
 pub fn core_boot_id() -> String {
-    QUEUES
-        .get()
-        .map(|q| q.core.boot_id())
-        .unwrap_or_default()
+    QUEUES.get().map(|q| q.core.boot_id()).unwrap_or_default()
 }
 pub async fn enqueue<M: Message>(
     kind: &str,
@@ -459,12 +465,10 @@ pub async fn replay(api: ApiConfig, core: bool) {
         let result = async {
             let client = SharedRpcClient::get(&api).await?.as_rpc_client();
             let mut service = client.telemetry_service();
-            let receipt = tokio::time::timeout(
-                Duration::from_secs(30),
-                service.upload_batch(batch),
-            )
-            .await??
-            .into_inner();
+            let receipt =
+                tokio::time::timeout(Duration::from_secs(30), service.upload_batch(batch))
+                    .await??
+                    .into_inner();
             let ack = spool.clone();
             tokio::task::spawn_blocking(move || ack.acknowledge(&receipt)).await??;
             Ok::<_, anyhow::Error>(())
@@ -476,17 +480,13 @@ pub async fn replay(api: ApiConfig, core: bool) {
             }
             Err(e) => {
                 if failures == 0 {
-                    LAST_FAILURE
-                        .store(crate::utils::time::now_timestamp(), Ordering::Relaxed);
+                    LAST_FAILURE.store(crate::utils::time::now_timestamp(), Ordering::Relaxed);
                     error!(core, error=%e, "URGENT: telemetry write failed; retained on node until durable receipt");
                 } else {
                     warn!(core, error=%e, "telemetry batch remains pending");
                 }
                 failures = failures.saturating_add(1);
-                tokio::time::sleep(Duration::from_secs(
-                    (1u64 << failures.min(6)).min(60),
-                ))
-                .await;
+                tokio::time::sleep(Duration::from_secs((1u64 << failures.min(6)).min(60))).await;
             }
         }
     }
@@ -523,7 +523,11 @@ async fn persist_access(buffer: &mut Vec<pb::HttpAccessLog>) {
         http_access_logs: std::mem::take(buffer),
     };
     if let Err(e) = enqueue("access_log", &request, 0, false).await {
-        record_gap("access_log", crate::utils::time::now_timestamp(), &e.to_string());
+        record_gap(
+            "access_log",
+            crate::utils::time::now_timestamp(),
+            &e.to_string(),
+        );
     }
 }
 pub async fn node_logs(mut rx: tokio::sync::mpsc::Receiver<pb::NodeLog>) {
@@ -553,7 +557,11 @@ async fn persist_node_logs(buffer: &mut Vec<pb::NodeLog>) {
         node_logs: std::mem::take(buffer),
     };
     if let Err(e) = enqueue("node_log", &request, 0, false).await {
-        record_gap("node_log", crate::utils::time::now_timestamp(), &e.to_string());
+        record_gap(
+            "node_log",
+            crate::utils::time::now_timestamp(),
+            &e.to_string(),
+        );
     }
 }
 
@@ -571,22 +579,25 @@ mod tests {
         let spool = Spool::open(&path, true, 1 << 20).unwrap();
         let b = spool.front().unwrap().unwrap();
         assert_eq!(b.batch_id, id);
-        assert!(spool
+        assert!(
+            spool
+                .acknowledge(&pb::TelemetryReceipt {
+                    batch_id: "wrong".into(),
+                    sequence: b.sequence,
+                    backend: "direct".into(),
+                    durable_at: 2,
+                })
+                .is_err()
+        );
+        assert!(spool.front().unwrap().is_some());
+        spool
             .acknowledge(&pb::TelemetryReceipt {
-                batch_id: "wrong".into(),
+                batch_id: id,
                 sequence: b.sequence,
                 backend: "direct".into(),
                 durable_at: 2,
             })
-            .is_err());
-        assert!(spool.front().unwrap().is_some());
-        spool.acknowledge(&pb::TelemetryReceipt {
-            batch_id: id,
-            sequence: b.sequence,
-            backend: "direct".into(),
-            durable_at: 2,
-        })
-        .unwrap();
+            .unwrap();
         assert!(spool.front().unwrap().is_none());
         drop(spool);
         std::fs::remove_dir_all(path).unwrap();
@@ -598,7 +609,10 @@ mod tests {
         spool.append("node_metric", vec![], 0, false, 1).unwrap();
         let first = spool.front().unwrap().unwrap().batch_id;
         for _ in 0..100 {
-            if spool.append("node_metric", vec![1; 100], 0, false, 2).is_err() {
+            if spool
+                .append("node_metric", vec![1; 100], 0, false, 2)
+                .is_err()
+            {
                 break;
             }
         }

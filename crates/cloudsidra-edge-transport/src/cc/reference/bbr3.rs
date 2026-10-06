@@ -30,11 +30,11 @@
 //! - extra_acked: EWMA of acked beyond expectation (1/16 gain, cap 2×cwnd
 //!   — upstream `BBR_EXTRA_ACKED_MAX`).
 
+use crate::TransportInstant;
 use crate::cc::parts::Prr;
 use crate::cc::{CcSnapshot, CongestionController};
 use crate::rate_sample::RateSample;
 use crate::rtt::RttState;
-use crate::TransportInstant;
 use std::time::Duration;
 
 const MODE_STARTUP: &str = "startup";
@@ -88,9 +88,7 @@ impl MinFilter {
     }
     fn add(&mut self, now: TransportInstant, v: f64) -> f64 {
         let now_us = now.micros();
-        if v <= self.best
-            || now_us.saturating_sub(self.best_at) > self.window.as_micros() as u64
-        {
+        if v <= self.best || now_us.saturating_sub(self.best_at) > self.window.as_micros() as u64 {
             self.best = v;
             self.best_at = now_us;
         }
@@ -322,8 +320,7 @@ impl CongestionController for Bbr3Ref {
                     let expected = est as f64 * rs.interval.as_micros() as f64 / 1e6;
                     let extra = (rs.acked_sacked as f64 - expected).max(0.0);
                     self.extra_acked += EXTRA_GAIN * (extra - self.extra_acked);
-                    self.extra_acked =
-                        self.extra_acked.min(2.0 * self.cwnd as f64);
+                    self.extra_acked = self.extra_acked.min(2.0 * self.cwnd as f64);
                 }
             }
         }
@@ -334,7 +331,8 @@ impl CongestionController for Bbr3Ref {
         }
 
         // Round tracking (packet conservation).
-        let round_done = rs.cum_ack > 0 && self.round_end_cum > 0 && rs.cum_ack > self.round_end_cum;
+        let round_done =
+            rs.cum_ack > 0 && self.round_end_cum > 0 && rs.cum_ack > self.round_end_cum;
         if round_done {
             self.rounds = self.rounds.saturating_add(1);
             // Loss bookkeeping closes the round: inflight_lo REFILL —
@@ -388,11 +386,11 @@ impl CongestionController for Bbr3Ref {
                 if self.pacing_bps == 0 {
                     // No bw sample yet: initial window pacing.
                     let rtt = self.min_rtt_f.value().unwrap_or(50_000.0);
-                    self.pacing_bps =
-                        (self.cwnd as f64 * gain * 1e6 / rtt) as u64;
+                    self.pacing_bps = (self.cwnd as f64 * gain * 1e6 / rtt) as u64;
                 }
                 self.cwnd = (self.bdp() as f64 * STARTUP_CWND)
-                    .max(self.cwnd as f64 + rs.acked_sacked as f64) as u64;
+                    .max(self.cwnd as f64 + rs.acked_sacked as f64)
+                    as u64;
                 if round_done && !rs.is_app_limited {
                     let rate = rs.delivery_rate_bps() as f64;
                     if rate <= self.full_bw * FULL_BW_MARGIN {
@@ -458,17 +456,17 @@ impl CongestionController for Bbr3Ref {
                     Some(_) => {}
                     None => {
                         if in_flight <= PROBE_RTT_INFLIGHT_MSS * self.mss {
-                            self.probe_rtt_done = Some(
-                                rs.now.micros() + PROBE_RTT_HOLD.as_micros() as u64,
-                            );
+                            self.probe_rtt_done =
+                                Some(rs.now.micros() + PROBE_RTT_HOLD.as_micros() as u64);
                         }
                     }
                 }
                 // Refresh filter if a lower rtt arrived during probe.
                 if let Some(r) = rs.rtt {
-                    self.min_rtt_f.reset(rs.now, (r.as_micros() as f64).min(
-                        self.min_rtt_f.value().unwrap_or(f64::INFINITY),
-                    ));
+                    self.min_rtt_f.reset(
+                        rs.now,
+                        (r.as_micros() as f64).min(self.min_rtt_f.value().unwrap_or(f64::INFINITY)),
+                    );
                 }
             }
             MODE_RECOVERY => {
@@ -599,7 +597,10 @@ impl CongestionController for Bbr3Ref {
             cwnd_bytes: self.cwnd(),
             ssthresh_bytes: u64::MAX / 2,
             pacing_rate_bps: self.pacing_rate(),
-            min_rtt: self.min_rtt_f.value().map(|v| Duration::from_micros(v as u64)),
+            min_rtt: self
+                .min_rtt_f
+                .value()
+                .map(|v| Duration::from_micros(v as u64)),
             bandwidth_hi_bps: self.bw_hi,
             bandwidth_lo_bps: self.bw_lo,
             inflight_hi_bytes: self.inflight_hi,

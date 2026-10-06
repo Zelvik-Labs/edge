@@ -1964,8 +1964,7 @@ pub(crate) fn cache_meta_tombstone_version(hash: &str) -> Option<u64> {
 /// Reconcile the cache-metadata and access-log ledger categories against
 /// the live maps. Owner formats: metadata entries are keyed by their hash,
 /// tombstones carry a `cache-meta-tombstone:` prefix.
-pub fn reconcile_cache_meta_resident_ledger(
-) -> crate::memory_governor::ResidentReconcileStats {
+pub fn reconcile_cache_meta_resident_ledger() -> crate::memory_governor::ResidentReconcileStats {
     let gov = &crate::memory_governor::MEMORY_GOVERNOR;
     let mut total = gov.reconcile_resident_category(
         crate::memory_governor::ResidentCategory::CacheMetadata,
@@ -2496,8 +2495,10 @@ mod tests {
 
     #[test]
     fn mace_storage_round_trip_and_prefix_scan() {
-        let dir =
-            std::env::temp_dir().join(format!("cloudsidra-edge-mace-test-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!(
+            "cloudsidra-edge-mace-test-{}",
+            uuid::Uuid::new_v4()
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         let storage = MetricStorage::open(&dir).expect("open mace storage");
 
@@ -2606,8 +2607,10 @@ mod tests {
 
     #[test]
     fn history_cleanup_removes_only_expired_metric_namespaces() {
-        let dir =
-            std::env::temp_dir().join(format!("cloudsidra-edge-mace-cleanup-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!(
+            "cloudsidra-edge-mace-cleanup-{}",
+            uuid::Uuid::new_v4()
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         let storage = MetricStorage::open(&dir).expect("open mace storage");
 

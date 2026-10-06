@@ -391,10 +391,9 @@ async fn large_server_json_and_hot_reload_under_low_memory() {
     for round in 0..2 {
         let before = process_rss();
         let started = Instant::now();
-        let large = serde_json::from_value::<ServerConfig>(
-            site_value(9_001 + round as i64, &page, 64),
-        )
-        .expect("large server JSON must parse");
+        let large =
+            serde_json::from_value::<ServerConfig>(site_value(9_001 + round as i64, &page, 64))
+                .expect("large server JSON must parse");
         let round_maps = tokio::time::timeout(
             APPLY_TIMEOUT,
             cloudsidra_edge::config_apply::materialize_runtime_servers(
@@ -421,9 +420,7 @@ async fn large_server_json_and_hot_reload_under_low_memory() {
             )
             .await;
         elapsed = started.elapsed();
-        let delta = process_rss()
-            .rss_bytes
-            .saturating_sub(before.rss_bytes);
+        let delta = process_rss().rss_bytes.saturating_sub(before.rss_bytes);
         if round == 0 {
             first_delta = delta;
         } else {

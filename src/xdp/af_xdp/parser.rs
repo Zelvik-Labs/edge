@@ -77,10 +77,8 @@ fn ip_l4_span(ip_packet: &[u8]) -> Option<(IpAddr, IpAddr, usize)> {
         }
         6 => {
             let base = ip_packet.get(..IPV6_HEADER_LEN)?;
-            let source =
-                IpAddr::V6(Ipv6Addr::from(<[u8; 16]>::try_from(&base[8..24]).ok()?));
-            let destination =
-                IpAddr::V6(Ipv6Addr::from(<[u8; 16]>::try_from(&base[24..40]).ok()?));
+            let source = IpAddr::V6(Ipv6Addr::from(<[u8; 16]>::try_from(&base[8..24]).ok()?));
+            let destination = IpAddr::V6(Ipv6Addr::from(<[u8; 16]>::try_from(&base[24..40]).ok()?));
             let packet_end = ip_packet.len();
             let (_, l4_offset) =
                 ipv6_transport_offset(ip_packet, base[6], IPV6_HEADER_LEN, packet_end)?;
@@ -298,8 +296,7 @@ fn parse_icmpv6_error(frame: &[u8], ip_offset: usize) -> Option<AfXdpIcmpError> 
         return None;
     }
     let source = IpAddr::V6(Ipv6Addr::from(<[u8; 16]>::try_from(&base[8..24]).ok()?));
-    let destination =
-        IpAddr::V6(Ipv6Addr::from(<[u8; 16]>::try_from(&base[24..40]).ok()?));
+    let destination = IpAddr::V6(Ipv6Addr::from(<[u8; 16]>::try_from(&base[24..40]).ok()?));
     if !icmpv6_checksum_ok(source, destination, icmp) {
         return None;
     }
@@ -344,8 +341,7 @@ fn parse_quoted_tuple(inner: &[u8], family: u8) -> Option<(AfXdpTcpFlowKey, u8)>
             return None;
         }
         let source = IpAddr::V6(Ipv6Addr::from(<[u8; 16]>::try_from(&base[8..24]).ok()?));
-        let destination =
-            IpAddr::V6(Ipv6Addr::from(<[u8; 16]>::try_from(&base[24..40]).ok()?));
+        let destination = IpAddr::V6(Ipv6Addr::from(<[u8; 16]>::try_from(&base[24..40]).ok()?));
         let (proto, l4_offset) =
             ipv6_transport_offset(inner, base[6], IPV6_HEADER_LEN, inner.len())?;
         (proto, source, destination, l4_offset, inner.len())
@@ -362,12 +358,7 @@ fn parse_quoted_tuple(inner: &[u8], family: u8) -> Option<(AfXdpTcpFlowKey, u8)>
 }
 
 /// Shared transport pseudo-header sum for checksum compute and verify.
-fn l4_pseudo_sum(
-    source: IpAddr,
-    destination: IpAddr,
-    protocol: u8,
-    l4_len: usize,
-) -> Option<u32> {
+fn l4_pseudo_sum(source: IpAddr, destination: IpAddr, protocol: u8, l4_len: usize) -> Option<u32> {
     match (source, destination) {
         (IpAddr::V4(source), IpAddr::V4(destination)) => {
             let mut pseudo_header = [0u8; 12];
@@ -426,11 +417,7 @@ pub(crate) fn ipv4_header_checksum_ok(frame: &[u8], ip_offset: usize) -> bool {
 /// UDP datagram verification. `udp_packet` is the full datagram including
 /// its checksum field. IPv4 permits a zero checksum (sender computed
 /// none); IPv6 forbids it (RFC 8200 §8.1 — mandatory for UDP over v6).
-pub(crate) fn udp_checksum_ok(
-    source: IpAddr,
-    destination: IpAddr,
-    udp_packet: &[u8],
-) -> bool {
+pub(crate) fn udp_checksum_ok(source: IpAddr, destination: IpAddr, udp_packet: &[u8]) -> bool {
     let Some(stored) = udp_packet
         .get(6..8)
         .map(|field| u16::from_be_bytes([field[0], field[1]]))
@@ -456,16 +443,11 @@ fn icmpv4_checksum_ok(icmp: &[u8]) -> bool {
 
 /// TCP segment verification — mandatory in both families; `segment` is
 /// the whole TCP datagram including its checksum field.
-pub(crate) fn tcp_checksum_ok(
-    source: IpAddr,
-    destination: IpAddr,
-    segment: &[u8],
-) -> bool {
+pub(crate) fn tcp_checksum_ok(source: IpAddr, destination: IpAddr, segment: &[u8]) -> bool {
     if segment.len() < 18 {
         return false;
     }
-    let Some(pseudo_sum) = l4_pseudo_sum(source, destination, IP_PROTO_TCP, segment.len())
-    else {
+    let Some(pseudo_sum) = l4_pseudo_sum(source, destination, IP_PROTO_TCP, segment.len()) else {
         return false;
     };
     checksum_total_ok(pseudo_sum.wrapping_add(checksum_sum(segment)))
@@ -475,8 +457,7 @@ pub(crate) fn tcp_checksum_ok(
 /// plus message (RFC 8200 §8.1).
 #[cfg(any(test, target_os = "linux"))]
 fn icmpv6_checksum_ok(source: IpAddr, destination: IpAddr, icmp: &[u8]) -> bool {
-    let Some(pseudo_sum) = l4_pseudo_sum(source, destination, IP_PROTO_ICMPV6, icmp.len())
-    else {
+    let Some(pseudo_sum) = l4_pseudo_sum(source, destination, IP_PROTO_ICMPV6, icmp.len()) else {
         return false;
     };
     checksum_total_ok(pseudo_sum.wrapping_add(checksum_sum(icmp)))
@@ -781,11 +762,7 @@ pub(crate) fn parse_transport(
             if udp_len < UDP_HEADER_LEN || l4_offset + udp_len > packet_end {
                 return None;
             }
-            if !udp_checksum_ok(
-                source,
-                destination,
-                &frame[l4_offset..l4_offset + udp_len],
-            ) {
+            if !udp_checksum_ok(source, destination, &frame[l4_offset..l4_offset + udp_len]) {
                 return None;
             }
             Some(AfXdpL4Packet {
@@ -955,9 +932,7 @@ pub(crate) fn tcp_flags_from_ip_packet(ip_packet: &[u8]) -> Option<u8> {
 /// frame: wire sequence number, payload byte count, and control flags
 /// (SYN/FIN consume a sequence position each).
 #[cfg(target_os = "linux")]
-pub(crate) fn tcp_seq_bounds_from_ip_packet(
-    ip_packet: &[u8],
-) -> Option<(u32, u32, u8)> {
+pub(crate) fn tcp_seq_bounds_from_ip_packet(ip_packet: &[u8]) -> Option<(u32, u32, u8)> {
     let (protocol, l4_offset, packet_end) = ip_transport_bounds(ip_packet)?;
     if protocol != IP_PROTO_TCP || l4_offset + TCP_MIN_HEADER_LEN > packet_end {
         return None;

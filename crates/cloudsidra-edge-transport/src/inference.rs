@@ -8,9 +8,9 @@
 //!
 //! All updates are per-ACK O(1). No online learning.
 
+use crate::TransportInstant;
 use crate::model::PathModel;
 use crate::rate_sample::RateSample;
-use crate::TransportInstant;
 use std::time::Duration;
 
 /// Evidence weights in log-odds units (plan §2.3 ordering):
@@ -272,9 +272,7 @@ impl Inference {
                 // a tail of losses, which would keep excess positive
                 // forever on genuinely random-loss paths.
                 let total = (rs.acked_sacked + rs.lost).max(1) as f64;
-                let rate = model
-                    .quiet_loss_rate()
-                    .unwrap_or(rs.lost as f64 / total);
+                let rate = model.quiet_loss_rate().unwrap_or(rs.lost as f64 / total);
                 // No baseline → no "excess" claim: before p_rand has
                 // converged, quiet loss proves nothing about
                 // congestion (treating the missing baseline as zero

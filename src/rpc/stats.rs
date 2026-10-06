@@ -334,7 +334,11 @@ impl From<&PendingWindow> for StoredPendingWindow {
             window_start: value.window_start,
             segment_started_at: value.segment_started_at,
             source_boot: value.source_boot.clone(),
-            stats: value.stats.iter().map(StoredPendingBandwidthStat::from).collect(),
+            stats: value
+                .stats
+                .iter()
+                .map(StoredPendingBandwidthStat::from)
+                .collect(),
             error_counts: value.error_counts.iter().map(|(k, v)| (*k, *v)).collect(),
         }
     }
@@ -346,7 +350,11 @@ impl From<StoredPendingWindow> for PendingWindow {
             window_start: value.window_start,
             segment_started_at: value.segment_started_at,
             source_boot: value.source_boot,
-            stats: value.stats.into_iter().map(pb::ServerBandwidthStat::from).collect(),
+            stats: value
+                .stats
+                .into_iter()
+                .map(pb::ServerBandwidthStat::from)
+                .collect(),
             error_counts: value.error_counts.into_iter().collect(),
         }
     }
@@ -416,7 +424,10 @@ async fn persist_bandwidth_state(
     let state = StoredBandwidthState {
         current_window: current_window.to_string(),
         window_stats: window_stats.values().cloned().collect(),
-        pending_windows: pending_windows.iter().map(StoredPendingWindow::from).collect(),
+        pending_windows: pending_windows
+            .iter()
+            .map(StoredPendingWindow::from)
+            .collect(),
         boot: crate::telemetry::process_boot().to_string(),
         segment_started_at,
         pending_stats: Vec::new(),
@@ -441,7 +452,11 @@ fn parse_window_start(day: &str, time_at: &str) -> i64 {
         .unwrap_or(0)
 }
 
-fn bandwidth_stat_pb(stat: &BandwidthWindowStat, config_store: &ConfigStore, node_region_id: i64) -> pb::ServerBandwidthStat {
+fn bandwidth_stat_pb(
+    stat: &BandwidthWindowStat,
+    config_store: &ConfigStore,
+    node_region_id: i64,
+) -> pb::ServerBandwidthStat {
     let bytes_per_sec = bandwidth_bytes_per_sec(stat, config_store);
     pb::ServerBandwidthStat {
         user_id: stat.user_id,
@@ -550,7 +565,10 @@ async fn flush_stale_window(
         stored_boot.to_string(),
     );
     if let Err(e) = enqueue_window_batch(&window, false).await {
-        warn!("stale bandwidth window could not reach the durable queue: {}", e);
+        warn!(
+            "stale bandwidth window could not reach the durable queue: {}",
+            e
+        );
     }
     // The downtime span is permanent loss: emit a gap batch whose range covers
     // the stale window so settlement for it stays paused.
@@ -558,8 +576,7 @@ async fn flush_stale_window(
         kind: "gap".into(),
         has_gap: true,
         gap_kind: "bandwidth".into(),
-        gap_reason: "node restarted before window close; downtime coverage unrecoverable"
-            .into(),
+        gap_reason: "node restarted before window close; downtime coverage unrecoverable".into(),
         window_start,
         occurred_at: crate::utils::time::now_timestamp(),
         ..Default::default()

@@ -95,7 +95,12 @@ impl Codel {
     /// Dequeue decision for one packet (RFC 8289 `dodequeue`).
     /// `queue_empty` is whether the queue was empty at dequeue —
     /// used to exit dropping cleanly like upstream.
-    pub fn dequeue(&mut self, now: TransportInstant, stamp: Stamp, queue_empty: bool) -> CodelAction {
+    pub fn dequeue(
+        &mut self,
+        now: TransportInstant,
+        stamp: Stamp,
+        queue_empty: bool,
+    ) -> CodelAction {
         self.packets_in += 1;
         let sojourn = now.duration_since(stamp.enqueued_at);
         let now_us = now.micros();
@@ -135,13 +140,12 @@ impl Codel {
             self.dropping = true;
             // Recency rule (RFC 8289 §4.5): if the last drop was within
             // one interval, resume with the previous count; else reset.
-            self.count = if now_us.saturating_sub(self.last_drop_us)
-                < self.interval.as_micros() as u64
-            {
-                self.count.max(1)
-            } else {
-                1
-            };
+            self.count =
+                if now_us.saturating_sub(self.last_drop_us) < self.interval.as_micros() as u64 {
+                    self.count.max(1)
+                } else {
+                    1
+                };
             self.drop_next_us = self.control_law(now_us, self.count);
             self.count = self.count.saturating_add(1);
             self.last_drop_us = now_us;
@@ -218,13 +222,21 @@ mod tests {
         // Drive into dropping state with Not-ECT packets.
         for i in 0..200u64 {
             let enq = i * 1_000;
-            c.dequeue(TransportInstant::from_micros(enq + 10_000), stamp(enq, 0), false);
+            c.dequeue(
+                TransportInstant::from_micros(enq + 10_000),
+                stamp(enq, 0),
+                false,
+            );
         }
         let dropped_before = c.dropped;
         let marked_before = c.marked_ce;
         // Now an ECT(0) packet under overload → mark, not drop.
         let now = 300_000u64;
-        let a = c.dequeue(TransportInstant::from_micros(now), stamp(now - 10_000, 2), false);
+        let a = c.dequeue(
+            TransportInstant::from_micros(now),
+            stamp(now - 10_000, 2),
+            false,
+        );
         assert!(a == CodelAction::MarkCe || a == CodelAction::Pass);
         if a == CodelAction::MarkCe {
             assert_eq!(c.marked_ce, marked_before + 1);
@@ -237,13 +249,21 @@ mod tests {
         let mut c = Codel::new(DEFAULT_TARGET, DEFAULT_INTERVAL);
         for i in 0..200u64 {
             let enq = i * 1_000;
-            c.dequeue(TransportInstant::from_micros(enq + 10_000), stamp(enq, 0), false);
+            c.dequeue(
+                TransportInstant::from_micros(enq + 10_000),
+                stamp(enq, 0),
+                false,
+            );
         }
         assert!(c.is_dropping());
         // Sojourn falls below target → leave dropping.
         for i in 0..50u64 {
             let enq = 300_000 + i * 1_000;
-            let a = c.dequeue(TransportInstant::from_micros(enq + 1_000), stamp(enq, 0), false);
+            let a = c.dequeue(
+                TransportInstant::from_micros(enq + 1_000),
+                stamp(enq, 0),
+                false,
+            );
             if a == CodelAction::Drop {
                 // still within drop schedule window — ok briefly
             }
@@ -252,8 +272,11 @@ mod tests {
         let mut passed = 0;
         for i in 0..100u64 {
             let enq = 400_000 + i * 1_000;
-            if c.dequeue(TransportInstant::from_micros(enq + 500), stamp(enq, 0), false)
-                == CodelAction::Pass
+            if c.dequeue(
+                TransportInstant::from_micros(enq + 500),
+                stamp(enq, 0),
+                false,
+            ) == CodelAction::Pass
             {
                 passed += 1;
             }

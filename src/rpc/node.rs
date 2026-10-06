@@ -124,7 +124,6 @@ fn dedup_ssl_certs(
         .collect()
 }
 
-
 fn collect_enabled_ssl_certs(
     global_certs: &[crate::config_models::SSLCertConfig],
     global_policy: Option<&crate::config_models::SSLPolicyConfig>,
@@ -425,12 +424,17 @@ where
     });
 
     #[cfg(feature = "node-control")]
+    let mut verified_release = None;
+    #[cfg(feature = "node-control")]
     let result =
         match crate::node_control::transport::fetch_snapshot(api_config, fetch_version).await {
-            Err(err) if err.code() == tonic::Code::Unimplemented => {
+            Err(err) if crate::node_control::transport::uses_legacy_fallback(&err) => {
                 crate::rpc::track_rpc(client.find_current_node_config(req)).await
             }
-            result => result,
+            result => result.map(|snap| {
+                verified_release = snap.release;
+                tonic::Response::new(snap.config)
+            }),
         };
     #[cfg(not(feature = "node-control"))]
     let result = crate::rpc::track_rpc(client.find_current_node_config(req)).await;
@@ -554,6 +558,13 @@ where
                     };
                     let numeric_id = payload.id.unwrap_or(0);
                     let payload_servers = std::mem::take(&mut payload.servers);
+                    // Auto-derived business listen ports from this snapshot's
+                    // typed server list — a later runtime.xdp section without
+                    // explicit proxy.ports must not strip the active set.
+                    let derived_xdp_proxy_ports =
+                        crate::xdp_auto_config::xdp_proxy_ports_from_server_refs(
+                            &payload_servers,
+                        );
 
                     debug!(
                         "Successfully parsed NodeConfigPayload. Numeric ID: {}, Server count: {}",
@@ -769,7 +780,6 @@ where
                             }
                         }
                     }
-
 
                     let node_level = payload.level;
                     let parent_nodes = Arc::new(
@@ -1018,7 +1028,7 @@ where
                                 return false;
                             }
                         };
-                        let xdp = match runtime_push.xdp {
+                        let mut xdp = match runtime_push.xdp {
                             Some(xdp) => xdp,
                             None => match crate::runtime_mode::RuntimeConfig::load_default() {
                                 Ok(local) => local.xdp,
@@ -1028,6 +1038,10 @@ where
                                 }
                             },
                         };
+                        crate::xdp_auto_config::fill_missing_xdp_proxy_ports(
+                            &mut xdp,
+                            &derived_xdp_proxy_ports,
+                        );
                         let previous_xdp = crate::runtime_mode::RuntimeConfig::current()
                             .unwrap_or_default()
                             .xdp;
@@ -1136,7 +1150,7 @@ where
                     )
                     .await;
                     crate::logging::set_numeric_node_id(numeric_id);
- crate::telemetry::set_binding(payload.telemetry.clone());
+                    crate::telemetry::set_binding(payload.telemetry.clone());
                     config_store.set_global_stat_upload(
                         payload
                             .global_server_config
@@ -1230,6 +1244,50 @@ where
         Err(e) => {
             warn!("Error fetching node config: {}", e);
             return false;
+        }
+    }
+
+    // Release confirmation runs only after the snapshot/apply path fully
+    // succeeded (decode, governor admission, runtime/XDP/WAF/cert apply).
+    // The sender itself rejects when the live store's config version does not
+    // equal the frozen release version; a failed confirmation keeps the sync
+    // loop retrying instead of reporting success.
+    #[cfg(feature = "node-control")]
+    if let Some(release) = verified_release {
+        // Fail closed before any phase RPC: a release that leaves the
+        // dataplane short of the applied business ports is never confirmed.
+        let servers = config_store.get_all_servers().await;
+        let expected_ports = crate::xdp_auto_config::xdp_proxy_ports_from_server_refs(
+            servers.iter().map(AsRef::as_ref),
+        );
+        let status = crate::xdp::status_snapshot();
+        if let Err(err) = crate::node_control::transport::validate_release_dataplane_snapshot(
+            &status,
+            &expected_ports,
+        ) {
+            warn!(
+                "RPC_NODE: release {} (version {}) confirmation blocked: {}",
+                release.release_id, release.version, err
+            );
+            return false;
+        }
+        let active_version = config_store.get_config_version().await;
+        match crate::node_control::transport::complete_release(api_config, &release, active_version)
+            .await
+        {
+            Ok(()) => {
+                debug!(
+                    "RPC_NODE: release {} confirmed at version {}",
+                    release.release_id, release.version
+                );
+            }
+            Err(err) => {
+                warn!(
+                    "RPC_NODE: release {} confirmation failed: {}",
+                    release.release_id, err
+                );
+                return false;
+            }
         }
     }
 
@@ -1462,54 +1520,54 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
         });
 
         let status = serde_json::json!({
-            "buildVersion": env!("CARGO_PKG_VERSION"),
-            "runtimeDir": crate::paths::NodePaths::current().runtime_root(),
-            "buildVersionCode": build_version_code(),
-            "configVersion": config_store.get_config_version().await,
-            "os": std::env::consts::OS,
-            "arch": std::env::consts::ARCH,
-            "hostname": hostname,
-            "hostIP": host_ip,
-            "exePath": exe_path,
-            "cpuUsage": cpu_usage,
-            "cpuLogicalCount": sys.cpus().len(),
-            "cpuPhysicalCount": sysinfo::System::physical_core_count().unwrap_or(sys.cpus().len()),
-            "memoryUsage": mem_usage,
-            "memoryTotal": total_memory,
-            "diskUsage": disk_usage,
-            "diskTotal": disk_total,
-            "diskMaxUsage": disk_max_usage,
-            "diskMaxUsagePartition": disk_max_partition,
-            "load1m": load.one,
-            "load5m": load.five,
-            "load15m": load.fifteen,
-            "trafficInBytes": traffic_in,
-            "trafficOutBytes": traffic_out,
-            "connectionCount": connections,
-            "connectionShadow": {
-                "downstreamTransports": shadow_connections.downstream_transports,
-                "upstreamTransports": shadow_connections.upstream_transports,
-                "rpcTransports": shadow_connections.rpc_transports,
-                "udpSessions": shadow_connections.udp_sessions,
-                "quicConnections": shadow_connections.quic_connections,
-                "pendingRequests": shadow_connections.pending_requests,
-                "forwardingRequests": shadow_connections.forwarding_requests,
-                "activeRequests": shadow_connections.active_requests
-            },
-            "apiSuccessPercent": api_success_percent,
-            "apiAvgCostSeconds": api_avg_cost_seconds,
-            "cacheTotalDiskSize": cache_stats.disk_bytes,
-            "cacheTotalMemorySize": cache_stats.memory_bytes,
-            "resourceGovernor": resource_governor,
-            "pipelines": pipelines,
- "telemetry":crate::telemetry::snapshot(),
-            "l4Defense": l4_defense,
-            "xdp": xdp_status,
-            "updatedAt": now,
-            "timestamp": now,
-            "isActive": true,
-            "isHealthy": true,
-        });
+                   "buildVersion": env!("CARGO_PKG_VERSION"),
+                   "runtimeDir": crate::paths::NodePaths::current().runtime_root(),
+                   "buildVersionCode": build_version_code(),
+                   "configVersion": config_store.get_config_version().await,
+                   "os": std::env::consts::OS,
+                   "arch": std::env::consts::ARCH,
+                   "hostname": hostname,
+                   "hostIP": host_ip,
+                   "exePath": exe_path,
+                   "cpuUsage": cpu_usage,
+                   "cpuLogicalCount": sys.cpus().len(),
+                   "cpuPhysicalCount": sysinfo::System::physical_core_count().unwrap_or(sys.cpus().len()),
+                   "memoryUsage": mem_usage,
+                   "memoryTotal": total_memory,
+                   "diskUsage": disk_usage,
+                   "diskTotal": disk_total,
+                   "diskMaxUsage": disk_max_usage,
+                   "diskMaxUsagePartition": disk_max_partition,
+                   "load1m": load.one,
+                   "load5m": load.five,
+                   "load15m": load.fifteen,
+                   "trafficInBytes": traffic_in,
+                   "trafficOutBytes": traffic_out,
+                   "connectionCount": connections,
+                   "connectionShadow": {
+                       "downstreamTransports": shadow_connections.downstream_transports,
+                       "upstreamTransports": shadow_connections.upstream_transports,
+                       "rpcTransports": shadow_connections.rpc_transports,
+                       "udpSessions": shadow_connections.udp_sessions,
+                       "quicConnections": shadow_connections.quic_connections,
+                       "pendingRequests": shadow_connections.pending_requests,
+                       "forwardingRequests": shadow_connections.forwarding_requests,
+                       "activeRequests": shadow_connections.active_requests
+                   },
+                   "apiSuccessPercent": api_success_percent,
+                   "apiAvgCostSeconds": api_avg_cost_seconds,
+                   "cacheTotalDiskSize": cache_stats.disk_bytes,
+                   "cacheTotalMemorySize": cache_stats.memory_bytes,
+                   "resourceGovernor": resource_governor,
+                   "pipelines": pipelines,
+        "telemetry":crate::telemetry::snapshot(),
+                   "l4Defense": l4_defense,
+                   "xdp": xdp_status,
+                   "updatedAt": now,
+                   "timestamp": now,
+                   "isActive": true,
+                   "isHealthy": true,
+               });
 
         #[cfg(feature = "node-control")]
         if let Err(err) = crate::node_control::transport::report_health(
@@ -1857,7 +1915,19 @@ pub async fn start_node_value_reporter(config_store: Arc<ConfigStore>) {
             .collect();
 
         let node_value_items_count = node_value_items.len();
-        if let Err(e)=crate::telemetry::enqueue("node_metric",&pb::CreateNodeValuesRequest{node_value_items},0,false).await{warn!("Error persisting {} node values: {}",node_value_items_count,e);crate::telemetry::record_gap("node_metric",created_at,&e.to_string());}
-
+        if let Err(e) = crate::telemetry::enqueue(
+            "node_metric",
+            &pb::CreateNodeValuesRequest { node_value_items },
+            0,
+            false,
+        )
+        .await
+        {
+            warn!(
+                "Error persisting {} node values: {}",
+                node_value_items_count, e
+            );
+            crate::telemetry::record_gap("node_metric", created_at, &e.to_string());
+        }
     }
 }

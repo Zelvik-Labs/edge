@@ -132,7 +132,11 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ("common.cancelled", "Cancelled.", "已取消。"),
     ("common.none", "none", "无"),
     // Top-level command output
-    ("status.version", "CloudSidra-Edge version", "CloudSidra-Edge 版本"),
+    (
+        "status.version",
+        "CloudSidra-Edge version",
+        "CloudSidra-Edge 版本",
+    ),
     ("status.build_time", "Build time", "构建时间"),
     (
         "status.running",
@@ -154,13 +158,21 @@ const STRINGS: &[(&str, &str, &str)] = &[
         "CloudSidra-Edge started in background",
         "CloudSidra-Edge 已在后台启动",
     ),
-    ("stop.stopped", "CloudSidra-Edge stopped.", "CloudSidra-Edge 已停止。"),
+    (
+        "stop.stopped",
+        "CloudSidra-Edge stopped.",
+        "CloudSidra-Edge 已停止。",
+    ),
     (
         "stop.not_running",
         "CloudSidra-Edge is not running.",
         "CloudSidra-Edge 未运行。",
     ),
-    ("stop.stopping", "Stopping CloudSidra-Edge", "正在停止 CloudSidra-Edge"),
+    (
+        "stop.stopping",
+        "Stopping CloudSidra-Edge",
+        "正在停止 CloudSidra-Edge",
+    ),
     (
         "stop.force",
         "CloudSidra-Edge did not stop within 20s, forcing shutdown",

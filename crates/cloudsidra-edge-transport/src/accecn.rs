@@ -361,18 +361,9 @@ impl AccEcn {
     /// Feed a parsed AccECN option — RFC 9768 §3.2.3 allows the Data
     /// Receiver to omit unchanged trailing fields; `None` substitutes
     /// the last seen value (delta 0). Returns the CE byte delta.
-    pub fn on_ack_option(
-        &mut self,
-        e0b: Option<u64>,
-        e1b: Option<u64>,
-        ceb: Option<u64>,
-    ) -> u64 {
+    pub fn on_ack_option(&mut self, e0b: Option<u64>, e1b: Option<u64>, ceb: Option<u64>) -> u64 {
         let (p0, p1, pc) = self.peer_counters;
-        self.on_ack_counters(
-            e0b.unwrap_or(p0),
-            e1b.unwrap_or(p1),
-            ceb.unwrap_or(pc),
-        )
+        self.on_ack_counters(e0b.unwrap_or(p0), e1b.unwrap_or(p1), ceb.unwrap_or(pc))
     }
 }
 
@@ -384,7 +375,14 @@ mod tests {
     fn initiator_acc_ecn_handshake() {
         let mut a = AccEcn::new(true, true);
         let syn = a.syn_flags(false);
-        assert_eq!(syn, Flags { ae: true, cwr: true, ece: true });
+        assert_eq!(
+            syn,
+            Flags {
+                ae: true,
+                cwr: true,
+                ece: true
+            }
+        );
         a.on_syn_ack(Flags::new(false, true, false));
         assert_eq!(a.mode, EcnMode::AccEcn);
     }

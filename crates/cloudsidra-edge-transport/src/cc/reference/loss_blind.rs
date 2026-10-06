@@ -7,11 +7,11 @@
 //! Not a full Linux BBRv1 stand-in (§2.9: 不等同于完整 Linux BBRv1) —
 //! it shares every other EdgeCC mechanism so the comparison is clean.
 
+use crate::TransportInstant;
 use crate::cc::{CcSnapshot, CongestionController};
 use crate::edgecc::{EdgeCc, PathPrior, Tier};
 use crate::rate_sample::RateSample;
 use crate::rtt::RttState;
-use crate::TransportInstant;
 use std::time::Duration;
 
 #[derive(Debug)]
@@ -34,7 +34,13 @@ impl CongestionController for LossBlindRef {
     fn on_rate_sample(&mut self, rs: &RateSample, in_flight: u64, rtt: &RttState) {
         self.inner.on_rate_sample(rs, in_flight, rtt)
     }
-    fn on_loss_event(&mut self, now: TransportInstant, lost: u64, in_flight: u64, persistent: bool) {
+    fn on_loss_event(
+        &mut self,
+        now: TransportInstant,
+        lost: u64,
+        in_flight: u64,
+        persistent: bool,
+    ) {
         self.inner.on_loss_event(now, lost, in_flight, persistent)
     }
     fn on_ecn_ce(&mut self, now: TransportInstant, ce: u64, del: u64, in_flight: u64) {

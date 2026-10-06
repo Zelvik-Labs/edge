@@ -403,34 +403,36 @@ pub static MEMORY_GOVERNOR: LazyLock<MemoryGovernor> = LazyLock::new(|| {
     // the 250ms cadence.
     let _ = std::thread::Builder::new()
         .name("memgov-snapshot".to_string())
-        .spawn(|| loop {
-            MEMGOV_REFRESHING.with(|f| f.set(true));
-            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                {
-                    let _update = lock_recover(&MEMORY_GOVERNOR.snapshot_update);
-                    MEMORY_GOVERNOR.refresh_snapshot_uncached(
-                        crate::utils::time::system_timestamp_millis(),
-                    );
-                }
-                // Rebuild the materialized limits table against the fresh
-                // inputs so `limits()` stays a pure ArcSwap load.
-                let _ = MEMORY_GOVERNOR.refresh_limits();
-            }));
-            // Idle backoff: once no consumer has read the snapshot for
-            // SNAPSHOT_IDLE_AFTER_MS, drop from 4 Hz to one refresh per
-            // HARD_STALE window — a consumer that arrives mid-idle is
-            // still served (cache inside the bound) or takes one inline
-            // refresh, and its stamp re-arms the fast cadence.
-            let now = crate::utils::time::system_timestamp_millis();
-            let last = MEMORY_GOVERNOR
-                .snapshot_consumer_at_millis
-                .load(Ordering::Relaxed) as i64;
-            let idle = last <= 0 || now.saturating_sub(last) > SNAPSHOT_IDLE_AFTER_MS;
-            std::thread::sleep(Duration::from_millis(if idle {
-                SNAPSHOT_IDLE_TTL_MS
-            } else {
-                SNAPSHOT_TTL_MS as u64
-            }));
+        .spawn(|| {
+            loop {
+                MEMGOV_REFRESHING.with(|f| f.set(true));
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    {
+                        let _update = lock_recover(&MEMORY_GOVERNOR.snapshot_update);
+                        MEMORY_GOVERNOR.refresh_snapshot_uncached(
+                            crate::utils::time::system_timestamp_millis(),
+                        );
+                    }
+                    // Rebuild the materialized limits table against the fresh
+                    // inputs so `limits()` stays a pure ArcSwap load.
+                    let _ = MEMORY_GOVERNOR.refresh_limits();
+                }));
+                // Idle backoff: once no consumer has read the snapshot for
+                // SNAPSHOT_IDLE_AFTER_MS, drop from 4 Hz to one refresh per
+                // HARD_STALE window — a consumer that arrives mid-idle is
+                // still served (cache inside the bound) or takes one inline
+                // refresh, and its stamp re-arms the fast cadence.
+                let now = crate::utils::time::system_timestamp_millis();
+                let last = MEMORY_GOVERNOR
+                    .snapshot_consumer_at_millis
+                    .load(Ordering::Relaxed) as i64;
+                let idle = last <= 0 || now.saturating_sub(last) > SNAPSHOT_IDLE_AFTER_MS;
+                std::thread::sleep(Duration::from_millis(if idle {
+                    SNAPSHOT_IDLE_TTL_MS
+                } else {
+                    SNAPSHOT_TTL_MS as u64
+                }));
+            }
         });
     governor
 });
@@ -1435,7 +1437,10 @@ impl MemoryGovernor {
         let outstanding = self
             .account_pending_bytes
             .load(Ordering::Acquire)
-            .saturating_add(self.account_committed_unconfirmed_bytes.load(Ordering::Acquire));
+            .saturating_add(
+                self.account_committed_unconfirmed_bytes
+                    .load(Ordering::Acquire),
+            );
         headroom
             .saturating_sub(self.account_safety_margin_bytes())
             .saturating_sub(outstanding)
@@ -1446,12 +1451,7 @@ impl MemoryGovernor {
     /// grants and `true` only for growing an already-committed permit.
     /// Committed charges also land in the live/purpose attribution
     /// immediately — the covered allocation is already real.
-    fn try_charge_account(
-        &self,
-        bytes: u64,
-        committed: bool,
-        purpose: SharedGrantPurpose,
-    ) -> bool {
+    fn try_charge_account(&self, bytes: u64, committed: bool, purpose: SharedGrantPurpose) -> bool {
         let counter = if committed {
             &self.account_committed_unconfirmed_bytes
         } else {
@@ -1617,9 +1617,12 @@ impl MemoryGovernor {
         fd_used: u64,
         now_ms: u64,
     ) {
-        self.cached_total_bytes.store(total_bytes, Ordering::Release);
-        self.cached_used_bytes
-            .store(total_bytes.saturating_sub(available_bytes), Ordering::Release);
+        self.cached_total_bytes
+            .store(total_bytes, Ordering::Release);
+        self.cached_used_bytes.store(
+            total_bytes.saturating_sub(available_bytes),
+            Ordering::Release,
+        );
         self.cached_available_bytes
             .store(available_bytes, Ordering::Release);
         // Tests seed an unconstrained host: the account sees the seeded
@@ -1823,8 +1826,7 @@ impl MemoryGovernor {
         // attributable.
         let account_charge =
             class_estimated_bytes(class).saturating_add(cache_read_memory_charge_bytes);
-        let Some(mut shared) =
-            self.try_grant_shared(SharedGrantPurpose::Admission, account_charge)
+        let Some(mut shared) = self.try_grant_shared(SharedGrantPurpose::Admission, account_charge)
         else {
             if cache_read_memory_charge_bytes > 0 {
                 self.cache_read_memory_bytes
@@ -1944,10 +1946,7 @@ impl MemoryGovernor {
     }
 
     fn listener_pool_active_slots(&self) -> u64 {
-        lock_recover(&self.listener_pools)
-            .values()
-            .copied()
-            .sum()
+        lock_recover(&self.listener_pools).values().copied().sum()
     }
 
     fn listener_pool_tracked(&self) -> usize {
@@ -2078,12 +2077,7 @@ impl MemoryGovernor {
             AdmissionClass::ClusterInternalConnection => connection_limit(
                 state_budget_bytes(snapshot) / 64,
                 CLUSTER_INTERNAL_CONNECTION_ESTIMATED_BYTES,
-                pressure_adjusted_min_limit(
-                    snapshot,
-                    MIN_CLUSTER_INTERNAL_CONNECTION_LIMIT,
-                    16,
-                    4,
-                ),
+                pressure_adjusted_min_limit(snapshot, MIN_CLUSTER_INTERNAL_CONNECTION_LIMIT, 16, 4),
                 MAX_CLUSTER_INTERNAL_CONNECTION_LIMIT,
             ),
             AdmissionClass::RpcStreamCommand => connection_limit(
@@ -2617,10 +2611,7 @@ impl MemoryGovernor {
             bloom_filter_used_bytes: used(ResidentCategory::BloomFilter),
             negative_cache_used_bytes: used(ResidentCategory::NegativeCache),
             pressure_level,
-            owner_cap_rejections: self
-                .resident
-                .owner_cap_rejections
-                .load(Ordering::Relaxed),
+            owner_cap_rejections: self.resident.owner_cap_rejections.load(Ordering::Relaxed),
             tracked_owners: self
                 .resident
                 .owners
@@ -2822,10 +2813,8 @@ impl MemoryGovernor {
         let mem = self.memory_snapshot();
         let fd_snapshot = self.fd_equivalent_snapshot();
         let resident = self.resident_memory_snapshot();
-        let unaccounted_rss_bytes = self.unaccounted_rss_bytes(
-            mem.process_rss_bytes,
-            resident.total_used_bytes,
-        );
+        let unaccounted_rss_bytes =
+            self.unaccounted_rss_bytes(mem.process_rss_bytes, resident.total_used_bytes);
         let tracked_rss_bytes = self.tracked_rss_bytes(resident.total_used_bytes);
         GovernorSnapshot {
             memory_total_bytes: mem.total_bytes,
@@ -2957,9 +2946,7 @@ impl MemoryGovernor {
             account_committed_unconfirmed_bytes: self
                 .account_committed_unconfirmed_bytes
                 .load(Ordering::Relaxed),
-            account_committed_live_bytes: self
-                .account_committed_live_bytes
-                .load(Ordering::Relaxed),
+            account_committed_live_bytes: self.account_committed_live_bytes.load(Ordering::Relaxed),
             account_grants_total: self.account_grants_total.load(Ordering::Relaxed),
             account_rejects_total: self.account_rejects_total.load(Ordering::Relaxed),
             cgroup_reclaimable_bytes: mem.cgroup_reclaimable_bytes,
@@ -3029,42 +3016,43 @@ impl MemoryGovernor {
         for class in ALL_ADMISSION_CLASSES {
             class_limit[class_index(class)] = self.limit_for_in(class, &snapshot) as u64;
         }
-        self.cached_limits.store(std::sync::Arc::new(GovernorLimits {
-            generation,
-            class_limit,
-            // A landed-but-blind observation (availability Unknown and
-            // no headroom reading at all) collapses the derived byte
-            // budget toward ~1B and would refuse every charged admission
-            // while class ceilings still admit on the cpu fallback.
-            // Bound the aggregate by what the materialized ceilings can
-            // charge — bounded by policy, never a phantom physical bound.
-            shared_connection_budget_bytes: if matches!(
-                snapshot.availability,
-                MemoryAvailability::Unknown
-            ) && snapshot.account_headroom_bytes.is_none()
-            {
-                admission_capacity_bytes(&class_limit, shared_connection_charge_bytes)
-            } else {
-                shared_connection_admission_budget(&snapshot)
-            },
-            cache_read_memory_budget_bytes: cache_read_memory_budget_bytes(&snapshot),
-            cache_read_memory_object_limit_bytes: cache_read_memory_object_limit_bytes(
-                &snapshot,
-            ),
-            zero_copy_relay_limit: zero_copy_relay_limit(&snapshot) as u64,
-            zero_copy_relay_budget_bytes: zero_copy_relay_budget_bytes(&snapshot),
-            udp_queue_budget_bytes: udp_queued_bytes_budget(&snapshot),
-            tcp_queue_budget_bytes: tcp_queue_bytes_budget(&snapshot),
-            request_workspace_budget_bytes: request_workspace_budget_bytes(&snapshot),
-            fd_soft_limit: snapshot.fd_soft_limit,
-            memory_pressure_high: memory_pressure_high(&snapshot),
-            memory_pressure_level: memory_pressure_level(&snapshot),
-            ticket_float_bytes: ticket_float_bytes_for(memory_pressure_level(&snapshot)),
-            ticket_float_cap_bytes: ticket_float_cap_bytes_for(
-                memory_pressure_level(&snapshot),
-            ),
-            fd_clamped_mask: fd_clamped_mask(&class_limit),
-        }));
+        self.cached_limits
+            .store(std::sync::Arc::new(GovernorLimits {
+                generation,
+                class_limit,
+                // A landed-but-blind observation (availability Unknown and
+                // no headroom reading at all) collapses the derived byte
+                // budget toward ~1B and would refuse every charged admission
+                // while class ceilings still admit on the cpu fallback.
+                // Bound the aggregate by what the materialized ceilings can
+                // charge — bounded by policy, never a phantom physical bound.
+                shared_connection_budget_bytes: if matches!(
+                    snapshot.availability,
+                    MemoryAvailability::Unknown
+                ) && snapshot.account_headroom_bytes.is_none()
+                {
+                    admission_capacity_bytes(&class_limit, shared_connection_charge_bytes)
+                } else {
+                    shared_connection_admission_budget(&snapshot)
+                },
+                cache_read_memory_budget_bytes: cache_read_memory_budget_bytes(&snapshot),
+                cache_read_memory_object_limit_bytes: cache_read_memory_object_limit_bytes(
+                    &snapshot,
+                ),
+                zero_copy_relay_limit: zero_copy_relay_limit(&snapshot) as u64,
+                zero_copy_relay_budget_bytes: zero_copy_relay_budget_bytes(&snapshot),
+                udp_queue_budget_bytes: udp_queued_bytes_budget(&snapshot),
+                tcp_queue_budget_bytes: tcp_queue_bytes_budget(&snapshot),
+                request_workspace_budget_bytes: request_workspace_budget_bytes(&snapshot),
+                fd_soft_limit: snapshot.fd_soft_limit,
+                memory_pressure_high: memory_pressure_high(&snapshot),
+                memory_pressure_level: memory_pressure_level(&snapshot),
+                ticket_float_bytes: ticket_float_bytes_for(memory_pressure_level(&snapshot)),
+                ticket_float_cap_bytes: ticket_float_cap_bytes_for(memory_pressure_level(
+                    &snapshot,
+                )),
+                fd_clamped_mask: fd_clamped_mask(&class_limit),
+            }));
         self.cached_limits.load()
     }
 
@@ -3314,12 +3302,8 @@ impl MemoryGovernor {
             cgroup_memory_max_bytes: self.cached_cgroup_memory_max_bytes.load(Ordering::Relaxed),
             cgroup_memory_high_bytes: self.cached_cgroup_memory_high_bytes.load(Ordering::Relaxed),
             cgroup_swap_max_bytes: self.cached_cgroup_swap_max_bytes.load(Ordering::Relaxed),
-            cgroup_reclaimable_bytes: self
-                .cached_cgroup_reclaimable_bytes
-                .load(Ordering::Relaxed),
-            account_headroom_bytes: match self
-                .cached_account_headroom_bytes
-                .load(Ordering::Relaxed)
+            cgroup_reclaimable_bytes: self.cached_cgroup_reclaimable_bytes.load(Ordering::Relaxed),
+            account_headroom_bytes: match self.cached_account_headroom_bytes.load(Ordering::Relaxed)
             {
                 u64::MAX => None,
                 value => Some(value),
@@ -3534,8 +3518,7 @@ fn read_memory_snapshot() -> MemorySnapshot {
     }
 
     #[cfg(target_os = "linux")]
-    let (psi_some_avg10_x100, psi_full_avg10_x100) =
-        linux_read_psi_memory().unwrap_or((0, 0));
+    let (psi_some_avg10_x100, psi_full_avg10_x100) = linux_read_psi_memory().unwrap_or((0, 0));
     #[cfg(not(target_os = "linux"))]
     let (psi_some_avg10_x100, psi_full_avg10_x100) = (0, 0);
 
@@ -3757,9 +3740,7 @@ fn linux_cgroup_v2_effective() -> Option<CgroupMemoryEffective> {
         max_bytes,
         high_bytes,
         swap_max_bytes,
-        current_bytes: leaf_current
-            .unwrap_or(0)
-            .saturating_sub(inactive_file),
+        current_bytes: leaf_current.unwrap_or(0).saturating_sub(inactive_file),
         levels,
         reclaimable_bytes: inactive_file,
         current_known: leaf_current.is_some(),
@@ -4567,9 +4548,7 @@ const TICKET_FLOAT_CAP_BYTES_NORMAL: u64 = 1024 * 1024;
 /// the full balance and refills cover only the exact need.
 fn ticket_float_bytes_for(level: MemoryPressureLevel) -> u64 {
     match level {
-        MemoryPressureLevel::Normal | MemoryPressureLevel::Elevated => {
-            TICKET_FLOAT_BYTES_NORMAL
-        }
+        MemoryPressureLevel::Normal | MemoryPressureLevel::Elevated => TICKET_FLOAT_BYTES_NORMAL,
         MemoryPressureLevel::High => TICKET_FLOAT_BYTES_NORMAL / 4,
         MemoryPressureLevel::Critical => 0,
     }
@@ -4651,9 +4630,7 @@ pub fn class_estimated_bytes(class: AdmissionClass) -> u64 {
         AdmissionClass::CacheRevalidate => CACHE_REVALIDATE_ESTIMATED_BYTES,
         AdmissionClass::CacheWrite => CACHE_WRITE_ESTIMATED_BYTES,
         AdmissionClass::CacheReadMemory => CACHE_READ_MEMORY_ESTIMATED_BYTES,
-        AdmissionClass::ClusterInternalConnection => {
-            CLUSTER_INTERNAL_CONNECTION_ESTIMATED_BYTES
-        }
+        AdmissionClass::ClusterInternalConnection => CLUSTER_INTERNAL_CONNECTION_ESTIMATED_BYTES,
         AdmissionClass::RpcStreamCommand => RPC_STREAM_COMMAND_ESTIMATED_BYTES,
         AdmissionClass::SniRelay => SNI_RELAY_ESTIMATED_BYTES,
     }
@@ -5356,9 +5333,7 @@ mod tests {
             crate::utils::time::system_timestamp_millis() as u64,
             Ordering::Release,
         );
-        governor
-            .cached_generation
-            .fetch_add(1, Ordering::Release);
+        governor.cached_generation.fetch_add(1, Ordering::Release);
         let permit = governor
             .try_admit_zero_copy_relay()
             .expect("zero-copy relay should fit in a fresh governor");
@@ -5510,8 +5485,7 @@ mod tests {
         // available yields a ~460 MiB connection budget — ~14.4k×32 KiB —
         // so the memory cap binds below the 16k/core cpu cap. Admitting
         // 16k anyway would be the old overcommit the min() bound removed.
-        let small_memory_cap =
-            small.connection_budget_bytes / HTTP_CONN_ESTIMATED_BYTES;
+        let small_memory_cap = small.connection_budget_bytes / HTTP_CONN_ESTIMATED_BYTES;
         assert_eq!(small_http as u64, small_memory_cap);
         assert!(medium_http > small_http);
         assert!(large_http > medium_http);
@@ -5664,7 +5638,10 @@ mod tests {
             MIN_HTTP_CONNECTION_LIMIT,
             MAX_HTTP_CONNECTION_LIMIT,
         );
-        assert!(big_http > 500_000, "256GiB box must scale beyond small defaults");
+        assert!(
+            big_http > 500_000,
+            "256GiB box must scale beyond small defaults"
+        );
         assert!(big_http <= 64 * 16_384);
 
         // Unknown availability keeps the per-core fallback: derived
@@ -5960,7 +5937,9 @@ mod tests {
             .counter(AdmissionClass::HttpConnection)
             .store(n, Ordering::Release);
         assert!(
-            governor.connection_admission_used_bytes().saturating_mul(100)
+            governor
+                .connection_admission_used_bytes()
+                .saturating_mul(100)
                 >= budget.saturating_mul(80),
             "seeded count must put the derived ledger above the 80% mark"
         );
@@ -6245,12 +6224,10 @@ mod tests {
         seed_governor_memory(&governor, total, 12 * 1024 * 1024 * 1024, 1_048_576, 128);
         let budget = governor.connection_admission_budget_bytes();
         // Derived ledger: seed the HTTP count so Σcount×charge lands at ~91%.
-        governor
-            .counter(AdmissionClass::HttpConnection)
-            .store(
-                budget.saturating_mul(91) / 100 / HTTP_CONN_ESTIMATED_BYTES,
-                Ordering::Release,
-            );
+        governor.counter(AdmissionClass::HttpConnection).store(
+            budget.saturating_mul(91) / 100 / HTTP_CONN_ESTIMATED_BYTES,
+            Ordering::Release,
+        );
         assert!(
             governor.tcp_relay_pressure_idle_timeout().is_some(),
             "idle timeout should engage when connection admission is saturated"
@@ -6294,8 +6271,8 @@ mod resident_memory_tests {
 #[cfg(test)]
 mod en16_pool_tests {
     use super::{
-        pinned_alloc_headroom_bytes, pinned_alloc_reserve_bytes, AdmissionClass,
-        BudgetedMemorySnapshot, DiskLedgerClass, MemoryGovernor, SharedGrantPurpose,
+        AdmissionClass, BudgetedMemorySnapshot, DiskLedgerClass, MemoryGovernor,
+        SharedGrantPurpose, pinned_alloc_headroom_bytes, pinned_alloc_reserve_bytes,
     };
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -6449,14 +6426,13 @@ mod en16_pool_tests {
         for owner in ["live-a", "live-b", "dead-c"] {
             assert!(governor.resident_memory_replace_owned(cat, owner, 128));
         }
-        let before = governor.resident_memory_snapshot().negative_cache_used_bytes;
+        let before = governor
+            .resident_memory_snapshot()
+            .negative_cache_used_bytes;
         assert_eq!(before, 384);
 
-        let live: std::collections::HashSet<&str> =
-            ["live-a", "live-b"].into_iter().collect();
-        let stats = governor.reconcile_resident_category(cat, 1024, &mut |key| {
-            live.contains(key)
-        });
+        let live: std::collections::HashSet<&str> = ["live-a", "live-b"].into_iter().collect();
+        let stats = governor.reconcile_resident_category(cat, 1024, &mut |key| live.contains(key));
         assert_eq!(stats.owners_scanned, 3);
         assert_eq!(stats.stale_owners_removed, 1);
         assert_eq!(stats.bytes_refunded, 128);
@@ -6468,9 +6444,7 @@ mod en16_pool_tests {
             256
         );
         // Idempotent: a second pass finds nothing.
-        let stats = governor.reconcile_resident_category(cat, 1024, &mut |key| {
-            live.contains(key)
-        });
+        let stats = governor.reconcile_resident_category(cat, 1024, &mut |key| live.contains(key));
         assert_eq!(stats.stale_owners_removed, 0);
         assert_eq!(stats.bytes_refunded, 0);
     }
@@ -6559,10 +6533,7 @@ mod en16_pool_tests {
         };
         // 2GiB total → 128MiB reserve → 1472MiB headroom: the incident node's
         // ~1.6GiB-available state yields ample room for ~300MiB of state maps.
-        assert_eq!(
-            pinned_alloc_headroom_bytes(&snapshot),
-            (1600 - 128) << 20
-        );
+        assert_eq!(pinned_alloc_headroom_bytes(&snapshot), (1600 - 128) << 20);
         // Available below reserve → headroom saturates at 0, not negative.
         let starved = BudgetedMemorySnapshot {
             total_bytes: 2 << 30,
@@ -6599,9 +6570,7 @@ mod en16_pool_tests {
         // Publish a blind snapshot directly: generation advances,
         // availability stays Unknown (0), headroom stays unobserved
         // (u64::MAX). cpu_parallelism drives the class-ceiling fallback.
-        governor
-            .cached_cpu_parallelism
-            .store(4, Ordering::Release);
+        governor.cached_cpu_parallelism.store(4, Ordering::Release);
         governor.cached_at_millis.store(
             crate::utils::time::system_timestamp_millis().max(0) as u64,
             Ordering::Release,
@@ -6740,10 +6709,7 @@ mod en16_pool_tests {
 
         // The shrunk half returned to grantable (pending path refunds
         // immediately).
-        assert_eq!(
-            governor.account_view().grantable_bytes,
-            before - (1 << 30)
-        );
+        assert_eq!(governor.account_view().grantable_bytes, before - (1 << 30));
         drop(grant);
         assert_eq!(governor.account_view().grantable_bytes, before);
     }
@@ -6803,16 +6769,12 @@ mod en16_pool_tests {
             .try_grant_shared(SharedGrantPurpose::KernelBpf, grantable)
             .expect("bulk grant within capacity");
         assert!(
-            governor
-                .try_admit(AdmissionClass::HttpConnection)
-                .is_none(),
+            governor.try_admit(AdmissionClass::HttpConnection).is_none(),
             "class ceiling has room but the account is empty — fail closed"
         );
         drop(_bulk);
         assert!(
-            governor
-                .try_admit(AdmissionClass::HttpConnection)
-                .is_some(),
+            governor.try_admit(AdmissionClass::HttpConnection).is_some(),
             "releasing the grant restores admission"
         );
     }

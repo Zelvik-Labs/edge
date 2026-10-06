@@ -1557,8 +1557,14 @@ impl HttpProxyManager {
                 )
                 .await;
         }
-        self.handle_af_xdp_http_stream_inner(client_stream, client_addr, listen_port, kind, client_flow)
-            .await
+        self.handle_af_xdp_http_stream_inner(
+            client_stream,
+            client_addr,
+            listen_port,
+            kind,
+            client_flow,
+        )
+        .await
     }
 
     #[cfg(any(test, target_os = "linux"))]
@@ -1617,10 +1623,8 @@ impl HttpProxyManager {
                         .await;
                 };
                 if let Some(server) = route.sni_passthrough_server {
-                    let sni_connection_guard = l4_connection_registry::register(
-                        client_addr,
-                        L4ConnectionProtocol::SniTcp,
-                    );
+                    let sni_connection_guard =
+                        l4_connection_registry::register(client_addr, L4ConnectionProtocol::SniTcp);
                     let sni_cancel_rx = sni_connection_guard.cancel_receiver();
                     self.handle_sni_passthrough_stream(
                         client_stream,

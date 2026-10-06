@@ -41,9 +41,9 @@
 
 use cloudsidra_edge_transport::cc::reference::CubicRef;
 use cloudsidra_edge_transport::{CongestionController, RateSample, RttState, TransportInstant};
+use smoltcp::socket::tcp::RttEstimator;
 use smoltcp::socket::tcp::congestion::Controller;
 use smoltcp::socket::tcp::congestion::cubic::Cubic;
-use smoltcp::socket::tcp::RttEstimator;
 use smoltcp::time::Instant;
 use std::time::Duration;
 
@@ -78,7 +78,12 @@ fn ref_ack_round(
         *now_us += RTT_US / n;
         *cum_ack += MSS;
         let in_flight = refr.cwnd().min(PIPE_SEGS * MSS);
-        refr.on_sent(TransportInstant::from_micros(*now_us), MSS, in_flight, false);
+        refr.on_sent(
+            TransportInstant::from_micros(*now_us),
+            MSS,
+            in_flight,
+            false,
+        );
         rtt_state.sample(Duration::from_micros(RTT_US));
         refr.on_rate_sample(
             &RateSample {
@@ -114,7 +119,10 @@ fn build_schedule() -> Vec<Round> {
 
     for _ in 0..MAX_ROUNDS {
         if refr.cwnd() >= PIPE_SEGS * MSS && losses < 3 {
-            schedule.push(Round::LossBurst { dupacks: 3, lost: MSS });
+            schedule.push(Round::LossBurst {
+                dupacks: 3,
+                lost: MSS,
+            });
             refr.on_loss_event(
                 TransportInstant::from_micros(now_us),
                 MSS,
@@ -290,7 +298,13 @@ fn emit_csv(rows: &[Row]) {
     for r in rows {
         out.push_str(&format!(
             "{},{},{},{},{},{},{},{}\n",
-            r.step, r.event, r.now_us, r.acked, r.in_flight_ref, r.in_flight_up, r.cwnd_ref,
+            r.step,
+            r.event,
+            r.now_us,
+            r.acked,
+            r.in_flight_ref,
+            r.in_flight_up,
+            r.cwnd_ref,
             r.cwnd_up
         ));
     }
@@ -306,7 +320,11 @@ fn cubic_ref_vs_upstream_same_ack_trajectory() {
     // Invariant 1: both windows stay positive for the whole run.
     for r in &rows {
         assert!(r.cwnd_ref >= MSS, "ref cwnd collapsed at step {}", r.step);
-        assert!(r.cwnd_up >= MSS, "upstream cwnd collapsed at step {}", r.step);
+        assert!(
+            r.cwnd_up >= MSS,
+            "upstream cwnd collapsed at step {}",
+            r.step
+        );
     }
 
     // Invariant 2: slow start — with len == MSS both add exactly 1 MSS per

@@ -150,6 +150,7 @@ impl L4Connect for UpstreamL4Connector {
         )
         .await
         .map_err(|err| {
+            debug!(upstream = %destination_addr, error = ?err, "upstream connect failed");
             let timed_out = err.chain().any(|cause| {
                 cause
                     .downcast_ref::<tokio::time::error::Elapsed>()
@@ -346,7 +347,6 @@ pub struct ProxyCTX {
     /// address — this field is left for callers that want to distinguish a
     /// PROXY-protocol-derived IP from a raw socket IP without re-parsing.
     /// Set by `maybe_consume_proxy_protocol_header` when wired through.
-    #[allow(dead_code)]
     pub proxy_protocol_ip: Option<std::net::IpAddr>,
     pub request_phase: RequestPhase,
 }
@@ -9312,7 +9312,7 @@ impl ProxyHttp for EdgeProxy {
                     m.count_errors
                         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
- let is_cached = ctx.cache_hit.unwrap_or(false);
+                let is_cached = ctx.cache_hit.unwrap_or(false);
                 let is_attack = ctx.waf_action.is_some();
                 crate::metrics::record::request_end_without_active(
                     server_id,
@@ -9872,7 +9872,6 @@ impl ProxyHttp for EdgeProxy {
         Ok(())
     }
 
-    #[allow(unused_variables)]
     async fn upstream_response_filter(
         &self,
         session: &mut Session,

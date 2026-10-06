@@ -205,9 +205,7 @@ impl PipelineMetrics {
                 .load(Ordering::Relaxed),
             waf_state_evicted: self.waf_state_evicted.load(Ordering::Relaxed),
             firewall_pending_dropped: self.firewall_pending_dropped.load(Ordering::Relaxed),
-            metrics_cardinality_dropped: self
-                .metrics_cardinality_dropped
-                .load(Ordering::Relaxed),
+            metrics_cardinality_dropped: self.metrics_cardinality_dropped.load(Ordering::Relaxed),
         }
     }
 }

@@ -4,11 +4,11 @@
 //! PRR recovery, once-per-RTT ECN, RTO, HyStart++ exit, CUBIC
 //! multiplicative decrease.
 
-use cloudsidra_edge_transport::cc::reference::{CubicRef, NewRenoRef};
+use cloudsidra_edge_transport::TransportInstant;
 use cloudsidra_edge_transport::cc::CongestionController;
+use cloudsidra_edge_transport::cc::reference::{CubicRef, NewRenoRef};
 use cloudsidra_edge_transport::rate_sample::RateSample;
 use cloudsidra_edge_transport::rtt::RttState;
-use cloudsidra_edge_transport::TransportInstant;
 use std::time::Duration;
 
 const MSS: u64 = 1460;
@@ -48,8 +48,16 @@ fn new_reno_prr_exits_recovery_at_ssthresh() {
     }
     // Two 2*MSS ACK events: RFC 3465 ABC caps each event at L=2*MSS, so
     // total growth equals acked bytes across the two events.
-    cc.on_rate_sample(&sample(2000, 2 * MSS, 2 * MSS, 2 * MSS, 10_000), 8 * MSS, &rtt);
-    cc.on_rate_sample(&sample(2100, 2 * MSS, 2 * MSS, 4 * MSS, 10_000), 6 * MSS, &rtt);
+    cc.on_rate_sample(
+        &sample(2000, 2 * MSS, 2 * MSS, 2 * MSS, 10_000),
+        8 * MSS,
+        &rtt,
+    );
+    cc.on_rate_sample(
+        &sample(2100, 2 * MSS, 2 * MSS, 4 * MSS, 10_000),
+        6 * MSS,
+        &rtt,
+    );
     assert_eq!(cc.cwnd(), 8 * MSS, "SS grows cwnd by acked bytes");
 
     // Loss enters recovery: ssthresh = flight/2.
@@ -59,10 +67,18 @@ fn new_reno_prr_exits_recovery_at_ssthresh() {
     assert_eq!(snap.ssthresh_bytes, 4 * MSS);
 
     // ACKs grind cum_ack past the recovery point (sent_total at entry).
-    cc.on_rate_sample(&sample(4000, 2 * MSS, 2 * MSS, sent + MSS, 10_000), 4 * MSS, &rtt);
+    cc.on_rate_sample(
+        &sample(4000, 2 * MSS, 2 * MSS, sent + MSS, 10_000),
+        4 * MSS,
+        &rtt,
+    );
     let snap = cc.snapshot();
     assert_eq!(snap.mode, "congestion_avoidance");
-    assert_eq!(cc.cwnd(), 4 * MSS, "RFC 6937: cwnd = ssthresh on recovery exit");
+    assert_eq!(
+        cc.cwnd(),
+        4 * MSS,
+        "RFC 6937: cwnd = ssthresh on recovery exit"
+    );
     assert_eq!(snap.reason_code, "recovery_done");
 }
 
@@ -73,7 +89,11 @@ fn new_reno_ecn_responds_once_per_rtt() {
     for i in 0..10u64 {
         cc.on_sent(t(i * 100), MSS, (i + 1) * MSS, false);
     }
-    cc.on_rate_sample(&sample(2000, 4 * MSS, 4 * MSS, 4 * MSS, 10_000), 8 * MSS, &rtt);
+    cc.on_rate_sample(
+        &sample(2000, 4 * MSS, 4 * MSS, 4 * MSS, 10_000),
+        8 * MSS,
+        &rtt,
+    );
     let cwnd_before = cc.cwnd();
 
     cc.on_ecn_ce(t(3000), MSS, 4 * MSS, 8 * MSS);
@@ -97,7 +117,11 @@ fn new_reno_rto_collapses_to_loss_window() {
     for i in 0..10u64 {
         cc.on_sent(t(i * 100), MSS, (i + 1) * MSS, false);
     }
-    cc.on_rate_sample(&sample(2000, 4 * MSS, 4 * MSS, 4 * MSS, 10_000), 8 * MSS, &rtt);
+    cc.on_rate_sample(
+        &sample(2000, 4 * MSS, 4 * MSS, 4 * MSS, 10_000),
+        8 * MSS,
+        &rtt,
+    );
     cc.on_rto(t(5000), 8 * MSS);
     let snap = cc.snapshot();
     assert_eq!(cc.cwnd(), MSS);
@@ -148,7 +172,11 @@ fn cubic_loss_applies_beta_decrease() {
     for i in 0..40u64 {
         cc.on_sent(t(i * 100), MSS, (i + 1) * MSS, false);
     }
-    cc.on_rate_sample(&sample(10_000, 30 * MSS, 30 * MSS, 30 * MSS, 10_000), 20 * MSS, &rtt);
+    cc.on_rate_sample(
+        &sample(10_000, 30 * MSS, 30 * MSS, 30 * MSS, 10_000),
+        20 * MSS,
+        &rtt,
+    );
     let before = cc.cwnd();
     cc.on_loss_event(t(20_000), MSS, 20 * MSS, false);
     assert!(

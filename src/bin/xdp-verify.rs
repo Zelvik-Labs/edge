@@ -18,10 +18,7 @@ fn main() {
                 std::process::exit(2);
             }
         };
-        let mut names: Vec<String> = bpf
-            .programs()
-            .map(|(name, _)| name.to_string())
-            .collect();
+        let mut names: Vec<String> = bpf.programs().map(|(name, _)| name.to_string()).collect();
         names.sort();
         let mut failed = 0u32;
         for name in &names {

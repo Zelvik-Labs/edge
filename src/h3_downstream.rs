@@ -14,6 +14,7 @@ use pingora_core::protocols::l4::socket::SocketAddr;
 use pingora_core::{Error, ErrorType, Result as PingoraResult};
 use pingora_http::{RequestHeader, ResponseHeader};
 use tokio::sync::Mutex;
+use tracing::debug;
 
 pub struct H3DownstreamSession<S>
 where
@@ -71,7 +72,9 @@ where
             return Ok(None);
         }
 
+        debug!("recv_body_chunk ENTER");
         let mut stream = self.stream.lock().await;
+        debug!("recv_body_chunk LOCKED");
         let result = if let Some(timeout) = self.read_timeout {
             match tokio::time::timeout(timeout, stream.recv_data()).await {
                 Ok(result) => result,
@@ -85,6 +88,10 @@ where
         } else {
             stream.recv_data().await
         };
+        debug!(
+            is_eof = matches!(&result, Ok(None)),
+            "recv_body_chunk COMPLETE"
+        );
         drop(stream);
 
         let Some(mut chunk) = result.map_err(|err| {
@@ -118,8 +125,10 @@ where
 
     async fn send_response(&mut self, resp: &ResponseHeader, end: bool) -> PingoraResult<()> {
         let response = build_h3_response(resp)?;
+        debug!(status = resp.status.as_u16(), end, "send_response ENTER");
         let mut stream = self.stream.lock().await;
-        if let Some(timeout) = self.write_timeout {
+        debug!("send_response LOCKED");
+        let send_result = if let Some(timeout) = self.write_timeout {
             tokio::time::timeout(timeout, stream.send_response(response))
                 .await
                 .map_err(|_| {
@@ -127,8 +136,9 @@ where
                 })?
         } else {
             stream.send_response(response).await
-        }
-        .map_err(|err| {
+        };
+        debug!("send_response COMPLETE");
+        send_result.map_err(|err| {
             Error::explain(
                 ErrorType::WriteError,
                 format!("writing HTTP/3 response header: {err}"),
@@ -145,8 +155,10 @@ where
 
     async fn send_body(&mut self, data: Bytes) -> PingoraResult<()> {
         self.body_bytes_sent = self.body_bytes_sent.saturating_add(data.len());
+        debug!(bytes = data.len(), "send_body ENTER");
         let mut stream = self.stream.lock().await;
-        if let Some(timeout) = self.write_timeout {
+        debug!("send_body LOCKED");
+        let send_result = if let Some(timeout) = self.write_timeout {
             tokio::time::timeout(timeout, stream.send_data(data))
                 .await
                 .map_err(|_| {
@@ -154,8 +166,9 @@ where
                 })?
         } else {
             stream.send_data(data).await
-        }
-        .map_err(|err| {
+        };
+        debug!("send_body COMPLETE");
+        send_result.map_err(|err| {
             Error::explain(
                 ErrorType::WriteError,
                 format!("writing HTTP/3 response body: {err}"),
@@ -238,6 +251,7 @@ where
     }
 
     async fn response_duplex_vec(&mut self, tasks: Vec<HttpTask>) -> PingoraResult<bool> {
+        debug!(tasks = tasks.len(), "response_duplex_vec ENTER");
         let mut done = false;
         for task in tasks {
             match task {
@@ -266,6 +280,7 @@ where
                 HttpTask::Failed(err) => return Err(err),
             }
         }
+        debug!(done, "response_duplex_vec EXIT");
         Ok(done)
     }
 
@@ -322,12 +337,14 @@ where
         if self.response_done {
             return Ok(());
         }
+        debug!("finish ENTER");
         self.stream.lock().await.finish().await.map_err(|err| {
             Error::explain(
                 ErrorType::WriteError,
                 format!("finishing HTTP/3 response: {err}"),
             )
         })?;
+        debug!("finish COMPLETE");
         self.response_done = true;
         Ok(())
     }

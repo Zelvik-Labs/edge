@@ -829,6 +829,29 @@ impl XdpManager {
             // would orphan the AF_XDP sessions the workers still own, so
             // the reload is rejected before any commit damage.
             let adopt_lease = predecessor.and_then(|old| old.live_dataplane_lease());
+            // A predecessor whose lease was retired (e.g. an intentional
+            // ports->0 teardown) may still have workers dropping sessions
+            // and releasing queue sockets; a fresh bind on the same queues
+            // EBUSYs until they drain. Bounded wait — expiry fails loudly
+            // rather than racing the kernel registration.
+            if let Some(old) = predecessor
+                && adopt_lease.is_none()
+            {
+                let retired_lease = old
+                    .af_xdp
+                    .lock()
+                    .as_ref()
+                    .and_then(|runtime| runtime.lease.clone());
+                if let Some(lease) = retired_lease
+                    && !lease
+                        .wait_workers_drained(std::time::Duration::from_secs(3))
+                        .await
+                {
+                    anyhow::bail!(
+                        "previous AF_XDP workers did not drain within 3s;                          rebind of the same queues refused"
+                    );
+                }
+            }
             if let Some(old) = predecessor
                 && adopt_lease.is_some()
                 && let Err(detail) = dataplane_shape_compatible(old, &self.config)
@@ -1185,7 +1208,18 @@ impl XdpManager {
                 self.set_tcp_dataplane_detail(xdp_tcp_dataplane_detail(&self.config));
                 return Ok(());
             }
-            match linux::prepare_af_xdp_sockets(&self.config) {
+            // Fresh bind after teardown: stale kernel XDP_XSKS refs must
+            // be cleared before the new sockets are created.
+            let prepare_result = {
+                let mut ebpf = self.ebpf.lock();
+                match ebpf.as_mut() {
+                    Some(ebpf) => linux::prepare_af_xdp_sockets_for_rebind(ebpf, &self.config),
+                    None => Err(anyhow::anyhow!(
+                        "eBPF program is not loaded; cannot rebind AF_XDP sockets"
+                    )),
+                }
+            };
+            match prepare_result {
                 Ok(mut runtime) => {
                     let mut registration_failed = false;
                     let mut registration_failure_detail = None;
@@ -1446,6 +1480,7 @@ impl XdpManager {
             .filter(|interface| interface.mode == XdpRuntimeMode::Proxy)
             .collect::<Vec<_>>();
         let proxy_ready = self.proxy_redirect_enabled.load(Ordering::Relaxed)
+            && !self.config.proxy.ports.is_empty()
             && !proxy_interfaces.is_empty()
             && proxy_interfaces.iter().all(|interface| {
                 !interface.queues.is_empty()
@@ -2771,6 +2806,57 @@ impl XdpManager {
         }
     }
 
+    /// After every reactor thread of a retired lease has exited: record
+    /// that generation's sockets as gone — the status book must not keep
+    /// reporting ready/registered sockets that no longer exist. Identity
+    /// is checked strictly: only the lease this runtime still carries,
+    /// retired, with zero live workers, is cleared — a fresh replacement
+    /// generation's lease is never touched. Configured/faulted flags and
+    /// all counters are preserved; no map or state purge.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn finish_retired_af_xdp_runtime(
+        &self,
+        expected: &std::sync::Arc<AfXdpDataplaneLease>,
+    ) {
+        {
+            let mut runtime = self.af_xdp.lock();
+            let Some(handle) = runtime.as_mut() else {
+                return;
+            };
+            let Some(lease) = handle.lease.as_ref() else {
+                return;
+            };
+            if !std::sync::Arc::ptr_eq(lease, expected)
+                || !lease.is_retired()
+                || lease.live_workers.load(Ordering::Relaxed) > 0
+            {
+                return;
+            }
+            let detail = if self.config.proxy.ports.is_empty() {
+                "intentional AF_XDP generation retired".to_string()
+            } else {
+                "retired AF_XDP generation".to_string()
+            };
+            for status in handle.statuses.iter_mut() {
+                status.registered = false;
+                status.socket_created = false;
+                status.ready = false;
+                status.detail = detail.clone();
+            }
+            let mut book = self.xsk_status.write();
+            for status in book.iter_mut() {
+                status.registered = false;
+                status.socket_created = false;
+                status.ready = false;
+                status.detail = detail.clone();
+            }
+            drop(book);
+            self.proxy_redirect_enabled.store(false, Ordering::Relaxed);
+            self.proxy_workers_starting.store(false, Ordering::Relaxed);
+        }
+        self.persist_status_now();
+    }
+
     /// F1: adopt the predecessor's live dataplane after an atomic attach
     /// commit. Everything the workers need moves wholesale: the runtime
     /// handle (status book), the dial registry (shared with workers —
@@ -2804,8 +2890,13 @@ impl XdpManager {
             Ordering::Relaxed,
         );
         *self.dial_guard_detail.lock() = old.dial_guard_detail.lock().clone();
+        // Redirect bookkeeping is inherited only when this generation
+        // still has business ports — an adopted stop generation (ports
+        // emptied by config) must not report a dataplane it will never
+        // bridge.
         self.proxy_redirect_enabled.store(
-            old.proxy_redirect_enabled.load(Ordering::Relaxed),
+            old.proxy_redirect_enabled.load(Ordering::Relaxed)
+                && !self.config.proxy.ports.is_empty(),
             Ordering::Relaxed,
         );
         self.dataplane_adopted.store(true, Ordering::Relaxed);

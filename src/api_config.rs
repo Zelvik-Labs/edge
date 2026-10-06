@@ -9,7 +9,13 @@ use std::sync::atomic::{AtomicI8, Ordering};
 static RUNTIME_RPC_ENDPOINTS: Lazy<RwLock<Option<Vec<String>>>> = Lazy::new(|| RwLock::new(None));
 // Admin-configured package download bases pushed via runtime.api.update; takes
 // precedence over the local yaml `update.endpoints` and rpc endpoints.
-static RUNTIME_UPDATE_ENDPOINTS: Lazy<RwLock<Option<Vec<String>>>> = Lazy::new(|| RwLock::new(None));
+static RUNTIME_UPDATE_ENDPOINTS: Lazy<RwLock<Option<Vec<String>>>> =
+    Lazy::new(|| RwLock::new(None));
+
+static AUTO_ACCESS_LOG_QUEUE_CAPACITY: Lazy<usize> =
+    Lazy::new(|| crate::memory_governor::MEMORY_GOVERNOR.access_log_queue_capacity());
+static AUTO_ACCESS_LOG_BATCH_SIZE: Lazy<usize> =
+    Lazy::new(|| crate::memory_governor::MEMORY_GOVERNOR.access_log_batch_size());
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ApiConfig {
@@ -282,11 +288,11 @@ fn auto_access_log_upload_concurrency(queue_capacity: usize, batch_size: usize) 
 }
 
 fn default_access_log_queue_capacity() -> usize {
-    crate::memory_governor::MEMORY_GOVERNOR.access_log_queue_capacity()
+    *AUTO_ACCESS_LOG_QUEUE_CAPACITY
 }
 
 fn default_access_log_batch_size() -> usize {
-    crate::memory_governor::MEMORY_GOVERNOR.access_log_batch_size()
+    *AUTO_ACCESS_LOG_BATCH_SIZE
 }
 
 fn default_access_log_flush_interval_ms() -> u64 {
@@ -315,6 +321,8 @@ impl ApiConfig {
     }
 
     pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        Lazy::force(&AUTO_ACCESS_LOG_QUEUE_CAPACITY);
+        Lazy::force(&AUTO_ACCESS_LOG_BATCH_SIZE);
         let content = fs::read_to_string(&path)?;
         let mut config: ApiConfig = serde_yaml::from_str(&content)?;
         let override_path = crate::paths::NodePaths::current()
@@ -598,6 +606,128 @@ kernelTuning:
 
         assert_eq!(validate_rpc_endpoint(endpoint).unwrap(), endpoint);
     }
+
+    fn runtime_test_dir() -> (PathBuf, PathBuf) {
+        let dir =
+            std::env::temp_dir().join(format!("cloudsidra-runtime-test-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        let local = dir.join("api.yaml");
+        fs::write(
+            &local,
+            "nodeId: '1'\nsecret: fixture\nrpc.endpoints: ['http://127.0.0.1:8001']\n",
+        )
+        .unwrap();
+        (dir, local)
+    }
+
+    #[test]
+    fn empty_pushes_keep_stable_auto_pipeline_defaults() {
+        let (dir, local) = runtime_test_dir();
+        let push = NodeApiPush::default();
+        let first = push
+            .prepare_at(&local, &dir)
+            .unwrap()
+            .config
+            .access_log_pipeline
+            .normalized();
+        let second = push
+            .prepare_at(&local, &dir)
+            .unwrap()
+            .config
+            .access_log_pipeline
+            .normalized();
+        assert_eq!(first, second);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn empty_push_after_explicit_pipeline_override_restores_auto_defaults() {
+        let (dir, local) = runtime_test_dir();
+        let push = NodeApiPush {
+            access_log_pipeline: Some(AccessLogPipelineConfig {
+                queue_capacity: 12_345,
+                batch_size: 678,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let overridden = push
+            .prepare_at(&local, &dir)
+            .unwrap()
+            .config
+            .access_log_pipeline
+            .clone();
+        assert_eq!(overridden.queue_capacity, 12_345);
+        assert_eq!(overridden.batch_size, 678);
+
+        let restored = NodeApiPush::default()
+            .prepare_at(&local, &dir)
+            .unwrap()
+            .config
+            .access_log_pipeline
+            .normalized();
+        let local_config: ApiConfig = serde_yaml::from_slice(&fs::read(&local).unwrap()).unwrap();
+        assert_eq!(restored, local_config.access_log_pipeline.normalized());
+        assert_ne!(restored, overridden.normalized());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn distinct_startup_pipeline_configs_compare_unequal() {
+        let a: ApiConfig = serde_yaml::from_str(
+            r#"
+rpc.endpoints:
+  - https://api.example.com
+nodeId: "1"
+secret: "secret"
+accessLogPipeline:
+  queueCapacity: 4096
+  batchSize: 256
+"#,
+        )
+        .unwrap();
+        let b: ApiConfig = serde_yaml::from_str(
+            r#"
+rpc.endpoints:
+  - https://api.example.com
+nodeId: "1"
+secret: "secret"
+accessLogPipeline:
+  queueCapacity: 8192
+  batchSize: 256
+"#,
+        )
+        .unwrap();
+
+        assert_ne!(
+            a.access_log_pipeline.normalized(),
+            b.access_log_pipeline.normalized()
+        );
+    }
+
+    #[test]
+    fn access_log_auto_defaults_do_not_drift() {
+        let _: ApiConfig = serde_yaml::from_str(
+            "nodeId: '1'\nsecret: fixture\nrpc.endpoints: ['http://127.0.0.1:8001']\n",
+        )
+        .unwrap();
+        assert_eq!(
+            default_access_log_queue_capacity(),
+            default_access_log_queue_capacity()
+        );
+        assert_eq!(
+            default_access_log_batch_size(),
+            default_access_log_batch_size()
+        );
+        assert_eq!(
+            AccessLogPipelineConfig::default().queue_capacity,
+            default_access_log_queue_capacity()
+        );
+        assert_eq!(
+            AccessLogPipelineConfig::default().batch_size,
+            default_access_log_batch_size()
+        );
+    }
 }
 
 /// 平台 release 验签公钥：随 runtime.api 推送并经 control-plane-runtime.json
@@ -636,8 +766,7 @@ static STARTUP_KERNEL_TUNING: std::sync::OnceLock<KernelTuningConfig> = std::syn
 
 /// 已确认的 release 验签公钥：首随认证快照下发，之后持久化在
 /// control-plane-runtime.json；每次 NodeApiPush 合并都刷新钉扎值。
-static RELEASE_SIGNING_PUBKEY: std::sync::RwLock<Option<Vec<u8>>> =
-    std::sync::RwLock::new(None);
+static RELEASE_SIGNING_PUBKEY: std::sync::RwLock<Option<Vec<u8>>> = std::sync::RwLock::new(None);
 
 /// install_release_signing_key pins the hex-ed25519 public key carried in a
 /// NodeApiPush. Malformed material is ignored — verification then stays off
@@ -658,14 +787,31 @@ pub fn install_release_signing_key(push: &ReleaseSigningPush) {
 
 /// release_signing_pubkey returns the pinned platform key, if any.
 pub fn release_signing_pubkey() -> Option<Vec<u8>> {
-    RELEASE_SIGNING_PUBKEY.read().ok().and_then(|key| key.clone())
+    RELEASE_SIGNING_PUBKEY
+        .read()
+        .ok()
+        .and_then(|key| key.clone())
 }
+
+/// clears the pinned release signing key (test-only: parallel test binaries
+/// cannot rely on the global slot staying empty).
+#[cfg(test)]
+pub fn reset_release_signing_key() {
+    if let Ok(mut slot) = RELEASE_SIGNING_PUBKEY.write() {
+        *slot = None;
+    }
+}
+
+/// Serializes every test that mutates the process-global pinned key slot —
+/// lock in the test fn before install/reset, hold until done.
+#[cfg(test)]
+pub(crate) static RELEASE_SIGNING_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// verify_release_signature checks `signature_digest` as an Ed25519 signature
 /// over `release_id` against the pinned platform key.
 /// 返回 Err 仅当公钥已知且签名不匹配——公钥未知（旧 API 未下发）时跳过并告警。
 pub fn verify_release_signature(release_id: &str, digest: &[u8]) -> Result<(), tonic::Code> {
-    use aws_lc_rs::signature::{UnparsedPublicKey, ED25519};
+    use aws_lc_rs::signature::{ED25519, UnparsedPublicKey};
     let Some(key) = release_signing_pubkey() else {
         tracing::warn!("no release signing key pinned; skipping signature_digest verification");
         return Ok(());
@@ -809,7 +955,7 @@ mod pushed_runtime_tests {
 #[cfg(test)]
 mod release_signing_tests {
     use super::*;
-    use aws_lc_rs::signature::{KeyPair, Ed25519KeyPair};
+    use aws_lc_rs::signature::{Ed25519KeyPair, KeyPair};
 
     // 一次生成覆盖本模块全部用例：公钥十六进制 + 对 release_id 签名。
     fn seeded_keypair() -> (Ed25519KeyPair, Vec<u8>) {
@@ -822,6 +968,7 @@ mod release_signing_tests {
     // 全局钉扎槽单测内串行——并行 #[test] 会互相覆盖 RELEASE_SIGNING_PUBKEY。
     #[test]
     fn pinned_key_verifies_release_signature() {
+        let _g = RELEASE_SIGNING_TEST_LOCK.lock().unwrap();
         let (pair, pubkey) = seeded_keypair();
         install_release_signing_key(&ReleaseSigningPush {
             algorithm: "ed25519".into(),

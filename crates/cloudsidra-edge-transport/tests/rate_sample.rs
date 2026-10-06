@@ -1,8 +1,8 @@
 //! RateSample unit cases: ACK compression, delayed ACK, SACK subsets,
 //! Karn's rule for retransmits, app-limited propagation.
 
-use cloudsidra_edge_transport::rate_sample::{RateSampler, TxRecord};
 use cloudsidra_edge_transport::TransportInstant;
+use cloudsidra_edge_transport::rate_sample::{RateSampler, TxRecord};
 use std::time::Duration;
 
 const MSS: u64 = 1460;
@@ -69,7 +69,10 @@ fn retransmitted_segments_never_produce_rtt_samples() {
     let retx = s.note_sent(0, MSS, t(2000), true, Some(orig.first_tx_at));
     assert!(retx.is_retransmit);
     let rs = s.on_ack(t(3000), &[retx], 0, 0, 0, MSS);
-    assert_eq!(rs.delivered, MSS, "retransmitted bytes still count as delivered");
+    assert_eq!(
+        rs.delivered, MSS,
+        "retransmitted bytes still count as delivered"
+    );
     assert_eq!(rs.rtt, None, "Karn: retransmits must not sample RTT");
 }
 

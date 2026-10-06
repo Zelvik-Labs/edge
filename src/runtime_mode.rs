@@ -208,11 +208,10 @@ pub fn xsk_driver_native_floor(driver: &str) -> Option<(u32, u32)> {
         "virtio_net" => Some((6, 11)),
         "ena" => Some((5, 16)),
         "gve" => Some((6, 2)),
-        "i40e" | "ice" | "ixgbe" | "ixgbevf" | "iavf" | "mlx4_en" | "mlx5_core"
-        | "bnxt_en" | "qede" | "sfc" | "sfc_ef100" | "nfp" | "nfp_netvf"
-        | "mvneta" | "mvpp2" | "stmmac" | "enetc" | "atlantic" | "axgbe" | "amd-xgbe"
-        | "bcmgenet" | "cpsw" | "am65-cpsw" | "fec" | "dpaa2-eth" | "xilinx_axienet"
-        | "netdevsim" => Some((5, 4)),
+        "i40e" | "ice" | "ixgbe" | "ixgbevf" | "iavf" | "mlx4_en" | "mlx5_core" | "bnxt_en"
+        | "qede" | "sfc" | "sfc_ef100" | "nfp" | "nfp_netvf" | "mvneta" | "mvpp2" | "stmmac"
+        | "enetc" | "atlantic" | "axgbe" | "amd-xgbe" | "bcmgenet" | "cpsw" | "am65-cpsw"
+        | "fec" | "dpaa2-eth" | "xilinx_axienet" | "netdevsim" => Some((5, 4)),
         _ => None,
     }
 }
@@ -1113,7 +1112,10 @@ xdp:
 
     impl XdpEnvGuard {
         fn apply(home: &std::path::Path, vars: &[(&'static str, Option<&str>)]) -> Self {
-            let mut saved = vec![("CLOUDSIDRA_EDGE_HOME", std::env::var_os("CLOUDSIDRA_EDGE_HOME"))];
+            let mut saved = vec![(
+                "CLOUDSIDRA_EDGE_HOME",
+                std::env::var_os("CLOUDSIDRA_EDGE_HOME"),
+            )];
             unsafe {
                 std::env::set_var("CLOUDSIDRA_EDGE_HOME", home);
             }
@@ -1193,9 +1195,7 @@ xdp:
         assert!(load_xdp_enabled(Some("xdp: {}\n"), clear).unwrap());
         // File is the final authority in both directions.
         assert!(load_xdp_enabled(Some("xdp:\n  enabled: true\n"), &[xdp_var("0")]).unwrap());
-        assert!(
-            !load_xdp_enabled(Some("xdp:\n  enabled: false\n"), &[xdp_var("1")]).unwrap()
-        );
+        assert!(!load_xdp_enabled(Some("xdp:\n  enabled: false\n"), &[xdp_var("1")]).unwrap());
         assert!(!load_xdp_enabled(Some("xdp:\n  enabled: false\n"), clear).unwrap());
         // Garbage env values are an explicit error, not a silent default.
         assert!(load_xdp_enabled(None, &[xdp_var("maybe")]).is_err());

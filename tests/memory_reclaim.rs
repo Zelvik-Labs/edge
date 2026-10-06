@@ -64,8 +64,7 @@ fn critical_reclaim_returns_freed_pages_to_os() {
 
     // Cache capacity is governor-budget-derived (min 256 entries); fill up
     // to 8k unique compiled patterns — enough retained heap to see in RSS.
-    let target = cloudsidra_edge::bounded_regex_cache::regex_cache_max_entries()
-        .min(8_192) as u32;
+    let target = cloudsidra_edge::bounded_regex_cache::regex_cache_max_entries().min(8_192) as u32;
     for i in 0..target {
         let pattern = format!("^rss-reclaim-{i}-[0-9]+$");
         assert!(

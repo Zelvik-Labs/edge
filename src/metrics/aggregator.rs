@@ -555,9 +555,7 @@ mod tests {
         aggregator.record_with_capacity(test_key(1, "a"), 5, 0, false, 2);
         let before = crate::pipeline_metrics::snapshot().metrics_cardinality_dropped;
         aggregator.record_with_capacity(test_key(1, "c"), 99, 0, false, 2);
-        assert!(
-            crate::pipeline_metrics::snapshot().metrics_cardinality_dropped > before
-        );
+        assert!(crate::pipeline_metrics::snapshot().metrics_cardinality_dropped > before);
 
         let rows = aggregator.flush();
         assert_eq!(rows.len(), 2);

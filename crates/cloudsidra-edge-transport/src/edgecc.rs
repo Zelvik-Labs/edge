@@ -646,8 +646,7 @@ impl EdgeCc {
         // response to any queue this admits on congested paths.
         let implied = if self.prev_in_flight > 0 {
             Duration::from_micros(
-                (self.prev_in_flight as u128 * 1_000_000 / bw.max(1) as u128)
-                    .min(1_000_000) as u64,
+                (self.prev_in_flight as u128 * 1_000_000 / bw.max(1) as u128).min(1_000_000) as u64,
             )
         } else {
             Duration::from_micros(0)
@@ -692,7 +691,9 @@ impl EdgeCc {
             .into_iter()
             .flatten()
             .max()
-            .map(|s| (s as u128 * base.as_micros().max(1) / 1_000_000).min(u64::MAX as u128) as u64);
+            .map(|s| {
+                (s as u128 * base.as_micros().max(1) / 1_000_000).min(u64::MAX as u128) as u64
+            });
             if let Some(p) = proven {
                 target = target.min(p.saturating_mul(3));
             }
@@ -946,12 +947,10 @@ impl CongestionController for EdgeCc {
                     // be a starved sub-ms srtt, which unbounded would
                     // price a full window far above the link.
                     let bound = self.slope_bound();
-                    let delivery = bound.map_or_else(|| rs.delivery_rate_bps(), |b| {
-                        rs.delivery_rate_bps().min(b)
-                    });
+                    let delivery = bound
+                        .map_or_else(|| rs.delivery_rate_bps(), |b| rs.delivery_rate_bps().min(b));
                     let floor_rtt = rtt_d.max(Duration::from_millis(1));
-                    let implied = (self.inflight_target as u128 * 1_000_000
-                        / floor_rtt.as_micros())
+                    let implied = (self.inflight_target as u128 * 1_000_000 / floor_rtt.as_micros())
                         .min(u64::MAX as u128) as u64;
                     // Blind paths pace at min(delivery, window-implied):
                     // before any slope exists the delivery sample is the

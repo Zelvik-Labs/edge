@@ -89,8 +89,16 @@ pub fn derive_xdp_config_for_servers_with_options(
 }
 
 pub fn xdp_proxy_ports_from_servers(servers: &[ServerConfig]) -> Vec<XdpProxyPortConfig> {
+    xdp_proxy_ports_from_server_refs(servers.iter())
+}
+
+/// Same listener derivation over borrowed configs — the apply path hands out
+/// `&ServerConfig` references without cloning the store's Arc wrappers.
+pub fn xdp_proxy_ports_from_server_refs<'a>(
+    servers: impl IntoIterator<Item = &'a ServerConfig>,
+) -> Vec<XdpProxyPortConfig> {
     let mut ports = BTreeMap::new();
-    for server in servers.iter().filter(|server| server.is_on) {
+    for server in servers.into_iter().filter(|server| server.is_on) {
         if let Some(http) = &server.http
             && http.is_on
         {
@@ -121,6 +129,15 @@ pub fn xdp_proxy_ports_from_servers(servers: &[ServerConfig]) -> Vec<XdpProxyPor
         }
     }
     ports.into_values().collect()
+}
+
+/// Fill `proxy.ports` only when it was never provisioned — explicit ports
+/// stay authoritative; empty derived ports mean no active business and are
+/// left alone (no artificial fallback).
+pub fn fill_missing_xdp_proxy_ports(config: &mut XdpConfig, ports: &[XdpProxyPortConfig]) {
+    if config.enabled && config.proxy.ports.is_empty() {
+        config.proxy.ports = ports.to_vec();
+    }
 }
 
 pub fn refresh_xdp_interface_queues(config: &mut XdpConfig) {
@@ -659,5 +676,98 @@ mod tests {
             }]
         );
         assert_eq!(merged.proxy.protocols, vec![XdpProxyProtocol::Https]);
+    }
+
+    fn http80_https443_h3_server() -> ServerConfig {
+        ServerConfig {
+            is_on: true,
+            http: Some(HTTPConfig {
+                is_on: true,
+                listen: vec![listen("80")],
+            }),
+            https: Some(HTTPSConfig {
+                is_on: true,
+                listen: vec![listen("443")],
+                ssl_policy: None,
+                supports_http3: Some(true),
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn fill_missing_ports_keeps_all_other_config_bitwise() {
+        let ports = xdp_proxy_ports_from_servers(&[http80_https443_h3_server()]);
+        assert_eq!(ports.len(), 3, "http 80 + https 443 + h3 443");
+        let mut config = XdpConfig {
+            enabled: true,
+            ..Default::default()
+        };
+        let before = config.clone();
+        fill_missing_xdp_proxy_ports(&mut config, &ports);
+        assert_eq!(config.proxy.ports, ports);
+        let mut config_without_ports = config.clone();
+        config_without_ports.proxy.ports = before.proxy.ports.clone();
+        assert_eq!(
+            serde_json::to_string(&config_without_ports).unwrap(),
+            serde_json::to_string(&before).unwrap()
+        );
+    }
+
+    #[test]
+    fn fill_missing_ports_respects_explicit_ports_and_disabled() {
+        let ports = xdp_proxy_ports_from_servers(&[http80_https443_h3_server()]);
+        let mut config = XdpConfig {
+            enabled: true,
+            ..Default::default()
+        };
+        config.proxy.ports = vec![XdpProxyPortConfig {
+            protocol: XdpProxyProtocol::Tcp,
+            port: 65000,
+        }];
+        fill_missing_xdp_proxy_ports(&mut config, &ports);
+        assert_eq!(config.proxy.ports.len(), 1);
+        assert_eq!(config.proxy.ports[0].port, 65000);
+
+        let mut disabled = XdpConfig {
+            enabled: false,
+            ..Default::default()
+        };
+        fill_missing_xdp_proxy_ports(&mut disabled, &ports);
+        assert!(disabled.proxy.ports.is_empty());
+    }
+
+    #[test]
+    fn fill_missing_ports_empty_business_and_new_listener() {
+        // All servers off -> legitimately empty: nothing invented.
+        let off = ServerConfig {
+            is_on: false,
+            http: Some(HTTPConfig {
+                is_on: true,
+                listen: vec![listen("80")],
+            }),
+            ..Default::default()
+        };
+        let mut config = XdpConfig {
+            enabled: true,
+            ..Default::default()
+        };
+        fill_missing_xdp_proxy_ports(&mut config, &xdp_proxy_ports_from_servers(&[off]));
+        assert!(config.proxy.ports.is_empty());
+
+        // Changed listener 80 -> 8080 derives the NEW port, never retains 80.
+        let moved = ServerConfig {
+            is_on: true,
+            http: Some(HTTPConfig {
+                is_on: true,
+                listen: vec![listen("8080")],
+            }),
+            ..Default::default()
+        };
+        let ports = xdp_proxy_ports_from_servers(&[moved]);
+        assert_eq!(ports.len(), 1);
+        assert_eq!(ports[0].port, 8080);
+        fill_missing_xdp_proxy_ports(&mut config, &ports);
+        assert_eq!(config.proxy.ports[0].port, 8080);
     }
 }

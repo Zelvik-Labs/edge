@@ -10,9 +10,9 @@
 //! and confidence; `inference` turns them into a congestion belief and
 //! the (T5) decision layer consumes both.
 
+use crate::TransportInstant;
 use crate::rate_sample::RateSample;
 use crate::rtt::RttState;
-use crate::TransportInstant;
 use std::time::Duration;
 
 // ---------------------------------------------------------------------
@@ -75,11 +75,7 @@ impl WinFilter {
     }
 
     fn worst(&self) -> f64 {
-        if self.is_min {
-            f64::INFINITY
-        } else {
-            0.0
-        }
+        if self.is_min { f64::INFINITY } else { 0.0 }
     }
 
     fn set_window(&mut self, window: Duration) {
@@ -391,12 +387,7 @@ impl PathModel {
     }
 
     /// Feed one ACK event — every filter updates, all O(1).
-    pub fn on_rate_sample(
-        &mut self,
-        rs: &RateSample,
-        in_flight: u64,
-        rtt: &RttState,
-    ) {
+    pub fn on_rate_sample(&mut self, rs: &RateSample, in_flight: u64, rtt: &RttState) {
         let now_us = rs.now.micros();
         // `rs.delivered` is the segment-lifetime window (overlapping
         // across ACKs — not additive). `acked_sacked` is the per-ACK
@@ -444,8 +435,7 @@ impl PathModel {
 
             // Delay-signal quality (new): deviation at low inflight.
             if in_flight <= self.low_inflight_thresh() {
-                self.low_inflight_dev
-                    .add(EWMA_GAIN, (r_us - srtt_us).abs());
+                self.low_inflight_dev.add(EWMA_GAIN, (r_us - srtt_us).abs());
                 self.low_inflight_samples += 1;
             }
         }
@@ -473,8 +463,7 @@ impl PathModel {
             self.bw_last_sample = rate;
             if rate > 0.0 {
                 if let Some(srtt) = rtt.srtt {
-                    self.bw_max
-                        .set_window(srtt * BW_MAX_WINDOW_RTTS as u32);
+                    self.bw_max.set_window(srtt * BW_MAX_WINDOW_RTTS as u32);
                 }
                 // bw_max sees every real sample (max-filter is safe);
                 // bw_est only learns from network-limited flights —
@@ -615,14 +604,11 @@ impl PathModel {
             self.lt_round_had_loss = true;
             if self.lt_round_end_us == 0 {
                 self.lt_round_end_us = now_us + rtt_us;
-                let anchor = self
-                    .bw_slope()
-                    .map(|v| v as f64)
-                    .unwrap_or_else(|| {
-                        self.bw_est
-                            .get()
-                            .unwrap_or_else(|| self.bw_max.value().unwrap_or(0.0))
-                    });
+                let anchor = self.bw_slope().map(|v| v as f64).unwrap_or_else(|| {
+                    self.bw_est
+                        .get()
+                        .unwrap_or_else(|| self.bw_max.value().unwrap_or(0.0))
+                });
                 self.lt_candidate = anchor;
                 self.lt_slope_peak = self.lt_slope_peak.max(anchor);
             }
@@ -691,14 +677,11 @@ impl PathModel {
                 .unwrap_or(200_000)
                 .clamp(2_000, 4_000_000);
             self.lt_round_end_us = now.micros() + rtt_us;
-            let anchor = self
-                .bw_slope()
-                .map(|v| v as f64)
-                .unwrap_or_else(|| {
-                    self.bw_est
-                        .get()
-                        .unwrap_or_else(|| self.bw_max.value().unwrap_or(0.0))
-                });
+            let anchor = self.bw_slope().map(|v| v as f64).unwrap_or_else(|| {
+                self.bw_est
+                    .get()
+                    .unwrap_or_else(|| self.bw_max.value().unwrap_or(0.0))
+            });
             self.lt_candidate = anchor;
             self.lt_slope_peak = self.lt_slope_peak.max(anchor);
         }
@@ -735,7 +718,8 @@ impl PathModel {
     /// because on short-RTT paths the damage from an unbounded
     /// estimate is done within a few ms.
     pub fn bw_slope(&self) -> Option<u64> {
-        self.bw_slope_windowed().or_else(|| self.bw_slope_lifetime())
+        self.bw_slope_windowed()
+            .or_else(|| self.bw_slope_lifetime())
     }
 
     /// Windowed confirmed-delivered slope only — `None` while the
@@ -871,9 +855,7 @@ impl PathModel {
     pub fn loss_congested(&self, in_flight: u64) -> bool {
         match self.bdp_est() {
             Some(bdp) if bdp > 0 => in_flight > bdp + bdp / 4,
-            _ => {
-                self.qdelay_us > self.qdelay_elevated_thresh().as_micros() as f64
-            }
+            _ => self.qdelay_us > self.qdelay_elevated_thresh().as_micros() as f64,
         }
     }
 

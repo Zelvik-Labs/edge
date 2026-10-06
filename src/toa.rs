@@ -734,13 +734,9 @@ impl UpstreamL4Stream {
         peer_addr: SocketAddr,
     ) -> pingora_core::protocols::l4::stream::Stream {
         match self {
-            Self::Kernel(stream) => {
-                pingora_core::protocols::l4::stream::Stream::from(stream)
-            }
+            Self::Kernel(stream) => pingora_core::protocols::l4::stream::Stream::from(stream),
             #[cfg(target_os = "linux")]
-            Self::AfXdp(stream) => {
-                crate::xdp::af_xdp::virtual_l4_stream(*stream, peer_addr)
-            }
+            Self::AfXdp(stream) => crate::xdp::af_xdp::virtual_l4_stream(*stream, peer_addr),
         }
     }
 }
@@ -808,13 +804,8 @@ pub async fn connect_upstream(
     #[cfg(target_os = "linux")]
     {
         if crate::xdp::afxdp_upstream_selected() {
-            return connect_upstream_afxdp(
-                backend_addr,
-                remote_addr,
-                toa_config,
-                connect_timeout,
-            )
-            .await;
+            return connect_upstream_afxdp(backend_addr, remote_addr, toa_config, connect_timeout)
+                .await;
         }
     }
     connect_with_toa(backend_addr, remote_addr, toa_config, connect_timeout)
@@ -925,7 +916,12 @@ mod tests {
         let bytes = toa_syn_option_bytes(client);
         let mut expected = vec![254, 20];
         expected.extend_from_slice(&4321u16.to_be_bytes());
-        expected.extend_from_slice(&"2001:db8::1".parse::<std::net::Ipv6Addr>().unwrap().octets());
+        expected.extend_from_slice(
+            &"2001:db8::1"
+                .parse::<std::net::Ipv6Addr>()
+                .unwrap()
+                .octets(),
+        );
         assert_eq!(bytes, expected);
     }
 
@@ -939,14 +935,9 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let backend_addr = listener.local_addr().unwrap().to_string();
         let client: SocketAddr = "198.51.100.9:4444".parse().unwrap();
-        let stream = connect_upstream(
-            &backend_addr,
-            client,
-            None,
-            Duration::from_secs(5),
-        )
-        .await
-        .unwrap();
+        let stream = connect_upstream(&backend_addr, client, None, Duration::from_secs(5))
+            .await
+            .unwrap();
         let expected: SocketAddr = backend_addr.parse().unwrap();
         assert_eq!(stream.peer_addr().unwrap(), expected);
         // Kernel streams keep the kernel TOA port contract — the caller
@@ -971,17 +962,11 @@ mod tests {
         // Non-loopback target: loopback upstreams legitimately take the
         // kernel path (AF_XDP has no reactor on `lo`) — only a routable
         // destination exercises the missing-registry fail-closed check.
-        let err = match connect_upstream(
-            "203.0.113.7:443",
-            client,
-            None,
-            Duration::from_secs(1),
-        )
-        .await
-        {
-            Ok(_) => panic!("afxdp mode without a live registry must fail closed"),
-            Err(err) => err,
-        };
+        let err =
+            match connect_upstream("203.0.113.7:443", client, None, Duration::from_secs(1)).await {
+                Ok(_) => panic!("afxdp mode without a live registry must fail closed"),
+                Err(err) => err,
+            };
         let message = format!("{err:#}");
         assert!(
             message.contains("failed to connect AF_XDP upstream"),

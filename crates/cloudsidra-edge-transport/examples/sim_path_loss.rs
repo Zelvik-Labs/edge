@@ -19,14 +19,22 @@ fn cell(delay_ms: u64, uniform_loss: f64, rate_mbps: u64) {
     };
     cfg.buffer_bytes = cfg.rate_bps * (delay_ms as u64) * 1000 / 1_000_000;
     for (label, mut cc) in [
-        ("edgecc", Box::new(EdgeCc::new(cfg.mss, Tier::T1, None, false)) as Box<dyn CongestionController>),
+        (
+            "edgecc",
+            Box::new(EdgeCc::new(cfg.mss, Tier::T1, None, false)) as Box<dyn CongestionController>,
+        ),
         ("bbr3", Box::new(Bbr3Ref::new(cfg.mss))),
     ] {
         let res = run(&mut *cc, &cfg);
         let snap = cc.snapshot();
         println!(
             "  {label:>7}: done={} fct={:.1}s rtos={} retx={} mode={} reason={}",
-            res.completed, res.fct_us as f64 / 1e6, res.rto_events, res.retransmits, snap.mode, snap.reason_code,
+            res.completed,
+            res.fct_us as f64 / 1e6,
+            res.rto_events,
+            res.retransmits,
+            snap.mode,
+            snap.reason_code,
         );
     }
 }

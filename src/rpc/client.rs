@@ -362,8 +362,22 @@ impl RpcClient {
         .max_encoding_message_size(RPC_NODE_STREAM_MESSAGE_BYTES)
     }
 
-    pub fn telemetry_service(&self)->pb::telemetry_service_client::TelemetryServiceClient<tonic::service::interceptor::InterceptedService<Channel,impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static>>{
- pb::telemetry_service_client::TelemetryServiceClient::with_interceptor(self.channel.clone(),Self::interceptor(&self.api_config,Some("node"))).send_compressed(CompressionEncoding::Gzip).accept_compressed(CompressionEncoding::Gzip).max_decoding_message_size(RPC_MAX_MESSAGE_BYTES).max_encoding_message_size(RPC_MAX_MESSAGE_BYTES)
+    pub fn telemetry_service(
+        &self,
+    ) -> pb::telemetry_service_client::TelemetryServiceClient<
+        tonic::service::interceptor::InterceptedService<
+            Channel,
+            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+        >,
+    > {
+        pb::telemetry_service_client::TelemetryServiceClient::with_interceptor(
+            self.channel.clone(),
+            Self::interceptor(&self.api_config, Some("node")),
+        )
+        .send_compressed(CompressionEncoding::Gzip)
+        .accept_compressed(CompressionEncoding::Gzip)
+        .max_decoding_message_size(RPC_MAX_MESSAGE_BYTES)
+        .max_encoding_message_size(RPC_MAX_MESSAGE_BYTES)
     }
     pub fn server_service(
         &self,
@@ -951,6 +965,14 @@ pub struct SharedRpcClient {
 }
 
 impl SharedRpcClient {
+    /// Drop the process-global channel — each test's runtime owns its own
+    /// balance_channel driver, so a channel built under a dead runtime must
+    /// never be reused. Test-only; production state is untouched.
+    #[cfg(test)]
+    pub(crate) fn reset_for_test() {
+        SHARED_RPC.store(std::sync::Arc::new(None));
+    }
+
     /// Get or lazily create a shared Channel for all unary RPC callers.
     /// Mirrors Go's `SharedRPC()` — returns the same singleton instance every time.
     /// Uses `balance_channel` so tonic load-balances across all configured endpoints,

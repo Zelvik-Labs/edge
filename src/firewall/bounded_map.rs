@@ -157,9 +157,7 @@ where
         // At the soft cap we must evict rather than occupy a dead slot —
         // the global count would otherwise exceed the budget.
         let must_evict = self.len() >= soft_cap.max(1);
-        if !must_evict
-            && let Some(idx) = dead
-        {
+        if !must_evict && let Some(idx) = dead {
             seg.slots[idx] = Some((key, expiry));
             seg.len += 1;
             self.total_len.fetch_add(1, Ordering::Relaxed);
@@ -409,7 +407,12 @@ mod tests {
             let m = map.clone();
             handles.push(std::thread::spawn(move || {
                 for i in 0..20_000u64 {
-                    m.insert(i.wrapping_mul(2654435761) ^ t, i as i64 + 10_000, 5, 64 * 64);
+                    m.insert(
+                        i.wrapping_mul(2654435761) ^ t,
+                        i as i64 + 10_000,
+                        5,
+                        64 * 64,
+                    );
                 }
             }));
         }

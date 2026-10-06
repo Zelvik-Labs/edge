@@ -83,9 +83,7 @@ static LAST_RECLAIM_STATS: Mutex<Option<ReclaimStats>> = Mutex::new(None);
 
 /// Most recent reclaim pass outcome, for runtime/node-status observability.
 pub fn last_reclaim_stats() -> Option<ReclaimStats> {
-    *LAST_RECLAIM_STATS
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+    *LAST_RECLAIM_STATS.lock().unwrap_or_else(|e| e.into_inner())
 }
 // Highest pressure level observed since the monitor last drained it. Hot-path
 // callers only bump this atomic and unpark the monitor; they never run reclaim
@@ -224,8 +222,7 @@ impl ReclaimCoordinator {
             && now_ms >= self.next_allowed_ms
         {
             self.repeat_triggers = self.repeat_triggers.saturating_add(1);
-            let trigger_level = if self.repeat_triggers
-                >= Self::REPEAT_TRIGGER_ESCALATION_THRESHOLD
+            let trigger_level = if self.repeat_triggers >= Self::REPEAT_TRIGGER_ESCALATION_THRESHOLD
                 && level < MemoryPressureLevel::Critical
             {
                 self.repeat_triggers = 0;
@@ -368,9 +365,7 @@ pub fn reclaim_for_level(level: MemoryPressureLevel) -> ReclaimStats {
     }
 
     stats.process_rss_after_bytes = current_process_rss_bytes();
-    *LAST_RECLAIM_STATS
-        .lock()
-        .unwrap_or_else(|e| e.into_inner()) = Some(stats);
+    *LAST_RECLAIM_STATS.lock().unwrap_or_else(|e| e.into_inner()) = Some(stats);
     tracing::info!(
         target: "memory_reclaim",
         level = level.as_str(),
@@ -424,9 +419,8 @@ pub fn request_reclaim(level: MemoryPressureLevel) -> Option<ReclaimStats> {
     // reported by the default panic hook; we additionally log it as an error
     // so it cannot be mistaken for a normal cooldown skip.
     let reclaim_started = Instant::now();
-    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        reclaim_for_level(level)
-    }));
+    let outcome =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| reclaim_for_level(level)));
     RECLAIM_RUNS_TOTAL.fetch_add(1, Ordering::Relaxed);
     RECLAIM_LAST_DURATION_MS.store(
         reclaim_started.elapsed().as_millis() as u64,
@@ -438,8 +432,7 @@ pub fn request_reclaim(level: MemoryPressureLevel) -> Option<ReclaimStats> {
     LAST_RECLAIM_AT_MS.store(monotonic_elapsed_ms().max(1), Ordering::Release);
     match outcome {
         Ok(stats) => {
-            RECLAIM_BYTES_FREED_EST
-                .fetch_add(stats.freed_bytes_estimate(), Ordering::Relaxed);
+            RECLAIM_BYTES_FREED_EST.fetch_add(stats.freed_bytes_estimate(), Ordering::Relaxed);
             drop(_reset);
             Some(stats)
         }
@@ -605,8 +598,7 @@ fn maybe_reconcile_resident_ledgers() {
     LAST_LEDGER_RECONCILE_MS.store(now, Ordering::Relaxed);
     let stats = crate::cache_hybrid::reconcile_resident_ledgers();
     LEDGER_RECONCILE_PASSES.fetch_add(1, Ordering::Relaxed);
-    LEDGER_RECONCILE_STALE_OWNERS
-        .fetch_add(stats.stale_owners_removed as u64, Ordering::Relaxed);
+    LEDGER_RECONCILE_STALE_OWNERS.fetch_add(stats.stale_owners_removed as u64, Ordering::Relaxed);
     LEDGER_RECONCILE_BYTES_REFUNDED.fetch_add(stats.bytes_refunded, Ordering::Relaxed);
     if stats.stale_owners_removed > 0 || stats.truncated {
         tracing::warn!(
@@ -887,12 +879,9 @@ mod pressure_events {
             })
             .collect();
         loop {
-            let rc =
-                unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, -1) };
+            let rc = unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, -1) };
             if rc < 0 {
-                if std::io::Error::last_os_error().kind()
-                    == std::io::ErrorKind::Interrupted
-                {
+                if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
                     continue;
                 }
                 // A broken fd should not spin — drop back to poll cadence.
@@ -918,9 +907,9 @@ mod pressure_events {
                 // Keep the watcher alive across a wake panic (e.g. a poisoned
                 // lock inside the snapshot re-read): without this the thread
                 // dies and all event-driven escalation is silently lost.
-                if let Err(payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
-                    || on_pressure_event_wake(name, floor),
-                )) {
+                if let Err(payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    on_pressure_event_wake(name, floor)
+                })) {
                     tracing::error!(
                         target: "memory_reclaim",
                         source = name,
@@ -938,9 +927,8 @@ mod pressure_events {
 
         #[test]
         fn memory_events_parses_counters_and_ignores_low() {
-            let counters = EventCounters::parse(
-                "low 0\nhigh 3\nmax 1\noom 0\noom_kill 2\noom_group_kill 0\n",
-            );
+            let counters =
+                EventCounters::parse("low 0\nhigh 3\nmax 1\noom 0\noom_kill 2\noom_group_kill 0\n");
             assert_eq!(counters.high, 3);
             assert_eq!(counters.max, 1);
             assert_eq!(counters.oom_kill, 2);
@@ -1009,9 +997,11 @@ mod tests {
         let reclaim =
             unsafe { libmimalloc_sys::mi_option_get(MI_OPTION_ABANDONED_RECLAIM_ON_FREE) };
         assert_eq!(reclaim, 1, "abandoned reclaim-on-free must be enabled");
-        let seg_reclaim =
-            unsafe { libmimalloc_sys::mi_option_get(MI_OPTION_MAX_SEGMENT_RECLAIM) };
-        assert_eq!(seg_reclaim, 50, "abandoned-segment drain rate must be raised");
+        let seg_reclaim = unsafe { libmimalloc_sys::mi_option_get(MI_OPTION_MAX_SEGMENT_RECLAIM) };
+        assert_eq!(
+            seg_reclaim, 50,
+            "abandoned-segment drain rate must be raised"
+        );
         let arena_mult = unsafe { libmimalloc_sys::mi_option_get(MI_OPTION_ARENA_PURGE_MULT) };
         assert_eq!(arena_mult, 2, "arena purge window must be tightened");
     }
@@ -1258,7 +1248,10 @@ mod tests {
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             reclaim_for_level(MemoryPressureLevel::Critical);
         }));
-        assert!(outcome.is_err(), "forced panic must propagate to the caller");
+        assert!(
+            outcome.is_err(),
+            "forced panic must propagate to the caller"
+        );
         RECLAIM_IN_PROGRESS.with(|flag| {
             assert!(
                 !flag.get(),

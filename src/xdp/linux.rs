@@ -7,16 +7,16 @@ use aya::maps::lpm_trie::Key as LpmKey;
 use aya::maps::{Array, HashMap as AyaHashMap, LpmTrie, PerCpuArray, XskMap};
 use aya::programs::links::PinnedLink;
 use cloudsidra_edge_xdp_common::{
-    XdpBudgetConfig, XdpCounters, XdpFlowAcct, XdpInterfacePolicy, XdpIpv4Key,
-    XdpIpv6Key, XdpLocalIpv4Key, XdpLocalIpv6Key, XdpOutCtKey, XdpOutCtValue, XdpPendingCap,
-    XdpPortProtoKey, XdpQueueKey, XdpRateBucket, XdpRateLimitConfig, XdpRuleValue, XdpSnatRevKey,
-    XdpSnatRevValue, XdpUdpCtKey, XdpUdpCtValue, XdpUdpFwdKey, XdpUdpFwdRule,
+    XdpBudgetConfig, XdpCounters, XdpFlowAcct, XdpInterfacePolicy, XdpIpv4Key, XdpIpv6Key,
+    XdpLocalIpv4Key, XdpLocalIpv6Key, XdpOutCtKey, XdpOutCtValue, XdpPendingCap, XdpPortProtoKey,
+    XdpQueueKey, XdpRateBucket, XdpRateLimitConfig, XdpRuleValue, XdpSnatRevKey, XdpSnatRevValue,
+    XdpUdpCtKey, XdpUdpCtValue, XdpUdpFwdKey, XdpUdpFwdRule,
 };
 use ipnet::IpNet;
 use std::collections::BTreeSet;
-use std::net::SocketAddr;
 use std::ffi::CString;
 use std::io::Write;
+use std::net::SocketAddr;
 use std::num::NonZeroU32;
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd};
 use std::path::{Path, PathBuf};
@@ -234,11 +234,7 @@ fn bpf_map_lookup_u32(map_fd: std::os::fd::RawFd, key: u32) -> std::io::Result<O
 }
 
 /// BPF_MAP_UPDATE_ELEM writing a u32 value (a prog fd for prog arrays).
-fn bpf_map_update_u32(
-    map_fd: std::os::fd::RawFd,
-    key: u32,
-    value: u32,
-) -> std::io::Result<()> {
+fn bpf_map_update_u32(map_fd: std::os::fd::RawFd, key: u32, value: u32) -> std::io::Result<()> {
     let mut attr = BpfAttr::zeroed();
     attr.map_elem = BpfAttrMapElem {
         map_fd: map_fd as u32,
@@ -327,6 +323,25 @@ pub struct AfXdpPollStats {
     pub parsed: usize,
     pub parse_errors: usize,
     pub refilled: usize,
+}
+
+#[cfg(test)]
+impl AfXdpRuntimeHandle {
+    /// Socketless runtime for lease/status bookkeeping tests — no kernel
+    /// resources, so a test can exercise adoption/retirement state paths
+    /// without binding AF_XDP.
+    pub(crate) fn test_with_lease(
+        statuses: Vec<XdpQueueStatus>,
+        lease: Option<std::sync::Arc<AfXdpDataplaneLease>>,
+    ) -> Self {
+        Self {
+            queues: Vec::new(),
+            statuses,
+            last_status_refresh_at: None,
+            lease,
+            umem_permit: None,
+        }
+    }
 }
 
 impl AfXdpRuntimeHandle {
@@ -895,17 +910,13 @@ impl AfXdpQueueHandle {
     /// on the CQ path) or never entered the consume loop.
     #[cfg(target_os = "linux")]
     pub(crate) fn xdp_stats(&self) -> Option<(u64, u64, u64)> {
-        self.tx
-            .fd()
-            .xdp_statistics()
-            .ok()
-            .map(|s| {
-                (
-                    s.tx_ring_empty_descs(),
-                    s.tx_invalid_descs(),
-                    self.tx_completed_total,
-                )
-            })
+        self.tx.fd().xdp_statistics().ok().map(|s| {
+            (
+                s.tx_ring_empty_descs(),
+                s.tx_invalid_descs(),
+                self.tx_completed_total,
+            )
+        })
     }
 
     fn submit_raw_frame(&mut self, mut desc: FrameDesc, frame: &[u8]) -> anyhow::Result<bool> {
@@ -950,13 +961,12 @@ impl AfXdpQueueHandle {
     fn pcap_open(queue: u32) -> Option<std::io::BufWriter<std::fs::File>> {
         use std::io::Write;
         let base = std::env::var("CLOUDSIDRA_EDGE_XDP_PCAP").ok()?;
-        let mut w = std::io::BufWriter::new(
-            std::fs::File::create(format!("{base}.q{queue}")).ok()?,
-        );
+        let mut w =
+            std::io::BufWriter::new(std::fs::File::create(format!("{base}.q{queue}")).ok()?);
         // magic(LE) ver 2.4, snaplen 65535, linktype EN10MB
         let hdr: [u8; 24] = [
-            0xd4, 0xc3, 0xb2, 0xa1, 2, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 1, 0,
-            0, 0,
+            0xd4, 0xc3, 0xb2, 0xa1, 2, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 1, 0, 0,
+            0,
         ];
         w.write_all(&hdr).ok()?;
         Some(w)
@@ -1193,8 +1203,7 @@ pub(crate) fn xsk_bind_attempts(mode: XdpXskMode) -> &'static [(&'static str, Bi
     );
     const ZERO_COPY: &[(&str, BindFlags)] = &[("zero-copy", ZERO_COPY_FLAGS)];
     const COPY: &[(&str, BindFlags)] = &[("copy", COPY_FLAGS)];
-    const AUTO: &[(&str, BindFlags)] =
-        &[("zero-copy", ZERO_COPY_FLAGS), ("copy", COPY_FLAGS)];
+    const AUTO: &[(&str, BindFlags)] = &[("zero-copy", ZERO_COPY_FLAGS), ("copy", COPY_FLAGS)];
     match mode {
         XdpXskMode::Auto => AUTO,
         XdpXskMode::Copy => COPY,
@@ -1424,9 +1433,7 @@ pub async fn attach(
     atomic: Option<&AtomicReattach>,
 ) -> anyhow::Result<AttachedProgram> {
     std::fs::create_dir_all(xdp_bpf_pin_dir())
-        .map_err(|err| {
-            anyhow::anyhow!("create bpffs pin dir {}: {err}", xdp_bpf_pin_dir())
-        })?;
+        .map_err(|err| anyhow::anyhow!("create bpffs pin dir {}: {err}", xdp_bpf_pin_dir()))?;
     // When the operator gave no explicit stateTables, size the scalable
     // state maps to the pinned-allocation headroom — only *new* pinned
     // bytes are charged, so a re-attach reusing its existing pins always
@@ -1543,10 +1550,7 @@ pub async fn attach(
     // sockets) and every inbound frame would drop while TX kept flowing.
     // Pinning shares the live socket registrations; a closed socket's
     // entry is removed by the kernel, so the pin never holds a dead fd.
-    loader.map_pin_path(
-        "XDP_XSKS",
-        Path::new(xdp_bpf_pin_dir()).join("XDP_XSKS"),
-    );
+    loader.map_pin_path("XDP_XSKS", Path::new(xdp_bpf_pin_dir()).join("XDP_XSKS"));
     // EN-10 takeover contract: flow state and the lifecycle feedback channel
     // are pinned so a reload/restart adopts existing flows instead of
     // severing them. aya reuses a compatible pin purely by name; the spec
@@ -1690,17 +1694,18 @@ pub async fn attach(
         let Some(sub_program) = ebpf.program_mut(name) else {
             continue;
         };
-        debug_assert!(dispatch_fds
-            .iter()
-            .any(|(s, fd)| *s == slot && fd.is_some()));
+        debug_assert!(
+            dispatch_fds
+                .iter()
+                .any(|(s, fd)| *s == slot && fd.is_some())
+        );
         let sub: &mut aya::programs::Xdp = sub_program.try_into()?;
         let pin_path = prog_pin_dir.join(name);
         if pin_path.exists() {
             std::fs::remove_file(&pin_path)?;
         }
-        sub.pin(&pin_path).map_err(|err| {
-            anyhow::anyhow!("pin {name} to {}: {err}", pin_path.display())
-        })?;
+        sub.pin(&pin_path)
+            .map_err(|err| anyhow::anyhow!("pin {name} to {}: {err}", pin_path.display()))?;
     }
     let mut dispatch_prev: Vec<(u32, Option<u32>)> = Vec::new();
     // Owned fd for the pinned XDP_DISPATCH map — held for the revert path
@@ -1950,9 +1955,8 @@ fn atomic_link_swap(
             let map_fd = map_fd.as_raw_fd();
             for (slot, old_id) in dispatch_prev.iter().rev() {
                 let r = match old_id {
-                    Some(id) => bpf_prog_fd_by_id(*id).and_then(|fd| {
-                        bpf_map_update_u32(map_fd, *slot, fd.as_raw_fd() as u32)
-                    }),
+                    Some(id) => bpf_prog_fd_by_id(*id)
+                        .and_then(|fd| bpf_map_update_u32(map_fd, *slot, fd.as_raw_fd() as u32)),
                     None => bpf_map_delete_u32(map_fd, *slot),
                 };
                 if let Err(revert_err) = r {
@@ -1986,9 +1990,8 @@ fn atomic_link_swap(
             continue;
         }
         let swap = (|| -> anyhow::Result<Option<u32>> {
-            let pinned = PinnedLink::from_pin(&pin_path).map_err(|err| {
-                anyhow::anyhow!("open pinned link {}: {err}", pin_path.display())
-            })?;
+            let pinned = PinnedLink::from_pin(&pin_path)
+                .map_err(|err| anyhow::anyhow!("open pinned link {}: {err}", pin_path.display()))?;
             let fd_link: aya::programs::links::FdLink = pinned.into();
             let info = fd_link
                 .info()
@@ -2617,8 +2620,8 @@ fn sync_interface_policy(ebpf: &mut aya::Ebpf, config: &XdpConfig) -> anyhow::Re
 /// — `protectedServices[].redirect: false` clears it so protection stays on
 /// while the VIP's ports keep their kernel path.
 fn local_ip_flags(interface: &XdpInterfaceConfig, ip: &IpAddr) -> u32 {
-    let mut flags =
-        cloudsidra_edge_xdp_common::XDP_LOCAL_PRESENT | cloudsidra_edge_xdp_common::XDP_LOCAL_REDIRECT;
+    let mut flags = cloudsidra_edge_xdp_common::XDP_LOCAL_PRESENT
+        | cloudsidra_edge_xdp_common::XDP_LOCAL_REDIRECT;
     for entry in &interface.protected_services {
         if &entry.ip == ip {
             if !entry.redirect {
@@ -2768,17 +2771,11 @@ pub fn disable_queue_redirect(
 /// Returns None for a mismatched-family pair (v4 local + v6 remote or
 /// vice versa) — that pair can never exist on the wire, so the caller
 /// fails the dial instead of inserting a dead entry.
-pub fn out_ct_key(
-    local: SocketAddr,
-    remote: SocketAddr,
-    proto: u8,
-) -> Option<XdpOutCtKey> {
+pub fn out_ct_key(local: SocketAddr, remote: SocketAddr, proto: u8) -> Option<XdpOutCtKey> {
     let (local_addr, remote_addr, family) = match (local, remote) {
-        (SocketAddr::V4(local), SocketAddr::V4(remote)) => (
-            v4_embed(*local.ip()),
-            v4_embed(*remote.ip()),
-            4u8,
-        ),
+        (SocketAddr::V4(local), SocketAddr::V4(remote)) => {
+            (v4_embed(*local.ip()), v4_embed(*remote.ip()), 4u8)
+        }
         (SocketAddr::V6(local), SocketAddr::V6(remote)) => {
             (local.ip().octets(), remote.ip().octets(), 6u8)
         }
@@ -2835,11 +2832,8 @@ pub fn upsert_splice(
     let map = ebpf
         .map_mut("XDP_TCP_SPLICE")
         .ok_or_else(|| anyhow::anyhow!("missing map XDP_TCP_SPLICE"))?;
-    let mut map = AyaHashMap::<
-        _,
-        XdpOutCtKey,
-        cloudsidra_edge_xdp_common::XdpTcpSpliceValue,
-    >::try_from(map)?;
+    let mut map =
+        AyaHashMap::<_, XdpOutCtKey, cloudsidra_edge_xdp_common::XdpTcpSpliceValue>::try_from(map)?;
     map.insert(key, value, 0)?;
     Ok(())
 }
@@ -2850,11 +2844,8 @@ pub fn remove_splice(ebpf: &mut aya::Ebpf, key: &XdpOutCtKey) -> anyhow::Result<
     let map = ebpf
         .map_mut("XDP_TCP_SPLICE")
         .ok_or_else(|| anyhow::anyhow!("missing map XDP_TCP_SPLICE"))?;
-    let mut map = AyaHashMap::<
-        _,
-        XdpOutCtKey,
-        cloudsidra_edge_xdp_common::XdpTcpSpliceValue,
-    >::try_from(map)?;
+    let mut map =
+        AyaHashMap::<_, XdpOutCtKey, cloudsidra_edge_xdp_common::XdpTcpSpliceValue>::try_from(map)?;
     map.remove(key)?;
     Ok(())
 }
@@ -2876,11 +2867,8 @@ pub fn sweep_splice_map(
     let Some(map) = ebpf.map_mut("XDP_TCP_SPLICE") else {
         return Ok(reaped);
     };
-    let mut map = AyaHashMap::<
-        _,
-        XdpOutCtKey,
-        cloudsidra_edge_xdp_common::XdpTcpSpliceValue,
-    >::try_from(map)?;
+    let mut map =
+        AyaHashMap::<_, XdpOutCtKey, cloudsidra_edge_xdp_common::XdpTcpSpliceValue>::try_from(map)?;
     let mut stale: Vec<(XdpOutCtKey, u64, u8)> = Vec::new();
     for entry in map.iter() {
         let (key, value) = entry?;
@@ -3044,8 +3032,14 @@ pub(super) fn udp_forward_entry(
     // admission on a service the operator believes is strongly validated.
     if fwd.challenge {
         anyhow::ensure!(is_tcp, "challenge is TCP-only (UDP rules ignore it)");
-        anyhow::ensure!(fwd.snat, "challenge requires snat (the splice needs observable backend replies)");
-        anyhow::ensure!(key.family == 4, "challenge is IPv4-only in this slice (IPv6 keeps bounded admission)");
+        anyhow::ensure!(
+            fwd.snat,
+            "challenge requires snat (the splice needs observable backend replies)"
+        );
+        anyhow::ensure!(
+            key.family == 4,
+            "challenge is IPv4-only in this slice (IPv6 keeps bounded admission)"
+        );
     }
     Ok((
         key,
@@ -3093,8 +3087,7 @@ fn resolve_next_hop_mac(target: IpAddr) -> anyhow::Result<[u8; 6]> {
         .and_then(|v| v.as_str())
         .map(str::to_string)
         .unwrap_or_else(|| target.to_string());
-    resolve_neighbor_mac(&next_hop)
-        .map_err(|err| anyhow::anyhow!("{err} (route to {target})"))
+    resolve_neighbor_mac(&next_hop).map_err(|err| anyhow::anyhow!("{err} (route to {target})"))
 }
 
 /// T4: link-layer address of a resolved next hop — refuses entries whose
@@ -3198,8 +3191,7 @@ pub(crate) fn resolve_outbound_route(target: IpAddr) -> anyhow::Result<XdpOutbou
             // probe datagram so the kernel starts resolving, then poll
             // briefly — still failing closed when no usable entry lands.
             warm_neighbor(&next_hop);
-            let deadline =
-                std::time::Instant::now() + NEIGHBOR_WARM_TIMEOUT;
+            let deadline = std::time::Instant::now() + NEIGHBOR_WARM_TIMEOUT;
             loop {
                 std::thread::sleep(NEIGHBOR_WARM_POLL);
                 match resolve_neighbor_mac(&next_hop) {
@@ -3461,8 +3453,7 @@ fn clear_xsk_map(ebpf: &mut aya::Ebpf) -> anyhow::Result<()> {
         .map_mut("XDP_XSKS")
         .ok_or_else(|| anyhow::anyhow!("missing map XDP_XSKS"))?;
     let mut map = XskMap::try_from(map)?;
-    clear_xsk_map_entries(&mut map);
-    Ok(())
+    clear_xsk_map_entries(&mut map)
 }
 
 fn clear_pinned_xsk_map() -> anyhow::Result<()> {
@@ -3472,8 +3463,7 @@ fn clear_pinned_xsk_map() -> anyhow::Result<()> {
     }
     let map = aya::maps::Map::XskMap(aya::maps::MapData::from_pin(path)?);
     let mut map = XskMap::try_from(map)?;
-    clear_xsk_map_entries(&mut map);
-    Ok(())
+    clear_xsk_map_entries(&mut map)
 }
 
 /// Removes pinned maps whose kernel-reported spec no longer matches the
@@ -3498,18 +3488,18 @@ fn state_table_override(name: &str, config: &XdpConfig) -> Option<u32> {
         "XDP_SNAT_REV" => t.snat_rev_max_entries,
         "XDP_FLOW_ACCT" => t.flow_acct_max_entries,
         "XDP_RATE_V6" => t.rate_v6_max_entries,
-        "XDP_BLOCKED_V4" | "XDP_BLOCKED_V6" | "XDP_BLOCKED_V4_LPM"
-        | "XDP_BLOCKED_V6_LPM" => t.acl_blocked_max_entries,
-        "XDP_ALLOWED_V4" | "XDP_ALLOWED_V6" | "XDP_ALLOWED_V4_LPM"
-        | "XDP_ALLOWED_V6_LPM" => t.acl_allowed_max_entries,
+        "XDP_BLOCKED_V4" | "XDP_BLOCKED_V6" | "XDP_BLOCKED_V4_LPM" | "XDP_BLOCKED_V6_LPM" => {
+            t.acl_blocked_max_entries
+        }
+        "XDP_ALLOWED_V4" | "XDP_ALLOWED_V6" | "XDP_ALLOWED_V4_LPM" | "XDP_ALLOWED_V6_LPM" => {
+            t.acl_allowed_max_entries
+        }
         "XDP_RATE_V4" => t.rate_v4_max_entries,
         _ => None,
     }
 }
 
-fn bpf_map_specs(
-    config: &XdpConfig,
-) -> [(&'static str, aya::maps::MapType, u32, u32, u32); 38] {
+fn bpf_map_specs(config: &XdpConfig) -> [(&'static str, aya::maps::MapType, u32, u32, u32); 38] {
     use aya::maps::MapType;
     use cloudsidra_edge_xdp_common::*;
     use core::mem::size_of;
@@ -3854,7 +3844,10 @@ pub(crate) fn auto_scale_state_tables(
             // pin. Members pinned larger than `chosen` were charged above
             // and trip the stale-pin gate.
             knob_values.push((*knob, chosen));
-            if members.iter().any(|(_, _, default_max)| *default_max != chosen) {
+            if members
+                .iter()
+                .any(|(_, _, default_max)| *default_max != chosen)
+            {
                 differs_from_default = true;
             }
             continue;
@@ -3941,10 +3934,12 @@ fn state_table_knob(name: &str) -> &'static str {
         "XDP_SNAT_REV" => "snat_rev",
         "XDP_FLOW_ACCT" => "flow_acct",
         "XDP_RATE_V6" => "rate_v6",
-        "XDP_BLOCKED_V4" | "XDP_BLOCKED_V6" | "XDP_BLOCKED_V4_LPM"
-        | "XDP_BLOCKED_V6_LPM" => "acl_blocked",
-        "XDP_ALLOWED_V4" | "XDP_ALLOWED_V6" | "XDP_ALLOWED_V4_LPM"
-        | "XDP_ALLOWED_V6_LPM" => "acl_allowed",
+        "XDP_BLOCKED_V4" | "XDP_BLOCKED_V6" | "XDP_BLOCKED_V4_LPM" | "XDP_BLOCKED_V6_LPM" => {
+            "acl_blocked"
+        }
+        "XDP_ALLOWED_V4" | "XDP_ALLOWED_V6" | "XDP_ALLOWED_V4_LPM" | "XDP_ALLOWED_V6_LPM" => {
+            "acl_allowed"
+        }
         "XDP_RATE_V4" => "rate_v4",
         _ => "fixed",
     }
@@ -4231,13 +4226,66 @@ fn drop_stale_pinned_maps(config: &XdpConfig, purge_state: bool) -> Vec<String> 
     dropped
 }
 
-fn clear_xsk_map_entries<T>(map: &mut XskMap<T>)
+/// Walk every slot in order and invoke `unset`. The first error stops the
+/// walk — a partially cleared map is reported, never silently tolerated.
+pub(crate) fn clear_xsk_slots_with(
+    max: u32,
+    mut unset: impl FnMut(u32) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    for index in 0..max {
+        unset(index)?;
+    }
+    Ok(())
+}
+
+/// True only for a slot that was already empty: the kernel reports
+/// `ENOENT` on `bpf_map_delete_elem` (surfaced as `SyscallError`; aya may
+/// also report `KeyNotFound`). Any other error — EBADF, EINVAL, EPERM —
+/// is a real failure and propagates.
+pub(crate) fn xsk_unset_is_absent(err: &aya::maps::MapError) -> bool {
+    match err {
+        aya::maps::MapError::KeyNotFound => true,
+        aya::maps::MapError::SyscallError(sys) => sys.io_error.raw_os_error() == Some(libc::ENOENT),
+        _ => false,
+    }
+}
+
+fn clear_xsk_map_entries<T>(map: &mut XskMap<T>) -> anyhow::Result<()>
 where
     T: std::borrow::BorrowMut<aya::maps::MapData>,
 {
-    for index in 0..map.len() {
-        let _ = map.unset(index);
-    }
+    let max = map.len();
+    clear_xsk_slots_with(max, |index| match map.unset(index) {
+        Ok(()) => Ok(()),
+        Err(err) if xsk_unset_is_absent(&err) => Ok(()),
+        Err(err) => Err(err.into()),
+    })
+}
+
+/// Ordering seam: cleanup must complete (or fail) before prepare runs.
+pub(crate) fn prepare_after_xsk_cleanup<T>(
+    cleanup: impl FnOnce() -> anyhow::Result<()>,
+    prepare: impl FnOnce() -> anyhow::Result<T>,
+) -> anyhow::Result<T> {
+    cleanup()?;
+    prepare()
+}
+
+/// Clear only volatile socket registrations before binding a fresh
+/// generation. Live dataplane adoption bypasses this path; flow, conn,
+/// and counter maps are untouched.
+pub(super) fn prepare_af_xdp_sockets_for_rebind(
+    ebpf: &mut aya::Ebpf,
+    config: &XdpConfig,
+) -> anyhow::Result<AfXdpRuntimeHandle> {
+    prepare_after_xsk_cleanup(
+        || {
+            clear_xsk_map(ebpf)?;
+            tracing::info!("xdp: XDP_XSKS cleared before AF_XDP socket rebind");
+            Ok(())
+        },
+        || prepare_af_xdp_sockets(config),
+    )
 }
 
 fn xsk_map_entries(config: &XdpConfig) -> anyhow::Result<Vec<XskMapEntry>> {

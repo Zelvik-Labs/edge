@@ -102,10 +102,7 @@ enum SpliceAttempt {
 }
 
 #[cfg(target_os = "linux")]
-async fn begin_leg(
-    registry: &AfXdpDialRegistry,
-    flow: AfXdpTcpFlowKey,
-) -> Option<AfXdpSpliceLeg> {
+async fn begin_leg(registry: &AfXdpDialRegistry, flow: AfXdpTcpFlowKey) -> Option<AfXdpSpliceLeg> {
     let (reply, rx) = tokio::sync::oneshot::channel();
     if !registry.session_request(&flow, AfXdpReactorRequest::SpliceBegin { flow, reply }) {
         return None;
@@ -183,10 +180,8 @@ async fn try_promote_once(
     // decodes it with the scale the edge announced on the backend leg
     // (backend_leg's own shift). The datapath therefore rescales by
     // (sender_scale - edge_own_shift_on_sibling) per direction.
-    let client_wnd_shift =
-        client_leg.win_shift.0 as i32 - backend_leg.win_shift.1 as i32;
-    let backend_wnd_shift =
-        backend_leg.win_shift.0 as i32 - client_leg.win_shift.1 as i32;
+    let client_wnd_shift = client_leg.win_shift.0 as i32 - backend_leg.win_shift.1 as i32;
+    let backend_wnd_shift = backend_leg.win_shift.0 as i32 - client_leg.win_shift.1 as i32;
     if client_wnd_shift > i8::MAX as i32
         || client_wnd_shift < i8::MIN as i32
         || backend_wnd_shift > i8::MAX as i32

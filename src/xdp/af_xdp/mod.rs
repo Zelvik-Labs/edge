@@ -311,9 +311,8 @@ static AF_XDP_TCP_DIAG_BUFFER_SHRINKS: AtomicU64 = AtomicU64::new(0);
 /// bounded by Σ per-queue session limits; the status export below is
 /// additionally capped so a saturated node cannot emit an unbounded body.
 #[cfg(target_os = "linux")]
-static AF_XDP_TCP_SESSION_SNAPSHOTS: std::sync::LazyLock<
-    DashMap<String, serde_json::Value>,
-> = std::sync::LazyLock::new(DashMap::new);
+static AF_XDP_TCP_SESSION_SNAPSHOTS: std::sync::LazyLock<DashMap<String, serde_json::Value>> =
+    std::sync::LazyLock::new(DashMap::new);
 
 /// T1: cap on session rows exported into a single /status response.
 #[cfg(target_os = "linux")]
@@ -460,31 +459,33 @@ fn tcp_top_held_json(n: usize) -> serde_json::Value {
         })
         .collect();
     scored.sort_by_key(|a| std::cmp::Reverse(a.0));
-    serde_json::json!(scored
-        .into_iter()
-        .take(n)
-        .map(|(held, row)| serde_json::json!({
-            "peer": row["peer"],
-            "local": row["local"],
-            "class": row["class"],
-            "state": row["state"],
-            "heldBytes": held,
-            "cwnd": row["cwndBytes"],
-            "rttUs": row["minRttMicros"],
-            "sendQ": row["sendQueueBytes"],
-            "recvQ": row["recvQueueBytes"],
-            "pendIn": row["pendingIngressBytes"],
-            "pendEg": row["pendingEgressBytes"],
-            // EdgeCC observability — why the window/rate sits where it
-            // does (mode + reason + model outputs), not just its size.
-            "ccMode": row["ccMode"],
-            "ccReason": row["reasonCode"],
-            "paceBps": row["pacingRateBps"],
-            "beliefMilli": row["beliefMilli"],
-            "envelopeBytes": row["envelopeBytes"],
-            "bwSigmaBps": row["bwSigmaBps"],
-        }))
-        .collect::<Vec<_>>())
+    serde_json::json!(
+        scored
+            .into_iter()
+            .take(n)
+            .map(|(held, row)| serde_json::json!({
+                "peer": row["peer"],
+                "local": row["local"],
+                "class": row["class"],
+                "state": row["state"],
+                "heldBytes": held,
+                "cwnd": row["cwndBytes"],
+                "rttUs": row["minRttMicros"],
+                "sendQ": row["sendQueueBytes"],
+                "recvQ": row["recvQueueBytes"],
+                "pendIn": row["pendingIngressBytes"],
+                "pendEg": row["pendingEgressBytes"],
+                // EdgeCC observability — why the window/rate sits where it
+                // does (mode + reason + model outputs), not just its size.
+                "ccMode": row["ccMode"],
+                "ccReason": row["reasonCode"],
+                "paceBps": row["pacingRateBps"],
+                "beliefMilli": row["beliefMilli"],
+                "envelopeBytes": row["envelopeBytes"],
+                "bwSigmaBps": row["bwSigmaBps"],
+            }))
+            .collect::<Vec<_>>()
+    )
 }
 
 /// Throughput-facing view of live sessions: rank by real queue pressure
@@ -504,29 +505,31 @@ fn tcp_top_active_json(n: usize) -> serde_json::Value {
         })
         .collect();
     scored.sort_by_key(|a| std::cmp::Reverse(a.0));
-    serde_json::json!(scored
-        .into_iter()
-        .take(n)
-        .map(|(active, row)| serde_json::json!({
-            "peer": row["peer"],
-            "local": row["local"],
-            "class": row["class"],
-            "state": row["state"],
-            "activeBytes": active,
-            "cwnd": row["cwndBytes"],
-            "rttUs": row["minRttMicros"],
-            "sendQ": row["sendQueueBytes"],
-            "pendIn": row["pendingIngressBytes"],
-            "pendEg": row["pendingEgressBytes"],
-            "ccMode": row["ccMode"],
-            "ccReason": row["reasonCode"],
-            "paceBps": row["pacingRateBps"],
-            "remoteWin": row["remoteWinBytes"],
-            "unacked": row["unackedBytes"],
-            "pipe": row["pipeBytes"],
-            "timer": row["timerState"],
-        }))
-        .collect::<Vec<_>>())
+    serde_json::json!(
+        scored
+            .into_iter()
+            .take(n)
+            .map(|(active, row)| serde_json::json!({
+                "peer": row["peer"],
+                "local": row["local"],
+                "class": row["class"],
+                "state": row["state"],
+                "activeBytes": active,
+                "cwnd": row["cwndBytes"],
+                "rttUs": row["minRttMicros"],
+                "sendQ": row["sendQueueBytes"],
+                "pendIn": row["pendingIngressBytes"],
+                "pendEg": row["pendingEgressBytes"],
+                "ccMode": row["ccMode"],
+                "ccReason": row["reasonCode"],
+                "paceBps": row["pacingRateBps"],
+                "remoteWin": row["remoteWinBytes"],
+                "unacked": row["unackedBytes"],
+                "pipe": row["pipeBytes"],
+                "timer": row["timerState"],
+            }))
+            .collect::<Vec<_>>()
+    )
 }
 
 #[cfg(target_os = "linux")]
@@ -758,19 +761,21 @@ mod parser;
 #[cfg(target_os = "linux")]
 mod splice;
 mod tcp_reactor;
+#[cfg(target_os = "linux")]
+mod wake;
 
-pub use bridge::{AfXdpRuntime, runtime, start_proxy_bridge, start_udp_bridge};
 #[cfg(test)]
 pub(crate) use bridge::*;
+pub use bridge::{AfXdpRuntime, runtime, start_proxy_bridge, start_udp_bridge};
 #[cfg(target_os = "linux")]
 pub(crate) use dial::*;
-#[cfg(target_os = "linux")]
-pub(crate) use splice::*;
-#[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
+#[cfg(any(test, target_os = "linux"))]
 pub(crate) use parser::*;
 pub use parser::{
     encode_ip_reply_frame, encode_udp_reply_frame, extract_ip_frame, parse_l4_packet,
     parse_proxy_frame,
 };
+#[cfg(target_os = "linux")]
+pub(crate) use splice::*;
 pub(crate) use tcp_reactor::*;
 pub use tcp_reactor::{AfXdpTcpStream, AfXdpTcpStreamParts};

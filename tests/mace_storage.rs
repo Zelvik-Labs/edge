@@ -65,7 +65,8 @@ fn packed_period_records_merge_in_memory() {
 
 #[test]
 fn metric_storage_increment_and_server_batch_round_trip() {
-    let dir = std::env::temp_dir().join(format!("cloudsidra-edge-mace-opt-{}", uuid::Uuid::new_v4()));
+    let dir =
+        std::env::temp_dir().join(format!("cloudsidra-edge-mace-opt-{}", uuid::Uuid::new_v4()));
     let _ = std::fs::remove_dir_all(&dir);
     let storage = MetricStorage::open(&dir).expect("open mace storage");
 

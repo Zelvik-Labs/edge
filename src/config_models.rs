@@ -600,8 +600,8 @@ pub struct GlobalHTTPAccessLogConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct NodeConfigPayload {
- #[serde(default)]
- pub telemetry: crate::telemetry::Binding,
+    #[serde(default)]
+    pub telemetry: crate::telemetry::Binding,
     pub id: Option<i64>,
     #[serde(rename = "nodeId")]
     pub node_id: Option<String>,

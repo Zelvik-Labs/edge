@@ -8,13 +8,11 @@
 //! Usage: cargo run -p cloudsidra-edge-transport --release --example \
 //!          sim_acceptance > matrix.csv
 
-use cloudsidra_edge_transport::cc::reference::{
-    Bbr3Ref, CubicRef, LossBlindRef, NewRenoRef,
-};
 use cloudsidra_edge_transport::cc::CongestionController;
+use cloudsidra_edge_transport::cc::reference::{Bbr3Ref, CubicRef, LossBlindRef, NewRenoRef};
 use cloudsidra_edge_transport::edgecc::{EdgeCc, PathPrior, Tier};
 use cloudsidra_edge_transport::sim::{
-    run, run_multi, Aqm, FlowSpec, Policer, RouteSwitch, SimConfig, SimResult,
+    Aqm, FlowSpec, Policer, RouteSwitch, SimConfig, SimResult, run, run_multi,
 };
 use std::time::Duration;
 
@@ -40,17 +38,38 @@ enum Vk {
 }
 
 const VARIANTS: &[Variant] = &[
-    Variant { name: "edgecc", kind: Vk::Edge(false, false) },
+    Variant {
+        name: "edgecc",
+        kind: Vk::Edge(false, false),
+    },
     Variant {
         name: "edgecc_no_prand",
         kind: Vk::Edge(true, false),
     },
-    Variant { name: "edgecc_loss_blind", kind: Vk::LossBlindFlag },
-    Variant { name: "edgecc_prior", kind: Vk::Edge(false, true) },
-    Variant { name: "bbr3ref", kind: Vk::Bbr3 },
-    Variant { name: "lossblindref", kind: Vk::LossBlindRef },
-    Variant { name: "cubicref", kind: Vk::Cubic },
-    Variant { name: "newrenoref", kind: Vk::NewReno },
+    Variant {
+        name: "edgecc_loss_blind",
+        kind: Vk::LossBlindFlag,
+    },
+    Variant {
+        name: "edgecc_prior",
+        kind: Vk::Edge(false, true),
+    },
+    Variant {
+        name: "bbr3ref",
+        kind: Vk::Bbr3,
+    },
+    Variant {
+        name: "lossblindref",
+        kind: Vk::LossBlindRef,
+    },
+    Variant {
+        name: "cubicref",
+        kind: Vk::Cubic,
+    },
+    Variant {
+        name: "newrenoref",
+        kind: Vk::NewReno,
+    },
 ];
 
 fn build(v: &Variant, cfg: &SimConfig) -> Box<dyn CongestionController> {
@@ -116,11 +135,7 @@ fn qdelay_quantiles(res: &SimResult, base_rtt_us: u64) -> (u64, u64, u64) {
 }
 
 fn fct_us(res: &SimResult, _total: u64, cap_us: u64) -> u64 {
-    if res.fct_us > 0 {
-        res.fct_us
-    } else {
-        cap_us
-    }
+    if res.fct_us > 0 { res.fct_us } else { cap_us }
 }
 
 fn seed_for(cell_id: u64, replica: u32) -> u64 {
@@ -184,10 +199,7 @@ fn run_cell(v: &Variant, cfg: &SimConfig, flows: u32, cell: &str, replica: u32) 
     } else {
         let mut ccs: Vec<Box<dyn CongestionController>> =
             (0..flows).map(|_| build(v, &cfg)).collect();
-        let specs: Vec<FlowSpec> = ccs
-            .iter_mut()
-            .map(|cc| FlowSpec::new(&mut **cc))
-            .collect();
+        let specs: Vec<FlowSpec> = ccs.iter_mut().map(|cc| FlowSpec::new(&mut **cc)).collect();
         let res = run_multi(&cfg, specs);
         let mut goodputs = Vec::new();
         for (i, fr) in res.flows.iter().enumerate() {

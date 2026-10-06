@@ -219,6 +219,12 @@ enum Commands {
     Restart,
     /// Install the cloud node as a systemd service and global command
     Install,
+    /// Internal upgrade recovery supervisor.
+    #[command(hide = true)]
+    UpgradeGuard {
+        #[arg(long)]
+        manifest: PathBuf,
+    },
     /// Upgrade the installed binary from GitHub Releases
     Upgrade {
         /// Release tag to install, for example v1.1.6. Defaults to latest.
@@ -607,7 +613,7 @@ fn spawn_xdp_port_sync_task(rt: &tokio::runtime::Runtime, enabled: bool) {
                 Err(err) => {
                     consecutive_errors = consecutive_errors.saturating_add(1);
                     let message = format!(
-                        "xdp.proxy.ports sync failed consecutive={} reason={}",
+                        "xdp.proxy.ports sync failed consecutive={} reason={:#}",
                         consecutive_errors, err
                     );
                     warn!("{message}");
@@ -1953,12 +1959,12 @@ struct UpgradeOptions {
     no_restart: bool,
 }
 
-use cloudsidra_edge::node_upgrade::{
-    XDP_EBPF_OBJECT_NAME, backup_current_binary, detect_release_asset, download_to_file,
-    extract_release_payload, install_xdp_ebpf_object_to_runtime, replace_binary,
-};
 #[cfg(test)]
 use cloudsidra_edge::node_upgrade::select_release_asset;
+use cloudsidra_edge::node_upgrade::{
+    XDP_EBPF_OBJECT_NAME, detect_release_asset, download_to_file, extract_release_payload,
+    install_release_payload, install_xdp_ebpf_object_to_runtime,
+};
 
 #[cfg(target_os = "linux")]
 const CLOUDSIDRA_EDGE_SYSTEMD_SERVICE: &str = "cloudsidra-edge.service";
@@ -2218,17 +2224,6 @@ fn runtime_root_for_upgrade(install_binary: &Path) -> anyhow::Result<PathBuf> {
     )
 }
 
-fn install_xdp_ebpf_object(
-    source: Option<&Path>,
-    install_binary: &Path,
-) -> anyhow::Result<Option<PathBuf>> {
-    let Some(source) = source else {
-        return Ok(None);
-    };
-    let runtime_root = runtime_root_for_upgrade(install_binary)?;
-    install_xdp_ebpf_object_to_runtime(source, &runtime_root).map(Some)
-}
-
 fn repair_missing_xdp_ebpf_object(
     runtime_root: &Path,
     install_binary: &Path,
@@ -2268,7 +2263,8 @@ fn repair_missing_xdp_ebpf_object_for_current_runtime(
         return;
     }
 
-    let install_binary = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cloudsidra-edge"));
+    let install_binary =
+        std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cloudsidra-edge"));
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     match repair_missing_xdp_ebpf_object(node_paths.runtime_root(), &install_binary, &cwd) {
         Ok(Some(repair)) => warn!(
@@ -2395,18 +2391,27 @@ fn upgrade_binary(options: UpgradeOptions) -> anyhow::Result<()> {
         println!("{}", t("upgrade.extracting"));
         let payload = extract_release_payload(&archive_path, &tmp_dir)?;
 
-        let backup_path = backup_current_binary(&install_binary, &options.backup_dir, &version)?;
-        println!("{}: {}", t("upgrade.backup"), backup_path.display());
-
-        replace_binary(&payload.binary, &install_binary)?;
-        println!("{}: {}", t("upgrade.installed"), install_binary.display());
-        match install_xdp_ebpf_object(payload.xdp_ebpf_object.as_deref(), &install_binary)? {
-            Some(path) => println!("{}: {}", t("upgrade.xdp_object_installed"), path.display()),
-            None => println!("{}", t("upgrade.xdp_object_missing")),
-        }
-
+        let root = runtime_root_for_upgrade(&install_binary)?;
+        let installation = install_release_payload(
+            &payload,
+            &install_binary,
+            &root,
+            &options.backup_dir,
+            &version,
+        )?;
+        println!(
+            "Upgrade backup manifest: {}",
+            installation.manifest.display()
+        );
         if !options.no_restart {
-            restart_after_upgrade(&install_binary)?;
+            #[cfg(target_os = "linux")]
+            if systemd_service_exists() && systemd_service_is_active() {
+                installation.restart_with_rollback()?;
+            } else if let Err(error) = restart_after_upgrade(&install_binary) {
+                installation.rollback()?;
+                restart_after_upgrade(&install_binary)?;
+                return Err(error);
+            }
         }
 
         Ok(())
@@ -2515,7 +2520,11 @@ mod upgrade_tests {
             let mut archive = tar::Builder::new(encoder);
 
             append_test_tar_file(&mut archive, "cloudsidra-edge", b"binary")?;
-            append_test_tar_file(&mut archive, "data/cloudsidra-edge-xdp-ebpf.o", b"ebpf-object")?;
+            append_test_tar_file(
+                &mut archive,
+                "data/cloudsidra-edge-xdp-ebpf.o",
+                b"ebpf-object",
+            )?;
             archive.finish()?;
             let encoder = archive.into_inner()?;
             encoder.finish()?;
@@ -2700,7 +2709,10 @@ WorkingDirectory='/opt/cloudsidra/edge'
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
             .unwrap_or(0);
-        std::env::temp_dir().join(format!("cloudsidra-edge-{name}-{}-{nanos}", std::process::id()))
+        std::env::temp_dir().join(format!(
+            "cloudsidra-edge-{name}-{}-{nanos}",
+            std::process::id()
+        ))
     }
 
     fn append_test_tar_file(
@@ -2775,6 +2787,9 @@ fn main() -> anyhow::Result<()> {
     raise_nofile_limit();
 
     match cli.command {
+        Some(Commands::UpgradeGuard { manifest }) => {
+            cloudsidra_edge::node_upgrade::run_upgrade_guard(&manifest)?
+        }
         None => {
             // Default: Foreground
             run_node(cli.monitor_port, cli.monitor_clear)?;
@@ -3134,9 +3149,8 @@ fn xdp_health_fallback_reason(status: &cloudsidra_edge::xdp::XdpStatusSnapshot) 
 /// this run before the process exits. A graceful upgrade (SIGQUIT) is
 /// deliberately skipped: the successor adopts the pinned dataplane.
 struct XdpShutdownService {
-    phase: parking_lot::Mutex<
-        tokio::sync::broadcast::Receiver<pingora_core::server::ExecutionPhase>,
-    >,
+    phase:
+        parking_lot::Mutex<tokio::sync::broadcast::Receiver<pingora_core::server::ExecutionPhase>>,
 }
 
 #[async_trait::async_trait]
@@ -3162,11 +3176,8 @@ impl pingora_core::services::background::BackgroundService for XdpShutdownServic
             info!("graceful upgrade in progress — XDP dataplane left for the successor");
             return;
         }
-        match tokio::time::timeout(
-            Duration::from_secs(3),
-            cloudsidra_edge::xdp::detach(false),
-        )
-        .await
+        match tokio::time::timeout(Duration::from_secs(3), cloudsidra_edge::xdp::detach(false))
+            .await
         {
             Ok(Ok(())) => info!("XDP dataplane detached during shutdown"),
             Ok(Err(err)) => warn!("XDP detach during shutdown failed: {err}"),
@@ -3178,6 +3189,47 @@ impl pingora_core::services::background::BackgroundService for XdpShutdownServic
 fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()> {
     let node_paths = cloudsidra_edge::paths::NodePaths::current();
     node_paths.ensure_runtime_dirs().ok();
+
+    // Panic sites must survive a dropped run.log batch or a journald that
+    // cannot store (e.g. a full filesystem): mirror every panic to
+    // logs/panic.log best-effort, then fall through to the default stderr
+    // hook. Without this a task or process panic under I/O pressure leaves
+    // no thread/location evidence at all.
+    {
+        let panic_log = node_paths.logs_dir().join("panic.log");
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            use std::io::Write as _;
+            if let Ok(mut file) = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&panic_log)
+            {
+                let location = info
+                    .location()
+                    .map(|loc| format!("{}:{}:{}", loc.file(), loc.line(), loc.column()))
+                    .unwrap_or_else(|| "unknown".to_string());
+                let payload = info
+                    .payload()
+                    .downcast_ref::<&str>()
+                    .copied()
+                    .or_else(|| {
+                        info.payload()
+                            .downcast_ref::<String>()
+                            .map(String::as_str)
+                    })
+                    .unwrap_or("<non-string payload>");
+                let thread = std::thread::current();
+                let name = thread.name().unwrap_or("<unnamed>");
+                let secs = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                let _ = writeln!(file, "{secs} panic thread={name} at {location}: {payload}");
+            }
+            previous(info);
+        }));
+    }
 
     // 0. Ensure single instance and write PID using flock
     use std::io::Write;
@@ -3359,9 +3411,21 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         hm_start.start().await;
     });
 
-    if let Err(e)=cloudsidra_edge::telemetry::initialize(){error!("telemetry spool initialization failed: {}",e);cloudsidra_edge::telemetry::record_gap("core",cloudsidra_edge::utils::time::now_timestamp(),&e.to_string());}
- let telemetry_core_api=api_config.clone();rt.spawn(cloudsidra_edge::telemetry::replay(telemetry_core_api,true));
- let telemetry_detail_api=api_config.clone();rt.spawn(cloudsidra_edge::telemetry::replay(telemetry_detail_api,false));
+    if let Err(e) = cloudsidra_edge::telemetry::initialize() {
+        error!("telemetry spool initialization failed: {}", e);
+        cloudsidra_edge::telemetry::record_gap(
+            "core",
+            cloudsidra_edge::utils::time::now_timestamp(),
+            &e.to_string(),
+        );
+    }
+    let telemetry_core_api = api_config.clone();
+    rt.spawn(cloudsidra_edge::telemetry::replay(telemetry_core_api, true));
+    let telemetry_detail_api = api_config.clone();
+    rt.spawn(cloudsidra_edge::telemetry::replay(
+        telemetry_detail_api,
+        false,
+    ));
     // 3. Start Background Syncers
     let cs = config_store.clone();
     let ac = api_config.clone();
@@ -3581,14 +3645,12 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         tcp_manager.start_listeners().await;
     });
 
-    my_server.add_service(
-        pingora_core::services::background::background_service(
-            "xdp-shutdown",
-            XdpShutdownService {
-                phase: parking_lot::Mutex::new(my_server.watch_execution_phase()),
-            },
-        ),
-    );
+    my_server.add_service(pingora_core::services::background::background_service(
+        "xdp-shutdown",
+        XdpShutdownService {
+            phase: parking_lot::Mutex::new(my_server.watch_execution_phase()),
+        },
+    ));
 
     // SIGINT takes Pingora's fast-shutdown path: the shutdown broadcast
     // never reaches services, so a dedicated listener runs a bounded
@@ -3609,9 +3671,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     }
 
     info!("CloudSidra-Edge (PID {}) is ready.", std::process::id());
-    my_server.run_forever();
-    #[allow(unreachable_code)]
-    Ok(())
+    my_server.run_forever()
 }
 
 fn init_logging(node_paths: &cloudsidra_edge::paths::NodePaths) {
@@ -3695,7 +3755,9 @@ mod tests {
         assert!(is_cloudsidra_edge_binary_name("cloudsidra-edge"));
         assert!(is_cloudsidra_edge_binary_name("cloudsidra-edge"));
         assert!(!is_cloudsidra_edge_binary_name("bash"));
-        assert!(!is_cloudsidra_edge_binary_name("install-cloudsidra-edge.sh"));
+        assert!(!is_cloudsidra_edge_binary_name(
+            "install-cloudsidra-edge.sh"
+        ));
     }
 
     #[test]

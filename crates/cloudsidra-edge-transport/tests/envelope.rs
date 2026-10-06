@@ -2,7 +2,7 @@
 //! low-belief REFILL, and the inviolable clamp() contract.
 
 use cloudsidra_edge_transport::envelope::{
-    Envelope, DEFAULT_HEADROOM_MILLI, REFILL_AFTER_ROUNDS, REFILL_BELIEF_MILLI,
+    DEFAULT_HEADROOM_MILLI, Envelope, REFILL_AFTER_ROUNDS, REFILL_BELIEF_MILLI,
 };
 
 #[test]

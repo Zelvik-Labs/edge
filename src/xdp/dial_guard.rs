@@ -15,6 +15,8 @@
 //! half-applied guard never wedges a restart. Guard hits are readable
 //! through `dial_guard_hits` and surface in /status.
 
+use std::time::Duration;
+
 use crate::kernel_syn_defense::{CommandOutput, CommandRunner, SynproxySysctlStore};
 
 pub(crate) const DIAL_GUARD_FAMILY: &str = "inet";
@@ -24,6 +26,13 @@ pub(crate) const DIAL_GUARD_COUNTER: &str = "dial_guard_hits";
 
 const IP_LOCAL_RESERVED_PORTS: &str = "net.ipv4.ip_local_reserved_ports";
 const IP_LOCAL_PORT_RANGE: &str = "net.ipv4.ip_local_port_range";
+
+/// Every nftables invocation is a child process whose spawn and wait
+/// ride the tokio process driver. A child that never reports back (for
+/// example during post-crash resource pressure) must not suspend bridge
+/// startup forever: bound each call and surface the timeout as an
+/// ordinary command failure so the caller's explicit error path runs.
+const NFT_COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// What `ensure_dial_port_guard` established — reported to /status so an
 /// operator can tell a guarded span from a partial install.
@@ -58,9 +67,7 @@ pub(crate) fn validate_dial_port_range(
         .and_then(|v| v.parse().ok())
         .ok_or_else(|| anyhow::anyhow!("malformed {IP_LOCAL_PORT_RANGE}: {raw:?}"))?;
     if start < lo || end > hi {
-        anyhow::bail!(
-            "dial port range {start}-{end} escapes ip_local_port_range {lo}-{hi}"
-        );
+        anyhow::bail!("dial port range {start}-{end} escapes ip_local_port_range {lo}-{hi}");
     }
     Ok(())
 }
@@ -135,10 +142,20 @@ pub(crate) fn unpin_dial_port_range(
 
 async fn nft(runner: &impl CommandRunner, args: &[&str]) -> anyhow::Result<String> {
     let args: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
-    let output: CommandOutput = runner
-        .run("nft", &args)
-        .await
-        .map_err(|err| anyhow::anyhow!("failed to execute nft; is nftables installed? {err}"))?;
+    let output: CommandOutput = match tokio::time::timeout(
+        NFT_COMMAND_TIMEOUT,
+        runner.run("nft", &args),
+    )
+    .await
+    {
+        Ok(result) => result
+            .map_err(|err| anyhow::anyhow!("failed to execute nft; is nftables installed? {err}"))?,
+        Err(_) => anyhow::bail!(
+            "nft {} timed out after {}s",
+            args.join(" "),
+            NFT_COMMAND_TIMEOUT.as_secs()
+        ),
+    };
     if output.success {
         return Ok(output.stdout);
     }
@@ -180,7 +197,11 @@ pub(crate) async fn install_dial_guard_rules(
 ) -> anyhow::Result<()> {
     let range = format!("{start}-{end}");
     nft(runner, &["--version"]).await?;
-    nft_allow_exists(runner, &["add", "table", DIAL_GUARD_FAMILY, DIAL_GUARD_TABLE]).await?;
+    nft_allow_exists(
+        runner,
+        &["add", "table", DIAL_GUARD_FAMILY, DIAL_GUARD_TABLE],
+    )
+    .await?;
     nft_allow_exists(
         runner,
         &[
@@ -222,7 +243,11 @@ pub(crate) async fn install_dial_guard_rules(
     nft_ignore_missing(
         runner,
         &[
-            "flush", "chain", DIAL_GUARD_FAMILY, DIAL_GUARD_TABLE, DIAL_GUARD_CHAIN,
+            "flush",
+            "chain",
+            DIAL_GUARD_FAMILY,
+            DIAL_GUARD_TABLE,
+            DIAL_GUARD_CHAIN,
         ],
     )
     .await?;
@@ -254,9 +279,7 @@ pub(crate) async fn install_dial_guard_rules(
 
 /// Drop the whole guard table — rules and counter together. Missing
 /// objects are fine; the guard may have been half-installed.
-pub(crate) async fn remove_dial_guard_rules(
-    runner: &impl CommandRunner,
-) -> anyhow::Result<()> {
+pub(crate) async fn remove_dial_guard_rules(runner: &impl CommandRunner) -> anyhow::Result<()> {
     nft_ignore_missing(
         runner,
         &["delete", "table", DIAL_GUARD_FAMILY, DIAL_GUARD_TABLE],
@@ -284,10 +307,9 @@ pub(crate) async fn dial_guard_hits(runner: &impl CommandRunner) -> anyhow::Resu
     json["nftables"]
         .as_array()
         .and_then(|entries| {
-            entries.iter().find_map(|entry| {
-                entry["counter"]["packets"]
-                    .as_u64()
-            })
+            entries
+                .iter()
+                .find_map(|entry| entry["counter"]["packets"].as_u64())
         })
         .ok_or_else(|| anyhow::anyhow!("nft counter {DIAL_GUARD_COUNTER} not found in output"))
 }
@@ -347,12 +369,7 @@ pub(crate) fn remove_dial_port_guard_blocking(
     start: u16,
     end: u16,
 ) -> anyhow::Result<()> {
-    let nft_result = match nft_blocking(&[
-        "delete",
-        "table",
-        DIAL_GUARD_FAMILY,
-        DIAL_GUARD_TABLE,
-    ]) {
+    let nft_result = match nft_blocking(&["delete", "table", DIAL_GUARD_FAMILY, DIAL_GUARD_TABLE]) {
         Ok(()) => Ok(()),
         Err(err) if is_missing_error(&err) => Ok(()),
         Err(err) => Err(err),
@@ -420,9 +437,13 @@ mod tests {
     struct FakeRunner {
         calls: Mutex<Vec<Vec<String>>>,
         outputs: Mutex<Vec<(String, CommandOutput)>>,
+        hang: std::sync::atomic::AtomicBool,
     }
 
     impl FakeRunner {
+        fn hang(&self) {
+            self.hang.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
         fn push(&self, needle: &str, output: CommandOutput) {
             self.outputs
                 .lock()
@@ -443,9 +464,15 @@ mod tests {
     impl CommandRunner for FakeRunner {
         async fn run(&self, _program: &str, args: &[String]) -> io::Result<CommandOutput> {
             self.calls.lock().unwrap().push(args.to_vec());
+            if self.hang.load(std::sync::atomic::Ordering::Relaxed) {
+                std::future::pending::<()>().await;
+            }
             let joined = args.join(" ");
             let mut outputs = self.outputs.lock().unwrap();
-            if let Some(pos) = outputs.iter().position(|(needle, _)| joined.contains(needle)) {
+            if let Some(pos) = outputs
+                .iter()
+                .position(|(needle, _)| joined.contains(needle))
+            {
                 return Ok(outputs.remove(pos).1);
             }
             Ok(CommandOutput {
@@ -502,7 +529,9 @@ mod tests {
             .await
             .unwrap();
         assert!(runner.ran(&format!("add table {DIAL_GUARD_FAMILY} {DIAL_GUARD_TABLE}")));
-        assert!(runner.ran(&format!("add counter {DIAL_GUARD_FAMILY} {DIAL_GUARD_TABLE} {DIAL_GUARD_COUNTER}")));
+        assert!(runner.ran(&format!(
+            "add counter {DIAL_GUARD_FAMILY} {DIAL_GUARD_TABLE} {DIAL_GUARD_COUNTER}"
+        )));
         assert!(runner.ran("tcp dport 40000-49999"));
         assert!(runner.ran("udp dport 40000-49999"));
         // Every DROP rule must reference the named counter for /status hits.
@@ -512,11 +541,13 @@ mod tests {
             .filter(|args| args.join(" ").contains("drop"))
             .count();
         assert_eq!(drops, 2);
-        assert!(runner
-            .calls()
-            .iter()
-            .filter(|args| args.join(" ").contains("drop"))
-            .all(|args| args.join(" ").contains(DIAL_GUARD_COUNTER)));
+        assert!(
+            runner
+                .calls()
+                .iter()
+                .filter(|args| args.join(" ").contains("drop"))
+                .all(|args| args.join(" ").contains(DIAL_GUARD_COUNTER))
+        );
     }
 
     #[tokio::test]
@@ -588,5 +619,31 @@ mod tests {
         assert_eq!(report.reserved_ports_value, "40000-49999");
         assert!(report.nft_installed);
         assert!(runner.ran("drop"));
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn ensure_errors_when_nft_child_never_reports() {
+        let store = store();
+        let runner = FakeRunner::default();
+        runner.hang();
+        let err = ensure_dial_port_guard(&store, &runner, 40_000, 49_999)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("timed out"));
+        assert!(runner.ran("--version"));
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn removal_errors_when_nft_child_never_reports() {
+        let store = store();
+        let runner = FakeRunner::default();
+        runner.hang();
+        let err = remove_dial_port_guard(&store, &runner, 40_000, 49_999)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("timed out"));
+        // The sysctl unpin still runs after the nft failure — teardown is
+        // best-effort-complete rather than skipped on the first error.
+        assert!(!runner.calls().is_empty());
     }
 }

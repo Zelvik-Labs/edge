@@ -27,11 +27,9 @@ impl CongestionController for Tap {
     }
     fn on_rate_sample(&mut self, rs: &RateSample, in_flight: u64, rtt: &RttState) {
         if rs.delivered > 0 {
-            self.rates.borrow_mut().push((
-                rs.now.micros(),
-                rs.delivery_rate_bps(),
-                rs.delivered,
-            ));
+            self.rates
+                .borrow_mut()
+                .push((rs.now.micros(), rs.delivery_rate_bps(), rs.delivered));
         }
         self.inner.on_rate_sample(rs, in_flight, rtt);
         self.snap.borrow_mut().push((
@@ -82,7 +80,11 @@ impl CongestionController for Tap {
     fn on_loss_undo(&mut self, now: cloudsidra_edge_transport::TransportInstant) {
         self.inner.on_loss_undo(now)
     }
-    fn on_idle_restart(&mut self, now: cloudsidra_edge_transport::TransportInstant, idle: Duration) {
+    fn on_idle_restart(
+        &mut self,
+        now: cloudsidra_edge_transport::TransportInstant,
+        idle: Duration,
+    ) {
         self.inner.on_idle_restart(now, idle)
     }
     fn on_mss_update(&mut self, mss: u64) {
@@ -100,11 +102,11 @@ impl CongestionController for Tap {
 }
 
 fn run_bbr3_probe() {
-    use cloudsidra_edge_transport::cc::reference::Bbr3Ref;
+    use cloudsidra_edge_transport::TransportInstant;
     use cloudsidra_edge_transport::cc::CongestionController;
+    use cloudsidra_edge_transport::cc::reference::Bbr3Ref;
     use cloudsidra_edge_transport::rate_sample::RateSample;
     use cloudsidra_edge_transport::rtt::RttState;
-    use cloudsidra_edge_transport::TransportInstant;
     struct T {
         inner: Bbr3Ref,
         rates: Rc<RefCell<Vec<(u64, u64, u64, u64)>>>,
@@ -242,29 +244,53 @@ fn main() {
     let cc = &cc.inner;
     eprintln!(
         "completed={} delivered={} fct_us={} drops={} loss_events={} rtos={} retx={}",
-        res.completed, res.delivered_bytes, res.fct_us, res.drops, res.loss_events, res.rto_events, res.retransmits
+        res.completed,
+        res.delivered_bytes,
+        res.fct_us,
+        res.drops,
+        res.loss_events,
+        res.rto_events,
+        res.retransmits
     );
     let csnap = cc.snapshot();
     eprintln!(
         "mode={} reason={} cwnd={} pacing={:?} bw_lo={:?} bw_hi={:?} p_rand={:?} belief={:?} env={:?} inflight_lo={:?}",
-        csnap.mode, csnap.reason_code, csnap.cwnd_bytes, csnap.pacing_rate_bps,
-        csnap.bandwidth_lo_bps, csnap.bandwidth_hi_bps, csnap.p_rand_milli,
-        csnap.belief_milli, csnap.envelope_bytes, csnap.inflight_lo_bytes,
+        csnap.mode,
+        csnap.reason_code,
+        csnap.cwnd_bytes,
+        csnap.pacing_rate_bps,
+        csnap.bandwidth_lo_bps,
+        csnap.bandwidth_hi_bps,
+        csnap.p_rand_milli,
+        csnap.belief_milli,
+        csnap.envelope_bytes,
+        csnap.inflight_lo_bytes,
     );
     eprintln!(
         "model: bw_est={:?} bw_max={:?} bdp={:?} base_rtt={:?} qdelay={:?} lo={:.2}",
-        cc.model.bw_est(), cc.model.bw_max(), cc.model.bdp_est(),
-        cc.model.base_rtt(), cc.model.qdelay(), cc.infer.log_odds(),
+        cc.model.bw_est(),
+        cc.model.bw_max(),
+        cc.model.bdp_est(),
+        cc.model.base_rtt(),
+        cc.model.qdelay(),
+        cc.infer.log_odds(),
     );
     eprintln!(
         "loss_cols(qd,quiet) bytes={:?} events={:?} burst_len={:.2} p_rand={:?} lt_bw={:?} dsq={:?}",
-        cc.model.loss_columns(), cc.model.loss_events(), cc.model.burst_len(),
-        cc.model.p_rand(), cc.model.lt_bw(), cc.model.delay_signal_quality(),
+        cc.model.loss_columns(),
+        cc.model.loss_events(),
+        cc.model.burst_len(),
+        cc.model.p_rand(),
+        cc.model.lt_bw(),
+        cc.model.delay_signal_quality(),
     );
     eprintln!(
         "infer weights: ce={:.2} qdelay={:.2} loss_qd={:.2} quiet={:.2} plateau={:.2}",
-        cc.infer.w_ce_total, cc.infer.w_qdelay_total, cc.infer.w_loss_qd_total,
-        cc.infer.w_quiet_total, cc.infer.w_plateau_total,
+        cc.infer.w_ce_total,
+        cc.infer.w_qdelay_total,
+        cc.infer.w_loss_qd_total,
+        cc.infer.w_quiet_total,
+        cc.infer.w_plateau_total,
     );
     // cwnd histogram over time
     let mut buckets = std::collections::BTreeMap::new();
@@ -292,7 +318,10 @@ fn main() {
         let mut buckets: std::collections::BTreeMap<u64, Vec<(u64, u64, u64, u64)>> =
             std::collections::BTreeMap::new();
         for &(t, cwnd, pacing, slope, _p, inf) in s.iter() {
-            buckets.entry(t / 1_000_000).or_default().push((cwnd, pacing, slope, inf));
+            buckets
+                .entry(t / 1_000_000)
+                .or_default()
+                .push((cwnd, pacing, slope, inf));
         }
         eprintln!("per-second (sec, n, cwnd_p50, pacing_p50, slope_p50, inflight_p50):");
         for (sec, rows) in &buckets {
@@ -350,7 +379,12 @@ fn main() {
             cfg.rate_bps as f64 / 1e6,
         );
         for (t, r, d) in rs.iter().rev().take(8) {
-            eprintln!("  t={}ms rate={:.2}MB/s delivered={}", t / 1000, *r as f64 / 1e6, d);
+            eprintln!(
+                "  t={}ms rate={:.2}MB/s delivered={}",
+                t / 1000,
+                *r as f64 / 1e6,
+                d
+            );
         }
     }
     // raw event window around a livelock cycle
@@ -365,10 +399,20 @@ fn main() {
     }
     // sample cwnd at a few time points
     for frac in [0.1f64, 0.3, 0.5, 0.7, 0.9] {
-        let t = (res.fct_us.max(res.trace.last().map(|r| r.t_us).unwrap_or(0)) as f64 * frac) as u64;
+        let t = (res
+            .fct_us
+            .max(res.trace.last().map(|r| r.t_us).unwrap_or(0)) as f64
+            * frac) as u64;
         let row = res.trace.iter().find(|r| r.t_us >= t);
         if let Some(r) = row {
-            eprintln!("t={}ms kind={:?} cwnd={} flight={} delivered={}", r.t_us / 1000, r.kind, r.cwnd, r.in_flight, r.delivered_total);
+            eprintln!(
+                "t={}ms kind={:?} cwnd={} flight={} delivered={}",
+                r.t_us / 1000,
+                r.kind,
+                r.cwnd,
+                r.in_flight,
+                r.delivered_total
+            );
         }
     }
     let _ = TraceKind::Send;

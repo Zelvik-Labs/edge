@@ -177,7 +177,10 @@ pub fn save_xdp_enabled(path: &Path, enabled: bool) -> Result<()> {
 
     let mut root = read_yaml_mapping(path)?;
     if let Some(value) = root.get_mut(serde_yaml::Value::String("xdp".to_string()))
-        && !matches!(value, serde_yaml::Value::Mapping(_) | serde_yaml::Value::Null)
+        && !matches!(
+            value,
+            serde_yaml::Value::Mapping(_) | serde_yaml::Value::Null
+        )
     {
         anyhow::bail!("{}: `xdp` is not a YAML mapping", path.display());
     }
@@ -266,10 +269,7 @@ mod tests {
 
     #[test]
     fn merge_xdp_enabled_preserves_operational_fields() {
-        let dir = std::env::temp_dir().join(format!(
-            "xdp-merge-test-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("xdp-merge-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("api_node.yaml");
         std::fs::write(
@@ -282,10 +282,7 @@ mod tests {
             serde_yaml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(value["xdp"]["enabled"].as_bool(), Some(true));
         assert_eq!(value["xdp"]["attachMode"].as_str(), Some("skb"));
-        assert_eq!(
-            value["xdp"]["interfaces"][0]["name"].as_str(),
-            Some("eth0")
-        );
+        assert_eq!(value["xdp"]["interfaces"][0]["name"].as_str(), Some("eth0"));
         std::fs::remove_dir_all(&dir).ok();
     }
 

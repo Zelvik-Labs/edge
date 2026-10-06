@@ -16,7 +16,10 @@ pub fn desired_release(journal: &PatchJournal) -> DesiredRelease {
     desired_release_for_cursor(journal, 0)
 }
 
-pub fn desired_release_for_cursor(journal: &PatchJournal, local_config_version: i64) -> DesiredRelease {
+pub fn desired_release_for_cursor(
+    journal: &PatchJournal,
+    local_config_version: i64,
+) -> DesiredRelease {
     let snapshot_required = journal.snapshot_required() || local_config_version == 0;
     DesiredRelease {
         release_id: journal.last_release_id().to_string(),

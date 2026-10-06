@@ -5,7 +5,7 @@
 
 use cloudsidra_edge_transport::cc::reference::{CubicRef, NewRenoRef};
 use cloudsidra_edge_transport::sim::{
-    run, run_multi, Aqm, FlowSpec, Policer, RouteSwitch, SimConfig, SimResult, TraceKind,
+    Aqm, FlowSpec, Policer, RouteSwitch, SimConfig, SimResult, TraceKind, run, run_multi,
 };
 use std::time::Duration;
 
@@ -295,7 +295,11 @@ fn same_seed_same_trace() {
     cfg.random_loss = 0.005;
     let a = cubic_run(&cfg);
     let b = cubic_run(&cfg);
-    assert_eq!(a.trace_digest(), b.trace_digest(), "sim must be deterministic");
+    assert_eq!(
+        a.trace_digest(),
+        b.trace_digest(),
+        "sim must be deterministic"
+    );
 }
 
 /// Golden trace regression — the digest is pinned to the verified run;
