@@ -7,14 +7,14 @@ en2-b (netns en2-ns, 10.99.0.6). The full node runs in the foreground so
 the sweeper (rate-map GC, rate-cfg sync) is live.
 
 The per-source limiter is pressure-gated in userspace (disabled at Normal
-pressure). Debug builds honor CLOUDSIDRA_EDGE_XDP_TEST_PRESSURE=elevated so the
+pressure). Debug builds honor ZELVIK_EDGE_XDP_TEST_PRESSURE=elevated so the
 real config -> sync -> eBPF path is exercised without host memory pressure.
 Rate-map entry counts are read with bpftool by map id (maps are process-
 owned and intentionally unpinned).
 
 Usage (root, Linux):
     sudo python3 scripts/edge/en08_rate_probe.py \
-        --node-bin target/debug/cloudsidra-edge --out /tmp/en08.json
+        --node-bin target/debug/zelvik-edge --out /tmp/en08.json
 
 Subcommand (internal): --send ... runs inside the netns as the frame
 sender.
@@ -36,7 +36,7 @@ HOST_IF = "en2-a"
 PEER_IF = "en2-b"
 HOST_IP = "10.99.0.5"
 PEER_IP = "10.99.0.6"
-PIN_DIR = "/sys/fs/bpf/cloudsidra-edge-xdp"
+PIN_DIR = "/sys/fs/bpf/zelvik-edge-xdp"
 BPFTOOL_CANDIDATES = [
     "/usr/lib/linux-tools-5.15.0-191/bpftool",
     "bpftool",
@@ -227,17 +227,17 @@ def start_node(node_bin, home, cwd, udp_pps, window_ms, pfx4, gc_after):
     write_node_config(os.path.join(home, "configs", "api_node.yaml"),
                       udp_pps, window_ms, pfx4, gc_after)
     write_api_config(os.path.join(home, "configs", "api_node.yaml"))
-    # The node loads the eBPF object from $CLOUDSIDRA_EDGE_HOME/data/.
+    # The node loads the eBPF object from $ZELVIK_EDGE_HOME/data/.
     obj_src = os.path.normpath(os.path.join(
         os.path.dirname(os.path.abspath(node_bin)),
-        "..", "..", "data", "cloudsidra-edge-xdp-ebpf.o"))
+        "..", "..", "data", "zelvik-edge-xdp-ebpf.o"))
     os.makedirs(os.path.join(home, "data"), exist_ok=True)
     if os.path.exists(obj_src):
         import shutil
         shutil.copyfile(obj_src,
-                        os.path.join(home, "data", "cloudsidra-edge-xdp-ebpf.o"))
-    env = dict(os.environ, CLOUDSIDRA_EDGE_HOME=home, RUST_LOG="info",
-               CLOUDSIDRA_EDGE_XDP_TEST_PRESSURE="elevated")
+                        os.path.join(home, "data", "zelvik-edge-xdp-ebpf.o"))
+    env = dict(os.environ, ZELVIK_EDGE_HOME=home, RUST_LOG="info",
+               ZELVIK_EDGE_XDP_TEST_PRESSURE="elevated")
     log = open(os.path.join(cwd, "node.log"), "w")
     proc = subprocess.Popen([os.path.abspath(node_bin)],
                             cwd=cwd, env=env, stdout=log, stderr=log,

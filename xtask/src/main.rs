@@ -49,19 +49,19 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
-/// Resolve the pinned eBPF toolchain. `crates/cloudsidra-edge-xdp-ebpf/
+/// Resolve the pinned eBPF toolchain. `crates/zelvik-edge-xdp-ebpf/
 /// rust-toolchain.toml` is the single source of truth for the dated nightly;
-/// CLOUDSIDRA_EDGE_EBPF_TOOLCHAIN may override it. Never a bare `nightly` name:
+/// ZELVIK_EDGE_EBPF_TOOLCHAIN may override it. Never a bare `nightly` name:
 /// the release chain must build with the same verified dated toolchain that
 /// CI installed, not whatever `nightly` happens to resolve to.
 fn ebpf_toolchain() -> anyhow::Result<String> {
-    if let Ok(name) = std::env::var("CLOUDSIDRA_EDGE_EBPF_TOOLCHAIN") {
+    if let Ok(name) = std::env::var("ZELVIK_EDGE_EBPF_TOOLCHAIN") {
         let name = name.trim().to_string();
         if !name.is_empty() {
             return Ok(name);
         }
     }
-    let manifest_dir = PathBuf::from("crates").join("cloudsidra-edge-xdp-ebpf");
+    let manifest_dir = PathBuf::from("crates").join("zelvik-edge-xdp-ebpf");
     let toml_path = manifest_dir.join("rust-toolchain.toml");
     let toml = std::fs::read_to_string(&toml_path)
         .with_context(|| format!("failed to read {}", toml_path.display()))?;
@@ -98,7 +98,7 @@ fn build_ebpf(profile: &str) -> anyhow::Result<()> {
     let toolchain = ebpf_toolchain()?;
     ensure_bpf_toolchain(&toolchain)?;
     let target = "bpfel-unknown-none";
-    let crate_dir = PathBuf::from("crates").join("cloudsidra-edge-xdp-ebpf");
+    let crate_dir = PathBuf::from("crates").join("zelvik-edge-xdp-ebpf");
     // Spawn via `rustup run` so the nested build resolves the pinned sysroot
     // even when a parent cargo leaked RUSTUP_TOOLCHAIN/RUSTC into the env.
     let mut cmd = Command::new("rustup");
@@ -108,7 +108,7 @@ fn build_ebpf(profile: &str) -> anyhow::Result<()> {
         "cargo",
         "build",
         "--manifest-path",
-        "crates/cloudsidra-edge-xdp-ebpf/Cargo.toml",
+        "crates/zelvik-edge-xdp-ebpf/Cargo.toml",
         "--target",
         target,
         "-Z",
@@ -138,7 +138,7 @@ fn build_ebpf(profile: &str) -> anyhow::Result<()> {
             PathBuf::from(target_dir)
                 .join(target)
                 .join(profile_dir)
-                .join("cloudsidra-edge-xdp-ebpf"),
+                .join("zelvik-edge-xdp-ebpf"),
         );
     }
     candidates.extend([
@@ -146,11 +146,11 @@ fn build_ebpf(profile: &str) -> anyhow::Result<()> {
             .join("target")
             .join(target)
             .join(profile_dir)
-            .join("cloudsidra-edge-xdp-ebpf"),
+            .join("zelvik-edge-xdp-ebpf"),
         PathBuf::from("target")
             .join(target)
             .join(profile_dir)
-            .join("cloudsidra-edge-xdp-ebpf"),
+            .join("zelvik-edge-xdp-ebpf"),
     ]);
     let source = candidates
         .iter()
@@ -159,7 +159,7 @@ fn build_ebpf(profile: &str) -> anyhow::Result<()> {
         .unwrap_or_else(|| candidates[0].clone());
     let dest_dir = PathBuf::from("data");
     std::fs::create_dir_all(&dest_dir)?;
-    let dest = dest_dir.join("cloudsidra-edge-xdp-ebpf.o");
+    let dest = dest_dir.join("zelvik-edge-xdp-ebpf.o");
     std::fs::copy(&source, &dest).with_context(|| {
         format!(
             "failed to copy eBPF object from {} to {}",

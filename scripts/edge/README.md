@@ -22,7 +22,7 @@ sudo python3 scripts/edge/runner.py --list
 
 # 单功能拓扑（本机 netns，自动建/拆，自动 attach/detach）
 sudo python3 scripts/edge/runner.py --only T01 --mode protect \
-    --node-bin target/debug/cloudsidra-edge --out results.json
+    --node-bin target/debug/zelvik-edge --out results.json
 
 # 独立发包机拓扑（不 attach；只发包并读对端快照）
 sudo python3 scripts/edge/runner.py --topology external \

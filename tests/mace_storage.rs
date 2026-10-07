@@ -1,9 +1,9 @@
-use cloudsidra_edge::metrics::storage::{
+use zelvik_edge::metrics::storage::{
     MaceMemoryTier, MetricStorage, NODE_PERIOD_BYTES, SERVER_PERIOD_BYTES,
     apply_node_period_deltas, apply_server_period_update, fold_counter_deltas,
     mace_memory_observation, mace_memory_tier_for_stable_capacity,
 };
-use cloudsidra_edge::rpc::metrics::ServerMetricUpdate;
+use zelvik_edge::rpc::metrics::ServerMetricUpdate;
 
 fn sample_update() -> ServerMetricUpdate {
     ServerMetricUpdate {
@@ -66,7 +66,7 @@ fn packed_period_records_merge_in_memory() {
 #[test]
 fn metric_storage_increment_and_server_batch_round_trip() {
     let dir =
-        std::env::temp_dir().join(format!("cloudsidra-edge-mace-opt-{}", uuid::Uuid::new_v4()));
+        std::env::temp_dir().join(format!("zelvik-edge-mace-opt-{}", uuid::Uuid::new_v4()));
     let _ = std::fs::remove_dir_all(&dir);
     let storage = MetricStorage::open(&dir).expect("open mace storage");
 

@@ -837,7 +837,7 @@ async fn handle_message(
             }
         }
         "checksystemdservice" => {
-            let (ok, reply) = check_systemd_service("cloudsidra-edge").await;
+            let (ok, reply) = check_systemd_service("zelvik-edge").await;
             is_ok = ok;
             message_reply = reply;
         }

@@ -1,0 +1,52 @@
+[Unit]
+Description=Zelvik Edge (CDN / global traffic data-plane node)
+Documentation=file:/usr/share/doc/zelvik-edge/README.md
+Wants=network-online.target
+After=network-online.target zelvik-api.service
+
+[Service]
+Type=simple
+User=zelvik-edge
+Group=zelvik-edge
+# Standalone (single-node) mode is the default. Running the binary with no
+# subcommand starts the foreground server (run_node). It reads its runtime and
+# api config tree from CLOUD_NODE_HOME / the install dir.
+ExecStart=/usr/bin/zelvik-edge
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=60s
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Edge attaches eBPF (XDP), binds low ports and may raise interface affinity.
+# Provide the capabilities it needs; non-root user still applies.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=false
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_NET_ADMIN
+# Edge sizing: dedicated CPU/NIC; scale memory/FD per bandwidth (docs/08).
+LimitNOFILE=1048576
+LimitNPROC=65536
+TasksMax=65536
+LimitMEMLOCK=infinity
+MemoryMax=16G
+CPUQuota=800%
+
+Environment=CLOUD_NODE_MODE=standalone
+Environment=CLOUD_NODE_HOME=/var/lib/zelvik/edge
+Environment=ZELVIK_CONFIG_DIR=/etc/zelvik/edge
+Environment=ZELVIK_LOG_FORMAT=json
+Environment=TZ=Asia/Shanghai
+
+# node_id / secret / API endpoints rendered by the installer (${NODE_SECRET}).
+EnvironmentFile=-/etc/zelvik/edge/secrets.env
+
+[Install]
+WantedBy=multi-user.target

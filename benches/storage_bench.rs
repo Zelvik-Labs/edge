@@ -1,5 +1,5 @@
-use cloudsidra_edge::metrics::storage::{CacheMetaUpsert, MetricStorage};
-use cloudsidra_edge::rpc::metrics::ServerMetricUpdate;
+use zelvik_edge::metrics::storage::{CacheMetaUpsert, MetricStorage};
+use zelvik_edge::rpc::metrics::ServerMetricUpdate;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use std::hint::black_box;
 use std::path::PathBuf;

@@ -1,5 +1,5 @@
-use cloudsidra_edge::config::ConfigStore;
-use cloudsidra_edge::config_models::ServerConfig;
+use zelvik_edge::config::ConfigStore;
+use zelvik_edge::config_models::ServerConfig;
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::collections::HashMap;
 use std::hint::black_box;

@@ -21,7 +21,7 @@ Phases:
 
 Usage (root, Linux):
     sudo python3 scripts/edge/en12_queue_probe.py \
-        --node-bin target/debug/cloudsidra-edge --out /tmp/en12.json
+        --node-bin target/debug/zelvik-edge --out /tmp/en12.json
 """
 
 import argparse
@@ -39,7 +39,7 @@ HOST_IF = "en2-a"
 PEER_IF = "en2-b"
 HOST_IP = "10.99.0.5"
 PEER_IP = "10.99.0.6"
-PIN_DIR = "/sys/fs/bpf/cloudsidra-edge-xdp"
+PIN_DIR = "/sys/fs/bpf/zelvik-edge-xdp"
 PROXY_UDP_PORT = 443
 CLIENT_PORT = 53000
 
@@ -164,13 +164,13 @@ def start_node(node_bin, home, cwd, xsk_mode, extra_env=None):
     write_api_config(os.path.join(home, "configs", "api_node.yaml"))
     obj_src = os.path.normpath(os.path.join(
         os.path.dirname(os.path.abspath(node_bin)),
-        "..", "..", "data", "cloudsidra-edge-xdp-ebpf.o"))
+        "..", "..", "data", "zelvik-edge-xdp-ebpf.o"))
     os.makedirs(os.path.join(home, "data"), exist_ok=True)
     if os.path.exists(obj_src):
         import shutil
         shutil.copyfile(obj_src,
-                        os.path.join(home, "data", "cloudsidra-edge-xdp-ebpf.o"))
-    env = dict(os.environ, CLOUDSIDRA_EDGE_HOME=home, RUST_LOG="debug")
+                        os.path.join(home, "data", "zelvik-edge-xdp-ebpf.o"))
+    env = dict(os.environ, ZELVIK_EDGE_HOME=home, RUST_LOG="debug")
     if extra_env:
         env.update(extra_env)
     log = open(os.path.join(cwd, "node.log"), "w")
@@ -449,7 +449,7 @@ def main():
         started_at = time.time()
         proc = start_node(
             args.node_bin, home, cwd, "copy",
-            extra_env={"CLOUDSIDRA_EDGE_XDP_TEST_WITHDRAW_QUEUE": f"{HOST_IF}:1"},
+            extra_env={"ZELVIK_EDGE_XDP_TEST_WITHDRAW_QUEUE": f"{HOST_IF}:1"},
         )
         state = {}
         deadline = time.time() + 20

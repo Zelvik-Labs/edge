@@ -1,6 +1,6 @@
-# Cursor 规则：CloudSidra-Edge
+# Cursor 规则：Zelvik-Edge
 
-Edge 是公网数据面，修改必须优先保护现有代理、缓存、WAF、连接和资源稳定性。开始任务前先读取 docs/architecture.md、docs/grpc-api.md、docs/config-receive-audit.md、CloudSidra-Docs/docs/04-edge-integration.md 和 docs/cloudsidra-control-plane-plan.md。
+Edge 是公网数据面，修改必须优先保护现有代理、缓存、WAF、连接和资源稳定性。开始任务前先读取 docs/architecture.md、docs/grpc-api.md、docs/config-receive-audit.md、../docs/docs/04-edge-integration.md 和 docs/zelvik-control-plane-plan.md。
 
 硬约束：
 

@@ -50,7 +50,7 @@ const SPLICE_FLUSH_BUDGET: Duration = Duration::from_secs(2);
 pub(crate) fn splice_promotion_enabled() -> bool {
     static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ENABLED.get_or_init(|| {
-        std::env::var("CLOUDSIDRA_XDP_TCP_SPLICE")
+        std::env::var("ZELVIK_XDP_TCP_SPLICE")
             .map(|value| !matches!(value.as_str(), "0" | "false" | "off"))
             .unwrap_or(true)
     })
@@ -225,12 +225,12 @@ async fn try_promote_once(
     let client_key = linux::out_ct_key(
         client_flow.local_addr,
         client_flow.peer_addr,
-        cloudsidra_edge_xdp_common::XDP_PROTO_TCP,
+        zelvik_edge_xdp_common::XDP_PROTO_TCP,
     );
     let backend_key = linux::out_ct_key(
         backend_flow.local_addr,
         backend_flow.peer_addr,
-        cloudsidra_edge_xdp_common::XDP_PROTO_TCP,
+        zelvik_edge_xdp_common::XDP_PROTO_TCP,
     );
     let (Some(client_key), Some(backend_key)) = (client_key, backend_key) else {
         let _ = end_leg(registry, client_flow, false).await;
@@ -246,7 +246,7 @@ async fn try_promote_once(
     // userspace; once the tail confirms, every live ack exceeds it.
     let client_seq_delta = backend_snd.wrapping_sub(client_leg.rcv_nxt) as i32;
     let backend_seq_delta = client_snd.wrapping_sub(backend_leg.rcv_nxt) as i32;
-    let client_value = cloudsidra_edge_xdp_common::XdpTcpSpliceValue {
+    let client_value = zelvik_edge_xdp_common::XdpTcpSpliceValue {
         last_seen_ns: linux::monotonic_now_ns(),
         server_id: 0,
         new_dst_addr: octets(backend_flow.peer_addr),
@@ -257,12 +257,12 @@ async fn try_promote_once(
         ack_floor: client_snd,
         seq_delta: client_seq_delta,
         ack_delta: backend_seq_delta.wrapping_neg(),
-        state: cloudsidra_edge_xdp_common::XDP_SPLICE_STATE_OPEN,
+        state: zelvik_edge_xdp_common::XDP_SPLICE_STATE_OPEN,
         ts_nego: client_leg.ts_nego as u8,
         wnd_shift: client_wnd_shift as i8,
         _pad: [0; 5],
     };
-    let backend_value = cloudsidra_edge_xdp_common::XdpTcpSpliceValue {
+    let backend_value = zelvik_edge_xdp_common::XdpTcpSpliceValue {
         last_seen_ns: linux::monotonic_now_ns(),
         server_id: 0,
         new_dst_addr: octets(client_flow.peer_addr),
@@ -273,7 +273,7 @@ async fn try_promote_once(
         ack_floor: backend_snd,
         seq_delta: backend_seq_delta,
         ack_delta: client_seq_delta.wrapping_neg(),
-        state: cloudsidra_edge_xdp_common::XDP_SPLICE_STATE_OPEN,
+        state: zelvik_edge_xdp_common::XDP_SPLICE_STATE_OPEN,
         ts_nego: backend_leg.ts_nego as u8,
         wnd_shift: backend_wnd_shift as i8,
         _pad: [0; 5],

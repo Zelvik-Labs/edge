@@ -998,7 +998,7 @@ pub(crate) fn read_u16(buf: &[u8], offset: usize) -> Option<u16> {
 // parsers above; classification is additive observability.
 // ---------------------------------------------------------------------------
 
-/// Mirror of the eBPF parse classes (XDP_CLASS_* in cloudsidra-edge-xdp-common),
+/// Mirror of the eBPF parse classes (XDP_CLASS_* in zelvik-edge-xdp-common),
 /// plus NonIp for frames the kernel program passes without classifying.
 #[cfg(test)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

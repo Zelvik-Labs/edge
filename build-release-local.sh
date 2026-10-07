@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cloudsidra-edge release build — LOCAL macOS cross-compile to Linux x86_64.
+# zelvik-edge release build — LOCAL macOS cross-compile to Linux x86_64.
 #
 # Mirrors /root/memgov/build-release.sh semantics on the build host:
 # - Invoke the real rustup cargo, not the mbx PATH shim (mbx's GC has deleted
@@ -46,10 +46,10 @@ export PKG_CONFIG_LIBDIR="$SYSROOT_LIB/pkgconfig"
 # hardcodes -I/usr/include/x86_64-linux-gnu which does not exist on macOS;
 # C_INCLUDE_PATH supplies the real search dirs for clang -target bpf).
 export C_INCLUDE_PATH="$SYSROOT/usr/include:$SYSROOT/usr/include/x86_64-linux-gnu"
-GLIBC="${CLOUDSIDRA_EDGE_GLIBC:-2.36}"
+GLIBC="${ZELVIK_EDGE_GLIBC:-2.36}"
 TARGET="x86_64-unknown-linux-gnu.${GLIBC}"
 if [ "${1:-}" = "--all-bins" ]; then
   shift
   exec cargo zigbuild --release --target "$TARGET" "$@"
 fi
-exec cargo zigbuild --release --target "$TARGET" --bin cloudsidra-edge "$@"
+exec cargo zigbuild --release --target "$TARGET" --bin zelvik-edge "$@"

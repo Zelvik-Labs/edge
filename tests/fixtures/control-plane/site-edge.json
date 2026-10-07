@@ -204,8 +204,8 @@
             "name": "cluster-cache",
             "options": {
               "autoPurgeOnUpdate": true,
-              "cacheGeneration": 2004728708719082,
-              "dir": "/tmp/cloudsidra-contract-cache",
+              "cacheGeneration": 3903894312233256,
+              "dir": "/tmp/zelvik-contract-cache",
               "ipWriteLimitCount": 5,
               "ipWriteLimitWindowSeconds": 60,
               "memoryCapacity": "4096",

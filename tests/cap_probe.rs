@@ -1,6 +1,6 @@
 // Branch-only probe — prints governor-derived caps so bench numbers can be
 // interpreted against the actual limits on the build host.
-use cloudsidra_edge::memory_governor::MEMORY_GOVERNOR;
+use zelvik_edge::memory_governor::MEMORY_GOVERNOR;
 
 #[test]
 fn print_caps() {

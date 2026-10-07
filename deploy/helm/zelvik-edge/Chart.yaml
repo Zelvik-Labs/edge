@@ -1,0 +1,15 @@
+apiVersion: v2
+name: zelvik-edge
+description: Zelvik Edge data plane (CDN / global traffic, based on cloud-node-rust)
+type: application
+# Chart version is SemVer (Helm requirement). Component version is in appVersion.
+version: 0.1.0
+appVersion: "2026.1.08.0"
+home: https://github.com/Zelvik-Labs/edge
+sources:
+  - https://github.com/Zelvik-Labs/edge
+keywords:
+  - zelvik
+  - edge
+  - cdn
+  - data-plane

@@ -6,7 +6,7 @@ use crate::runtime_mode::{
 use aya::maps::lpm_trie::Key as LpmKey;
 use aya::maps::{Array, HashMap as AyaHashMap, LpmTrie, PerCpuArray, XskMap};
 use aya::programs::links::PinnedLink;
-use cloudsidra_edge_xdp_common::{
+use zelvik_edge_xdp_common::{
     XdpBudgetConfig, XdpCounters, XdpFlowAcct, XdpInterfacePolicy, XdpIpv4Key, XdpIpv6Key,
     XdpLocalIpv4Key, XdpLocalIpv6Key, XdpOutCtKey, XdpOutCtValue, XdpPendingCap, XdpPortProtoKey,
     XdpQueueKey, XdpRateBucket, XdpRateLimitConfig, XdpRuleValue, XdpSnatRevKey, XdpSnatRevValue,
@@ -199,7 +199,7 @@ fn bpf_link_update(
 /// tag is stable across loads, so identical eBPF text always compares
 /// equal — the tag-equality check is what lets the dispatch-table
 /// handover prove the pinned link's entry program is bytecode-identical
-/// to the new generation's `cloudsidra_xdp` on kernels without
+/// to the new generation's `zelvik_xdp` on kernels without
 /// BPF_LINK_UPDATE for XDP links (< 6.4).
 fn bpf_prog_tag_by_fd(prog_fd: std::os::fd::RawFd) -> std::io::Result<u64> {
     // bpf_prog_info: type u32 @0, id u32 @4, tag [u8;8] @8.
@@ -578,7 +578,7 @@ pub(crate) struct AfXdpQueueHandle {
     /// distinguishes "kernel never returns completions" from
     /// "completions arrive but lag behind produces" in wedge diagnosis.
     tx_completed_total: u64,
-    /// Debug wire dump — `CLOUDSIDRA_EDGE_XDP_PCAP=<path>` writes every
+    /// Debug wire dump — `ZELVIK_EDGE_XDP_PCAP=<path>` writes every
     /// RX/TX frame to `<path>.q<N>` in pcap (DLT_EN10MB) so AF_XDP
     /// traffic can be inspected even though dev_direct_xmit and XDP
     /// redirect are both invisible to packet taps (tcpdump sees
@@ -960,7 +960,7 @@ impl AfXdpQueueHandle {
     /// strictly optional diagnostics.
     fn pcap_open(queue: u32) -> Option<std::io::BufWriter<std::fs::File>> {
         use std::io::Write;
-        let base = std::env::var("CLOUDSIDRA_EDGE_XDP_PCAP").ok()?;
+        let base = std::env::var("ZELVIK_EDGE_XDP_PCAP").ok()?;
         let mut w =
             std::io::BufWriter::new(std::fs::File::create(format!("{base}.q{queue}")).ok()?);
         // magic(LE) ver 2.4, snaplen 65535, linktype EN10MB
@@ -1514,7 +1514,7 @@ pub async fn attach(
             "pinned eBPF state maps are ABI-incompatible with this object: {stale_state:?}; \
              the live dataplane was left running and no state was destroyed. \
              Flow-state migration across this change is not implemented — \
-             to accept the loss run `cloudsidra-edge xdp detach --purge-state`, then attach again"
+             to accept the loss run `zelvik-edge xdp detach --purge-state`, then attach again"
         );
     }
     drop_stale_pinned_maps(config, purge_stale_state);
@@ -1582,8 +1582,8 @@ pub async fn attach(
     };
     {
         let program: &mut aya::programs::Xdp = ebpf
-            .program_mut("cloudsidra_xdp")
-            .ok_or_else(|| anyhow::anyhow!("missing eBPF program cloudsidra_xdp"))?
+            .program_mut("zelvik_xdp")
+            .ok_or_else(|| anyhow::anyhow!("missing eBPF program zelvik_xdp"))?
             .try_into()?;
         program.load()?;
     }
@@ -1617,7 +1617,7 @@ pub async fn attach(
         // fail closed (counted drop) rather than forwarding unverified
         // challenge traffic.
         (11, "xdp_tcp4_challenge"),
-        // Family-split main dataplane: cloudsidra_xdp tail-calls one of
+        // Family-split main dataplane: zelvik_xdp tail-calls one of
         // these so each pipeline gets its own 1M-insn verifier budget.
         // Missing slots degrade to kernel pass inside the entry program.
         (12, "xdp_main_v4_work"),
@@ -1770,7 +1770,7 @@ pub async fn attach(
                 .sum();
             if configured > 0 {
                 tracing::warn!(
-                    "eBPF object lacks XDP_DISPATCH; {configured} configured forwards are not active (stale object, rebuild cloudsidra-edge-xdp-ebpf.o)"
+                    "eBPF object lacks XDP_DISPATCH; {configured} configured forwards are not active (stale object, rebuild zelvik-edge-xdp-ebpf.o)"
                 );
             }
         }
@@ -1793,8 +1793,8 @@ pub async fn attach(
         zero_counters(&mut ebpf)?;
     }
     let program: &mut aya::programs::Xdp = ebpf
-        .program_mut("cloudsidra_xdp")
-        .ok_or_else(|| anyhow::anyhow!("missing eBPF program cloudsidra_xdp"))?
+        .program_mut("zelvik_xdp")
+        .ok_or_else(|| anyhow::anyhow!("missing eBPF program zelvik_xdp"))?
         .try_into()?;
     if let Some(atomic) = atomic {
         atomic_link_swap(
@@ -1904,7 +1904,7 @@ fn attach_transient_overhead_bytes(new_map_bytes: u64) -> u64 {
 ///    entry program.
 /// 2. On kernels without XDP link update (EINVAL from the missing
 ///    `.update_prog` op, e.g. 6.1), fall back to a bytecode check: if the
-///    pinned link's entry program tag equals the new `cloudsidra_xdp`
+///    pinned link's entry program tag equals the new `zelvik_xdp`
 ///    tag, the dispatcher is instruction-identical and the
 ///    already-updated XDP_DISPATCH slots carry the entire semantic
 ///    change — keeping the old entry attached is correct. If the tags
@@ -1930,9 +1930,9 @@ fn atomic_link_swap(
     let new_prog_fd = program
         .fd()?
         .try_clone()
-        .map_err(|err| anyhow::anyhow!("clone cloudsidra_xdp fd for link update: {err}"))?;
+        .map_err(|err| anyhow::anyhow!("clone zelvik_xdp fd for link update: {err}"))?;
     let new_tag = bpf_prog_tag_by_fd(new_prog_fd.as_fd().as_raw_fd())
-        .map_err(|err| anyhow::anyhow!("read new cloudsidra_xdp program tag: {err}"))?;
+        .map_err(|err| anyhow::anyhow!("read new zelvik_xdp program tag: {err}"))?;
     // (interface, old_prog_id): only links that were truly swapped via
     // BPF_LINK_UPDATE need a link-level revert — tag-adopted interfaces
     // are covered by the dispatch-table restore.
@@ -2080,7 +2080,7 @@ fn atomic_link_swap(
     Ok(())
 }
 
-/// Detect a live cloudsidra-edge daemon that still owns the pinned
+/// Detect a live zelvik-edge daemon that still owns the pinned
 /// dataplane. The daemon holds an exclusive flock on its pidfile for
 /// its entire lifetime, so a lock held by a different live pid means a
 /// predecessor is mid-handover. This process's own lock is excluded —
@@ -2138,7 +2138,7 @@ fn reclaim_orphaned_xdp_links() -> anyhow::Result<()> {
     }
     if let Some(owner) = xdp_owner_alive() {
         anyhow::bail!(
-            "pinned XDP links {pins:?} are owned by a running cloudsidra-edge daemon \
+            "pinned XDP links {pins:?} are owned by a running zelvik-edge daemon \
              (pid {owner}); refusing to tear down a live dataplane — use the \
              daemon's reload path or run `xdp detach` first"
         );
@@ -2470,7 +2470,7 @@ pub fn read_pinned_counters() -> anyhow::Result<XdpCounters> {
 pub fn sync_rate_limit(ebpf: &mut aya::Ebpf, config: &XdpRateLimitConfig) -> anyhow::Result<()> {
     let map = ebpf.map_mut("XDP_RATE_CFG").ok_or_else(|| {
         anyhow::anyhow!(
-            "missing map XDP_RATE_CFG; eBPF object predates rate limiter (rebuild cloudsidra-edge-xdp-ebpf.o)"
+            "missing map XDP_RATE_CFG; eBPF object predates rate limiter (rebuild zelvik-edge-xdp-ebpf.o)"
         )
     })?;
     let mut array = Array::<_, XdpRateLimitConfig>::try_from(map)?;
@@ -2484,7 +2484,7 @@ pub fn sync_rate_limit(ebpf: &mut aya::Ebpf, config: &XdpRateLimitConfig) -> any
 pub fn sync_budget(ebpf: &mut aya::Ebpf, config: &XdpBudgetConfig) -> anyhow::Result<()> {
     let map = ebpf.map_mut("XDP_BUDGET_CFG").ok_or_else(|| {
         anyhow::anyhow!(
-            "missing map XDP_BUDGET_CFG; eBPF object predates budget gate (rebuild cloudsidra-edge-xdp-ebpf.o)"
+            "missing map XDP_BUDGET_CFG; eBPF object predates budget gate (rebuild zelvik-edge-xdp-ebpf.o)"
         )
     })?;
     let mut array = Array::<_, XdpBudgetConfig>::try_from(map)?;
@@ -2502,15 +2502,15 @@ pub fn sync_budget(ebpf: &mut aya::Ebpf, config: &XdpBudgetConfig) -> anyhow::Re
 pub fn sync_cookie_key(ebpf: &mut aya::Ebpf) -> anyhow::Result<()> {
     let map = ebpf.map_mut("XDP_COOKIE_KEY").ok_or_else(|| {
         anyhow::anyhow!(
-            "missing map XDP_COOKIE_KEY; eBPF object predates EN-14 cookie key ring (rebuild cloudsidra-edge-xdp-ebpf.o)"
+            "missing map XDP_COOKIE_KEY; eBPF object predates EN-14 cookie key ring (rebuild zelvik-edge-xdp-ebpf.o)"
         )
     })?;
-    let mut array = Array::<_, cloudsidra_edge_xdp_common::XdpCookieKey>::try_from(map)?;
+    let mut array = Array::<_, zelvik_edge_xdp_common::XdpCookieKey>::try_from(map)?;
     let cur = array.get(&0, 0)?;
     if cur.cur != [0u8; 16] {
         return Ok(());
     }
-    let key = cloudsidra_edge_xdp_common::XdpCookieKey {
+    let key = zelvik_edge_xdp_common::XdpCookieKey {
         cur: rand::random::<[u8; 16]>(),
         ..Default::default()
     };
@@ -2526,7 +2526,7 @@ pub fn sync_pending_cap(
 ) -> anyhow::Result<()> {
     let map = ebpf.map_mut("XDP_PENDING_CAP").ok_or_else(|| {
         anyhow::anyhow!(
-            "missing map XDP_PENDING_CAP; eBPF object predates EN-09 pending table (rebuild cloudsidra-edge-xdp-ebpf.o)"
+            "missing map XDP_PENDING_CAP; eBPF object predates EN-09 pending table (rebuild zelvik-edge-xdp-ebpf.o)"
         )
     })?;
     let mut array = Array::<_, XdpPendingCap>::try_from(map)?;
@@ -2601,10 +2601,10 @@ fn sync_interface_policy(ebpf: &mut aya::Ebpf, config: &XdpConfig) -> anyhow::Re
             local_ip_filter: u8::from(!interface.local_ips.is_empty()),
             fragment_action: match interface.fragment_action {
                 crate::runtime_mode::XdpFragmentAction::Pass => {
-                    cloudsidra_edge_xdp_common::XDP_FRAGMENT_PASS
+                    zelvik_edge_xdp_common::XDP_FRAGMENT_PASS
                 }
                 crate::runtime_mode::XdpFragmentAction::Drop => {
-                    cloudsidra_edge_xdp_common::XDP_FRAGMENT_DROP
+                    zelvik_edge_xdp_common::XDP_FRAGMENT_DROP
                 }
             },
             frame_size: interface.frame_size,
@@ -2620,19 +2620,19 @@ fn sync_interface_policy(ebpf: &mut aya::Ebpf, config: &XdpConfig) -> anyhow::Re
 /// — `protectedServices[].redirect: false` clears it so protection stays on
 /// while the VIP's ports keep their kernel path.
 fn local_ip_flags(interface: &XdpInterfaceConfig, ip: &IpAddr) -> u32 {
-    let mut flags = cloudsidra_edge_xdp_common::XDP_LOCAL_PRESENT
-        | cloudsidra_edge_xdp_common::XDP_LOCAL_REDIRECT;
+    let mut flags = zelvik_edge_xdp_common::XDP_LOCAL_PRESENT
+        | zelvik_edge_xdp_common::XDP_LOCAL_REDIRECT;
     for entry in &interface.protected_services {
         if &entry.ip == ip {
             if !entry.redirect {
-                flags &= !cloudsidra_edge_xdp_common::XDP_LOCAL_REDIRECT;
+                flags &= !zelvik_edge_xdp_common::XDP_LOCAL_REDIRECT;
             }
             flags |= match entry.fragment_action {
                 Some(crate::runtime_mode::XdpFragmentAction::Pass) => {
-                    cloudsidra_edge_xdp_common::XDP_LOCAL_FRAG_PASS
+                    zelvik_edge_xdp_common::XDP_LOCAL_FRAG_PASS
                 }
                 Some(crate::runtime_mode::XdpFragmentAction::Drop) => {
-                    cloudsidra_edge_xdp_common::XDP_LOCAL_FRAG_DROP
+                    zelvik_edge_xdp_common::XDP_LOCAL_FRAG_DROP
                 }
                 None => 0,
             };
@@ -2827,13 +2827,13 @@ pub fn remove_out_ct(ebpf: &mut aya::Ebpf, key: &XdpOutCtKey) -> anyhow::Result<
 pub fn upsert_splice(
     ebpf: &mut aya::Ebpf,
     key: XdpOutCtKey,
-    value: cloudsidra_edge_xdp_common::XdpTcpSpliceValue,
+    value: zelvik_edge_xdp_common::XdpTcpSpliceValue,
 ) -> anyhow::Result<()> {
     let map = ebpf
         .map_mut("XDP_TCP_SPLICE")
         .ok_or_else(|| anyhow::anyhow!("missing map XDP_TCP_SPLICE"))?;
     let mut map =
-        AyaHashMap::<_, XdpOutCtKey, cloudsidra_edge_xdp_common::XdpTcpSpliceValue>::try_from(map)?;
+        AyaHashMap::<_, XdpOutCtKey, zelvik_edge_xdp_common::XdpTcpSpliceValue>::try_from(map)?;
     map.insert(key, value, 0)?;
     Ok(())
 }
@@ -2845,7 +2845,7 @@ pub fn remove_splice(ebpf: &mut aya::Ebpf, key: &XdpOutCtKey) -> anyhow::Result<
         .map_mut("XDP_TCP_SPLICE")
         .ok_or_else(|| anyhow::anyhow!("missing map XDP_TCP_SPLICE"))?;
     let mut map =
-        AyaHashMap::<_, XdpOutCtKey, cloudsidra_edge_xdp_common::XdpTcpSpliceValue>::try_from(map)?;
+        AyaHashMap::<_, XdpOutCtKey, zelvik_edge_xdp_common::XdpTcpSpliceValue>::try_from(map)?;
     map.remove(key)?;
     Ok(())
 }
@@ -2859,7 +2859,7 @@ pub fn sweep_splice_map(
     idle: std::time::Duration,
     closing_grace: std::time::Duration,
 ) -> anyhow::Result<Vec<XdpOutCtKey>> {
-    use cloudsidra_edge_xdp_common::XDP_SPLICE_STATE_CLOSING;
+    use zelvik_edge_xdp_common::XDP_SPLICE_STATE_CLOSING;
     let now_ns = monotonic_now_ns();
     let idle_ns = idle.as_nanos().min(u64::MAX as u128) as u64;
     let closing_ns = closing_grace.as_nanos().min(u64::MAX as u128) as u64;
@@ -2868,7 +2868,7 @@ pub fn sweep_splice_map(
         return Ok(reaped);
     };
     let mut map =
-        AyaHashMap::<_, XdpOutCtKey, cloudsidra_edge_xdp_common::XdpTcpSpliceValue>::try_from(map)?;
+        AyaHashMap::<_, XdpOutCtKey, zelvik_edge_xdp_common::XdpTcpSpliceValue>::try_from(map)?;
     let mut stale: Vec<(XdpOutCtKey, u64, u8)> = Vec::new();
     for entry in map.iter() {
         let (key, value) = entry?;
@@ -2951,7 +2951,7 @@ fn sync_forward_map(
         let configured: usize = config.interfaces.iter().map(|i| forwards(i).len()).sum();
         if configured > 0 {
             tracing::warn!(
-                "eBPF object lacks {map_name}; {configured} configured {proto} forwards are not active (stale object, rebuild cloudsidra-edge-xdp-ebpf.o)"
+                "eBPF object lacks {map_name}; {configured} configured {proto} forwards are not active (stale object, rebuild zelvik-edge-xdp-ebpf.o)"
             );
         }
         return Ok(());
@@ -3262,7 +3262,7 @@ pub(super) fn sweep_nat_maps(
     tcp_closing_grace: std::time::Duration,
     tcp_pending: std::time::Duration,
 ) -> anyhow::Result<()> {
-    use cloudsidra_edge_xdp_common::XDP_CT_STATE_CLOSING;
+    use zelvik_edge_xdp_common::XDP_CT_STATE_CLOSING;
     let now_ns = monotonic_now_ns();
     let udp_idle_ns = udp_idle.as_nanos().min(u64::MAX as u128) as u64;
     let tcp_idle_ns = tcp_idle.as_nanos().min(u64::MAX as u128) as u64;
@@ -3476,7 +3476,7 @@ fn clear_pinned_xsk_map() -> anyhow::Result<()> {
 /// by traffic); the removal is logged, never silent.
 /// (name, map type, key size, value size, max_entries). Must stay
 /// aligned with the #[map] definitions in
-/// crates/cloudsidra-edge-xdp-ebpf/src/main.rs. LPM trie keys carry a
+/// crates/zelvik-edge-xdp-ebpf/src/main.rs. LPM trie keys carry a
 /// 4-byte prefix length in front of the address.
 /// EN-16: `xdp.stateTables` overrides for the sizeable state maps. Returns
 /// the configured max_entries or `None` to keep the object's default.
@@ -3501,7 +3501,7 @@ fn state_table_override(name: &str, config: &XdpConfig) -> Option<u32> {
 
 fn bpf_map_specs(config: &XdpConfig) -> [(&'static str, aya::maps::MapType, u32, u32, u32); 38] {
     use aya::maps::MapType;
-    use cloudsidra_edge_xdp_common::*;
+    use zelvik_edge_xdp_common::*;
     use core::mem::size_of;
 
     let u = size_of::<u32>() as u32;
@@ -3589,7 +3589,7 @@ fn bpf_map_specs(config: &XdpConfig) -> [(&'static str, aya::maps::MapType, u32,
             "XDP_SVC_BUDGET",
             MapType::PerCpuHash,
             u,
-            size_of::<cloudsidra_edge_xdp_common::XdpSvcBucket>() as u32,
+            size_of::<zelvik_edge_xdp_common::XdpSvcBucket>() as u32,
             256,
         ),
         (
@@ -3626,7 +3626,7 @@ fn bpf_map_specs(config: &XdpConfig) -> [(&'static str, aya::maps::MapType, u32,
             "XDP_TCP_SPLICE",
             MapType::Hash,
             size_of::<XdpOutCtKey>() as u32,
-            size_of::<cloudsidra_edge_xdp_common::XdpTcpSpliceValue>() as u32,
+            size_of::<zelvik_edge_xdp_common::XdpTcpSpliceValue>() as u32,
             65_536,
         ),
         (
@@ -3640,7 +3640,7 @@ fn bpf_map_specs(config: &XdpConfig) -> [(&'static str, aya::maps::MapType, u32,
             "XDP_COOKIE_KEY",
             MapType::Array,
             u,
-            size_of::<cloudsidra_edge_xdp_common::XdpCookieKey>() as u32,
+            size_of::<zelvik_edge_xdp_common::XdpCookieKey>() as u32,
             1,
         ),
         (
@@ -4060,7 +4060,7 @@ fn audit_loaded_map_specs(ebpf: &aya::Ebpf, config: &XdpConfig) -> anyhow::Resul
 fn adopt_flow_state(ebpf: &mut aya::Ebpf) -> anyhow::Result<(u64, u64)> {
     let epoch_map = ebpf.map_mut("XDP_OWNER_EPOCH").ok_or_else(|| {
         anyhow::anyhow!(
-            "missing map XDP_OWNER_EPOCH; eBPF object predates EN-10 ownership epochs (rebuild cloudsidra-edge-xdp-ebpf.o)"
+            "missing map XDP_OWNER_EPOCH; eBPF object predates EN-10 ownership epochs (rebuild zelvik-edge-xdp-ebpf.o)"
         )
     })?;
     let mut epochs = Array::<_, u64>::try_from(epoch_map)?;
@@ -4354,7 +4354,7 @@ pub(crate) struct RuleMapImages {
     pub(crate) blocked_v6_lpm: LpmV6Image,
 }
 
-// Must stay aligned with crates/cloudsidra-edge-xdp-ebpf map max_entries.
+// Must stay aligned with crates/zelvik-edge-xdp-ebpf map max_entries.
 const XDP_BLOCKED_EXACT_MAP_MAX_ENTRIES: u64 = 262_144;
 const XDP_ALLOWED_EXACT_MAP_MAX_ENTRIES: u64 = 65_536;
 const XDP_RULE_LPM_MAP_MAX_ENTRIES: u64 = 65_536;

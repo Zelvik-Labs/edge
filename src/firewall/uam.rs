@@ -200,13 +200,13 @@ setTimeout(function(){{
 
 /// Derives an UAM-specific key using SHA256.
 ///
-/// Uses `SHA256("cloudsidra-edge-uam-v3:" + secret)` to produce a scoped key,
+/// Uses `SHA256("zelvik-edge-uam-v3:" + secret)` to produce a scoped key,
 /// separating UAM key space from WAF / other subsystems. UAM uses a
 /// different key prefix so a WAF-challenge pass cookie cannot satisfy
 /// a UAM challenge, and vice versa.
 pub fn uam_hmac_key(secret: &[u8]) -> Vec<u8> {
     let mut h = Sha256::new();
-    h.update(b"cloudsidra-edge-uam-v3:");
+    h.update(b"zelvik-edge-uam-v3:");
     h.update(secret);
     h.finalize().to_vec()
 }
@@ -259,7 +259,7 @@ mod tests {
             token: "uam-token",
             challenge_life_seconds: 60,
             pow_difficulty: 5,
-            verify_route: "/.well-known/cloudsidra-edge/waf-verify",
+            verify_route: "/.well-known/zelvik-edge/waf-verify",
             return_path: "/",
             slider_target: 120,
         }

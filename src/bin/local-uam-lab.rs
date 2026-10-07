@@ -8,20 +8,20 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use cloudsidra_edge::api_config::{AccessLogPipelineConfig, ApiConfig};
-use cloudsidra_edge::config::ConfigStore;
-use cloudsidra_edge::config_models::{
+use zelvik_edge::api_config::{AccessLogPipelineConfig, ApiConfig};
+use zelvik_edge::config::ConfigStore;
+use zelvik_edge::config_models::{
     FlexibleAddr, GlobalHTTPAllConfig, HTTPConfig, HTTPFirewallInboundConfig, HTTPFirewallPolicy,
     HTTPFirewallRef, HTTPFirewallRule, HTTPFirewallRuleGroup, HTTPFirewallRuleSet,
     NetworkAddressConfig, OriginConfig, OriginTlsSecurityVerifyMode, ProxyProtocolConfig,
     ReverseProxyConfig, SchedulingConfig, ServerConfig, ServerNameConfig, UAMConfig,
     WAFCaptchaOptions, WAFJSCookieOptions, WebConfig,
 };
-use cloudsidra_edge::firewall::state::WafStateManager;
-use cloudsidra_edge::firewall::verifier::WafVerifier;
-use cloudsidra_edge::lb_factory;
-use cloudsidra_edge::proxy::EdgeProxy;
-use cloudsidra_edge::ssl::DynamicCertSelector;
+use zelvik_edge::firewall::state::WafStateManager;
+use zelvik_edge::firewall::verifier::WafVerifier;
+use zelvik_edge::lb_factory;
+use zelvik_edge::proxy::EdgeProxy;
+use zelvik_edge::ssl::DynamicCertSelector;
 use pingora_core::server::Server;
 use pingora_core::server::configuration::ServerConf;
 use serde_json::{Value, json};
@@ -140,7 +140,7 @@ fn main() -> anyhow::Result<()> {
     let key_life = env_i32("LOCAL_UAM_KEY_LIFE", 3600);
     let pow_difficulty = env_u8("LOCAL_UAM_POW_DIFFICULTY", 5);
 
-    cloudsidra_edge::utils::time::init_local_timezone();
+    zelvik_edge::utils::time::init_local_timezone();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -159,12 +159,12 @@ fn main() -> anyhow::Result<()> {
         proxy_port,
         key_life,
     ));
-    cloudsidra_edge::metrics::init_http_dimension_worker(10_000);
-    cloudsidra_edge::proxy::start_request_limit_cleanup_task();
+    zelvik_edge::metrics::init_http_dimension_worker(10_000);
+    zelvik_edge::proxy::start_request_limit_cleanup_task();
 
     let config_store = Arc::new(ConfigStore::new());
     let waf_state = Arc::new(WafStateManager::new());
-    cloudsidra_edge::firewall::state::start_gc_task(waf_state.clone());
+    zelvik_edge::firewall::state::start_gc_task(waf_state.clone());
 
     let api_config = Arc::new(ApiConfig {
         rpc_tls: Default::default(),
@@ -235,7 +235,7 @@ fn main() -> anyhow::Result<()> {
         None,
         true,
         false,
-        "cloudsidra-edge-uam-lab".to_string(),
+        "zelvik-edge-uam-lab".to_string(),
         false,
         false,
         0,
@@ -246,7 +246,7 @@ fn main() -> anyhow::Result<()> {
         None,
         Some(GlobalHTTPAllConfig {
             allow_lan_ip: true,
-            server_name: "cloudsidra-edge-uam-lab".to_string(),
+            server_name: "zelvik-edge-uam-lab".to_string(),
             ..Default::default()
         }),
         Vec::new(),
@@ -822,7 +822,7 @@ fn cookie_value<'a>(cookies: &'a str, name: &str) -> Option<&'a str> {
 fn init_logging() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         EnvFilter::new(
-            "info,cloudsidra_edge::proxy=debug,cloudsidra_edge::http_proxy_manager=debug",
+            "info,zelvik_edge::proxy=debug,zelvik_edge::http_proxy_manager=debug",
         )
     });
     let _ = tracing_subscriber::fmt()

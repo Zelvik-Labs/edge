@@ -17,7 +17,7 @@ use crate::wire::{
     AccEcnCounters, IpAddress, IpEndpoint, IpListenEndpoint, IpProtocol, IpRepr, TCP_HEADER_LEN,
     TcpControl, TcpRepr, TcpSeqNumber, TcpTimestampGenerator, TcpTimestampRepr,
 };
-use cloudsidra_edge_transport::accecn::{AccEcn, EcnMode, Flags as AccEcnFlags};
+use zelvik_edge_transport::accecn::{AccEcn, EcnMode, Flags as AccEcnFlags};
 
 pub mod congestion;
 mod transport_ext;
@@ -786,7 +786,7 @@ impl<'a> Socket<'a> {
     }
 
     /// smoltcp-edge (T3): install an external transport controller from
-    /// `cloudsidra-edge-transport`. Once installed, the socket routes all
+    /// `zelvik-edge-transport`. Once installed, the socket routes all
     /// sender bookkeeping through the `transport_ext` scoreboard —
     /// per-segment records, SACK consumption, RACK-TLP loss detection,
     /// DSACK/Eifel spurious-retransmit undo, pacing and app-limited
@@ -798,7 +798,7 @@ impl<'a> Socket<'a> {
     /// — records are pushed on first data transmission).
     pub fn set_transport_controller(
         &mut self,
-        cc: alloc::boxed::Box<dyn cloudsidra_edge_transport::cc::CongestionController>,
+        cc: alloc::boxed::Box<dyn zelvik_edge_transport::cc::CongestionController>,
     ) {
         self.ext_transport = Some(transport_ext::ExtTransport::new(cc));
     }
@@ -810,7 +810,7 @@ impl<'a> Socket<'a> {
 
     /// smoltcp-edge (T3): controller snapshot for observability
     /// (published into the AF_XDP session `/status` table).
-    pub fn transport_snapshot(&self) -> Option<cloudsidra_edge_transport::cc::CcSnapshot> {
+    pub fn transport_snapshot(&self) -> Option<zelvik_edge_transport::cc::CcSnapshot> {
         self.ext_transport.as_ref().map(|e| e.snapshot())
     }
 
@@ -11052,7 +11052,7 @@ mod test {
 
     #[test]
     fn test_external_transport_controller() {
-        use cloudsidra_edge_transport::cc::reference::CubicRef;
+        use zelvik_edge_transport::cc::reference::CubicRef;
 
         let mut s = socket_established_with_buffer_sizes(8192, 64);
         s.remote_win_len = 65535;
@@ -11138,7 +11138,7 @@ mod test {
 
     #[test]
     fn test_pacing_blocked_data_emits_nothing() {
-        use cloudsidra_edge_transport::cc::reference::CubicRef;
+        use zelvik_edge_transport::cc::reference::CubicRef;
 
         // Regression: when the pacing gate holds new data before its
         // deadline, dispatch must produce NO packet at all — previously
@@ -11219,7 +11219,7 @@ mod test {
 
     #[test]
     fn test_external_transport_loss_event_shrinks_cwnd() {
-        use cloudsidra_edge_transport::cc::reference::CubicRef;
+        use zelvik_edge_transport::cc::reference::CubicRef;
 
         let mut s = socket_established_with_buffer_sizes(8192, 64);
         s.remote_win_len = 65535;
@@ -11707,7 +11707,7 @@ mod test {
         let mut s = socket_established();
         s.acc_ecn.mode = EcnMode::AccEcn;
         s.set_transport_controller(Box::new(
-            cloudsidra_edge_transport::cc::reference::CubicRef::new(536),
+            zelvik_edge_transport::cc::reference::CubicRef::new(536),
         ));
         s.send_slice(b"abcdef").unwrap();
         // The first emitted segment also carries the (zero) counters
@@ -11768,7 +11768,7 @@ mod test {
         let mut s = socket_established();
         s.acc_ecn.mode = EcnMode::ClassicEcn;
         s.set_transport_controller(Box::new(
-            cloudsidra_edge_transport::cc::reference::CubicRef::new(536),
+            zelvik_edge_transport::cc::reference::CubicRef::new(536),
         ));
         s.send_slice(b"abcdef").unwrap();
         recv!(

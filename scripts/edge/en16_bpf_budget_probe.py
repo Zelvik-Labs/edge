@@ -17,7 +17,7 @@ across 31 maps. This probe proves the ledger is observable and enforced:
 
 Usage (root, Linux):
     sudo python3 scripts/edge/en16_bpf_budget_probe.py \
-        --node-bin target/debug/cloudsidra-edge --out /tmp/en16.json
+        --node-bin target/debug/zelvik-edge --out /tmp/en16.json
 """
 
 import argparse
@@ -32,7 +32,7 @@ HOST_IF = "en2-a"
 PEER_IF = "en2-b"
 HOST_IP = "10.99.0.5"
 PEER_IP = "10.99.0.6"
-PIN_DIR = "/sys/fs/bpf/cloudsidra-edge-xdp"
+PIN_DIR = "/sys/fs/bpf/zelvik-edge-xdp"
 CGROUP = "/sys/fs/cgroup/en16-bpf-budget"
 # 4 GiB -> state_budget = 8% ~= 343 MiB < ~365 MiB projected map memory.
 CGROUP_MAX = 4 * 1024 * 1024 * 1024
@@ -118,7 +118,7 @@ def dump_maps(node_bin, cwd):
 
 
 def start_node(node_bin, home, cwd, cgroup=None):
-    env = dict(os.environ, CLOUDSIDRA_EDGE_HOME=home, RUST_LOG="info")
+    env = dict(os.environ, ZELVIK_EDGE_HOME=home, RUST_LOG="info")
     log_path = os.path.join(cwd, "node.log")
     log = open(log_path, "w")
     if cgroup:

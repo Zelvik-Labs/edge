@@ -169,7 +169,7 @@ pub fn save_xdp_config(path: &Path, xdp: &XdpConfig) -> Result<()> {
 
 /// Persist only the `xdp.enabled` flag, preserving everything else already in
 /// the file. XDP is on by default; the file exists solely to record an
-/// explicit operator override and outranks the `CLOUDSIDRA_EDGE_XDP` env var.
+/// explicit operator override and outranks the `ZELVIK_EDGE_XDP` env var.
 /// The `xdp` section is replaced rather than merged so stale operational
 /// fields cannot shadow the auto-derived configuration.
 pub fn save_xdp_enabled(path: &Path, enabled: bool) -> Result<()> {

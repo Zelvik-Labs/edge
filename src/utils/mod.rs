@@ -24,7 +24,7 @@ pub fn ensure_single_instance(pid_file: &str) -> anyhow::Result<()> {
 
         if let Some(process) = sys.process(pid) {
             let exe_name = process.name().to_string_lossy().to_lowercase();
-            if exe_name.contains("cloudsidra-edge") || exe_name.contains("rust") {
+            if exe_name.contains("zelvik-edge") || exe_name.contains("rust") {
                 anyhow::bail!(
                     "Instance already running. PID: {}, Name: {}. Please kill it first.",
                     old_pid_val,

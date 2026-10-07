@@ -1,12 +1,12 @@
 [package]
-name = "cloudsidra-edge"
+name = "zelvik-edge"
 version = "26.9.0"
 edition = "2024"
 rust-version = "1.98.1"
-description = "CloudSidra Edge CDN and global traffic data plane"
+description = "Zelvik Edge CDN and global traffic data plane"
 
-[package.metadata.cloudsidra]
-product = "CloudSidra-Edge"
+[package.metadata.zelvik]
+product = "Zelvik-Edge"
 version_scheme = "product-semver"
 upstream_project = "cloud-node-rust"
 upstream_version = "1.2.2"
@@ -20,7 +20,7 @@ default = ["node-control"]
 node-control = []
 
 [[bin]]
-name = "CloudSidra-Edge"
+name = "Zelvik-Edge"
 path = "src/main.rs"
 
 [dependencies]
@@ -103,8 +103,8 @@ aes-gcm = "0.11.0"
 async-compression = { version = "0.4.43", features = ["tokio", "zstd"] }
 arc-swap = "1.9.2"
 ahash = "0.8.12"
-cloudsidra-edge-xdp-common = { path = "crates/cloudsidra-edge-xdp-common", features = ["aya"] }
-cloudsidra-edge-transport = { path = "crates/cloudsidra-edge-transport" }
+zelvik-edge-xdp-common = { path = "crates/zelvik-edge-xdp-common", features = ["aya"] }
+zelvik-edge-transport = { path = "crates/zelvik-edge-transport" }
 mimalloc = "0.1.52"
 # Pinned to the exact version mimalloc links so `mi_collect` resolves to the
 # same statically linked allocator instance instead of a second copy.
@@ -202,16 +202,16 @@ harness = false
 [build-dependencies]
 tonic-prost-build = "0.14.6"
 
-# crates/cloudsidra-edge-xdp-ebpf stays outside: it pins a dated nightly via its
+# crates/zelvik-edge-xdp-ebpf stays outside: it pins a dated nightly via its
 # own rust-toolchain.toml and builds for the bpfeb target — it must not join
 # this workspace's resolution.
 [workspace]
-members = ["crates/cloudsidra-edge-transport"]
-# cloudsidra-edge-xdp-ebpf pins its own dated nightly/bpfeb toolchain;
+members = ["crates/zelvik-edge-transport"]
+# zelvik-edge-xdp-ebpf pins its own dated nightly/bpfeb toolchain;
 # pingora-main is a vendored checkout with its own workspace root;
 # xtask is a standalone tool manifest — all three must stay outside
 # this workspace's auto-membership.
-exclude = ["crates/cloudsidra-edge-xdp-ebpf", "pingora-main", "xtask"]
+exclude = ["crates/zelvik-edge-xdp-ebpf", "pingora-main", "xtask"]
 
 # smoltcp-edge is a controlled fork of smoltcp 0.14.0 (T3): transport
 # hooks in socket/tcp.rs + minimal wire repr surface, every divergence

@@ -2,8 +2,8 @@
 use anyhow::Context;
 use chrono::{Local, TimeZone};
 use clap::{Parser, Subcommand, ValueEnum};
-use cloudsidra_edge::i18n::{Language, t};
-use cloudsidra_edge::xdp_config_wizard::{XdpConfigWizard, save_xdp_enabled};
+use zelvik_edge::i18n::{Language, t};
+use zelvik_edge::xdp_config_wizard::{XdpConfigWizard, save_xdp_enabled};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::CString;
 use std::fs;
@@ -25,18 +25,18 @@ static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
 
-use cloudsidra_edge::api_config::ApiConfig;
-use cloudsidra_edge::config::ConfigStore;
-use cloudsidra_edge::firewall::state::WafStateManager;
-use cloudsidra_edge::health_manager::GlobalHealthManager;
-use cloudsidra_edge::kernel_syn_defense;
-use cloudsidra_edge::l4_connection_registry;
-use cloudsidra_edge::proxy::EdgeProxy;
-use cloudsidra_edge::runtime_mode::{
+use zelvik_edge::api_config::ApiConfig;
+use zelvik_edge::config::ConfigStore;
+use zelvik_edge::firewall::state::WafStateManager;
+use zelvik_edge::health_manager::GlobalHealthManager;
+use zelvik_edge::kernel_syn_defense;
+use zelvik_edge::l4_connection_registry;
+use zelvik_edge::proxy::EdgeProxy;
+use zelvik_edge::runtime_mode::{
     RuntimeConfig, XdpAttachMode, XdpFallbackMode, XdpRuntimeMode,
 };
-use cloudsidra_edge::ssl::DynamicCertSelector;
-use cloudsidra_edge::{firewall, logging, rpc, tcp_proxy, udp_proxy};
+use zelvik_edge::ssl::DynamicCertSelector;
+use zelvik_edge::{firewall, logging, rpc, tcp_proxy, udp_proxy};
 
 struct LocalLogTimer;
 
@@ -45,7 +45,7 @@ impl FormatTime for LocalLogTimer {
         write!(
             w,
             "{}",
-            cloudsidra_edge::utils::time::now_local_millis().format("%Y-%m-%dT%H:%M:%S%.6f%:z")
+            zelvik_edge::utils::time::now_local_millis().format("%Y-%m-%dT%H:%M:%S%.6f%:z")
         )
     }
 }
@@ -58,8 +58,8 @@ struct SharedLogWriter {
 
 impl SharedLogWriter {
     fn new(file: fs::File, path: PathBuf) -> Self {
-        let snapshot = cloudsidra_edge::memory_governor::MEMORY_GOVERNOR
-            .snapshot(cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads());
+        let snapshot = zelvik_edge::memory_governor::MEMORY_GOVERNOR
+            .snapshot(zelvik_edge::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads());
         let estimated_event_bytes = 1024u64;
         let queue_capacity =
             usize::try_from(snapshot.local_log_queue_budget_bytes / estimated_event_bytes)
@@ -92,8 +92,8 @@ impl SharedLogGuard {
             Ok(()) => Ok(()),
             Err(std_mpsc::TrySendError::Full(_)) | Err(std_mpsc::TrySendError::Disconnected(_)) => {
                 self.dropped.fetch_add(1, Ordering::Relaxed);
-                cloudsidra_edge::pipeline_metrics::increment(
-                    cloudsidra_edge::pipeline_metrics::PipelineCounter::LocalLogDropped,
+                zelvik_edge::pipeline_metrics::increment(
+                    zelvik_edge::pipeline_metrics::PipelineCounter::LocalLogDropped,
                 );
                 Ok(())
             }
@@ -137,8 +137,8 @@ fn run_log_writer(
     _dropped: Arc<AtomicU64>,
 ) {
     use std::io::Write as _;
-    let rotate_bytes = cloudsidra_edge::memory_governor::MEMORY_GOVERNOR
-        .snapshot(cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads())
+    let rotate_bytes = zelvik_edge::memory_governor::MEMORY_GOVERNOR
+        .snapshot(zelvik_edge::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads())
         .local_log_queue_budget_bytes
         .max(1024 * 1024);
     let mut written = file.metadata().map(|metadata| metadata.len()).unwrap_or(0);
@@ -167,14 +167,14 @@ fn run_log_writer(
                 Ok(())
             })();
             if rotation.is_err() {
-                cloudsidra_edge::pipeline_metrics::increment(
-                    cloudsidra_edge::pipeline_metrics::PipelineCounter::LocalLogRotationFailed,
+                zelvik_edge::pipeline_metrics::increment(
+                    zelvik_edge::pipeline_metrics::PipelineCounter::LocalLogRotationFailed,
                 );
             }
         }
         if file.write_all(&pending).and_then(|_| file.flush()).is_err() {
-            cloudsidra_edge::pipeline_metrics::increment(
-                cloudsidra_edge::pipeline_metrics::PipelineCounter::LocalLogWriteFailed,
+            zelvik_edge::pipeline_metrics::increment(
+                zelvik_edge::pipeline_metrics::PipelineCounter::LocalLogWriteFailed,
             );
         } else {
             written = written.saturating_add(pending.len() as u64);
@@ -185,9 +185,9 @@ fn run_log_writer(
 }
 
 #[derive(Parser)]
-#[command(name = "cloudsidra-edge")]
+#[command(name = "zelvik-edge")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
-#[command(about = "CloudSidra-Edge - High Performance Cloud Node written in Rust / Rust 编写的高性能云节点", long_about = None)]
+#[command(about = "Zelvik-Edge - High Performance Cloud Node written in Rust / Rust 编写的高性能云节点", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -232,7 +232,7 @@ enum Commands {
         version: String,
 
         /// GitHub repository in OWNER/REPO form.
-        #[arg(long, default_value = "CloudSidra/CloudSidra-Edge")]
+        #[arg(long, default_value = "Zelvik-Labs/edge")]
         repo: String,
 
         /// GitHub base URL used to construct release download URLs.
@@ -252,7 +252,7 @@ enum Commands {
         install_binary: Option<PathBuf>,
 
         /// Directory for previous binary backups.
-        #[arg(long, default_value = "/var/backups/cloudsidra/edge-upgrade")]
+        #[arg(long, default_value = "/var/backups/zelvik/edge-upgrade")]
         backup_dir: PathBuf,
 
         /// Confirm all prompts and run non-interactively.
@@ -263,7 +263,7 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
 
-        /// Do not restart/start cloudsidra-edge after replacing the binary.
+        /// Do not restart/start zelvik-edge after replacing the binary.
         #[arg(long)]
         no_restart: bool,
     },
@@ -332,7 +332,7 @@ enum FirewallCommands {
     Init,
     /// Clean expired local firewall block records from Mace
     Gc,
-    /// List nftables and CloudSidra-Edge blacklist entries
+    /// List nftables and Zelvik-Edge blacklist entries
     List {
         /// Aggregate exact IP rows when total entries exceed this threshold
         #[arg(long, default_value_t = 200)]
@@ -510,7 +510,7 @@ enum XdpCliCc {
     LossBlind,
 }
 
-impl From<XdpCliCc> for cloudsidra_edge::runtime_mode::XdpTransportController {
+impl From<XdpCliCc> for zelvik_edge::runtime_mode::XdpTransportController {
     fn from(value: XdpCliCc) -> Self {
         match value {
             XdpCliCc::Cubic => Self::Cubic,
@@ -650,7 +650,7 @@ fn spawn_xdp_diag_log_task(rt: &tokio::runtime::Runtime, enabled: bool) {
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             interval.tick().await;
-            let diag = cloudsidra_edge::xdp::af_xdp::tcp_diag_scalars();
+            let diag = zelvik_edge::xdp::af_xdp::tcp_diag_scalars();
             info!("afxdp.tcp diag {}", diag);
         }
     });
@@ -672,7 +672,7 @@ async fn sync_xdp_proxy_ports_once() -> anyhow::Result<Option<(usize, usize)>> {
     let payload = kernel_syn_defense::fetch_live_node_config_payload()
         .await
         .context("failed to fetch live node config for XDP proxy port sync")?;
-    let ports = cloudsidra_edge::xdp_auto_config::xdp_proxy_ports_from_servers(&payload.servers);
+    let ports = zelvik_edge::xdp_auto_config::xdp_proxy_ports_from_servers(&payload.servers);
     if ports == runtime_config.xdp.proxy.ports {
         return Ok(None);
     }
@@ -684,14 +684,14 @@ async fn sync_xdp_proxy_ports_once() -> anyhow::Result<Option<(usize, usize)>> {
     // Derived state lives in memory only: the config file holds at most the
     // explicit `xdp.enabled` override, and every attach re-derives the rest.
     RuntimeConfig::set_current(runtime_config);
-    cloudsidra_edge::xdp::reload_from_runtime()
+    zelvik_edge::xdp::reload_from_runtime()
         .await
         .context("failed to reload XDP after proxy port sync")?;
     Ok(Some((old_count, new_count)))
 }
 
 fn build_time_display() -> String {
-    option_env!("CLOUDSIDRA_EDGE_BUILD_TIMESTAMP")
+    option_env!("ZELVIK_EDGE_BUILD_TIMESTAMP")
         .and_then(|value| value.parse::<i64>().ok())
         .and_then(|timestamp| Local.timestamp_opt(timestamp, 0).single())
         .map(|dt| dt.format("%Y-%m-%d %H:%M:%S %z").to_string())
@@ -750,7 +750,7 @@ fn prompt_ntp_timezone() -> anyhow::Result<Option<String>> {
         return Ok(None);
     }
 
-    let current = cloudsidra_edge::utils::ntp::detect_system_timezone()
+    let current = zelvik_edge::utils::ntp::detect_system_timezone()
         .unwrap_or_else(|| "Asia/Shanghai".to_string());
     println!("{}", t("ntp.title"));
     println!("  {}: {}", t("ntp.current_timezone"), current);
@@ -830,7 +830,7 @@ fn run_zerocopy_command(enable: bool, disable: bool, yes: bool) -> anyhow::Resul
     println!(
         "  {:<18} auto (current {} bytes)",
         format!("{}:", t("zerocopy.copy_buffer")),
-        cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.relay_copy_buffer_bytes()
+        zelvik_edge::memory_governor::MEMORY_GOVERNOR.relay_copy_buffer_bytes()
     );
 
     let requested_zero_copy = if enable {
@@ -892,13 +892,13 @@ fn run_firewall_command(command: FirewallCommands) -> anyhow::Result<()> {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?;
-            rt.block_on(cloudsidra_edge::firewall::kernel::ensure_nftables())?;
+            rt.block_on(zelvik_edge::firewall::kernel::ensure_nftables())?;
             println!("{}", t("firewall.initialized"));
         }
         FirewallCommands::Gc => {
-            let now = cloudsidra_edge::utils::time::now_timestamp();
-            let removed = cloudsidra_edge::firewall::persistence::cleanup_expired(now);
-            let _ = cloudsidra_edge::firewall::persistence::flush_pending();
+            let now = zelvik_edge::utils::time::now_timestamp();
+            let removed = zelvik_edge::firewall::persistence::cleanup_expired(now);
+            let _ = zelvik_edge::firewall::persistence::flush_pending();
             println!("{}: {}", t("firewall.gc_removed"), removed);
         }
         FirewallCommands::List {
@@ -945,7 +945,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                     .enable_all()
                     .build()?;
                 match rt.block_on(
-                    cloudsidra_edge::xdp_auto_config::derive_xdp_config_from_live_node(
+                    zelvik_edge::xdp_auto_config::derive_xdp_config_from_live_node(
                         &runtime_config,
                     ),
                 ) {
@@ -954,7 +954,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 }
             }
             RuntimeConfig::set_current(runtime_config);
-            println!("{}", cloudsidra_edge::xdp::doctor_report());
+            println!("{}", zelvik_edge::xdp::doctor_report());
             if let Some(err) = auto_error {
                 println!("  auto derive:   failed: {err}");
             }
@@ -994,9 +994,9 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 xdp
             } else {
                 rt.block_on(
-                    cloudsidra_edge::xdp_auto_config::derive_xdp_config_from_live_node_with_options(
+                    zelvik_edge::xdp_auto_config::derive_xdp_config_from_live_node_with_options(
                         &runtime_config,
-                        cloudsidra_edge::xdp_auto_config::XdpAutoConfigOptions {
+                        zelvik_edge::xdp_auto_config::XdpAutoConfigOptions {
                             interfaces,
                             mode: mode.map(Into::into).unwrap_or(XdpRuntimeMode::Proxy),
                             attach_mode: attach_mode.map(Into::into).unwrap_or(XdpAttachMode::Auto),
@@ -1014,19 +1014,19 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             runtime_config.xdp = effective_xdp;
             runtime_config.validate()?;
             if !no_tune {
-                let report = cloudsidra_edge::xdp_netdev_tuning::apply_for_xdp_config(
+                let report = zelvik_edge::xdp_netdev_tuning::apply_for_xdp_config(
                     &runtime_config.xdp,
-                    cloudsidra_edge::xdp_netdev_tuning::XdpNetdevTuneOptions {
+                    zelvik_edge::xdp_netdev_tuning::XdpNetdevTuneOptions {
                         dry_run,
                         install_tools: !no_install_tools,
                         report_node_log: true,
                         persist_report: !dry_run,
                     },
                 )?;
-                cloudsidra_edge::xdp_netdev_tuning::print_report(&report);
+                zelvik_edge::xdp_netdev_tuning::print_report(&report);
             }
             if !dry_run {
-                cloudsidra_edge::xdp_auto_config::refresh_xdp_interface_queues(
+                zelvik_edge::xdp_auto_config::refresh_xdp_interface_queues(
                     &mut runtime_config.xdp,
                 );
                 runtime_config.validate()?;
@@ -1039,9 +1039,9 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 );
                 return Ok(());
             }
-            let runtime_path = cloudsidra_edge::paths::NodePaths::current().api_config_file();
+            let runtime_path = zelvik_edge::paths::NodePaths::current().api_config_file();
             if file_config_is_authoritative {
-                cloudsidra_edge::xdp_config_wizard::merge_xdp_enabled(&runtime_path, true)?;
+                zelvik_edge::xdp_config_wizard::merge_xdp_enabled(&runtime_path, true)?;
             } else {
                 save_xdp_enabled(&runtime_path, true)?;
             }
@@ -1049,15 +1049,15 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             if !is_systemd_invocation() && systemd_service_is_active() {
                 run_systemctl("restart")?;
                 std::thread::sleep(Duration::from_secs(3));
-                if let Some(status) = cloudsidra_edge::xdp::persisted_status_snapshot() {
+                if let Some(status) = zelvik_edge::xdp::persisted_status_snapshot() {
                     print_xdp_status_snapshot(status);
                 } else {
-                    println!("XDP config saved; cloudsidra-edge.service restarted.");
+                    println!("XDP config saved; zelvik-edge.service restarted.");
                 }
                 return Ok(());
             }
             RuntimeConfig::set_current(runtime_config);
-            rt.block_on(cloudsidra_edge::xdp::attach_from_runtime())?;
+            rt.block_on(zelvik_edge::xdp::attach_from_runtime())?;
             print_xdp_status();
         }
         XdpCommands::Stop { purge_state } => {
@@ -1066,9 +1066,9 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?;
-            rt.block_on(cloudsidra_edge::xdp::detach(purge_state))?;
+            rt.block_on(zelvik_edge::xdp::detach(purge_state))?;
             runtime_config.xdp.enabled = false;
-            let runtime_path = cloudsidra_edge::paths::NodePaths::current().api_config_file();
+            let runtime_path = zelvik_edge::paths::NodePaths::current().api_config_file();
             save_xdp_enabled(&runtime_path, false)?;
             RuntimeConfig::set_current(runtime_config);
             print_xdp_status();
@@ -1085,7 +1085,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                         .enable_all()
                         .build()?;
                     rt.block_on(
-                        cloudsidra_edge::xdp_auto_config::derive_xdp_config_from_live_node(
+                        zelvik_edge::xdp_auto_config::derive_xdp_config_from_live_node(
                             &runtime_config,
                         ),
                     )?
@@ -1104,24 +1104,24 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             } else {
                 interfaces
             };
-            let report = cloudsidra_edge::xdp_netdev_tuning::apply_for_interfaces(
+            let report = zelvik_edge::xdp_netdev_tuning::apply_for_interfaces(
                 &interface_names,
                 runtime_config.xdp.fallback,
-                cloudsidra_edge::xdp_netdev_tuning::XdpNetdevTuneOptions {
+                zelvik_edge::xdp_netdev_tuning::XdpNetdevTuneOptions {
                     dry_run: !apply,
                     install_tools: apply && !no_install_tools,
                     report_node_log: true,
                     persist_report: apply,
                 },
             )?;
-            cloudsidra_edge::xdp_netdev_tuning::print_report(&report);
+            zelvik_edge::xdp_netdev_tuning::print_report(&report);
         }
         XdpCommands::DumpMaps => {
             let runtime_config = RuntimeConfig::load_default()?;
             RuntimeConfig::set_current(runtime_config);
             println!(
                 "{}",
-                serde_json::to_string_pretty(&cloudsidra_edge::xdp::dump_maps())?
+                serde_json::to_string_pretty(&zelvik_edge::xdp::dump_maps())?
             );
         }
         XdpCommands::Reload => {
@@ -1130,7 +1130,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?;
-            rt.block_on(cloudsidra_edge::xdp::reload_from_runtime())?;
+            rt.block_on(zelvik_edge::xdp::reload_from_runtime())?;
             print_xdp_status();
         }
         XdpCommands::RawSmoke {
@@ -1143,7 +1143,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 .enable_all()
                 .build()?;
             let duration = Duration::from_millis(duration_ms.max(1));
-            let report = rt.block_on(cloudsidra_edge::xdp::raw_smoke(duration, ready_file))?;
+            let report = rt.block_on(zelvik_edge::xdp::raw_smoke(duration, ready_file))?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
         XdpCommands::ProxySmoke {
@@ -1156,7 +1156,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             let runtime_config = RuntimeConfig::load_default()?;
             RuntimeConfig::set_current(runtime_config);
             if let Some(cc) = cc {
-                cloudsidra_edge::runtime_mode::set_validation_transport_controller(cc.into());
+                zelvik_edge::runtime_mode::set_validation_transport_controller(cc.into());
             }
             // Match the production `run_node` scheduler: session tasks,
             // demux workers and per-queue bridges spread across cores.
@@ -1167,7 +1167,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 .enable_all()
                 .build()?;
             let duration = Duration::from_millis(duration_ms.max(1));
-            let report = rt.block_on(cloudsidra_edge::xdp::proxy_smoke(
+            let report = rt.block_on(zelvik_edge::xdp::proxy_smoke(
                 duration, ready_file, kernel, remote,
             ))?;
             println!("{}", serde_json::to_string_pretty(&report)?);
@@ -1182,7 +1182,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 .enable_all()
                 .build()?;
             let duration = Duration::from_millis(duration_ms.max(1));
-            let report = rt.block_on(cloudsidra_edge::xdp::proxy_reload_smoke(
+            let report = rt.block_on(zelvik_edge::xdp::proxy_reload_smoke(
                 duration, ready_file,
             ))?;
             println!("{}", serde_json::to_string_pretty(&report)?);
@@ -1199,7 +1199,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             let runtime_config = RuntimeConfig::load_default()?;
             RuntimeConfig::set_current(runtime_config);
             if let Some(cc) = cc {
-                cloudsidra_edge::runtime_mode::set_validation_transport_controller(cc.into());
+                zelvik_edge::runtime_mode::set_validation_transport_controller(cc.into());
             }
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -1208,7 +1208,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             let payload = vec![0x5au8; payload_bytes];
             let send_interval = Duration::from_millis(send_interval_ms);
             let reload_at = reload_at_ms.map(Duration::from_millis);
-            let report = rt.block_on(cloudsidra_edge::xdp::dial_smoke(
+            let report = rt.block_on(zelvik_edge::xdp::dial_smoke(
                 target,
                 duration,
                 ready_file,
@@ -1227,15 +1227,15 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
 
 fn print_xdp_status() {
     let status = if RuntimeConfig::current().is_some() {
-        cloudsidra_edge::xdp::status_snapshot()
+        zelvik_edge::xdp::status_snapshot()
     } else {
-        cloudsidra_edge::xdp::persisted_status_snapshot()
-            .unwrap_or_else(cloudsidra_edge::xdp::status_snapshot)
+        zelvik_edge::xdp::persisted_status_snapshot()
+            .unwrap_or_else(zelvik_edge::xdp::status_snapshot)
     };
     print_xdp_status_snapshot(status);
 }
 
-fn print_xdp_status_snapshot(status: cloudsidra_edge::xdp::XdpStatusSnapshot) {
+fn print_xdp_status_snapshot(status: zelvik_edge::xdp::XdpStatusSnapshot) {
     println!("{}", t("xdp.status.title"));
     println!(
         "  {:<14} {}",
@@ -1377,7 +1377,7 @@ fn print_xdp_status_snapshot(status: cloudsidra_edge::xdp::XdpStatusSnapshot) {
             }
         }
     }
-    for line in cloudsidra_edge::xdp_netdev_tuning::status_lines() {
+    for line in zelvik_edge::xdp_netdev_tuning::status_lines() {
         println!("{line}");
     }
 }
@@ -1393,8 +1393,8 @@ fn xdp_yes_no(value: bool) -> &'static str {
 fn print_defense_status() {
     let syn = kernel_syn_defense::snapshot();
     let active = l4_connection_registry::snapshot();
-    let metrics = cloudsidra_edge::l4_defense::metrics_snapshot();
-    let pressure = cloudsidra_edge::l4_defense::current_pressure_level();
+    let metrics = zelvik_edge::l4_defense::metrics_snapshot();
+    let pressure = zelvik_edge::l4_defense::current_pressure_level();
 
     println!("{}", t("defense.title"));
     println!(
@@ -1477,10 +1477,10 @@ fn run_firewall_list(aggregate_threshold: usize, no_aggregate: bool) -> anyhow::
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    let nf_ips = rt.block_on(cloudsidra_edge::firewall::kernel::nftables_blocked_ips())?;
+    let nf_ips = rt.block_on(zelvik_edge::firewall::kernel::nftables_blocked_ips())?;
     let nf_ips = nf_ips.into_iter().collect::<BTreeSet<_>>();
-    let expired_cleaned = cloudsidra_edge::firewall::persistence::cleanup_expired(
-        cloudsidra_edge::utils::time::now_timestamp(),
+    let expired_cleaned = zelvik_edge::firewall::persistence::cleanup_expired(
+        zelvik_edge::utils::time::now_timestamp(),
     );
     let (black_ips, black_targets) = load_blacklist_snapshot();
 
@@ -1522,10 +1522,10 @@ fn run_firewall_list(aggregate_threshold: usize, no_aggregate: bool) -> anyhow::
 }
 
 fn load_blacklist_snapshot() -> (BTreeSet<IpAddr>, Vec<String>) {
-    let now = cloudsidra_edge::utils::time::now_timestamp();
+    let now = zelvik_edge::utils::time::now_timestamp();
     let mut ips = BTreeSet::new();
     let mut targets = BTreeSet::new();
-    for record in cloudsidra_edge::firewall::persistence::load_active_blacklist_records(now) {
+    for record in zelvik_edge::firewall::persistence::load_active_blacklist_records(now) {
         if let Ok(ip) = record.target.parse::<IpAddr>() {
             ips.insert(ip);
         } else {
@@ -1649,13 +1649,13 @@ fn run_ntp_command(
     };
 
     if let Some(timezone) = timezone {
-        cloudsidra_edge::utils::ntp::set_system_timezone(&timezone)?;
+        zelvik_edge::utils::ntp::set_system_timezone(&timezone)?;
         println!("{} {}", t("ntp.timezone_set"), timezone);
     }
-    cloudsidra_edge::utils::time::init_local_timezone();
+    zelvik_edge::utils::time::init_local_timezone();
 
     let servers = if servers.is_empty() {
-        cloudsidra_edge::utils::ntp::default_servers_as_strings()
+        zelvik_edge::utils::ntp::default_servers_as_strings()
     } else {
         servers
     };
@@ -1663,9 +1663,9 @@ fn run_ntp_command(
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    let result = rt.block_on(cloudsidra_edge::utils::ntp::sync_once(&servers, timeout))?;
+    let result = rt.block_on(zelvik_edge::utils::ntp::sync_once(&servers, timeout))?;
     let adjusted_millis =
-        cloudsidra_edge::utils::ntp::apply_system_clock_offset(result.offset_millis)?;
+        zelvik_edge::utils::ntp::apply_system_clock_offset(result.offset_millis)?;
     println!("{}", result.system_clock_log_message(adjusted_millis));
     Ok(())
 }
@@ -1722,23 +1722,23 @@ fn cmdline_contains_management_command(cmdline: &[u8]) -> bool {
 }
 
 #[cfg(any(target_os = "linux", test))]
-fn is_cloudsidra_edge_binary_name(name: &str) -> bool {
-    // "CloudSidra-Edge" is the Cargo artifact name (target/release/CloudSidra-Edge);
-    // release tarballs rename it to "cloudsidra-edge". Both must be recognized or
+fn is_zelvik_edge_binary_name(name: &str) -> bool {
+    // "Zelvik-Edge" is the Cargo artifact name (target/release/Zelvik-Edge);
+    // release tarballs rename it to "zelvik-edge". Both must be recognized or
     // check_running misses the daemon, removes its live pid file, and restart
     // leaves two instances split-brained on the same config.
     matches!(
         name,
-        "cloudsidra-edge" | "CloudSidra-Edge" | "cloud-node" | "cloud-node-rust"
+        "zelvik-edge" | "Zelvik-Edge" | "cloud-node" | "cloud-node-rust"
     )
 }
 
 #[cfg(target_os = "linux")]
-fn is_cloudsidra_edge_process(pid: u32) -> bool {
+fn is_zelvik_edge_process(pid: u32) -> bool {
     if let Ok(exe) = fs::read_link(format!("/proc/{pid}/exe")) {
         if !process_basename(&exe)
             .as_deref()
-            .is_some_and(is_cloudsidra_edge_binary_name)
+            .is_some_and(is_zelvik_edge_binary_name)
         {
             return false;
         }
@@ -1753,12 +1753,12 @@ fn is_cloudsidra_edge_process(pid: u32) -> bool {
 
     first_cmdline_arg_basename(&cmdline)
         .as_deref()
-        .is_some_and(is_cloudsidra_edge_binary_name)
+        .is_some_and(is_zelvik_edge_binary_name)
         && !cmdline_contains_management_command(&cmdline)
 }
 
 #[cfg(not(target_os = "linux"))]
-fn is_cloudsidra_edge_process(_pid: u32) -> bool {
+fn is_zelvik_edge_process(_pid: u32) -> bool {
     true
 }
 
@@ -1766,10 +1766,10 @@ fn read_pid(path: &Path) -> Option<u32> {
     fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
-fn find_cloudsidra_edge_process_by_cwd(pid_path: PathBuf) -> Option<RunningInstance> {
+fn find_zelvik_edge_process_by_cwd(pid_path: PathBuf) -> Option<RunningInstance> {
     let current_pid = std::process::id();
     let root =
-        fs::canonicalize(cloudsidra_edge::paths::NodePaths::current().runtime_root()).ok()?;
+        fs::canonicalize(zelvik_edge::paths::NodePaths::current().runtime_root()).ok()?;
 
     for entry in fs::read_dir("/proc").ok()? {
         let Ok(entry) = entry else {
@@ -1778,7 +1778,7 @@ fn find_cloudsidra_edge_process_by_cwd(pid_path: PathBuf) -> Option<RunningInsta
         let Ok(pid) = entry.file_name().to_string_lossy().parse::<u32>() else {
             continue;
         };
-        if pid == current_pid || !process_exists(pid) || !is_cloudsidra_edge_process(pid) {
+        if pid == current_pid || !process_exists(pid) || !is_zelvik_edge_process(pid) {
             continue;
         }
 
@@ -1796,7 +1796,7 @@ fn find_cloudsidra_edge_process_by_cwd(pid_path: PathBuf) -> Option<RunningInsta
 fn check_running() -> Option<RunningInstance> {
     use std::os::unix::io::AsRawFd;
 
-    let node_paths = cloudsidra_edge::paths::NodePaths::current();
+    let node_paths = zelvik_edge::paths::NodePaths::current();
     let mut pid_paths = node_paths.pid_file_candidates();
 
     for path in &pid_paths {
@@ -1822,7 +1822,7 @@ fn check_running() -> Option<RunningInstance> {
             || err.raw_os_error() == Some(libc::EAGAIN))
             && let Some(pid) = read_pid(path)
         {
-            if process_exists(pid) && is_cloudsidra_edge_process(pid) {
+            if process_exists(pid) && is_zelvik_edge_process(pid) {
                 return Some(RunningInstance {
                     pid,
                     pid_path: path.clone(),
@@ -1832,7 +1832,7 @@ fn check_running() -> Option<RunningInstance> {
         }
     }
 
-    find_cloudsidra_edge_process_by_cwd(pid_paths.remove(0))
+    find_zelvik_edge_process_by_cwd(pid_paths.remove(0))
 }
 
 fn send_signal(pid: u32, signal: libc::c_int) -> io::Result<()> {
@@ -1868,7 +1868,7 @@ fn stop_running_instance(instance: RunningInstance) -> anyhow::Result<()> {
         send_signal(instance.pid, libc::SIGKILL)?;
         if !wait_for_exit(instance.pid, Duration::from_secs(5)) {
             anyhow::bail!(
-                "CloudSidra-Edge process {} did not exit after SIGKILL",
+                "Zelvik-Edge process {} did not exit after SIGKILL",
                 instance.pid
             );
         }
@@ -1893,7 +1893,7 @@ fn systemd_service_is_active() -> bool {
     Command::new("systemctl")
         .arg("is-active")
         .arg("--quiet")
-        .arg("cloudsidra-edge.service")
+        .arg("zelvik-edge.service")
         .status()
         .map(|status| status.success())
         .unwrap_or(false)
@@ -1903,7 +1903,7 @@ fn systemd_service_is_active() -> bool {
 fn systemd_service_exists() -> bool {
     Command::new("systemctl")
         .arg("cat")
-        .arg("cloudsidra-edge.service")
+        .arg("zelvik-edge.service")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -1927,15 +1927,15 @@ fn run_systemctl(action: &str) -> anyhow::Result<bool> {
     }
 
     println!(
-        "{}: systemctl {action} cloudsidra-edge.service",
+        "{}: systemctl {action} zelvik-edge.service",
         t("systemd.managed")
     );
     let status = Command::new("systemctl")
         .arg(action)
-        .arg("cloudsidra-edge.service")
+        .arg("zelvik-edge.service")
         .status()?;
     if !status.success() {
-        anyhow::bail!("systemctl {action} cloudsidra-edge.service failed with {status}");
+        anyhow::bail!("systemctl {action} zelvik-edge.service failed with {status}");
     }
     Ok(true)
 }
@@ -1960,17 +1960,17 @@ struct UpgradeOptions {
 }
 
 #[cfg(test)]
-use cloudsidra_edge::node_upgrade::select_release_asset;
-use cloudsidra_edge::node_upgrade::{
+use zelvik_edge::node_upgrade::select_release_asset;
+use zelvik_edge::node_upgrade::{
     XDP_EBPF_OBJECT_NAME, detect_release_asset, download_to_file, extract_release_payload,
     install_release_payload, install_xdp_ebpf_object_to_runtime,
 };
 
 #[cfg(target_os = "linux")]
-const CLOUDSIDRA_EDGE_SYSTEMD_SERVICE: &str = "cloudsidra-edge.service";
+const ZELVIK_EDGE_SYSTEMD_SERVICE: &str = "zelvik-edge.service";
 #[cfg(target_os = "linux")]
-const CLOUDSIDRA_EDGE_SYSTEMD_SERVICE_PATH: &str = "/etc/systemd/system/cloudsidra-edge.service";
-const CLOUDSIDRA_EDGE_WRAPPER_PATH: &str = "/usr/bin/cloudsidra-edge";
+const ZELVIK_EDGE_SYSTEMD_SERVICE_PATH: &str = "/etc/systemd/system/zelvik-edge.service";
+const ZELVIK_EDGE_WRAPPER_PATH: &str = "/usr/bin/zelvik-edge";
 
 #[derive(Debug, PartialEq, Eq)]
 struct XdpObjectRepair {
@@ -2093,7 +2093,7 @@ fn split_config_words(value: &str) -> Vec<String> {
     words
 }
 
-fn service_env_cloudsidra_edge_home_from_text(service: &str) -> Option<PathBuf> {
+fn service_env_zelvik_edge_home_from_text(service: &str) -> Option<PathBuf> {
     for line in service.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with('#') {
@@ -2103,7 +2103,7 @@ fn service_env_cloudsidra_edge_home_from_text(service: &str) -> Option<PathBuf> 
             continue;
         };
         for word in split_config_words(rest) {
-            if let Some(value) = word.strip_prefix("CLOUDSIDRA_EDGE_HOME=") {
+            if let Some(value) = word.strip_prefix("ZELVIK_EDGE_HOME=") {
                 return normalize_config_path(value);
             }
         }
@@ -2129,21 +2129,21 @@ fn service_working_directory_from_text(service: &str) -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "linux")]
-fn cloudsidra_edge_service_text() -> Option<String> {
+fn zelvik_edge_service_text() -> Option<String> {
     if let Ok(output) = Command::new("systemctl")
         .arg("cat")
-        .arg(CLOUDSIDRA_EDGE_SYSTEMD_SERVICE)
+        .arg(ZELVIK_EDGE_SYSTEMD_SERVICE)
         .output()
         && output.status.success()
         && !output.stdout.is_empty()
     {
         return Some(String::from_utf8_lossy(&output.stdout).into_owned());
     }
-    fs::read_to_string(CLOUDSIDRA_EDGE_SYSTEMD_SERVICE_PATH).ok()
+    fs::read_to_string(ZELVIK_EDGE_SYSTEMD_SERVICE_PATH).ok()
 }
 
 #[cfg(not(target_os = "linux"))]
-fn cloudsidra_edge_service_text() -> Option<String> {
+fn zelvik_edge_service_text() -> Option<String> {
     None
 }
 
@@ -2178,14 +2178,14 @@ fn script_cd_workdir(path: &Path) -> Option<PathBuf> {
 }
 
 fn runtime_root_from_inputs(
-    cloudsidra_edge_home: Option<PathBuf>,
+    zelvik_edge_home: Option<PathBuf>,
     service_env_home: Option<PathBuf>,
     service_workdir: Option<PathBuf>,
     wrapper_workdir: Option<PathBuf>,
     cwd: Option<PathBuf>,
     install_binary: &Path,
 ) -> anyhow::Result<PathBuf> {
-    if let Some(root) = cloudsidra_edge_home {
+    if let Some(root) = zelvik_edge_home {
         return Ok(root);
     }
     if let Some(root) = service_env_home {
@@ -2209,16 +2209,16 @@ fn runtime_root_from_inputs(
 }
 
 fn runtime_root_for_upgrade(install_binary: &Path) -> anyhow::Result<PathBuf> {
-    let service_text = cloudsidra_edge_service_text();
+    let service_text = zelvik_edge_service_text();
     runtime_root_from_inputs(
-        std::env::var_os("CLOUDSIDRA_EDGE_HOME").map(PathBuf::from),
+        std::env::var_os("ZELVIK_EDGE_HOME").map(PathBuf::from),
         service_text
             .as_deref()
-            .and_then(service_env_cloudsidra_edge_home_from_text),
+            .and_then(service_env_zelvik_edge_home_from_text),
         service_text
             .as_deref()
             .and_then(service_working_directory_from_text),
-        script_cd_workdir(Path::new(CLOUDSIDRA_EDGE_WRAPPER_PATH)),
+        script_cd_workdir(Path::new(ZELVIK_EDGE_WRAPPER_PATH)),
         std::env::current_dir().ok(),
         install_binary,
     )
@@ -2256,7 +2256,7 @@ fn repair_missing_xdp_ebpf_object(
 }
 
 fn repair_missing_xdp_ebpf_object_for_current_runtime(
-    node_paths: &cloudsidra_edge::paths::NodePaths,
+    node_paths: &zelvik_edge::paths::NodePaths,
 ) {
     let dest = node_paths.data_dir().join(XDP_EBPF_OBJECT_NAME);
     if dest.is_file() {
@@ -2264,7 +2264,7 @@ fn repair_missing_xdp_ebpf_object_for_current_runtime(
     }
 
     let install_binary =
-        std::env::current_exe().unwrap_or_else(|_| PathBuf::from("cloudsidra-edge"));
+        std::env::current_exe().unwrap_or_else(|_| PathBuf::from("zelvik-edge"));
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     match repair_missing_xdp_ebpf_object(node_paths.runtime_root(), &install_binary, &cwd) {
         Ok(Some(repair)) => warn!(
@@ -2374,7 +2374,7 @@ fn upgrade_binary(options: UpgradeOptions) -> anyhow::Result<()> {
     }
 
     let tmp_dir = std::env::temp_dir().join(format!(
-        "cloudsidra-edge-upgrade-{}-{}",
+        "zelvik-edge-upgrade-{}-{}",
         std::process::id(),
         unix_timestamp()
     ));
@@ -2441,34 +2441,34 @@ mod upgrade_tests {
         assert_eq!(
             release_download_url(
                 "https://github.com/",
-                "CloudSidra/CloudSidra-Edge",
+                "Zelvik-Labs/edge",
                 "latest",
-                "CloudSidra-Edge-linux-x64-v3-avx2.tar.gz"
+                "Zelvik-Edge-linux-x64-v3-avx2.tar.gz"
             ),
-            "https://github.com/CloudSidra/CloudSidra-Edge/releases/latest/download/CloudSidra-Edge-linux-x64-v3-avx2.tar.gz"
+            "https://github.com/Zelvik-Labs/edge/releases/latest/download/Zelvik-Edge-linux-x64-v3-avx2.tar.gz"
         );
         assert_eq!(
             release_download_url(
                 "https://github.com",
-                "CloudSidra/CloudSidra-Edge",
+                "Zelvik-Labs/edge",
                 "v1.1.6",
-                "CloudSidra-Edge-linux-arm64-generic.tar.gz"
+                "Zelvik-Edge-linux-arm64-generic.tar.gz"
             ),
-            "https://github.com/CloudSidra/CloudSidra-Edge/releases/download/v1.1.6/CloudSidra-Edge-linux-arm64-generic.tar.gz"
+            "https://github.com/Zelvik-Labs/edge/releases/download/v1.1.6/Zelvik-Edge-linux-arm64-generic.tar.gz"
         );
     }
 
     #[test]
     fn applies_github_mirror_urls() {
-        let url = "https://github.com/CloudSidra/CloudSidra-Edge/releases/latest/download/CloudSidra-Edge-linux-x64-v2-sse4.2.tar.gz";
+        let url = "https://github.com/Zelvik-Labs/edge/releases/latest/download/Zelvik-Edge-linux-x64-v2-sse4.2.tar.gz";
         assert_eq!(apply_github_mirror(url, None), url);
         assert_eq!(
             apply_github_mirror(url, Some("https://gh-proxy.example")),
-            "https://gh-proxy.example/https://github.com/CloudSidra/CloudSidra-Edge/releases/latest/download/CloudSidra-Edge-linux-x64-v2-sse4.2.tar.gz"
+            "https://gh-proxy.example/https://github.com/Zelvik-Labs/edge/releases/latest/download/Zelvik-Edge-linux-x64-v2-sse4.2.tar.gz"
         );
         assert_eq!(
             apply_github_mirror(url, Some("https://mirror.example/?target={url}")),
-            "https://mirror.example/?target=https://github.com/CloudSidra/CloudSidra-Edge/releases/latest/download/CloudSidra-Edge-linux-x64-v2-sse4.2.tar.gz"
+            "https://mirror.example/?target=https://github.com/Zelvik-Labs/edge/releases/latest/download/Zelvik-Edge-linux-x64-v2-sse4.2.tar.gz"
         );
     }
 
@@ -2476,15 +2476,15 @@ mod upgrade_tests {
     fn selects_x64_release_assets_by_cpu_flags() {
         assert_eq!(
             select_release_asset("x86_64", "flags: sse4_2 avx2", false).unwrap(),
-            "CloudSidra-Edge-linux-x64-v3-avx2.tar.gz"
+            "Zelvik-Edge-linux-x64-v3-avx2.tar.gz"
         );
         assert_eq!(
             select_release_asset("x86_64", "flags: sse4_2 avx512f avx2", false).unwrap(),
-            "CloudSidra-Edge-linux-x64-v4-avx512.tar.gz"
+            "Zelvik-Edge-linux-x64-v4-avx512.tar.gz"
         );
         assert_eq!(
             select_release_asset("x86_64", "flags: sse4_2", false).unwrap(),
-            "CloudSidra-Edge-linux-x64-v2-sse4.2.tar.gz"
+            "Zelvik-Edge-linux-x64-v2-sse4.2.tar.gz"
         );
         assert!(select_release_asset("x86_64", "flags: avx2", false).is_err());
         assert!(select_release_asset("x86_64", "flags: sse4_2", true).is_err());
@@ -2494,18 +2494,18 @@ mod upgrade_tests {
     fn selects_arm_release_assets_by_cpuinfo() {
         assert_eq!(
             select_release_asset("aarch64", "CPU part: neoverse-n1", false).unwrap(),
-            "CloudSidra-Edge-linux-arm64-neoverse-n1.tar.gz"
+            "Zelvik-Edge-linux-arm64-neoverse-n1.tar.gz"
         );
         assert_eq!(
             select_release_asset("aarch64", "processor: 0", false).unwrap(),
-            "CloudSidra-Edge-linux-arm64-generic.tar.gz"
+            "Zelvik-Edge-linux-arm64-generic.tar.gz"
         );
     }
 
     #[test]
     fn extracts_release_payload_with_xdp_object() {
         let temp_root = std::env::temp_dir().join(format!(
-            "cloudsidra-edge-release-payload-test-{}-{}",
+            "zelvik-edge-release-payload-test-{}-{}",
             std::process::id(),
             unix_timestamp()
         ));
@@ -2519,10 +2519,10 @@ mod upgrade_tests {
             let encoder = GzEncoder::new(file, Compression::default());
             let mut archive = tar::Builder::new(encoder);
 
-            append_test_tar_file(&mut archive, "cloudsidra-edge", b"binary")?;
+            append_test_tar_file(&mut archive, "zelvik-edge", b"binary")?;
             append_test_tar_file(
                 &mut archive,
-                "data/cloudsidra-edge-xdp-ebpf.o",
+                "data/zelvik-edge-xdp-ebpf.o",
                 b"ebpf-object",
             )?;
             archive.finish()?;
@@ -2544,22 +2544,22 @@ mod upgrade_tests {
     fn parses_service_and_wrapper_runtime_paths() {
         let service = r#"
 [Service]
-Environment="FOO=bar" "CLOUDSIDRA_EDGE_HOME=/srv/cloud node" BAZ=qux
-WorkingDirectory='/opt/cloudsidra/edge'
+Environment="FOO=bar" "ZELVIK_EDGE_HOME=/srv/cloud node" BAZ=qux
+WorkingDirectory='/opt/zelvik/edge'
 "#;
         assert_eq!(
-            service_env_cloudsidra_edge_home_from_text(service),
+            service_env_zelvik_edge_home_from_text(service),
             Some(PathBuf::from("/srv/cloud node"))
         );
         assert_eq!(
             service_working_directory_from_text(service),
-            Some(PathBuf::from("/opt/cloudsidra/edge"))
+            Some(PathBuf::from("/opt/zelvik/edge"))
         );
         assert_eq!(
             parse_script_cd_workdir(
-                "#!/bin/bash\ncd \"/var/lib/cloudsidra/edge\" && exec /var/lib/cloudsidra/edge/cloudsidra-edge \"$@\"\n"
+                "#!/bin/bash\ncd \"/var/lib/zelvik/edge\" && exec /var/lib/zelvik/edge/zelvik-edge \"$@\"\n"
             ),
-            Some(PathBuf::from("/var/lib/cloudsidra/edge"))
+            Some(PathBuf::from("/var/lib/zelvik/edge"))
         );
     }
 
@@ -2574,7 +2574,7 @@ WorkingDirectory='/opt/cloudsidra/edge'
             let cwd = temp_root.join("cwd");
             let empty_cwd = temp_root.join("empty-cwd");
             let bin_dir = temp_root.join("bin");
-            let install_binary = bin_dir.join("cloudsidra-edge");
+            let install_binary = bin_dir.join("zelvik-edge");
             fs::create_dir_all(cwd.join("configs"))?;
             fs::create_dir_all(&empty_cwd)?;
             fs::create_dir_all(&bin_dir)?;
@@ -2654,7 +2654,7 @@ WorkingDirectory='/opt/cloudsidra/edge'
                 None,
                 Some(runtime_root.clone()),
                 Some(cwd),
-                Path::new("/usr/bin/cloudsidra-edge"),
+                Path::new("/usr/bin/zelvik-edge"),
             )?;
             assert_eq!(resolved, runtime_root);
             assert_ne!(resolved, PathBuf::from("/usr/bin"));
@@ -2682,7 +2682,7 @@ WorkingDirectory='/opt/cloudsidra/edge'
             let runtime_root = temp_root.join("runtime");
             let bin_dir = temp_root.join("bin");
             let cwd = temp_root.join("cwd");
-            let install_binary = bin_dir.join("cloudsidra-edge");
+            let install_binary = bin_dir.join("zelvik-edge");
             let misplaced = bin_dir.join("data").join(XDP_EBPF_OBJECT_NAME);
             fs::create_dir_all(misplaced.parent().unwrap())?;
             fs::create_dir_all(&cwd)?;
@@ -2710,7 +2710,7 @@ WorkingDirectory='/opt/cloudsidra/edge'
             .map(|duration| duration.as_nanos())
             .unwrap_or(0);
         std::env::temp_dir().join(format!(
-            "cloudsidra-edge-{name}-{}-{nanos}",
+            "zelvik-edge-{name}-{}-{nanos}",
             std::process::id()
         ))
     }
@@ -2781,14 +2781,14 @@ fn main() -> anyhow::Result<()> {
     // Must run before any worker/runtime threads spawn: enables mimalloc's
     // abandoned-page purge on thread termination so RSS does not plateau on
     // pages owned by dead heaps.
-    cloudsidra_edge::memory_reclaim::configure_allocator();
+    zelvik_edge::memory_reclaim::configure_allocator();
     let cli = Cli::parse();
     Language::set_current(Language::detect());
     raise_nofile_limit();
 
     match cli.command {
         Some(Commands::UpgradeGuard { manifest }) => {
-            cloudsidra_edge::node_upgrade::run_upgrade_guard(&manifest)?
+            zelvik_edge::node_upgrade::run_upgrade_guard(&manifest)?
         }
         None => {
             // Default: Foreground
@@ -2804,7 +2804,7 @@ fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
 
-            let node_paths = cloudsidra_edge::paths::NodePaths::current();
+            let node_paths = zelvik_edge::paths::NodePaths::current();
             node_paths.ensure_runtime_dirs().ok();
 
             // Single-fork daemonize
@@ -2850,7 +2850,7 @@ fn main() -> anyhow::Result<()> {
 
                 // Run directly in the daemon child
                 if let Err(e) = run_node(cli.monitor_port, cli.monitor_clear) {
-                    eprintln!("CloudSidra-Edge fatal error: {}", e);
+                    eprintln!("Zelvik-Edge fatal error: {}", e);
                     libc::_exit(1);
                 }
             }
@@ -2906,7 +2906,7 @@ fn main() -> anyhow::Result<()> {
                 let work_dir = std::env::current_dir()?.canonicalize()?;
 
                 // 1. Create global command wrapper
-                let bin_path = "/usr/bin/cloudsidra-edge";
+                let bin_path = "/usr/bin/zelvik-edge";
                 let wrapper_script = format!(
                     "#!/bin/bash\ncd {}\n{} \"$@\"\n",
                     work_dir.display(),
@@ -2931,15 +2931,15 @@ fn main() -> anyhow::Result<()> {
                 println!("{}", t("install.global_ok"));
 
                 // 2. Create Systemd service
-                let service_path = "/etc/systemd/system/cloudsidra-edge.service";
+                let service_path = "/etc/systemd/system/zelvik-edge.service";
                 let service_content = format!(
                     "[Unit]\n\
-Description=CloudSidra-Edge High Performance Cloud Node\n\
+Description=Zelvik-Edge High Performance Cloud Node\n\
 After=network.target\n\n\
 [Service]\n\
 Type=simple\n\
 WorkingDirectory={}\n\
-Environment=CLOUDSIDRA_EDGE_HOME={}\n\
+Environment=ZELVIK_EDGE_HOME={}\n\
 ExecStart={}\n\
 ExecStop={} stop\n\
 TimeoutStopSec=35\n\
@@ -2964,7 +2964,7 @@ WantedBy=multi-user.target\n",
                     let _ = Command::new("systemctl").arg("daemon-reload").status();
                     let _ = Command::new("systemctl")
                         .arg("enable")
-                        .arg("cloudsidra-edge")
+                        .arg("zelvik-edge")
                         .status();
                     println!("{}", t("install.service_ok"));
                 }
@@ -3041,7 +3041,7 @@ WantedBy=multi-user.target\n",
             println!(
                 "{}: auto (current {} bytes)",
                 t("test.relay_copy_buffer"),
-                cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.relay_copy_buffer_bytes()
+                zelvik_edge::memory_governor::MEMORY_GOVERNOR.relay_copy_buffer_bytes()
             );
             println!(
                 "XDP: enabled={} attachMode={} fallback={} interfaces={}",
@@ -3075,7 +3075,7 @@ fn spawn_xdp_health_fallback_task(rt: &tokio::runtime::Runtime, waf_state: Arc<W
                 continue;
             }
 
-            let status = cloudsidra_edge::xdp::status_snapshot();
+            let status = zelvik_edge::xdp::status_snapshot();
             if status.warming || booted_at.elapsed() < XDP_HEALTH_BOOT_GRACE {
                 consecutive_failures = 0;
                 continue;
@@ -3093,7 +3093,7 @@ fn spawn_xdp_health_fallback_task(rt: &tokio::runtime::Runtime, waf_state: Arc<W
                 "XDP health check failed repeatedly; switching L4 kernel enforcement to non-XDP fallback: {}",
                 reason
             );
-            let fallback = cloudsidra_edge::firewall::kernel::build_non_xdp_fallback_filter().await;
+            let fallback = zelvik_edge::firewall::kernel::build_non_xdp_fallback_filter().await;
             let fallback_status = fallback.status();
             waf_state.set_kernel_filter(fallback);
             warn!(
@@ -3105,7 +3105,7 @@ fn spawn_xdp_health_fallback_task(rt: &tokio::runtime::Runtime, waf_state: Arc<W
     });
 }
 
-fn xdp_health_fallback_reason(status: &cloudsidra_edge::xdp::XdpStatusSnapshot) -> Option<String> {
+fn xdp_health_fallback_reason(status: &zelvik_edge::xdp::XdpStatusSnapshot) -> Option<String> {
     if !status.enabled {
         return None;
     }
@@ -3176,7 +3176,7 @@ impl pingora_core::services::background::BackgroundService for XdpShutdownServic
             info!("graceful upgrade in progress — XDP dataplane left for the successor");
             return;
         }
-        match tokio::time::timeout(Duration::from_secs(3), cloudsidra_edge::xdp::detach(false))
+        match tokio::time::timeout(Duration::from_secs(3), zelvik_edge::xdp::detach(false))
             .await
         {
             Ok(Ok(())) => info!("XDP dataplane detached during shutdown"),
@@ -3187,7 +3187,7 @@ impl pingora_core::services::background::BackgroundService for XdpShutdownServic
 }
 
 fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()> {
-    let node_paths = cloudsidra_edge::paths::NodePaths::current();
+    let node_paths = zelvik_edge::paths::NodePaths::current();
     node_paths.ensure_runtime_dirs().ok();
 
     // Panic sites must survive a dropped run.log batch or a journald that
@@ -3274,7 +3274,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
 
     init_logging(&node_paths);
 
-    info!("Starting CloudSidra Edge v{}...", env!("CARGO_PKG_VERSION"));
+    info!("Starting Zelvik Edge v{}...", env!("CARGO_PKG_VERSION"));
 
     // Create the runtime to spawn background tasks
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -3284,19 +3284,19 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
 
     if let Some(port) = monitor_port {
         spawn_staggered(&rt, Duration::ZERO, async move {
-            cloudsidra_edge::perf_monitor::start(port, monitor_clear).await;
+            zelvik_edge::perf_monitor::start(port, monitor_clear).await;
         });
     }
 
     // 1. Load API Config
     let api_config = ApiConfig::load_default().expect("Failed to load configs/api_node.yaml");
-    cloudsidra_edge::tcp_proxy::configure_relay_from_api(&api_config);
+    zelvik_edge::tcp_proxy::configure_relay_from_api(&api_config);
     let numeric_node_id = api_config.node_id.parse::<i64>().unwrap_or(0);
     logging::set_numeric_node_id(numeric_node_id);
     let access_log_pipeline = api_config.access_log_pipeline.normalized();
     let (log_tx, log_rx) = tokio::sync::mpsc::channel(access_log_pipeline.queue_capacity);
     let (node_log_tx, node_log_rx) = tokio::sync::mpsc::channel(
-        cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.node_log_queue_capacity(),
+        zelvik_edge::memory_governor::MEMORY_GOVERNOR.node_log_queue_capacity(),
     );
     logging::init_global_log_bus(
         log_tx,
@@ -3309,7 +3309,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     RuntimeConfig::set_current(runtime_config.clone());
     repair_missing_xdp_ebpf_object_for_current_runtime(&node_paths);
     if runtime_config.xdp.enabled && runtime_config.xdp.interfaces.is_empty() {
-        match rt.block_on(cloudsidra_edge::xdp::ensure_current_xdp_auto_config()) {
+        match rt.block_on(zelvik_edge::xdp::ensure_current_xdp_auto_config()) {
             Ok(()) => {
                 if let Some(current) = RuntimeConfig::current() {
                     runtime_config = current;
@@ -3324,9 +3324,9 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         }
     }
     if runtime_config.xdp.enabled {
-        match cloudsidra_edge::xdp_netdev_tuning::apply_for_xdp_config(
+        match zelvik_edge::xdp_netdev_tuning::apply_for_xdp_config(
             &runtime_config.xdp,
-            cloudsidra_edge::xdp_netdev_tuning::XdpNetdevTuneOptions {
+            zelvik_edge::xdp_netdev_tuning::XdpNetdevTuneOptions {
                 dry_run: false,
                 install_tools: false,
                 report_node_log: true,
@@ -3336,7 +3336,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
             Ok(report) => {
                 info!("XDP netdev tuning completed: {}", report.summary());
                 let before_interfaces = runtime_config.xdp.interfaces.clone();
-                cloudsidra_edge::xdp_auto_config::refresh_xdp_interface_queues(
+                zelvik_edge::xdp_auto_config::refresh_xdp_interface_queues(
                     &mut runtime_config.xdp,
                 );
                 runtime_config.validate()?;
@@ -3370,7 +3370,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
             }
         }
     }
-    if let Err(err) = rt.block_on(cloudsidra_edge::xdp::initialize_from_runtime()) {
+    if let Err(err) = rt.block_on(zelvik_edge::xdp::initialize_from_runtime()) {
         if runtime_config.xdp.fallback.fail_start() {
             return Err(err.context("XDP initialization failed"));
         }
@@ -3379,16 +3379,16 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     spawn_xdp_port_sync_task(&rt, runtime_config.xdp.enabled);
     spawn_xdp_diag_log_task(&rt, runtime_config.xdp.enabled);
     let api_config_arc = Arc::new(api_config.clone());
-    cloudsidra_edge::client_agent::load_client_agent_ip_index();
-    cloudsidra_edge::client_agent::start_client_agent_queue(api_config_arc.clone());
-    cloudsidra_edge::kernel_syn_defense::start_monitor();
+    zelvik_edge::client_agent::load_client_agent_ip_index();
+    zelvik_edge::client_agent::start_client_agent_queue(api_config_arc.clone());
+    zelvik_edge::kernel_syn_defense::start_monitor();
 
     // 2. Initialize Managers
     let config_store = Arc::new(ConfigStore::new());
-    cloudsidra_edge::kernel_syn_defense::start_synproxy_reconciler(config_store.clone());
+    zelvik_edge::kernel_syn_defense::start_synproxy_reconciler(config_store.clone());
     let waf_state = Arc::new(WafStateManager::new());
     waf_state.install_kernel_snapshot_provider();
-    let initial_kernel_filter = rt.block_on(cloudsidra_edge::firewall::kernel::build_filter(None));
+    let initial_kernel_filter = rt.block_on(zelvik_edge::firewall::kernel::build_filter(None));
     if initial_kernel_filter.available() {
         waf_state.set_kernel_filter(initial_kernel_filter);
     }
@@ -3400,8 +3400,8 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
             restored_blocks
         );
     }
-    cloudsidra_edge::firewall::persistence::start_flush_task();
-    cloudsidra_edge::firewall::state::start_gc_task(waf_state.clone());
+    zelvik_edge::firewall::persistence::start_flush_task();
+    zelvik_edge::firewall::state::start_gc_task(waf_state.clone());
     let ip_list_manager = Arc::new(firewall::lists::GlobalIpListManager::new(waf_state.clone()));
     let health_manager = GlobalHealthManager::new(16);
     let cert_selector = Arc::new(DynamicCertSelector::new());
@@ -3411,18 +3411,18 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         hm_start.start().await;
     });
 
-    if let Err(e) = cloudsidra_edge::telemetry::initialize() {
+    if let Err(e) = zelvik_edge::telemetry::initialize() {
         error!("telemetry spool initialization failed: {}", e);
-        cloudsidra_edge::telemetry::record_gap(
+        zelvik_edge::telemetry::record_gap(
             "core",
-            cloudsidra_edge::utils::time::now_timestamp(),
+            zelvik_edge::utils::time::now_timestamp(),
             &e.to_string(),
         );
     }
     let telemetry_core_api = api_config.clone();
-    rt.spawn(cloudsidra_edge::telemetry::replay(telemetry_core_api, true));
+    rt.spawn(zelvik_edge::telemetry::replay(telemetry_core_api, true));
     let telemetry_detail_api = api_config.clone();
-    rt.spawn(cloudsidra_edge::telemetry::replay(
+    rt.spawn(zelvik_edge::telemetry::replay(
         telemetry_detail_api,
         false,
     ));
@@ -3450,7 +3450,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         rpc::start_ip_list_syncer(ac_i, cs_i, il_i).await;
     });
 
-    cloudsidra_edge::metrics::analyzer::initialize_geoip_readers();
+    zelvik_edge::metrics::analyzer::initialize_geoip_readers();
 
     let ac_geoip = api_config.clone();
     spawn_staggered(&rt, Duration::from_secs(6), async move {
@@ -3470,8 +3470,8 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         rpc::start_updating_server_list_syncer(ac_us, cs_us, hm_us, ds_us).await;
     });
 
-    cloudsidra_edge::metrics::init_http_dimension_worker(
-        cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.metrics_queue_capacity(),
+    zelvik_edge::metrics::init_http_dimension_worker(
+        zelvik_edge::memory_governor::MEMORY_GOVERNOR.metrics_queue_capacity(),
     );
 
     // Reporters
@@ -3522,7 +3522,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     });
 
     spawn_staggered(&rt, Duration::from_secs(21), async move {
-        cloudsidra_edge::metrics::start_persistence_flusher().await;
+        zelvik_edge::metrics::start_persistence_flusher().await;
     });
 
     let ac_ocsp = api_config.clone();
@@ -3533,7 +3533,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
 
     // Log Uploader
     if api_config.kernel_tuning.normalized().enabled {
-        cloudsidra_edge::kernel_tuning::apply_runtime_tuning_and_report(
+        zelvik_edge::kernel_tuning::apply_runtime_tuning_and_report(
             &api_config.kernel_tuning.normalized(),
         );
     } else {
@@ -3547,22 +3547,22 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     }
     report_l4_performance_summary(&api_config);
 
-    rt.spawn(cloudsidra_edge::telemetry::access_logs(log_rx));
-    rt.spawn(cloudsidra_edge::telemetry::node_logs(node_log_rx));
+    rt.spawn(zelvik_edge::telemetry::access_logs(log_rx));
+    rt.spawn(zelvik_edge::telemetry::node_logs(node_log_rx));
     spawn_staggered(&rt, Duration::from_secs(16), async move {
-        cloudsidra_edge::utils::ntp::start_auto_ntp_syncer().await;
+        zelvik_edge::utils::ntp::start_auto_ntp_syncer().await;
     });
 
     // 4. Initialize Pingora Server with multi-threading
     let mut conf = pingora_core::server::configuration::ServerConf::default();
-    conf.threads = cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads();
+    conf.threads = zelvik_edge::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads();
     conf.upstream_keepalive_pool_size =
-        cloudsidra_edge::memory_governor::MEMORY_GOVERNOR.pingora_keepalive_pool_size(conf.threads);
+        zelvik_edge::memory_governor::MEMORY_GOVERNOR.pingora_keepalive_pool_size(conf.threads);
     conf.grace_period_seconds = Some(5);
     conf.graceful_shutdown_timeout_seconds = Some(5);
     let mut my_server = pingora_core::server::Server::new_with_opt_and_conf(None, conf);
     let mem_plan =
-        cloudsidra_edge::memory_plan::current_memory_plan(my_server.configuration.threads);
+        zelvik_edge::memory_plan::current_memory_plan(my_server.configuration.threads);
     info!(
         "Pingora server configured with {} threads, upstream keepalive pool per thread={}, memory plan={}",
         my_server.configuration.threads,
@@ -3577,34 +3577,34 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         waf_state: waf_state.clone(),
         api_config: api_config_arc.clone(),
         cert_selector: cert_selector.clone(),
-        waf_verifier: Arc::new(cloudsidra_edge::firewall::verifier::WafVerifier::new(
+        waf_verifier: Arc::new(zelvik_edge::firewall::verifier::WafVerifier::new(
             &api_config_arc.secret,
         )),
         tls_downstream: false,
     };
-    let http_manager = cloudsidra_edge::http_proxy_manager::HttpProxyManager::new(
+    let http_manager = zelvik_edge::http_proxy_manager::HttpProxyManager::new(
         (*config_store).clone(),
         cert_selector.clone(),
         proxy_logic.clone(),
         my_server.configuration.clone(),
     );
     let xdp_http_manager = http_manager.clone();
-    cloudsidra_edge::proxy::start_request_limit_cleanup_task();
-    cloudsidra_edge::origin_state::start_origin_state_cleanup_task();
-    cloudsidra_edge::metrics::storage::start_cache_access_flusher();
-    // cloudsidra_edge::cache_hybrid::start_cache_profiler();
-    cloudsidra_edge::metrics::start_pressure_updater();
-    cloudsidra_edge::memory_reclaim::start_reclaim_monitor();
-    cloudsidra_edge::cache_hybrid::start_cache_janitor();
-    tokio::spawn(cloudsidra_edge::cache_hybrid::start_cache_purger(
-        cloudsidra_edge::cache_manager::CACHE.storage,
-        cloudsidra_edge::paths::NodePaths::current().cache_dir(),
+    zelvik_edge::proxy::start_request_limit_cleanup_task();
+    zelvik_edge::origin_state::start_origin_state_cleanup_task();
+    zelvik_edge::metrics::storage::start_cache_access_flusher();
+    // zelvik_edge::cache_hybrid::start_cache_profiler();
+    zelvik_edge::metrics::start_pressure_updater();
+    zelvik_edge::memory_reclaim::start_reclaim_monitor();
+    zelvik_edge::cache_hybrid::start_cache_janitor();
+    tokio::spawn(zelvik_edge::cache_hybrid::start_cache_purger(
+        zelvik_edge::cache_manager::CACHE.storage,
+        zelvik_edge::paths::NodePaths::current().cache_dir(),
     ));
     spawn_staggered(&rt, Duration::from_secs(1), async move {
         http_manager.start_listeners().await;
     });
 
-    let http3_manager = cloudsidra_edge::http3_proxy_manager::Http3ProxyManager::new(
+    let http3_manager = zelvik_edge::http3_proxy_manager::Http3ProxyManager::new(
         (*config_store).clone(),
         cert_selector.clone(),
         proxy_logic,
@@ -3617,7 +3617,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         waf_state.clone(),
         numeric_node_id,
     );
-    let quic_udp_demux = cloudsidra_edge::quic_udp_demux::QuicUdpDemuxManager::new(
+    let quic_udp_demux = zelvik_edge::quic_udp_demux::QuicUdpDemuxManager::new(
         (*config_store).clone(),
         http3_manager,
         udp_manager.clone(),
@@ -3634,7 +3634,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         quic_udp_demux.start_listeners().await;
     });
     spawn_staggered(&rt, Duration::from_secs(2), async move {
-        cloudsidra_edge::xdp::af_xdp::start_proxy_bridge(
+        zelvik_edge::xdp::af_xdp::start_proxy_bridge(
             xdp_quic_udp_demux,
             xdp_tcp_manager,
             xdp_http_manager,
@@ -3663,23 +3663,23 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
                 sigint.recv().await;
                 let _ = tokio::time::timeout(
                     Duration::from_millis(1500),
-                    cloudsidra_edge::xdp::detach(false),
+                    zelvik_edge::xdp::detach(false),
                 )
                 .await;
             });
         }
     }
 
-    info!("CloudSidra-Edge (PID {}) is ready.", std::process::id());
+    info!("Zelvik-Edge (PID {}) is ready.", std::process::id());
     my_server.run_forever()
 }
 
-fn init_logging(node_paths: &cloudsidra_edge::paths::NodePaths) {
+fn init_logging(node_paths: &zelvik_edge::paths::NodePaths) {
     // Initialize logging with custom filter to silence hardcoded frame-level noise.
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
 
-    cloudsidra_edge::utils::time::init_local_timezone();
+    zelvik_edge::utils::time::init_local_timezone();
 
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         tracing_subscriber::EnvFilter::new("info,pingora_proxy::proxy_cache=off")
@@ -3716,7 +3716,7 @@ fn init_logging(node_paths: &cloudsidra_edge::paths::NodePaths) {
 
 fn report_l4_performance_summary(api_config: &ApiConfig) {
     let relay = api_config.relay.normalized();
-    let governor = &cloudsidra_edge::memory_governor::MEMORY_GOVERNOR;
+    let governor = &zelvik_edge::memory_governor::MEMORY_GOVERNOR;
     let message = format!(
         "zero_copy={} tcp_copy_buffer_bytes={} tcp_accept_workers={} udp_demux_workers={} udp_socket_buffer_bytes={}",
         relay.zero_copy,
@@ -3729,7 +3729,7 @@ fn report_l4_performance_summary(api_config: &ApiConfig) {
     logging::report_node_log("info".to_string(), "l4_performance".to_string(), message, 0);
 
     if !relay.zero_copy {
-        let recommendation = "TCP pure L4 forwarding can reduce CPU by enabling zero-copy: cloudsidra-edge zerocopy --enable";
+        let recommendation = "TCP pure L4 forwarding can reduce CPU by enabling zero-copy: zelvik-edge zerocopy --enable";
         info!("{}", recommendation);
         logging::report_node_log(
             "info".to_string(),
@@ -3744,39 +3744,39 @@ fn report_l4_performance_summary(api_config: &ApiConfig) {
 mod tests {
     use super::{
         FirewallAggregate, FirewallListFlags, cmdline_contains_management_command,
-        first_cmdline_arg_basename, is_cloudsidra_edge_binary_name, process_basename,
+        first_cmdline_arg_basename, is_zelvik_edge_binary_name, process_basename,
         record_firewall_aggregate, v4_24, v6_48,
     };
     use std::net::{Ipv4Addr, Ipv6Addr};
     use std::path::Path;
 
     #[test]
-    fn cloudsidra_edge_binary_names_accept_real_binaries() {
-        assert!(is_cloudsidra_edge_binary_name("cloudsidra-edge"));
-        assert!(is_cloudsidra_edge_binary_name("cloudsidra-edge"));
-        assert!(!is_cloudsidra_edge_binary_name("bash"));
-        assert!(!is_cloudsidra_edge_binary_name(
-            "install-cloudsidra-edge.sh"
+    fn zelvik_edge_binary_names_accept_real_binaries() {
+        assert!(is_zelvik_edge_binary_name("zelvik-edge"));
+        assert!(is_zelvik_edge_binary_name("zelvik-edge"));
+        assert!(!is_zelvik_edge_binary_name("bash"));
+        assert!(!is_zelvik_edge_binary_name(
+            "install-zelvik-edge.sh"
         ));
     }
 
     #[test]
     fn process_basename_strips_linux_deleted_suffix() {
         assert_eq!(
-            process_basename(Path::new("/opt/cloudsidra/edge/cloudsidra-edge (deleted)"))
+            process_basename(Path::new("/opt/zelvik/edge/zelvik-edge (deleted)"))
                 .as_deref(),
-            Some("cloudsidra-edge")
+            Some("zelvik-edge")
         );
     }
 
     #[test]
     fn cmdline_detection_uses_argv0_not_wrapper_arguments() {
         assert_eq!(
-            first_cmdline_arg_basename(b"/opt/cloudsidra/edge/cloudsidra-edge\0start\0").as_deref(),
-            Some("cloudsidra-edge")
+            first_cmdline_arg_basename(b"/opt/zelvik/edge/zelvik-edge\0start\0").as_deref(),
+            Some("zelvik-edge")
         );
         assert_eq!(
-            first_cmdline_arg_basename(b"bash\0/usr/bin/cloudsidra-edge\0status\0").as_deref(),
+            first_cmdline_arg_basename(b"bash\0/usr/bin/zelvik-edge\0status\0").as_deref(),
             Some("bash")
         );
     }
@@ -3784,19 +3784,19 @@ mod tests {
     #[test]
     fn cmdline_detection_excludes_short_lived_management_commands() {
         assert!(cmdline_contains_management_command(
-            b"/opt/cloudsidra/edge/cloudsidra-edge\0status\0"
+            b"/opt/zelvik/edge/zelvik-edge\0status\0"
         ));
         assert!(cmdline_contains_management_command(
-            b"/opt/cloudsidra/edge/cloudsidra-edge\0test\0"
+            b"/opt/zelvik/edge/zelvik-edge\0test\0"
         ));
         assert!(cmdline_contains_management_command(
-            b"/opt/cloudsidra/edge/cloudsidra-edge\0defense\0status\0"
+            b"/opt/zelvik/edge/zelvik-edge\0defense\0status\0"
         ));
         assert!(!cmdline_contains_management_command(
-            b"/opt/cloudsidra/edge/cloudsidra-edge\0start\0"
+            b"/opt/zelvik/edge/zelvik-edge\0start\0"
         ));
         assert!(!cmdline_contains_management_command(
-            b"/opt/cloudsidra/edge/cloudsidra-edge\0--monitor-port\08888\0"
+            b"/opt/zelvik/edge/zelvik-edge\0--monitor-port\08888\0"
         ));
     }
 

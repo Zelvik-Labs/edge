@@ -1,6 +1,6 @@
-use cloudsidra_edge::compiled::CompiledServerFeaturePlan;
-use cloudsidra_edge::config_models::NodeConfigPayload;
-use cloudsidra_edge::firewall::state::WafStateManager;
+use zelvik_edge::compiled::CompiledServerFeaturePlan;
+use zelvik_edge::config_models::NodeConfigPayload;
+use zelvik_edge::firewall::state::WafStateManager;
 
 #[test]
 fn actual_admin_payload_projected_by_api_parses_and_compiles() {
@@ -35,10 +35,10 @@ fn actual_admin_payload_projected_by_api_parses_and_compiles() {
     assert_eq!(groups[0].mode, "observe");
     assert!(groups.len() >= 2);
     let compiled_firewall =
-        cloudsidra_edge::firewall::compiled::CompiledFirewallPolicy::compile(firewall);
+        zelvik_edge::firewall::compiled::CompiledFirewallPolicy::compile(firewall);
     assert!(compiled_firewall.inbound.is_some());
     let cache = web.cache.as_ref().unwrap().cache_policy.as_ref().unwrap();
-    let compiled_cache = cloudsidra_edge::cache::compiled::CompiledCachePolicy::compile_arc(cache);
+    let compiled_cache = zelvik_edge::cache::compiled::CompiledCachePolicy::compile_arc(cache);
     assert_eq!(compiled_cache.refs.len(), 2);
     assert_eq!(compiled_cache.refs[0].response_policy.ttl_seconds(), 60);
     assert_eq!(
@@ -71,7 +71,7 @@ fn cc_minute_and_cache_write_limits_have_independent_windows_and_scopes() {
 
 #[tokio::test]
 async fn shared_certificate_ocsp_is_per_site_and_toggle_keeps_staple() {
-    use cloudsidra_edge::{
+    use zelvik_edge::{
         config_models::{SSLCertConfig, ServerConfig},
         ssl::{DynamicCertSelector, sync_certs_for_servers},
     };
@@ -147,7 +147,7 @@ async fn shared_certificate_ocsp_is_per_site_and_toggle_keeps_staple() {
 #[cfg(unix)]
 #[tokio::test]
 async fn observing_waf_group_cannot_bypass_later_defense() {
-    use cloudsidra_edge::{config_models::HTTPFirewallPolicy, firewall};
+    use zelvik_edge::{config_models::HTTPFirewallPolicy, firewall};
     use tokio::io::AsyncWriteExt;
     let (mut client, downstream) = tokio::net::UnixStream::pair().unwrap();
     client
@@ -180,14 +180,14 @@ async fn observing_waf_group_cannot_bypass_later_defense() {
 
 #[test]
 fn unsupported_rewrite_flags_are_rejected_instead_of_ignored() {
-    use cloudsidra_edge::config_models::HTTPRewriteRule;
+    use zelvik_edge::config_models::HTTPRewriteRule;
     assert!(serde_json::from_value::<HTTPRewriteRule>(serde_json::json!({"flags":"ig"})).is_ok());
     assert!(serde_json::from_value::<HTTPRewriteRule>(serde_json::json!({"flags":"z"})).is_err());
 }
 
 #[tokio::test]
 async fn ocsp_received_before_certificate_is_retained_and_expired_staples_are_omitted() {
-    use cloudsidra_edge::{
+    use zelvik_edge::{
         config_models::SSLCertConfig,
         ssl::{DynamicCertSelector, sync_certs},
     };
@@ -241,7 +241,7 @@ async fn ocsp_received_before_certificate_is_retained_and_expired_staples_are_om
 
 #[tokio::test]
 async fn inline_certificate_site_policy_matches_material_after_synthetic_id_assignment() {
-    use cloudsidra_edge::{
+    use zelvik_edge::{
         config_models::{SSLCertConfig, ServerConfig},
         ssl::{DynamicCertSelector, sync_certs_for_servers},
     };

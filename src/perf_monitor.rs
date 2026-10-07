@@ -582,7 +582,7 @@ const INDEX_HTML: &str = r#"<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CloudSidra-Edge Performance Monitor</title>
+  <title>Zelvik-Edge Performance Monitor</title>
   <style>
     :root { --bg:#080b0a; --panel:#111916; --panel2:#17241f; --ink:#edf7f1; --muted:#91a49a; --line:#26362f; --green:#56d68f; --amber:#f5bd68; --blue:#79b7ff; --red:#ff7a7a; }
     * { box-sizing:border-box; }

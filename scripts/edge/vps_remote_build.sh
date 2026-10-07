@@ -1,9 +1,9 @@
 #!/bin/bash
-# Remote build script — run ON an authorized VPS inside /root/cloudsidra-edge-dev.
+# Remote build script — run ON an authorized VPS inside /root/zelvik-edge-dev.
 # Constrained: CARGO_BUILD_JOBS=1, debuginfo=0, one build at a time (flock).
 # Prereqs on the build host (.110):
 #   - rustup stable + the dated nightly pinned in
-#     crates/cloudsidra-edge-xdp-ebpf/rust-toolchain.toml (rust-src component)
+#     crates/zelvik-edge-xdp-ebpf/rust-toolchain.toml (rust-src component)
 #   - bpf-linker prebuilt binary in ~/.cargo/bin (v0.11.1 musl, LLVM 23.1.1)
 #     cargo install bpf-linker FAILS: llvm-sys needs LLVM==23, Debian has 14.
 #
@@ -12,7 +12,7 @@
 # prints the done marker.
 set -euo pipefail
 
-TASK_DIR="${1:-/root/cloudsidra-edge-dev}"
+TASK_DIR="${1:-/root/zelvik-edge-dev}"
 LOCK="$TASK_DIR/.build.lock"
 MARKER="$TASK_DIR/.cn-task-owner"
 
@@ -41,7 +41,7 @@ export RUSTFLAGS="-C debuginfo=0"
 
 echo "=== build $(date -u +%FT%TZ) host=$(hostname) dir=$TASK_DIR ==="
 rustc --version
-EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/cloudsidra-edge-xdp-ebpf/rust-toolchain.toml | head -1)"
+EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/zelvik-edge-xdp-ebpf/rust-toolchain.toml | head -1)"
 rustc "+${EBPF_NIGHTLY:-nightly}" --version
 bpf-linker --version 2>/dev/null | head -1
 free -m | head -2
@@ -56,8 +56,8 @@ if [ "$rc" -ne 0 ]; then
     exit "$rc"
 fi
 tail -25 build.log
-ls -la crates/cloudsidra-edge-xdp-ebpf/target/bpfel-unknown-none/release/cloudsidra-edge-xdp-ebpf
-sha256sum crates/cloudsidra-edge-xdp-ebpf/target/bpfel-unknown-none/release/cloudsidra-edge-xdp-ebpf target/debug/cloudsidra-edge
+ls -la crates/zelvik-edge-xdp-ebpf/target/bpfel-unknown-none/release/zelvik-edge-xdp-ebpf
+sha256sum crates/zelvik-edge-xdp-ebpf/target/bpfel-unknown-none/release/zelvik-edge-xdp-ebpf target/debug/zelvik-edge
 
 echo "--- tests ---"
 rc=0

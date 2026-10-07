@@ -1,8 +1,8 @@
-use cloudsidra_edge::config_apply::ConfigApplyLimits;
-use cloudsidra_edge::memory_governor::{
+use zelvik_edge::config_apply::ConfigApplyLimits;
+use zelvik_edge::memory_governor::{
     AdmissionClass, MEMORY_GOVERNOR, MemoryPressureLevel, reported_memory_totals,
 };
-use cloudsidra_edge::memory_plan::current_memory_plan;
+use zelvik_edge::memory_plan::current_memory_plan;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Barrier};
 use std::thread;
@@ -18,7 +18,7 @@ impl Drop for ActiveGuard {
 }
 
 fn assert_budget_fields_within_available(
-    snapshot: &cloudsidra_edge::memory_governor::GovernorSnapshot,
+    snapshot: &zelvik_edge::memory_governor::GovernorSnapshot,
 ) {
     let available = snapshot.memory_available_bytes.max(1);
     let budgets = [

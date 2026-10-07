@@ -20,7 +20,7 @@ use std::time::Duration;
 use crate::kernel_syn_defense::{CommandOutput, CommandRunner, SynproxySysctlStore};
 
 pub(crate) const DIAL_GUARD_FAMILY: &str = "inet";
-pub(crate) const DIAL_GUARD_TABLE: &str = "cloudsidra_edge_dial_guard";
+pub(crate) const DIAL_GUARD_TABLE: &str = "zelvik_edge_dial_guard";
 pub(crate) const DIAL_GUARD_CHAIN: &str = "dial_input";
 pub(crate) const DIAL_GUARD_COUNTER: &str = "dial_guard_hits";
 
@@ -574,7 +574,7 @@ mod tests {
             "list counter",
             CommandOutput {
                 success: true,
-                stdout: r#"{"nftables":[{"metainfo":{"json_schema_version":1}},{"counter":{"family":"inet","table":"cloudsidra_edge_dial_guard","name":"dial_guard_hits","handle":3,"packets":42,"bytes":2520}}]}"#
+                stdout: r#"{"nftables":[{"metainfo":{"json_schema_version":1}},{"counter":{"family":"inet","table":"zelvik_edge_dial_guard","name":"dial_guard_hits","handle":3,"packets":42,"bytes":2520}}]}"#
                     .to_string(),
                 stderr: String::new(),
             },

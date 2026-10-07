@@ -1,0 +1,12 @@
+# K3s profile. local-path storage class, klipper servicelb LoadBalancer.
+cluster:
+  type: k3s
+  namespace: zelvik-edge
+
+storage:
+  storageClass: local-path
+
+service:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  annotations: {}

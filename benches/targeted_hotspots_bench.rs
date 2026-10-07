@@ -1,9 +1,9 @@
-use cloudsidra_edge::cache_hybrid::{HybridStorage, fast_l1_lookup};
-use cloudsidra_edge::config_models::{HTTPHTMLOptimizationConfig, SSLCertConfig, SSLPolicyConfig};
-use cloudsidra_edge::firewall::verifier::WafVerifier;
-use cloudsidra_edge::metrics::analyzer::analyze_request;
-use cloudsidra_edge::proxy::EdgeProxy;
-use cloudsidra_edge::ssl::{DynamicCertSelector, sync_certs};
+use zelvik_edge::cache_hybrid::{HybridStorage, fast_l1_lookup};
+use zelvik_edge::config_models::{HTTPHTMLOptimizationConfig, SSLCertConfig, SSLPolicyConfig};
+use zelvik_edge::firewall::verifier::WafVerifier;
+use zelvik_edge::metrics::analyzer::analyze_request;
+use zelvik_edge::proxy::EdgeProxy;
+use zelvik_edge::ssl::{DynamicCertSelector, sync_certs};
 use criterion::{Criterion, criterion_group, criterion_main};
 use image::{DynamicImage, ImageBuffer, ImageFormat, Rgba};
 use pingora_cache::{CacheKey, CacheMeta, Storage, trace::Span};

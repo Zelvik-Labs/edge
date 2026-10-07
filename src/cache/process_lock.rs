@@ -164,13 +164,13 @@ fn cache_process_roots(roots: &[PathBuf]) -> Vec<PathBuf> {
 }
 
 fn cache_process_barrier_path(root: &Path) -> PathBuf {
-    root.join(".cloudsidra-edge-cache-locks")
+    root.join(".zelvik-edge-cache-locks")
         .join("barrier.lock")
 }
 
 fn cache_process_key_path(root: &Path, key_hash: &str) -> PathBuf {
     let first = key_hash.get(..2).unwrap_or("00");
-    root.join(".cloudsidra-edge-cache-locks")
+    root.join(".zelvik-edge-cache-locks")
         .join("keys")
         .join(first)
         .join(format!("{key_hash}.lock"))
@@ -689,7 +689,7 @@ mod tests {
         // Tests exercise the lock machinery directly; the runtime is not in
         // declared RKE2 mode, so force the layer on for this module.
         FORCE_PROCESS_LOCKS.store(true, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!("cloudsidra-edge-plock-{name}"));
+        let root = std::env::temp_dir().join(format!("zelvik-edge-plock-{name}"));
         std::fs::create_dir_all(&root).expect("test root");
         root
     }

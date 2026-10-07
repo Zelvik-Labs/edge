@@ -22,7 +22,7 @@ impl Language {
     }
 
     pub fn detect() -> Self {
-        for name in ["CLOUDSIDRA_EDGE_LANG", "LC_ALL", "LANGUAGE", "LANG"] {
+        for name in ["ZELVIK_EDGE_LANG", "LC_ALL", "LANGUAGE", "LANG"] {
             if let Ok(lang) = std::env::var(name)
                 && let Some(lang) = Self::parse(&lang)
             {
@@ -56,8 +56,8 @@ const STRINGS: &[(&str, &str, &str)] = &[
     // CLI commands and options
     (
         "app.about",
-        "CloudSidra-Edge - High Performance Cloud Node written in Rust",
-        "CloudSidra-Edge - Rust 编写的高性能云节点",
+        "Zelvik-Edge - High Performance Cloud Node written in Rust",
+        "Zelvik-Edge - Rust 编写的高性能云节点",
     ),
     (
         "cmd.start",
@@ -134,59 +134,59 @@ const STRINGS: &[(&str, &str, &str)] = &[
     // Top-level command output
     (
         "status.version",
-        "CloudSidra-Edge version",
-        "CloudSidra-Edge 版本",
+        "Zelvik-Edge version",
+        "Zelvik-Edge 版本",
     ),
     ("status.build_time", "Build time", "构建时间"),
     (
         "status.running",
-        "CloudSidra-Edge is running",
-        "CloudSidra-Edge 正在运行",
+        "Zelvik-Edge is running",
+        "Zelvik-Edge 正在运行",
     ),
     (
         "status.stopped",
-        "CloudSidra-Edge is stopped.",
-        "CloudSidra-Edge 已停止。",
+        "Zelvik-Edge is stopped.",
+        "Zelvik-Edge 已停止。",
     ),
     (
         "status.already_running",
-        "CloudSidra-Edge is already running",
-        "CloudSidra-Edge 已在运行",
+        "Zelvik-Edge is already running",
+        "Zelvik-Edge 已在运行",
     ),
     (
         "start.started",
-        "CloudSidra-Edge started in background",
-        "CloudSidra-Edge 已在后台启动",
+        "Zelvik-Edge started in background",
+        "Zelvik-Edge 已在后台启动",
     ),
     (
         "stop.stopped",
-        "CloudSidra-Edge stopped.",
-        "CloudSidra-Edge 已停止。",
+        "Zelvik-Edge stopped.",
+        "Zelvik-Edge 已停止。",
     ),
     (
         "stop.not_running",
-        "CloudSidra-Edge is not running.",
-        "CloudSidra-Edge 未运行。",
+        "Zelvik-Edge is not running.",
+        "Zelvik-Edge 未运行。",
     ),
     (
         "stop.stopping",
-        "Stopping CloudSidra-Edge",
-        "正在停止 CloudSidra-Edge",
+        "Stopping Zelvik-Edge",
+        "正在停止 Zelvik-Edge",
     ),
     (
         "stop.force",
-        "CloudSidra-Edge did not stop within 20s, forcing shutdown",
-        "CloudSidra-Edge 20 秒内未停止，正在强制关闭",
+        "Zelvik-Edge did not stop within 20s, forcing shutdown",
+        "Zelvik-Edge 20 秒内未停止，正在强制关闭",
     ),
     (
         "install.global_ok",
-        "Successfully registered global command: cloudsidra-edge",
-        "已成功注册全局命令：cloudsidra-edge",
+        "Successfully registered global command: zelvik-edge",
+        "已成功注册全局命令：zelvik-edge",
     ),
     (
         "install.service_ok",
-        "Successfully registered systemd service. You can now use: systemctl start cloudsidra-edge",
-        "已成功注册 systemd 服务。现在可以使用：systemctl start cloudsidra-edge",
+        "Successfully registered systemd service. You can now use: systemctl start zelvik-edge",
+        "已成功注册 systemd 服务。现在可以使用：systemctl start zelvik-edge",
     ),
     (
         "install.linux_only",
@@ -195,8 +195,8 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "systemd.managed",
-        "CloudSidra-Edge is managed by systemd, running",
-        "CloudSidra-Edge 由 systemd 管理，正在执行",
+        "Zelvik-Edge is managed by systemd, running",
+        "Zelvik-Edge 由 systemd 管理，正在执行",
     ),
     ("test.start", "Testing configuration...", "正在测试配置..."),
     ("test.valid", "Configuration is valid.", "配置有效。"),
@@ -207,7 +207,7 @@ const STRINGS: &[(&str, &str, &str)] = &[
         "中继复制缓冲区",
     ),
     // NTP and zero-copy
-    ("ntp.title", "CloudSidra-Edge NTP", "CloudSidra-Edge NTP"),
+    ("ntp.title", "Zelvik-Edge NTP", "Zelvik-Edge NTP"),
     ("ntp.current_timezone", "current timezone", "当前时区"),
     (
         "ntp.keep_timezone",
@@ -222,8 +222,8 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "zerocopy.title",
-        "CloudSidra-Edge zero-copy relay",
-        "CloudSidra-Edge 零拷贝中继",
+        "Zelvik-Edge zero-copy relay",
+        "Zelvik-Edge 零拷贝中继",
     ),
     ("zerocopy.config", "config", "配置文件"),
     ("zerocopy.current", "current zero-copy", "当前零拷贝"),
@@ -246,29 +246,29 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "zerocopy.restart",
-        "Restart cloudsidra-edge for running listeners to use the new relay mode.",
-        "请重启 cloudsidra-edge，使运行中的监听器使用新的中继模式。",
+        "Restart zelvik-edge for running listeners to use the new relay mode.",
+        "请重启 zelvik-edge，使运行中的监听器使用新的中继模式。",
     ),
     ("upgrade.proceed", "Proceed with upgrade?", "继续升级？"),
     (
         "upgrade.service_stopped",
-        "cloudsidra-edge.service is installed but not active; leaving it stopped.",
-        "cloudsidra-edge.service 已安装但未运行，将保持停止状态。",
+        "zelvik-edge.service is installed but not active; leaving it stopped.",
+        "zelvik-edge.service 已安装但未运行，将保持停止状态。",
     ),
     (
         "upgrade.restarting",
-        "Restarting CloudSidra-Edge with upgraded binary...",
-        "正在使用升级后的二进制重启 CloudSidra-Edge...",
+        "Restarting Zelvik-Edge with upgraded binary...",
+        "正在使用升级后的二进制重启 Zelvik-Edge...",
     ),
     (
         "upgrade.node_stopped",
-        "CloudSidra-Edge is not running; leaving it stopped.",
-        "CloudSidra-Edge 未运行，将保持停止状态。",
+        "Zelvik-Edge is not running; leaving it stopped.",
+        "Zelvik-Edge 未运行，将保持停止状态。",
     ),
     (
         "upgrade.summary",
-        "CloudSidra-Edge upgrade summary:",
-        "CloudSidra-Edge 升级摘要：",
+        "Zelvik-Edge upgrade summary:",
+        "Zelvik-Edge 升级摘要：",
     ),
     ("upgrade.current_version", "current version", "当前版本"),
     ("upgrade.target_version", "target version", "目标版本"),
@@ -306,14 +306,14 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "upgrade.xdp_object_missing",
-        "Release archive does not contain data/cloudsidra-edge-xdp-ebpf.o; XDP attach will remain unavailable until the object is installed.",
-        "发布包不包含 data/cloudsidra-edge-xdp-ebpf.o；安装该对象前 XDP attach 仍不可用。",
+        "Release archive does not contain data/zelvik-edge-xdp-ebpf.o; XDP attach will remain unavailable until the object is installed.",
+        "发布包不包含 data/zelvik-edge-xdp-ebpf.o；安装该对象前 XDP attach 仍不可用。",
     ),
     // Firewall / defense
     (
         "firewall.initialized",
-        "nftables initialized: table=inet cloudsidra_edge sets=blocked_v4,blocked_v6",
-        "nftables 已初始化：table=inet cloudsidra_edge sets=blocked_v4,blocked_v6",
+        "nftables initialized: table=inet zelvik_edge sets=blocked_v4,blocked_v6",
+        "nftables 已初始化：table=inet zelvik_edge sets=blocked_v4,blocked_v6",
     ),
     (
         "firewall.gc_removed",
@@ -322,8 +322,8 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "firewall.title",
-        "CloudSidra-Edge firewall blacklist",
-        "CloudSidra-Edge 防火墙黑名单",
+        "Zelvik-Edge firewall blacklist",
+        "Zelvik-Edge 防火墙黑名单",
     ),
     (
         "firewall.nft_exact",
@@ -377,8 +377,8 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "defense.title",
-        "CloudSidra-Edge L4 defense status",
-        "CloudSidra-Edge L4 防御状态",
+        "Zelvik-Edge L4 defense status",
+        "Zelvik-Edge L4 防御状态",
     ),
     ("defense.runtime_scope", "runtime scope", "运行时范围"),
     (
@@ -430,8 +430,8 @@ const STRINGS: &[(&str, &str, &str)] = &[
     // XDP status
     (
         "xdp.status.title",
-        "CloudSidra-Edge XDP status",
-        "CloudSidra-Edge XDP 状态",
+        "Zelvik-Edge XDP status",
+        "Zelvik-Edge XDP 状态",
     ),
     ("xdp.status.enabled", "enabled", "已启用"),
     ("xdp.status.available", "available", "可用"),

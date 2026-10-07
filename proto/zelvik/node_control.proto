@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package zelvik.node.v1;
+
+// Vendored from docs/docs/contracts/proto/node_control.proto (WP-01 draft).
+// ApplyRelease.phase on the wire: prepare | validate | apply | ack only.
+// NodeControl.RegisterNode MUST NOT be aliased to index.IndexService.registerNode.
+
+message EnvelopeMeta {
+  string schema_version = 1;
+  int64 base_version = 2;
+  int64 patch_seq = 3;
+  string min_reader_version = 4;
+}
+
+service NodeControl {
+  rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
+  rpc GetDesiredRelease(GetDesiredReleaseRequest) returns (GetDesiredReleaseResponse);
+  rpc ApplyRelease(ApplyReleaseRequest) returns (ApplyReleaseResponse);
+  rpc StreamEvents(stream StreamEventsRequest) returns (stream StreamEventsResponse);
+  rpc ReportNodeHealth(ReportNodeHealthRequest) returns (ReportNodeHealthResponse);
+}
+
+message RegisterNodeRequest {
+  EnvelopeMeta meta = 1;
+  string node_id = 2;
+  string software_version = 3;
+  string capabilities_json = 4;
+  string region = 5;
+  string comm_mode = 6;
+  string cert_fingerprint = 7;
+}
+
+message RegisterNodeResponse {
+  EnvelopeMeta meta = 1;
+  bool accepted = 2;
+  string enrollment_status = 3;
+}
+
+message GetDesiredReleaseRequest {
+  EnvelopeMeta meta = 1;
+  string node_id = 2;
+}
+
+message GetDesiredReleaseResponse {
+  EnvelopeMeta meta = 1;
+  string release_id = 2;
+  bytes signature_digest = 3;
+  bytes snapshot_json = 5; // canonical scoped nodeJSON; omitted when base_version is current
+  bytes snapshot_hmac = 6; // HMAC-SHA256(node secret, big-endian version || snapshot_json)
+  bool snapshot_required = 4;
+}
+
+message ApplyReleaseRequest {
+  EnvelopeMeta meta = 1;
+  string node_id = 2;
+  string release_id = 3;
+  string phase = 4;
+}
+
+message ApplyReleaseResponse {
+  EnvelopeMeta meta = 1;
+  bool idempotent_replay = 2;
+  string phase_status = 3;
+}
+
+message StreamEventsRequest {
+  EnvelopeMeta meta = 1;
+  string node_id = 2;
+  uint64 sequence = 3;
+  bytes payload = 4;
+}
+
+message StreamEventsResponse {
+  EnvelopeMeta meta = 1;
+  uint64 ack_sequence = 2;
+}
+
+message ReportNodeHealthRequest {
+  EnvelopeMeta meta = 1;
+  string node_id = 2;
+  bool ready = 3;
+  string listeners_json = 4;
+  string cache_json = 5;
+  string xdp_json = 6;
+  string resource_pressure_json = 7;
+  string task_status_json = 8;
+}
+
+message ReportNodeHealthResponse {
+  EnvelopeMeta meta = 1;
+  bool accepted = 2;
+}

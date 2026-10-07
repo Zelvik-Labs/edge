@@ -9,7 +9,7 @@ background (module map, dependencies, priorities, search patterns) in
 
 ## Project
 
-CloudSidra-Edge is a high-performance CDN edge node built on
+Zelvik-Edge is a high-performance CDN edge node built on
 [Pingora](https://github.com/cloudflare/pingora): L7/L4 proxying, hybrid cache, WAF,
 dynamic certificates, logging and statistics, local observability, and an XDP/AF_XDP
 bypass dataplane on Linux. See [README.md](README.md) and [docs/README.md](docs/README.md).
@@ -101,7 +101,7 @@ build — re-verify against the CI baseline when build config or dependencies ch
 `scripts/build-release-local.sh`, which wires the Debian-amd64 sysroot and LLVM wrappers
 under `~/.local/share/cross-sysroot` (libelf/zlib, kernel UAPI headers, BPF-capable clang,
 `ld.lld` for libxdp-sys' GNU-ld embed step). The fleet floor is **x86-64-v2** — Ivy Bridge
-test nodes lack AVX2 and SIGILL on v3 builds (`CLOUDSIDRA_EDGE_TARGET_CPU` overrides).
+test nodes lack AVX2 and SIGILL on v3 builds (`ZELVIK_EDGE_TARGET_CPU` overrides).
 
 ## How to work
 

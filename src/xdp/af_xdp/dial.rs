@@ -93,8 +93,8 @@ pub(crate) struct AfXdpSpliceLeg {
 /// backend flow whose port claim must stay reserved until teardown.
 #[cfg(target_os = "linux")]
 pub(crate) struct AfXdpSpliceLease {
-    pub(crate) client_key: cloudsidra_edge_xdp_common::XdpOutCtKey,
-    pub(crate) backend_key: cloudsidra_edge_xdp_common::XdpOutCtKey,
+    pub(crate) client_key: zelvik_edge_xdp_common::XdpOutCtKey,
+    pub(crate) backend_key: zelvik_edge_xdp_common::XdpOutCtKey,
     pub(crate) backend_flow: AfXdpTcpFlowKey,
 }
 
@@ -741,7 +741,7 @@ impl AfXdpDialRegistry {
     /// direction of a live splice pair.
     pub(crate) fn splice_lease_for_key(
         &self,
-        key: &cloudsidra_edge_xdp_common::XdpOutCtKey,
+        key: &zelvik_edge_xdp_common::XdpOutCtKey,
     ) -> Option<AfXdpTcpFlowKey> {
         self.splices.iter().find_map(|entry| {
             let lease = entry.value();

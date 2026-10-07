@@ -1,4 +1,4 @@
-use cloudsidra_edge::metrics::storage::MetricStorage;
+use zelvik_edge::metrics::storage::MetricStorage;
 use serde::Serialize;
 use std::env;
 use std::path::PathBuf;

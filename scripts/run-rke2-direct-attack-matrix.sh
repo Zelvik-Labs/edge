@@ -1,9 +1,9 @@
 #!/bin/sh
 set -u
 
-ROOT=/root/cloudsidra-edge-test
+ROOT=/root/zelvik-edge-test
 RESULTS="$ROOT/perf-results"
-NAMESPACE=cloudsidra-edge-perf
+NAMESPACE=zelvik-edge-perf
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 run_dir="$RESULTS/direct-$timestamp"
 mkdir -p "$run_dir"

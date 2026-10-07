@@ -1,9 +1,9 @@
 #!/bin/sh
 set -u
 
-ROOT=/root/cloudsidra-edge-test
+ROOT=/root/zelvik-edge-test
 RESULTS="$ROOT/perf-results"
-NAMESPACE=cloudsidra-edge-perf
+NAMESPACE=zelvik-edge-perf
 KUBECTL="kubectl"
 
 mkdir -p "$RESULTS"

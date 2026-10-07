@@ -1,5 +1,5 @@
 #!/bin/bash
-# Sync cloudsidra-edge source to an authorized VPS task dir.
+# Sync zelvik-edge source to an authorized VPS task dir.
 # Usage: vps_sync.sh <host>   (host must be in the authorized list)
 #
 # R0 contract:
@@ -18,9 +18,9 @@ PD="${EDGE_DEV_PRIVATE_DIR:-$HOME/.codex/devin-edge-supervision.2C8iXj}"
 SSH="$PD/vps-ssh"
 SCP="$PD/vps-scp"
 cd "$(dirname "$0")/../.."
-[ -d src ] || { echo "not in cloudsidra-edge" >&2; exit 2; }
+[ -d src ] || { echo "not in zelvik-edge" >&2; exit 2; }
 
-TASK_DIR=/root/cloudsidra-edge-dev
+TASK_DIR=/root/zelvik-edge-dev
 TMPD=$(mktemp -d)
 trap 'rm -rf "$TMPD"' EXIT
 LIST="$TMPD/cn-files.txt"
@@ -47,7 +47,7 @@ while IFS= read -r f; do shasum -a 256 "$f"; done < "$LIST" > "$MANIFEST"
 
 # Task-dir ownership gate: a pre-existing dir without our marker is not
 # ours — refuse before any transfer or deletion.
-$SSH "$HOST" 'D=/root/cloudsidra-edge-dev
+$SSH "$HOST" 'D=/root/zelvik-edge-dev
 # Registered-host gate: a host we have never enrolled has no marker.
 # Enrollment happens once through this authenticated channel; afterwards
 # the marker must exist or the host is not ours to mutate.
@@ -70,7 +70,7 @@ $SCP "$MANIFEST" "root@$HOST:$TASK_DIR/SOURCE-SHA256.txt" >/dev/null
 # Remote: sweep extras not in the shipped list (manifest-driven delete,
 # only inside the owned task dir), then verify every checksum. Any
 # mismatch is a hard failure.
-$SSH "$HOST" 'set -e; cd /root/cloudsidra-edge-dev
+$SSH "$HOST" 'set -e; cd /root/zelvik-edge-dev
 TD=$(mktemp -d); trap "rm -rf $TD" EXIT
 find . -type f \
   ! -path "./target/*" ! -path "./*/target/*" ! -path "./data/*" \

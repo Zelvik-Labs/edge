@@ -19,14 +19,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use cloudsidra_edge::api_config::{AccessLogPipelineConfig, ApiConfig};
-use cloudsidra_edge::config::ConfigStore;
-use cloudsidra_edge::config_models::*;
-use cloudsidra_edge::firewall::state::WafStateManager;
-use cloudsidra_edge::firewall::verifier::WafVerifier;
-use cloudsidra_edge::lb_factory;
-use cloudsidra_edge::proxy::EdgeProxy;
-use cloudsidra_edge::ssl::DynamicCertSelector;
+use zelvik_edge::api_config::{AccessLogPipelineConfig, ApiConfig};
+use zelvik_edge::config::ConfigStore;
+use zelvik_edge::config_models::*;
+use zelvik_edge::firewall::state::WafStateManager;
+use zelvik_edge::firewall::verifier::WafVerifier;
+use zelvik_edge::lb_factory;
+use zelvik_edge::proxy::EdgeProxy;
+use zelvik_edge::ssl::DynamicCertSelector;
 use pingora_core::server::configuration::ServerConf;
 use serde_json::{Value, json};
 use tracing::{error, info};
@@ -86,29 +86,29 @@ fn main() -> anyhow::Result<()> {
     // xdp / nftables / iptables to force a specific backend, off to disable.
     let kernel_filter_mode = env_str("BENCH_KERNEL_FILTER", "auto");
 
-    cloudsidra_edge::utils::time::init_local_timezone();
+    zelvik_edge::utils::time::init_local_timezone();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .context("build bench-defense runtime")?;
     let _guard = runtime.enter();
 
-    cloudsidra_edge::metrics::init_http_dimension_worker(10_000);
-    cloudsidra_edge::proxy::start_request_limit_cleanup_task();
-    cloudsidra_edge::kernel_syn_defense::start_monitor();
+    zelvik_edge::metrics::init_http_dimension_worker(10_000);
+    zelvik_edge::proxy::start_request_limit_cleanup_task();
+    zelvik_edge::kernel_syn_defense::start_monitor();
 
     let config_store = Arc::new(ConfigStore::new());
-    cloudsidra_edge::kernel_syn_defense::start_synproxy_reconciler(config_store.clone());
+    zelvik_edge::kernel_syn_defense::start_synproxy_reconciler(config_store.clone());
     let waf_state = Arc::new(WafStateManager::new());
     waf_state.install_kernel_snapshot_provider();
     let kernel_filter_status = if kernel_filter_mode == "off" {
-        cloudsidra_edge::firewall::kernel::KernelFilterStatus {
+        zelvik_edge::firewall::kernel::KernelFilterStatus {
             name: "disabled",
             available: false,
             detail: "BENCH_KERNEL_FILTER=off".to_string(),
         }
     } else {
-        let filter = runtime.block_on(cloudsidra_edge::firewall::kernel::build_filter(Some(
+        let filter = runtime.block_on(zelvik_edge::firewall::kernel::build_filter(Some(
             &kernel_filter_mode,
         )));
         let status = filter.status();
@@ -122,9 +122,9 @@ fn main() -> anyhow::Result<()> {
         kernel_filter_status.available,
         kernel_filter_status.detail,
     );
-    cloudsidra_edge::firewall::state::start_gc_task(waf_state.clone());
-    cloudsidra_edge::metrics::storage::start_cache_access_flusher();
-    cloudsidra_edge::metrics::start_pressure_updater();
+    zelvik_edge::firewall::state::start_gc_task(waf_state.clone());
+    zelvik_edge::metrics::storage::start_cache_access_flusher();
+    zelvik_edge::metrics::start_pressure_updater();
 
     let api_config = Arc::new(ApiConfig {
         rpc_tls: Default::default(),
@@ -160,7 +160,7 @@ fn main() -> anyhow::Result<()> {
                 "127.0.0.1".to_string(),
             ],
         }];
-        runtime.block_on(cloudsidra_edge::ssl::sync_certs(&cert_selector, &certs));
+        runtime.block_on(zelvik_edge::ssl::sync_certs(&cert_selector, &certs));
     } else {
         error!("TLS cert/key unreadable ({cert_path}/{key_path}); :{tls_port} will fail to start");
     }
@@ -312,7 +312,7 @@ fn main() -> anyhow::Result<()> {
         ..Default::default()
     });
 
-    let http_manager = cloudsidra_edge::http_proxy_manager::HttpProxyManager::new(
+    let http_manager = zelvik_edge::http_proxy_manager::HttpProxyManager::new(
         (*config_store).clone(),
         cert_selector.clone(),
         proxy_logic.clone(),
@@ -320,7 +320,7 @@ fn main() -> anyhow::Result<()> {
     );
     runtime.spawn(async move { http_manager.start_listeners().await });
 
-    let tcp_manager = cloudsidra_edge::tcp_proxy::TcpProxyManager::new(
+    let tcp_manager = zelvik_edge::tcp_proxy::TcpProxyManager::new(
         (*config_store).clone(),
         cert_selector.clone(),
         waf_state.clone(),
@@ -328,7 +328,7 @@ fn main() -> anyhow::Result<()> {
     );
     runtime.spawn(async move { tcp_manager.start_listeners().await });
 
-    let udp_manager = cloudsidra_edge::udp_proxy::UdpProxyManager::new(
+    let udp_manager = zelvik_edge::udp_proxy::UdpProxyManager::new(
         (*config_store).clone(),
         waf_state.clone(),
         1,
@@ -339,11 +339,11 @@ fn main() -> anyhow::Result<()> {
     runtime.spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;
-            let l4 = cloudsidra_edge::l4_defense::metrics_snapshot();
-            let syn = cloudsidra_edge::kernel_syn_defense::snapshot();
+            let l4 = zelvik_edge::l4_defense::metrics_snapshot();
+            let syn = zelvik_edge::kernel_syn_defense::snapshot();
             let kernel = waf_state.kernel_filter_status();
-            let xdp = cloudsidra_edge::xdp::status_snapshot();
-            let pipeline = cloudsidra_edge::pipeline_metrics::snapshot();
+            let xdp = zelvik_edge::xdp::status_snapshot();
+            let pipeline = zelvik_edge::pipeline_metrics::snapshot();
             eprintln!(
                 "L4METRICS {}",
                 json!({
@@ -354,7 +354,7 @@ fn main() -> anyhow::Result<()> {
                     "admission_reject_total": l4.admission_reject_total,
                     "slow_close_total": l4.slow_close_total,
                     "prefix_blocked_total": l4.prefix_blocked_total,
-                    "pressure": cloudsidra_edge::l4_defense::current_pressure_level().as_str(),
+                    "pressure": zelvik_edge::l4_defense::current_pressure_level().as_str(),
                     "syn_overflows": syn.listen_overflows_delta,
                     "syn_drops": syn.listen_drops_delta,
                     "syncookies_sent": syn.syncookies_sent_delta,

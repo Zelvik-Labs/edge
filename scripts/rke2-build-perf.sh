@@ -1,9 +1,9 @@
 #!/bin/sh
 set -u
 
-ROOT=/root/cloudsidra-edge-test
+ROOT=/root/zelvik-edge-test
 ARTIFACTS="$ROOT/perf-artifacts"
-STATUS=/tmp/cloudsidra-edge-perf-build.status
+STATUS=/tmp/zelvik-edge-perf-build.status
 TOOLCHAIN="$ROOT/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin"
 
 export PATH="$TOOLCHAIN:$ROOT/.cargo/bin:$PATH"
@@ -15,8 +15,8 @@ rm -f "$STATUS"
 build_profile() {
     profile="$1"
     target="$ROOT/target-perf-$profile"
-    log="/tmp/cloudsidra-edge-perf-$profile.log"
-    time_log="/tmp/cloudsidra-edge-perf-$profile.time"
+    log="/tmp/zelvik-edge-perf-$profile.log"
+    time_log="/tmp/zelvik-edge-perf-$profile.time"
 
     rm -rf "$target"
     rm -f "$log" "$time_log"

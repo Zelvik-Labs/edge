@@ -1,6 +1,6 @@
-# CloudSidra-Edge data-plane image (standalone for compose/single-node).
+# Zelvik-Edge data-plane image (standalone for compose/single-node).
 # The Edge builds against vendored pingora; use the repo's rust toolchain.
-# Build from repo root:  docker build -f deploy/Dockerfile.edge -t cloudsidra-edge:2026.1.08.0 .
+# Build from repo root:  docker build -f deploy/Dockerfile.edge -t zelvik-edge:2026.1.08.0 .
 FROM rust:1.97-bookworm AS builder
 WORKDIR /build
 RUN apt-get update \
@@ -23,13 +23,13 @@ FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl tzdata iproute2 kmod libcap2-bin \
     && rm -rf /var/lib/apt/lists/*
-RUN useradd --system --no-create-home --home-dir /var/lib/cloudsidra/edge --shell /usr/sbin/nologin cloudsidra-edge
+RUN useradd --system --no-create-home --home-dir /var/lib/zelvik/edge --shell /usr/sbin/nologin zelvik-edge
 WORKDIR /app
-COPY --from=builder /build/target/release/CloudSidra-Edge /usr/local/bin/cloudsidra-edge
-RUN mkdir -p /etc/cloudsidra/edge /var/lib/cloudsidra/edge \
-    && chown -R cloudsidra-edge:cloudsidra-edge /var/lib/cloudsidra/edge
+COPY --from=builder /build/target/release/Zelvik-Edge /usr/local/bin/zelvik-edge
+RUN mkdir -p /etc/zelvik/edge /var/lib/zelvik/edge \
+    && chown -R zelvik-edge:zelvik-edge /var/lib/zelvik/edge
 # Edge needs NET_BIND_SERVICE / NET_RAW / NET_ADMIN at runtime (compose cap_add).
-USER cloudsidra-edge
+USER zelvik-edge
 EXPOSE 80 443 443/udp 19090
 # CLOUD_NODE_MODE=standalone, CLOUD_NODE_HOME configured at runtime.
-ENTRYPOINT ["/usr/local/bin/cloudsidra-edge"]
+ENTRYPOINT ["/usr/local/bin/zelvik-edge"]

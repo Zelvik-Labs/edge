@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::{Mutex, OwnedMutexGuard};
 
-pub const PARTIAL_KEY_PREFIX: &str = "__cloudsidra_edge_partial:";
+pub const PARTIAL_KEY_PREFIX: &str = "__zelvik_edge_partial:";
 pub const MIN_FORCE_PARTIAL_HIT_BYTES: u64 = 256 * 1024;
 /// Upper bound for a sparse partial object.  Without this limit a forged or
 /// malformed Content-Range can make the cache seek/create a multi-exabyte
@@ -1416,7 +1416,7 @@ mod tests {
 
     async fn test_root(label: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "cloudsidra-edge-partial-test-{label}-{}-{}",
+            "zelvik-edge-partial-test-{label}-{}-{}",
             std::process::id(),
             TEST_COUNTER.fetch_add(1, Ordering::Relaxed)
         ));

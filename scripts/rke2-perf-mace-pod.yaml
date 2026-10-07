@@ -2,9 +2,9 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: __POD_NAME__
-  namespace: cloudsidra-edge-perf
+  namespace: zelvik-edge-perf
   labels:
-    app: cloudsidra-edge-perf-mace
+    app: zelvik-edge-perf-mace
     profile: __PROFILE__
 spec:
   nodeName: hz-rke2-01
@@ -17,12 +17,12 @@ spec:
       command: ["/bin/sh", "-lc"]
       args:
         - >-
-          exec /opt/perf/__BINARY__ --path /var/lib/cloudsidra/edge/data/metrics.mace
+          exec /opt/perf/__BINARY__ --path /var/lib/zelvik/edge/data/metrics.mace
           --mode __MODE__ --duration-secs __DURATION__ --workers __WORKERS__
           --batch-size __BATCH_SIZE__
       env:
-        - name: CLOUDSIDRA_EDGE_HOME
-          value: /var/lib/cloudsidra/edge
+        - name: ZELVIK_EDGE_HOME
+          value: /var/lib/zelvik/edge
         - name: RUST_LOG
           value: error
       resources:
@@ -37,11 +37,11 @@ spec:
           mountPath: /opt/perf
           readOnly: true
         - name: node-data
-          mountPath: /var/lib/cloudsidra/edge
+          mountPath: /var/lib/zelvik/edge
   volumes:
     - name: artifacts
       hostPath:
-        path: /root/cloudsidra-edge-test/perf-artifacts
+        path: /root/zelvik-edge-test/perf-artifacts
         type: Directory
     - name: node-data
       emptyDir: {}

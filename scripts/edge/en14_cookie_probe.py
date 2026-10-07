@@ -38,7 +38,7 @@ Phases:
 
 Usage (root, Linux):
     sudo python3 scripts/edge/en14_cookie_probe.py \
-        --node-bin target/debug/cloudsidra-edge --out /tmp/en14.json
+        --node-bin target/debug/zelvik-edge --out /tmp/en14.json
 """
 
 import argparse
@@ -63,9 +63,9 @@ CLIENT_IP = "10.99.0.9"
 REAL_CLIENT_IP = "10.99.0.10"
 # bpffs is NOT isolated by netns: the production default pin dir must
 # never be cleaned by a probe. This task pins under a unique per-run
-# root via CLOUDSIDRA_EDGE_XDP_PIN_DIR and only that exact dir is removed.
+# root via ZELVIK_EDGE_XDP_PIN_DIR and only that exact dir is removed.
 BPF_PIN_ROOT = "/sys/fs/bpf"
-PROD_PIN_DIR = "/sys/fs/bpf/cloudsidra-edge-xdp"
+PROD_PIN_DIR = "/sys/fs/bpf/zelvik-edge-xdp"
 PIN_DIR = f"{BPF_PIN_ROOT}/en14-probe-{os.getpid()}"
 BPFTOOL_CANDIDATES = [
     "/usr/lib/linux-tools-5.15.0-191/bpftool",
@@ -671,7 +671,7 @@ def send(script, mode, dst_mac, a=0):
 
 def clean_pins():
     # Remove ONLY this run's unique pin dir. The production default
-    # (/sys/fs/bpf/cloudsidra-edge-xdp) and anything not created by this run
+    # (/sys/fs/bpf/zelvik-edge-xdp) and anything not created by this run
     # are never touched — bpffs is shared across netns boundaries.
     if not PIN_DIR.startswith(f"{BPF_PIN_ROOT}/en14-probe-") \
             or PIN_DIR == PROD_PIN_DIR:
@@ -688,14 +688,14 @@ def start_node(node_bin, home, cwd, ebpf_object):
     write_api_config(os.path.join(home, "configs", "api_node.yaml"))
     obj_src = os.path.normpath(os.path.join(
         os.path.dirname(os.path.abspath(node_bin)),
-        "..", "..", "data", "cloudsidra-edge-xdp-ebpf.o"))
+        "..", "..", "data", "zelvik-edge-xdp-ebpf.o"))
     os.makedirs(os.path.join(home, "data"), exist_ok=True)
     if os.path.exists(obj_src):
         import shutil
         shutil.copyfile(obj_src,
-                        os.path.join(home, "data", "cloudsidra-edge-xdp-ebpf.o"))
-    env = dict(os.environ, CLOUDSIDRA_EDGE_HOME=home, RUST_LOG="info",
-               CLOUDSIDRA_EDGE_XDP_PIN_DIR=PIN_DIR)
+                        os.path.join(home, "data", "zelvik-edge-xdp-ebpf.o"))
+    env = dict(os.environ, ZELVIK_EDGE_HOME=home, RUST_LOG="info",
+               ZELVIK_EDGE_XDP_PIN_DIR=PIN_DIR)
     log = open(os.path.join(cwd, "node.log"), "w")
     proc = subprocess.Popen([os.path.abspath(node_bin)],
                             cwd=cwd, env=env, stdout=log, stderr=log,
@@ -729,7 +729,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--send", nargs=3, metavar=("MODE", "DST_MAC", "A"),
                     help=argparse.SUPPRESS)
-    ap.add_argument("--node-bin", default="target/debug/cloudsidra-edge")
+    ap.add_argument("--node-bin", default="target/debug/zelvik-edge")
     ap.add_argument("--ebpf-object", default="",
                     help="external eBPF object path (overrides embedded)")
     ap.add_argument("--out", default="/tmp/en14.json")
@@ -747,7 +747,7 @@ def main():
         f"pin dir isolation violated: {PIN_DIR}"
     # All children (node, xdp dump-maps, senders) inherit the task pin
     # root so nothing under the production default dir is read or written.
-    os.environ["CLOUDSIDRA_EDGE_XDP_PIN_DIR"] = PIN_DIR
+    os.environ["ZELVIK_EDGE_XDP_PIN_DIR"] = PIN_DIR
     prod_pins_before = os.path.exists(PROD_PIN_DIR)
     setup_netns()
     clean_pins()

@@ -1286,7 +1286,7 @@ pub fn doctor_lines_for_config(config: &XdpConfig) -> Vec<String> {
         ));
         if driver.as_deref() == Some("hv_netvsc") && lro == "on" {
             lines.push(
-                "  issue:        required lro=off for XDP on hv_netvsc; run cloudsidra-edge xdp start or cloudsidra-edge xdp tune --apply"
+                "  issue:        required lro=off for XDP on hv_netvsc; run zelvik-edge xdp start or zelvik-edge xdp tune --apply"
                     .to_string(),
             );
         }

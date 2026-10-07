@@ -1,5 +1,5 @@
-use cloudsidra_edge::config_models::{HTTPHeaderConfig, HTTPHeaderPolicy};
-use cloudsidra_edge::headers::apply_response_header_policy_to_map;
+use zelvik_edge::config_models::{HTTPHeaderConfig, HTTPHeaderPolicy};
+use zelvik_edge::headers::apply_response_header_policy_to_map;
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::collections::HashMap;
 use std::hint::black_box;
@@ -14,7 +14,7 @@ fn bench_headers_policy(c: &mut Criterion) {
         delete_headers: vec!["x-powered-by".to_string()],
         set_headers: vec![HTTPHeaderConfig {
             name: "server".to_string(),
-            value: "CloudSidra-Edge".to_string(),
+            value: "Zelvik-Edge".to_string(),
             is_on: true,
             status: None,
             disable_redirect: false,

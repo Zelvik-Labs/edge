@@ -1,4 +1,4 @@
-use cloudsidra_edge::utils::template::format_template;
+use zelvik_edge::utils::template::format_template;
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 

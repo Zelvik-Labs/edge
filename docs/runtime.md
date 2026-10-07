@@ -1,13 +1,13 @@
 # 运行时说明
 
-CloudSidra Edge 的运行时由一个主进程和多个异步后台任务组成。主进程负责监听网络端口、维护配置快照、处理请求和启动上报任务；后台任务负责控制面同步、缓存维护、证书更新、统计上报和本地监控。
+Zelvik Edge 的运行时由一个主进程和多个异步后台任务组成。主进程负责监听网络端口、维护配置快照、处理请求和启动上报任务；后台任务负责控制面同步、缓存维护、证书更新、统计上报和本地监控。
 
 ## 启动流程
 
 启动过程大致如下：
 
 1. 创建 `configs`、`data`、`logs` 目录。
-2. 通过 `data/cloudsidra-edge.pid` 和 `flock` 保证单实例运行。
+2. 通过 `data/zelvik-edge.pid` 和 `flock` 保证单实例运行。
 3. 初始化日志系统。
 4. 加载 `configs/api_node.yaml`。
 5. 初始化 `ConfigStore`、WAF 状态、证书选择器、健康检查管理器。
@@ -22,27 +22,27 @@ CloudSidra Edge 的运行时由一个主进程和多个异步后台任务组成�
 ## CLI 命令
 
 ```bash
-cloudsidra-edge start
-cloudsidra-edge stop
-cloudsidra-edge restart
-cloudsidra-edge status
-cloudsidra-edge install
-cloudsidra-edge upgrade
-cloudsidra-edge ntp
-cloudsidra-edge firewall list
-cloudsidra-edge firewall init
-cloudsidra-edge xdp status
-cloudsidra-edge xdp doctor
-cloudsidra-edge xdp attach
-cloudsidra-edge xdp detach
-cloudsidra-edge test
+zelvik-edge start
+zelvik-edge stop
+zelvik-edge restart
+zelvik-edge status
+zelvik-edge install
+zelvik-edge upgrade
+zelvik-edge ntp
+zelvik-edge firewall list
+zelvik-edge firewall init
+zelvik-edge xdp status
+zelvik-edge xdp doctor
+zelvik-edge xdp attach
+zelvik-edge xdp detach
+zelvik-edge test
 ```
 
 全局参数：
 
 ```bash
-cloudsidra-edge --monitor-port 8888
-cloudsidra-edge --monitor-port 8888 --monitor-clear
+zelvik-edge --monitor-port 8888
+zelvik-edge --monitor-port 8888 --monitor-clear
 ```
 
 命令说明：
@@ -51,8 +51,8 @@ cloudsidra-edge --monitor-port 8888 --monitor-clear
 - `stop`：停止后台节点。
 - `restart`：先停止再启动。
 - `status`：读取 PID 文件和文件锁判断节点状态。
-- `install`：注册 `/usr/bin/cloudsidra-edge` wrapper 和 systemd service。
-- `upgrade`：从 GitHub Release 下载匹配当前 CPU/架构的最新版或指定版本，确认后备份并替换当前二进制，同时安装 release 包内的 `data/cloudsidra-edge-xdp-ebpf.o`。
+- `install`：注册 `/usr/bin/zelvik-edge` wrapper 和 systemd service。
+- `upgrade`：从 GitHub Release 下载匹配当前 CPU/架构的最新版或指定版本，确认后备份并替换当前二进制，同时安装 release 包内的 `data/zelvik-edge-xdp-ebpf.o`。
 - `ntp`：交互式或非交互式设置系统时区，并按内置 NTP 源校准系统时钟；守护进程自动 NTP 只校准程序内部偏移。
 - `firewall init`：初始化本地 `nftables` table/set/chain/drop rule。
 - `firewall list`：合并展示本地 `nftables` 精确 IP 和 RocksDB 本地运行时黑名单；条目较多时按 IPv4 `/24`、IPv6 `/48` 聚合。
@@ -63,30 +63,30 @@ cloudsidra-edge --monitor-port 8888 --monitor-clear
 - `xdp dump-maps`：输出当前进程维护的 XDP shadow maps 和 proxy 端口状态。
 - `test`：验证 `configs/api_node.yaml` 是否可解析。
 
-`upgrade` 默认使用交互式确认，并在成功替换后重启正在运行的 `cloudsidra-edge.service` 或内置后台进程：
+`upgrade` 默认使用交互式确认，并在成功替换后重启正在运行的 `zelvik-edge.service` 或内置后台进程：
 
 ```bash
-cloudsidra-edge upgrade
+zelvik-edge upgrade
 ```
 
 自动化场景可通过参数完整输入，跳过交互确认：
 
 ```bash
-cloudsidra-edge upgrade --yes
-cloudsidra-edge upgrade --version v1.1.7 --yes
-cloudsidra-edge upgrade --version latest --github-mirror https://gh-proxy.example --yes
-cloudsidra-edge upgrade --version v1.1.7 --github-base-url https://github.example.com --repo CloudSidra/CloudSidra-Edge --yes
+zelvik-edge upgrade --yes
+zelvik-edge upgrade --version v1.1.7 --yes
+zelvik-edge upgrade --version latest --github-mirror https://gh-proxy.example --yes
+zelvik-edge upgrade --version v1.1.7 --github-base-url https://github.example.com --repo Zelvik-Labs/edge --yes
 ```
 
 常用参数：
 
 - `--version`：目标版本，默认 `latest`；可传 `v1.1.7` 或 `1.1.7`。
-- `--repo`：GitHub 仓库，默认 `CloudSidra/CloudSidra-Edge`。
+- `--repo`：GitHub 仓库，默认 `Zelvik-Labs/edge`。
 - `--github-base-url`：GitHub 或 GitHub Enterprise 基础地址，默认 `https://github.com`。
 - `--github-mirror`：下载镜像/代理地址；如果包含 `{url}`，会用原始 GitHub 下载地址替换该占位符。
 - `--asset`：手动指定 release asset 文件名，覆盖自动 CPU/架构选择。
 - `--install-binary`：手动指定要替换的本地二进制路径，默认当前执行文件。
-- `--backup-dir`：旧二进制备份目录，默认 `/var/backups/cloudsidra/edge-upgrade`。
+- `--backup-dir`：旧二进制备份目录，默认 `/var/backups/zelvik/edge-upgrade`。
 - `--yes` / `--non-interactive`：跳过确认，适合脚本和控制面调用。
 - `--no-restart`：只替换二进制，不重启服务。
 - `--dry-run`：只打印升级计划，不下载、不替换、不重启。
@@ -96,9 +96,9 @@ cloudsidra-edge upgrade --version v1.1.7 --github-base-url https://github.exampl
 默认运行目录采用三类目录：
 
 - `configs/api_node.yaml`：API 节点连接配置。
-- `data/cloudsidra-edge.pid`：后台进程 PID 文件。
+- `data/zelvik-edge.pid`：后台进程 PID 文件。
 - `data/state.json`：部分运行状态持久化。
-- `data/cloudsidra-edge-xdp-ebpf.o`：可选的外部 XDP eBPF 对象（`cargo xtask build-ebpf` 生成）。默认加载的是构建期内嵌进二进制的对象；仅当 `xdp.ebpfObject` 或 `CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT_PATH` 显式指定时才读取该文件。
+- `data/zelvik-edge-xdp-ebpf.o`：可选的外部 XDP eBPF 对象（`cargo xtask build-ebpf` 生成）。默认加载的是构建期内嵌进二进制的对象；仅当 `xdp.ebpfObject` 或 `ZELVIK_EDGE_XDP_EBPF_OBJECT_PATH` 显式指定时才读取该文件。
 - `data/metrics.mace`：统计、缓存元数据和本地运行时防火墙封禁状态持久化。
 - `data/cache`：默认磁盘缓存目录。
 - `data/GeoLite2-City.mmdb`、`data/GeoLite2-ASN.mmdb`：GeoIP 数据库。
@@ -175,7 +175,7 @@ PROXY Protocol 入站只信任 loopback、private 或 link-local immediate peer�
 - `cleanCache`：清理本地缓存文件和缓存元数据。
 - `getStat`：回传 CPU、内存、负载、流量和连接数。
 - `changeAPINode`：切换运行时 API endpoint，并触发重连。
-- `checkSystemdService`：检查 `cloudsidra-edge` systemd service 是否已启用。
+- `checkSystemdService`：检查 `zelvik-edge` systemd service 是否已启用。
 - `checkLocalFirewall`：检查本地 `nftables` 可用性并回复版本或错误。
 
 未知消息会回复 `unhandled`，不会静默丢弃。HTTP 明文 endpoint 下，运行时使用底层 HTTP/2 gRPC frame 实现保持流打开，行为更接近 Go 客户端：请求流打开后即开始心跳，不把“服务端响应头已返回”作为建流成功的前置条件。
@@ -199,7 +199,7 @@ HTTPS/TLS 源站的 `tlsSecurityVerifyMode` 按单个源站生效，支持 `auto
 通过 `--monitor-port` 启动本地监控页：
 
 ```bash
-cloudsidra-edge --monitor-port 8888
+zelvik-edge --monitor-port 8888
 ```
 
 监控页展示：
@@ -217,12 +217,12 @@ cloudsidra-edge --monitor-port 8888
 
 未注册 systemd 时，`stop` 会通过 PID 文件和 Linux `/proc` 识别当前运行实例，先发送 `SIGTERM` 并等待进程退出；超时未退出时会发送 `SIGKILL`，确认进程结束后才清理匹配的 PID 文件。`restart` 会等待旧进程真实退出后再执行 `start`，避免旧进程仍占用 80/443 或持有数据目录锁时启动新实例。
 
-`status` 会清理陈旧 PID 文件；如果 PID 文件丢失但同一工作目录下仍有 cloudsidra-edge 进程，Linux 环境会继续识别为运行中，避免进程仍在监听端口但 CLI 误报 stopped。
+`status` 会清理陈旧 PID 文件；如果 PID 文件丢失但同一工作目录下仍有 zelvik-edge 进程，Linux 环境会继续识别为运行中，避免进程仍在监听端口但 CLI 误报 stopped。
 
-systemd 安装模式使用 `Type=simple` 直接托管前台进程，`TimeoutStopSec=35` 限制停止等待时间，并设置 `CLOUDSIDRA_EDGE_HOME` 指向运行目录。Pingora 的 SIGTERM graceful shutdown 宽限期设置为 5 秒，避免 `systemctl stop cloudsidra-edge` 长时间停留在 deactivating。
+systemd 安装模式使用 `Type=simple` 直接托管前台进程，`TimeoutStopSec=35` 限制停止等待时间，并设置 `ZELVIK_EDGE_HOME` 指向运行目录。Pingora 的 SIGTERM graceful shutdown 宽限期设置为 5 秒，避免 `systemctl stop zelvik-edge` 长时间停留在 deactivating。
 
 如果进程异常退出，systemd 安装模式下会按 `Restart=on-failure` 自动拉起。排障时优先查看：
 
-- `systemctl status cloudsidra-edge`
-- `journalctl -u cloudsidra-edge`
+- `systemctl status zelvik-edge`
+- `journalctl -u zelvik-edge`
 - `logs/run.log`

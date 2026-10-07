@@ -1,0 +1,17 @@
+{{- if .Values.internalService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "zelvik-edge.fullname" . }}-internal
+  labels:
+    {{- include "zelvik-edge.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "zelvik-edge.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: internal
+      port: {{ .Values.internalService.port }}
+      targetPort: internal
+      protocol: TCP
+{{- end }}

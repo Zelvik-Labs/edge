@@ -3,11 +3,11 @@
 对照对象：
 
 - **现有** `cloud-node-rust-v1`：`proto_defs/output_protos/`，运行时见 [grpc-api.md](grpc-api.md)。
-- **规划** `NodeControl`：[CloudSidra-Docs `03-api-contracts.md`](../../CloudSidra-Docs/docs/03-api-contracts.md) 与草稿 [`docs/contracts/proto/node_control.proto`](../../CloudSidra-Docs/docs/contracts/proto/node_control.proto)（WP-01，未冻结）。
+- **规划** `NodeControl`：[Zelvik-Docs `03-api-contracts.md`](../../docs/docs/03-api-contracts.md) 与草稿 [`docs/contracts/proto/node_control.proto`](../../docs/docs/contracts/proto/node_control.proto)（WP-01，未冻结）。
 
 本轮不实现 patch 状态机，也不改数据面。`IndexService.registerNode` 与规划 `RegisterNode` 同名异义。
 
-来源：[`VERSION-MANIFEST.toml`](../VERSION-MANIFEST.toml)、[`Cargo.toml`](../Cargo.toml) `[package.metadata.cloudsidra]`、[`ORIGIN.md`](../ORIGIN.md)。上游 commit 只采用清单值 `631e5c76cc5605e748dc0230ffc019053b852f80`。本仓库无上游 git 历史，未从 `git log` 编造。
+来源：[`VERSION-MANIFEST.toml`](../VERSION-MANIFEST.toml)、[`Cargo.toml`](../Cargo.toml) `[package.metadata.zelvik]`、[`ORIGIN.md`](../ORIGIN.md)。上游 commit 只采用清单值 `631e5c76cc5605e748dc0230ffc019053b852f80`。本仓库无上游 git 历史，未从 `git log` 编造。
 
 ## 状态
 
@@ -105,7 +105,7 @@
 
 ## 与 Docs 的冲突点
 
-1. Apply 阶段：`03-api-contracts.md` 与草稿 proto 为 apply/ack；`04-edge-integration.md` 与 `cloudsidra-control-plane-plan.md` 为 switch/report。
+1. Apply 阶段：`03-api-contracts.md` 与草稿 proto 为 apply/ack；`04-edge-integration.md` 与 `zelvik-control-plane-plan.md` 为 switch/report。
 2. RPC 命名：`03-api-contracts.md` 为 `GetDesiredRelease` / `StreamEvents` / `ReportNodeHealth`；草稿 proto 为 `GetDesiredRelease` / `StreamEvents` / `ReportNodeHealth`。
 3. 组件版本：Edge SemVer `0.1.0`；Docs `11-versioning.md` 组件层 CalVer；草稿 `software_version` 注释跟 CalVer。
 4. 同步形态：规划常态 patch；现网常态整包 `findCurrentNodeConfig`。

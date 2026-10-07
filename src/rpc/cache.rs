@@ -488,7 +488,7 @@ async fn preheat_cache_url(
         .header("x-cloud-preheat", "1")
         .header(
             "user-agent",
-            "Mozilla/5.0 (compatible; CloudSidra-EdgePreheat/1.0)",
+            "Mozilla/5.0 (compatible; Zelvik-EdgePreheat/1.0)",
         )
         .header("accept-encoding", "gzip, deflate, br")
         .send()

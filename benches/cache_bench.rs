@@ -1,5 +1,5 @@
-use cloudsidra_edge::cache_hybrid::HybridStorage;
-use cloudsidra_edge::cache_manager::create_meta;
+use zelvik_edge::cache_hybrid::HybridStorage;
+use zelvik_edge::cache_manager::create_meta;
 use criterion::{Criterion, criterion_group, criterion_main};
 use pingora_cache::{CacheKey, Storage, trace::Span};
 use std::hint::black_box;

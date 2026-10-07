@@ -1,0 +1,23 @@
+[package]
+name = "zelvik-edge-xdp-ebpf"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98.1"
+publish = false
+
+[dependencies]
+aya-ebpf = "0.2.1"
+zelvik-edge-xdp-common = { path = "../zelvik-edge-xdp-common", default-features = false }
+network-types = "0.2.0"
+
+[[bin]]
+name = "zelvik-edge-xdp-ebpf"
+path = "src/main.rs"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = "fat"

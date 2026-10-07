@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# CloudSidra-Edge single-node systemd installer.
-# Installs the CloudSidra-Edge binary, dedicated user + dirs, a standalone
+# Zelvik-Edge single-node systemd installer.
+# Installs the Zelvik-Edge binary, dedicated user + dirs, a standalone
 # runtime.yaml, and the systemd unit. Reads node_id / secret / API endpoints
-# from env or an interactive prompt and renders /etc/cloudsidra/edge/secrets.env.
-# Keep the existing upstream installer (scripts/install-CloudSidra-Edge.sh) for
-# migration of legacy Go cloud-node; this one is the CloudSidra systemd path.
+# from env or an interactive prompt and renders /etc/zelvik/edge/secrets.env.
+# Keep the existing upstream installer (scripts/install-Zelvik-Edge.sh) for
+# migration of legacy Go cloud-node; this one is the Zelvik systemd path.
 set -euo pipefail
 
-BIN_NAME="cloudsidra-edge"
-SERVICE_NAME="${SERVICE_NAME:-cloudsidra-edge}"
-SERVICE_USER="${SERVICE_USER:-cloudsidra-edge}"
-SERVICE_GROUP="${SERVICE_GROUP:-cloudsidra-edge}"
+BIN_NAME="zelvik-edge"
+SERVICE_NAME="${SERVICE_NAME:-zelvik-edge}"
+SERVICE_USER="${SERVICE_USER:-zelvik-edge}"
+SERVICE_GROUP="${SERVICE_GROUP:-zelvik-edge}"
 INSTALL_DIR="${INSTALL_DIR:-/usr/bin}"
-CONFIG_DIR="${CONFIG_DIR:-/etc/cloudsidra/edge}"
-DATA_DIR="${DATA_DIR:-/var/lib/cloudsidra/edge}"
-LOG_DIR="${LOG_DIR:-/var/log/cloudsidra}"
+CONFIG_DIR="${CONFIG_DIR:-/etc/zelvik/edge}"
+DATA_DIR="${DATA_DIR:-/var/lib/zelvik/edge}"
+LOG_DIR="${LOG_DIR:-/var/log/zelvik}"
 UNIT_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/systemd/${SERVICE_NAME}.service"
 RUNTIME_FILE="${CONFIG_DIR}/runtime.yaml"
 ENV_FILE="${CONFIG_DIR}/secrets.env"
@@ -121,7 +121,7 @@ install_unit() {
 }
 
 SRC_BINARY="${1:-}"
-[ -n "$SRC_BINARY" ] || SRC_BINARY="${EDGE_BINARY:-./target/release/CloudSidra-Edge}"
+[ -n "$SRC_BINARY" ] || SRC_BINARY="${EDGE_BINARY:-./target/release/Zelvik-Edge}"
 [ -f "$SRC_BINARY" ] || die "binary not found: $SRC_BINARY (cargo build --release)"
 
 install_binary "$SRC_BINARY"

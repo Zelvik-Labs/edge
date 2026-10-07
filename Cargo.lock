@@ -791,115 +791,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
-name = "cloudsidra-edge"
-version = "26.9.0"
-dependencies = [
- "aes",
- "aes-gcm",
- "ahash",
- "aho-corasick",
- "anyhow",
- "arc-swap",
- "async-compression",
- "async-stream",
- "async-trait",
- "aws-lc-rs",
- "aya",
- "base64 0.23.1",
- "bloom",
- "brotli 8.0.4",
- "bytes",
- "cfb-mode",
- "chrono",
- "clap",
- "cloudsidra-edge-transport",
- "cloudsidra-edge-xdp-common",
- "criterion",
- "dashmap",
- "flate2",
- "futures-util",
- "governor",
- "h2",
- "h3",
- "h3-quinn",
- "hex",
- "hmac",
- "hostname",
- "http",
- "image",
- "ipnet",
- "libc",
- "libinjectionrs",
- "libmimalloc-sys",
- "libxdp-sys",
- "local-ip-address",
- "lru 0.18.2",
- "mace-kv",
- "maxminddb",
- "md-5",
- "md5",
- "memmap2",
- "mimalloc",
- "moka",
- "neli",
- "num_cpus",
- "parking_lot",
- "pingora",
- "pingora-cache",
- "pingora-core",
- "pingora-http",
- "pingora-load-balancing",
- "pingora-memory-cache",
- "pingora-proxy",
- "prost",
- "quinn",
- "quinn-proto",
- "rand 0.10.2",
- "regex",
- "reqwest",
- "rustls",
- "rustls-native-certs",
- "rustls-pemfile",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha1",
- "sha2",
- "smoltcp",
- "socket2",
- "sysinfo",
- "tar",
- "tokio",
- "tokio-stream",
- "tonic",
- "tonic-prost",
- "tonic-prost-build",
- "tracing",
- "tracing-subscriber",
- "urlencoding",
- "uuid",
- "webp",
- "woothee",
- "x509-parser 0.18.1",
- "xsk-rs",
- "zstd",
-]
-
-[[package]]
-name = "cloudsidra-edge-transport"
-version = "0.1.0"
-dependencies = [
- "smoltcp",
-]
-
-[[package]]
-name = "cloudsidra-edge-xdp-common"
-version = "0.1.0"
-dependencies = [
- "aya",
-]
-
-[[package]]
 name = "cmake"
 version = "0.1.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4163,10 +4054,10 @@ dependencies = [
  "bitflags 1.3.2",
  "byteorder",
  "cfg-if",
- "cloudsidra-edge-transport",
  "defmt",
  "heapless",
  "managed",
+ "zelvik-edge-transport",
 ]
 
 [[package]]
@@ -5301,6 +5192,115 @@ dependencies = [
  "quote",
  "syn 2.0.119",
  "synstructure",
+]
+
+[[package]]
+name = "zelvik-edge"
+version = "26.9.0"
+dependencies = [
+ "aes",
+ "aes-gcm",
+ "ahash",
+ "aho-corasick",
+ "anyhow",
+ "arc-swap",
+ "async-compression",
+ "async-stream",
+ "async-trait",
+ "aws-lc-rs",
+ "aya",
+ "base64 0.23.1",
+ "bloom",
+ "brotli 8.0.4",
+ "bytes",
+ "cfb-mode",
+ "chrono",
+ "clap",
+ "criterion",
+ "dashmap",
+ "flate2",
+ "futures-util",
+ "governor",
+ "h2",
+ "h3",
+ "h3-quinn",
+ "hex",
+ "hmac",
+ "hostname",
+ "http",
+ "image",
+ "ipnet",
+ "libc",
+ "libinjectionrs",
+ "libmimalloc-sys",
+ "libxdp-sys",
+ "local-ip-address",
+ "lru 0.18.2",
+ "mace-kv",
+ "maxminddb",
+ "md-5",
+ "md5",
+ "memmap2",
+ "mimalloc",
+ "moka",
+ "neli",
+ "num_cpus",
+ "parking_lot",
+ "pingora",
+ "pingora-cache",
+ "pingora-core",
+ "pingora-http",
+ "pingora-load-balancing",
+ "pingora-memory-cache",
+ "pingora-proxy",
+ "prost",
+ "quinn",
+ "quinn-proto",
+ "rand 0.10.2",
+ "regex",
+ "reqwest",
+ "rustls",
+ "rustls-native-certs",
+ "rustls-pemfile",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha1",
+ "sha2",
+ "smoltcp",
+ "socket2",
+ "sysinfo",
+ "tar",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tracing",
+ "tracing-subscriber",
+ "urlencoding",
+ "uuid",
+ "webp",
+ "woothee",
+ "x509-parser 0.18.1",
+ "xsk-rs",
+ "zelvik-edge-transport",
+ "zelvik-edge-xdp-common",
+ "zstd",
+]
+
+[[package]]
+name = "zelvik-edge-transport"
+version = "0.1.0"
+dependencies = [
+ "smoltcp",
+]
+
+[[package]]
+name = "zelvik-edge-xdp-common"
+version = "0.1.0"
+dependencies = [
+ "aya",
 ]
 
 [[package]]

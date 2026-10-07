@@ -1,6 +1,6 @@
-# CloudSidra Edge 文档
+# Zelvik Edge 文档
 
-这个目录保存 CloudSidra Edge 的长期维护文档。README 只保留项目入口信息，具体功能、运行时、配置和运维细节统一放在这里。
+这个目录保存 Zelvik Edge 的长期维护文档。README 只保留项目入口信息，具体功能、运行时、配置和运维细节统一放在这里。
 
 ## 文档目录
 
@@ -23,7 +23,7 @@
 - [警告与 lint 策略](agents/warning-and-lint-policy.md)：警告必须消除根因、禁止屏蔽手段、存量 78 处债务清单、审批例外与豁免范围。- [RKE2 部署文档](rke2-deployment.md)：RKE2 集群上的部署方式。
 - [NodeControl 对照（E-01）](node-control-mapping.md)：规划 NodeControl 契约与现有 gcloud RPC 的逐条对照。
 - [版本号规划](versioning.md)：组件/协议/来源的版本模型与兼容矩阵入口。
-- [控制面集成计划](cloudsidra-control-plane-plan.md)：控制面接入的分阶段计划。
+- [控制面集成计划](zelvik-control-plane-plan.md)：控制面接入的分阶段计划。
 - 上游来源：[`ORIGIN.md`](../ORIGIN.md)、[`VERSION-MANIFEST.toml`](../VERSION-MANIFEST.toml)。
 
 ## 阅读顺序

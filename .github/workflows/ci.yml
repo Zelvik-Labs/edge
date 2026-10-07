@@ -84,7 +84,7 @@ jobs:
           BPF_LINKER_VERSION: "0.11.1"
         run: |
           set -euo pipefail
-          EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/cloudsidra-edge-xdp-ebpf/rust-toolchain.toml | head -1)"
+          EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/zelvik-edge-xdp-ebpf/rust-toolchain.toml | head -1)"
           test -n "$EBPF_NIGHTLY"
           rustup toolchain install "$EBPF_NIGHTLY" --profile minimal -c rust-src -c rustc-dev
           # bpf-linker links against libLLVM (>= the LLVM providing
@@ -101,11 +101,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -f data/cloudsidra-edge-xdp-ebpf.o
+          rm -f data/zelvik-edge-xdp-ebpf.o
           cargo xtask build-ebpf
-          test -s data/cloudsidra-edge-xdp-ebpf.o
-          echo "CLOUDSIDRA_EDGE_XDP_EBPF_SOURCE=data/cloudsidra-edge-xdp-ebpf.o" >> "$GITHUB_ENV"
-          echo "CLOUDSIDRA_EDGE_XDP_EBPF_SHA256=$(sha256sum data/cloudsidra-edge-xdp-ebpf.o | awk '{print $1}')" >> "$GITHUB_ENV"
+          test -s data/zelvik-edge-xdp-ebpf.o
+          echo "ZELVIK_EDGE_XDP_EBPF_SOURCE=data/zelvik-edge-xdp-ebpf.o" >> "$GITHUB_ENV"
+          echo "ZELVIK_EDGE_XDP_EBPF_SHA256=$(sha256sum data/zelvik-edge-xdp-ebpf.o | awk '{print $1}')" >> "$GITHUB_ENV"
 
       - name: cargo check (all targets)
         run: cargo check --all-targets
@@ -185,7 +185,7 @@ jobs:
           BPF_LINKER_VERSION: "0.11.1"
         run: |
           set -euo pipefail
-          EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/cloudsidra-edge-xdp-ebpf/rust-toolchain.toml | head -1)"
+          EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/zelvik-edge-xdp-ebpf/rust-toolchain.toml | head -1)"
           test -n "$EBPF_NIGHTLY"
           rustup toolchain install "$EBPF_NIGHTLY" --profile minimal -c rust-src -c rustc-dev
           # bpf-linker links against libLLVM (>= the LLVM providing
@@ -202,11 +202,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -f data/cloudsidra-edge-xdp-ebpf.o
+          rm -f data/zelvik-edge-xdp-ebpf.o
           cargo xtask build-ebpf
-          test -s data/cloudsidra-edge-xdp-ebpf.o
-          echo "CLOUDSIDRA_EDGE_XDP_EBPF_SOURCE=data/cloudsidra-edge-xdp-ebpf.o" >> "$GITHUB_ENV"
-          echo "CLOUDSIDRA_EDGE_XDP_EBPF_SHA256=$(sha256sum data/cloudsidra-edge-xdp-ebpf.o | awk '{print $1}')" >> "$GITHUB_ENV"
+          test -s data/zelvik-edge-xdp-ebpf.o
+          echo "ZELVIK_EDGE_XDP_EBPF_SOURCE=data/zelvik-edge-xdp-ebpf.o" >> "$GITHUB_ENV"
+          echo "ZELVIK_EDGE_XDP_EBPF_SHA256=$(sha256sum data/zelvik-edge-xdp-ebpf.o | awk '{print $1}')" >> "$GITHUB_ENV"
 
       - name: cargo test
         run: cargo test --lib --bins

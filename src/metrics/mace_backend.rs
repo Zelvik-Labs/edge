@@ -395,7 +395,7 @@ mod tests {
 
     fn test_path() -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
-            "cloudsidra-edge-mace-test-{}",
+            "zelvik-edge-mace-test-{}",
             uuid::Uuid::new_v4()
         ))
     }

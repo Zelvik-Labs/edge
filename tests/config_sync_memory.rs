@@ -5,14 +5,14 @@
 //! sync panics, deadlocks, drops sites, or grows RSS without bound across
 //! repeated applies.
 
-use cloudsidra_edge::config::ConfigStore;
-use cloudsidra_edge::config_apply::{
+use zelvik_edge::config::ConfigStore;
+use zelvik_edge::config_apply::{
     ConfigApplyLimits, MaterializeRuntimeServersArgs, RuntimeServerMaps, apply_server_snapshot,
     parse_node_config_json,
 };
-use cloudsidra_edge::config_models::ServerConfig;
-use cloudsidra_edge::health_manager::GlobalHealthManager;
-use cloudsidra_edge::memory_governor::{MEMORY_GOVERNOR, MemoryPressureLevel};
+use zelvik_edge::config_models::ServerConfig;
+use zelvik_edge::health_manager::GlobalHealthManager;
+use zelvik_edge::memory_governor::{MEMORY_GOVERNOR, MemoryPressureLevel};
 use serde_json::json;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -396,7 +396,7 @@ async fn large_server_json_and_hot_reload_under_low_memory() {
                 .expect("large server JSON must parse");
         let round_maps = tokio::time::timeout(
             APPLY_TIMEOUT,
-            cloudsidra_edge::config_apply::materialize_runtime_servers(
+            zelvik_edge::config_apply::materialize_runtime_servers(
                 MaterializeRuntimeServersArgs {
                     servers: vec![large],
                     health_manager: &health,

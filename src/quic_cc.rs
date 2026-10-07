@@ -1,4 +1,4 @@
-//! T5 (§5): bridge the cloudsidra-edge-transport pure algorithm core into
+//! T5 (§5): bridge the zelvik-edge-transport pure algorithm core into
 //! quinn's `congestion::Controller` contract — same EdgeCc state machine
 //! as AF_XDP TCP, plus the reference controllers for validation.
 //!
@@ -28,8 +28,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use cloudsidra_edge_transport::cc as tcc;
-use cloudsidra_edge_transport::{
+use zelvik_edge_transport::cc as tcc;
+use zelvik_edge_transport::{
     CongestionController, RateSampler, RttState, TransportInstant, TxRecord,
 };
 use quinn::congestion::{Controller, ControllerFactory, ControllerMetrics};
@@ -50,13 +50,13 @@ fn build_inner(settings: &XdpTransportSettings, mss: u64) -> Box<dyn CongestionC
         XdpTransportController::Bbr3 => Box::new(tcc::Bbr3Ref::new(mss)),
         XdpTransportController::LossBlind => Box::new(tcc::LossBlindRef::new(
             mss,
-            cloudsidra_edge_transport::Tier::T1,
+            zelvik_edge_transport::Tier::T1,
             None,
             settings.trusted_ecn,
         )),
-        XdpTransportController::Edgecc => Box::new(cloudsidra_edge_transport::EdgeCc::new(
+        XdpTransportController::Edgecc => Box::new(zelvik_edge_transport::EdgeCc::new(
             mss,
-            cloudsidra_edge_transport::Tier::T1,
+            zelvik_edge_transport::Tier::T1,
             None, // no path prior on the tokio side — path_table is worker-local
             settings.trusted_ecn,
         )),

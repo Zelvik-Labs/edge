@@ -3,7 +3,7 @@
 /configs/
 /data/
 /runtime/
-cloudsidra-edge
+zelvik-edge
 .DS_Store
 configs/cache/disk/
 bench-cert.pem
@@ -26,5 +26,5 @@ __pycache__/
 !.github/**
 !.cargo/
 !.cargo/**
-crates/cloudsidra-edge-xdp-common/target/
+crates/zelvik-edge-xdp-common/target/
 xtask/target/

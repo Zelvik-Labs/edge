@@ -142,7 +142,7 @@ pub async fn sync_node_tasks(
                     }
                     "installNode" | "startNode" => {
                         // updateNodeIsInstalled requires admin credentials on cloud API,
-                        // so we cannot mark this from the node side. cloudsidra-edge does not
+                        // so we cannot mark this from the node side. zelvik-edge does not
                         // execute these lifecycle tasks locally, so acknowledge them to
                         // avoid retry loops.
                         info!(

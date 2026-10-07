@@ -853,7 +853,7 @@ pub(crate) struct AfXdpTcpReactor {
     trusted_ecn: bool,
     /// T6: worker-local shared-bottleneck aggregate (EdgeCC only).
     /// `Rc<RefCell>` — never a cross-worker lock, never on the ACK path.
-    aggregate: Option<std::rc::Rc<std::cell::RefCell<cloudsidra_edge_transport::Aggregate>>>,
+    aggregate: Option<std::rc::Rc<std::cell::RefCell<zelvik_edge_transport::Aggregate>>>,
     /// Per-peer-IP L4 verdict cache — the full WAF verdict chain (two
     /// managers × whitelist/blocklist snapshot walks plus a wall-clock
     /// read) ran once per RX frame. Entries only need re-evaluation on a
@@ -861,7 +861,7 @@ pub(crate) struct AfXdpTcpReactor {
     /// the eBPF-side rule map carries the same verdicts regardless.
     l4_verdicts: AfXdpIpMap<(bool, i64)>,
     /// T6: worker-local bounded path-prior table (§2.2 长期先验).
-    path_table: std::rc::Rc<std::cell::RefCell<cloudsidra_edge_transport::PathTable>>,
+    path_table: std::rc::Rc<std::cell::RefCell<zelvik_edge_transport::PathTable>>,
     /// Aggregate arbitration tick watermark (~100ms periods).
     last_agg_period: SmoltcpInstant,
     /// Runtime that owns per-session L7 proxy tasks (TLS, HTTP, upstream
@@ -946,9 +946,9 @@ impl AfXdpTcpReactor {
             trusted_ecn: false,
             aggregate: None,
             path_table: std::rc::Rc::new(std::cell::RefCell::new(
-                cloudsidra_edge_transport::PathTable::new(
-                    cloudsidra_edge_transport::path_table::DEFAULT_CAPACITY,
-                    cloudsidra_edge_transport::path_table::DEFAULT_TTL,
+                zelvik_edge_transport::PathTable::new(
+                    zelvik_edge_transport::path_table::DEFAULT_CAPACITY,
+                    zelvik_edge_transport::path_table::DEFAULT_TTL,
                 ),
             )),
             last_agg_period: SmoltcpInstant::from_millis(0),
@@ -979,7 +979,7 @@ impl AfXdpTcpReactor {
         self.transport_controller = policy.controller;
         self.trusted_ecn = policy.trusted_ecn;
         if policy.aggregation_enabled() && self.aggregate.is_none() {
-            self.aggregate = Some(cloudsidra_edge_transport::Aggregate::shared());
+            self.aggregate = Some(zelvik_edge_transport::Aggregate::shared());
         }
     }
 
@@ -1007,7 +1007,7 @@ impl AfXdpTcpReactor {
     #[cfg(test)]
     pub(crate) fn path_table(
         &self,
-    ) -> std::rc::Rc<std::cell::RefCell<cloudsidra_edge_transport::PathTable>> {
+    ) -> std::rc::Rc<std::cell::RefCell<zelvik_edge_transport::PathTable>> {
         std::rc::Rc::clone(&self.path_table)
     }
 
@@ -1042,7 +1042,7 @@ impl AfXdpTcpReactor {
         &self,
         peer: IpAddr,
         local: IpAddr,
-    ) -> Option<cloudsidra_edge_transport::PathPrior> {
+    ) -> Option<zelvik_edge_transport::PathPrior> {
         let (dst_prefix, prefix_len) = match peer {
             IpAddr::V4(v4) => (
                 IpAddr::V4(std::net::Ipv4Addr::from(u32::from(v4) & 0xffff_ff00)),
@@ -1055,13 +1055,13 @@ impl AfXdpTcpReactor {
                 64,
             ),
         };
-        let key = cloudsidra_edge_transport::PathKey {
+        let key = zelvik_edge_transport::PathKey {
             egress_ifindex: 0,
             local_ip: local,
             dst_prefix,
             prefix_len,
         };
-        let now = cloudsidra_edge_transport::TransportInstant::from_micros(
+        let now = zelvik_edge_transport::TransportInstant::from_micros(
             self.clock.now_micros().max(0) as u64,
         );
         self.path_table.borrow_mut().lookup(&key, now)
@@ -1246,28 +1246,28 @@ impl AfXdpTcpReactor {
         &self,
         peer: IpAddr,
         local: IpAddr,
-    ) -> Box<dyn cloudsidra_edge_transport::cc::CongestionController> {
+    ) -> Box<dyn zelvik_edge_transport::cc::CongestionController> {
         use crate::runtime_mode::XdpTransportController as Ctl;
-        use cloudsidra_edge_transport::cc as tcc;
+        use zelvik_edge_transport::cc as tcc;
         match self.transport_controller {
             Ctl::Cubic => Box::new(tcc::CubicRef::new(536)),
             Ctl::NewReno => Box::new(tcc::NewRenoRef::new(536)),
             Ctl::Bbr3 => Box::new(tcc::Bbr3Ref::new(536)),
             Ctl::LossBlind => Box::new(tcc::LossBlindRef::new(
                 536,
-                cloudsidra_edge_transport::Tier::T1,
+                zelvik_edge_transport::Tier::T1,
                 None,
                 self.trusted_ecn,
             )),
             Ctl::Edgecc => {
-                let mut cc = cloudsidra_edge_transport::EdgeCc::new(
+                let mut cc = zelvik_edge_transport::EdgeCc::new(
                     536,
-                    cloudsidra_edge_transport::Tier::T1,
+                    zelvik_edge_transport::Tier::T1,
                     self.path_prior(peer, local),
                     self.trusted_ecn,
                 );
                 if let Some(agg) = self.aggregate.as_ref()
-                    && let Some(lease) = cloudsidra_edge_transport::Aggregate::join(agg)
+                    && let Some(lease) = zelvik_edge_transport::Aggregate::join(agg)
                 {
                     cc.set_aggregate(Box::new(lease));
                 }
@@ -1280,11 +1280,11 @@ impl AfXdpTcpReactor {
     /// (fresh samples validate priors — §2.2 fresh-sample contract).
     /// Static: the reap path calls this while `self.sockets` is borrowed.
     pub(crate) fn record_path_sample(
-        table: &std::rc::Rc<std::cell::RefCell<cloudsidra_edge_transport::PathTable>>,
+        table: &std::rc::Rc<std::cell::RefCell<zelvik_edge_transport::PathTable>>,
         clock_us: i64,
         peer: IpAddr,
         local: IpAddr,
-        snap: &cloudsidra_edge_transport::cc::CcSnapshot,
+        snap: &zelvik_edge_transport::cc::CcSnapshot,
         failed: bool,
     ) {
         let (dst_prefix, prefix_len) = match peer {
@@ -1299,16 +1299,16 @@ impl AfXdpTcpReactor {
                 64,
             ),
         };
-        let key = cloudsidra_edge_transport::PathKey {
+        let key = zelvik_edge_transport::PathKey {
             egress_ifindex: 0,
             local_ip: local,
             dst_prefix,
             prefix_len,
         };
-        let now = cloudsidra_edge_transport::TransportInstant::from_micros(clock_us.max(0) as u64);
+        let now = zelvik_edge_transport::TransportInstant::from_micros(clock_us.max(0) as u64);
         table.borrow_mut().record(
             key,
-            cloudsidra_edge_transport::PathSample {
+            zelvik_edge_transport::PathSample {
                 bw_bps: snap.bandwidth_lo_bps.or(snap.bandwidth_hi_bps).unwrap_or(0),
                 base_rtt: snap.min_rtt.unwrap_or_default(),
                 p_rand: snap.p_rand_milli.unwrap_or(0) as f64 / 1000.0,

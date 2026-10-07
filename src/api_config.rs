@@ -609,7 +609,7 @@ kernelTuning:
 
     fn runtime_test_dir() -> (PathBuf, PathBuf) {
         let dir =
-            std::env::temp_dir().join(format!("cloudsidra-runtime-test-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("zelvik-runtime-test-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&dir).unwrap();
         let local = dir.join("api.yaml");
         fs::write(
@@ -925,7 +925,7 @@ mod pushed_runtime_tests {
     #[test]
     fn failed_generation_never_publishes_its_staged_override() {
         let dir =
-            std::env::temp_dir().join(format!("cloudsidra-runtime-test-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("zelvik-runtime-test-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&dir).unwrap();
         let local = dir.join("api.yaml");
         fs::write(

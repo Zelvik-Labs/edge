@@ -13,8 +13,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
 use tracing::{info, warn};
 
-pub const XDP_EBPF_OBJECT_NAME: &str = "cloudsidra-edge-xdp-ebpf.o";
-const DEFAULT_BACKUP_DIR: &str = "/var/backups/cloudsidra/edge-upgrade";
+pub const XDP_EBPF_OBJECT_NAME: &str = "zelvik-edge-xdp-ebpf.o";
+const DEFAULT_BACKUP_DIR: &str = "/var/backups/zelvik/edge-upgrade";
 
 #[derive(Debug)]
 pub struct ExtractedReleasePayload {
@@ -66,18 +66,18 @@ pub fn select_release_asset(
                 );
             }
             if cpuinfo_has_flag(cpuinfo, "avx512f") {
-                Ok("CloudSidra-Edge-linux-x64-v4-avx512.tar.gz")
+                Ok("Zelvik-Edge-linux-x64-v4-avx512.tar.gz")
             } else if cpuinfo_has_flag(cpuinfo, "avx2") {
-                Ok("CloudSidra-Edge-linux-x64-v3-avx2.tar.gz")
+                Ok("Zelvik-Edge-linux-x64-v3-avx2.tar.gz")
             } else {
-                Ok("CloudSidra-Edge-linux-x64-v2-sse4.2.tar.gz")
+                Ok("Zelvik-Edge-linux-x64-v2-sse4.2.tar.gz")
             }
         }
         "aarch64" | "arm64" => {
             if cpuinfo.to_ascii_lowercase().contains("neoverse-n1") {
-                Ok("CloudSidra-Edge-linux-arm64-neoverse-n1.tar.gz")
+                Ok("Zelvik-Edge-linux-arm64-neoverse-n1.tar.gz")
             } else {
-                Ok("CloudSidra-Edge-linux-arm64-generic.tar.gz")
+                Ok("Zelvik-Edge-linux-arm64-generic.tar.gz")
             }
         }
         other => anyhow::bail!("unsupported architecture for official release assets: {other}"),
@@ -132,7 +132,7 @@ pub async fn download_to_file(url: &str, target: &Path) -> anyhow::Result<()> {
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(20))
         .timeout(Duration::from_secs(600))
-        .user_agent(format!("cloudsidra-edge/{}", env!("CARGO_PKG_VERSION")))
+        .user_agent(format!("zelvik-edge/{}", env!("CARGO_PKG_VERSION")))
         .build()?;
     let mut response = client.get(url).send().await?;
     if !response.status().is_success() {
@@ -163,7 +163,7 @@ pub fn extract_release_payload(
     let archive_file = fs::File::open(archive_path)?;
     let gz = flate2::read::GzDecoder::new(archive_file);
     let mut archive = tar::Archive::new(gz);
-    let binary = target_dir.join("cloudsidra-edge");
+    let binary = target_dir.join("zelvik-edge");
     let xdp_ebpf_object = target_dir.join(XDP_EBPF_OBJECT_NAME);
     let mut found_binary = false;
     let mut found_xdp_ebpf_object = false;
@@ -172,13 +172,13 @@ pub fn extract_release_payload(
         let mut entry = entry?;
         let path = entry.path()?.into_owned();
         let parts = archive_path_parts(&path);
-        if parts == ["cloudsidra-edge"] {
+        if parts == ["zelvik-edge"] {
             if found_binary || !entry.header().entry_type().is_file() {
                 anyhow::bail!("release binary must be a unique regular file");
             }
             entry.unpack(&binary)?;
             if !binary.is_file() {
-                anyhow::bail!("release archive cloudsidra-edge entry is not a regular file");
+                anyhow::bail!("release archive zelvik-edge entry is not a regular file");
             }
             found_binary = true;
         } else if parts == ["data", XDP_EBPF_OBJECT_NAME] {
@@ -194,7 +194,7 @@ pub fn extract_release_payload(
     }
 
     if !found_binary {
-        anyhow::bail!("release archive does not contain cloudsidra-edge");
+        anyhow::bail!("release archive does not contain zelvik-edge");
     }
 
     Ok(ExtractedReleasePayload {
@@ -261,9 +261,9 @@ pub fn validate_release_payload(
     let text = String::from_utf8(output.stdout)?;
     let reported = text
         .trim()
-        .strip_prefix("cloudsidra-edge ")
+        .strip_prefix("zelvik-edge ")
         .ok_or_else(|| {
-            anyhow::anyhow!("release binary did not report a CloudSidra-Edge version")
+            anyhow::anyhow!("release binary did not report a Zelvik-Edge version")
         })?;
     if !output.status.success()
         || (version != "latest" && reported != version.trim_start_matches('v'))
@@ -304,7 +304,7 @@ impl UpgradeInstallation {
     pub fn restart_with_rollback(&self) -> anyhow::Result<()> {
         let restart = || -> anyhow::Result<()> {
             let status = Command::new("systemctl")
-                .args(["restart", "cloudsidra-edge.service"])
+                .args(["restart", "zelvik-edge.service"])
                 .status()?;
             if !status.success() {
                 anyhow::bail!("service restart failed: {status}");
@@ -313,7 +313,7 @@ impl UpgradeInstallation {
             for _ in 0..15 {
                 std::thread::sleep(Duration::from_secs(1));
                 if !Command::new("systemctl")
-                    .args(["is-active", "--quiet", "cloudsidra-edge.service"])
+                    .args(["is-active", "--quiet", "zelvik-edge.service"])
                     .status()?
                     .success()
                 {
@@ -324,7 +324,7 @@ impl UpgradeInstallation {
         };
         if let Err(error) = restart() {
             let stopped = Command::new("systemctl")
-                .args(["stop", "cloudsidra-edge.service"])
+                .args(["stop", "zelvik-edge.service"])
                 .status()?;
             if !stopped.success() {
                 anyhow::bail!(
@@ -435,7 +435,7 @@ pub fn backup_current_binary(
     let file_name = install_binary
         .file_name()
         .and_then(|name| name.to_str())
-        .unwrap_or("cloudsidra-edge");
+        .unwrap_or("zelvik-edge");
     let backup_path = backup_dir.join(format!("{file_name}.{version}.{}.backup", unix_timestamp()));
     fs::copy(install_binary, &backup_path)?;
     Ok(backup_path)
@@ -571,7 +571,7 @@ pub async fn execute_node_upgrade(
     );
 
     let tmp_dir = std::env::temp_dir().join(format!(
-        "cloudsidra-edge-task-upgrade-{}-{}",
+        "zelvik-edge-task-upgrade-{}-{}",
         std::process::id(),
         unix_timestamp()
     ));
@@ -624,7 +624,7 @@ async fn fetch_package_meta(
     asset: &str,
 ) -> anyhow::Result<PackageMeta> {
     let mut url = format!(
-        "{}/v1/edge/packages/meta?component=CloudSidra-Edge&asset={}",
+        "{}/v1/edge/packages/meta?component=Zelvik-Edge&asset={}",
         base.trim_end_matches('/'),
         urlencoding(asset)
     );
@@ -634,14 +634,14 @@ async fn fetch_package_meta(
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(30))
-        .user_agent(format!("cloudsidra-edge/{}", env!("CARGO_PKG_VERSION")))
+        .user_agent(format!("zelvik-edge/{}", env!("CARGO_PKG_VERSION")))
         .build()?;
     let response = client.get(&url).send().await?;
     if !response.status().is_success() {
         anyhow::bail!("package meta returned HTTP {}", response.status());
     }
     let meta = serde_json::from_str::<PackageMeta>(&response.text().await?)?;
-    if meta.component != "CloudSidra-Edge" || meta.filename != asset {
+    if meta.component != "Zelvik-Edge" || meta.filename != asset {
         anyhow::bail!("package meta returned unexpected asset {}", meta.filename);
     }
     if meta.sha256.is_empty() || !meta.url.starts_with('/') {
@@ -667,11 +667,11 @@ fn urlencoding(value: &str) -> String {
 fn schedule_upgrade_restart(manifest: &Path) -> anyhow::Result<()> {
     // A transient unit survives the edge unit stopping and owns recovery.
     let state: UpgradeInstallation = serde_json::from_slice(&fs::read(manifest)?)?;
-    let unit = format!("cloudsidra-edge-upgrade-{}", uuid::Uuid::new_v4());
+    let unit = format!("zelvik-edge-upgrade-{}", uuid::Uuid::new_v4());
     let status = Command::new("systemd-run")
         .args(["--collect", "--unit", &unit])
         .arg(format!(
-            "--setenv=CLOUDSIDRA_EDGE_HOME={}",
+            "--setenv=ZELVIK_EDGE_HOME={}",
             state
                 .object
                 .parent()

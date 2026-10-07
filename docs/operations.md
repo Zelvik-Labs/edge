@@ -1,6 +1,6 @@
 # 部署与运维
 
-本文件说明 CloudSidra Edge 的构建、安装、运行、监控和排障建议。
+本文件说明 Zelvik Edge 的构建、安装、运行、监控和排障建议。
 
 ## 构建
 
@@ -29,68 +29,68 @@ RUSTFLAGS="-C target-cpu=neoverse-n1 -C opt-level=3 -C lto=fat" cargo build --re
 
 不要在不支持对应指令集的机器上运行高阶 CPU 构建产物。
 
-XDP/AF_XDP eBPF 对象在 Linux 目标构建时由 `build.rs` 自动编译并**内嵌进主二进制**（需要 nightly + rust-src + bpf-linker；缺少工具链时回退嵌入 `data/cloudsidra-edge-xdp-ebpf.o` 并输出告警）。二进制与 eBPF 程序因此永远同版本，部署只需一个二进制文件。
+XDP/AF_XDP eBPF 对象在 Linux 目标构建时由 `build.rs` 自动编译并**内嵌进主二进制**（需要 nightly + rust-src + bpf-linker；缺少工具链时回退嵌入 `data/zelvik-edge-xdp-ebpf.o` 并输出告警）。二进制与 eBPF 程序因此永远同版本，部署只需一个二进制文件。
 
-也可以用 `cargo xtask build-ebpf` 单独构建到 `data/cloudsidra-edge-xdp-ebpf.o`，用于调试或通过 `xdp.ebpfObject` / `CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT_PATH` 显式指定外部对象做热替换。
+也可以用 `cargo xtask build-ebpf` 单独构建到 `data/zelvik-edge-xdp-ebpf.o`，用于调试或通过 `xdp.ebpfObject` / `ZELVIK_EDGE_XDP_EBPF_OBJECT_PATH` 显式指定外部对象做热替换。
 
 ## 安装
 
 安装命令：
 
 ```bash
-sudo ./target/release/cloudsidra-edge install
+sudo ./target/release/zelvik-edge install
 ```
 
 安装会执行两件事：
 
-- 写入 `/usr/bin/cloudsidra-edge` wrapper。
-- 写入 `/etc/systemd/system/cloudsidra-edge.service` 并启用服务。
+- 写入 `/usr/bin/zelvik-edge` wrapper。
+- 写入 `/etc/systemd/system/zelvik-edge.service` 并启用服务。
 
 安装后的常用命令：
 
 ```bash
-cloudsidra-edge start
-cloudsidra-edge stop
-cloudsidra-edge restart
-cloudsidra-edge status
-cloudsidra-edge upgrade
-cloudsidra-edge ntp
-cloudsidra-edge xdp status
-cloudsidra-edge xdp doctor
+zelvik-edge start
+zelvik-edge stop
+zelvik-edge restart
+zelvik-edge status
+zelvik-edge upgrade
+zelvik-edge ntp
+zelvik-edge xdp status
+zelvik-edge xdp doctor
 ```
 
-systemd unit 会以 `Type=simple` 托管前台节点进程，用于开机自启、日志和状态排障。已注册 systemd unit 时，`cloudsidra-edge start/restart` 会优先委托给 `systemctl`；未注册 systemd 时才使用内置后台进程管理。节点自身会同时把运行日志追加到 `logs/run.log`。
+systemd unit 会以 `Type=simple` 托管前台节点进程，用于开机自启、日志和状态排障。已注册 systemd unit 时，`zelvik-edge start/restart` 会优先委托给 `systemctl`；未注册 systemd 时才使用内置后台进程管理。节点自身会同时把运行日志追加到 `logs/run.log`。
 
 XDP/AF_XDP 默认启用，接口和队列由代码自动推导。部署前确认服务具备 root 或 `CAP_BPF`、`CAP_NET_ADMIN`、`CAP_NET_RAW`，建议先执行：
 
 ```bash
-cloudsidra-edge xdp doctor
-cloudsidra-edge xdp status
+zelvik-edge xdp doctor
+zelvik-edge xdp status
 ```
 
-如需关闭，设置 `CLOUDSIDRA_EDGE_XDP=0` 或在 `configs/api_node.yaml` 中写 `xdp.enabled: false`（文件为最终裁决）。如果生产环境要求 XDP 不可用时拒绝启动，把 `xdp.fallback` 设置为 `fail-start`；默认 `pass` 会回退到原监听器并记录原因。
+如需关闭，设置 `ZELVIK_EDGE_XDP=0` 或在 `configs/api_node.yaml` 中写 `xdp.enabled: false`（文件为最终裁决）。如果生产环境要求 XDP 不可用时拒绝启动，把 `xdp.fallback` 设置为 `fail-start`；默认 `pass` 会回退到原监听器并记录原因。
 
 ## 内置 NTP 命令
 
 已安装 Rust 版后，可以用内置 NTP 命令交互式设置系统时区并校准系统时钟：
 
 ```bash
-sudo cloudsidra-edge ntp
+sudo zelvik-edge ntp
 ```
 
 非交互设置时区并校时：
 
 ```bash
-sudo cloudsidra-edge ntp --timezone Asia/Hong_Kong --yes
+sudo zelvik-edge ntp --timezone Asia/Hong_Kong --yes
 ```
 
 只校时、不修改时区：
 
 ```bash
-sudo cloudsidra-edge ntp --no-timezone --yes
+sudo zelvik-edge ntp --no-timezone --yes
 ```
 
-守护进程启动后的自动 NTP 同步只修正程序内部时间偏移，并通过节点日志上报偏差；显式执行 `cloudsidra-edge ntp` 才会修改系统时钟。
+守护进程启动后的自动 NTP 同步只修正程序内部时间偏移，并通过节点日志上报偏差；显式执行 `zelvik-edge ntp` 才会修改系统时钟。
 
 如果服务器或机房禁用了 UDP/123，命令会在内置 NTP 源全部超时后自动回退到 HTTPS Date 时间源，继续通过 TCP/443 获取时间参考。
 
@@ -99,7 +99,7 @@ sudo cloudsidra-edge ntp --no-timezone --yes
 已安装 Rust 版后，可以直接使用二进制内置升级命令从 GitHub Release 拉取最新版：
 
 ```bash
-sudo cloudsidra-edge upgrade
+sudo zelvik-edge upgrade
 ```
 
 默认行为：
@@ -107,39 +107,39 @@ sudo cloudsidra-edge upgrade
 - 自动选择当前 CPU/架构匹配的官方 release 包。
 - 默认目标版本为 `latest`。
 - 显示升级摘要并交互确认。
-- 替换前把旧二进制备份到 `/var/backups/cloudsidra/edge-upgrade/`。
-- 替换成功后，如果 `cloudsidra-edge.service` 正在运行则重启 systemd 服务；未使用 systemd 时会重启内置后台进程。
+- 替换前把旧二进制备份到 `/var/backups/zelvik/edge-upgrade/`。
+- 替换成功后，如果 `zelvik-edge.service` 正在运行则重启 systemd 服务；未使用 systemd 时会重启内置后台进程。
 
 非交互升级到最新版：
 
 ```bash
-sudo cloudsidra-edge upgrade --yes
+sudo zelvik-edge upgrade --yes
 ```
 
 升级到指定版本：
 
 ```bash
-sudo cloudsidra-edge upgrade --version v1.1.6 --yes
+sudo zelvik-edge upgrade --version v1.1.6 --yes
 ```
 
 使用 GitHub 镜像/代理站：
 
 ```bash
-sudo cloudsidra-edge upgrade --github-mirror https://gh-proxy.example --yes
+sudo zelvik-edge upgrade --github-mirror https://gh-proxy.example --yes
 ```
 
 如果镜像站需要把原始 URL 放到模板中，可使用 `{url}` 占位符：
 
 ```bash
-sudo cloudsidra-edge upgrade --github-mirror 'https://mirror.example/download?url={url}' --yes
+sudo zelvik-edge upgrade --github-mirror 'https://mirror.example/download?url={url}' --yes
 ```
 
 使用 GitHub Enterprise 或自建镜像作为基础站点：
 
 ```bash
-sudo cloudsidra-edge upgrade \
+sudo zelvik-edge upgrade \
   --github-base-url https://github.example.com \
-  --repo CloudSidra/CloudSidra-Edge \
+  --repo Zelvik-Labs/edge \
   --version v1.1.6 \
   --yes
 ```
@@ -147,13 +147,13 @@ sudo cloudsidra-edge upgrade \
 上线前查看升级计划：
 
 ```bash
-sudo cloudsidra-edge upgrade --dry-run
+sudo zelvik-edge upgrade --dry-run
 ```
 
 只替换二进制，不立即重启：
 
 ```bash
-sudo cloudsidra-edge upgrade --yes --no-restart
+sudo zelvik-edge upgrade --yes --no-restart
 ```
 
 ## 安装与升级 Rust 版
@@ -161,34 +161,34 @@ sudo cloudsidra-edge upgrade --yes --no-restart
 仓库提供统一安装脚本（所有输出中英双语同时显示）：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-cloudsidra-edge.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo bash
 ```
 
 脚本为单一收敛流程，不再区分“新装 / 升级 / 迁移”入口：
 
 - 自动检测现有部署：发现旧 Go 原版或旧 Rust 版时按迁移/升级处理；找不到现有 `api_node.yaml` 时按全新安装处理，交互式询问 API 连接配置（也可用参数传入）。
-- 查找当前 `cloudsidra-edge` 命令、`cloudsidra-edge.service` 的 `ExecStart` 和常见安装路径。
-- 将找到的旧二进制、`/usr/bin/cloudsidra-edge` 和 systemd unit 备份到 `/var/backups/cloudsidra/edge-migration/<timestamp>/`。
+- 查找当前 `zelvik-edge` 命令、`zelvik-edge.service` 的 `ExecStart` 和常见安装路径。
+- 将找到的旧二进制、`/usr/bin/zelvik-edge` 和 systemd unit 备份到 `/var/backups/zelvik/edge-migration/<timestamp>/`。
 - 从 Go 原版迁移时备份文件带有 `go-original` 标识；升级已有 Rust 版时备份文件带有 `rust-current` 标识。
 - 根据系统架构（x86-64 v2/v3/v4、arm64 generic/neoverse-n1）选择 GitHub Release 包，默认最新版，`--version` 可指定。
-- 将 Rust 二进制和 `data/cloudsidra-edge-xdp-ebpf.o` 原子替换到运行目录；目录识别优先使用 service `WorkingDirectory`、`/usr/bin/cloudsidra-edge` wrapper 中的 `cd` 目录、旧二进制所在目录和常见旧目录，全新安装默认 `/root/cloudsidra-edge`。
+- 将 Rust 二进制和 `data/zelvik-edge-xdp-ebpf.o` 原子替换到运行目录；目录识别优先使用 service `WorkingDirectory`、`/usr/bin/zelvik-edge` wrapper 中的 `cd` 目录、旧二进制所在目录和常见旧目录，全新安装默认 `/root/zelvik-edge`。
 - 从旧运行目录迁移 `configs/api_node.yaml`、旧版根目录 `api_node.yaml` 和运行状态数据。
-- 执行 Rust 二进制内置的 `install` 命令，重新注册 `/usr/bin/cloudsidra-edge` wrapper 和 `cloudsidra-edge.service`，并设置 `CLOUDSIDRA_EDGE_HOME` 指向运行目录。
+- 执行 Rust 二进制内置的 `install` 命令，重新注册 `/usr/bin/zelvik-edge` wrapper 和 `zelvik-edge.service`，并设置 `ZELVIK_EDGE_HOME` 指向运行目录。
 - 默认必装 GeoIP 数据库：`GeoLite2-City.mmdb`、`GeoLite2-ASN.mmdb`、`GeoLite2-Country.mmdb` 已从 `P3TERX/GeoLite.mmdb` 同步到本仓库 `geoip/` 目录作为唯一来源，后续更新由仓库维护者决定；安装时从 `github.com/<repo>/raw/main/geoip/` 下载，可用 `GEOIP_BASE_URL` 覆盖镜像地址。
 - 默认安装完成后自动启动/重启服务并校验运行状态；`--no-start` 可跳过。
 
-全新安装会默认创建 `/root/cloudsidra-edge`，并在缺少 `api_node.yaml` 时交互输入 API 连接配置，生成 `/root/cloudsidra-edge/configs/api_node.yaml`；`--timezone` 可同时设置系统时区。
+全新安装会默认创建 `/root/zelvik-edge`，并在缺少 `api_node.yaml` 时交互输入 API 连接配置，生成 `/root/zelvik-edge/configs/api_node.yaml`；`--timezone` 可同时设置系统时区。
 
 上线前建议先 dry-run：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-cloudsidra-edge.sh | sudo bash -s -- --dry-run
+curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo bash -s -- --dry-run
 ```
 
 安装指定版本：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-cloudsidra-edge.sh | sudo bash -s -- --version v1.1.2 --yes
+curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo bash -s -- --version v1.1.2 --yes
 ```
 
 ## 1.1.2 说明
@@ -212,46 +212,46 @@ curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scr
 升级现有 Rust 节点到最新版（与安装同一条命令，脚本自动按升级处理）：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-cloudsidra-edge.sh | sudo bash -s -- --yes
+curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo bash -s -- --yes
 ```
 
 全新安装的一条非交互命令（未检测到现有 `api_node.yaml` 时自动按全新安装处理）：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-cloudsidra-edge.sh | sudo bash -s -- --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret
+curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo bash -s -- --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret
 ```
 
 GeoIP 库默认必装，文件写入节点 `data/` 目录，因为运行时会优先从 `data/GeoLite2-City.mmdb` 和 `data/GeoLite2-ASN.mmdb` 读取。旧版工作目录 GeoIP 文件仍作为迁移 fallback。如需指定目录：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-cloudsidra-edge.sh | sudo bash -s -- --geoip-dir /opt/cloudsidra/edge/data --yes
+curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo bash -s -- --geoip-dir /opt/zelvik/edge/data --yes
 ```
 
 指定安装目录或禁止自动启动：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-cloudsidra-edge.sh | sudo bash -s -- --install-dir /opt/cloudsidra/edge --no-start --yes
+curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo bash -s -- --install-dir /opt/zelvik/edge --no-start --yes
 ```
 
 列出可用备份：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-cloudsidra-edge.sh | sudo bash -s -- --list-backups
+curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo bash -s -- --list-backups
 ```
 
 从最近一次备份恢复 Go 原版：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-cloudsidra-edge.sh | sudo bash -s -- --restore
+curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo bash -s -- --restore
 ```
 
 非交互恢复指定备份：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scripts/install-cloudsidra-edge.sh | sudo bash -s -- --restore --restore-backup /var/backups/cloudsidra/edge-migration/20260509-120000 --yes
+curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo bash -s -- --restore --restore-backup /var/backups/zelvik/edge-migration/20260509-120000 --yes
 ```
 
-恢复时脚本会停止当前服务，恢复 `go-original` 二进制、`/usr/bin/cloudsidra-edge` 和 systemd unit，并将当前 Rust 文件备份到 `restore-current-*` 目录。手动回滚也可以停止服务后恢复备份目录中的文件，再执行 `systemctl daemon-reload` 与 `systemctl start cloudsidra-edge`。
+恢复时脚本会停止当前服务，恢复 `go-original` 二进制、`/usr/bin/zelvik-edge` 和 systemd unit，并将当前 Rust 文件备份到 `restore-current-*` 目录。手动回滚也可以停止服务后恢复备份目录中的文件，再执行 `systemctl daemon-reload` 与 `systemctl start zelvik-edge`。
 
 ## 运行前检查
 
@@ -271,7 +271,7 @@ curl -fsSL https://raw.githubusercontent.com/CloudSidra/CloudSidra-Edge/main/scr
 启动本地监控页：
 
 ```bash
-cloudsidra-edge --monitor-port 8888
+zelvik-edge --monitor-port 8888
 ```
 
 生产环境建议只暴露在内网或通过本机 SSH 隧道访问，不建议直接公网暴露。
@@ -291,7 +291,7 @@ cloudsidra-edge --monitor-port 8888
 
 常见日志来源：
 
-- systemd 日志：`journalctl -u cloudsidra-edge`
+- systemd 日志：`journalctl -u zelvik-edge`
 - 本地运行日志：`logs/run.log`
 - 控制面节点日志：由 NodeLogUploader 上报。
 - 访问日志：由 LogUploader 批量上报。
@@ -306,8 +306,8 @@ cloudsidra-edge --monitor-port 8888
 排障时优先看：
 
 ```bash
-systemctl status cloudsidra-edge
-journalctl -u cloudsidra-edge -n 200 --no-pager
+systemctl status zelvik-edge
+journalctl -u zelvik-edge -n 200 --no-pager
 tail -n 200 logs/run.log
 ```
 

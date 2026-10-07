@@ -1,34 +1,34 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use cloudsidra_edge::api_config::ApiConfig;
-use cloudsidra_edge::config::ConfigStore;
-use cloudsidra_edge::firewall::state::WafStateManager;
-use cloudsidra_edge::health_manager::GlobalHealthManager;
-use cloudsidra_edge::pb;
-use cloudsidra_edge::rpc::client::RpcClient;
-use cloudsidra_edge::rpc::node::{
+use zelvik_edge::api_config::ApiConfig;
+use zelvik_edge::config::ConfigStore;
+use zelvik_edge::firewall::state::WafStateManager;
+use zelvik_edge::health_manager::GlobalHealthManager;
+use zelvik_edge::pb;
+use zelvik_edge::rpc::client::RpcClient;
+use zelvik_edge::rpc::node::{
     FetchConfigArgs, fetch_and_apply_config, report_node_online_once,
 };
-use cloudsidra_edge::ssl::DynamicCertSelector;
+use zelvik_edge::ssl::DynamicCertSelector;
 use std::io::Read;
 
 fn real_api_config_from_env() -> anyhow::Result<Option<ApiConfig>> {
-    if std::env::var("CLOUDSIDRA_EDGE_REAL_API_TEST")
+    if std::env::var("ZELVIK_EDGE_REAL_API_TEST")
         .ok()
         .as_deref()
         != Some("1")
     {
-        eprintln!("skip real API config test: set CLOUDSIDRA_EDGE_REAL_API_TEST=1 to enable");
+        eprintln!("skip real API config test: set ZELVIK_EDGE_REAL_API_TEST=1 to enable");
         return Ok(None);
     }
 
-    if let Ok(path) = std::env::var("CLOUDSIDRA_EDGE_TEST_API_CONFIG") {
+    if let Ok(path) = std::env::var("ZELVIK_EDGE_TEST_API_CONFIG") {
         return ApiConfig::load(path).map(Some);
     }
 
-    let endpoints = std::env::var("CLOUDSIDRA_EDGE_TEST_RPC_ENDPOINTS")
-        .or_else(|_| std::env::var("CLOUDSIDRA_EDGE_TEST_RPC_ENDPOINT"))
+    let endpoints = std::env::var("ZELVIK_EDGE_TEST_RPC_ENDPOINTS")
+        .or_else(|_| std::env::var("ZELVIK_EDGE_TEST_RPC_ENDPOINT"))
         .map(|value| {
             value
                 .split(',')
@@ -37,8 +37,8 @@ fn real_api_config_from_env() -> anyhow::Result<Option<ApiConfig>> {
                 .map(str::to_string)
                 .collect::<Vec<_>>()
         })?;
-    let node_id = std::env::var("CLOUDSIDRA_EDGE_TEST_NODE_ID")?;
-    let secret = std::env::var("CLOUDSIDRA_EDGE_TEST_SECRET")?;
+    let node_id = std::env::var("ZELVIK_EDGE_TEST_NODE_ID")?;
+    let secret = std::env::var("ZELVIK_EDGE_TEST_SECRET")?;
 
     Ok(Some(ApiConfig {
         rpc_tls: Default::default(),
@@ -54,7 +54,7 @@ fn real_api_config_from_env() -> anyhow::Result<Option<ApiConfig>> {
 }
 
 fn real_stream_hold_seconds() -> u64 {
-    std::env::var("CLOUDSIDRA_EDGE_REAL_API_STREAM_SECONDS")
+    std::env::var("ZELVIK_EDGE_REAL_API_STREAM_SECONDS")
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or(45)
@@ -62,35 +62,35 @@ fn real_stream_hold_seconds() -> u64 {
 }
 
 fn require_real_stream() -> bool {
-    std::env::var("CLOUDSIDRA_EDGE_REAL_API_REQUIRE_STREAM")
+    std::env::var("ZELVIK_EDGE_REAL_API_REQUIRE_STREAM")
         .ok()
         .as_deref()
         == Some("1")
 }
 
 fn require_real_stream_response() -> bool {
-    std::env::var("CLOUDSIDRA_EDGE_REAL_API_REQUIRE_STREAM_RESPONSE")
+    std::env::var("ZELVIK_EDGE_REAL_API_REQUIRE_STREAM_RESPONSE")
         .ok()
         .as_deref()
         == Some("1")
 }
 
 fn require_real_doc_snapshot() -> bool {
-    std::env::var("CLOUDSIDRA_EDGE_REAL_API_DOC_SNAPSHOT")
+    std::env::var("ZELVIK_EDGE_REAL_API_DOC_SNAPSHOT")
         .ok()
         .as_deref()
         == Some("1")
 }
 
 fn require_real_cache_task_consume() -> bool {
-    std::env::var("CLOUDSIDRA_EDGE_REAL_API_CONSUME_CACHE_TASKS")
+    std::env::var("ZELVIK_EDGE_REAL_API_CONSUME_CACHE_TASKS")
         .ok()
         .as_deref()
         == Some("1")
 }
 
 fn require_real_cache_task_list() -> bool {
-    std::env::var("CLOUDSIDRA_EDGE_REAL_API_LIST_CACHE_TASKS")
+    std::env::var("ZELVIK_EDGE_REAL_API_LIST_CACHE_TASKS")
         .ok()
         .as_deref()
         == Some("1")
@@ -191,7 +191,7 @@ fn print_doc_sample(label: &str, value: serde_json::Value) -> anyhow::Result<()>
 async fn real_api_list_cache_tasks_once() -> anyhow::Result<()> {
     if !require_real_cache_task_list() {
         eprintln!(
-            "skip real cache task list test: set CLOUDSIDRA_EDGE_REAL_API_LIST_CACHE_TASKS=1 to enable"
+            "skip real cache task list test: set ZELVIK_EDGE_REAL_API_LIST_CACHE_TASKS=1 to enable"
         );
         return Ok(());
     }
@@ -237,7 +237,7 @@ async fn real_api_list_cache_tasks_once() -> anyhow::Result<()> {
 async fn real_api_consume_prefix_purge_cache_tasks_once() -> anyhow::Result<()> {
     if !require_real_cache_task_consume() {
         eprintln!(
-            "skip real cache task consume test: set CLOUDSIDRA_EDGE_REAL_API_CONSUME_CACHE_TASKS=1 to enable"
+            "skip real cache task consume test: set ZELVIK_EDGE_REAL_API_CONSUME_CACHE_TASKS=1 to enable"
         );
         return Ok(());
     }
@@ -316,7 +316,7 @@ async fn real_api_consume_prefix_purge_cache_tasks_once() -> anyhow::Result<()> 
 
     let mut consumed = Vec::new();
     for task_id in task_ids {
-        let ok = cloudsidra_edge::rpc::cache::sync_cache_tasks(
+        let ok = zelvik_edge::rpc::cache::sync_cache_tasks(
             client.channel(),
             &api_config,
             &config_store,
@@ -355,7 +355,7 @@ async fn real_api_config_can_be_fetched_parsed_and_applied() -> anyhow::Result<(
     };
 
     if let Err(error) = tracing_subscriber::fmt()
-        .with_env_filter("cloudsidra_edge=debug")
+        .with_env_filter("zelvik_edge=debug")
         .with_test_writer()
         .try_init()
     {
@@ -392,7 +392,7 @@ async fn real_api_config_can_be_fetched_parsed_and_applied() -> anyhow::Result<(
     );
 
     let node_json = decode_node_json(direct_resp).await?;
-    let parsed: cloudsidra_edge::config_models::NodeConfigPayload =
+    let parsed: zelvik_edge::config_models::NodeConfigPayload =
         serde_json::from_slice(&node_json)?;
     assert!(
         parsed.id.unwrap_or(0) > 0 || parsed.node_id.as_deref().is_some_and(|id| !id.is_empty()),
@@ -470,7 +470,7 @@ async fn real_api_config_can_be_fetched_parsed_and_applied() -> anyhow::Result<(
 
     let stream_result = tokio::time::timeout(
         Duration::from_secs(hold_secs + 20),
-        cloudsidra_edge::rpc::stream::probe_node_stream(
+        zelvik_edge::rpc::stream::probe_node_stream(
             &api_config,
             Arc::new(config_store.clone()),
             Duration::from_secs(hold_secs),
@@ -526,7 +526,7 @@ async fn real_api_config_can_be_fetched_parsed_and_applied() -> anyhow::Result<(
 async fn real_api_grpc_documentation_snapshot() -> anyhow::Result<()> {
     if !require_real_doc_snapshot() {
         eprintln!(
-            "skip real API documentation snapshot: set CLOUDSIDRA_EDGE_REAL_API_DOC_SNAPSHOT=1"
+            "skip real API documentation snapshot: set ZELVIK_EDGE_REAL_API_DOC_SNAPSHOT=1"
         );
         return Ok(());
     }
@@ -570,7 +570,7 @@ async fn real_api_grpc_documentation_snapshot() -> anyhow::Result<()> {
     });
     let node_json = decode_node_json(raw_config_resp).await?;
     let node_json_value: serde_json::Value = serde_json::from_slice(&node_json)?;
-    let payload: cloudsidra_edge::config_models::NodeConfigPayload =
+    let payload: zelvik_edge::config_models::NodeConfigPayload =
         serde_json::from_slice(&node_json)?;
     let numeric_node_id = payload.id.unwrap_or(0);
     let first_server = payload.servers.iter().find_map(|server| {

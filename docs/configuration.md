@@ -1,6 +1,6 @@
 # 配置说明
 
-CloudSidra Edge 的本地配置很少，主要配置来自控制面。节点本地只需要知道 API 节点地址、节点 ID 和密钥。
+Zelvik Edge 的本地配置很少，主要配置来自控制面。节点本地只需要知道 API 节点地址、节点 ID 和密钥。
 
 ## configs/api_node.yaml
 
@@ -34,9 +34,9 @@ relay:
 可使用内置命令交互或非交互调整零拷贝：
 
 ```bash
-cloudsidra-edge zerocopy
-cloudsidra-edge zerocopy --enable --yes
-cloudsidra-edge zerocopy --disable --yes
+zelvik-edge zerocopy
+zelvik-edge zerocopy --enable --yes
+zelvik-edge zerocopy --disable --yes
 ```
 
 修改后需要重启正在运行的节点进程，已有连接不会切换 relay 模式。
@@ -52,7 +52,7 @@ xdp:
   enabled: false
 ```
 
-开关解析顺序：默认启用 < `CLOUDSIDRA_EDGE_XDP` 环境变量 < 文件中的 `xdp.enabled` 显式值（最终裁决）。启用的 XDP 固定为**双向数据面**（入向代理 + 出向 AF_XDP 回源）；`xdp.upstream.mode` 不是可选开关，配置 `kernel` 会被忽略并记录警告。
+开关解析顺序：默认启用 < `ZELVIK_EDGE_XDP` 环境变量 < 文件中的 `xdp.enabled` 显式值（最终裁决）。启用的 XDP 固定为**双向数据面**（入向代理 + 出向 AF_XDP 回源）；`xdp.upstream.mode` 不是可选开关，配置 `kernel` 会被忽略并记录警告。
 
 `fallback: pass`（默认）表示 attach、XSK 或 map 同步失败时回退到现有 socket 路径并记录 fallback 原因；`fallback: fail-start` 表示启动条件不满足时返回错误。完整说明见 [XDP/AF_XDP 旁路数据面](xdp-af-xdp.md)。
 
@@ -60,10 +60,10 @@ eBPF 程序默认使用**构建期内嵌进二进制**的对象（单文件部�
 
 ```yaml
 xdp:
-  ebpfObject: /path/to/cloudsidra-edge-xdp-ebpf.o   # 显式覆盖；文件缺失是显式错误
+  ebpfObject: /path/to/zelvik-edge-xdp-ebpf.o   # 显式覆盖；文件缺失是显式错误
 ```
 
-`xdp.ebpfObject`（最高优先级）> `CLOUDSIDRA_EDGE_XDP_EBPF_OBJECT_PATH` 环境变量 > 内嵌对象（默认）。
+`xdp.ebpfObject`（最高优先级）> `ZELVIK_EDGE_XDP_EBPF_OBJECT_PATH` 环境变量 > 内嵌对象（默认）。
 
 聚合预算（EN-07）——进入受保护 VIP 的未验证包总量与新状态准入速率上限：
 
@@ -176,14 +176,14 @@ xdp:
 
 ### `enableReadingOriginAsync`
 
-控制面缓存规则里的 `enableReadingOriginAsync` 字段目前在 cloudsidra-edge 中可以被接收和解析，但不会按单条 `cacheRef` 独立生效。
+控制面缓存规则里的 `enableReadingOriginAsync` 字段目前在 zelvik-edge 中可以被接收和解析，但不会按单条 `cacheRef` 独立生效。
 
-cloudsidra-edge 的 HTTP 缓存写入由 Pingora cache 状态机接管。Pingora 的默认行为取决于底层 cache storage 是否支持 `support_streaming_partial_write()`：
+zelvik-edge 的 HTTP 缓存写入由 Pingora cache 状态机接管。Pingora 的默认行为取决于底层 cache storage 是否支持 `support_streaming_partial_write()`：
 
 - 支持时，缓存 miss 的响应一旦判定可缓存，Pingora 会把源站读取和客户端写出解耦；客户端中断连接后，状态机会忽略 downstream error，继续读取源站并填充缓存。
 - 不支持时，客户端中断通常会结束当前代理链路，不会继续为了缓存单独读完整个源站响应。
 
-因此当前 cloudsidra-edge 中该能力是 storage 级别的统一行为，不是 `enableReadingOriginAsync` 可单独开启或关闭的规则级行为。严格按单条缓存规则控制该字段，需要后续改造 Pingora cache/代理状态机或在 cloudsidra-edge 中实现独立的响应体读取与缓存写入路径。
+因此当前 zelvik-edge 中该能力是 storage 级别的统一行为，不是 `enableReadingOriginAsync` 可单独开启或关闭的规则级行为。严格按单条缓存规则控制该字段，需要后续改造 Pingora cache/代理状态机或在 zelvik-edge 中实现独立的响应体读取与缓存写入路径。
 
 ## 访问日志配置
 
@@ -242,7 +242,7 @@ sysctl -w net.ipv4.tcp_congestion_control=bbr
 验证本地 `configs/api_node.yaml`：
 
 ```bash
-cloudsidra-edge test
+zelvik-edge test
 ```
 
 该命令只验证本地 API 配置是否能解析，不代表控制面连接一定成功。

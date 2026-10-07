@@ -9,7 +9,7 @@
 3. 把数据导入同级的新目录：
 
 ```bash
-cd /path/to/cloudsidra-edge
+cd /path/to/zelvik-edge
 migration_target="$(mktemp -d)"
 trap 'cargo clean --target-dir "$migration_target"' EXIT
 CARGO_TARGET_DIR="$migration_target" cargo xtask migrate-metrics-to-mace \

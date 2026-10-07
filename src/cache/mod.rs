@@ -237,9 +237,9 @@ fn cache_key_representation_root(cache_key: &str) -> std::borrow::Cow<'_, str> {
         .unwrap_or_else(|| std::borrow::Cow::Borrowed(cache_key))
 }
 
-const CACHE_METHOD_KEY_MARKER: &str = "@__cloudsidra_edge_method:";
-const CACHE_ENCODING_KEY_MARKER: &str = "@__cloudsidra_edge_ce:";
-const CACHE_WEBP_KEY_MARKER: &str = "@__cloudsidra_edge_webp:";
+const CACHE_METHOD_KEY_MARKER: &str = "@__zelvik_edge_method:";
+const CACHE_ENCODING_KEY_MARKER: &str = "@__zelvik_edge_ce:";
+const CACHE_WEBP_KEY_MARKER: &str = "@__zelvik_edge_webp:";
 
 /// Bind automatic invalidation to both the site and complete custom key.
 pub(crate) fn bind_cache_generation(key: &mut String, server_id: i64, generation: i64) {
@@ -247,7 +247,7 @@ pub(crate) fn bind_cache_generation(key: &mut String, server_id: i64, generation
     let digest = format!("{:x}", md5_legacy::compute(key.as_bytes()));
     write!(
         key,
-        "@__cloudsidra_edge_config:{server_id}:{generation}:{digest}"
+        "@__zelvik_edge_config:{server_id}:{generation}:{digest}"
     )
     .expect("writing a String cannot fail");
 }

@@ -1,5 +1,5 @@
-use cloudsidra_edge::logging::{next_request_id, report_node_log, set_numeric_node_id};
-use cloudsidra_edge::utils::time::{local_from_timestamp_millis, now_timestamp_millis};
+use zelvik_edge::logging::{next_request_id, report_node_log, set_numeric_node_id};
+use zelvik_edge::utils::time::{local_from_timestamp_millis, now_timestamp_millis};
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 

@@ -1,4 +1,4 @@
-//! CloudSidra `NodeControl` v1 authenticated snapshot transport.
+//! Zelvik `NodeControl` v1 authenticated snapshot transport.
 //!
 //! Isolated from the HTTP/cache/WAF/XDP data plane. Legacy
 //! `pb.NodeService.find_current_node_config` remains the migration-window
@@ -6,7 +6,7 @@
 
 #[cfg(feature = "node-control")]
 pub mod proto {
-    tonic::include_proto!("cloudsidra.node.v1");
+    tonic::include_proto!("zelvik.node.v1");
 }
 
 pub mod apply;
@@ -28,7 +28,7 @@ pub use register::{CommMode, RegisterError, RegisterInput, RegisterOutcome, enro
 pub use store::{StoreApplyError, StoreApplyResult, apply_node_payload_json};
 
 /// Fully-qualified service name. Must not be confused with `index.IndexService`.
-pub const NODE_CONTROL_SERVICE: &str = "cloudsidra.node.v1.NodeControl";
+pub const NODE_CONTROL_SERVICE: &str = "zelvik.node.v1.NodeControl";
 pub const INDEX_REGISTER_SERVICE: &str = "index.IndexService";
 
 #[cfg(all(test, feature = "node-control"))]
@@ -51,7 +51,7 @@ mod proto_tests {
     #[test]
     fn generated_register_message_lives_in_node_control_package() {
         let name = std::any::type_name::<RegisterNodeRequest>();
-        assert!(name.contains("cloudsidra"), "{name}");
+        assert!(name.contains("zelvik"), "{name}");
     }
 
     #[test]

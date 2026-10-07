@@ -10,7 +10,7 @@ fn main() {
     {
         let path = std::env::args()
             .nth(1)
-            .unwrap_or_else(|| "data/cloudsidra-edge-xdp-ebpf.o".to_string());
+            .unwrap_or_else(|| "data/zelvik-edge-xdp-ebpf.o".to_string());
         let mut bpf = match aya::Ebpf::load_file(&path) {
             Ok(bpf) => bpf,
             Err(err) => {
