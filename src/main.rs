@@ -2285,6 +2285,7 @@ fn repair_missing_xdp_ebpf_object_for_current_runtime(
     }
 }
 
+#[cfg(target_os = "linux")] // 仅 Linux 升级重启路径调用（systemd/自更新）
 fn restart_after_upgrade(install_binary: &Path) -> anyhow::Result<()> {
     #[cfg(target_os = "linux")]
     if systemd_service_exists() {
