@@ -232,13 +232,12 @@ enum Commands {
         version: String,
 
         /// Release component name distributed by the license hub.
-        /// Legacy OWNER/REPO values (e.g. Zelvik-Labs/edge) are mapped.
-        #[arg(long, alias = "repo", default_value = "Zelvik-Edge")]
+        #[arg(long, default_value = "Zelvik-Edge")]
         component: String,
 
         /// Release hub base URL used to construct package download URLs.
         /// Packages are distributed by the license site itself.
-        #[arg(long, alias = "github-base-url", default_value = "https://license.zelvik.net")]
+        #[arg(long, default_value = "https://license.zelvik.net")]
         base_url: String,
 
         /// Override release asset name instead of auto-detecting CPU/architecture.
@@ -1991,22 +1990,6 @@ fn release_download_url(base_url: &str, component: &str, version: &str, asset: &
     format!("{base}/Download/{version}/{component}/{asset}")
 }
 
-/// Maps a legacy OWNER/REPO component selector to the license component name.
-fn normalize_release_component(component: &str) -> String {
-    let trimmed = component.trim().trim_matches('/');
-    if !trimmed.contains('/') {
-        return trimmed.to_string();
-    }
-    let repo = trimmed.rsplit('/').next().unwrap_or(trimmed);
-    match repo {
-        "edge" => "Zelvik-Edge".to_string(),
-        "control-plane" => "Zelvik-API".to_string(),
-        "admin-console" => "Zelvik-Admin".to_string(),
-        "console" => "Zelvik-User".to_string(),
-        other => other.to_string(),
-    }
-}
-
 fn unix_timestamp() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -2317,9 +2300,8 @@ fn upgrade_binary(options: UpgradeOptions) -> anyhow::Result<()> {
     };
     let install_binary = options.install_binary.unwrap_or(std::env::current_exe()?);
     let install_binary = install_binary.canonicalize().unwrap_or(install_binary);
-    let component = normalize_release_component(&options.component);
     let download_url =
-        release_download_url(&options.base_url, &component, &version, &asset);
+        release_download_url(&options.base_url, &options.component, &version, &asset);
 
     println!("{}", t("upgrade.summary"));
     println!(
@@ -2334,7 +2316,7 @@ fn upgrade_binary(options: UpgradeOptions) -> anyhow::Result<()> {
     println!(
         "  {:<17} {}",
         format!("{}:", t("upgrade.repository")),
-        component
+        options.component
     );
     println!("  {:<17} {asset}", format!("{}:", t("upgrade.asset")));
     println!(
@@ -2453,14 +2435,6 @@ mod upgrade_tests {
             ),
             "https://license.zelvik.net/Download/v1.1.6/Zelvik-Edge/Zelvik-Edge-linux-arm64-generic.tar.gz"
         );
-    }
-
-    #[test]
-    fn maps_legacy_repo_selectors_to_components() {
-        assert_eq!(normalize_release_component("Zelvik-Edge"), "Zelvik-Edge");
-        assert_eq!(normalize_release_component("Zelvik-Labs/edge"), "Zelvik-Edge");
-        assert_eq!(normalize_release_component("Zelvik-Labs/control-plane"), "Zelvik-API");
-        assert_eq!(normalize_release_component("mirror/Zelvik-User"), "Zelvik-User");
     }
 
     #[test]
