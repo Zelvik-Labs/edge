@@ -1105,7 +1105,7 @@ impl UdpProxyManager {
     pub async fn start_listeners(self: Arc<Self>) {
         debug!(
             "Starting UDP Proxy Manager for v{}...",
-            env!("CARGO_PKG_VERSION")
+            crate::RELEASE_VERSION
         );
 
         loop {

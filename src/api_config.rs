@@ -805,7 +805,7 @@ pub fn reset_release_signing_key() {
 /// Serializes every test that mutates the process-global pinned key slot —
 /// lock in the test fn before install/reset, hold until done.
 #[cfg(test)]
-pub(crate) static RELEASE_SIGNING_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub(crate) static RELEASE_SIGNING_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// verify_release_signature checks `signature_digest` as an Ed25519 signature
 /// over `release_id` against the pinned platform key.
@@ -968,7 +968,7 @@ mod release_signing_tests {
     // 全局钉扎槽单测内串行——并行 #[test] 会互相覆盖 RELEASE_SIGNING_PUBKEY。
     #[test]
     fn pinned_key_verifies_release_signature() {
-        let _g = RELEASE_SIGNING_TEST_LOCK.lock().unwrap();
+        let _g = RELEASE_SIGNING_TEST_LOCK.blocking_lock();
         let (pair, pubkey) = seeded_keypair();
         install_release_signing_key(&ReleaseSigningPush {
             algorithm: "ed25519".into(),

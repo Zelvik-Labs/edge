@@ -41,6 +41,9 @@ export AR="${AR:-/opt/homebrew/opt/llvm/bin/llvm-ar}"
 # x86-64-v2 default: matches the CI baseline and the fleet floor — the
 # XDP node runs Ivy Bridge Xeons (AVX, no AVX2/BMI2/FMA) and v3 SIGILLs
 # there. Override with ZELVIK_EDGE_TARGET_CPU for v3-capable targets.
+# ZELVIK_RELEASE_VERSION (CalVer YY.M.W[.P]) flows through to option_env! in
+# src/lib.rs; unset it falls back to the Cargo package version. option_env!
+# is recorded in dep-info, so changing it forces a real recompile.
 TARGET_CPU="${ZELVIK_EDGE_TARGET_CPU:-x86-64-v2}"
 export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C target-cpu=$TARGET_CPU -L $SYSROOT/usr/lib/x86_64-linux-gnu"
 GLIBC="${ZELVIK_EDGE_GLIBC:-2.36}"

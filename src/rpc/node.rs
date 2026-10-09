@@ -48,7 +48,7 @@ where
 }
 
 fn build_version_code() -> u32 {
-    env!("CARGO_PKG_VERSION")
+    crate::RELEASE_VERSION
         .split('.')
         .take(3)
         .map(|part| part.parse::<u32>().unwrap_or(0).min(999))
@@ -1520,7 +1520,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
         });
 
         let status = serde_json::json!({
-                   "buildVersion": env!("CARGO_PKG_VERSION"),
+                   "buildVersion": crate::RELEASE_VERSION,
                    "runtimeDir": crate::paths::NodePaths::current().runtime_root(),
                    "buildVersionCode": build_version_code(),
                    "configVersion": config_store.get_config_version().await,
@@ -1644,7 +1644,7 @@ pub async fn report_node_online_once(
         .unwrap_or_else(|_| serde_json::json!({"available": false}));
     let shadow_connections = crate::metrics::shadow_connection_metrics();
     let status = serde_json::json!({
-        "buildVersion": env!("CARGO_PKG_VERSION"),
+        "buildVersion": crate::RELEASE_VERSION,
         "buildVersionCode": build_version_code(),
         "configVersion": config_store.get_config_version().await,
         "os": std::env::consts::OS,

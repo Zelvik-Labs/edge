@@ -5196,7 +5196,7 @@ dependencies = [
 
 [[package]]
 name = "zelvik-edge"
-version = "26.9.0"
+version = "26.10.2"
 dependencies = [
  "aes",
  "aes-gcm",

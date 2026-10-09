@@ -39,7 +39,7 @@ fn scoped_fingerprint(config_store: &ConfigStore, payload_hash: &str) -> String 
     format!(
         "{}:{}:{}",
         config_store.runtime_fingerprint_salt(),
-        env!("CARGO_PKG_VERSION"),
+        crate::RELEASE_VERSION,
         payload_hash
     )
 }

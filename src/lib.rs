@@ -1,3 +1,13 @@
+/// Product release version in CalVer `YY.M.W[.P]`.
+///
+/// `ZELVIK_RELEASE_VERSION` lets the release build inject a four-segment
+/// patch version (e.g. `26.10.2.1`), which Cargo's three-segment package
+/// version cannot express; otherwise this falls back to `CARGO_PKG_VERSION`.
+pub const RELEASE_VERSION: &str = match option_env!("ZELVIK_RELEASE_VERSION") {
+    Some(v) => v,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 pub mod pb {
     tonic::include_proto!("pb");
 }
@@ -79,3 +89,34 @@ pub mod xdp_netdev_tuning;
 
 pub mod telemetry;
 pub mod traffic_shaping;
+
+#[cfg(test)]
+mod version_tests {
+    /// CalVer `YY.M.W[.P]` — patch segment optional, must be >= 1 when present.
+    fn parse_calver(v: &str) -> Option<(u32, u32, u32, u32)> {
+        let v = v.trim().trim_start_matches('v');
+        let parts: Vec<&str> = v.split('.').collect();
+        if !(parts.len() == 3 || parts.len() == 4) {
+            return None;
+        }
+        let n = |s: &str| s.parse::<u32>().ok();
+        let (yy, m, w) = (n(parts[0])?, n(parts[1])?, n(parts[2])?);
+        if parts[0].len() != 2 || !(1..=12).contains(&m) || !(1..=5).contains(&w) {
+            return None;
+        }
+        let p = if parts.len() == 4 { n(parts[3])? } else { 0 };
+        if parts.len() == 4 && p == 0 {
+            return None;
+        }
+        Some((yy, m, w, p))
+    }
+
+    #[test]
+    fn release_version_is_valid_calver() {
+        let v = super::RELEASE_VERSION;
+        assert!(parse_calver(v).is_some(), "RELEASE_VERSION {v:?} must be CalVer YY.M.W[.P]");
+        assert!(parse_calver("26.10.2.1").is_some());
+        assert!(parse_calver("26.10.2-beta.1").is_none());
+        assert!(parse_calver("26.10.6").is_none());
+    }
+}

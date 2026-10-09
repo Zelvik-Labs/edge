@@ -186,7 +186,7 @@ fn run_log_writer(
 
 #[derive(Parser)]
 #[command(name = "zelvik-edge")]
-#[command(version = env!("CARGO_PKG_VERSION"))]
+#[command(version = zelvik_edge::RELEASE_VERSION)]
 #[command(about = "Zelvik-Edge - High Performance Cloud Node written in Rust / Rust 编写的高性能云节点", long_about = None)]
 struct Cli {
     #[command(subcommand)]
@@ -2307,7 +2307,7 @@ fn upgrade_binary(options: UpgradeOptions) -> anyhow::Result<()> {
     println!(
         "  {:<17} {}",
         format!("{}:", t("upgrade.current_version")),
-        env!("CARGO_PKG_VERSION")
+        zelvik_edge::RELEASE_VERSION
     );
     println!(
         "  {:<17} {version}",
@@ -2833,7 +2833,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Some(Commands::Status) => {
-            println!("{}: {}", t("status.version"), env!("CARGO_PKG_VERSION"));
+            println!("{}: {}", t("status.version"), zelvik_edge::RELEASE_VERSION);
             println!("{}: {}", t("status.build_time"), build_time_display());
             if let Some(instance) = check_running() {
                 println!("{} (PID: {})", t("status.running"), instance.pid);
@@ -3237,7 +3237,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
 
     init_logging(&node_paths);
 
-    info!("Starting Zelvik Edge v{}...", env!("CARGO_PKG_VERSION"));
+    info!("Starting Zelvik Edge v{}...", zelvik_edge::RELEASE_VERSION);
 
     // Create the runtime to spawn background tasks
     let rt = tokio::runtime::Builder::new_multi_thread()

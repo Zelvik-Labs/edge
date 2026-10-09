@@ -132,7 +132,7 @@ pub async fn download_to_file(url: &str, target: &Path) -> anyhow::Result<()> {
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(20))
         .timeout(Duration::from_secs(600))
-        .user_agent(format!("zelvik-edge/{}", env!("CARGO_PKG_VERSION")))
+        .user_agent(format!("zelvik-edge/{}", crate::RELEASE_VERSION))
         .build()?;
     let mut response = client.get(url).send().await?;
     if !response.status().is_success() {
@@ -553,7 +553,7 @@ pub async fn execute_node_upgrade(
     let (base, meta) = resolved
         .ok_or_else(|| last_err.unwrap_or_else(|| anyhow::anyhow!("no usable update endpoint")))?;
 
-    if meta.version.trim_start_matches('v') == env!("CARGO_PKG_VERSION") {
+    if meta.version.trim_start_matches('v') == crate::RELEASE_VERSION {
         info!(
             "node already runs {} ({}); upgrade task is a no-op",
             meta.version, meta.filename
@@ -563,7 +563,7 @@ pub async fn execute_node_upgrade(
 
     info!(
         "node upgrade: {} -> {} via {} ({} bytes, sha256 {})",
-        env!("CARGO_PKG_VERSION"),
+        crate::RELEASE_VERSION,
         meta.version,
         base,
         meta.size_bytes,
@@ -634,7 +634,7 @@ async fn fetch_package_meta(
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(30))
-        .user_agent(format!("zelvik-edge/{}", env!("CARGO_PKG_VERSION")))
+        .user_agent(format!("zelvik-edge/{}", crate::RELEASE_VERSION))
         .build()?;
     let response = client.get(&url).send().await?;
     if !response.status().is_success() {

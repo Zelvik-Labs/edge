@@ -69,7 +69,7 @@ pub async fn fetch_snapshot(api: &ApiConfig, version: i64) -> Result<FetchedSnap
     let registered = crate::rpc::track_rpc(client.register_node(RegisterNodeRequest {
         meta: Some(envelope(version)),
         node_id: api.node_id.clone(),
-        software_version: env!("CARGO_PKG_VERSION").into(),
+        software_version: crate::RELEASE_VERSION.into(),
         capabilities_json: r#"{"snapshotHmac":true,"structuredHealth":true}"#.into(),
         region: String::new(),
         comm_mode: mode.into(),
@@ -277,16 +277,13 @@ impl<F> ApplyReleaseSender
 where
     F: FnMut(tonic::Request<()>) -> Result<tonic::Request<()>, Status> + Clone + Send + 'static,
 {
-    fn apply_release(
+    async fn apply_release(
         &mut self,
         req: ApplyReleaseRequest,
-    ) -> impl std::future::Future<Output = Result<super::proto::ApplyReleaseResponse, Status>> + Send + '_
-    {
-        async move {
-            crate::rpc::track_rpc(self.apply_release(req))
-                .await
-                .map(tonic::Response::into_inner)
-        }
+    ) -> Result<super::proto::ApplyReleaseResponse, Status> {
+        crate::rpc::track_rpc(self.apply_release(req))
+            .await
+            .map(tonic::Response::into_inner)
     }
 }
 
@@ -493,7 +490,7 @@ mod tests {
 
     #[test]
     fn snapshot_verification_rejects_tampering() {
-        let _g = KEY_LOCK.lock().unwrap();
+        let _g = KEY_LOCK.blocking_lock();
         crate::rpc::client::SharedRpcClient::reset_for_test();
         crate::api_config::reset_release_signing_key();
         let api = api();
@@ -545,7 +542,7 @@ mod tests {
 
     #[test]
     fn release_binding_requires_key_and_signature() {
-        let _g = KEY_LOCK.lock().unwrap();
+        let _g = KEY_LOCK.blocking_lock();
         crate::rpc::client::SharedRpcClient::reset_for_test();
         crate::api_config::reset_release_signing_key();
         let api = api();
@@ -960,7 +957,7 @@ mod loopback_tests {
 
     #[tokio::test]
     async fn fetch_snapshot_preserves_verified_release_over_loopback() {
-        let _g = crate::api_config::RELEASE_SIGNING_TEST_LOCK.lock().unwrap();
+        let _g = crate::api_config::RELEASE_SIGNING_TEST_LOCK.lock().await;
         let pair = keypair();
         let h = harness(&pair, desired_response(&pair, 7, br#"{"version":7}"#, true)).await;
         let snap = fetch_snapshot(&h.api, 7).await.unwrap();
@@ -975,7 +972,7 @@ mod loopback_tests {
         let _ = tracing_subscriber::fmt()
             .with_max_level(tracing::Level::WARN)
             .try_init();
-        let _g = crate::api_config::RELEASE_SIGNING_TEST_LOCK.lock().unwrap();
+        let _g = crate::api_config::RELEASE_SIGNING_TEST_LOCK.lock().await;
         let pair = keypair();
         // valid HMAC+signature but the snapshot payload decodes badly
         let h = harness(
@@ -1028,7 +1025,7 @@ mod loopback_tests {
         let _ = tracing_subscriber::fmt()
             .with_max_level(tracing::Level::WARN)
             .try_init();
-        let _g = crate::api_config::RELEASE_SIGNING_TEST_LOCK.lock().unwrap();
+        let _g = crate::api_config::RELEASE_SIGNING_TEST_LOCK.lock().await;
         let pair = keypair();
         let h = harness(&pair, desired_response(&pair, 7, b"", false)).await;
         let channel = Channel::from_shared(h.api.rpc_endpoints[0].clone())

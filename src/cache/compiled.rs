@@ -673,7 +673,7 @@ impl CacheVariable {
     pub fn resolve_with_context(&self, ctx: &CacheEvalContext<'_>) -> String {
         match self {
             Self::Literal(value) => value.clone(),
-            Self::CloudVersion => env!("CARGO_PKG_VERSION").to_string(),
+            Self::CloudVersion => crate::RELEASE_VERSION.to_string(),
             Self::RequestPath => ctx.session.req_header().uri.path().to_string(),
             Self::RequestPathExtension => request_path_extension(ctx.session, false),
             Self::RequestPathLowerExtension => request_path_extension(ctx.session, true),

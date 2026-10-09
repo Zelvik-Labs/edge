@@ -457,7 +457,7 @@ impl ConfigStore {
             parent_nodes,
             tiered_origin_bypass,
             allow_lan_ip,
-            env!("CARGO_PKG_VERSION"),
+            crate::RELEASE_VERSION,
         ))
         .unwrap_or_default();
         format!("{:x}", md5_legacy::compute(context_json))

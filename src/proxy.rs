@@ -1872,7 +1872,7 @@ impl EdgeProxy {
 
         values.insert(
             "edgeVersion".to_string(),
-            env!("CARGO_PKG_VERSION").to_string(),
+            crate::RELEASE_VERSION.to_string(),
         );
         values.insert("remoteAddr".to_string(), ctx.client_ip_str.clone());
         values.insert("remoteAddrValue".to_string(), ctx.client_ip_str.clone());
@@ -2035,7 +2035,7 @@ impl EdgeProxy {
         values.insert("product.name".to_string(), self.product_name(ctx));
         values.insert(
             "product.version".to_string(),
-            env!("CARGO_PKG_VERSION").to_string(),
+            crate::RELEASE_VERSION.to_string(),
         );
         values.insert("origin.address".to_string(), ctx.origin_address.clone());
         values.insert("origin.addr".to_string(), ctx.origin_address.clone());
