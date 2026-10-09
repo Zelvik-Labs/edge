@@ -86,8 +86,8 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ),
     (
         "cmd.upgrade",
-        "Upgrade the installed binary from GitHub Releases",
-        "从 GitHub Releases 升级已安装的二进制文件",
+        "Upgrade the installed binary from the license release hub",
+        "从授权发布中心升级已安装的二进制文件",
     ),
     (
         "cmd.ntp",

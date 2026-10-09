@@ -225,23 +225,21 @@ enum Commands {
         #[arg(long)]
         manifest: PathBuf,
     },
-    /// Upgrade the installed binary from GitHub Releases
+    /// Upgrade the installed binary from the license release hub
     Upgrade {
         /// Release tag to install, for example v1.1.6. Defaults to latest.
         #[arg(long, default_value = "latest")]
         version: String,
 
-        /// GitHub repository in OWNER/REPO form.
+        /// Release repository in OWNER/REPO form (path segment under the
+        /// license hub's GitHub-compatible download routes).
         #[arg(long, default_value = "Zelvik-Labs/edge")]
         repo: String,
 
-        /// GitHub base URL used to construct release download URLs.
-        #[arg(long, default_value = "https://github.com")]
-        github_base_url: String,
-
-        /// Optional GitHub mirror/proxy. If it contains {url}, the original URL replaces it.
-        #[arg(long)]
-        github_mirror: Option<String>,
+        /// Release hub base URL used to construct package download URLs.
+        /// Packages are distributed by the license site itself.
+        #[arg(long, alias = "github-base-url", default_value = "https://license.zelvik.net")]
+        base_url: String,
 
         /// Override release asset name instead of auto-detecting CPU/architecture.
         #[arg(long)]
@@ -1949,8 +1947,7 @@ fn run_systemctl(_action: &str) -> anyhow::Result<bool> {
 struct UpgradeOptions {
     version: String,
     repo: String,
-    github_base_url: String,
-    github_mirror: Option<String>,
+    base_url: String,
     asset: Option<String>,
     install_binary: Option<PathBuf>,
     backup_dir: PathBuf,
@@ -1989,26 +1986,13 @@ fn normalize_release_version(version: &str) -> String {
     }
 }
 
-fn release_download_url(github_base_url: &str, repo: &str, version: &str, asset: &str) -> String {
-    let base = github_base_url.trim_end_matches('/');
+fn release_download_url(base_url: &str, repo: &str, version: &str, asset: &str) -> String {
+    let base = base_url.trim_end_matches('/');
     if version == "latest" {
         format!("{base}/{repo}/releases/latest/download/{asset}")
     } else {
         format!("{base}/{repo}/releases/download/{version}/{asset}")
     }
-}
-
-fn apply_github_mirror(download_url: &str, github_mirror: Option<&str>) -> String {
-    let Some(mirror) = github_mirror
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    else {
-        return download_url.to_string();
-    };
-    if mirror.contains("{url}") {
-        return mirror.replace("{url}", download_url);
-    }
-    format!("{}/{}", mirror.trim_end_matches('/'), download_url)
 }
 
 fn unix_timestamp() -> u64 {
@@ -2321,9 +2305,8 @@ fn upgrade_binary(options: UpgradeOptions) -> anyhow::Result<()> {
     };
     let install_binary = options.install_binary.unwrap_or(std::env::current_exe()?);
     let install_binary = install_binary.canonicalize().unwrap_or(install_binary);
-    let original_url =
-        release_download_url(&options.github_base_url, &options.repo, &version, &asset);
-    let download_url = apply_github_mirror(&original_url, options.github_mirror.as_deref());
+    let download_url =
+        release_download_url(&options.base_url, &options.repo, &version, &asset);
 
     println!("{}", t("upgrade.summary"));
     println!(
@@ -2441,35 +2424,21 @@ mod upgrade_tests {
     fn builds_release_download_urls() {
         assert_eq!(
             release_download_url(
-                "https://github.com/",
+                "https://license.zelvik.net/",
                 "Zelvik-Labs/edge",
                 "latest",
                 "Zelvik-Edge-linux-x64-v3-avx2.tar.gz"
             ),
-            "https://github.com/Zelvik-Labs/edge/releases/latest/download/Zelvik-Edge-linux-x64-v3-avx2.tar.gz"
+            "https://license.zelvik.net/Zelvik-Labs/edge/releases/latest/download/Zelvik-Edge-linux-x64-v3-avx2.tar.gz"
         );
         assert_eq!(
             release_download_url(
-                "https://github.com",
+                "https://license.zelvik.net",
                 "Zelvik-Labs/edge",
                 "v1.1.6",
                 "Zelvik-Edge-linux-arm64-generic.tar.gz"
             ),
-            "https://github.com/Zelvik-Labs/edge/releases/download/v1.1.6/Zelvik-Edge-linux-arm64-generic.tar.gz"
-        );
-    }
-
-    #[test]
-    fn applies_github_mirror_urls() {
-        let url = "https://github.com/Zelvik-Labs/edge/releases/latest/download/Zelvik-Edge-linux-x64-v2-sse4.2.tar.gz";
-        assert_eq!(apply_github_mirror(url, None), url);
-        assert_eq!(
-            apply_github_mirror(url, Some("https://gh-proxy.example")),
-            "https://gh-proxy.example/https://github.com/Zelvik-Labs/edge/releases/latest/download/Zelvik-Edge-linux-x64-v2-sse4.2.tar.gz"
-        );
-        assert_eq!(
-            apply_github_mirror(url, Some("https://mirror.example/?target={url}")),
-            "https://mirror.example/?target=https://github.com/Zelvik-Labs/edge/releases/latest/download/Zelvik-Edge-linux-x64-v2-sse4.2.tar.gz"
+            "https://license.zelvik.net/Zelvik-Labs/edge/releases/download/v1.1.6/Zelvik-Edge-linux-arm64-generic.tar.gz"
         );
     }
 
@@ -2978,8 +2947,7 @@ WantedBy=multi-user.target\n",
         Some(Commands::Upgrade {
             version,
             repo,
-            github_base_url,
-            github_mirror,
+            base_url,
             asset,
             install_binary,
             backup_dir,
@@ -2990,8 +2958,7 @@ WantedBy=multi-user.target\n",
             upgrade_binary(UpgradeOptions {
                 version,
                 repo,
-                github_base_url,
-                github_mirror,
+                base_url,
                 asset,
                 install_binary,
                 backup_dir,
