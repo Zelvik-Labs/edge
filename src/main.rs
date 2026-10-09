@@ -231,10 +231,10 @@ enum Commands {
         #[arg(long, default_value = "latest")]
         version: String,
 
-        /// Release repository in OWNER/REPO form (path segment under the
-        /// license hub's GitHub-compatible download routes).
-        #[arg(long, default_value = "Zelvik-Labs/edge")]
-        repo: String,
+        /// Release component name distributed by the license hub.
+        /// Legacy OWNER/REPO values (e.g. Zelvik-Labs/edge) are mapped.
+        #[arg(long, alias = "repo", default_value = "Zelvik-Edge")]
+        component: String,
 
         /// Release hub base URL used to construct package download URLs.
         /// Packages are distributed by the license site itself.
@@ -1946,7 +1946,7 @@ fn run_systemctl(_action: &str) -> anyhow::Result<bool> {
 #[derive(Debug)]
 struct UpgradeOptions {
     version: String,
-    repo: String,
+    component: String,
     base_url: String,
     asset: Option<String>,
     install_binary: Option<PathBuf>,
@@ -1986,12 +1986,24 @@ fn normalize_release_version(version: &str) -> String {
     }
 }
 
-fn release_download_url(base_url: &str, repo: &str, version: &str, asset: &str) -> String {
+fn release_download_url(base_url: &str, component: &str, version: &str, asset: &str) -> String {
     let base = base_url.trim_end_matches('/');
-    if version == "latest" {
-        format!("{base}/{repo}/releases/latest/download/{asset}")
-    } else {
-        format!("{base}/{repo}/releases/download/{version}/{asset}")
+    format!("{base}/Download/{version}/{component}/{asset}")
+}
+
+/// Maps a legacy OWNER/REPO component selector to the license component name.
+fn normalize_release_component(component: &str) -> String {
+    let trimmed = component.trim().trim_matches('/');
+    if !trimmed.contains('/') {
+        return trimmed.to_string();
+    }
+    let repo = trimmed.rsplit('/').next().unwrap_or(trimmed);
+    match repo {
+        "edge" => "Zelvik-Edge".to_string(),
+        "control-plane" => "Zelvik-API".to_string(),
+        "admin-console" => "Zelvik-Admin".to_string(),
+        "console" => "Zelvik-User".to_string(),
+        other => other.to_string(),
     }
 }
 
@@ -2305,8 +2317,9 @@ fn upgrade_binary(options: UpgradeOptions) -> anyhow::Result<()> {
     };
     let install_binary = options.install_binary.unwrap_or(std::env::current_exe()?);
     let install_binary = install_binary.canonicalize().unwrap_or(install_binary);
+    let component = normalize_release_component(&options.component);
     let download_url =
-        release_download_url(&options.base_url, &options.repo, &version, &asset);
+        release_download_url(&options.base_url, &component, &version, &asset);
 
     println!("{}", t("upgrade.summary"));
     println!(
@@ -2321,7 +2334,7 @@ fn upgrade_binary(options: UpgradeOptions) -> anyhow::Result<()> {
     println!(
         "  {:<17} {}",
         format!("{}:", t("upgrade.repository")),
-        options.repo
+        component
     );
     println!("  {:<17} {asset}", format!("{}:", t("upgrade.asset")));
     println!(
@@ -2425,21 +2438,29 @@ mod upgrade_tests {
         assert_eq!(
             release_download_url(
                 "https://license.zelvik.net/",
-                "Zelvik-Labs/edge",
+                "Zelvik-Edge",
                 "latest",
                 "Zelvik-Edge-linux-x64-v3-avx2.tar.gz"
             ),
-            "https://license.zelvik.net/Zelvik-Labs/edge/releases/latest/download/Zelvik-Edge-linux-x64-v3-avx2.tar.gz"
+            "https://license.zelvik.net/Download/latest/Zelvik-Edge/Zelvik-Edge-linux-x64-v3-avx2.tar.gz"
         );
         assert_eq!(
             release_download_url(
                 "https://license.zelvik.net",
-                "Zelvik-Labs/edge",
+                "Zelvik-Edge",
                 "v1.1.6",
                 "Zelvik-Edge-linux-arm64-generic.tar.gz"
             ),
-            "https://license.zelvik.net/Zelvik-Labs/edge/releases/download/v1.1.6/Zelvik-Edge-linux-arm64-generic.tar.gz"
+            "https://license.zelvik.net/Download/v1.1.6/Zelvik-Edge/Zelvik-Edge-linux-arm64-generic.tar.gz"
         );
+    }
+
+    #[test]
+    fn maps_legacy_repo_selectors_to_components() {
+        assert_eq!(normalize_release_component("Zelvik-Edge"), "Zelvik-Edge");
+        assert_eq!(normalize_release_component("Zelvik-Labs/edge"), "Zelvik-Edge");
+        assert_eq!(normalize_release_component("Zelvik-Labs/control-plane"), "Zelvik-API");
+        assert_eq!(normalize_release_component("mirror/Zelvik-User"), "Zelvik-User");
     }
 
     #[test]
@@ -2946,7 +2967,7 @@ WantedBy=multi-user.target\n",
         }
         Some(Commands::Upgrade {
             version,
-            repo,
+            component,
             base_url,
             asset,
             install_binary,
@@ -2957,7 +2978,7 @@ WantedBy=multi-user.target\n",
         }) => {
             upgrade_binary(UpgradeOptions {
                 version,
-                repo,
+                component,
                 base_url,
                 asset,
                 install_binary,
