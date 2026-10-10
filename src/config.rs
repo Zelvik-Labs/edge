@@ -29,6 +29,9 @@ pub struct PlanDerivedConfig {
     pub cc_max_qps: i32,
     pub cc_per_ip_max_qps: i32,
     pub cc_max_bandwidth: i64,
+    /// 套餐实例（订阅）的有效下行峰值带宽上限（Mbps），0 = 不限。
+    /// 实例下所有站点共享该额度（同一节点内共用一个限速桶）。
+    pub max_downlink_mbps: f64,
 }
 
 /// Configuration for the local cloud node.
@@ -150,7 +153,10 @@ pub struct TlsRouteInspection {
     pub sni_passthrough_server: Option<Arc<ServerConfig>>,
 }
 
-fn compile_plan_derived(plan: &crate::pb::Plan) -> PlanDerivedConfig {
+fn compile_plan_derived(
+    user_plan: &crate::pb::UserPlan,
+    plan: &crate::pb::Plan,
+) -> PlanDerivedConfig {
     let (cc_max_qps, cc_per_ip_max_qps, cc_max_bandwidth) = compile_plan_cc_limits(plan);
     PlanDerivedConfig {
         max_upload_bytes: compile_plan_max_upload_bytes(plan),
@@ -158,7 +164,23 @@ fn compile_plan_derived(plan: &crate::pb::Plan) -> PlanDerivedConfig {
         cc_max_qps,
         cc_per_ip_max_qps,
         cc_max_bandwidth,
+        max_downlink_mbps: compile_plan_downlink_mbps(user_plan, plan),
     }
+}
+
+/// 套餐实例限速取值优先级：实例有效值（套餐上限，含用户级覆盖）> 套餐
+/// `trafficLimit.downlinkMbps` > 不限（0）。实例值由控制面按订阅实例下发，
+/// 因此同一个实例下所有站点拿到的是同一个额度。
+fn compile_plan_downlink_mbps(user_plan: &crate::pb::UserPlan, plan: &crate::pb::Plan) -> f64 {
+    if user_plan.bandwidth_limit_mbps > 0 {
+        return user_plan.bandwidth_limit_mbps as f64;
+    }
+    if plan.traffic_limit_json.is_empty() {
+        return 0.0;
+    }
+    serde_json::from_slice::<TrafficLimitConfig>(&plan.traffic_limit_json)
+        .map(|config| config.downlink_mbps.max(0.0))
+        .unwrap_or(0.0)
 }
 
 fn compile_plan_cc_limits(plan: &crate::pb::Plan) -> (i32, i32, i64) {
@@ -1766,7 +1788,7 @@ impl ConfigStore {
             .iter()
             .filter_map(|(&user_plan_id, user_plan)| {
                 let plan = lock.plans.get(&user_plan.plan_id)?;
-                Some((user_plan_id, compile_plan_derived(plan)))
+                Some((user_plan_id, compile_plan_derived(user_plan, plan)))
             })
             .collect();
     }
@@ -2129,6 +2151,54 @@ mod tests {
         TLSExhaustionAttackConfig, UDPConfig,
     };
     use serde_json::json;
+
+    /// 套餐实例限速解析优先级：实例有效值 > 套餐 trafficLimit.downlinkMbps > 不限。
+    /// 实例值是控制面按订阅实例下发的唯一权威来源，因此必须覆盖套餐本体。
+    #[test]
+    fn plan_instance_limit_prefers_instance_value() {
+        let user_plan = crate::pb::UserPlan {
+            bandwidth_limit_mbps: 120,
+            ..Default::default()
+        };
+        let plan = crate::pb::Plan {
+            traffic_limit_json: br#"{"isOn":true,"downlinkMbps":50}"#.to_vec(),
+            ..Default::default()
+        };
+        assert_eq!(compile_plan_downlink_mbps(&user_plan, &plan), 120.0);
+    }
+
+    #[test]
+    fn plan_instance_limit_falls_back_to_plan_json() {
+        let plan = crate::pb::Plan {
+            traffic_limit_json: br#"{"isOn":true,"downlinkMbps":50}"#.to_vec(),
+            ..Default::default()
+        };
+        assert_eq!(
+            compile_plan_downlink_mbps(&crate::pb::UserPlan::default(), &plan),
+            50.0
+        );
+    }
+
+    #[test]
+    fn plan_instance_limit_unset_is_unlimited() {
+        assert_eq!(
+            compile_plan_downlink_mbps(
+                &crate::pb::UserPlan::default(),
+                &crate::pb::Plan::default()
+            ),
+            0.0
+        );
+    }
+
+    #[test]
+    fn plan_derived_carries_instance_limit() {
+        let user_plan = crate::pb::UserPlan {
+            bandwidth_limit_mbps: 200,
+            ..Default::default()
+        };
+        let derived = compile_plan_derived(&user_plan, &crate::pb::Plan::default());
+        assert_eq!(derived.max_downlink_mbps, 200.0);
+    }
 
     #[test]
     fn published_fingerprint_is_scoped_and_only_changes_when_marked() {

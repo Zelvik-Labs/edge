@@ -329,6 +329,8 @@ pub struct ProxyCTX {
     pub request_limit_out_bandwidth_sent: i64,
     pub request_limit_out_bandwidth_window_start: Option<std::time::Instant>,
     pub plan_max_upload_bytes: Option<i64>,
+    /// 套餐实例下行限速（Mbps）的每请求缓存；`Some(None)` 表示实例不限速。
+    pub plan_downlink_mbps: Option<Option<f64>>,
     pub traffic_limit_notice_body: Option<Option<String>>,
     pub global_cache_policies: Arc<Vec<Arc<HTTPCachePolicy>>>,
     pub compiled_plans: Arc<crate::compiled::CompiledPlanSet>,
@@ -481,6 +483,7 @@ impl Default for ProxyCTX {
             request_limit_out_bandwidth_sent: 0,
             request_limit_out_bandwidth_window_start: None,
             plan_max_upload_bytes: None,
+            plan_downlink_mbps: None,
             traffic_limit_notice_body: None,
             global_cache_policies: Arc::new(Vec::new()),
             compiled_plans: Arc::new(crate::compiled::CompiledPlanSet::default()),
@@ -5387,6 +5390,64 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
             .unwrap_or(0)
     }
 
+    /// 套餐实例下行限速（Mbps），每请求缓存一次。0 = 实例不限速。
+    fn resolve_plan_downlink_mbps(&self, ctx: &mut ProxyCTX) -> f64 {
+        if let Some(mbps) = ctx.plan_downlink_mbps {
+            return mbps.unwrap_or(0.0);
+        }
+        let mbps = ctx
+            .server
+            .as_ref()
+            .map(|server| self.compute_plan_downlink_mbps(server))
+            .unwrap_or(0.0);
+        ctx.plan_downlink_mbps = Some(Some(mbps));
+        mbps
+    }
+
+    fn compute_plan_downlink_mbps(&self, server: &ServerConfig) -> f64 {
+        if server.user_plan_id <= 0 {
+            return 0.0;
+        }
+        self.config
+            .get_plan_derived_sync(server.user_plan_id)
+            .map(|plan| plan.max_downlink_mbps)
+            .unwrap_or(0.0)
+    }
+
+    /// 下行限速目标：套餐实例（同实例所有站点共用一个桶）优先；实例不限速时
+    /// 回落站点级 `trafficLimit`。上行限速仍由站点级 `uplinkMbps` 负责。
+    fn downlink_shaping_target(
+        &self,
+        ctx: &mut ProxyCTX,
+        body_len: usize,
+    ) -> std::result::Result<Option<std::time::Duration>, &'static str> {
+        let plan_mbps = self.resolve_plan_downlink_mbps(ctx);
+        let target = ctx.server.as_ref().and_then(|server| {
+            if plan_mbps > 0.0 {
+                return Some((
+                    crate::traffic_shaping::ShapingScope::Plan(server.user_plan_id),
+                    plan_mbps,
+                ));
+            }
+            server
+                .traffic_limit
+                .as_ref()
+                .filter(|limit| limit.is_on)
+                .map(|limit| {
+                    (
+                        crate::traffic_shaping::ShapingScope::Site(server.numeric_id()),
+                        limit.downlink_mbps,
+                    )
+                })
+        });
+        let delay = target
+            .map(|(scope, rate)| {
+                crate::traffic_shaping::reserve_scoped(scope, false, rate, body_len)
+            })
+            .transpose()?;
+        Ok(delay.filter(|delay| !delay.is_zero()))
+    }
+
     async fn enforce_plan_max_upload(
         &self,
         session: &mut Session,
@@ -5513,18 +5574,8 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
         body_len: usize,
         ctx: &mut ProxyCTX,
     ) -> Result<Option<std::time::Duration>> {
-        let site_delay = ctx
-            .server
-            .as_ref()
-            .and_then(|server| {
-                server
-                    .traffic_limit
-                    .as_ref()
-                    .filter(|limit| limit.is_on)
-                    .map(|limit| (server.numeric_id(), limit.downlink_mbps))
-            })
-            .map(|(id, rate)| crate::traffic_shaping::reserve(id, false, rate, body_len))
-            .transpose()
+        let site_delay = self
+            .downlink_shaping_target(ctx, body_len)
             .map_err(|err| pingora::Error::explain(pingora::ErrorType::InternalError, err))?;
         let limit = ctx.request_limit_out_bandwidth_bytes;
         let connection_delay = if limit > 0 && body_len > 0 {

@@ -15,6 +15,9 @@ message UserPlan {
     bool isOn = 4;
     string dayTo = 5;
     string name = 6;
+    // 套餐实例（订阅）的有效下行峰值带宽上限（Mbps），0 = 不限。
+    // 该额度属于订阅实例：其实例下所有站点共享同一个限速桶（Edge 按节点聚合）。
+    int64 bandwidthLimitMbps = 7;
     User user = 30;
     Plan plan = 31;
     repeated Server servers = 33;
