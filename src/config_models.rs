@@ -1033,12 +1033,70 @@ pub struct TrafficLimitConfig {
     pub monthly_size: Option<Value>,
     #[serde(rename = "totalSize", default)]
     pub total_size: Option<Value>,
+    /// 配额窗口上限字节数（契约 edge-traffic-limit.md）；缺省时回退
+    /// monthlySize → dailySize → totalSize 兼容旧配置。
+    #[serde(rename = "windowLimitBytes", default)]
+    pub window_limit_bytes: Option<Value>,
+    /// 窗口周期单位：day|month|quarter|year，缺省 month。
+    #[serde(
+        rename = "periodUnit",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
+    pub period_unit: String,
+    /// 窗口周期长度（单位个数），缺省 1。
+    #[serde(rename = "periodInterval", default)]
+    pub period_interval: i64,
     #[serde(
         rename = "noticePageBody",
         default,
         deserialize_with = "deserialize_null_default"
     )]
     pub notice_page_body: String,
+}
+
+impl TrafficLimitConfig {
+    /// 配额窗口上限字节数：windowLimitBytes → monthlySize → dailySize →
+    /// totalSize，首个取到正数的生效；字段既可以是裸字节数，也可以是
+    /// SizeCapacity {count, unit} 对象。
+    pub fn window_limit_bytes_value(&self) -> i64 {
+        for value in [
+            &self.window_limit_bytes,
+            &self.monthly_size,
+            &self.daily_size,
+            &self.total_size,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if let Some(raw) = value.as_i64()
+                && raw > 0
+            {
+                return raw;
+            }
+            let bytes = SizeCapacity::from_json(value).to_bytes();
+            if bytes > 0 {
+                return bytes;
+            }
+        }
+        0
+    }
+
+    /// 解析为本地配额窗口参数；isOn=false 或上限非正数时不启用配额窗口。
+    pub fn quota_spec(&self) -> Option<crate::traffic_quota::QuotaSpec> {
+        if !self.is_on {
+            return None;
+        }
+        let limit = self.window_limit_bytes_value();
+        if limit <= 0 {
+            return None;
+        }
+        Some(crate::traffic_quota::QuotaSpec {
+            limit_bytes: limit as u64,
+            unit: crate::traffic_quota::PeriodUnit::parse(&self.period_unit),
+            interval: self.period_interval.clamp(1, i64::from(u32::MAX)) as u32,
+        })
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -4373,5 +4431,56 @@ X+95GP6zw1z8EDq0LRXI1vI=\n\
         }))
         .expect_err("legacy certs-as-id-strings shape must not parse");
         assert!(err.to_string().contains("id"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn traffic_limit_quota_spec_prefers_window_limit_bytes() {
+        let config: TrafficLimitConfig = serde_json::from_value(serde_json::json!({
+            "isOn": true,
+            "windowLimitBytes": 107374182400i64,
+            "monthlySize": {"count": 5, "unit": "GB"},
+            "periodUnit": "quarter",
+            "periodInterval": 2
+        }))
+        .expect("trafficLimit should parse");
+        let spec = config.quota_spec().expect("isOn + positive limit");
+        assert_eq!(spec.limit_bytes, 107374182400);
+        assert_eq!(spec.unit, crate::traffic_quota::PeriodUnit::Quarter);
+        assert_eq!(spec.interval, 2);
+    }
+
+    #[test]
+    fn traffic_limit_quota_spec_falls_back_to_legacy_sizes() {
+        // No windowLimitBytes: monthlySize → dailySize → totalSize 链。
+        let config: TrafficLimitConfig = serde_json::from_value(serde_json::json!({
+            "isOn": true,
+            "dailySize": {"count": 2, "unit": "GB"},
+            "totalSize": {"count": 50, "unit": "GB"}
+        }))
+        .expect("trafficLimit should parse");
+        let spec = config.quota_spec().expect("fallback resolves");
+        // monthlySize absent → dailySize wins over totalSize.
+        assert_eq!(spec.limit_bytes, 2 * 1024 * 1024 * 1024);
+        // Missing period_* degrades to month × 1.
+        assert_eq!(spec.unit, crate::traffic_quota::PeriodUnit::Month);
+        assert_eq!(spec.interval, 1);
+    }
+
+    #[test]
+    fn traffic_limit_quota_spec_disabled_without_is_on_or_limit() {
+        let off: TrafficLimitConfig = serde_json::from_value(serde_json::json!({
+            "isOn": false,
+            "windowLimitBytes": 1024i64
+        }))
+        .expect("parse");
+        assert!(off.quota_spec().is_none());
+
+        // window_limit_bytes=0 视为未配置（不拦截）。
+        let zero: TrafficLimitConfig = serde_json::from_value(serde_json::json!({
+            "isOn": true,
+            "windowLimitBytes": 0i64
+        }))
+        .expect("parse");
+        assert!(zero.quota_spec().is_none());
     }
 }

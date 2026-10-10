@@ -226,10 +226,37 @@ fn bench_string_operations(c: &mut Criterion) {
     group.finish();
 }
 
+/// Hot-path cost of the traffic quota window: exceeded-check (the per-request
+/// gate) and byte accounting (request-end). Both must stay allocation-free
+/// and lock-free — single-compare on the steady path.
+fn bench_traffic_quota(c: &mut Criterion) {
+    use zelvik_edge::traffic_quota::{PeriodUnit, QuotaSpec, QuotaWindow};
+
+    let now = zelvik_edge::utils::time::now_timestamp();
+    let window = QuotaWindow::new_for_bench(
+        QuotaSpec {
+            limit_bytes: u64::MAX,
+            unit: PeriodUnit::Month,
+            interval: 1,
+        },
+        now,
+    );
+
+    let mut group = c.benchmark_group("traffic_quota");
+    group.bench_function("exceeded_steady_state", |b| {
+        b.iter(|| black_box(window.exceeded(black_box(now))))
+    });
+    group.bench_function("account_outbound", |b| {
+        b.iter(|| window.add(black_box(1460), black_box(now)))
+    });
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_request_pipeline,
     bench_firewall_comprehensive,
     bench_string_operations,
+    bench_traffic_quota,
 );
 criterion_main!(benches);

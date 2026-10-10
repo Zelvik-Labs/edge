@@ -1127,6 +1127,7 @@ pub mod record {
         m.bytes_sent.fetch_add(bytes_sent, Ordering::Relaxed);
         m.bytes_received
             .fetch_add(bytes_received, Ordering::Relaxed);
+        crate::traffic_quota::record_outbound(server_id, bytes_sent);
 
         if is_cached {
             m.cached_bytes.fetch_add(bytes_sent, Ordering::Relaxed);
@@ -1165,6 +1166,7 @@ pub mod record {
         m.bytes_sent.fetch_add(bytes_sent, Ordering::Relaxed);
         m.bytes_received
             .fetch_add(bytes_received, Ordering::Relaxed);
+        crate::traffic_quota::record_outbound(server_id, bytes_sent);
 
         METRICS
             .total_bytes_sent

@@ -483,6 +483,24 @@ fn build_servers(
     });
     out.push(udp);
 
+    // 105 — quota.bench: site-scoped local quota window. BENCH_QUOTA_LIMIT_BYTES
+    // keeps the gate hot (DashMap hit + atomic compare) without tripping the
+    // limit; a tiny value exercises the 509 path for manual verification.
+    let mut quota = bench_server(105, &["quota.bench"], origin_http);
+    quota.http = Some(http_listen(http_port));
+    let quota_limit_bytes = env_str("BENCH_QUOTA_LIMIT_BYTES", "")
+        .parse::<u64>()
+        .unwrap_or(1 << 40);
+    let quota_period = env_str("BENCH_QUOTA_PERIOD", "month");
+    quota.traffic_limit = Some(TrafficLimitConfig {
+        is_on: true,
+        window_limit_bytes: Some(Value::from(quota_limit_bytes)),
+        period_unit: quota_period.clone(),
+        period_interval: 1,
+        ..Default::default()
+    });
+    out.push(quota);
+
     out
 }
 

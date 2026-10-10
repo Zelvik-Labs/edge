@@ -1767,7 +1767,7 @@ impl UdpProxyManager {
         if crate::l4_defense::is_l4_blocked(&self.config_store, &self.waf_state, client_addr.ip()) {
             return Ok(None);
         }
-        if server.has_valid_traffic_limit() {
+        if server.has_valid_traffic_limit() || crate::traffic_quota::quota_exceeded(&server) {
             debug!(
                 "UDP server {} is traffic-limited for client {}",
                 server.numeric_id(),
