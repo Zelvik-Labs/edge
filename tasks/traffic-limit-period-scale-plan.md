@@ -84,9 +84,13 @@ notice_page_body: string                     # 保持现状
 
 ## 实测记录（执行者填写）
 
-- `struct TrafficLimit` 定义：
-- 计数载体：
-- 现有窗口语义：
-- `enforce_traffic_limit` 返回语义与调用点：
-- 改动前基线（bench-defense / xdp-verify）：
-- 改动后对比：
+- `struct TrafficLimit` 定义：Edge 侧实为 `TrafficLimitConfig`（`src/config_models.rs:1022`），字段 `downlinkMbps/uplinkMbps/isOn/dailySize/monthlySize/totalSize/noticePageBody`；三个 size 为 `Option<Value>`（`SizeCapacity` JSON），**只被解析、从未参与执行**。另有 `TrafficLimitStatus`（`untilDay/planId/dateType/targetType`）。
+- 计数载体：当前无配额计数。流量统计用 `ServerMetrics`（`src/metrics.rs:587`）—— `METRICS.servers`（`DashMap<i64, Arc<ServerMetrics>>`）内的原子计数（`bytes_sent/bytes_received`），HTTP/UDP/TCP 全路径汇聚于 `record::request_end_inner`。
+- 现有窗口语义：**节点本地没有窗口**。`has_valid_traffic_limit()` = `TrafficLimitStatus.is_valid()` = `untilDay ≥ 今日`（控制面推送的「封禁至某日」）；Zelvik 控制面目前不写 `trafficLimitStatus`，它仅是 `serverConfigKeys` 白名单透传字段。真实超限处置在控制面：`BillingBlockedSites`（stop 策略停服、站点不下发）与 `BillingThrottledSites`（throttle 策略换 `throttle_mbps`）。
+- `enforce_traffic_limit` 返回语义与调用点：`Result<bool>`，`true` = 已写出 509 notice 页响应（请求终结）。调用点：`proxy.rs:8416`（`request_filter` 阶段）；UDP 在 `udp_proxy.rs:1770`（`has_valid_traffic_limit` → 拒绝建会话）；TCP L4 路径无配额判定。
+- 落地形态：新模块 `src/traffic_quota.rs`。窗口结构 `QuotaWindow{window_start, window_end, used_bytes, limit_bytes, spec_bits}` 全原子字段；`align_window(now, unit, interval, tz)` 按节点本地时区对自然日/月/季/年边界（interval 以纪元为锚计数）；跨界翻转用 `rolling: AtomicBool` 单次 CAS 守门 + 重校验，无锁；热路径 `exceeded()` = 边界检查 + `used >= limit` 一次比较；时钟回拨不回滚窗口（节流 warn）。双作用域注册表 `WINDOWS: DashMap<i64, Arc<QuotaWindow>>`：正键 = 站点（server id），负键 = 套餐实例（−user_plan_id，同 ShapingScope 惯例）；`SERVER_PLAN` 反查表支持按字节计费时命中套餐窗。计费字节 = 出站 `bytes_sent`：`record::request_end_inner`（L7）与 `record::record_transfer`（UDP/TCP/XDP）双钩子，与 `ServerBandwidthStat` 口径一致。配置解析：`TrafficLimitConfig` 新增 `windowLimitBytes/periodUnit/periodInterval`，`quota_spec()` 回退链 windowLimitBytes→monthlySize→dailySize→totalSize，缺省 month×1。同步点：`apply_node_config`/`replace_all_servers`/`replace_servers_snapshot`/`set_plans`/`set_user_plans` 内 `sync_from_config(&lock)`。指标：statusJSON 新增 `trafficQuota.{sites,plans}`（windowStart/windowEnd/usedBytes/limitBytes/periodUnit/periodInterval/exceeded），批量上报。
+- 单元/组件测试：`cargo test --lib --bins` 1002+14 全过；新增 13 项（对齐四类边界、interval>1、跨界翻转、时钟回拨、周期变更重置/额度变更保留、未知 unit 降级、回退链、isOn/limit 边界）。
+- 微基准（criterion，hotpath_bench）：`exceeded_steady_state` ≈ **0.79 ns/op**；`account_outbound` ≈ **6.65 ns/op**——零分配零锁，日历运算只在跨界时发生。
+- 改动后对比（bench-defense，本 VM 8C 共享机，wrk -t4 -c200 -d30s，4KB 静态）：新增 `quota.bench`（id 105，`BENCH_QUOTA_LIMIT_BYTES`/`BENCH_QUOTA_PERIOD` env）作为配额开启的 A/B 站。四轮 p50 均在 4.6–5.0ms、RPS 35–40k 区间交叉重叠（quota 第二轮 37.8k 反高于 baseline 37.7k）——噪声大于门开销，**p99/p50 无可测回归**。端到端：`BENCH_QUOTA_LIMIT_BYTES=1024` 下首请求 200、后续 509 notice 页（默认 notice body 渲染正常），plain.bench 不受影响（站点隔离生效）。
+- 断连用例：窗口由本地时钟驱动，控制面不可达时 `ensure_current` 照常跨界翻转（对齐只读 `LOCAL_TZ_OFFSET_SECONDS` 与系统钟，无外部依赖）——由实现结构与单元测试覆盖（bench-defense 无 RPC：`rpc_disable_update: true` 下窗口仍工作）。
+- §5.2–5.6 既有规模能力（SO_REUSEPORT+pin、XDP 预丢弃、Mace 分片、keepalive 复用、遥测批量）：本次未触碰相关代码路径；XDP 回归需 `xdp-verify` 在具备 AF_XDP 网卡/内核权限的压测机执行，本 VM `BENCH_KERNEL_FILTER=off` 下不覆盖——与历史 perf-reports 基线（`docs/perf-reports/20260912-023659-defense` 等）对照复测留给专用压测环境。

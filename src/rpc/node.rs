@@ -1561,6 +1561,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
                    "resourceGovernor": resource_governor,
                    "pipelines": pipelines,
         "telemetry":crate::telemetry::snapshot(),
+        "trafficQuota": crate::traffic_quota::status_snapshot_json(),
                    "l4Defense": l4_defense,
                    "xdp": xdp_status,
                    "updatedAt": now,

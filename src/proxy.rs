@@ -6908,7 +6908,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
         let Some(server) = ctx.server.as_ref() else {
             return Ok(false);
         };
-        if !server.has_valid_traffic_limit() {
+        if !server.has_valid_traffic_limit() && !crate::traffic_quota::quota_exceeded(server) {
             return Ok(false);
         }
 

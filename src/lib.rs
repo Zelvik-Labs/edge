@@ -88,6 +88,7 @@ pub mod xdp_config_wizard;
 pub mod xdp_netdev_tuning;
 
 pub mod telemetry;
+pub mod traffic_quota;
 pub mod traffic_shaping;
 
 #[cfg(test)]

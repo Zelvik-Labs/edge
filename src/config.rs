@@ -32,6 +32,9 @@ pub struct PlanDerivedConfig {
     /// 套餐实例（订阅）的有效下行峰值带宽上限（Mbps），0 = 不限。
     /// 实例下所有站点共享该额度（同一节点内共用一个限速桶）。
     pub max_downlink_mbps: f64,
+    /// 套餐实例级配额窗口（契约 edge-traffic-limit.md）；实例下所有站点
+    /// 共享同一个窗口计数。
+    pub traffic_quota: Option<crate::traffic_quota::QuotaSpec>,
 }
 
 /// Configuration for the local cloud node.
@@ -165,7 +168,20 @@ fn compile_plan_derived(
         cc_per_ip_max_qps,
         cc_max_bandwidth,
         max_downlink_mbps: compile_plan_downlink_mbps(user_plan, plan),
+        traffic_quota: compile_plan_traffic_quota(plan),
     }
+}
+
+/// 套餐配额窗口：trafficLimitJSON 按 TrafficLimitConfig 解析（与站点级同一
+/// 契约结构），isOn + 正数上限才生成窗口；period_* 缺省时由解析层降级为
+/// month × 1。
+fn compile_plan_traffic_quota(plan: &crate::pb::Plan) -> Option<crate::traffic_quota::QuotaSpec> {
+    if plan.traffic_limit_json.is_empty() {
+        return None;
+    }
+    serde_json::from_slice::<TrafficLimitConfig>(&plan.traffic_limit_json)
+        .ok()
+        .and_then(|config| config.quota_spec())
 }
 
 /// 套餐实例限速取值优先级：实例有效值（套餐上限，含用户级覆盖）> 套餐
@@ -1580,6 +1596,7 @@ impl ConfigStore {
         );
         Self::refresh_passthrough_indexes(&mut lock);
         Self::refresh_cluster_policy_indexes(&mut lock);
+        crate::traffic_quota::sync_from_config(&lock);
         drop(lock);
         *self.runtime_context_salt.lock() = new_salt;
         self.prune_published_fingerprints(&live_server_ids, &live_user_ids);
@@ -1618,6 +1635,7 @@ impl ConfigStore {
         lock.compiled_plans = Arc::new(compiled_plans);
         Self::refresh_passthrough_indexes(&mut lock);
         Self::refresh_cluster_policy_indexes(&mut lock);
+        crate::traffic_quota::sync_from_config(&lock);
         drop(lock);
         drop(_update);
         self.notify_runtime_reload();
@@ -1696,6 +1714,7 @@ impl ConfigStore {
         }
         Self::refresh_passthrough_indexes(&mut lock);
         Self::refresh_cluster_policy_indexes(&mut lock);
+        crate::traffic_quota::sync_from_config(&lock);
         drop(lock);
         drop(_update);
         self.notify_runtime_reload();
@@ -2108,6 +2127,7 @@ impl ConfigStore {
         let mut lock = self.inner.write();
         lock.plans = plans;
         Self::refresh_plan_derived(&mut lock);
+        crate::traffic_quota::sync_from_config(&lock);
     }
 
     pub async fn set_user_plans(&self, user_plans: HashMap<i64, crate::pb::UserPlan>) {
@@ -2115,6 +2135,7 @@ impl ConfigStore {
         let mut lock = self.inner.write();
         lock.user_plans = user_plans;
         Self::refresh_plan_derived(&mut lock);
+        crate::traffic_quota::sync_from_config(&lock);
     }
 
     pub async fn update_node_level_info(
