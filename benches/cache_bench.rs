@@ -1,9 +1,9 @@
-use zelvik_edge::cache_hybrid::HybridStorage;
-use zelvik_edge::cache_manager::create_meta;
 use criterion::{Criterion, criterion_group, criterion_main};
 use pingora_cache::{CacheKey, Storage, trace::Span};
 use std::hint::black_box;
 use tokio::runtime::Runtime;
+use zelvik_edge::cache_hybrid::HybridStorage;
+use zelvik_edge::cache_manager::create_meta;
 
 async fn setup_hybrid_storage() -> HybridStorage {
     let disk_path = "target/cache_bench_disk";
@@ -15,8 +15,8 @@ fn bench_cache_lookup(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
     let storage: &'static HybridStorage = Box::leak(Box::new(rt.block_on(setup_hybrid_storage())));
 
-    // Create a dummy CacheKey (namespace, primary, user_tag)
-    let key = CacheKey::new("http", "example.com", "/static/image.png");
+    // Create a dummy CacheKey (primary, user_tag).
+    let key = CacheKey::new("example.com", "/static/image.png");
 
     c.bench_function("cache_hybrid_lookup_miss", |b| {
         b.to_async(&rt).iter(|| async {

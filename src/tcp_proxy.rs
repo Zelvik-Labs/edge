@@ -113,7 +113,13 @@ pub fn configure_relay_from_api(config: &crate::api_config::ApiConfig) {
     );
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(
+    not(target_os = "linux"),
+    expect(
+        dead_code,
+        reason = "platform-specific dataplane entry points and state"
+    )
+)]
 fn relay_zero_copy_enabled() -> bool {
     RELAY_ZERO_COPY_ENABLED.load(Ordering::Relaxed)
 }
@@ -213,7 +219,7 @@ impl TcpProxyManager {
             false,
         )
         .map_err(|err| anyhow::anyhow!("build AF_XDP TCP TLS server config: {}", err))?;
-        let acceptor = Arc::new(TcpTlsAcceptor::from_server_config(rustls_config));
+        let acceptor = Arc::new(TcpTlsAcceptor::from_server_config(Arc::new(rustls_config)));
         *guard = Some(acceptor.clone());
         Ok(acceptor)
     }
@@ -234,7 +240,13 @@ impl TcpProxyManager {
         })
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "platform-specific dataplane entry points and state"
+        )
+    )]
     pub(crate) fn find_tcp_server_by_port_sync(
         &self,
         port: u16,
@@ -256,12 +268,24 @@ impl TcpProxyManager {
             })
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "platform-specific dataplane entry points and state"
+        )
+    )]
     pub(crate) fn af_xdp_is_l4_blocked(&self, ip: IpAddr) -> bool {
         crate::l4_defense::is_l4_blocked(&self.config_store, &self.waf_state, ip)
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "platform-specific dataplane entry points and state"
+        )
+    )]
     pub(crate) fn record_af_xdp_l4_event_with_pressure(
         &self,
         ip: IpAddr,
@@ -280,7 +304,10 @@ impl TcpProxyManager {
         )
     }
 
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "platform-specific dataplane entry points and state"
+    )]
     pub(crate) async fn handle_af_xdp_plain_stream<S>(
         self: Arc<Self>,
         client_stream: S,
@@ -320,7 +347,13 @@ impl TcpProxyManager {
             .await
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "platform-specific dataplane entry points and state"
+        )
+    )]
     async fn prepare_bypass_tcp_connection<S>(
         &self,
         client_stream: S,
@@ -464,7 +497,13 @@ impl TcpProxyManager {
         )))
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "platform-specific dataplane entry points and state"
+        )
+    )]
     pub(crate) async fn handle_af_xdp_tcp_stream<S>(
         self: Arc<Self>,
         client_stream: S,
@@ -515,7 +554,13 @@ impl TcpProxyManager {
         .await
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "platform-specific dataplane entry points and state"
+        )
+    )]
     pub(crate) async fn handle_af_xdp_tls_tcp_stream<S>(
         self: Arc<Self>,
         client_stream: S,
@@ -761,7 +806,7 @@ impl TcpProxyManager {
             )
             .map_err(|err| anyhow::anyhow!("build rustls TCP server config: {}", err))?;
             Some(Arc::new(
-                pingora_core::listeners::tls::Acceptor::from_server_config(rustls_config),
+                pingora_core::listeners::tls::Acceptor::from_server_config(Arc::new(rustls_config)),
             ))
         } else {
             None
@@ -836,7 +881,10 @@ impl TcpProxyManager {
     /// Keeps the live accept-worker count tracking
     /// `l4_defense::pressure_accept_worker_target`; extra workers retire
     /// themselves via their scale watch once pressure subsides.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "dataplane operation carries explicit policy and connection context"
+    )]
     async fn run_tcp_accept_scaler(
         self: Arc<Self>,
         bind_addr: SocketAddr,
@@ -906,7 +954,10 @@ impl TcpProxyManager {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "dataplane operation carries explicit policy and connection context"
+    )]
     async fn run_tcp_listener_worker(
         self: Arc<Self>,
         bind_addr: SocketAddr,
@@ -2250,7 +2301,7 @@ impl DirectionTaskError {
 
 type DirectionTaskResult = Result<DirectionSuccess, DirectionTaskError>;
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) async fn stream_tcp_bidirectional_with_metrics(
     server_id: i64,
     client: TcpStream,
@@ -2265,7 +2316,10 @@ pub(crate) async fn stream_tcp_bidirectional_with_metrics(
     .await
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "platform-specific dataplane entry points and state"
+)]
 pub(crate) async fn stream_sni_passthrough_bidirectional_with_metrics(
     server_id: i64,
     client: TcpStream,
@@ -2357,7 +2411,10 @@ async fn stream_tcp_bidirectional_with_metrics_options(
     stream_bidirectional_with_metrics_options(server_id, client, backend, options).await
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "platform-specific dataplane entry points and state"
+)]
 pub(crate) async fn stream_bidirectional_with_metrics<C, B>(
     server_id: i64,
     client: C,
@@ -3406,13 +3463,25 @@ async fn maybe_consume_proxy_protocol_header(
     }
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(
+    all(not(target_os = "linux"), not(test)),
+    expect(
+        dead_code,
+        reason = "platform-specific dataplane entry points and state"
+    )
+)]
 pub(crate) struct PrefixedStream<S> {
     prefix: io::Cursor<Vec<u8>>,
     inner: S,
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(
+    all(not(target_os = "linux"), not(test)),
+    expect(
+        dead_code,
+        reason = "platform-specific dataplane entry points and state"
+    )
+)]
 impl<S> PrefixedStream<S> {
     pub(crate) fn new(prefix: Vec<u8>, inner: S) -> Self {
         Self {
@@ -3459,7 +3528,13 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for PrefixedStream<S> {
     }
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(
+    all(not(target_os = "linux"), not(test)),
+    expect(
+        dead_code,
+        reason = "platform-specific dataplane entry points and state"
+    )
+)]
 pub(crate) async fn maybe_consume_proxy_protocol_header_generic<S>(
     mut stream: S,
     client_addr: SocketAddr,

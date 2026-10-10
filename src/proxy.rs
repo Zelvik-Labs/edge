@@ -9445,7 +9445,7 @@ impl ProxyHttp for EdgeProxy {
         ctx: &mut Self::CTX,
     ) -> Result<pingora_cache::CacheKey> {
         if let Some(key) = &ctx.cache_key {
-            return Ok(pingora_cache::CacheKey::new("", key.as_str(), key.as_str()));
+            return Ok(pingora_cache::CacheKey::new(key.as_str(), key.as_str()));
         }
 
         // CRITICAL: If no key was set by request_cache_filter, we MUST return an error.
@@ -9842,10 +9842,10 @@ impl ProxyHttp for EdgeProxy {
                 ctx.cache_key = Some(key);
 
                 if !cache_ref.enable_if_none_match {
-                    session.req_header_mut().headers.remove("if-none-match");
+                    session.req_header_mut().remove_header("if-none-match");
                 }
                 if !cache_ref.enable_if_modified_since {
-                    session.req_header_mut().headers.remove("if-modified-since");
+                    session.req_header_mut().remove_header("if-modified-since");
                 }
 
                 session
@@ -10068,7 +10068,7 @@ impl ProxyHttp for EdgeProxy {
                 };
 
                 if inm_match || ims_match {
-                    upstream_response.status = pingora::http::StatusCode::NOT_MODIFIED;
+                    upstream_response.set_status(pingora::http::StatusCode::NOT_MODIFIED)?;
                     ctx.response_status = 304;
                     // Populate weak ETag if we generated one (RFC 7232 §4.1)
                     if cached_etag.is_none()
@@ -10451,8 +10451,10 @@ impl ProxyHttp for EdgeProxy {
             && action.action_code == "block"
         {
             let (status, body) = self.outbound_waf_block_response(session, ctx, &action);
-            upstream_response.status = pingora::http::StatusCode::from_u16(status)
-                .unwrap_or(pingora::http::StatusCode::FORBIDDEN);
+            upstream_response.set_status(
+                pingora::http::StatusCode::from_u16(status)
+                    .unwrap_or(pingora::http::StatusCode::FORBIDDEN),
+            )?;
             ctx.response_status = status;
             upstream_response.remove_header("content-length");
             upstream_response.remove_header("transfer-encoding");

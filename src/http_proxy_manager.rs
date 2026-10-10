@@ -743,7 +743,7 @@ impl HttpProxyManager {
             )
             .context("build rustls HTTP server config")?;
             Some(Arc::new(
-                pingora_core::listeners::tls::Acceptor::from_server_config(rustls_config),
+                pingora_core::listeners::tls::Acceptor::from_server_config(Arc::new(rustls_config)),
             ))
         } else {
             None
@@ -1206,7 +1206,9 @@ impl HttpProxyManager {
             false,
         )
         .context("build rustls HTTP server config")?;
-        let acceptor = Arc::new(PingoraTlsAcceptor::from_server_config(rustls_config));
+        let acceptor = Arc::new(PingoraTlsAcceptor::from_server_config(Arc::new(
+            rustls_config,
+        )));
         *guard = Some(acceptor.clone());
         Ok(acceptor)
     }
@@ -2470,6 +2472,7 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
             // local pool instead of the global counter — one registry lookup
             // per connection instead of one global RMW per stream.
             let stream_ticket = crate::l4_connection_registry::ticket_for(&client_addr);
+            let mut malformed_streams = 0;
             loop {
                 let idle_deadline = h2_state.next_idle_deadline();
                 let lifetime_deadline = h2_state.lifetime_deadline();
@@ -2506,10 +2509,12 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                         );
                         break;
                     }
-                    result = pingora_core::protocols::http::v2::server::HttpSession::from_h2_conn(&mut h2_conn, digest.clone()) => result,
+                    result = pingora_core::protocols::http::v2::server::HttpSession::from_h2_conn_with_malformed_budget(&mut h2_conn, digest.clone(), &mut malformed_streams) => result,
                 };
                 match accept_result {
-                    Ok(Some(h2_session)) => {
+                    Ok(Some(pingora_core::protocols::http::v2::server::H2Accept::Session(
+                        h2_session,
+                    ))) => {
                         h2_state.record_stream();
                         if let Some(events) = h2_state.take_pending_l4_stream_events_if_due() {
                             manager.record_l4_event_weighted(
@@ -2625,6 +2630,17 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                                 .process_new_http(server_session, &shutdown_inner_h2)
                                 .await;
                         });
+                    }
+                    Ok(Some(pingora_core::protocols::http::v2::server::H2Accept::Rejected)) => {
+                        h2_state.record_reject();
+                        manager.record_l4_event(
+                            client_addr.ip(),
+                            L4DefenseKind::H2ConnectionAbuse,
+                            format!(
+                                "port={} peer={} reason=malformed_request rejects={}",
+                                port, client_addr, h2_state.rejected_streams
+                            ),
+                        );
                     }
                     Ok(None) => break,
                     Err(e) => {

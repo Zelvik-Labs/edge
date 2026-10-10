@@ -2116,7 +2116,7 @@ fn zelvik_edge_service_text() -> Option<String> {
         && output.status.success()
         && !output.stdout.is_empty()
     {
-        return Some(String::from_utf8_lossy(&output.stdout).into_owned());
+        return Some(String::from_utf8_lossy_owned(output.stdout));
     }
     fs::read_to_string(ZELVIK_EDGE_SYSTEMD_SERVICE_PATH).ok()
 }

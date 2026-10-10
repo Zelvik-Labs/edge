@@ -2,7 +2,7 @@
 name = "zelvik-edge"
 version = "26.10.2"
 edition = "2024"
-rust-version = "1.98.1"
+rust-version = "1.99.0"
 description = "Zelvik Edge CDN and global traffic data plane"
 
 [package.metadata.zelvik]
@@ -42,13 +42,13 @@ h3-quinn = "0.0.10"
 image = { version = "0.25.10", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 ipnet = "2.12.1"
 md-5 = "0.11.0"
-pingora = { path = "./pingora-main/pingora", features = ["proxy", "cache", "rustls"] }
-pingora-core = { path = "./pingora-main/pingora-core", features = ["rustls"] }
-pingora-load-balancing = { path = "./pingora-main/pingora-load-balancing", features = ["rustls"] }
-pingora-proxy = { path = "./pingora-main/pingora-proxy", features = ["rustls"] }
-pingora-http = { path = "./pingora-main/pingora-http" }
-pingora-cache = { path = "./pingora-main/pingora-cache", features = ["rustls"] }
-pingora-memory-cache = { path = "./pingora-main/pingora-memory-cache" }
+pingora = { version = "=0.9.0", path = "./pingora-main/pingora", features = ["proxy", "cache", "rustls"] }
+pingora-core = { version = "=0.9.0", path = "./pingora-main/pingora-core", features = ["rustls"] }
+pingora-load-balancing = { version = "=0.9.0", path = "./pingora-main/pingora-load-balancing", features = ["rustls"] }
+pingora-proxy = { version = "=0.9.0", path = "./pingora-main/pingora-proxy", features = ["rustls"] }
+pingora-http = { version = "=0.9.0", path = "./pingora-main/pingora-http" }
+pingora-cache = { version = "=0.9.0", path = "./pingora-main/pingora-cache", features = ["rustls"] }
+pingora-memory-cache = { version = "=0.9.0", path = "./pingora-main/pingora-memory-cache" }
 bloom = "0.3.2"
 prost = "0.14.4"
 regex = "1.13.1"

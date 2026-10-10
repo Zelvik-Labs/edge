@@ -30,7 +30,7 @@ use crate::subrequest::*;
 use crate::{PreparedSubrequest, Session};
 use bytes::Bytes;
 use futures::FutureExt;
-use log::debug;
+use log::{debug, warn};
 use pingora_core::protocols::http::{subrequest::server::SubrequestHandle, HttpTask};
 use pingora_error::{Error, ErrorType::*, OrErr, Result};
 use tokio::sync::mpsc;
@@ -53,16 +53,25 @@ pub struct PipeSubrequestState {
     /// The spawned subrequest task handle. Always set after spawn. Caller is
     /// responsible for awaiting/inspecting state.
     pub join_handle: Option<tokio::task::JoinHandle<()>>,
+    /// The receiving half of the pipe channel. When the coordinator exits
+    /// `pipe_subrequest` before the subrequest task finishes writing, this
+    /// receiver must be kept alive and drained alongside the join handle;
+    /// otherwise dropping it breaks the pipe and prevents the writer from
+    /// completing its cache-write lifecycle.
+    pub pipe_rx: Option<mpsc::Receiver<HttpTask>>,
 }
 
 impl PipeSubrequestState {
     /// Creates a snapshot for error reporting, excluding the join handle.
+    /// Moves `pipe_rx` into the snapshot so the receiver stays alive through
+    /// the error path and is not dropped when `self` is cleaned up.
     /// Used by [`map_pipe_err`] to capture state at the point of failure.
-    pub fn snapshot_for_error(&self) -> Self {
+    pub fn snapshot_for_error(&mut self) -> Self {
         PipeSubrequestState {
             saved_body: self.saved_body.clone(),
             header_received: self.header_received,
             join_handle: None,
+            pipe_rx: self.pipe_rx.take(),
         }
     }
 }
@@ -91,7 +100,7 @@ impl PipeSubrequestError {
 fn map_pipe_err<T, E: Into<Box<Error>>>(
     result: Result<T, E>,
     from_subreq: bool,
-    state: &PipeSubrequestState,
+    state: &mut PipeSubrequestState,
 ) -> Result<T, PipeSubrequestError> {
     result.map_err(|e| PipeSubrequestError::new(e, from_subreq, state.snapshot_for_error()))
 }
@@ -212,7 +221,10 @@ where
     });
     state.join_handle = Some(join_handle);
     let tx = subrequest_handle.tx;
-    let mut rx = subrequest_handle.rx;
+    // Move rx into state immediately so it survives all exit paths (early `?`
+    // returns, errors, and the normal success path). The select loop borrows it
+    // back via `state.pipe_rx.as_mut().expect(...)`.
+    state.pipe_rx = Some(subrequest_handle.rx);
 
     let mut wants_body = false;
     let mut wants_body_rx_err = false;
@@ -229,7 +241,7 @@ where
             .or_err(InternalError, "try_reserve() body pipe for subrequest");
 
         tokio::select! {
-            task = rx.recv(), if !response_state.upstream_done() => {
+            task = state.pipe_rx.as_mut().expect("pipe_rx always set after spawn").recv(), if !response_state.upstream_done() => {
                 debug!("upstream event: {:?}", task);
                 if let Some(t) = task {
                     // Did the subrequest get headers?
@@ -239,17 +251,17 @@ where
                     // pull as many tasks as we can
                     const TASK_BUFFER_SIZE: usize = 4;
                     let mut tasks = Vec::with_capacity(TASK_BUFFER_SIZE);
-                    let task = map_pipe_err(task_filter(t), false, &state)?;
+                    let task = map_pipe_err(task_filter(t), false, &mut state)?;
                     if let Some(filtered) = task {
                         tasks.push(filtered);
                     }
                     // tokio::task::unconstrained because now_or_never may yield None when the future is ready
-                    while let Some(maybe_task) = tokio::task::unconstrained(rx.recv()).now_or_never() {
+                    while let Some(maybe_task) = tokio::task::unconstrained(state.pipe_rx.as_mut().expect("pipe_rx always set after spawn").recv()).now_or_never() {
                         if let Some(t) = maybe_task {
                             if matches!(&t, HttpTask::Header(..)) {
                                 state.header_received = true;
                             }
-                            let task = map_pipe_err(task_filter(t), false, &state)?;
+                            let task = map_pipe_err(task_filter(t), false, &mut state)?;
                             if let Some(filtered) = task {
                                 tasks.push(filtered);
                             }
@@ -259,7 +271,7 @@ where
                     }
                     // FIXME: if one of these tasks is Failed(e), the session will return that
                     // error; in this case, the error is actually from the subreq
-                    let response_done = map_pipe_err(session.write_response_tasks(tasks).await, false, &state)?;
+                    let response_done = map_pipe_err(session.write_response_tasks(tasks).await, false, &mut state)?;
 
                     // NOTE: technically it is the downstream whose response state has finished here
                     // we consider the subrequest's work done however
@@ -309,7 +321,7 @@ where
                 // this is the first subrequest
                 // send the body
                 debug!("downstream event: main body for subrequest");
-                let body = map_pipe_err(body.map_err(|e| e.into_down()), false, &state)?;
+                let body = map_pipe_err(body.map_err(|e| e.into_down()), false, &mut state)?;
 
                 // If the request is websocket, `None` body means the request is closed.
                 // Set the response to be done as well so that the request completes normally.
@@ -325,7 +337,7 @@ where
                     state.saved_body.as_mut(),
                     send_permit.expect("checked is_ok()"),
                 )
-                .await, false, &state)?;
+                .await, false, &mut state)?;
 
                 downstream_state.maybe_finished(request_done);
 
@@ -346,13 +358,18 @@ where
                     is_body_done,
                     None,
                     send_permit.expect("checked is_ok()"),
-                ), false, &state)?;
+                ), false, &mut state)?;
                 downstream_state.maybe_finished(request_done);
 
             },
 
             else => break,
         }
+    }
+    // The output channel can close in the same poll that publishes a proxy error.
+    // Reconcile the terminal error before reporting successful pipe completion.
+    if let Ok(e) = proxy_error_rx.try_recv() {
+        return Err(PipeSubrequestError::new(e, true, state));
     }
     Ok(state)
 }
@@ -402,7 +419,7 @@ fn do_send_body_to_pipe(
 
     if let Some(capture) = saved_body.as_mut() {
         if capture.is_body_complete() {
-            debug!("subrequest trying to save body after body is complete");
+            warn!("subrequest trying to save body after body is complete");
         } else if let Some(d) = data.as_ref() {
             capture.save_body_bytes(d.clone());
         }
@@ -423,7 +440,9 @@ mod tests {
     use crate::{Session, Subrequest, SubrequestSpawner};
     use async_trait::async_trait;
     use pingora_core::protocols::http::ServerSession as HttpSession;
-    use std::sync::Arc;
+    use pingora_http::ResponseHeader;
+    use std::sync::{Arc, Barrier};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     /// Drops session without producing output — channels close, rx returns None.
     struct NoopApp;
@@ -438,6 +457,33 @@ mod tests {
         }
     }
 
+    struct HeaderThenErrorApp {
+        header_selected: Arc<Barrier>,
+    }
+
+    #[async_trait]
+    impl Subrequest for HeaderThenErrorApp {
+        async fn process_subrequest(
+            self: Arc<Self>,
+            mut session: Box<HttpSession>,
+            _ctx: Box<SubrequestCtx>,
+        ) {
+            let mut header =
+                ResponseHeader::build(200, Some(1)).expect("test response header should build");
+            header
+                .insert_header(http::header::CONTENT_LENGTH, "0")
+                .expect("test content-length should be valid");
+            session
+                .write_response_header(Box::new(header))
+                .await
+                .expect("test response header should be written");
+
+            self.header_selected.wait();
+            session.on_proxy_failure(Error::new(FileReadError));
+            self.header_selected.wait();
+        }
+    }
+
     async fn mock_session() -> Session {
         let input = b"GET / HTTP/1.1\r\nHost: test\r\n\r\n";
         let mock_io = tokio_test::io::Builder::new().read(&input[..]).build();
@@ -448,6 +494,58 @@ mod tests {
             .await
             .expect("mock request should parse");
         session
+    }
+
+    async fn writable_mock_session() -> Session {
+        let input = b"GET / HTTP/1.1\r\nHost: test\r\n\r\n";
+        let (mut client, server) = tokio::io::duplex(1024);
+        client
+            .write_all(input)
+            .await
+            .expect("mock request should be written");
+        tokio::spawn(async move {
+            let mut response = Vec::new();
+            let _ = client.read_to_end(&mut response).await;
+        });
+
+        let mut session = Session::new_h1(Box::new(server) as pingora_core::protocols::Stream);
+        session
+            .downstream_session
+            .read_request()
+            .await
+            .expect("mock request should parse");
+        session
+    }
+
+    fn hold_header_until_error(
+        task: HttpTask,
+        header_selected: &Barrier,
+    ) -> Result<Option<HttpTask>> {
+        if matches!(&task, HttpTask::Header(..)) {
+            header_selected.wait();
+            header_selected.wait();
+        }
+        Ok(Some(task))
+    }
+
+    async fn pipe_header_then_error(
+    ) -> std::result::Result<PipeSubrequestState, PipeSubrequestError> {
+        let header_selected = Arc::new(Barrier::new(2));
+        let mut session = writable_mock_session().await;
+        let app = HeaderThenErrorApp {
+            header_selected: Arc::clone(&header_selected),
+        };
+        let spawner = SubrequestSpawner::new(Arc::new(app));
+        let ctx = SubrequestCtx::builder().body_mode(BodyMode::NoBody).build();
+        let (subrequest, handle) = spawner.create_subrequest(session.as_downstream(), ctx);
+        pipe_subrequest(
+            &mut session,
+            subrequest,
+            handle,
+            move |task| hold_header_until_error(task, &header_selected),
+            InputBodyType::Preset(InputBody::NoBody),
+        )
+        .await
     }
 
     #[tokio::test]
@@ -474,5 +572,15 @@ mod tests {
             "no header should have been received from the no-op subrequest"
         );
         assert!(state.join_handle.is_some(), "task handle should be set");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn preserves_proxy_error_queued_before_pipe_completion() {
+        let error = pipe_header_then_error()
+            .await
+            .expect_err("subrequest proxy error should be preserved");
+        assert!(error.from_subreq);
+        assert_eq!(error.error.root_etype(), &FileReadError);
+        assert!(error.state.header_received);
     }
 }

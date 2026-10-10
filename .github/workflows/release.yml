@@ -52,14 +52,14 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.98.1
+        uses: dtolnay/rust-toolchain@1.99.0
         with:
           targets: ${{ matrix.target }}
 
       - name: Normalize Rust Toolchains
         shell: bash
         env:
-          RELEASE_RUST_VERSION: "1.98.1"
+          RELEASE_RUST_VERSION: "1.99.0"
         run: |
           set -euo pipefail
 

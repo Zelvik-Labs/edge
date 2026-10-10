@@ -1396,7 +1396,7 @@ mod linux {
     async fn run_nft(args: &[&str]) -> anyhow::Result<String> {
         let output = Command::new("nft").args(args).output().await?;
         if output.status.success() {
-            return Ok(String::from_utf8_lossy(&output.stdout).to_string());
+            return Ok(String::from_utf8_lossy_owned(output.stdout));
         }
         anyhow::bail!("{}", String::from_utf8_lossy(&output.stderr).trim())
     }

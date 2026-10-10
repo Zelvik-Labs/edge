@@ -1,9 +1,9 @@
 use crate::memory_governor::{AdmissionClass, MEMORY_GOVERNOR, StaticAdmissionPermit};
 use async_trait::async_trait;
 use dashmap::{DashMap, DashSet};
-use pingora_cache::key::CompactCacheKey;
 use pingora_cache::storage::{
-    HandleHit, HandleMiss, HitHandler, MissFinishType, MissHandler, PurgeType, Storage,
+    HandleHit, HandleMiss, HitHandler, MissFinishType, MissHandler, PurgeOutcome, PurgeTarget,
+    PurgeType, Storage,
 };
 use pingora_cache::{CacheKey, CacheMeta};
 use pingora_core::{Error, ErrorType, Result};
@@ -1372,12 +1372,16 @@ impl Storage for FileStorage {
 
     async fn purge(
         &'static self,
-        key: &CompactCacheKey,
+        target: PurgeTarget<'_>,
         _purge_type: PurgeType,
         _trace: &pingora_cache::trace::SpanHandle,
-    ) -> Result<bool> {
+    ) -> Result<PurgeOutcome> {
+        if matches!(target, PurgeTarget::Exact(entry) if entry.entry_id().is_some()) {
+            return Ok(PurgeOutcome::NotFound);
+        }
+        let key = target.key();
         if key.user_tag.is_empty() {
-            return Ok(false);
+            return Ok(PurgeOutcome::NotFound);
         }
 
         let key_str = key.user_tag.as_ref();
@@ -1391,7 +1395,11 @@ impl Storage for FileStorage {
                     error = %err,
                     "CACHE_PURGE: unable to acquire cross-process barrier; refusing purge"
                 );
-                return Ok(false);
+                return Err(Error::because(
+                    ErrorType::FileWriteError,
+                    "failed to acquire cross-process cache purge barrier",
+                    err,
+                ));
             }
         };
         let write_lock = cache_write_lock_for_key(key_str);
@@ -1405,7 +1413,7 @@ impl Storage for FileStorage {
             .delete_cache_meta_async(&hash)
             .await;
         negative_cache_insert(key_str, crate::utils::time::now_timestamp());
-        Ok(true)
+        Ok(PurgeOutcome::Purged(None))
     }
 
     async fn update_meta(
@@ -2624,11 +2632,9 @@ fn mark_surrogate_tag_saturated(tag: &str) {
 pub(crate) fn remove_hash_from_surrogate_index(hash: &str) {
     SURROGATE_KEY_INDEX.retain(|tag, set| {
         if set.remove(hash).is_some() {
-            SURROGATE_MEMBERSHIPS
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
-                    Some(value.saturating_sub(1))
-                })
-                .ok();
+            SURROGATE_MEMBERSHIPS.update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                value.saturating_sub(1)
+            });
             let owner = format!("{tag}\0{hash}");
             let _ = MEMORY_GOVERNOR.resident_memory_replace_owned(
                 crate::memory_governor::ResidentCategory::SurrogateIndex,
@@ -2654,11 +2660,9 @@ fn remove_surrogate_tag_set(tag: &str) {
                 0,
             );
         }
-        SURROGATE_MEMBERSHIPS
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
-                Some(value.saturating_sub(members))
-            })
-            .ok();
+        SURROGATE_MEMBERSHIPS.update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            value.saturating_sub(members)
+        });
     }
     if SURROGATE_SATURATED_TAGS.remove(tag).is_some() {
         let owner = format!("\0sat\0{tag}");
@@ -4911,12 +4915,16 @@ impl Storage for HybridStorage {
 
     async fn purge(
         &'static self,
-        key: &CompactCacheKey,
+        target: PurgeTarget<'_>,
         _purge_type: PurgeType,
         _trace: &pingora_cache::trace::SpanHandle,
-    ) -> Result<bool> {
+    ) -> Result<PurgeOutcome> {
+        if matches!(target, PurgeTarget::Exact(entry) if entry.entry_id().is_some()) {
+            return Ok(PurgeOutcome::NotFound);
+        }
+        let key = target.key();
         if key.user_tag.is_empty() {
-            return Ok(false);
+            return Ok(PurgeOutcome::NotFound);
         }
 
         let key_str = key.user_tag.as_ref();
@@ -4930,7 +4938,11 @@ impl Storage for HybridStorage {
                     error = %err,
                     "CACHE_PURGE: unable to acquire cross-process purge barrier"
                 );
-                return Ok(false);
+                return Err(Error::because(
+                    ErrorType::FileWriteError,
+                    "failed to acquire cross-process cache purge barrier",
+                    err,
+                ));
             }
         };
         // Keep local PURGE behavior consistent with the RPC key purge: the
@@ -4949,7 +4961,7 @@ impl Storage for HybridStorage {
         for variant in variants {
             self.purge_exact_stored_key_at_version(&variant, None).await;
         }
-        Ok(true)
+        Ok(PurgeOutcome::Purged(None))
     }
 
     async fn update_meta(
@@ -5624,13 +5636,19 @@ mod tests {
             )
             .await,
         ];
-        let compact = CacheKey::new("", base.clone(), base.clone()).to_compact();
+        let compact = CacheKey::new(base.clone(), base.clone()).to_compact();
         let trace = pingora_cache::trace::Span::inactive().handle();
 
         assert!(
-            <HybridStorage as Storage>::purge(storage, &compact, PurgeType::Invalidation, &trace)
-                .await
-                .expect("local purge result")
+            <HybridStorage as Storage>::purge(
+                storage,
+                PurgeTarget::Active(&compact),
+                PurgeType::Invalidation,
+                &trace
+            )
+            .await
+            .expect("local purge result")
+                == PurgeOutcome::Purged(None)
         );
         for (hash, path) in entries {
             assert!(!path.exists(), "local purge left body file for {hash}");
@@ -5733,7 +5751,7 @@ mod tests {
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
-        let key = CacheKey::new("edge", key_str.as_str(), "");
+        let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
         tokio::fs::create_dir_all(path.parent().expect("cache path parent"))
@@ -5782,7 +5800,7 @@ mod tests {
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
-        let key = CacheKey::new("edge", key_str.as_str(), "");
+        let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
         tokio::fs::create_dir_all(path.parent().expect("cache path parent"))
@@ -5838,7 +5856,7 @@ mod tests {
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
         storage.update_config(root.clone(), Vec::new(), true, false);
-        let key = CacheKey::new("edge", key_str.as_str(), "");
+        let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path_by_hash(&hash);
         tokio::fs::create_dir_all(path.parent().unwrap())
@@ -5887,7 +5905,7 @@ mod tests {
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
-        let key = CacheKey::new("edge", key_str.as_str(), "");
+        let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path_by_hash(&hash);
         tokio::fs::create_dir_all(path.parent().unwrap())
@@ -5927,7 +5945,7 @@ mod tests {
         let unique = unique_test_suffix("update-meta-length-mismatch");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
-        let key = CacheKey::new("edge", unique.as_str(), "");
+        let key = CacheKey::new(unique.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
         tokio::fs::create_dir_all(path.parent().expect("cache path parent"))
@@ -6014,7 +6032,7 @@ mod tests {
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
-        let key = CacheKey::new("edge", key_str.as_str(), "");
+        let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
         tokio::fs::create_dir_all(path.parent().expect("cache path parent"))
@@ -6052,7 +6070,7 @@ mod tests {
         let unique = unique_test_suffix("legacy-error-status-l2-hit");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
-        let key = CacheKey::new("edge", unique.as_str(), "");
+        let key = CacheKey::new(unique.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
         tokio::fs::create_dir_all(path.parent().expect("cache path parent"))
@@ -6093,7 +6111,7 @@ mod tests {
         let unique = unique_test_suffix("corrupt-compressed-l2");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
-        let key = CacheKey::new("edge", unique.as_str(), "");
+        let key = CacheKey::new(unique.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
         tokio::fs::create_dir_all(path.parent().expect("cache path parent"))
@@ -6209,8 +6227,11 @@ mod tests {
 
     #[tokio::test]
     async fn delete_clears_metadata_less_l1_when_local_meta_is_missing() {
+        let _state_guard = CACHE_GLOBAL_STATE_LOCK.lock().await;
         let key = unique_test_suffix("delete-l1");
+        let hash = format!("{:x}", md5_legacy::compute(key.as_bytes()));
         let now = crate::utils::time::now_timestamp();
+        let cache_state_version = new_cache_l1_state_version(&hash);
         crate::cache_manager::CACHE.storage.l1.put(
             &key,
             TinyUfoL1Entry {
@@ -6225,20 +6246,20 @@ mod tests {
                 stale_if_error_secs: 0,
                 error_status_allowed: false,
                 metadata_updated_at: now,
-                cache_state_version: 0,
+                cache_state_version,
                 purge_generation: current_cache_purge_generation(),
                 metadata_required: false,
             },
             std::time::Duration::from_secs(60),
         );
 
-        let hash = format!("{:x}", md5_legacy::compute(key.as_bytes()));
         assert!(crate::metrics::storage::get_cache_meta_memory(&hash).is_none());
         assert!(crate::cache_manager::CACHE.storage.l1.get(&key).is_some());
 
         crate::cache_hybrid::invalidate_l1_key(&key);
+        let delete_version = crate::metrics::storage::next_cache_meta_event_version();
         crate::metrics::storage::STORAGE
-            .delete_cache_meta_async_at_version(&hash, 100)
+            .delete_cache_meta_async_at_version(&hash, delete_version)
             .await;
 
         assert!(crate::cache_manager::CACHE.storage.l1.get(&key).is_none());
@@ -6261,7 +6282,7 @@ mod tests {
                 shard_id: None,
                 relative_path: None,
                 root_path: None,
-                event_version: Some(99),
+                event_version: Some(delete_version - 1),
                 updated_at: Some(now),
                 stale_while_revalidate_secs: 0,
                 stale_if_error_secs: 0,
@@ -6280,7 +6301,7 @@ mod tests {
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(FileStorage::new(&root)));
-        let key = CacheKey::new("edge", key_str.as_str(), "");
+        let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
         tokio::fs::create_dir_all(path.parent().expect("cache path parent"))
@@ -6337,7 +6358,7 @@ mod tests {
         let unique = unique_test_suffix("metadata-less-l1-fence");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
-        let key = CacheKey::new("edge", unique.as_str(), "");
+        let key = CacheKey::new(unique.as_str(), "");
         let hash = format!("{:x}", md5_legacy::compute(unique.as_bytes()));
         let state_version = crate::metrics::storage::next_cache_meta_event_version();
         let now = crate::utils::time::now_timestamp();
@@ -6394,7 +6415,7 @@ mod tests {
             .expect("find a Bloom false-negative candidate");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
         let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
-        let key = CacheKey::new("edge", unique.as_str(), "");
+        let key = CacheKey::new(unique.as_str(), "");
         let hash = storage.l2.get_hash(&key);
         let path = storage.l2.get_path_by_hash(&hash);
         tokio::fs::create_dir_all(path.parent().expect("cache path parent"))
@@ -6795,7 +6816,7 @@ mod tests {
         // scenario on that interference instead of weakening the assertion.
         for attempt in 0..8 {
             let attempt_key = format!("{unique}-{attempt}");
-            let first_key = CacheKey::new("edge", attempt_key.as_str(), "");
+            let first_key = CacheKey::new(attempt_key.as_str(), "");
             let mut first = storage
                 .memory_miss_handler(&first_key, &make_meta(), false)
                 .await
@@ -6805,7 +6826,7 @@ mod tests {
                 .await
                 .expect("first body");
 
-            let second_key = CacheKey::new("edge", attempt_key.as_str(), "");
+            let second_key = CacheKey::new(attempt_key.as_str(), "");
             let second = tokio::spawn(async move {
                 storage
                     .memory_miss_handler(&second_key, &make_meta(), false)

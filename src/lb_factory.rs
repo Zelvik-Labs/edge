@@ -463,7 +463,7 @@ fn build_origin_lb(
                     let mut parts = hc.req.uri.clone().into_parts();
                     parts.path_and_query = Some(path_and_query.clone());
                     if let Ok(new_uri) = http::Uri::from_parts(parts) {
-                        hc.req.uri = new_uri;
+                        hc.req.set_uri(new_uri);
                     }
                 }
                 if let Some(timeout) = &hc_cfg.timeout {
@@ -726,7 +726,6 @@ fn backend_from_oss_target(
     }
 }
 
-#[allow(clippy::type_complexity)]
 pub async fn build_lb_blocking(
     server_id: i64,
     rp_cfg: ReverseProxyConfig,
@@ -747,7 +746,6 @@ pub async fn build_lb_blocking(
     .await
 }
 
-#[allow(clippy::type_complexity)]
 pub async fn build_lb_blocking_with_global_http(
     server_id: i64,
     rp_cfg: ReverseProxyConfig,
