@@ -23,8 +23,14 @@ fn lower_hex_eq(digest: &[u8], expected: &str) -> bool {
     true
 }
 
-/// Generates the base64 AES256-CFB encrypted token required by the API node.
-/// Uses deterministic key/IV derivation compatible with the control-plane decodeToken().
+/// Generates the base64 AES256-CFB token of the **upstream parent-node relay**
+/// header (`X-Cloud-Node-Id` + token), the vendored cloud-node face that the
+/// Zelvik control channel does not replace (05-control-channel-protocol.md §9).
+///
+/// It is NOT the Zelvik control-channel credential: that one is the `zvc1`
+/// credential minted by the shared suite (`zelvik_suite::credential`), sent in
+/// the `zelvik-credential` metadata key. The draft-period `nodeid`/`nodeId`/
+/// `type`/`token` metadata keys are deleted with no dual read.
 pub fn generate_token(node_id: &str, secret: &str, node_type: &str) -> anyhow::Result<String> {
     // Key: secret padded/truncated to 32 bytes (matching Go master)
     let mut key = [b' '; 32];

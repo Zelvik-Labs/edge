@@ -751,9 +751,7 @@ impl HttpProxyManager {
         let node_id = self
             .proxy_logic
             .api_config
-            .node_id
-            .parse::<i64>()
-            .unwrap_or(0);
+            .numeric_gcloud_node_id();
 
         let mut scale_retire = std::pin::pin!(async {
             match &scale_state {
@@ -1258,9 +1256,7 @@ impl HttpProxyManager {
         let node_id = self
             .proxy_logic
             .api_config
-            .node_id
-            .parse::<i64>()
-            .unwrap_or(0);
+            .numeric_gcloud_node_id();
         crate::l4_defense::record_l4_event_with_pressure(
             &self.config_store,
             &self.proxy_logic.waf_state,
@@ -1373,9 +1369,7 @@ impl HttpProxyManager {
         let node_id = self
             .proxy_logic
             .api_config
-            .node_id
-            .parse::<i64>()
-            .unwrap_or(0);
+            .numeric_gcloud_node_id();
         crate::special_defense::record_tls_handshake_failure(
             &self.config_store,
             &self.proxy_logic.waf_state,
@@ -1398,9 +1392,7 @@ impl HttpProxyManager {
         let node_id = self
             .proxy_logic
             .api_config
-            .node_id
-            .parse::<i64>()
-            .unwrap_or(0);
+            .numeric_gcloud_node_id();
         crate::l4_defense::record_l4_event(
             &self.config_store,
             &self.proxy_logic.waf_state,
@@ -1421,9 +1413,7 @@ impl HttpProxyManager {
         let node_id = self
             .proxy_logic
             .api_config
-            .node_id
-            .parse::<i64>()
-            .unwrap_or(0);
+            .numeric_gcloud_node_id();
         crate::l4_defense::record_l4_event_weighted_with_pressure(crate::l4_defense::L4EventArgs {
             config_store: &self.config_store,
             waf_state: &self.proxy_logic.waf_state,
@@ -1446,9 +1436,7 @@ impl HttpProxyManager {
         let node_id = self
             .proxy_logic
             .api_config
-            .node_id
-            .parse::<i64>()
-            .unwrap_or(0);
+            .numeric_gcloud_node_id();
         crate::special_defense::record_special_defense_hit(
             &self.proxy_logic.waf_state,
             node_id,
@@ -1709,9 +1697,7 @@ impl HttpProxyManager {
                 &self.proxy_logic.waf_state,
                 self.proxy_logic
                     .api_config
-                    .node_id
-                    .parse::<i64>()
-                    .unwrap_or(0),
+                    .numeric_gcloud_node_id(),
                 client_addr.ip(),
                 || {
                     format!(
@@ -2710,9 +2696,7 @@ async fn process_http1_stream(args: ProcessHttp1StreamArgs) {
         let node_id = manager
             .proxy_logic
             .api_config
-            .node_id
-            .parse::<i64>()
-            .unwrap_or(0);
+            .numeric_gcloud_node_id();
         crate::l4_defense::record_completed_handshake_event(
             &manager.config_store,
             &manager.proxy_logic.waf_state,

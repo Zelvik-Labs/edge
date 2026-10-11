@@ -37,15 +37,19 @@ fn real_api_config_from_env() -> anyhow::Result<Option<ApiConfig>> {
                 .map(str::to_string)
                 .collect::<Vec<_>>()
         })?;
-    let node_id = std::env::var("ZELVIK_EDGE_TEST_NODE_ID")?;
+    let instance_id = std::env::var("ZELVIK_EDGE_TEST_INSTANCE_ID")?;
     let secret = std::env::var("ZELVIK_EDGE_TEST_SECRET")?;
+    let gcloud_node_id = std::env::var("ZELVIK_EDGE_TEST_NODE_ID").unwrap_or_default();
+    let comm_mode = std::env::var("ZELVIK_EDGE_TEST_COMM_MODE").unwrap_or_default();
 
     Ok(Some(ApiConfig {
         rpc_tls: Default::default(),
         rpc_endpoints: endpoints,
         rpc_disable_update: false,
-        node_id,
+        instance_id,
         secret,
+        comm_mode,
+        gcloud_node_id,
         access_log_pipeline: Default::default(),
         relay: Default::default(),
         kernel_tuning: Default::default(),

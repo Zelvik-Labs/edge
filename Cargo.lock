@@ -5347,6 +5347,7 @@ dependencies = [
  "xsk-rs",
  "zelvik-edge-transport",
  "zelvik-edge-xdp-common",
+ "zelvik-suite",
  "zstd",
 ]
 
@@ -5362,6 +5363,25 @@ name = "zelvik-edge-xdp-common"
 version = "0.1.0"
 dependencies = [
  "aya",
+]
+
+[[package]]
+name = "zelvik-suite"
+version = "26.10.2"
+dependencies = [
+ "base64 0.23.1",
+ "hmac",
+ "prost",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.20",
+ "tokio",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tracing",
 ]
 
 [[package]]

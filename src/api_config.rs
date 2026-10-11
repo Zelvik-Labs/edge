@@ -25,10 +25,31 @@ pub struct ApiConfig {
     pub rpc_endpoints: Vec<String>,
     #[serde(rename = "rpc.disableUpdate", default)]
     pub rpc_disable_update: bool,
-    #[serde(rename = "nodeId")]
-    pub node_id: String,
+    /// Server-generated edge instance id: `nd_` followed by 10 hex characters.
+    /// It is the control-channel identity: the `zelvik-instance` metadata, the
+    /// credential `iid` claim and the NodeControl node_id all carry it. A client
+    /// never chooses it.
+    #[serde(rename = "instanceId")]
+    pub instance_id: String,
+    /// The 32-byte credential key, hex-encoded, exactly as the enrollment
+    /// response returned it. The `zvc1` credential is re-minted for every RPC.
+    ///
+    /// NOTE (open interface question, recorded not hidden): the same secret is
+    /// also the HMAC key material of the UAM/WAF challenge tokens, which are
+    /// signed with the hex rendering of this value. Both sides must derive those
+    /// bytes identically; 05/04 do not fix the derivation yet.
     #[serde(rename = "secret")]
     pub secret: String,
+    /// Registered transport policy: `plaintext` | `tls` | `mtls`. The API
+    /// compares it with the registered instance record and computes the trust
+    /// tier server-side; the node never asserts its own tier.
+    #[serde(rename = "commMode", default)]
+    pub comm_mode: String,
+    /// The upstream gcloud face's numeric node id. It is **not** an
+    /// authentication identity any more: it only travels in the vendored gcloud
+    /// request payloads and the L1->L2 parent relay header (05 §9).
+    #[serde(rename = "gcloudNodeId", default)]
+    pub gcloud_node_id: String,
     #[serde(rename = "accessLogPipeline", default)]
     pub access_log_pipeline: AccessLogPipelineConfig,
     #[serde(rename = "relay", default)]
@@ -316,6 +337,66 @@ fn default_kernel_tuning_enabled() -> bool {
 }
 
 impl ApiConfig {
+    /// The protocol role of this process. Edge nodes are always `edge`.
+    pub fn instance_kind(&self) -> zelvik_suite::credential::Kind {
+        zelvik_suite::credential::Kind::Edge
+    }
+
+    /// The decoded 32-byte credential key.
+    pub fn credential_secret(&self) -> anyhow::Result<Vec<u8>> {
+        let secret = zelvik_suite::credential::decode_secret(self.secret.trim())
+            .map_err(|e| anyhow::anyhow!("secret is not a 32-byte hex credential key: {e}"))?;
+        Ok(secret.to_vec())
+    }
+
+    /// The registered transport policy, parsed by the shared suite.
+    pub fn comm_mode(&self) -> anyhow::Result<zelvik_suite::CommMode> {
+        let raw = if self.comm_mode.trim().is_empty() {
+            "plaintext"
+        } else {
+            self.comm_mode.trim()
+        };
+        zelvik_suite::CommMode::parse(raw)
+            .map_err(|e| anyhow::anyhow!("commMode is invalid: {e}"))
+    }
+
+    /// The upstream gcloud numeric node id (0 when unset). Never an identity.
+    pub fn numeric_gcloud_node_id(&self) -> i64 {
+        self.gcloud_node_id.trim().parse::<i64>().unwrap_or(0)
+    }
+
+    /// The shared suite client configuration of this node.
+    pub fn channel_config(&self) -> anyhow::Result<zelvik_suite::channel::Config> {
+        let endpoint = self
+            .rpc_endpoints
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("no 'rpc.endpoints' configured"))?
+            .clone();
+        let mut cfg = zelvik_suite::channel::Config::new(
+            endpoint,
+            self.instance_id.trim(),
+            self.instance_kind(),
+            self.credential_secret()?,
+        );
+        cfg.comm_mode = self.comm_mode()?;
+        cfg.tls = zelvik_suite::channel::TlsConfig {
+            ca_file: self.rpc_tls.ca_file.as_ref().map(|p| p.display().to_string()),
+            cert_file: self.rpc_tls.cert_file.as_ref().map(|p| p.display().to_string()),
+            key_file: self.rpc_tls.key_file.as_ref().map(|p| p.display().to_string()),
+            domain_name: self.rpc_tls.server_name.clone(),
+        };
+        cfg.validate()
+            .map_err(|e| anyhow::anyhow!("instance identity is invalid: {e}"))?;
+        Ok(cfg)
+    }
+
+    /// The credential interceptor every control-plane client stub installs. It
+    /// injects the four `zelvik-*` metadata keys and re-mints the credential for
+    /// each RPC; no call site touches metadata by hand.
+    pub fn credential_interceptor(&self) -> anyhow::Result<zelvik_suite::channel::CredentialInterceptor> {
+        Ok(zelvik_suite::channel::CredentialInterceptor::new(&self.channel_config()?))
+    }
+
     pub fn default_paths() -> Vec<PathBuf> {
         crate::paths::NodePaths::current().api_config_candidates()
     }
@@ -347,11 +428,19 @@ impl ApiConfig {
         if config.rpc_endpoints.is_empty() {
             anyhow::bail!("no valid 'rpc.endpoints' in {:?}", path.as_ref());
         }
-        if config.node_id.is_empty() {
-            anyhow::bail!("'nodeId' required in {:?}", path.as_ref());
+        if config.instance_id.is_empty() {
+            anyhow::bail!("'instanceId' required in {:?}", path.as_ref());
         }
         if config.secret.is_empty() {
             anyhow::bail!("'secret' required in {:?}", path.as_ref());
+        }
+        // Fail closed on the identity material: a typo must stop the node at
+        // startup, never silently fall back to a legacy identity.
+        config.channel_config()?;
+        if config.gcloud_node_id.is_empty() {
+            tracing::warn!(
+                "'gcloudNodeId' is empty: the upstream gcloud payloads will carry node id 0"
+            );
         }
         Self::set_runtime_rpc_endpoints(config.rpc_endpoints.clone())?;
         LOCAL_CACHE_SENDFILE.store(
@@ -542,8 +631,9 @@ mod tests {
             r#"
 rpc.endpoints:
   - https://api.example.com
-nodeId: "1"
-secret: "secret"
+instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+gcloudNodeId: "1"
 "#,
         )
         .unwrap();
@@ -557,8 +647,9 @@ secret: "secret"
             r#"
 rpc.endpoints:
   - https://api.example.com
-nodeId: "1"
-secret: "secret"
+instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+gcloudNodeId: "1"
 "#,
         )
         .unwrap();
@@ -572,8 +663,9 @@ secret: "secret"
             r#"
 rpc.endpoints:
   - https://api.example.com
-nodeId: "1"
-secret: "secret"
+instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+gcloudNodeId: "1"
 cache:
   sendfile: true
 "#,
@@ -589,8 +681,9 @@ cache:
             r#"
 rpc.endpoints:
   - https://api.example.com
-nodeId: "1"
-secret: "secret"
+instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+gcloudNodeId: "1"
 kernelTuning:
   enabled: false
 "#,
@@ -614,7 +707,7 @@ kernelTuning:
         let local = dir.join("api.yaml");
         fs::write(
             &local,
-            "nodeId: '1'\nsecret: fixture\nrpc.endpoints: ['http://127.0.0.1:8001']\n",
+            "instanceId: 'nd_0123456789'\nsecret: '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'\nrpc.endpoints: ['http://127.0.0.1:8001']\n",
         )
         .unwrap();
         (dir, local)
@@ -678,8 +771,9 @@ kernelTuning:
             r#"
 rpc.endpoints:
   - https://api.example.com
-nodeId: "1"
-secret: "secret"
+instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+gcloudNodeId: "1"
 accessLogPipeline:
   queueCapacity: 4096
   batchSize: 256
@@ -690,8 +784,9 @@ accessLogPipeline:
             r#"
 rpc.endpoints:
   - https://api.example.com
-nodeId: "1"
-secret: "secret"
+instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+gcloudNodeId: "1"
 accessLogPipeline:
   queueCapacity: 8192
   batchSize: 256
@@ -708,7 +803,7 @@ accessLogPipeline:
     #[test]
     fn access_log_auto_defaults_do_not_drift() {
         let _: ApiConfig = serde_yaml::from_str(
-            "nodeId: '1'\nsecret: fixture\nrpc.endpoints: ['http://127.0.0.1:8001']\n",
+            "instanceId: 'nd_0123456789'\nsecret: '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'\nrpc.endpoints: ['http://127.0.0.1:8001']\n",
         )
         .unwrap();
         assert_eq!(
@@ -930,7 +1025,7 @@ mod pushed_runtime_tests {
         let local = dir.join("api.yaml");
         fs::write(
             &local,
-            "nodeId: '1'\nsecret: fixture\nrpc.endpoints: ['http://127.0.0.1:8001']\n",
+            "instanceId: 'nd_0123456789'\nsecret: '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'\nrpc.endpoints: ['http://127.0.0.1:8001']\n",
         )
         .unwrap();
         let push = NodeApiPush {
@@ -1007,8 +1102,9 @@ mod update_endpoint_tests {
             r#"
 rpc.endpoints:
   - https://api.example.com:9090
-nodeId: "1"
-secret: "secret"
+instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+gcloudNodeId: "1"
 "#,
         )
         .unwrap();

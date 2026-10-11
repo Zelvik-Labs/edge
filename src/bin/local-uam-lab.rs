@@ -33,7 +33,6 @@ use tracing_subscriber::EnvFilter;
 const DEFAULT_PROXY_PORT: u16 = 19080;
 const DEFAULT_ORIGIN_PORT: u16 = 19081;
 const INDEX_HOST: &str = "lab.localhost";
-const SECRET: &str = "local-uam-lab-secret";
 
 #[derive(Clone, Copy)]
 enum LabKind {
@@ -170,8 +169,10 @@ fn main() -> anyhow::Result<()> {
         rpc_tls: Default::default(),
         rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
         rpc_disable_update: true,
-        node_id: "1".to_string(),
-        secret: SECRET.to_string(),
+        instance_id: "nd_0123456789".to_string(),
+        secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".to_string(),
+        comm_mode: String::new(),
+        gcloud_node_id: "1".to_string(),
         access_log_pipeline: AccessLogPipelineConfig::default(),
         relay: Default::default(),
         kernel_tuning: Default::default(),

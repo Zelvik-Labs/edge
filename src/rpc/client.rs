@@ -1,10 +1,8 @@
 #![allow(clippy::type_complexity, clippy::result_large_err)]
 
 use crate::api_config::ApiConfig;
-use crate::auth::generate_token;
 use crate::pb;
 use tonic::codec::CompressionEncoding;
-use tonic::{Request, Status};
 
 use arc_swap::ArcSwap;
 use std::sync::Arc;
@@ -192,7 +190,7 @@ impl RpcClient {
 
         let mut service = pb::ping_service_client::PingServiceClient::with_interceptor(
             channel,
-            Self::interceptor(api_config, None),
+            Self::interceptor(api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -250,45 +248,14 @@ impl RpcClient {
         }
     }
 
-    fn interceptor(
-        api_config: &ApiConfig,
-        node_type: Option<&'static str>,
-    ) -> impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static {
-        let node_id = api_config.node_id.clone();
-        let secret = api_config.secret.clone();
-        let type_str = node_type.unwrap_or("node");
-        move |mut req: Request<()>| {
-            // Control-plane RPC authentication is upstream-compatible: the token
-            // role must remain "node". `type_str` is only an optional metadata
-            // hint for newer API nodes.
-            let token = generate_token(&node_id, &secret, "node").unwrap_or_default();
-
-            let val = node_id
-                .parse()
-                .unwrap_or(tonic::metadata::MetadataValue::from_static("0"));
-
-            // Standard lowercase keys (canonical gRPC)
-            req.metadata_mut().insert("nodeid", val.clone());
-            if node_type.is_some() {
-                req.metadata_mut().insert(
-                    "type",
-                    tonic::metadata::MetadataValue::from_static(type_str),
-                );
-            }
-
-            // Go-style CamelCase key
-            if let Ok(key) = tonic::metadata::MetadataKey::from_bytes(b"nodeId") {
-                req.metadata_mut().insert(key, val);
-            }
-
-            req.metadata_mut().insert(
-                "token",
-                token
-                    .parse()
-                    .unwrap_or(tonic::metadata::MetadataValue::from_static("")),
-            );
-            Ok(req)
-        }
+    /// The credential interceptor of every control-plane client stub: the shared
+    /// suite injects the four `zelvik-*` metadata keys and re-mints the `zvc1`
+    /// credential for each RPC. The draft-period `nodeid`/`nodeId`/`type`/
+    /// `token` keys are deleted with no dual read.
+    fn interceptor(api_config: &ApiConfig) -> zelvik_suite::channel::CredentialInterceptor {
+        api_config
+            .credential_interceptor()
+            .expect("control-plane identity must be valid before an RPC client is built")
     }
 
     #[cfg(feature = "node-control")]
@@ -297,12 +264,12 @@ impl RpcClient {
     ) -> crate::node_control::proto::node_control_client::NodeControlClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         crate::node_control::proto::node_control_client::NodeControlClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -315,12 +282,12 @@ impl RpcClient {
     ) -> pb::node_service_client::NodeServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::node_service_client::NodeServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -333,12 +300,12 @@ impl RpcClient {
     ) -> pb::node_service_client::NodeServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::node_service_client::NodeServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, Some("node")),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -351,12 +318,12 @@ impl RpcClient {
     ) -> pb::node_service_client::NodeServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::node_service_client::NodeServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .max_decoding_message_size(RPC_NODE_STREAM_MESSAGE_BYTES)
         .max_encoding_message_size(RPC_NODE_STREAM_MESSAGE_BYTES)
@@ -367,12 +334,12 @@ impl RpcClient {
     ) -> pb::telemetry_service_client::TelemetryServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::telemetry_service_client::TelemetryServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, Some("node")),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -384,12 +351,12 @@ impl RpcClient {
     ) -> pb::server_service_client::ServerServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::server_service_client::ServerServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -402,12 +369,12 @@ impl RpcClient {
     ) -> pb::server_service_client::ServerServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::server_service_client::ServerServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, Some("node")),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -420,12 +387,12 @@ impl RpcClient {
     ) -> pb::node_task_service_client::NodeTaskServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::node_task_service_client::NodeTaskServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -438,12 +405,12 @@ impl RpcClient {
     ) -> pb::user_service_client::UserServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::user_service_client::UserServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -456,12 +423,12 @@ impl RpcClient {
     ) -> pb::node_value_service_client::NodeValueServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::node_value_service_client::NodeValueServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -474,12 +441,12 @@ impl RpcClient {
     ) -> pb::node_value_service_client::NodeValueServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::node_value_service_client::NodeValueServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, Some("node")),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -492,12 +459,12 @@ impl RpcClient {
     ) -> pb::node_log_service_client::NodeLogServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::node_log_service_client::NodeLogServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -510,12 +477,12 @@ impl RpcClient {
     ) -> pb::server_bandwidth_stat_service_client::ServerBandwidthStatServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::server_bandwidth_stat_service_client::ServerBandwidthStatServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -528,12 +495,12 @@ impl RpcClient {
     ) -> pb::server_daily_stat_service_client::ServerDailyStatServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::server_daily_stat_service_client::ServerDailyStatServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -546,12 +513,12 @@ impl RpcClient {
     ) -> pb::metric_stat_service_client::MetricStatServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::metric_stat_service_client::MetricStatServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -564,12 +531,12 @@ impl RpcClient {
     ) -> pb::ip_item_service_client::IpItemServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::ip_item_service_client::IpItemServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -582,12 +549,12 @@ impl RpcClient {
     ) -> pb::ip_item_service_client::IpItemServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::ip_item_service_client::IpItemServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, Some("node")),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -600,12 +567,12 @@ impl RpcClient {
     ) -> pb::ip_list_service_client::IpListServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::ip_list_service_client::IpListServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -618,12 +585,12 @@ impl RpcClient {
     ) -> pb::ip_list_service_client::IpListServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::ip_list_service_client::IpListServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, Some("node")),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -636,12 +603,12 @@ impl RpcClient {
     ) -> pb::server_deleted_content_service_client::ServerDeletedContentServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::server_deleted_content_service_client::ServerDeletedContentServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -654,12 +621,12 @@ impl RpcClient {
     ) -> pb::api_node_service_client::ApiNodeServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::api_node_service_client::ApiNodeServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -672,12 +639,12 @@ impl RpcClient {
     ) -> pb::firewall_service_client::FirewallServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::firewall_service_client::FirewallServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -690,12 +657,12 @@ impl RpcClient {
     ) -> pb::acme_authentication_service_client::AcmeAuthenticationServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::acme_authentication_service_client::AcmeAuthenticationServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -708,12 +675,12 @@ impl RpcClient {
     ) -> pb::ip_library_artifact_service_client::IpLibraryArtifactServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::ip_library_artifact_service_client::IpLibraryArtifactServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -726,12 +693,12 @@ impl RpcClient {
     ) -> pb::file_chunk_service_client::FileChunkServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::file_chunk_service_client::FileChunkServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -744,12 +711,12 @@ impl RpcClient {
     ) -> pb::ssl_cert_service_client::SslCertServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::ssl_cert_service_client::SslCertServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -762,12 +729,12 @@ impl RpcClient {
     ) -> pb::http_cache_task_key_service_client::HttpCacheTaskKeyServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::http_cache_task_key_service_client::HttpCacheTaskKeyServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -780,12 +747,12 @@ impl RpcClient {
     ) -> pb::ping_service_client::PingServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::ping_service_client::PingServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -798,12 +765,12 @@ impl RpcClient {
     ) -> pb::plan_service_client::PlanServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::plan_service_client::PlanServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -816,12 +783,12 @@ impl RpcClient {
     ) -> pb::updating_server_list_service_client::UpdatingServerListServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::updating_server_list_service_client::UpdatingServerListServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -834,12 +801,12 @@ impl RpcClient {
     ) -> pb::authority_key_service_client::AuthorityKeyServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::authority_key_service_client::AuthorityKeyServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -852,12 +819,12 @@ impl RpcClient {
     ) -> pb::client_agent_ip_service_client::ClientAgentIpServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::client_agent_ip_service_client::ClientAgentIpServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -870,12 +837,12 @@ impl RpcClient {
     ) -> pb::file_service_client::FileServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::file_service_client::FileServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -888,12 +855,12 @@ impl RpcClient {
     ) -> pb::script_service_client::ScriptServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::script_service_client::ScriptServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -910,12 +877,12 @@ impl RpcClient {
     ) -> pb::server_event_service_client::ServerEventServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::server_event_service_client::ServerEventServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -928,12 +895,12 @@ impl RpcClient {
     ) -> pb::server_top_ip_stat_service_client::ServerTopIpStatServiceClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
-            impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone + Send + 'static,
+            zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
         pb::server_top_ip_stat_service_client::ServerTopIpStatServiceClient::with_interceptor(
             self.channel.clone(),
-            Self::interceptor(&self.api_config, None),
+            Self::interceptor(&self.api_config),
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -1063,8 +1030,10 @@ impl SharedRpcClient {
             rpc_tls: Default::default(),
             rpc_endpoints: new_endpoints.to_vec(),
             rpc_disable_update: false,
-            node_id: "1".into(),
-            secret: "test".into(),
+            instance_id: "nd_0123456789".into(),
+            secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".into(),
+            comm_mode: String::new(),
+            gcloud_node_id: "1".into(),
             access_log_pipeline: Default::default(),
             relay: Default::default(),
             kernel_tuning: Default::default(),

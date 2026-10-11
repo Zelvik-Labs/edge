@@ -638,9 +638,7 @@ impl Http3ProxyManager {
         let node_id = self
             .proxy_logic
             .api_config
-            .node_id
-            .parse::<i64>()
-            .unwrap_or(0);
+            .numeric_gcloud_node_id();
         crate::l4_defense::record_l4_event(
             &self.config_store,
             &self.proxy_logic.waf_state,
@@ -944,8 +942,10 @@ mod tests {
             rpc_tls: Default::default(),
             rpc_endpoints: Vec::new(),
             rpc_disable_update: true,
-            node_id: "1".to_string(),
-            secret: "h3-test".to_string(),
+            instance_id: "nd_0123456789".to_string(),
+            secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".to_string(),
+            comm_mode: String::new(),
+            gcloud_node_id: "1".to_string(),
             access_log_pipeline: crate::api_config::AccessLogPipelineConfig::default(),
             relay: crate::api_config::RelayConfig::default(),
             kernel_tuning: crate::api_config::KernelTuningConfig::default(),

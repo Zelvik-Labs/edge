@@ -2032,7 +2032,7 @@ impl EdgeProxy {
             "documentRoot".to_string(),
             Self::web_document_root(ctx.server.as_deref()),
         );
-        values.insert("node.id".to_string(), self.api_config.node_id.clone());
+        values.insert("node.id".to_string(), self.api_config.instance_id.clone());
         values.insert("node.name".to_string(), HOSTNAME.clone());
         values.insert("node.role".to_string(), String::new());
         values.insert("product.name".to_string(), self.product_name(ctx));
@@ -2539,7 +2539,7 @@ impl EdgeProxy {
         error: &Error,
     ) {
         let (ip, _, raw_addr) = Self::http_session_socket_client_ip(session);
-        let node_id = self.api_config.node_id.parse::<i64>().unwrap_or(0);
+        let node_id = self.api_config.numeric_gcloud_node_id();
         let protocol = if Self::is_tls_http_session(session) {
             "https"
         } else {
@@ -2572,7 +2572,7 @@ impl EdgeProxy {
         else {
             return;
         };
-        let node_id = self.api_config.node_id.parse::<i64>().unwrap_or(0);
+        let node_id = self.api_config.numeric_gcloud_node_id();
         crate::special_defense::record_special_defense_hit(
             &self.waf_state,
             node_id,
@@ -2959,7 +2959,7 @@ impl EdgeProxy {
             group_id,
             set_id,
         } = args;
-        let node_id = self.api_config.node_id.parse::<i64>().unwrap_or(0);
+        let node_id = self.api_config.numeric_gcloud_node_id();
         let (source_url, source_user_agent) = match session {
             Some(session) => {
                 let source_url = ctx
@@ -8667,7 +8667,7 @@ impl ProxyHttp for EdgeProxy {
         let (reason, defense) = Self::classify_downstream_parse_error(error);
         if matches!(error.etype(), ReadTimedout) {
             let (ip, _, raw_addr) = Self::http_session_socket_client_ip(session);
-            let node_id = self.api_config.node_id.parse::<i64>().unwrap_or(0);
+            let node_id = self.api_config.numeric_gcloud_node_id();
             if Self::is_tls_http_session(session) {
                 crate::l4_defense::record_completed_handshake_event(
                     &self.config,
@@ -8713,7 +8713,7 @@ impl ProxyHttp for EdgeProxy {
             crate::l4_defense::record_completed_handshake_event(
                 &self.config,
                 &self.waf_state,
-                self.api_config.node_id.parse::<i64>().unwrap_or(0),
+                self.api_config.numeric_gcloud_node_id(),
                 ip,
                 kind,
                 2,
@@ -10537,7 +10537,7 @@ impl ProxyHttp for EdgeProxy {
                 write!(
                     &mut x_cache,
                     "; node={}; server={}",
-                    self.api_config.node_id,
+                    self.api_config.instance_id,
                     ctx.server
                         .as_ref()
                         .map(|server| server.numeric_id())
@@ -10841,7 +10841,7 @@ impl ProxyHttp for EdgeProxy {
 
         // 2. L1 Logic: Inject Identity headers when talking to L2
         if ctx.node_level == 1 && ctx.upstream_is_parent {
-            let node_id = &self.api_config.node_id;
+            let node_id = &self.api_config.gcloud_node_id;
             let secret = &self.api_config.secret;
 
             // 2.1 Identification

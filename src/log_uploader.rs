@@ -1,5 +1,4 @@
 use crate::api_config::{AccessLogPipelineConfig, ApiConfig};
-use crate::auth::generate_token;
 use crate::pb;
 use crate::rpc::client::RPC_MAX_MESSAGE_BYTES;
 use prost::Message;
@@ -449,27 +448,12 @@ impl AccessLogUploadWorker {
     ) -> pb::http_access_log_service_client::HttpAccessLogServiceClient<
         tonic::service::interceptor::InterceptedService<Channel, impl tonic::service::Interceptor>,
     > {
-        let node_id = self.api_config.node_id.clone();
-        let secret = self.api_config.secret.clone();
+        // The shared suite interceptor owns the identity metadata and re-mints
+        // the credential for every upload.
+        let interceptor = self.api_config.credential_interceptor().expect("control-plane identity must be valid before an upload client is built");
         pb::http_access_log_service_client::HttpAccessLogServiceClient::with_interceptor(
             channel,
-            move |mut req: tonic::Request<()>| {
-                let token = generate_token(&node_id, &secret, "node").unwrap_or_default();
-                let val = node_id
-                    .parse()
-                    .unwrap_or(tonic::metadata::MetadataValue::from_static("0"));
-                req.metadata_mut().insert("nodeid", val.clone());
-                if let Ok(key) = tonic::metadata::MetadataKey::from_bytes(b"nodeId") {
-                    req.metadata_mut().insert(key, val);
-                }
-                req.metadata_mut().insert(
-                    "token",
-                    token
-                        .parse()
-                        .unwrap_or(tonic::metadata::MetadataValue::from_static("")),
-                );
-                Ok(req)
-            },
+            interceptor,
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -487,8 +471,10 @@ mod tests {
             rpc_tls: Default::default(),
             rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
             rpc_disable_update: false,
-            node_id: "1".to_string(),
-            secret: "secret".to_string(),
+            instance_id: "nd_0123456789".to_string(),
+            secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".to_string(),
+            comm_mode: String::new(),
+            gcloud_node_id: "1".to_string(),
             access_log_pipeline: Default::default(),
             relay: Default::default(),
             kernel_tuning: Default::default(),
@@ -715,28 +701,11 @@ impl NodeLogUploader {
             return;
         };
 
-        let node_id = self.api_config.node_id.clone();
-        let secret = self.api_config.secret.clone();
+        let interceptor = self.api_config.credential_interceptor().expect("control-plane identity must be valid before an upload client is built");
 
         let mut client = pb::node_log_service_client::NodeLogServiceClient::with_interceptor(
             channel,
-            move |mut req: tonic::Request<()>| {
-                let token = generate_token(&node_id, &secret, "node").unwrap_or_default();
-                let val = node_id
-                    .parse()
-                    .unwrap_or(tonic::metadata::MetadataValue::from_static("0"));
-                req.metadata_mut().insert("nodeid", val.clone());
-                if let Ok(key) = tonic::metadata::MetadataKey::from_bytes(b"nodeId") {
-                    req.metadata_mut().insert(key, val);
-                }
-                req.metadata_mut().insert(
-                    "token",
-                    token
-                        .parse()
-                        .unwrap_or(tonic::metadata::MetadataValue::from_static("")),
-                );
-                Ok(req)
-            },
+            interceptor,
         )
         .send_compressed(CompressionEncoding::Gzip)
         .accept_compressed(CompressionEncoding::Gzip)
@@ -840,8 +809,10 @@ mod node_log_uploader_tests {
             rpc_tls: Default::default(),
             rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
             rpc_disable_update: false,
-            node_id: "1".to_string(),
-            secret: "secret".to_string(),
+            instance_id: "nd_0123456789".to_string(),
+            secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".to_string(),
+            comm_mode: String::new(),
+            gcloud_node_id: "1".to_string(),
             access_log_pipeline: Default::default(),
             relay: Default::default(),
             kernel_tuning: Default::default(),

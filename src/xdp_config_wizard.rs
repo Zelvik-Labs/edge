@@ -274,7 +274,7 @@ mod tests {
         let path = dir.join("api_node.yaml");
         std::fs::write(
             &path,
-            "nodeId: 3\nxdp:\n  enabled: false\n  attachMode: skb\n  interfaces:\n    - name: eth0\n      mode: proxy\n",
+            "instanceId: nd_0123456789\nsecret: 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\ngcloudNodeId: 3\nxdp:\n  enabled: false\n  attachMode: skb\n  interfaces:\n    - name: eth0\n      mode: proxy\n",
         )
         .unwrap();
         super::merge_xdp_enabled(&path, true).unwrap();

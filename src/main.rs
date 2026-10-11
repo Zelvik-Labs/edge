@@ -3254,7 +3254,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     // 1. Load API Config
     let api_config = ApiConfig::load_default().expect("Failed to load configs/api_node.yaml");
     zelvik_edge::tcp_proxy::configure_relay_from_api(&api_config);
-    let numeric_node_id = api_config.node_id.parse::<i64>().unwrap_or(0);
+    let numeric_node_id = api_config.numeric_gcloud_node_id();
     logging::set_numeric_node_id(numeric_node_id);
     let access_log_pipeline = api_config.access_log_pipeline.normalized();
     let (log_tx, log_rx) = tokio::sync::mpsc::channel(access_log_pipeline.queue_capacity);
