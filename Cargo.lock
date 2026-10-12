@@ -5368,6 +5368,7 @@ dependencies = [
 [[package]]
 name = "zelvik-suite"
 version = "26.10.2"
+source = "git+https://github.com/Zelvik-Labs/protocol?tag=rust%2Fv0.0.1#987809d18ddf003042fba85d07b5aaa509e7115a"
 dependencies = [
  "base64 0.23.1",
  "hmac",

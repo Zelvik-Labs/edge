@@ -80,7 +80,12 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 # Shared control-channel suite (L1-L6): zvc1 credentials, the zelvik-* metadata
 # interceptor, the nine-step server pipeline and the cursor rules.
-zelvik-suite = { path = "../protocol/suite/rust" }
+#
+# Pinned by the draft tag `rust/v0.0.1` of the private Zelvik-Labs/protocol
+# repository (never `main`). Fetching it needs git https credentials for
+# github.com (`gh auth setup-git`). `protocol/suite/rust` is the same crate, so
+# the tag is the published form of what used to be the local path dependency.
+zelvik-suite = { git = "https://github.com/Zelvik-Labs/protocol", tag = "rust/v0.0.1" }
 urlencoding = "2.1.3"
 uuid = { version = "1.24.1", features = ["v4"] }
 webp = "0.3.1"
