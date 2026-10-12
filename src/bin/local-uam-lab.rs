@@ -262,12 +262,16 @@ fn main() -> anyhow::Result<()> {
         None,
     ));
 
+    let challenge_key = api_config
+        .challenge_key()
+        .expect("dummy credential secret derives a challenge key");
     let proxy_logic = EdgeProxy {
         config: config_store.clone(),
         waf_state,
         api_config: api_config.clone(),
+        challenge_key,
         cert_selector: cert_selector.clone(),
-        waf_verifier: Arc::new(WafVerifier::new(api_config.secret.as_str())),
+        waf_verifier: Arc::new(WafVerifier::new(&challenge_key)),
         tls_downstream: false,
     };
 

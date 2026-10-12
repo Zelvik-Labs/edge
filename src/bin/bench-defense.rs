@@ -32,7 +32,6 @@ use serde_json::{Value, json};
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
-const SECRET: &str = "bench-defense-secret";
 const CLUSTER_ID: i64 = 1;
 const DEFENSE_POLICY_ID: i64 = 9001;
 
@@ -298,12 +297,16 @@ fn main() -> anyhow::Result<()> {
         None,
     ));
 
+    let challenge_key = api_config
+        .challenge_key()
+        .expect("dummy credential secret derives a challenge key");
     let proxy_logic = EdgeProxy {
         config: config_store.clone(),
         waf_state: waf_state.clone(),
         api_config: api_config.clone(),
+        challenge_key,
         cert_selector: cert_selector.clone(),
-        waf_verifier: Arc::new(WafVerifier::new(SECRET)),
+        waf_verifier: Arc::new(WafVerifier::new(&challenge_key)),
         tls_downstream: false,
     };
 

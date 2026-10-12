@@ -3,6 +3,10 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// The D7 challenge key: `generate_token` is keyed by the derived 32-byte value
+/// (04 §2.4 / 05 §4.6), never by the raw credential secret.
+const CHALLENGE_KEY: [u8; 32] = [0x11; 32];
+
 fn bench_generate_token(c: &mut Criterion) {
     let mut group = c.benchmark_group("auth_token_generation");
 
@@ -10,21 +14,21 @@ fn bench_generate_token(c: &mut Criterion) {
         b.iter(|| {
             generate_token(
                 black_box("node-abc123"),
-                black_box("secret-key-32bytes!!!"),
+                black_box(&CHALLENGE_KEY),
                 black_box("edge"),
             )
         })
     });
 
-    group.bench_function("generate_token_short_secret", |b| {
-        b.iter(|| generate_token(black_box("n1"), black_box("sh0rt"), black_box("edge")))
+    group.bench_function("generate_token_short_node_id", |b| {
+        b.iter(|| generate_token(black_box("n1"), black_box(&CHALLENGE_KEY), black_box("edge")))
     });
 
-    group.bench_function("generate_token_long_inputs", |b| {
+    group.bench_function("generate_token_long_node_id", |b| {
         b.iter(|| {
             generate_token(
                 black_box("node-very-long-id-0123456789-abcdef"),
-                black_box("super-secret-key-that-is-very-long-0123456789-abcdefghijklmnop"),
+                black_box(&CHALLENGE_KEY),
                 black_box("edge"),
             )
         })

@@ -3535,13 +3535,20 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     my_server.bootstrap();
 
     // 5. Setup Dynamic HTTP/HTTPS Proxy Manager
+    // The challenge / relay-token HMAC key is derived once, fail-closed, from the
+    // credential secret (04 §2.4 / 05 §4.6, D7); nothing keys those tokens with
+    // the raw secret.
+    let challenge_key = api_config_arc.challenge_key().map_err(|error| {
+        anyhow::anyhow!("derive the challenge key from the credential secret: {error}")
+    })?;
     let proxy_logic = EdgeProxy {
         config: config_store.clone(),
         waf_state: waf_state.clone(),
         api_config: api_config_arc.clone(),
+        challenge_key,
         cert_selector: cert_selector.clone(),
         waf_verifier: Arc::new(zelvik_edge::firewall::verifier::WafVerifier::new(
-            &api_config_arc.secret,
+            &challenge_key,
         )),
         tls_downstream: false,
     };

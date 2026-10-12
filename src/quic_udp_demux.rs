@@ -2289,13 +2289,17 @@ mod tests {
             kernel_tuning: crate::api_config::KernelTuningConfig::default(),
             cache: Default::default(),
         });
+        let challenge_key = api_config
+            .challenge_key()
+            .expect("dummy credential secret derives a challenge key");
         let proxy_logic = crate::proxy::EdgeProxy {
             config: Arc::new(store.clone()),
             waf_state: waf_state.clone(),
             api_config: api_config.clone(),
+            challenge_key,
             cert_selector: cert_selector.clone(),
             waf_verifier: Arc::new(crate::firewall::verifier::WafVerifier::new(
-                &api_config.secret,
+                &challenge_key,
             )),
             tls_downstream: false,
         };

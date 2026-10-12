@@ -1,5 +1,4 @@
 use base64::Engine;
-use sha2::{Digest, Sha256};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UamMode {
@@ -196,32 +195,6 @@ setTimeout(function(){{
     // base64 编码外层包装
     let encoded = base64::engine::general_purpose::STANDARD.encode(inner.as_bytes());
     format!("eval(atob('{}'))", encoded)
-}
-
-/// Derives an UAM-specific key using SHA256.
-///
-/// Uses `SHA256("zelvik-edge-uam-v3:" + secret)` to produce a scoped key,
-/// separating UAM key space from WAF / other subsystems. UAM uses a
-/// different key prefix so a WAF-challenge pass cookie cannot satisfy
-/// a UAM challenge, and vice versa.
-pub fn uam_hmac_key(secret: &[u8]) -> Vec<u8> {
-    let mut h = Sha256::new();
-    h.update(b"zelvik-edge-uam-v3:");
-    h.update(secret);
-    h.finalize().to_vec()
-}
-
-/// Deterministically selects a challenge mode based on the token seed.
-///
-/// Returns 0 -> slider, 1 -> captcha, 2 -> click.
-/// Same `token_seed` always returns the same mode (no true randomness).
-pub fn random_challenge_mode(secret: &[u8], token_seed: u64) -> u8 {
-    let mut hasher = Sha256::new();
-    hasher.update(secret);
-    hasher.update(b"geetest-mode:");
-    hasher.update(token_seed.to_le_bytes());
-    let digest = hasher.finalize();
-    digest[0] % 3
 }
 
 fn cloud_challenge_css() -> &'static str {

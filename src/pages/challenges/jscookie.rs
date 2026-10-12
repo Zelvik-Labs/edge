@@ -16,7 +16,7 @@ pub fn issue_html(
     waf_token: &str,
     verify_route: &str,
     return_path: &str,
-    secret: &[u8],
+    challenge_key: &[u8; 32],
     expiry: u64,
     secure_cookie: bool,
 ) -> String {
@@ -44,7 +44,7 @@ pub fn issue_html(
         "e": expiry,
         "n": general_purpose::URL_SAFE_NO_PAD.encode(rand::random::<[u8; 12]>()),
     });
-    let challenge_token = encode_challenge_token(&payload, secret);
+    let challenge_token = encode_challenge_token(&payload, challenge_key);
 
     let route_json = serde_json::to_string(verify_route).unwrap_or_else(|_| "\"/\"".to_string());
     let return_json = serde_json::to_string(return_path).unwrap_or_else(|_| "\"/\"".to_string());
@@ -208,7 +208,7 @@ pub fn verify(
     elapsed_ms: u64,
     fingerprint: &str,
     digest: &str,
-    secret: &[u8],
+    challenge_key: &[u8; 32],
 ) -> Option<String> {
     if challenge_token.is_empty()
         || waf_token.is_empty()
@@ -219,7 +219,7 @@ pub fn verify(
         return None;
     }
 
-    let payload = decode_challenge_token(challenge_token, secret)?;
+    let payload = decode_challenge_token(challenge_token, challenge_key)?;
     if is_token_expired(&payload) {
         return None;
     }
@@ -321,9 +321,13 @@ fn now_millis() -> u64 {
 mod tests {
     use super::*;
 
+    /// Stands in for `ApiConfig::challenge_key` (D7): challenge tokens are keyed
+    /// by the derived 32-byte challenge key, never by a raw credential secret.
+    const TEST_CHALLENGE_KEY: [u8; 32] = [0x11; 32];
+
     #[test]
     fn verifies_signed_js_cookie_roundtrip() {
-        let secret = b"secret";
+        let challenge_key = &TEST_CHALLENGE_KEY;
         let waf_token = "waf-token";
         let seed = "seed-value-for-test";
         let cookie_name = "WAF-JS-test";
@@ -347,7 +351,7 @@ mod tests {
                     + 60),
                 "n": "nonce",
             }),
-            secret,
+            challenge_key,
         );
         let cookie = derive_cookie_value(waf_token, seed);
         let fp = "ce=1|wd=0|lg=en|pf=test|hc=8|tz=UTC";
@@ -365,7 +369,7 @@ mod tests {
                 elapsed,
                 fp,
                 &digest,
-                secret,
+                challenge_key,
             ),
             Some(cookie_name.to_string())
         );
@@ -373,7 +377,7 @@ mod tests {
 
     #[test]
     fn rejects_missing_cookie_roundtrip() {
-        let secret = b"secret";
+        let challenge_key = &TEST_CHALLENGE_KEY;
         let waf_token = "waf-token";
         let seed = "seed-value-for-test";
         let cookie_name = "WAF-JS-test";
@@ -397,7 +401,7 @@ mod tests {
                     + 60),
                 "n": "nonce",
             }),
-            secret,
+            challenge_key,
         );
         let fp = "ce=1|wd=0|lg=en|pf=test|hc=8|tz=UTC";
         let elapsed = 700;
@@ -411,7 +415,7 @@ mod tests {
                 elapsed,
                 fp,
                 &digest,
-                secret
+                challenge_key
             ),
             None
         );

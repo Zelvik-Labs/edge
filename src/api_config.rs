@@ -34,10 +34,12 @@ pub struct ApiConfig {
     /// The 32-byte credential key, hex-encoded, exactly as the enrollment
     /// response returned it. The `zvc1` credential is re-minted for every RPC.
     ///
-    /// NOTE (open interface question, recorded not hidden): the same secret is
-    /// also the HMAC key material of the UAM/WAF challenge tokens, which are
-    /// signed with the hex rendering of this value. Both sides must derive those
-    /// bytes identically; 05/04 do not fix the derivation yet.
+    /// It is the **single root key** of this node: the L1→L2 relay token and the
+    /// UAM/WAF challenge tokens do not reuse it directly, they are keyed by the
+    /// explicitly derived challenge key (04 §2.4 / 05 §4.6, D7) —
+    /// `challenge_key = HMAC-SHA256(secret, "zelvik/challenge/v1")`, see
+    /// [`ApiConfig::challenge_key`]. The draft-period implicit reuse is deleted:
+    /// no fallback, no dual read, no alias.
     #[serde(rename = "secret")]
     pub secret: String,
     /// Registered transport policy: `plaintext` | `tls` | `mtls`. The API
@@ -347,6 +349,23 @@ impl ApiConfig {
         let secret = zelvik_suite::credential::decode_secret(self.secret.trim())
             .map_err(|e| anyhow::anyhow!("secret is not a 32-byte hex credential key: {e}"))?;
         Ok(secret.to_vec())
+    }
+
+    /// The 32-byte challenge / relay-token HMAC key, derived from the credential
+    /// secret (04 §2.4 / 05 §4.6, D7):
+    ///
+    /// ```text
+    /// challenge_key = HMAC-SHA256(credential_secret, "zelvik/challenge/v1")
+    /// ```
+    ///
+    /// The derivation lives in the shared suite so every role derives the same
+    /// bytes; edge must not carry a second derivation. Fails closed — a secret
+    /// that is not a 32-byte credential key has no challenge key, and nothing
+    /// signs a challenge token with the raw secret instead.
+    pub fn challenge_key(&self) -> anyhow::Result<[u8; 32]> {
+        let secret = self.credential_secret()?;
+        zelvik_suite::credential::derive_challenge_key(&secret)
+            .map_err(|e| anyhow::anyhow!("challenge key derivation failed: {e}"))
     }
 
     /// The registered transport policy, parsed by the shared suite.
@@ -1129,6 +1148,76 @@ gcloudNodeId: "1"
         assert_eq!(
             config.effective_update_endpoints(),
             vec!["https://api.example.com:9090".to_string()]
+        );
+    }
+}
+
+#[cfg(test)]
+mod challenge_key_tests {
+    use super::*;
+
+    const DUMMY_SECRET: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+    /// The D7 conformance vector for [`DUMMY_SECRET`]
+    /// (`protocol/conformance/challenge.json`): the same secret must derive the
+    /// same key in every role and language.
+    const DUMMY_CHALLENGE_KEY: &str =
+        "dc55d19595f9dcce924efb94a68c8fc901efd777a364e44f2c446a959b6a8200";
+
+    fn config_with_secret(secret: &str) -> ApiConfig {
+        serde_yaml::from_str(&format!(
+            r#"
+rpc.endpoints:
+  - https://api.example.com:9090
+instanceId: "nd_0123456789"
+secret: "{secret}"
+gcloudNodeId: "1"
+"#
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn challenge_key_matches_the_conformance_vector_and_is_stable() {
+        let config = config_with_secret(DUMMY_SECRET);
+        let key = config.challenge_key().expect("dummy secret derives");
+        assert_eq!(hex::encode(key), DUMMY_CHALLENGE_KEY);
+        // Stable across calls and across ApiConfig instances built from the same
+        // secret (no per-process salt, no time dependence).
+        assert_eq!(config.challenge_key().unwrap(), key);
+        assert_eq!(config_with_secret(DUMMY_SECRET).challenge_key().unwrap(), key);
+        // The derived key is not the root secret: the implicit reuse is gone.
+        assert_ne!(
+            key.as_slice(),
+            config.credential_secret().unwrap().as_slice()
+        );
+    }
+
+    #[test]
+    fn rotated_secret_rotates_the_challenge_key() {
+        let rotated = config_with_secret(
+            "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100",
+        )
+        .challenge_key()
+        .unwrap();
+        assert_eq!(
+            hex::encode(rotated),
+            "7cd775052ff93fe1275bdf3f9342adc1f09af4d85c0a819d777636c87d1e7d92"
+        );
+        assert_ne!(
+            rotated,
+            config_with_secret(DUMMY_SECRET).challenge_key().unwrap()
+        );
+    }
+
+    #[test]
+    fn non_credential_secret_fails_closed_instead_of_reusing_the_raw_secret() {
+        let config = config_with_secret("secret");
+        let error = config
+            .challenge_key()
+            .expect_err("a non-32-byte secret has no challenge key");
+        assert!(
+            error.to_string().contains("32-byte hex credential key"),
+            "unexpected error: {error}"
         );
     }
 }

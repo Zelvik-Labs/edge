@@ -1350,13 +1350,15 @@ async fn xdp_proxy_smoke_managers(
         kernel_tuning: crate::api_config::KernelTuningConfig::default(),
         cache: Default::default(),
     });
+    let challenge_key = api_config.challenge_key()?;
     let proxy_logic = crate::proxy::EdgeProxy {
         config: std::sync::Arc::new(store.clone()),
         waf_state: waf_state.clone(),
         api_config: api_config.clone(),
+        challenge_key,
         cert_selector: cert_selector.clone(),
         waf_verifier: std::sync::Arc::new(crate::firewall::verifier::WafVerifier::new(
-            &api_config.secret,
+            &challenge_key,
         )),
         tls_downstream: false,
     };

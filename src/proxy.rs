@@ -505,6 +505,11 @@ pub struct EdgeProxy {
     pub config: Arc<ConfigStore>,
     pub waf_state: Arc<WafStateManager>,
     pub api_config: Arc<ApiConfig>,
+    /// The 32-byte challenge / relay-token HMAC key derived from the credential
+    /// secret (04 §2.4 / 05 §4.6, D7). It is computed once at startup — the
+    /// credential secret is fixed for the process lifetime — so no challenge or
+    /// relay token can ever be signed with the raw secret again.
+    pub challenge_key: [u8; 32],
     pub cert_selector: Arc<crate::ssl::DynamicCertSelector>,
     pub waf_verifier: Arc<crate::firewall::verifier::WafVerifier>,
     pub tls_downstream: bool,
@@ -3389,7 +3394,7 @@ impl EdgeProxy {
         ua_hasher.update(ua.as_bytes());
         let ua_hash = hex::encode(ua_hasher.finalize());
         let data = format!("uam-pass|{payload}|{ip}|{ua_hash}|{host_scope}");
-        Self::hmac_sha256_hex(self.api_config.secret.as_bytes(), data.as_bytes())
+        Self::hmac_sha256_hex(&self.challenge_key, data.as_bytes())
     }
 
     fn issue_uam_pass_cookie(
@@ -3464,8 +3469,7 @@ impl EdgeProxy {
         ua_hasher.update(ua.as_bytes());
         let ua_hash = hex::encode(ua_hasher.finalize());
         let data = format!("uam-challenge|{payload}|{ip}|{ua_hash}|{host_scope}");
-        let key = crate::firewall::uam::uam_hmac_key(self.api_config.secret.as_bytes());
-        Self::hmac_sha256_hex(&key, data.as_bytes())
+        Self::hmac_sha256_hex(&self.challenge_key, data.as_bytes())
     }
 
     fn issue_uam_challenge_token(&self, args: UamChallengeTokenArgs<'_>) -> String {
@@ -5825,7 +5829,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
 
     fn waf_redirect_signature(&self, token: &str, ip: &str, ua: &str) -> String {
         let digest = Self::hmac_sha256(
-            self.api_config.secret.as_bytes(),
+            &self.challenge_key,
             format!("waf-redirect|{token}|{ip}|{ua}").as_bytes(),
         );
         hex::encode(digest)
@@ -5833,7 +5837,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
 
     fn waf_pass_signature(&self, token: &str, ip: &str, ua: &str, challenge_type: &str) -> String {
         let digest = Self::hmac_sha256(
-            self.api_config.secret.as_bytes(),
+            &self.challenge_key,
             format!("waf-pass|{token}|{ip}|{ua}|{challenge_type}").as_bytes(),
         );
         hex::encode(digest)
@@ -5982,6 +5986,9 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
         session_id: &str,
         exp: i64,
     ) -> ([u8; 16], [u8; 16], String) {
+        // HLS key delivery is not a challenge/relay token, so it is out of the
+        // D7 derivation boundary (04 §2.4 "用途边界"): the credential secret keys
+        // it directly, exactly as before.
         let secret = self.api_config.secret.as_bytes();
         let scope = format!("{server_id}|{target}|{session_id}|{exp}");
 
@@ -6250,7 +6257,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                             challenge_token,
                             &seq,
                             click_elapsed,
-                            self.api_config.secret.as_bytes(),
+                            &self.challenge_key,
                         )
                     })
                 }
@@ -6261,7 +6268,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                         crate::pages::challenges::captcha::verify(
                             challenge_token,
                             &answer_hash,
-                            self.api_config.secret.as_bytes(),
+                            &self.challenge_key,
                         )
                     })
                 }
@@ -6281,7 +6288,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                                 elapsed,
                                 &fingerprint,
                                 &digest,
-                                self.api_config.secret.as_bytes(),
+                                &self.challenge_key,
                             )
                         });
                     verified_js_cookie_name.is_some()
@@ -6304,7 +6311,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                             sy,
                             elapsed,
                             &trace,
-                            self.api_config.secret.as_bytes(),
+                            &self.challenge_key,
                         )
                     } else {
                         let target = self.waf_verifier.slider_target(&token);
@@ -7262,7 +7269,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                     raw_method.as_str()
                 };
 
-                let challenge_secret = self.api_config.secret.as_bytes();
+                let challenge_key = &self.challenge_key;
                 let challenge_expiry =
                     crate::utils::time::now_timestamp() as u64 + life_seconds.max(60) as u64;
 
@@ -7274,7 +7281,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                             &token,
                             WAF_VERIFY_ROUTE,
                             &return_path,
-                            challenge_secret,
+                            challenge_key,
                             challenge_expiry,
                         );
 
@@ -7287,7 +7294,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                             &token,
                             WAF_VERIFY_ROUTE,
                             &return_path,
-                            challenge_secret,
+                            challenge_key,
                             challenge_expiry,
                         );
 
@@ -7300,7 +7307,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                             &token,
                             WAF_VERIFY_ROUTE,
                             &return_path,
-                            challenge_secret,
+                            challenge_key,
                             challenge_expiry,
                             Self::is_https_downstream(session, ctx),
                         );
@@ -7334,7 +7341,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                             WAF_VERIFY_ROUTE,
                             &return_path,
                             target,
-                            challenge_secret,
+                            challenge_key,
                             challenge_expiry,
                         );
 
@@ -10842,7 +10849,6 @@ impl ProxyHttp for EdgeProxy {
         // 2. L1 Logic: Inject Identity headers when talking to L2
         if ctx.node_level == 1 && ctx.upstream_is_parent {
             let node_id = &self.api_config.gcloud_node_id;
-            let secret = &self.api_config.secret;
 
             // 2.1 Identification
             upstream_request
@@ -10854,8 +10860,8 @@ impl ProxyHttp for EdgeProxy {
                 .insert_header("X-Cloud-Real-Ip", ctx.client_ip.to_string())
                 .unwrap();
 
-            // 2.3 Security Token
-            if let Ok(token) = crate::auth::generate_token(node_id, secret, "node") {
+            // 2.3 Security Token, keyed by the derived challenge key (D7)
+            if let Ok(token) = crate::auth::generate_token(node_id, &self.challenge_key, "node") {
                 upstream_request
                     .insert_header("X-Cloud-Access-Token", token)
                     .unwrap();
@@ -12413,5 +12419,100 @@ mod tests {
         super::HTTP_REQUEST_PARSE_MARKS.remove("203.0.113.10:50001");
         super::HTTP_REQUEST_PARSE_MARKS.remove("203.0.113.11:50002");
         super::HTTP_REQUEST_PARSE_MARKS.remove("203.0.113.12:50003");
+    }
+
+    // ── D7: challenge / relay tokens are keyed by the derived challenge key ──
+
+    /// The D7 conformance vector for the dummy credential secret used below
+    /// (`protocol/conformance/challenge.json`).
+    const DUMMY_CHALLENGE_KEY_HEX: &str =
+        "dc55d19595f9dcce924efb94a68c8fc901efd777a364e44f2c446a959b6a8200";
+
+    fn test_proxy() -> EdgeProxy {
+        let api_config = std::sync::Arc::new(crate::api_config::ApiConfig {
+            rpc_tls: Default::default(),
+            rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
+            rpc_disable_update: true,
+            instance_id: "nd_0123456789".to_string(),
+            secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+                .to_string(),
+            comm_mode: String::new(),
+            gcloud_node_id: "1".to_string(),
+            access_log_pipeline: crate::api_config::AccessLogPipelineConfig::default(),
+            relay: Default::default(),
+            kernel_tuning: Default::default(),
+            cache: Default::default(),
+        });
+        let challenge_key = api_config
+            .challenge_key()
+            .expect("dummy credential secret derives a challenge key");
+        EdgeProxy {
+            config: std::sync::Arc::new(crate::config::ConfigStore::new()),
+            waf_state: std::sync::Arc::new(crate::firewall::state::WafStateManager::new()),
+            api_config,
+            challenge_key,
+            cert_selector: std::sync::Arc::new(crate::ssl::DynamicCertSelector::new()),
+            waf_verifier: std::sync::Arc::new(
+                crate::firewall::verifier::WafVerifier::new(&challenge_key),
+            ),
+            tls_downstream: false,
+        }
+    }
+
+    fn uam_ua_hash(ua: &str) -> String {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(ua.as_bytes());
+        hex::encode(hasher.finalize())
+    }
+
+    #[test]
+    fn challenge_signatures_use_the_derived_challenge_key_not_the_raw_secret() {
+        let proxy = test_proxy();
+        let raw_secret = proxy.api_config.secret.as_bytes();
+        assert_eq!(hex::encode(proxy.challenge_key), DUMMY_CHALLENGE_KEY_HEX);
+        assert_ne!(proxy.challenge_key.as_slice(), raw_secret);
+
+        let ip = "203.0.113.7";
+        let ua = "test-agent";
+        let host_scope = "captcha.example.com|1";
+        let ua_hash = uam_ua_hash(ua);
+
+        let pass_data = format!("uam-pass|payload|{ip}|{ua_hash}|{host_scope}");
+        let challenge_data = format!("uam-challenge|payload|{ip}|{ua_hash}|{host_scope}");
+        let waf_pass_data = format!("waf-pass|waf-token|{ip}|{ua}|slider");
+        let waf_redirect_data = format!("waf-redirect|waf-token|{ip}|{ua}");
+
+        for (actual, data) in [
+            (
+                proxy.uam_pass_signature("payload", ip, ua, host_scope),
+                pass_data.as_str(),
+            ),
+            (
+                proxy.uam_challenge_signature("payload", ip, ua, host_scope),
+                challenge_data.as_str(),
+            ),
+            (
+                proxy.waf_pass_signature("waf-token", ip, ua, "slider"),
+                waf_pass_data.as_str(),
+            ),
+            (
+                proxy.waf_redirect_signature("waf-token", ip, ua),
+                waf_redirect_data.as_str(),
+            ),
+        ] {
+            assert_eq!(
+                actual,
+                EdgeProxy::hmac_sha256_hex(&proxy.challenge_key, data.as_bytes()),
+                "challenge signature must be keyed by the derived challenge key"
+            );
+            // The draft-period keying (the raw credential secret) is gone: it
+            // would produce a different MAC for the same data.
+            assert_ne!(
+                actual,
+                EdgeProxy::hmac_sha256_hex(raw_secret, data.as_bytes()),
+                "challenge signature must not be keyed by the raw credential secret"
+            );
+        }
     }
 }
