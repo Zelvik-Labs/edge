@@ -61,6 +61,7 @@ pub mod paths;
 pub mod perf_monitor;
 pub mod pipeline_metrics;
 pub mod process_log_policy;
+pub mod probe;
 pub mod proxy;
 pub mod proxy_protocol;
 pub mod quic_cc;

@@ -740,6 +740,60 @@ pub struct NodeRuntimePush {
     pub api: Option<crate::api_config::NodeApiPush>,
     #[serde(default)]
     pub xdp: Option<crate::runtime_mode::XdpConfig>,
+    /// Active-probing (tcping) plan. Absent key means "no plan" — the engine
+    /// stops every probe, so removing the key on the control plane takes effect.
+    #[serde(default)]
+    pub probe: Option<ProbePlan>,
+}
+
+/// ProbePlan is the node's active-probing assignment: the providers enabled for
+/// the node's edge cluster, each with its cadence and labeled targets.
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct ProbePlan {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub providers: Vec<ProbeProviderPlan>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct ProbeProviderPlan {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub kind: String,
+    #[serde(rename = "intervalSeconds", default)]
+    pub interval_seconds: u32,
+    #[serde(rename = "timeoutMs", default)]
+    pub timeout_ms: u32,
+    #[serde(default)]
+    pub targets: Vec<ProbeTargetPlan>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct ProbeTargetPlan {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub host: String,
+    #[serde(default)]
+    pub port: u16,
+    #[serde(rename = "ipFamily", default)]
+    pub ip_family: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub region: String,
+    #[serde(default)]
+    pub city: String,
+    #[serde(default)]
+    pub carrier: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub weight: u32,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]

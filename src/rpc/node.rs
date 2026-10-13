@@ -1072,6 +1072,9 @@ where
                             return false;
                         }
                         api_push.activate(&prepared_api.config);
+                        // 主动探测计划：整份替换运行中的探测集合。计划缺席或
+                        // enabled=false 即停止全部探测（控制面删除该键时生效）。
+                        crate::probe::apply_plan(runtime_push.probe);
                     }
                     let deleted_contents = config_store.get_deleted_contents().await;
                     config_store
