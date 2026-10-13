@@ -10,6 +10,7 @@
 
 use crate::config_models::{ProbePlan, ProbeProviderPlan, ProbeTargetPlan};
 use crate::pb;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
@@ -34,11 +35,23 @@ const MAX_TIMEOUT_MS: u32 = 60000;
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 static TASKS: LazyLock<parking_lot::Mutex<Vec<JoinHandle<()>>>> =
     LazyLock::new(|| parking_lot::Mutex::new(Vec::new()));
+/// The plan currently applied, compared by value so an identical push (the
+/// control plane re-sends nodeJSON on any unrelated config change) does not
+/// restart running probes.
+static APPLIED_PLAN: LazyLock<parking_lot::Mutex<Option<ProbePlan>>> =
+    LazyLock::new(|| parking_lot::Mutex::new(None));
 
 /// apply_plan replaces the running probe set. `None` (or `enabled = false`)
 /// stops every probe — the control plane removes the key when a node's cluster
-/// has probing off or no bindings.
+/// has probing off or no bindings. An unchanged plan is a no-op: nodeJSON is
+/// rebuilt for every unrelated config change, and restarting every target
+/// would reset its cadence each time.
 pub fn apply_plan(plan: Option<ProbePlan>) {
+    let plan = plan.filter(|p| p.enabled);
+    let mut applied = APPLIED_PLAN.lock();
+    if *applied == plan {
+        return;
+    }
     let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     let mut tasks = TASKS.lock();
     for handle in tasks.drain(..) {
@@ -48,15 +61,16 @@ pub fn apply_plan(plan: Option<ProbePlan>) {
         Some(plan) if plan.enabled => plan,
         _ => {
             debug!("probe plan cleared");
+            *applied = None;
             return;
         }
     };
     let mut spawned = 0usize;
     let mut trimmed = 0usize;
-    for provider in plan.providers {
+    for provider in &plan.providers {
         // One shared provider per target task: the cadence and id are constant
         // across a provider's targets, so the plan is not cloned per target.
-        let provider = Arc::new(provider);
+        let provider = Arc::new(provider.clone());
         for target in &provider.targets {
             if target.host.trim().is_empty() || target.port == 0 {
                 continue;
@@ -79,6 +93,7 @@ pub fn apply_plan(plan: Option<ProbePlan>) {
             "probe plan exceeded target ceiling; extra targets ignored"
         );
     }
+    *applied = Some(plan);
     debug!(targets = spawned, "probe plan applied");
 }
 
@@ -118,7 +133,7 @@ async fn probe_once(
     let mut last_error = String::new();
     for _ in 0..SAMPLES_PER_CYCLE {
         sent += 1;
-        match tcp_ping(&target.host, target.port, timeout_dur).await {
+        match tcp_ping(target, timeout_dur).await {
             Ok(rtt) => {
                 received += 1;
                 rtts.push(rtt);
@@ -157,23 +172,78 @@ async fn probe_once(
     }
 }
 
-/// tcp_ping resolves the host asynchronously (never blocking the runtime) then
-/// times a TCP connect to the first usable address within the timeout.
-async fn tcp_ping(host: &str, port: u16, timeout_dur: Duration) -> Result<f64, String> {
+/// Each CIDR sample chooses one usable address uniformly without expanding
+/// the network. IPv4 network/broadcast addresses are excluded below /31;
+/// IPv6 has no broadcast address. The full IPv6 /0 is handled without overflow.
+fn cidr_sample(host: &str, random: u128) -> Result<IpAddr, String> {
+    let net: ipnet::IpNet = host.parse().map_err(|e| format!("CIDR: {e}"))?;
+    Ok(match net {
+        ipnet::IpNet::V4(net) => {
+            let count = 1u64 << (32 - net.prefix_len());
+            let (offset, count) = if net.prefix_len() < 31 {
+                (1, count - 2)
+            } else {
+                (0, count)
+            };
+            IpAddr::V4(Ipv4Addr::from(
+                u32::from(net.network()) + offset + (random % u128::from(count)) as u32,
+            ))
+        }
+        ipnet::IpNet::V6(net) => {
+            let bits = 128 - net.prefix_len();
+            let offset = if bits == 128 {
+                random
+            } else {
+                random % (1u128 << bits)
+            };
+            IpAddr::V6(Ipv6Addr::from(u128::from(net.network()) + offset))
+        }
+    })
+}
+
+fn matches_family(addr: IpAddr, family: &str) -> bool {
+    match family {
+        "v4" => addr.is_ipv4(),
+        "v6" => addr.is_ipv6(),
+        _ => false,
+    }
+}
+
+async fn tcp_ping(target: &ProbeTargetPlan, timeout_dur: Duration) -> Result<f64, String> {
     let start = Instant::now();
-    let addrs = match timeout(timeout_dur, tokio::net::lookup_host((host, port))).await {
-        Ok(Ok(iter)) => iter.collect::<Vec<_>>(),
-        Ok(Err(err)) => return Err(format!("resolve: {err}")),
-        Err(_) => return Err("resolve timeout".into()),
+    let addrs = match target.target_type.as_str() {
+        "cidr" => {
+            let ip = cidr_sample(&target.host, rand::random())?;
+            vec![std::net::SocketAddr::new(ip, target.port)]
+        }
+        "host" => match timeout(
+            timeout_dur,
+            tokio::net::lookup_host((target.host.as_str(), target.port)),
+        )
+        .await
+        {
+            Ok(Ok(iter)) => iter.collect::<Vec<_>>(),
+            Ok(Err(err)) => return Err(format!("resolve: {err}")),
+            Err(_) => return Err("resolve timeout".into()),
+        },
+        _ => return Err("invalid target type".into()),
     };
+    let addrs: Vec<_> = addrs
+        .into_iter()
+        .filter(|a| matches_family(a.ip(), &target.ip_family))
+        .collect();
     if addrs.is_empty() {
-        return Err("no address".into());
+        return Err("no address matching IP family".into());
     }
     let remaining = timeout_dur.saturating_sub(start.elapsed());
-    let budget = remaining.max(Duration::from_millis(1));
-    match timeout(budget, TcpStream::connect(&addrs[..])).await {
+    if remaining.is_zero() {
+        return Err("timeout".into());
+    }
+    // RTT starts after resolution: DNS lookup is not TCP connection latency.
+    let connect_start = Instant::now();
+    match timeout(remaining, TcpStream::connect(&addrs[..])).await {
         Ok(Ok(stream)) => {
-            let rtt_ms = start.elapsed().as_secs_f64() * 1000.0;
+            let rtt_ms = connect_start.elapsed().as_secs_f64() * 1000.0;
             drop(stream);
             Ok(rtt_ms)
         }
@@ -219,6 +289,115 @@ fn event_time_now() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cidr_sampling_is_bounded_and_excludes_v4_network_and_broadcast() {
+        for seed in [0, 1, 2, u128::MAX] {
+            let ip = cidr_sample("192.0.2.0/30", seed).unwrap();
+            assert!(
+                ip == "192.0.2.1".parse::<IpAddr>().unwrap()
+                    || ip == "192.0.2.2".parse::<IpAddr>().unwrap()
+            );
+            assert!(
+                "2001:db8::/32"
+                    .parse::<ipnet::IpNet>()
+                    .unwrap()
+                    .contains(&cidr_sample("2001:db8::/32", seed).unwrap())
+            );
+        }
+        assert_eq!(
+            cidr_sample("192.0.2.7/32", u128::MAX).unwrap().to_string(),
+            "192.0.2.7"
+        );
+        assert_eq!(
+            cidr_sample("192.0.2.0/31", 1).unwrap().to_string(),
+            "192.0.2.1"
+        );
+        assert_eq!(
+            cidr_sample("::/0", u128::MAX).unwrap(),
+            IpAddr::V6(Ipv6Addr::from(u128::MAX))
+        );
+        assert_eq!(
+            cidr_sample("2001:db8::1/128", 12).unwrap().to_string(),
+            "2001:db8::1"
+        );
+        assert!(cidr_sample("invalid", 0).is_err());
+    }
+
+    #[tokio::test]
+    async fn tcp_ping_enforces_family_and_cidr_is_connected_without_dns() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let target = ProbeTargetPlan {
+            target_type: "cidr".into(),
+            host: "127.0.0.1/32".into(),
+            port: listener.local_addr().unwrap().port(),
+            ip_family: "v4".into(),
+            ..Default::default()
+        };
+        assert!(tcp_ping(&target, Duration::from_secs(1)).await.is_ok());
+        let _connected = listener.accept().await.unwrap();
+        drop(listener);
+        let observation = probe_once(
+            &ProbeProviderPlan::default(),
+            &target,
+            Duration::from_secs(1),
+        )
+        .await;
+        assert!(!observation.success);
+        assert_eq!(observation.sent, SAMPLES_PER_CYCLE);
+        assert_eq!(observation.received, 0);
+        assert_eq!(observation.loss_percent, 100.0);
+        assert!(!observation.error.is_empty());
+        let wrong_family = ProbeTargetPlan {
+            ip_family: "v6".into(),
+            ..target
+        };
+        assert_eq!(
+            tcp_ping(&wrong_family, Duration::from_secs(1))
+                .await
+                .unwrap_err(),
+            "no address matching IP family"
+        );
+        assert!(matches_family("::1".parse().unwrap(), "v6"));
+        assert!(!matches_family("::1".parse().unwrap(), "v4"));
+    }
+
+    #[tokio::test]
+    async fn identical_plan_does_not_restart_generation_and_removal_stops_tasks() {
+        let plan = ProbePlan {
+            enabled: true,
+            providers: vec![ProbeProviderPlan {
+                targets: vec![ProbeTargetPlan {
+                    target_type: "host".into(),
+                    host: "127.0.0.1".into(),
+                    port: 9,
+                    ip_family: "v4".into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+        };
+        apply_plan(Some(plan.clone()));
+        let generation = GENERATION.load(Ordering::SeqCst);
+        assert_eq!(TASKS.lock().len(), 1);
+        apply_plan(Some(plan));
+        assert_eq!(GENERATION.load(Ordering::SeqCst), generation);
+        apply_plan(None);
+        assert!(TASKS.lock().is_empty());
+        assert!(APPLIED_PLAN.lock().is_none());
+        assert!(GENERATION.load(Ordering::SeqCst) > generation);
+    }
+
+    #[test]
+    fn probe_wire_contract_preserves_target_type_and_family() {
+        let target: ProbeTargetPlan = serde_json::from_str(
+            r#"{"targetType":"cidr","host":"2001:db8::/32","port":443,"ipFamily":"v6"}"#,
+        )
+        .unwrap();
+        assert_eq!(target.target_type, "cidr");
+        assert_eq!(target.ip_family, "v6");
+        assert_eq!(serde_json::to_value(target).unwrap()["targetType"], "cidr");
+    }
 
     #[test]
     fn jitter_is_zero_below_two_samples() {

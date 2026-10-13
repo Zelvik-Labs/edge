@@ -748,7 +748,7 @@ pub struct NodeRuntimePush {
 
 /// ProbePlan is the node's active-probing assignment: the providers enabled for
 /// the node's edge cluster, each with its cadence and labeled targets.
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq, Eq)]
 pub struct ProbePlan {
     #[serde(default)]
     pub enabled: bool,
@@ -756,7 +756,7 @@ pub struct ProbePlan {
     pub providers: Vec<ProbeProviderPlan>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq, Eq)]
 pub struct ProbeProviderPlan {
     #[serde(default)]
     pub id: String,
@@ -772,8 +772,10 @@ pub struct ProbeProviderPlan {
     pub targets: Vec<ProbeTargetPlan>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq, Eq)]
 pub struct ProbeTargetPlan {
+    #[serde(rename = "targetType")]
+    pub target_type: String,
     #[serde(default)]
     pub id: String,
     #[serde(default)]
