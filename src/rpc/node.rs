@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::LazyLock as Lazy;
 use std::time::Duration;
 use tonic::transport::Channel;
-use tonic::{Request, Status};
+use tonic::Request;
 use tracing::{debug, info, warn};
 
 use crate::api_config::ApiConfig;
@@ -33,7 +33,7 @@ static ENABLED_FEATURES_UNSUPPORTED_LOGGED: AtomicBool = AtomicBool::new(false);
 
 pub struct FetchConfigArgs<'a, F>
 where
-    F: FnMut(Request<()>) -> Result<Request<()>, Status> + Send + 'static,
+    F: tonic::service::Interceptor + Send + 'static,
 {
     pub client: &'a mut pb::node_service_client::NodeServiceClient<
         tonic::service::interceptor::InterceptedService<Channel, F>,
@@ -227,7 +227,7 @@ pub async fn start_config_syncer(
         .unwrap_or_default();
     info!(
         "Config syncer service started for API Node {} (Node ID: {})",
-        api_endpoint, api_config.node_id
+        api_endpoint, api_config.instance_id
     );
 
     let mut connect_backoff = Duration::from_secs(5);
@@ -397,7 +397,7 @@ fn log_global_settings(args: GlobalSettingsLogArgs<'_>) {
 
 pub async fn fetch_and_apply_config<F>(args: FetchConfigArgs<'_, F>) -> bool
 where
-    F: FnMut(Request<()>) -> Result<Request<()>, Status> + Send + 'static,
+    F: tonic::service::Interceptor + Send + 'static,
 {
     let FetchConfigArgs {
         client,
@@ -1072,6 +1072,9 @@ where
                             return false;
                         }
                         api_push.activate(&prepared_api.config);
+                        // 主动探测计划：整份替换运行中的探测集合。计划缺席或
+                        // enabled=false 即停止全部探测（控制面删除该键时生效）。
+                        crate::probe::apply_plan(runtime_push.probe);
                     }
                     let deleted_contents = config_store.get_deleted_contents().await;
                     config_store

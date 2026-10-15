@@ -14,7 +14,7 @@
 
 //! TLS server specific implementation
 
-use crate::listeners::TlsAcceptCallbacks;
+use crate::listeners::TlsAccept;
 use crate::protocols::tls::SslStream;
 use crate::protocols::{Shutdown, IO};
 use crate::tls::ext;
@@ -23,7 +23,7 @@ use crate::tls::ssl;
 use crate::tls::ssl::SslAcceptor;
 
 use async_trait::async_trait;
-use log::debug;
+use log::warn;
 use pingora_error::{ErrorType::*, OrErr, Result};
 use std::pin::Pin;
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
@@ -49,7 +49,7 @@ pub async fn handshake<S: IO>(ssl_acceptor: &SslAcceptor, io: S) -> Result<SslSt
 pub async fn handshake_with_callback<S: IO>(
     ssl_acceptor: &SslAcceptor,
     io: S,
-    callbacks: &TlsAcceptCallbacks,
+    callbacks: &(dyn TlsAccept + Send + Sync),
 ) -> Result<SslStream<S>> {
     let mut tls_stream = prepare_tls_stream(ssl_acceptor, io)?;
     let done = Pin::new(&mut tls_stream)
@@ -85,7 +85,7 @@ where
         match <Self as AsyncWriteExt>::shutdown(self).await {
             Ok(()) => {}
             Err(e) => {
-                debug!("TLS shutdown failed, {e}");
+                warn!("TLS shutdown failed, {e}");
             }
         }
     }
@@ -199,7 +199,7 @@ mod tests {
 
         tokio::spawn(client_task(client));
 
-        handshake_with_callback(&acceptor, server, &cb)
+        handshake_with_callback(&acceptor, server, cb.as_ref())
             .await
             .unwrap();
     }
@@ -239,7 +239,7 @@ mod tests {
 
         tokio::spawn(client_task(client));
 
-        let stream = handshake_with_callback(&acceptor, server, &cb)
+        let stream = handshake_with_callback(&acceptor, server, cb.as_ref())
             .await
             .unwrap();
         let ssl_digest = stream.ssl_digest().unwrap();

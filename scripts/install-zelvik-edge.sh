@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
+# Never trace key assignments, argument parsing, or the authorization header.
+set +xv
 set -euo pipefail
 
-REPO="${REPO:-Zelvik-Labs/edge}"
+UPDATE_KEY="${ZELVIK_UPDATE_KEY:-}"
+export -n UPDATE_KEY
+unset ZELVIK_UPDATE_KEY
+# The registration key follows the update key: never traced, never logged, and
+# unset from the environment before any command line carries it.
+REGISTRATION_KEY="${ZELVIK_REGISTRATION_KEY:-}"
+export -n REGISTRATION_KEY
+unset ZELVIK_REGISTRATION_KEY
 VERSION="${VERSION:-latest}"
 SERVICE_NAME="${SERVICE_NAME:-zelvik-edge}"
 BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/cloud-node-rust-migration}"
@@ -15,8 +24,11 @@ GEOIP_DIR="${GEOIP_DIR:-}"
 MODE="${MODE:-ask}"
 RESTORE_BACKUP="${RESTORE_BACKUP:-}"
 API_ENDPOINTS="${API_ENDPOINTS:-}"
-NODE_ID="${NODE_ID:-}"
-NODE_SECRET="${NODE_SECRET:-}"
+INSTANCE_NAME="${INSTANCE_NAME:-}"
+REGISTRATION_API_ENDPOINT="${REGISTRATION_API_ENDPOINT:-}"
+# Set by register_instance from the control plane's registration response.
+INSTANCE_ID=""
+NODE_SECRET=""
 TIMEZONE="${TIMEZONE:-}"
 ASSUME_YES=0
 DRY_RUN=0
@@ -32,19 +44,23 @@ The script:
   1. Asks for the interface language when running interactively.
   2. Finds the current cloud-node systemd ExecStart binary or command.
   3. Backs it up under a timestamped directory.
-  4. Downloads the requested Rust release from GitHub; latest is the default.
+  4. Downloads the requested Rust package from license.zelvik.net using an update key; latest is the default.
   5. Stops any running legacy cloud-node process and unregisters old systemd units.
   6. Optionally downloads GeoLite2 mmdb files from P3TERX/GeoLite.mmdb.
   7. Overwrites the binary, re-registers the zelvik-edge command/service, and verifies startup.
 
 Usage:
-  sudo scripts/install-zelvik-edge.sh
-  sudo scripts/install-zelvik-edge.sh --fresh
+  sudo --preserve-env=ZELVIK_UPDATE_KEY scripts/install-zelvik-edge.sh
+  sudo --preserve-env=ZELVIK_UPDATE_KEY scripts/install-zelvik-edge.sh --fresh
   sudo scripts/install-zelvik-edge.sh --restore
 
+Set ZELVIK_UPDATE_KEY securely in your shell before installation (zvu_ + 64 lowercase hex digits).
+Fresh install also needs an instance registration key (ZELVIK_REGISTRATION_KEY) shaped like
+irk_<12 hex digits>_<48 hex digits>; the node identity is obtained from the control plane by
+calling POST /v1/instances/register, never typed by hand.
 Run directly from GitHub:
-  curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo bash
-  curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo bash -s -- --fresh --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret --geoip
+  curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo --preserve-env=ZELVIK_UPDATE_KEY,ZELVIK_REGISTRATION_KEY bash
+  curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo --preserve-env=ZELVIK_UPDATE_KEY,ZELVIK_REGISTRATION_KEY bash -s -- --fresh --yes --api-endpoint http://127.0.0.1:8001 --geoip
 
 Options:
   --install              Install, migrate, or upgrade to the Rust release.
@@ -54,8 +70,9 @@ Options:
   --restore              Restore the Go original from a previous backup.
   --restore-backup DIR   Restore from this backup dir. Default: latest backup.
   --list-backups         List available backup dirs and exit.
-  --repo OWNER/REPO       GitHub repo. Default: Zelvik/edge
-  --version VERSION      Release tag, for example v0.1.0. Default: latest
+  --update-key KEY       Update key (zvu_ + 64 lowercase hex digits); prefer ZELVIK_UPDATE_KEY
+                         to avoid exposing it in shell history or process arguments.
+  --version VERSION      CalVer, for example 26.10.2 (no v prefix). Default: latest
   --service NAME         systemd service name. Default: zelvik-edge
   --install-dir DIR      Runtime working directory. Default: existing runtime dir, or /opt/zelvik/edge
   --install-binary PATH  Installed Zelvik-Edge binary path. Default: INSTALL_DIR/zelvik-edge
@@ -65,8 +82,13 @@ Options:
   --geoip-dir DIR        GeoIP target dir. Default: INSTALL_DIR/data.
   --api-endpoint URL     API RPC endpoint for fresh install. Can be repeated.
   --api-endpoints LIST   Comma-separated API RPC endpoints for fresh install.
-  --node-id ID           nodeId for fresh install.
-  --secret SECRET        secret for fresh install.
+  --registration-key KEY Instance registration key (irk_...) for fresh install;
+                         prefer ZELVIK_REGISTRATION_KEY to avoid exposing it in
+                         shell history or process arguments.
+  --instance-name NAME   Display name sent with the registration request.
+                         Default: the system hostname.
+  --registration-api URL Control plane API base used for the registration call.
+                         Default: the first --api-endpoint value.
   --timezone TZ          Set system timezone during fresh install, e.g. Asia/Shanghai.
   --no-timezone          Do not prompt for or change system timezone during fresh install.
   --start                Restart/start service after install without prompting.
@@ -78,9 +100,13 @@ Options:
   -h, --help             Show this help.
 
 Environment variables with the same names are also supported:
-  REPO, VERSION, SERVICE_NAME, INSTALL_DIR, INSTALL_BINARY, BACKUP_ROOT,
-  START_MODE, LANGUAGE, ZELVIK_EDGE_LANG, DOWNLOAD_GEOIP, GEOIP_DIR, MODE, RESTORE_BACKUP,
-  API_ENDPOINTS, NODE_ID, NODE_SECRET, TIMEZONE.
+  ZELVIK_UPDATE_KEY, ZELVIK_REGISTRATION_KEY, VERSION, SERVICE_NAME, INSTALL_DIR, INSTALL_BINARY,
+  BACKUP_ROOT, START_MODE, LANGUAGE, ZELVIK_EDGE_LANG, DOWNLOAD_GEOIP, GEOIP_DIR, MODE,
+  RESTORE_BACKUP, API_ENDPOINTS, INSTANCE_NAME, REGISTRATION_API_ENDPOINT, TIMEZONE.
+
+Install/upgrade and dry-run require a valid update key; restore, list-backups, and help do not.
+Packages are fetched only from https://license.zelvik.net/Download/{version}/Zelvik-Edge/{asset}.
+Redirects are rejected; GeoIP downloads never receive the update key.
 USAGE
 }
 
@@ -559,8 +585,9 @@ while [ "$#" -gt 0 ]; do
             MODE="list-backups"
             shift
             ;;
-        --repo)
-            REPO="${2:?missing repo}"
+        --update-key)
+            [ "$#" -ge 2 ] || die "missing update key; prefer ZELVIK_UPDATE_KEY"
+            UPDATE_KEY="$2"
             shift 2
             ;;
         --version)
@@ -613,12 +640,17 @@ while [ "$#" -gt 0 ]; do
             API_ENDPOINTS="${2:?missing api endpoints}"
             shift 2
             ;;
-        --node-id)
-            NODE_ID="${2:?missing node id}"
+        --registration-key)
+            [ "$#" -ge 2 ] || die "missing registration key; prefer ZELVIK_REGISTRATION_KEY"
+            REGISTRATION_KEY="$2"
             shift 2
             ;;
-        --secret)
-            NODE_SECRET="${2:?missing secret}"
+        --instance-name)
+            INSTANCE_NAME="${2:?missing instance name}"
+            shift 2
+            ;;
+        --registration-api)
+            REGISTRATION_API_ENDPOINT="${2:?missing registration api endpoint}"
             shift 2
             ;;
         --timezone)
@@ -666,6 +698,19 @@ done
 prompt_language
 
 prompt_mode
+
+if [ "$MODE" = "install" ] || [ "$MODE" = "fresh" ]; then
+    [[ "$UPDATE_KEY" =~ ^zvu_[0-9a-f]{64}$ ]] \
+        || die "install/upgrade requires a valid ZELVIK_UPDATE_KEY or --update-key (zvu_ + 64 lowercase hex digits)"
+    if [ "$VERSION" != "latest" ] && ! [[ "$VERSION" =~ ^[0-9]{2}\.(1[0-2]|[1-9])\.[1-5](\.[1-9][0-9]*)?$ ]]; then
+        die "version must be latest or canonical CalVer YY.M.W[.P], for example 26.10.2"
+    fi
+fi
+
+if [ "$MODE" = "fresh" ]; then
+    [[ "$REGISTRATION_KEY" =~ ^irk_[0-9a-f]{12}_[0-9a-f]{48}$ ]] \
+        || die "fresh install requires a valid ZELVIK_REGISTRATION_KEY or --registration-key (irk_ + 12 hex digits + _ + 48 lowercase hex digits)"
+fi
 
 if [ "$MODE" = "fresh" ]; then
     ALLOW_FRESH=1
@@ -1359,24 +1404,39 @@ detect_asset_name() {
     esac
 }
 
-normalize_version() {
-    if [ "$VERSION" = "latest" ]; then
-        printf 'latest'
-    elif printf '%s' "$VERSION" | grep -q '^v'; then
-        printf '%s' "$VERSION"
-    else
-        printf 'v%s' "$VERSION"
-    fi
-}
-
 download_url_for() {
     local version="$1"
     local asset="$2"
-    if [ "$version" = "latest" ]; then
-        printf 'https://github.com/%s/releases/latest/download/%s\n' "$REPO" "$asset"
-    else
-        printf 'https://github.com/%s/releases/download/%s/%s\n' "$REPO" "$version" "$asset"
+    printf 'https://license.zelvik.net/Download/%s/Zelvik-Edge/%s\n' "$version" "$asset"
+}
+
+download_package() {
+    local url="$1"
+    local target="$2"
+    local http_status=""
+
+    # -q ignores .curlrc (including verbose/trace/redirect settings). Supply the
+    # header through stdin, never curl's argv, and never follow a Location.
+    if ! http_status="$(printf 'header = "Authorization: Bearer %s"\n' "$UPDATE_KEY" \
+        | curl -q --config - --silent --show-error --fail \
+            --proto '=https' --no-location --max-redirs 0 \
+            --retry 3 --connect-timeout 20 \
+            --output "$target" --write-out '%{http_code}' "$url")"; then
+        rm -f "$target"
+        die "package download failed; check the update key and license.zelvik.net availability"
     fi
+    case "$http_status" in
+        200)
+            ;;
+        3??)
+            rm -f "$target"
+            die "package download refused HTTP redirect ($http_status); redirects are not allowed"
+            ;;
+        *)
+            rm -f "$target"
+            die "package download failed with HTTP status $http_status"
+            ;;
+    esac
 }
 
 geoip_url_for() {
@@ -1423,17 +1483,170 @@ collect_fresh_api_config() {
                 "API RPC endpoints, comma separated" \
                 "http://127.0.0.1:8001")"
         fi
-        if [ -z "$NODE_ID" ]; then
-            NODE_ID="$(prompt_text "nodeId" "nodeId")"
-        fi
-        if [ -z "$NODE_SECRET" ]; then
-            NODE_SECRET="$(prompt_text "secret" "secret" "" "yes")"
-        fi
     fi
 
     [ -n "$API_ENDPOINTS" ] || die "fresh install requires --api-endpoint or --api-endpoints"
-    [ -n "$NODE_ID" ] || die "fresh install requires --node-id"
-    [ -n "$NODE_SECRET" ] || die "fresh install requires --secret"
+    [ -n "$REGISTRATION_KEY" ] || die "fresh install requires ZELVIK_REGISTRATION_KEY or --registration-key"
+    register_instance
+}
+
+# Validate the identity the control plane handed back and refuse to write a
+# config the node would reject at boot.
+validate_registered_identity() {
+    local instance_id="$1"
+    local credential="$2"
+
+    [[ "$instance_id" =~ ^nd_[0-9a-f]{10}$ ]] \
+        || die "control plane returned an unexpected instance id: ${instance_id:0:3}***"
+    [[ "$credential" =~ ^[0-9a-f]{64}$ ]] \
+        || die "control plane returned a credential that is not 64 lowercase hex characters"
+}
+
+# Exchange the registration key for the node identity (instanceId) and its
+# one-time control-channel credential (secret) via the public
+# POST /v1/instances/register. The key is written to a 0600 request body and
+# handed to curl with --data-binary @file; the non-secret headers travel through
+# a curl --config on stdin — the same shape download_package uses for the update
+# key — so the key never reaches argv, a log line, or a child's environment.
+register_instance() {
+    local base="${REGISTRATION_API_ENDPOINT:-}"
+    local url=""
+    local work_dir=""
+    local body_path=""
+    local response_path=""
+    local response_flat=""
+    local http_status=""
+    local instance_id=""
+    local credential=""
+    local name=""
+    local endpoint=""
+    local candidate=""
+
+    if [ -z "$base" ]; then
+        # First non-empty endpoint from the fresh-install list.
+        IFS=',' read -r -a endpoint <<< "$API_ENDPOINTS"
+        for candidate in "${endpoint[@]}"; do
+            candidate="$(trim_spaces "$candidate")"
+            if [ -n "$candidate" ]; then
+                base="$candidate"
+                break
+            fi
+        done
+    fi
+    base="${base%/}"
+    [ -n "$base" ] || die "registration needs an API endpoint"
+
+    url="$base/v1/instances/register"
+
+    name="$INSTANCE_NAME"
+    if [ -z "$name" ]; then
+        name="$(hostname 2>/dev/null || printf 'edge-node')"
+    fi
+    # Keep the display name inside the control plane's 80-character bound.
+    if [ "${#name}" -gt 80 ]; then
+        name="${name:0:80}"
+    fi
+
+    if [ "$DRY_RUN" -eq 1 ]; then
+        log "+ register instance via POST $url (registration key from ZELVIK_REGISTRATION_KEY)"
+        INSTANCE_ID="nd_dryrun0000"
+        NODE_SECRET="0000000000000000000000000000000000000000000000000000000000000000"
+        return
+    fi
+
+    work_dir="$(mktemp -d)"
+    body_path="$work_dir/register-request.json"
+    response_path="$work_dir/register-response.json"
+
+    printf '{"registration_key":"%s","name":%s,"comm_mode":"plaintext","capabilities":["edge"]}\n' \
+        "$REGISTRATION_KEY" \
+        "$(json_quote_string "$name")" > "$body_path"
+    chmod 0600 "$body_path"
+
+    if ! http_status="$(printf 'header = "Content-Type: application/json"\nheader = "Idempotency-Key: %s"\n' \
+            "$(registration_idempotency_key "${REGISTRATION_KEY}|${name}")" \
+        | curl -q --config - --silent --show-error \
+            --proto '=http,https' --no-location --max-redirs 0 \
+            --retry 2 --connect-timeout 20 \
+            --data-binary "@$body_path" \
+            --output "$response_path" --write-out '%{http_code}' "$url")"; then
+        rm -rf "$work_dir"
+        die "instance registration failed; check the registration key and API endpoint reachability"
+    fi
+    rm -f "$body_path"
+
+    case "$http_status" in
+        201)
+            ;;
+        3??)
+            rm -rf "$work_dir"
+            die "instance registration refused HTTP redirect ($http_status); redirects are not allowed"
+            ;;
+        400|401|403)
+            rm -rf "$work_dir"
+            die "instance registration rejected the registration key (HTTP $http_status)"
+            ;;
+        409)
+            rm -rf "$work_dir"
+            die "registration key has no uses left (HTTP 409); issue a new registration key and retry"
+            ;;
+        *)
+            rm -rf "$work_dir"
+            die "instance registration failed with HTTP status $http_status"
+            ;;
+    esac
+
+    response_flat="$(tr -d '\n\r' < "$response_path")"
+    instance_id="$(printf '%s' "$response_flat" | sed -n 's/.*"instance_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+    credential="$(printf '%s' "$response_flat" | sed -n 's/.*"credential"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+    rm -rf "$work_dir"
+
+    [ -n "$instance_id" ] || die "registration response did not include instance_id"
+    [ -n "$credential" ] || die "registration response did not include credential"
+    validate_registered_identity "$instance_id" "$credential"
+
+    INSTANCE_ID="$instance_id"
+    NODE_SECRET="$credential"
+}
+
+json_quote_string() {
+    local value="$1"
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    value="${value//$'\n'/\\n}"
+    value="${value//$'\r'/\\r}"
+    value="${value//$'\t'/\\t}"
+    printf '"%s"' "$value"
+}
+
+# Deterministic Idempotency-Key for the registration write. The control plane
+# requires the header on every write and replays the stored response for a
+# repeated key, so seeding it with (registration key, node name) lets a retried
+# install on the same host recover its original instance instead of creating a
+# duplicate, while a different host sharing a multi-use key still gets its own
+# instance. The seed is hashed, so the key never leaves the request body in clear.
+registration_idempotency_key() {
+    local seed="$1"
+    local hex=""
+    hex="$(printf '%s' "$seed" | sha256_file_stdin)"
+    if [ "${#hex}" -ne 64 ]; then
+        # No sha256 tool: fall back to fresh entropy. Retries may then create a
+        # second instance, but the request still carries a valid unique key.
+        hex="$(od -An -tx1 -N16 /dev/urandom 2>/dev/null | tr -d ' \n')"
+    fi
+    # The control plane only requires a non-empty key; never hand it an empty one.
+    if [ -z "$hex" ]; then
+        hex="$(printf '%s-%s-%s' "$$" "$RANDOM" "$(date +%s)")"
+    fi
+    printf '%s\n' "${hex:0:32}"
+}
+
+sha256_file_stdin() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum | awk '{print $1}'
+    else
+        shasum -a 256 | awk '{print $1}'
+    fi
 }
 
 migrate_runtime_layout() {
@@ -1536,7 +1749,7 @@ write_api_node_config() {
     if [ "$DRY_RUN" -eq 0 ]; then
         {
             printf 'rpc.endpoints: %s\n' "$list"
-            printf 'nodeId: %s\n' "$(yaml_quote "$NODE_ID")"
+            printf 'instanceId: %s\n' "$(yaml_quote "$INSTANCE_ID")"
             printf 'secret: %s\n' "$(yaml_quote "$NODE_SECRET")"
             printf 'relay:\n'
             printf '  zeroCopy: false\n'
@@ -1545,7 +1758,7 @@ write_api_node_config() {
     else
         log "+ write $config_path"
         printf '  rpc.endpoints: %s\n' "$list"
-        printf '  nodeId: %s\n' "$(yaml_quote "$NODE_ID")"
+        printf '  instanceId: %s\n' "$(yaml_quote "$INSTANCE_ID")"
         printf '  secret: ******\n'
         printf '  relay.zeroCopy: false\n'
     fi
@@ -1831,7 +2044,7 @@ collect_fresh_timezone_config
 
 BACKUP_DIR="$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S)"
 ASSET_NAME="$(detect_asset_name)"
-NORMALIZED_VERSION="$(normalize_version)"
+NORMALIZED_VERSION="$VERSION"
 DOWNLOAD_URL="$(download_url_for "$NORMALIZED_VERSION" "$ASSET_NAME")"
 EXISTING_RUNTIME="not-found"
 CURRENT_BACKUP_SUFFIX="current"
@@ -1874,7 +2087,7 @@ fi
 
 section "$(is_zh && printf '安装摘要' || printf 'Install Summary')"
 kv "mode" "$MODE"
-kv "repository" "$REPO"
+kv "distribution" "https://license.zelvik.net"
 kv "version" "$NORMALIZED_VERSION"
 kv "asset" "$ASSET_NAME"
 kv "existing node" "${EXISTING_BINARY:-not found}"
@@ -1894,7 +2107,7 @@ if [ "$DOWNLOAD_GEOIP" = "yes" ]; then
 fi
 if [ "$MODE" = "fresh" ]; then
     kv "api endpoints" "$API_ENDPOINTS"
-    kv "nodeId" "$NODE_ID"
+    kv "instanceId" "$INSTANCE_ID"
     kv "secret" "******"
     if [ "$SKIP_TIMEZONE" -eq 1 ]; then
         kv "timezone" "keep current"
@@ -1912,7 +2125,6 @@ elif [ "$EXISTING_RUNTIME" = "unknown" ]; then
 fi
 
 confirm_install
-apply_fresh_timezone
 
 TMP_DIR="$(mktemp -d)"
 cleanup() {
@@ -1920,6 +2132,23 @@ cleanup() {
 }
 trap cleanup EXIT
 
+log "downloading: $DOWNLOAD_URL"
+if [ "$DRY_RUN" -eq 0 ]; then
+    # Keep the downloaded archive and extracted contents in separate empty dirs.
+    mkdir "$TMP_DIR/package" "$TMP_DIR/extracted"
+    download_package "$DOWNLOAD_URL" "$TMP_DIR/package/$ASSET_NAME"
+    tar -xzf "$TMP_DIR/package/$ASSET_NAME" -C "$TMP_DIR/extracted"
+    [ -f "$TMP_DIR/extracted/zelvik-edge" ] || die "release archive does not contain zelvik-edge"
+    if [ ! -f "$TMP_DIR/extracted/data/zelvik-edge-xdp-ebpf.o" ]; then
+        warn "release archive does not contain data/zelvik-edge-xdp-ebpf.o; XDP attach will be unavailable until the eBPF object is installed"
+    fi
+else
+    log "+ authenticated HTTPS package download (redirects disabled): $DOWNLOAD_URL"
+    log "+ tar -xzf $TMP_DIR/package/$ASSET_NAME -C $TMP_DIR/extracted"
+fi
+unset UPDATE_KEY
+
+apply_fresh_timezone
 run mkdir -p "$BACKUP_DIR"
 
 if [ -n "$EXISTING_BINARY" ] && [ -e "$EXISTING_BINARY" ]; then
@@ -1951,7 +2180,7 @@ if [ "$DRY_RUN" -eq 0 ]; then
     {
         printf 'created_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         printf 'mode=%s\n' "$MODE"
-        printf 'repo=%s\n' "$REPO"
+        printf 'distribution=%s\n' 'https://license.zelvik.net'
         printf 'version=%s\n' "$NORMALIZED_VERSION"
         printf 'asset=%s\n' "$ASSET_NAME"
         printf 'existing_binary=%s\n' "${EXISTING_BINARY:-not found}"
@@ -1970,7 +2199,7 @@ if [ "$DRY_RUN" -eq 0 ]; then
         if [ "$MODE" = "fresh" ]; then
             printf 'api_config=%s\n' "$INSTALL_DIR/configs/api_node.yaml"
             printf 'api_endpoints=%s\n' "$API_ENDPOINTS"
-            printf 'node_id=%s\n' "$NODE_ID"
+            printf 'instance_id=%s\n' "$INSTANCE_ID"
             printf 'timezone=%s\n' "${TIMEZONE:-keep current}"
         fi
     } > "$BACKUP_DIR/manifest.current.txt"
@@ -2000,19 +2229,6 @@ if [ "$LEGACY_WAS_RUNNING" -eq 0 ] && systemctl_available; then
     done < <(discover_legacy_units || true)
 fi
 
-log "downloading: $DOWNLOAD_URL"
-if [ "$DRY_RUN" -eq 0 ]; then
-    curl -fL --retry 3 --connect-timeout 20 -o "$TMP_DIR/$ASSET_NAME" "$DOWNLOAD_URL"
-    tar -xzf "$TMP_DIR/$ASSET_NAME" -C "$TMP_DIR"
-    [ -f "$TMP_DIR/zelvik-edge" ] || die "release archive does not contain zelvik-edge"
-    if [ ! -f "$TMP_DIR/data/zelvik-edge-xdp-ebpf.o" ]; then
-        warn "release archive does not contain data/zelvik-edge-xdp-ebpf.o; XDP attach will be unavailable until the eBPF object is installed"
-    fi
-else
-    log "+ curl -fL --retry 3 --connect-timeout 20 -o $TMP_DIR/$ASSET_NAME $DOWNLOAD_URL"
-    log "+ tar -xzf $TMP_DIR/$ASSET_NAME -C $TMP_DIR"
-fi
-
 # Stop and unregister the old deployment BEFORE overwriting binaries/unit files.
 # This avoids restarting with a mixed Go process + Rust ExecStop/unit state.
 stop_legacy_deployment
@@ -2021,16 +2237,16 @@ unregister_legacy_services
 run mkdir -p "$INSTALL_DIR" "$INSTALL_DIR/configs" "$INSTALL_DIR/data" "$INSTALL_DIR/logs"
 migrate_runtime_layout
 if [ "$DRY_RUN" -eq 0 ]; then
-    install -m 0755 "$TMP_DIR/zelvik-edge" "$INSTALL_BINARY.new"
+    install -m 0755 "$TMP_DIR/extracted/zelvik-edge" "$INSTALL_BINARY.new"
     mv -f "$INSTALL_BINARY.new" "$INSTALL_BINARY"
-    if [ -f "$TMP_DIR/data/zelvik-edge-xdp-ebpf.o" ]; then
-        install -m 0644 "$TMP_DIR/data/zelvik-edge-xdp-ebpf.o" "$INSTALL_DIR/data/zelvik-edge-xdp-ebpf.o.new"
+    if [ -f "$TMP_DIR/extracted/data/zelvik-edge-xdp-ebpf.o" ]; then
+        install -m 0644 "$TMP_DIR/extracted/data/zelvik-edge-xdp-ebpf.o" "$INSTALL_DIR/data/zelvik-edge-xdp-ebpf.o.new"
         mv -f "$INSTALL_DIR/data/zelvik-edge-xdp-ebpf.o.new" "$INSTALL_DIR/data/zelvik-edge-xdp-ebpf.o"
     fi
 else
-    log "+ install -m 0755 $TMP_DIR/zelvik-edge $INSTALL_BINARY.new"
+    log "+ install -m 0755 $TMP_DIR/extracted/zelvik-edge $INSTALL_BINARY.new"
     log "+ mv -f $INSTALL_BINARY.new $INSTALL_BINARY"
-    log "+ install -m 0644 $TMP_DIR/data/zelvik-edge-xdp-ebpf.o $INSTALL_DIR/data/zelvik-edge-xdp-ebpf.o"
+    log "+ install -m 0644 $TMP_DIR/extracted/data/zelvik-edge-xdp-ebpf.o $INSTALL_DIR/data/zelvik-edge-xdp-ebpf.o"
 fi
 
 write_api_node_config

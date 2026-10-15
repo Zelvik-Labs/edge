@@ -7,7 +7,7 @@ pub fn issue_html(
     waf_token: &str,
     verify_route: &str,
     return_path: &str,
-    secret: &[u8],
+    challenge_key: &[u8; 32],
     expiry: u64,
 ) -> String {
     let sfx = random_suffix();
@@ -190,7 +190,7 @@ pub fn issue_html(
         "e": expiry,
         "n": hex::encode(rand::random::<u64>().to_be_bytes()),
     });
-    let enc_token = encode_challenge_token(&pl, secret);
+    let enc_token = encode_challenge_token(&pl, challenge_key);
 
     let (instr, hint) = match lang {
         Lang::ZhCn => ("请按序号点击红色字符", "忽略灰色字符，只点红色"),
@@ -311,8 +311,13 @@ cv.addEventListener('touchend',function(e){{e.preventDefault();var t=e.changedTo
     )
 }
 
-pub fn verify(token: &str, sequence: &[usize], elapsed_ms: u64, secret: &[u8]) -> bool {
-    let payload = match crate::pages::challenges::decode_challenge_token(token, secret) {
+pub fn verify(
+    token: &str,
+    sequence: &[usize],
+    elapsed_ms: u64,
+    challenge_key: &[u8; 32],
+) -> bool {
+    let payload = match crate::pages::challenges::decode_challenge_token(token, challenge_key) {
         Some(p) => p,
         None => return false,
     };

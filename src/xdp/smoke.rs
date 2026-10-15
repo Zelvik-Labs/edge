@@ -1341,20 +1341,24 @@ async fn xdp_proxy_smoke_managers(
         rpc_tls: Default::default(),
         rpc_endpoints: Vec::new(),
         rpc_disable_update: true,
-        node_id: "1".to_string(),
-        secret: "xdp-smoke-secret".to_string(),
+        instance_id: "nd_0123456789".to_string(),
+        secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".to_string(),
+        comm_mode: String::new(),
+        gcloud_node_id: "1".to_string(),
         access_log_pipeline: crate::api_config::AccessLogPipelineConfig::default(),
         relay: crate::api_config::RelayConfig::default(),
         kernel_tuning: crate::api_config::KernelTuningConfig::default(),
         cache: Default::default(),
     });
+    let challenge_key = api_config.challenge_key()?;
     let proxy_logic = crate::proxy::EdgeProxy {
         config: std::sync::Arc::new(store.clone()),
         waf_state: waf_state.clone(),
         api_config: api_config.clone(),
+        challenge_key,
         cert_selector: cert_selector.clone(),
         waf_verifier: std::sync::Arc::new(crate::firewall::verifier::WafVerifier::new(
-            &api_config.secret,
+            &challenge_key,
         )),
         tls_downstream: false,
     };

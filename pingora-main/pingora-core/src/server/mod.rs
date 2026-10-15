@@ -25,15 +25,22 @@ use async_trait::async_trait;
 #[cfg(unix)]
 use daemon::daemonize;
 use daggy::NodeIndex;
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use parking_lot::Mutex;
+#[cfg(all(feature = "dial9", feature = "dial9-worker-s3"))]
+pub use pingora_runtime::Dial9S3UploadOpts;
 use pingora_runtime::{BlockingPoolOpts, Runtime, RuntimeBuilder};
+#[cfg(feature = "dial9")]
+pub use pingora_runtime::{
+    Dial9RuntimeOpts, DEFAULT_DIAL9_MAX_FILE_SIZE, DEFAULT_DIAL9_MAX_TOTAL_SIZE,
+};
+pub use pingora_runtime::{RuntimeMetricsOpts, RuntimeOpts};
 use pingora_timeout::fast_timeout;
 #[cfg(feature = "sentry")]
 use sentry::ClientOptions;
 use std::sync::Arc;
 use std::thread;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 #[cfg(unix)]
 use tokio::signal::unix;
 use tokio::sync::{broadcast, watch};
@@ -368,6 +375,17 @@ impl Server {
         self.bootstrap.lock().get_fds()
     }
 
+    /// Collect the listening bind addresses across all registered services.
+    #[cfg(unix)]
+    fn collect_listen_addresses(&self) -> Option<std::collections::HashSet<String>> {
+        self.services
+            .values()
+            .try_fold(std::collections::HashSet::new(), |mut addrs, wrapper| {
+                addrs.extend(wrapper.service.listen_addresses()?);
+                Some(addrs)
+            })
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn run_service(
         mut service: Box<dyn ServiceWithDependents>,
@@ -379,12 +397,18 @@ impl Server {
         ready_notifier: ServiceReadyNotifier,
         dependency_watches: Vec<ServiceReadyWatch>,
         blocking_opts: BlockingPoolOpts,
+        runtime_opts: RuntimeOpts,
     ) -> Runtime
 // NOTE: we need to keep the runtime outside async since
         // otherwise the runtime will be dropped.
     {
-        let service_runtime =
-            Server::create_runtime(service.name(), threads, work_stealing, blocking_opts);
+        let service_runtime = Server::create_runtime(
+            service.name(),
+            threads,
+            work_stealing,
+            blocking_opts,
+            runtime_opts,
+        );
         let service_name = service.name().to_string();
         service_runtime.get_handle().spawn(async move {
             // Wait for all dependencies to be ready
@@ -624,8 +648,13 @@ impl Server {
         if conf.daemon {
             info!("Daemonizing the server");
             fast_timeout::pause_for_fork();
-            daemonize(&self.configuration);
+            let daemonize_result = daemonize(&self.configuration);
             fast_timeout::unpause();
+            // If daemon_wait_for_ready is enabled, pass the parent PID to bootstrap so it
+            // can send SIGUSR1 to the parent after bootstrap completes.
+            if let Some(pid) = daemonize_result.notify_parent_pid {
+                self.bootstrap.lock().set_notify_parent_pid(pid);
+            }
         }
 
         #[cfg(windows)]
@@ -637,6 +666,16 @@ impl Server {
             max_threads: conf.max_blocking_threads,
             thread_keep_alive: conf.blocking_threads_ttl_seconds.map(Duration::from_secs),
         };
+        let runtime_opts = conf.runtime_opts();
+        if conf.runtime_enable_alt_timer && !conf.work_stealing {
+            warn!("runtime_enable_alt_timer is ignored when work_stealing is disabled");
+        }
+        // This global timeout threshold is intended to be configured once during server startup,
+        // before service runtimes begin creating timeout futures.
+        fast_timeout::set_fast_timeout_to_tokio_threshold(
+            conf.fast_timeout_to_tokio_threshold_seconds
+                .map(Duration::from_secs),
+        );
 
         // Initialize (or re-initialize) sentry and persist the guard for
         // the lifetime of the server. When daemonizing, the transport
@@ -649,6 +688,12 @@ impl Server {
 
         // Holds tuples of runtimes and their service name.
         let mut runtimes: Vec<(Runtime, String)> = Vec::new();
+
+        // Set this before the bootstrap service loads inherited fds.
+        #[cfg(unix)]
+        if let Some(expected) = self.collect_listen_addresses() {
+            self.bootstrap.lock().set_expected_listen_addrs(expected);
+        }
 
         // Get services in topological order (dependencies first)
         let startup_order = match self.dependencies.lock().topological_sort() {
@@ -681,6 +726,10 @@ impl Server {
 
             let threads = wrapper.service.threads().unwrap_or(conf.threads);
             let name = wrapper.service.name().to_string();
+            let service_runtime_opts = wrapper
+                .service
+                .runtime_opts_override(&runtime_opts)
+                .unwrap_or_else(|| runtime_opts.clone());
 
             // Extract dependency watches from the ServiceHandle
             let dependencies = self
@@ -721,13 +770,20 @@ impl Server {
                 ready_notifier,
                 dependency_watches,
                 blocking_opts.clone(),
+                service_runtime_opts,
             );
             runtimes.push((runtime, name));
         }
 
         // blocked on main loop so that it runs forever
         // Only work steal runtime can use block_on()
-        let server_runtime = Server::create_runtime("Server", 1, true, BlockingPoolOpts::default());
+        let server_runtime = Server::create_runtime(
+            "Server",
+            1,
+            true,
+            BlockingPoolOpts::default(),
+            RuntimeOpts::default(),
+        );
         #[cfg(unix)]
         let shutdown_type = server_runtime
             .get_handle()
@@ -776,18 +832,22 @@ impl Server {
             .map(|(rt, name)| {
                 info!("Waiting for runtimes to exit!");
                 let join = thread::spawn(move || {
+                    let start = Instant::now();
                     rt.shutdown_timeout(shutdown_timeout);
-                    thread::sleep(shutdown_timeout)
+                    start.elapsed()
                 });
                 (join, name)
             })
             .collect();
         for (shutdown, name) in shutdowns {
-            info!("Waiting for service runtime {} to exit", name);
-            if let Err(e) = shutdown.join() {
-                error!("Failed to shutdown service runtime {}: {:?}", name, e);
+            info!("Waiting for service runtime {name} to exit");
+            match shutdown.join() {
+                Ok(elapsed) if !shutdown_timeout.is_zero() && elapsed >= shutdown_timeout => {
+                    warn!("Service runtime {name} did not exit within {shutdown_timeout:?}")
+                }
+                Ok(elapsed) => info!("Service runtime {name} exited after {elapsed:?}"),
+                Err(e) => error!("Failed to shutdown service runtime {name}: {e:?}"),
             }
-            debug!("Service runtime {} has exited", name);
         }
         info!("All runtimes exited, exiting now");
 
@@ -801,10 +861,36 @@ impl Server {
         threads: usize,
         work_steal: bool,
         blocking_opts: BlockingPoolOpts,
+        runtime_opts: RuntimeOpts,
     ) -> Runtime {
         RuntimeBuilder::new(threads, name)
             .work_steal(work_steal)
             .blocking_pool_opts(blocking_opts)
+            .runtime_opts(runtime_opts)
             .build()
+    }
+}
+
+#[cfg(all(test, unix))]
+mod listen_address_tests {
+    use super::*;
+
+    struct UnknownService;
+
+    #[async_trait]
+    impl crate::services::Service for UnknownService {
+        fn name(&self) -> &str {
+            "unknown"
+        }
+    }
+
+    #[test]
+    fn unknown_service_disables_inherited_fd_cleanup() {
+        let mut server = Server::new_with_opt_and_conf(None, ServerConf::default());
+        server.bootstrap_as_a_service();
+        assert_eq!(server.collect_listen_addresses(), Some(Default::default()));
+
+        server.add_service(UnknownService);
+        assert_eq!(server.collect_listen_addresses(), None);
     }
 }

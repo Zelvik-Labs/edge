@@ -1945,9 +1945,14 @@ impl UdpProxyManager {
         let preferred_backend_bind = recent_upstream_ports.remove(&key).and_then(|(_, entry)| {
             (entry.recorded_at.elapsed() <= UDP_UPSTREAM_PORT_REUSE_TTL).then_some(entry.local_addr)
         });
+        // One in-flight slot per live session for least-connections ranking. The
+        // guard is owned by the session task below, so it is released exactly
+        // once when the relay ends — idle expiry, shutdown, or error alike.
+        let origin_inflight_guard = crate::lb_factory::begin_inflight_for(&lb, origin_id);
         self.sessions.insert(key, session.clone());
 
         self.spawn_session_work(async move {
+            let _origin_inflight_guard = origin_inflight_guard;
             let _session_permit = session_permit;
             let _listener_permit = listener_permit;
             // Shadow counter for live UDP passthrough sessions.
@@ -2461,6 +2466,190 @@ mod tests {
     use crate::config_models::{NetworkAddressConfig, ServerNameConfig, UDPConfig};
     use arc_swap::ArcSwap;
     use std::collections::HashMap;
+
+    /// A least-connections pool over the given origin ids, built through the
+    /// production `build_lb` path so the shared in-flight counters are wired in.
+    fn least_conn_test_lb(ids: &[i64]) -> Arc<crate::lb_factory::AnyLoadBalancer> {
+        let origins: Vec<serde_json::Value> = ids
+            .iter()
+            .enumerate()
+            .map(|(index, id)| {
+                serde_json::json!({
+                    "id": id,
+                    "addr": format!("127.0.0.1:{}", 9750 + index),
+                    "isOn": true,
+                    "weight": 1,
+                })
+            })
+            .collect();
+        let cfg: crate::config_models::ReverseProxyConfig = serde_json::from_value(serde_json::json!({
+            "isOn": true,
+            "primaryOrigins": origins,
+            "scheduling": { "code": "least_conn", "options": {} },
+        }))
+        .unwrap();
+        let (lb, _hc) = crate::lb_factory::build_lb(
+            0,
+            &cfg,
+            2,
+            &std::collections::HashMap::new(),
+            false,
+            true,
+        );
+        lb
+    }
+
+    async fn install_udp_test_server_with_lb(
+        store: &ConfigStore,
+        server: Arc<ServerConfig>,
+        id_to_lb: std::collections::HashMap<i64, Arc<crate::lb_factory::AnyLoadBalancer>>,
+    ) {
+        let servers = HashMap::from([(format!("s{}", server.numeric_id()), server)]);
+        store
+            .update_config(
+                1,
+                1,
+                0,
+                0,
+                servers.values().cloned().collect(),
+                servers,
+                HashMap::new(),
+                id_to_lb,
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                None,
+                0,
+                1,
+                true,
+                true,
+                HashMap::new(),
+                false,
+                false,
+                "random".to_string(),
+                HashMap::new(),
+                None,
+                false,
+                false,
+                String::new(),
+                false,
+                false,
+                0,
+                false,
+                false,
+                false,
+                String::new(),
+                None,
+                None,
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                None,
+                None,
+            )
+            .await;
+    }
+
+    /// Regression for Zelvik-Labs/edge#11: a UDP session counts as one unit of
+    /// load for its whole lifetime — created with the session, released when the
+    /// session relay ends — so least_conn spreads new sessions across origins.
+    #[tokio::test]
+    async fn udp_session_holds_one_least_conn_slot_for_its_lifetime() {
+        const SERVER_ID: i64 = 97_800;
+        const ORIGIN_A: i64 = 97_801;
+        const ORIGIN_B: i64 = 97_802;
+
+        let store = ConfigStore::new();
+        let mut id_to_lb = std::collections::HashMap::new();
+        id_to_lb.insert(SERVER_ID, least_conn_test_lb(&[ORIGIN_A, ORIGIN_B]));
+        let server = Arc::new(ServerConfig {
+            id: Some(SERVER_ID),
+            is_on: true,
+            udp: Some(UDPConfig {
+                is_on: true,
+                listen: vec![NetworkAddressConfig {
+                    protocol: Some("udp".to_string()),
+                    host: Some("0.0.0.0".to_string()),
+                    port_range: Some("443".to_string()),
+                }],
+            }),
+            ..Default::default()
+        });
+        install_udp_test_server_with_lb(&store, server.clone(), id_to_lb).await;
+        let manager = UdpProxyManager::new(store, Arc::new(WafStateManager::new()), 1);
+        let counters = crate::origin_state::ORIGIN_STATE_MANAGER.inflight_counters();
+
+        let client_addr: SocketAddr = "127.0.0.1:53111".parse().unwrap();
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
+        let (downstream_tx, _downstream_rx) = mpsc::channel(4);
+        let args = UdpPassthroughSessionArgs {
+            client_addr,
+            port: 443,
+            server: server.clone(),
+            probed_server_name: None,
+            downstream_sender: UdpDownstreamSender::channel(
+                "127.0.0.1:443".parse().unwrap(),
+                downstream_tx.clone(),
+            ),
+            shutdown_rx: shutdown_rx.clone(),
+            quic_cid_tx: None,
+        };
+
+        let session = manager
+            .create_passthrough_session_for_server_with_cid_updates_and_downstream(args)
+            .await
+            .expect("session creation succeeds")
+            .expect("session is created");
+        // The slot is taken before the session task is spawned, so it is already
+        // visible the moment creation returns.
+        assert_eq!(counters.inflight(session.origin_id), 1);
+
+        // A second session for a different client sees the first one's load and
+        // lands on the other origin.
+        let client_b: SocketAddr = "127.0.0.1:53112".parse().unwrap();
+        let args_b = UdpPassthroughSessionArgs {
+            client_addr: client_b,
+            port: 443,
+            server: server.clone(),
+            probed_server_name: None,
+            downstream_sender: UdpDownstreamSender::channel(
+                "127.0.0.1:443".parse().unwrap(),
+                downstream_tx.clone(),
+            ),
+            shutdown_rx: shutdown_rx.clone(),
+            quic_cid_tx: None,
+        };
+        let session_b = manager
+            .create_passthrough_session_for_server_with_cid_updates_and_downstream(args_b)
+            .await
+            .expect("second session creation succeeds")
+            .expect("second session is created");
+        assert_ne!(
+            session.origin_id, session_b.origin_id,
+            "least_conn must not keep picking the loaded origin"
+        );
+        assert_eq!(counters.inflight(ORIGIN_A) + counters.inflight(ORIGIN_B), 2);
+
+        // Ending both sessions releases both slots.
+        session.shutdown_tx.send(true).unwrap();
+        session_b.shutdown_tx.send(true).unwrap();
+        drop(session);
+        drop(session_b);
+        for _ in 0..200 {
+            if counters.inflight(ORIGIN_A) == 0 && counters.inflight(ORIGIN_B) == 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_eq!(counters.inflight(ORIGIN_A), 0);
+        assert_eq!(counters.inflight(ORIGIN_B), 0);
+    }
 
     #[test]
     fn udp_session_idle_deadline_uses_last_activity_remaining_time() {

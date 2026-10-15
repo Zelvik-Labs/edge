@@ -77,7 +77,7 @@ four-part results report is mandatory. Local hook:
 
 ## Build and verification
 
-Toolchain pinned to **1.98.1** by `rust-toolchain.toml`, edition 2024.
+Toolchain pinned to **1.99.0** by `rust-toolchain.toml`, edition 2024.
 `configs/`, `data/`, `api_node.yaml`, `runtime/` are not version-controlled — do not assume
 they exist.
 
@@ -91,6 +91,12 @@ they exist.
 | Project tooling | `cargo xtask <subcommand>` |
 | macOS → Linux release | `bash scripts/build-release-local.sh [--all-bins]` |
 | 构建产物清理（每次构建后必跑） | `bash scripts/clean-build-artifacts.sh` |
+| 本机 OrbStack Linux 检查与测试 | `bash scripts/test-orbstack.sh [arm64\|amd64] [all\|check\|test\|clippy\|pingora]` |
+
+OrbStack uses isolated, architecture-specific build/cache volumes; see
+[docs/orbstack-build-tests.md](docs/orbstack-build-tests.md). Clean only after
+build processes exit. The cleanup script checks Cargo locks and delegates managed
+target removal to mbx; never recursively delete an mbx target symlink destination.
 
 **Local and CI use different CPU baselines.** `.cargo/config.toml` sets
 `rustflags = ["-C", "target-cpu=native"]`; CI overrides with

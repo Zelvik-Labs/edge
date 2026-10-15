@@ -285,6 +285,11 @@ pub struct ProxyCTX {
     pub response_headers_size: usize,
     pub origin_address: String,
     pub origin_id: i64,
+    /// RAII guard holding this request's in-flight slot for the selected origin
+    /// when the least-connections algorithm drives selection. Dropping the
+    /// context (any exit path: success, failure, cancellation) releases the
+    /// slot; it is also released early in `logging`.
+    pub origin_inflight_guard: Option<crate::origin_state::OriginInflightGuard>,
     pub origin_connect_permit: Option<StaticAdmissionPermit>,
     /// Connection's admission ticket bucket (`memory_ticket`), resolved once
     /// per request in `early_request_filter`. Pooled classes draw from it;
@@ -442,6 +447,7 @@ impl Default for ProxyCTX {
             response_headers_size: 0,
             origin_address: String::new(),
             origin_id: 0,
+            origin_inflight_guard: None,
             origin_connect_permit: None,
             ticket_bucket: None,
             request_body_waf_permit: None,
@@ -505,6 +511,11 @@ pub struct EdgeProxy {
     pub config: Arc<ConfigStore>,
     pub waf_state: Arc<WafStateManager>,
     pub api_config: Arc<ApiConfig>,
+    /// The 32-byte challenge / relay-token HMAC key derived from the credential
+    /// secret (04 §2.4 / 05 §4.6, D7). It is computed once at startup — the
+    /// credential secret is fixed for the process lifetime — so no challenge or
+    /// relay token can ever be signed with the raw secret again.
+    pub challenge_key: [u8; 32],
     pub cert_selector: Arc<crate::ssl::DynamicCertSelector>,
     pub waf_verifier: Arc<crate::firewall::verifier::WafVerifier>,
     pub tls_downstream: bool,
@@ -2032,7 +2043,7 @@ impl EdgeProxy {
             "documentRoot".to_string(),
             Self::web_document_root(ctx.server.as_deref()),
         );
-        values.insert("node.id".to_string(), self.api_config.node_id.clone());
+        values.insert("node.id".to_string(), self.api_config.instance_id.clone());
         values.insert("node.name".to_string(), HOSTNAME.clone());
         values.insert("node.role".to_string(), String::new());
         values.insert("product.name".to_string(), self.product_name(ctx));
@@ -2539,7 +2550,7 @@ impl EdgeProxy {
         error: &Error,
     ) {
         let (ip, _, raw_addr) = Self::http_session_socket_client_ip(session);
-        let node_id = self.api_config.node_id.parse::<i64>().unwrap_or(0);
+        let node_id = self.api_config.numeric_gcloud_node_id();
         let protocol = if Self::is_tls_http_session(session) {
             "https"
         } else {
@@ -2572,7 +2583,7 @@ impl EdgeProxy {
         else {
             return;
         };
-        let node_id = self.api_config.node_id.parse::<i64>().unwrap_or(0);
+        let node_id = self.api_config.numeric_gcloud_node_id();
         crate::special_defense::record_special_defense_hit(
             &self.waf_state,
             node_id,
@@ -2641,10 +2652,8 @@ impl EdgeProxy {
     }
 
     fn redirect_to_https_status(status: i32) -> u16 {
-        u16::try_from(status)
-            .ok()
-            .filter(|code| matches!(*code, 301 | 302 | 307 | 308))
-            .unwrap_or(301)
+        // Single source of truth shared with the compiled plan path.
+        crate::compiled::redirect_to_https_status(status)
     }
 
     fn www_trailing_slash_redirect(
@@ -2959,7 +2968,7 @@ impl EdgeProxy {
             group_id,
             set_id,
         } = args;
-        let node_id = self.api_config.node_id.parse::<i64>().unwrap_or(0);
+        let node_id = self.api_config.numeric_gcloud_node_id();
         let (source_url, source_user_agent) = match session {
             Some(session) => {
                 let source_url = ctx
@@ -3389,7 +3398,7 @@ impl EdgeProxy {
         ua_hasher.update(ua.as_bytes());
         let ua_hash = hex::encode(ua_hasher.finalize());
         let data = format!("uam-pass|{payload}|{ip}|{ua_hash}|{host_scope}");
-        Self::hmac_sha256_hex(self.api_config.secret.as_bytes(), data.as_bytes())
+        Self::hmac_sha256_hex(&self.challenge_key, data.as_bytes())
     }
 
     fn issue_uam_pass_cookie(
@@ -3464,8 +3473,7 @@ impl EdgeProxy {
         ua_hasher.update(ua.as_bytes());
         let ua_hash = hex::encode(ua_hasher.finalize());
         let data = format!("uam-challenge|{payload}|{ip}|{ua_hash}|{host_scope}");
-        let key = crate::firewall::uam::uam_hmac_key(self.api_config.secret.as_bytes());
-        Self::hmac_sha256_hex(&key, data.as_bytes())
+        Self::hmac_sha256_hex(&self.challenge_key, data.as_bytes())
     }
 
     fn issue_uam_challenge_token(&self, args: UamChallengeTokenArgs<'_>) -> String {
@@ -5825,7 +5833,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
 
     fn waf_redirect_signature(&self, token: &str, ip: &str, ua: &str) -> String {
         let digest = Self::hmac_sha256(
-            self.api_config.secret.as_bytes(),
+            &self.challenge_key,
             format!("waf-redirect|{token}|{ip}|{ua}").as_bytes(),
         );
         hex::encode(digest)
@@ -5833,7 +5841,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
 
     fn waf_pass_signature(&self, token: &str, ip: &str, ua: &str, challenge_type: &str) -> String {
         let digest = Self::hmac_sha256(
-            self.api_config.secret.as_bytes(),
+            &self.challenge_key,
             format!("waf-pass|{token}|{ip}|{ua}|{challenge_type}").as_bytes(),
         );
         hex::encode(digest)
@@ -5982,6 +5990,9 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
         session_id: &str,
         exp: i64,
     ) -> ([u8; 16], [u8; 16], String) {
+        // HLS key delivery is not a challenge/relay token, so it is out of the
+        // D7 derivation boundary (04 §2.4 "用途边界"): the credential secret keys
+        // it directly, exactly as before.
         let secret = self.api_config.secret.as_bytes();
         let scope = format!("{server_id}|{target}|{session_id}|{exp}");
 
@@ -6250,7 +6261,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                             challenge_token,
                             &seq,
                             click_elapsed,
-                            self.api_config.secret.as_bytes(),
+                            &self.challenge_key,
                         )
                     })
                 }
@@ -6261,7 +6272,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                         crate::pages::challenges::captcha::verify(
                             challenge_token,
                             &answer_hash,
-                            self.api_config.secret.as_bytes(),
+                            &self.challenge_key,
                         )
                     })
                 }
@@ -6281,7 +6292,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                                 elapsed,
                                 &fingerprint,
                                 &digest,
-                                self.api_config.secret.as_bytes(),
+                                &self.challenge_key,
                             )
                         });
                     verified_js_cookie_name.is_some()
@@ -6304,7 +6315,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                             sy,
                             elapsed,
                             &trace,
-                            self.api_config.secret.as_bytes(),
+                            &self.challenge_key,
                         )
                     } else {
                         let target = self.waf_verifier.slider_target(&token);
@@ -7262,7 +7273,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                     raw_method.as_str()
                 };
 
-                let challenge_secret = self.api_config.secret.as_bytes();
+                let challenge_key = &self.challenge_key;
                 let challenge_expiry =
                     crate::utils::time::now_timestamp() as u64 + life_seconds.max(60) as u64;
 
@@ -7274,7 +7285,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                             &token,
                             WAF_VERIFY_ROUTE,
                             &return_path,
-                            challenge_secret,
+                            challenge_key,
                             challenge_expiry,
                         );
 
@@ -7287,7 +7298,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                             &token,
                             WAF_VERIFY_ROUTE,
                             &return_path,
-                            challenge_secret,
+                            challenge_key,
                             challenge_expiry,
                         );
 
@@ -7300,7 +7311,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                             &token,
                             WAF_VERIFY_ROUTE,
                             &return_path,
-                            challenge_secret,
+                            challenge_key,
                             challenge_expiry,
                             Self::is_https_downstream(session, ctx),
                         );
@@ -7334,7 +7345,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                             WAF_VERIFY_ROUTE,
                             &return_path,
                             target,
-                            challenge_secret,
+                            challenge_key,
                             challenge_expiry,
                         );
 
@@ -8667,7 +8678,7 @@ impl ProxyHttp for EdgeProxy {
         let (reason, defense) = Self::classify_downstream_parse_error(error);
         if matches!(error.etype(), ReadTimedout) {
             let (ip, _, raw_addr) = Self::http_session_socket_client_ip(session);
-            let node_id = self.api_config.node_id.parse::<i64>().unwrap_or(0);
+            let node_id = self.api_config.numeric_gcloud_node_id();
             if Self::is_tls_http_session(session) {
                 crate::l4_defense::record_completed_handshake_event(
                     &self.config,
@@ -8713,7 +8724,7 @@ impl ProxyHttp for EdgeProxy {
             crate::l4_defense::record_completed_handshake_event(
                 &self.config,
                 &self.waf_state,
-                self.api_config.node_id.parse::<i64>().unwrap_or(0),
+                self.api_config.numeric_gcloud_node_id(),
                 ip,
                 kind,
                 2,
@@ -9127,7 +9138,24 @@ impl ProxyHttp for EdgeProxy {
         if target_peer.is_none()
             && let Some(lb) = &ctx.lb
         {
-            target_peer = lb.select_with_backup(b"", 16, |origin_id| {
+            // Consistent hashing keys on the client IP (scheduling hashKey="ip");
+            // round robin / random / least-conn ignore the key.
+            let mut key_buf = [0u8; 16];
+            let key: &[u8] = if lb.uses_client_ip_key() {
+                match ctx.client_ip {
+                    std::net::IpAddr::V4(v4) => {
+                        key_buf[..4].copy_from_slice(&v4.octets());
+                        &key_buf[..4]
+                    }
+                    std::net::IpAddr::V6(v6) => {
+                        key_buf.copy_from_slice(&v6.octets());
+                        &key_buf[..]
+                    }
+                }
+            } else {
+                b""
+            };
+            target_peer = lb.select_with_backup(key, 16, |origin_id| {
                 crate::origin_state::ORIGIN_STATE_MANAGER.is_down(origin_id)
             });
         }
@@ -9222,6 +9250,18 @@ impl ProxyHttp for EdgeProxy {
             };
 
             ctx.origin_id = backend_ext.map(|ext| ext.origin_id).unwrap_or(0);
+            // Hold an in-flight slot for least-connections ranking. The guard is
+            // released by dropping the context (or early in `logging`), covering
+            // success, error, and cancellation paths alike.
+            if ctx
+                .lb
+                .as_ref()
+                .map(|lb| lb.is_least_conn())
+                .unwrap_or(false)
+            {
+                ctx.origin_inflight_guard =
+                    Some(crate::origin_state::ORIGIN_STATE_MANAGER.begin_inflight(ctx.origin_id));
+            }
             ctx.origin_host = host_override.unwrap_or_default();
             ctx.oss_backend = backend_ext.and_then(|ext| ext.oss_backend.clone());
             if let Some(oss_backend) = &ctx.oss_backend {
@@ -9344,6 +9384,7 @@ impl ProxyHttp for EdgeProxy {
 
     async fn logging(&self, session: &mut Session, _re: Option<&Error>, ctx: &mut Self::CTX) {
         ctx.origin_connect_permit.take();
+        ctx.origin_inflight_guard.take();
         if ctx.response_status == 0
             && let Some(err) = _re
             && matches!(err.esource(), ErrorSource::Downstream)
@@ -9445,7 +9486,7 @@ impl ProxyHttp for EdgeProxy {
         ctx: &mut Self::CTX,
     ) -> Result<pingora_cache::CacheKey> {
         if let Some(key) = &ctx.cache_key {
-            return Ok(pingora_cache::CacheKey::new("", key.as_str(), key.as_str()));
+            return Ok(pingora_cache::CacheKey::new(key.as_str(), key.as_str()));
         }
 
         // CRITICAL: If no key was set by request_cache_filter, we MUST return an error.
@@ -9842,10 +9883,10 @@ impl ProxyHttp for EdgeProxy {
                 ctx.cache_key = Some(key);
 
                 if !cache_ref.enable_if_none_match {
-                    session.req_header_mut().headers.remove("if-none-match");
+                    session.req_header_mut().remove_header("if-none-match");
                 }
                 if !cache_ref.enable_if_modified_since {
-                    session.req_header_mut().headers.remove("if-modified-since");
+                    session.req_header_mut().remove_header("if-modified-since");
                 }
 
                 session
@@ -10068,7 +10109,7 @@ impl ProxyHttp for EdgeProxy {
                 };
 
                 if inm_match || ims_match {
-                    upstream_response.status = pingora::http::StatusCode::NOT_MODIFIED;
+                    upstream_response.set_status(pingora::http::StatusCode::NOT_MODIFIED)?;
                     ctx.response_status = 304;
                     // Populate weak ETag if we generated one (RFC 7232 §4.1)
                     if cached_etag.is_none()
@@ -10451,8 +10492,10 @@ impl ProxyHttp for EdgeProxy {
             && action.action_code == "block"
         {
             let (status, body) = self.outbound_waf_block_response(session, ctx, &action);
-            upstream_response.status = pingora::http::StatusCode::from_u16(status)
-                .unwrap_or(pingora::http::StatusCode::FORBIDDEN);
+            upstream_response.set_status(
+                pingora::http::StatusCode::from_u16(status)
+                    .unwrap_or(pingora::http::StatusCode::FORBIDDEN),
+            )?;
             ctx.response_status = status;
             upstream_response.remove_header("content-length");
             upstream_response.remove_header("transfer-encoding");
@@ -10535,7 +10578,7 @@ impl ProxyHttp for EdgeProxy {
                 write!(
                     &mut x_cache,
                     "; node={}; server={}",
-                    self.api_config.node_id,
+                    self.api_config.instance_id,
                     ctx.server
                         .as_ref()
                         .map(|server| server.numeric_id())
@@ -10839,8 +10882,7 @@ impl ProxyHttp for EdgeProxy {
 
         // 2. L1 Logic: Inject Identity headers when talking to L2
         if ctx.node_level == 1 && ctx.upstream_is_parent {
-            let node_id = &self.api_config.node_id;
-            let secret = &self.api_config.secret;
+            let node_id = &self.api_config.gcloud_node_id;
 
             // 2.1 Identification
             upstream_request
@@ -10852,8 +10894,8 @@ impl ProxyHttp for EdgeProxy {
                 .insert_header("X-Cloud-Real-Ip", ctx.client_ip.to_string())
                 .unwrap();
 
-            // 2.3 Security Token
-            if let Ok(token) = crate::auth::generate_token(node_id, secret, "node") {
+            // 2.3 Security Token, keyed by the derived challenge key (D7)
+            if let Ok(token) = crate::auth::generate_token(node_id, &self.challenge_key, "node") {
                 upstream_request
                     .insert_header("X-Cloud-Access-Token", token)
                     .unwrap();
@@ -11699,7 +11741,11 @@ mod tests {
     fn redirect_to_https_defaults_to_301_and_preserves_valid_status() {
         assert_eq!(EdgeProxy::redirect_to_https_status(0), 301);
         assert_eq!(EdgeProxy::redirect_to_https_status(999), 301);
+        assert_eq!(EdgeProxy::redirect_to_https_status(-1), 301);
+        assert_eq!(EdgeProxy::redirect_to_https_status(301), 301);
         assert_eq!(EdgeProxy::redirect_to_https_status(302), 302);
+        // 303 is offered by the admin console and must pass through unchanged.
+        assert_eq!(EdgeProxy::redirect_to_https_status(303), 303);
         assert_eq!(EdgeProxy::redirect_to_https_status(307), 307);
         assert_eq!(EdgeProxy::redirect_to_https_status(308), 308);
     }
@@ -12411,5 +12457,100 @@ mod tests {
         super::HTTP_REQUEST_PARSE_MARKS.remove("203.0.113.10:50001");
         super::HTTP_REQUEST_PARSE_MARKS.remove("203.0.113.11:50002");
         super::HTTP_REQUEST_PARSE_MARKS.remove("203.0.113.12:50003");
+    }
+
+    // ── D7: challenge / relay tokens are keyed by the derived challenge key ──
+
+    /// The D7 conformance vector for the dummy credential secret used below
+    /// (`protocol/conformance/challenge.json`).
+    const DUMMY_CHALLENGE_KEY_HEX: &str =
+        "dc55d19595f9dcce924efb94a68c8fc901efd777a364e44f2c446a959b6a8200";
+
+    fn test_proxy() -> EdgeProxy {
+        let api_config = std::sync::Arc::new(crate::api_config::ApiConfig {
+            rpc_tls: Default::default(),
+            rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
+            rpc_disable_update: true,
+            instance_id: "nd_0123456789".to_string(),
+            secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+                .to_string(),
+            comm_mode: String::new(),
+            gcloud_node_id: "1".to_string(),
+            access_log_pipeline: crate::api_config::AccessLogPipelineConfig::default(),
+            relay: Default::default(),
+            kernel_tuning: Default::default(),
+            cache: Default::default(),
+        });
+        let challenge_key = api_config
+            .challenge_key()
+            .expect("dummy credential secret derives a challenge key");
+        EdgeProxy {
+            config: std::sync::Arc::new(crate::config::ConfigStore::new()),
+            waf_state: std::sync::Arc::new(crate::firewall::state::WafStateManager::new()),
+            api_config,
+            challenge_key,
+            cert_selector: std::sync::Arc::new(crate::ssl::DynamicCertSelector::new()),
+            waf_verifier: std::sync::Arc::new(
+                crate::firewall::verifier::WafVerifier::new(&challenge_key),
+            ),
+            tls_downstream: false,
+        }
+    }
+
+    fn uam_ua_hash(ua: &str) -> String {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(ua.as_bytes());
+        hex::encode(hasher.finalize())
+    }
+
+    #[test]
+    fn challenge_signatures_use_the_derived_challenge_key_not_the_raw_secret() {
+        let proxy = test_proxy();
+        let raw_secret = proxy.api_config.secret.as_bytes();
+        assert_eq!(hex::encode(proxy.challenge_key), DUMMY_CHALLENGE_KEY_HEX);
+        assert_ne!(proxy.challenge_key.as_slice(), raw_secret);
+
+        let ip = "203.0.113.7";
+        let ua = "test-agent";
+        let host_scope = "captcha.example.com|1";
+        let ua_hash = uam_ua_hash(ua);
+
+        let pass_data = format!("uam-pass|payload|{ip}|{ua_hash}|{host_scope}");
+        let challenge_data = format!("uam-challenge|payload|{ip}|{ua_hash}|{host_scope}");
+        let waf_pass_data = format!("waf-pass|waf-token|{ip}|{ua}|slider");
+        let waf_redirect_data = format!("waf-redirect|waf-token|{ip}|{ua}");
+
+        for (actual, data) in [
+            (
+                proxy.uam_pass_signature("payload", ip, ua, host_scope),
+                pass_data.as_str(),
+            ),
+            (
+                proxy.uam_challenge_signature("payload", ip, ua, host_scope),
+                challenge_data.as_str(),
+            ),
+            (
+                proxy.waf_pass_signature("waf-token", ip, ua, "slider"),
+                waf_pass_data.as_str(),
+            ),
+            (
+                proxy.waf_redirect_signature("waf-token", ip, ua),
+                waf_redirect_data.as_str(),
+            ),
+        ] {
+            assert_eq!(
+                actual,
+                EdgeProxy::hmac_sha256_hex(&proxy.challenge_key, data.as_bytes()),
+                "challenge signature must be keyed by the derived challenge key"
+            );
+            // The draft-period keying (the raw credential secret) is gone: it
+            // would produce a different MAC for the same data.
+            assert_ne!(
+                actual,
+                EdgeProxy::hmac_sha256_hex(raw_secret, data.as_bytes()),
+                "challenge signature must not be keyed by the raw credential secret"
+            );
+        }
     }
 }

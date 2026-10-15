@@ -561,7 +561,7 @@ impl RuntimeDistinctIpTracker {
         }
         if self
             .reserved
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |reserved| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |reserved| {
                 (reserved < self.capacity).then_some(reserved + 1)
             })
             .is_err()
@@ -695,7 +695,7 @@ impl ServerMetrics {
 }
 
 fn decrement_active_connections(counter: &AtomicI64) {
-    let _ = counter.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+    let _ = counter.try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
         if current > 0 {
             Some(current - 1)
         } else if current < 0 {
@@ -1105,7 +1105,10 @@ pub mod record {
         );
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "dataplane operation carries explicit policy and connection context"
+    )]
     fn request_end_inner(
         server_id: i64,
         bytes_sent: u64,

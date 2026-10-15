@@ -36,22 +36,18 @@ struct ChallengePayload {
 
 pub struct WafVerifier {
     key: [u8; 32],
-    legacy_key: [u8; 32],
 }
 
 impl WafVerifier {
-    pub fn new(secret: &str) -> Self {
-        let mut hasher = Sha256::new();
-        hasher.update(secret.as_bytes());
-        let digest = hasher.finalize();
-        let mut key = [0u8; 32];
-        key.copy_from_slice(&digest);
-
-        let mut legacy_key = [0u8; 32];
-        let secret_bytes = secret.as_bytes();
-        let len = secret_bytes.len().min(32);
-        legacy_key[..len].copy_from_slice(&secret_bytes[..len]);
-        Self { key, legacy_key }
+    /// Builds the verifier from the node's derived challenge key
+    /// (`ApiConfig::challenge_key`, 04 §2.4 / 05 §4.6, D7). The key is used as
+    /// the AES-256-GCM key of the `WAF-Token` challenge token directly; the raw
+    /// credential secret is never a challenge key and there is no legacy
+    /// fallback key to read tokens minted from it.
+    pub fn new(challenge_key: &[u8; 32]) -> Self {
+        Self {
+            key: *challenge_key,
+        }
     }
 
     /// Generates a cryptographically strong, authenticated WAF token
@@ -143,9 +139,7 @@ impl WafVerifier {
         let (nonce_bytes, ciphertext) = decoded.split_at(12);
         let nonce = Nonce::from(<[u8; 12]>::try_from(nonce_bytes).ok()?);
 
-        let payload = self
-            .decrypt_payload(&self.key, &nonce, ciphertext)
-            .or_else(|| self.decrypt_payload(&self.legacy_key, &nonce, ciphertext))?;
+        let payload = self.decrypt_payload(&self.key, &nonce, ciphertext)?;
 
         if payload.ip != ip || payload.ua_hash != current_ua_hash {
             return None;
@@ -175,9 +169,7 @@ impl WafVerifier {
         }
         let (nonce_bytes, ciphertext) = decoded.split_at(12);
         let nonce = Nonce::from(<[u8; 12]>::try_from(nonce_bytes).ok()?);
-        let payload = self
-            .decrypt_payload(&self.key, &nonce, ciphertext)
-            .or_else(|| self.decrypt_payload(&self.legacy_key, &nonce, ciphertext))?;
+        let payload = self.decrypt_payload(&self.key, &nonce, ciphertext)?;
         if payload.ip != ip || payload.ua_hash != current_ua_hash {
             return None;
         }
@@ -357,5 +349,35 @@ impl WafVerifier {
             }})();
             "#
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The D7 challenge key of the dummy credential secret used across the
+    /// test fixtures; the `WAF-Token` is keyed by this value, not by the raw
+    /// credential secret.
+    const CHALLENGE_KEY: [u8; 32] = [0x2a; 32];
+
+    #[test]
+    fn waf_token_round_trips_under_the_derived_challenge_key() {
+        let verifier = WafVerifier::new(&CHALLENGE_KEY);
+        let token = verifier.generate_token_with_life("203.0.113.7", "test-agent", 3600);
+        assert!(!token.is_empty());
+        assert!(
+            verifier
+                .token_failure_config("203.0.113.7", "test-agent", &token)
+                .is_some()
+        );
+        // A different key cannot read the token: there is no second key and no
+        // fallback to the raw secret.
+        let other = WafVerifier::new(&[0x2b; 32]);
+        assert!(
+            other
+                .token_failure_config("203.0.113.7", "test-agent", &token)
+                .is_none()
+        );
     }
 }

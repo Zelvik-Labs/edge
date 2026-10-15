@@ -469,8 +469,8 @@ impl CommandRunner for SystemCommandRunner {
             .await?;
         Ok(CommandOutput {
             success: output.status.success(),
-            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+            stdout: String::from_utf8_lossy_owned(output.stdout),
+            stderr: String::from_utf8_lossy_owned(output.stderr),
         })
     }
 }
@@ -493,7 +493,13 @@ pub enum SynproxySysctlStatus {
 }
 
 impl SynproxySysctlStatus {
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "platform-specific dataplane entry points and state"
+        )
+    )]
     fn as_str(&self) -> &'static str {
         match self {
             Self::Applied => "applied",
@@ -697,7 +703,13 @@ pub struct SynproxyNftStatus {
 }
 
 impl SynproxyNftStatus {
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "platform-specific dataplane entry points and state"
+        )
+    )]
     fn enabled(&self) -> bool {
         self.table_exists
             && self.has_notrack_rule
@@ -912,7 +924,13 @@ async fn delete_rules_by_comment(
     Ok(())
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(
+    all(not(target_os = "linux"), not(test)),
+    expect(
+        dead_code,
+        reason = "platform-specific dataplane entry points and state"
+    )
+)]
 fn parse_rule_handles_by_comment(input: &str, comment: &str) -> Vec<u64> {
     input
         .lines()
@@ -1178,7 +1196,13 @@ fn format_synproxy_apply_output(
     )
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(
+    all(not(target_os = "linux"), not(test)),
+    expect(
+        dead_code,
+        reason = "platform-specific dataplane entry points and state"
+    )
+)]
 fn format_ports(ports: &BTreeSet<u16>) -> String {
     if ports.is_empty() {
         "-".to_string()
@@ -1191,7 +1215,13 @@ fn format_ports(ports: &BTreeSet<u16>) -> String {
     }
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(
+    all(not(target_os = "linux"), not(test)),
+    expect(
+        dead_code,
+        reason = "platform-specific dataplane entry points and state"
+    )
+)]
 fn sysctl_report_summary(reports: &[SynproxySysctlReport]) -> String {
     reports
         .iter()
@@ -1219,6 +1249,30 @@ mod tests {
     use std::collections::HashSet;
     #[cfg(target_os = "linux")]
     use std::sync::Mutex;
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn system_command_output_preserves_valid_utf8() {
+        let output = SystemCommandRunner
+            .run("/usr/bin/printf", &["%s".into(), "edge-节点".into()])
+            .await
+            .unwrap();
+        assert!(output.success);
+        assert_eq!(output.stdout, "edge-节点");
+        assert!(output.stderr.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn system_command_output_replaces_invalid_utf8() {
+        let output = SystemCommandRunner
+            .run("/usr/bin/printf", &[r"\377ok".into()])
+            .await
+            .unwrap();
+        assert!(output.success);
+        assert_eq!(output.stdout, "\u{fffd}ok");
+        assert!(output.stderr.is_empty());
+    }
 
     #[derive(Default)]
     struct FakeSysctlStore {

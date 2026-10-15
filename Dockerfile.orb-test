@@ -1,0 +1,52 @@
+FROM rust:1.99.0-bookworm
+
+ARG TARGETARCH
+ARG MBX_VERSION=1.14.0
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential ca-certificates clang cmake curl git libclang-dev \
+        libelf-dev libpcap-dev libzstd-dev lld llvm m4 perl pkg-config \
+        protobuf-compiler python3 rsync zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rustup component add rustfmt clippy llvm-tools-preview
+
+ENV PATH="/usr/local/cargo/bin:/usr/local/bin:${PATH}"
+
+RUN set -eu; \
+    case "$TARGETARCH" in \
+        arm64) triple=aarch64-unknown-linux-gnu; \
+            checksum=fdf7965e886e25b2a34cefcc1a0b685159a0ee66002f58b720a0e29b5901fee8 ;; \
+        amd64) triple=x86_64-unknown-linux-gnu; \
+            checksum=fc32cc431a9e022519b16348962f99ca84626ff25196bc11e61cb05df66fb069 ;; \
+        *) printf 'unsupported architecture: %s\n' "$TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    test "$MBX_VERSION" = 1.14.0; \
+    mkdir /tmp/mbx-download; \
+    curl --proto '=https' --tlsv1.2 -fL --retry 3 \
+        "https://github.com/jdx/mr-boxington/releases/download/v${MBX_VERSION}/mbx-${triple}.tar.gz" \
+        -o /tmp/mbx-download/mbx.tar.gz; \
+    printf '%s  %s\n' "$checksum" /tmp/mbx-download/mbx.tar.gz | sha256sum -c -; \
+    tar -xzf /tmp/mbx-download/mbx.tar.gz -C /tmp/mbx-download; \
+    install -m 0755 /tmp/mbx-download/mbx /usr/local/bin/mbx; \
+    rm -rf /tmp/mbx-download; \
+    mbx --version
+
+ENV CARGO_TERM_COLOR=never \
+    CARGO_BUILD_JOBS=2 \
+    CARGO_INCREMENTAL=0 \
+    CARGO_PROFILE_DEV_DEBUG=0 \
+    CARGO_PROFILE_TEST_DEBUG=0 \
+    MBX_CACHE_DIR=/var/cache/zelvik-mbx \
+    MBX_REMOTE_URL="" \
+    MBX_GC_AUTO=false \
+    MBX_GC_MAX_SIZE=3GiB \
+    MBX_TARGET_MAX_SIZE=5GiB \
+    MBX_GC_INCREMENTAL_MAX_SIZE=1GiB \
+    MBX_GC_MAX_TOTAL_SIZE=8GiB \
+    MBX_SCHEDULER_CPUS=2 \
+    MBX_SCHEDULER_MEMORY=3GiB \
+    MBX_SUMMARY=full
+
+WORKDIR /workspace

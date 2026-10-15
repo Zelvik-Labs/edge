@@ -68,7 +68,7 @@ pub async fn fetch_snapshot(api: &ApiConfig, version: i64) -> Result<FetchedSnap
     };
     let registered = crate::rpc::track_rpc(client.register_node(RegisterNodeRequest {
         meta: Some(envelope(version)),
-        node_id: api.node_id.clone(),
+        node_id: api.instance_id.clone(),
         software_version: crate::RELEASE_VERSION.into(),
         capabilities_json: r#"{"snapshotHmac":true,"structuredHealth":true}"#.into(),
         region: String::new(),
@@ -90,7 +90,7 @@ pub async fn fetch_snapshot(api: &ApiConfig, version: i64) -> Result<FetchedSnap
             base_version: version,
             patch_seq: 0,
         }),
-        node_id: api.node_id.clone(),
+        node_id: api.instance_id.clone(),
     }))
     .await?
     .into_inner();
@@ -275,7 +275,7 @@ impl<F> ApplyReleaseSender
         tonic::service::interceptor::InterceptedService<tonic::transport::Channel, F>,
     >
 where
-    F: FnMut(tonic::Request<()>) -> Result<tonic::Request<()>, Status> + Clone + Send + 'static,
+    F: tonic::service::Interceptor + Clone + Send + 'static,
 {
     async fn apply_release(
         &mut self,
@@ -339,7 +339,7 @@ where
                     base_version: release.version,
                     patch_seq: 0,
                 }),
-                node_id: api.node_id.clone(),
+                node_id: api.instance_id.clone(),
                 release_id: release.release_id.clone(),
                 phase: phase.to_string(),
             })
@@ -397,7 +397,7 @@ pub async fn report_health(
         .map_err(|err| Status::unavailable(err.to_string()))?
         .as_rpc_client();
     let response = crate::rpc::track_rpc(rpc.node_control_service().report_node_health(ReportNodeHealthRequest {
-        meta:Some(envelope(version)),node_id:api.node_id.clone(),ready:status.get("isHealthy").and_then(|value|value.as_bool()).unwrap_or(false),
+        meta:Some(envelope(version)),node_id:api.instance_id.clone(),ready:status.get("isHealthy").and_then(|value|value.as_bool()).unwrap_or(false),
         listeners_json:serde_json::json!({"connections":status["connectionCount"],"transports":status["connectionShadow"]}).to_string(),
         cache_json:serde_json::json!({"diskBytes":status["cacheTotalDiskSize"],"memoryBytes":status["cacheTotalMemorySize"]}).to_string(),
         xdp_json:status["xdp"].to_string(),resource_pressure_json:status["resourceGovernor"].to_string(),task_status_json:status["pipelines"].to_string(),
@@ -419,8 +419,11 @@ mod tests {
             rpc_tls: Default::default(),
             rpc_endpoints: vec![],
             rpc_disable_update: false,
-            node_id: "nd_test".into(),
+            instance_id: "nd_0123456789".into(),
+            // The snapshot HMAC fixtures sign with the literal "secret".
             secret: "secret".into(),
+            comm_mode: String::new(),
+            gcloud_node_id: "nd_test".into(),
             access_log_pipeline: Default::default(),
             relay: Default::default(),
             kernel_tuning: Default::default(),
@@ -652,7 +655,7 @@ mod tests {
         assert_eq!(phases, ["prepare", "validate", "apply", "ack"]);
         for req in &sender.calls {
             assert_eq!(req.release_id, "rel-9");
-            assert_eq!(req.node_id, "nd_test");
+            assert_eq!(req.node_id, "nd_0123456789");
             assert_eq!(req.meta.as_ref().unwrap().base_version, 7);
             assert_eq!(req.meta.as_ref().unwrap().schema_version, "node.v1");
         }
@@ -911,8 +914,12 @@ mod loopback_tests {
                 rpc_tls: Default::default(),
                 rpc_endpoints: vec![format!("http://{addr}")],
                 rpc_disable_update: false,
-                node_id: "nd_test".into(),
-                secret: "secret".into(),
+                instance_id: "nd_0123456789".into(),
+                // The snapshot HMAC fixtures sign with the literal "secret".
+                // The loopback server signs with the same credential key.
+                secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".into(),
+                comm_mode: String::new(),
+                gcloud_node_id: "nd_test".into(),
                 access_log_pipeline: Default::default(),
                 relay: Default::default(),
                 kernel_tuning: Default::default(),
@@ -922,13 +929,17 @@ mod loopback_tests {
         }
     }
 
+    /// The credential key every loopback fixture shares (test-only dummy).
+    const TEST_SECRET: &str =
+        "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+
     fn desired_response(
         pair: &Ed25519KeyPair,
         version: i64,
         body: &[u8],
         required: bool,
     ) -> proto::GetDesiredReleaseResponse {
-        let mut mac = Hmac::<Sha256>::new_from_slice(b"secret").unwrap();
+        let mut mac = Hmac::<Sha256>::new_from_slice(TEST_SECRET.as_bytes()).unwrap();
         mac.update(&version.to_be_bytes());
         mac.update(body);
         proto::GetDesiredReleaseResponse {

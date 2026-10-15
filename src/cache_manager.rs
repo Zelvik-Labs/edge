@@ -38,7 +38,7 @@ impl CacheManager {
         value: &[u8],
         ttl_secs: u64,
     ) -> anyhow::Result<usize> {
-        let cache_key = CacheKey::new("", key, key);
+        let cache_key = CacheKey::new(key, key);
         let now = SystemTime::now();
         let fresh_until = now + Duration::from_secs(ttl_secs);
         let mut header = ResponseHeader::build(200, Some(1))?;
@@ -62,7 +62,7 @@ impl CacheManager {
             return Ok(Some(meta.size));
         }
 
-        let cache_key = CacheKey::new("", key, key);
+        let cache_key = CacheKey::new(key, key);
         let trace = pingora_cache::trace::Span::inactive().handle();
         Ok(self.storage.lookup(&cache_key, &trace).await?.map(|_| 0))
     }
