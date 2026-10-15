@@ -35,17 +35,22 @@ nodeId: "your-node-id"
 secret: "your-node-secret"
 ```
 
-安装或升级到 GitHub 最新 Rust Release（自动检测现有部署：有则迁移/升级，无则全新安装；输出中英双语）：
+安装或升级使用授权站 `https://license.zelvik.net` 分发的 Rust 包，需要有效的更新密钥（格式为 `zvu_` 加 64 位十六进制字符）。先在 root shell 中安全读取密钥，再运行安装脚本；密钥不写入命令历史或下载 URL：
 
 ```bash
+read -r -s -p 'Update key: ' ZELVIK_UPDATE_KEY; printf '\n'
+export ZELVIK_UPDATE_KEY
 curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | bash
 ```
 
-全新安装的一条非交互命令示例（GeoLite2 库由本仓库 `geoip/` 提供，默认必装）：
+脚本交互选择升级或全新安装；全新安装的非交互命令示例（沿用上述环境变量，`--geoip` 可选下载 GeoLite2 库）：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | bash -s -- --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret
+curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | bash -s -- --fresh --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret
+unset ZELVIK_UPDATE_KEY
 ```
+
+也支持 `--update-key KEY`，但建议用环境变量避免密钥出现在进程参数和 shell 历史中。使用 sudo 时需显式保留该变量（`sudo --preserve-env=ZELVIK_UPDATE_KEY bash`）。安装与 dry-run 均校验密钥格式，恢复、列出备份和帮助无需密钥。包下载仅使用固定 HTTPS 地址 `/Download/{version}/Zelvik-Edge/{asset}`，默认 `latest`，指定版本示例为 `--version 26.10.2`；任何重定向都会失败，GeoIP 请求不携带更新密钥。GitHub Release 仅保留发布说明和源码，不提供二进制包或包的 Actions artifact。
 
 ## 文档
 

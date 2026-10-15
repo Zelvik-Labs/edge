@@ -9,7 +9,7 @@ use std::io::Cursor;
 use std::sync::{Arc, RwLock};
 use x509_parser::prelude::*;
 
-use crate::config_models::SSLCertConfig;
+use crate::config_models::{SSLCertConfig, SSLPolicyConfig};
 use crate::tls_crypto::{default_crypto_provider, install_default_crypto_provider};
 
 type CertCacheMap = Arc<RwLock<HashMap<i64, (String, Arc<CertPair>)>>>;
@@ -195,6 +195,118 @@ impl ResolvesServerCert for DynamicCertSelector {
     }
 }
 
+/// Minimum TLS protocol version an HTTPS listener will accept.
+///
+/// rustls only implements TLS 1.2 and TLS 1.3, so the admin-console
+/// `sslPolicy.minVersion` string is folded onto this two-valued floor: any
+/// value below TLS 1.2 (or an unrecognized one) is rejected with a warning and
+/// resolved to [`TlsMinVersion::Tls12`] rather than silently acting as the
+/// default.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum TlsMinVersion {
+    /// TLS 1.2 and TLS 1.3 — the permissive floor, also the default when unset.
+    #[default]
+    Tls12,
+    /// TLS 1.3 only.
+    Tls13,
+}
+
+impl TlsMinVersion {
+    /// Resolves the `sslPolicy.minVersion` string into a supported floor.
+    ///
+    /// An empty string (unset) means "TLS 1.2 and above". `TLSv1.0`/`TLSv1.1`
+    /// are unsupported by rustls and are explicitly rejected with a warning,
+    /// degrading to the TLS 1.2 floor; any other unrecognized value is likewise
+    /// warned about and resolved to the TLS 1.2 floor — never silently treated
+    /// as a default.
+    pub fn from_config_str(min_version: &str) -> Self {
+        let trimmed = min_version.trim();
+        if trimmed.is_empty() {
+            return Self::Tls12;
+        }
+        if trimmed.eq_ignore_ascii_case("TLSv1.3") || trimmed.eq_ignore_ascii_case("TLS1.3") {
+            return Self::Tls13;
+        }
+        if trimmed.eq_ignore_ascii_case("TLSv1.2") || trimmed.eq_ignore_ascii_case("TLS1.2") {
+            return Self::Tls12;
+        }
+        if trimmed.eq_ignore_ascii_case("TLSv1.1")
+            || trimmed.eq_ignore_ascii_case("TLS1.1")
+            || trimmed.eq_ignore_ascii_case("TLSv1.0")
+            || trimmed.eq_ignore_ascii_case("TLS1.0")
+            || trimmed.eq_ignore_ascii_case("TLSv1")
+            || trimmed.eq_ignore_ascii_case("TLS1")
+        {
+            tracing::warn!(
+                "sslPolicy.minVersion={:?} is not supported by rustls (TLS 1.0/1.1 are disabled); \
+                 falling back to the TLS 1.2 minimum",
+                min_version
+            );
+            return Self::Tls12;
+        }
+        tracing::warn!(
+            "sslPolicy.minVersion={:?} is not a recognized TLS version; \
+             falling back to the TLS 1.2 minimum",
+            min_version
+        );
+        Self::Tls12
+    }
+
+    /// The more permissive of two floors — used when several servers share one
+    /// acceptor, which cannot vary its version set per SNI. TLS 1.2 wins unless
+    /// both sides require TLS 1.3.
+    fn most_permissive(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Tls13, Self::Tls13) => Self::Tls13,
+            _ => Self::Tls12,
+        }
+    }
+}
+
+/// Resolved TLS policy for an HTTP/1.1+2 listener — the ALPN and protocol-version
+/// knobs a single `rustls::ServerConfig` can express.
+///
+/// A shared acceptor cannot vary these per SNI, so when several HTTPS servers
+/// bind the same address their policies are aggregated with [`TlsPolicy::union`].
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct TlsPolicy {
+    /// Whether the listener advertises `h2` in ALPN (HTTP/2 support).
+    pub http2_enabled: bool,
+    /// Lowest TLS version the listener accepts.
+    pub min_version: TlsMinVersion,
+}
+
+impl Default for TlsPolicy {
+    /// HTTP/2 与 TLS 1.2 下限是边缘的既有行为：站点没有下发 `sslPolicy` 时
+    /// 不能因为「字段缺失」就静默关掉 h2，只有显式 `http2Enabled=false` 才关。
+    fn default() -> Self {
+        Self {
+            http2_enabled: true,
+            min_version: TlsMinVersion::Tls12,
+        }
+    }
+}
+
+impl TlsPolicy {
+    /// Derives the listener policy from a server's `sslPolicy` block.
+    pub fn from_ssl_policy(policy: &SSLPolicyConfig) -> Self {
+        Self {
+            http2_enabled: policy.http2_enabled,
+            min_version: TlsMinVersion::from_config_str(&policy.min_version),
+        }
+    }
+
+    /// Union of two policies sharing one acceptor: HTTP/2 is advertised if
+    /// either side enables it, and the version floor is the more permissive of
+    /// the two.
+    pub fn union(self, other: Self) -> Self {
+        Self {
+            http2_enabled: self.http2_enabled || other.http2_enabled,
+            min_version: self.min_version.most_permissive(other.min_version),
+        }
+    }
+}
+
 pub fn build_rustls_server_config(
     cert_selector: Arc<DynamicCertSelector>,
     alpn_protocols: Vec<Vec<u8>>,
@@ -216,6 +328,22 @@ pub fn build_rustls_server_config(
     let mut config = builder.with_no_client_auth().with_cert_resolver(resolver);
     config.alpn_protocols = alpn_protocols;
     Ok(config)
+}
+
+/// Builds the rustls server config for an HTTP/1.1+2 listener from a resolved
+/// [`TlsPolicy`]: ALPN advertises `h2` only when HTTP/2 is enabled, and the
+/// accepted protocol versions follow the configured minimum.
+pub fn build_rustls_server_config_for_policy(
+    cert_selector: Arc<DynamicCertSelector>,
+    policy: TlsPolicy,
+) -> anyhow::Result<rustls::ServerConfig> {
+    let alpn_protocols = if policy.http2_enabled {
+        vec![b"h2".to_vec(), b"http/1.1".to_vec()]
+    } else {
+        vec![b"http/1.1".to_vec()]
+    };
+    let tls13_only = policy.min_version == TlsMinVersion::Tls13;
+    build_rustls_server_config(cert_selector, alpn_protocols, tls13_only)
 }
 
 impl CertPair {

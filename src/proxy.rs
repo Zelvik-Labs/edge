@@ -285,6 +285,11 @@ pub struct ProxyCTX {
     pub response_headers_size: usize,
     pub origin_address: String,
     pub origin_id: i64,
+    /// RAII guard holding this request's in-flight slot for the selected origin
+    /// when the least-connections algorithm drives selection. Dropping the
+    /// context (any exit path: success, failure, cancellation) releases the
+    /// slot; it is also released early in `logging`.
+    pub origin_inflight_guard: Option<crate::origin_state::OriginInflightGuard>,
     pub origin_connect_permit: Option<StaticAdmissionPermit>,
     /// Connection's admission ticket bucket (`memory_ticket`), resolved once
     /// per request in `early_request_filter`. Pooled classes draw from it;
@@ -442,6 +447,7 @@ impl Default for ProxyCTX {
             response_headers_size: 0,
             origin_address: String::new(),
             origin_id: 0,
+            origin_inflight_guard: None,
             origin_connect_permit: None,
             ticket_bucket: None,
             request_body_waf_permit: None,
@@ -2646,10 +2652,8 @@ impl EdgeProxy {
     }
 
     fn redirect_to_https_status(status: i32) -> u16 {
-        u16::try_from(status)
-            .ok()
-            .filter(|code| matches!(*code, 301 | 302 | 307 | 308))
-            .unwrap_or(301)
+        // Single source of truth shared with the compiled plan path.
+        crate::compiled::redirect_to_https_status(status)
     }
 
     fn www_trailing_slash_redirect(
@@ -9134,7 +9138,24 @@ impl ProxyHttp for EdgeProxy {
         if target_peer.is_none()
             && let Some(lb) = &ctx.lb
         {
-            target_peer = lb.select_with_backup(b"", 16, |origin_id| {
+            // Consistent hashing keys on the client IP (scheduling hashKey="ip");
+            // round robin / random / least-conn ignore the key.
+            let mut key_buf = [0u8; 16];
+            let key: &[u8] = if lb.uses_client_ip_key() {
+                match ctx.client_ip {
+                    std::net::IpAddr::V4(v4) => {
+                        key_buf[..4].copy_from_slice(&v4.octets());
+                        &key_buf[..4]
+                    }
+                    std::net::IpAddr::V6(v6) => {
+                        key_buf.copy_from_slice(&v6.octets());
+                        &key_buf[..]
+                    }
+                }
+            } else {
+                b""
+            };
+            target_peer = lb.select_with_backup(key, 16, |origin_id| {
                 crate::origin_state::ORIGIN_STATE_MANAGER.is_down(origin_id)
             });
         }
@@ -9229,6 +9250,18 @@ impl ProxyHttp for EdgeProxy {
             };
 
             ctx.origin_id = backend_ext.map(|ext| ext.origin_id).unwrap_or(0);
+            // Hold an in-flight slot for least-connections ranking. The guard is
+            // released by dropping the context (or early in `logging`), covering
+            // success, error, and cancellation paths alike.
+            if ctx
+                .lb
+                .as_ref()
+                .map(|lb| lb.is_least_conn())
+                .unwrap_or(false)
+            {
+                ctx.origin_inflight_guard =
+                    Some(crate::origin_state::ORIGIN_STATE_MANAGER.begin_inflight(ctx.origin_id));
+            }
             ctx.origin_host = host_override.unwrap_or_default();
             ctx.oss_backend = backend_ext.and_then(|ext| ext.oss_backend.clone());
             if let Some(oss_backend) = &ctx.oss_backend {
@@ -9351,6 +9384,7 @@ impl ProxyHttp for EdgeProxy {
 
     async fn logging(&self, session: &mut Session, _re: Option<&Error>, ctx: &mut Self::CTX) {
         ctx.origin_connect_permit.take();
+        ctx.origin_inflight_guard.take();
         if ctx.response_status == 0
             && let Some(err) = _re
             && matches!(err.esource(), ErrorSource::Downstream)
@@ -11707,7 +11741,11 @@ mod tests {
     fn redirect_to_https_defaults_to_301_and_preserves_valid_status() {
         assert_eq!(EdgeProxy::redirect_to_https_status(0), 301);
         assert_eq!(EdgeProxy::redirect_to_https_status(999), 301);
+        assert_eq!(EdgeProxy::redirect_to_https_status(-1), 301);
+        assert_eq!(EdgeProxy::redirect_to_https_status(301), 301);
         assert_eq!(EdgeProxy::redirect_to_https_status(302), 302);
+        // 303 is offered by the admin console and must pass through unchanged.
+        assert_eq!(EdgeProxy::redirect_to_https_status(303), 303);
         assert_eq!(EdgeProxy::redirect_to_https_status(307), 307);
         assert_eq!(EdgeProxy::redirect_to_https_status(308), 308);
     }

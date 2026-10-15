@@ -1,7 +1,7 @@
 use dashmap::DashMap;
 use std::sync::Arc;
 use std::sync::LazyLock as Lazy;
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, warn};
 
@@ -29,13 +29,30 @@ impl OriginState {
 
 pub struct OriginStateManager {
     states: DashMap<i64, Arc<OriginState>>,
+    inflight: Arc<OriginInflightCounters>,
 }
 
 impl OriginStateManager {
     fn new() -> Self {
         Self {
             states: DashMap::with_shard_amount(64),
+            inflight: Arc::new(OriginInflightCounters::new()),
         }
+    }
+
+    /// Shared per-origin in-flight request counters, used by the
+    /// least-connections load balancer. Cloning the returned `Arc` keeps the
+    /// counters alive for the lifetime of a built load balancer.
+    pub fn inflight_counters(&self) -> Arc<OriginInflightCounters> {
+        Arc::clone(&self.inflight)
+    }
+
+    /// Increment the in-flight counter for `origin_id` and return an RAII guard
+    /// that decrements it on drop. The guard must be kept for the whole
+    /// lifetime of the request so that every exit path (success, failure,
+    /// cancellation) releases the slot exactly once.
+    pub fn begin_inflight(&self, origin_id: i64) -> OriginInflightGuard {
+        self.inflight.begin(origin_id)
     }
 
     pub fn record_success(&self, origin_id: i64) {
@@ -105,6 +122,76 @@ impl OriginStateManager {
                 .or_insert_with(|| Arc::new(OriginState::new()))
                 .value(),
         )
+    }
+}
+
+/// Per-origin in-flight request counters shared between the least-connections
+/// load balancer (which reads them to rank candidates) and the request path
+/// (which increments/decrements them through [OriginInflightGuard]).
+///
+/// This is deliberately separate from `metrics::active_requests`, which is a
+/// single global counter and cannot rank individual origins.
+pub struct OriginInflightCounters {
+    counts: DashMap<i64, Arc<AtomicUsize>>,
+}
+
+impl OriginInflightCounters {
+    pub fn new() -> Self {
+        Self {
+            counts: DashMap::with_shard_amount(64),
+        }
+    }
+
+    /// Current number of in-flight requests routed to `origin_id`.
+    pub fn inflight(&self, origin_id: i64) -> usize {
+        if origin_id <= 0 {
+            return 0;
+        }
+        self.counts
+            .get(&origin_id)
+            .map(|counter| counter.load(Ordering::Relaxed))
+            .unwrap_or(0)
+    }
+
+    /// Increment the counter for `origin_id` and return a guard that decrements
+    /// it on drop. A non-positive `origin_id` (e.g. the `127.0.0.1:80` fallback
+    /// backend) yields a no-op guard.
+    pub fn begin(&self, origin_id: i64) -> OriginInflightGuard {
+        if origin_id <= 0 {
+            return OriginInflightGuard { counter: None };
+        }
+        let counter = Arc::clone(
+            self.counts
+                .entry(origin_id)
+                .or_insert_with(|| Arc::new(AtomicUsize::new(0)))
+                .value(),
+        );
+        counter.fetch_add(1, Ordering::Relaxed);
+        OriginInflightGuard {
+            counter: Some(counter),
+        }
+    }
+}
+
+impl Default for OriginInflightCounters {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// RAII handle that keeps one in-flight slot counted for the origin it was
+/// created for. Dropping it releases exactly the slot taken by
+/// [OriginInflightCounters::begin], so a leaked counter is impossible even on
+/// early return, error, or cancellation.
+pub struct OriginInflightGuard {
+    counter: Option<Arc<AtomicUsize>>,
+}
+
+impl Drop for OriginInflightGuard {
+    fn drop(&mut self) {
+        if let Some(counter) = &self.counter {
+            counter.fetch_sub(1, Ordering::Relaxed);
+        }
     }
 }
 

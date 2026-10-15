@@ -1,5 +1,5 @@
 use crate::config::ConfigStore;
-use crate::config_models::{ProxyProtocolConfig, ServerConfig};
+use crate::config_models::{HTTPSConfig, ProxyProtocolConfig, ServerConfig};
 use crate::l4_connection_registry::{self, L4ConnectionProtocol};
 use crate::l4_defense::L4DefenseKind;
 use crate::memory_governor::{AdmissionClass, MEMORY_GOVERNOR};
@@ -8,7 +8,7 @@ use crate::net_bind::{
 };
 use crate::proxy::EdgeProxy;
 use crate::proxy_protocol;
-use crate::ssl::DynamicCertSelector;
+use crate::ssl::{DynamicCertSelector, TlsPolicy};
 use anyhow::Context;
 use dashmap::DashMap;
 use pingora_core::apps::HttpServerApp;
@@ -50,6 +50,10 @@ use std::os::windows::io::AsRawSocket;
 struct ListenerHandle {
     is_tls: bool,
     enable_proxy_protocol: bool,
+    /// Aggregated TLS policy this listener's acceptor was built with. Kept on
+    /// the handle so `reconcile_listeners` (via `ListenerConfig`) can detect a
+    /// policy change and rebuild the listener.
+    tls_policy: TlsPolicy,
     shutdown_tx: watch::Sender<bool>,
 }
 
@@ -187,6 +191,9 @@ impl H2ConnectionDefenseState {
 struct ListenerConfig {
     is_tls: bool,
     enable_proxy_protocol: bool,
+    /// Aggregated TLS policy for this port. Part of equality so a policy change
+    /// forces `reconcile_listeners` to tear down and rebuild the acceptor.
+    tls_policy: TlsPolicy,
 }
 
 #[cfg(any(test, target_os = "linux"))]
@@ -317,6 +324,17 @@ impl TlsProbeKind {
     }
 }
 
+/// TLS policy for the HTTPS listener serving `https_cfg`. Servers without an
+/// active `sslPolicy` contribute the default policy (HTTP/2 off, TLS 1.2 floor).
+fn server_https_tls_policy(https_cfg: &HTTPSConfig) -> TlsPolicy {
+    https_cfg
+        .ssl_policy
+        .as_ref()
+        .filter(|policy| policy.is_on)
+        .map(TlsPolicy::from_ssl_policy)
+        .unwrap_or_default()
+}
+
 fn record_desired_listener(
     desired_ports: &mut HashMap<SocketAddr, ListenerConfig>,
     bind_addr: SocketAddr,
@@ -327,17 +345,40 @@ fn record_desired_listener(
         Entry::Vacant(entry) => {
             entry.insert(config);
         }
-        Entry::Occupied(entry) if *entry.get() == config => {}
-        Entry::Occupied(entry) => {
-            warn!(
-                "HTTP/HTTPS Proxy Manager: ignoring conflicting listener config on {} for server {} (existing TLS={}, proxy_protocol={}; requested TLS={}, proxy_protocol={})",
-                bind_addr,
-                server_id,
-                entry.get().is_tls,
-                entry.get().enable_proxy_protocol,
-                config.is_tls,
-                config.enable_proxy_protocol
-            );
+        Entry::Occupied(mut entry) => {
+            let existing = entry.get_mut();
+            if existing.is_tls != config.is_tls
+                || existing.enable_proxy_protocol != config.enable_proxy_protocol
+            {
+                warn!(
+                    "HTTP/HTTPS Proxy Manager: ignoring conflicting listener config on {} for server {} (existing TLS={}, proxy_protocol={}; requested TLS={}, proxy_protocol={})",
+                    bind_addr,
+                    server_id,
+                    existing.is_tls,
+                    existing.enable_proxy_protocol,
+                    config.is_tls,
+                    config.enable_proxy_protocol
+                );
+                return;
+            }
+            if existing.tls_policy != config.tls_policy {
+                // One rustls::ServerConfig cannot vary ALPN/versions per SNI, so
+                // servers sharing a port must share one policy. Take the union
+                // (HTTP/2 = OR, version floor = most permissive) and record it.
+                let merged = existing.tls_policy.union(config.tls_policy);
+                warn!(
+                    "HTTP/HTTPS Proxy Manager: server {} requests a TLS policy on {} that differs from other servers sharing the port (existing http2={}, min_version={:?}; requested http2={}, min_version={:?}); the shared acceptor uses http2={}, min_version={:?}",
+                    server_id,
+                    bind_addr,
+                    existing.tls_policy.http2_enabled,
+                    existing.tls_policy.min_version,
+                    config.tls_policy.http2_enabled,
+                    config.tls_policy.min_version,
+                    merged.http2_enabled,
+                    merged.min_version
+                );
+                existing.tls_policy = merged;
+            }
         }
     }
 }
@@ -353,7 +394,7 @@ pub struct HttpProxyManager {
     #[cfg(any(test, target_os = "linux"))]
     tls_proxy: OnceLock<Arc<pingora_proxy::HttpProxy<EdgeProxy>>>,
     #[cfg(any(test, target_os = "linux"))]
-    tls_acceptor: parking_lot::RwLock<Option<Arc<PingoraTlsAcceptor>>>,
+    tls_acceptor: parking_lot::RwLock<HashMap<TlsPolicy, Arc<PingoraTlsAcceptor>>>,
 }
 
 impl HttpProxyManager {
@@ -374,7 +415,7 @@ impl HttpProxyManager {
             #[cfg(any(test, target_os = "linux"))]
             tls_proxy: OnceLock::new(),
             #[cfg(any(test, target_os = "linux"))]
-            tls_acceptor: parking_lot::RwLock::new(None),
+            tls_acceptor: parking_lot::RwLock::new(HashMap::new()),
         })
     }
 
@@ -417,6 +458,7 @@ impl HttpProxyManager {
                                             ListenerConfig {
                                                 is_tls: false,
                                                 enable_proxy_protocol: enable_pp,
+                                                tls_policy: TlsPolicy::default(),
                                             },
                                             server.numeric_id(),
                                         );
@@ -462,6 +504,7 @@ impl HttpProxyManager {
                                             ListenerConfig {
                                                 is_tls: true,
                                                 enable_proxy_protocol: enable_pp,
+                                                tls_policy: server_https_tls_policy(https_cfg),
                                             },
                                             server.numeric_id(),
                                         );
@@ -486,8 +529,7 @@ impl HttpProxyManager {
             }
 
             for (bind_addr, config) in &desired_ports {
-                self.spawn_listener(*bind_addr, config.is_tls, config.enable_proxy_protocol)
-                    .await;
+                self.spawn_listener(*bind_addr, *config).await;
             }
             self.reconcile_listeners(&desired_ports);
             tokio::select! {
@@ -500,14 +542,16 @@ impl HttpProxyManager {
         }
     }
 
-    async fn spawn_listener(
-        self: &Arc<Self>,
-        bind_addr: SocketAddr,
-        is_tls: bool,
-        enable_proxy_protocol: bool,
-    ) {
+    async fn spawn_listener(self: &Arc<Self>, bind_addr: SocketAddr, config: ListenerConfig) {
+        let ListenerConfig {
+            is_tls,
+            enable_proxy_protocol,
+            tls_policy,
+        } = config;
         if let Some(existing) = self.handled_ports.get(&bind_addr) {
-            if existing.is_tls == is_tls && existing.enable_proxy_protocol == enable_proxy_protocol
+            if existing.is_tls == is_tls
+                && existing.enable_proxy_protocol == enable_proxy_protocol
+                && existing.tls_policy == tls_policy
             {
                 return;
             }
@@ -522,19 +566,20 @@ impl HttpProxyManager {
             ListenerHandle {
                 is_tls,
                 enable_proxy_protocol,
+                tls_policy,
                 shutdown_tx,
             },
         );
         info!(
-            "HTTP/HTTPS Proxy Manager: Initializing listener on {} (TLS={}, proxy_protocol={})",
-            bind_addr, is_tls, enable_proxy_protocol
+            "HTTP/HTTPS Proxy Manager: Initializing listener on {} (TLS={}, proxy_protocol={}, http2={}, min_version={:?})",
+            bind_addr, is_tls, enable_proxy_protocol, tls_policy.http2_enabled, tls_policy.min_version
         );
 
         let manager = self.clone();
         tokio::spawn(async move {
             if let Err(e) = manager
                 .clone()
-                .run_http_listener(bind_addr, is_tls, enable_proxy_protocol, shutdown_rx)
+                .run_http_listener(bind_addr, config, shutdown_rx)
                 .await
             {
                 error!("HTTP/HTTPS listener on {} failed: {}", bind_addr, e);
@@ -553,6 +598,7 @@ impl HttpProxyManager {
                     ListenerConfig {
                         is_tls: entry.value().is_tls,
                         enable_proxy_protocol: entry.value().enable_proxy_protocol,
+                        tls_policy: entry.value().tls_policy,
                     },
                 )
             })
@@ -577,10 +623,14 @@ impl HttpProxyManager {
     async fn run_http_listener(
         self: Arc<Self>,
         bind_addr: SocketAddr,
-        is_tls: bool,
-        enable_proxy_protocol: bool,
+        config: ListenerConfig,
         shutdown_rx: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
+        let ListenerConfig {
+            is_tls,
+            enable_proxy_protocol,
+            ..
+        } = config;
         let worker_count = MEMORY_GOVERNOR.http_accept_worker_count();
         info!(
             "HTTP/HTTPS Proxy Manager: starting {} accept worker(s) on {} (TLS={}, proxy_protocol={})",
@@ -598,8 +648,7 @@ impl HttpProxyManager {
                 manager
                     .run_accept_scaler(
                         bind_addr,
-                        is_tls,
-                        enable_proxy_protocol,
+                        config,
                         worker_count,
                         desired,
                         &mut scaler_shutdown,
@@ -612,14 +661,7 @@ impl HttpProxyManager {
             let worker_shutdown = shutdown_rx.clone();
             tokio::spawn(async move {
                 if let Err(err) = manager
-                    .run_http_listener_worker(
-                        bind_addr,
-                        is_tls,
-                        enable_proxy_protocol,
-                        worker_id,
-                        worker_shutdown,
-                        None,
-                    )
+                    .run_http_listener_worker(bind_addr, config, worker_id, worker_shutdown, None)
                     .await
                 {
                     error!(
@@ -629,15 +671,8 @@ impl HttpProxyManager {
                 }
             });
         }
-        self.run_http_listener_worker(
-            bind_addr,
-            is_tls,
-            enable_proxy_protocol,
-            0,
-            shutdown_rx,
-            None,
-        )
-        .await
+        self.run_http_listener_worker(bind_addr, config, 0, shutdown_rx, None)
+            .await
     }
 
     /// Spawns/stops extra accept workers so the live count tracks
@@ -647,8 +682,7 @@ impl HttpProxyManager {
     async fn run_accept_scaler(
         self: Arc<Self>,
         bind_addr: SocketAddr,
-        is_tls: bool,
-        enable_proxy_protocol: bool,
+        config: ListenerConfig,
         base_workers: usize,
         desired: Arc<AtomicUsize>,
         shutdown_rx: &mut watch::Receiver<bool>,
@@ -690,8 +724,7 @@ impl HttpProxyManager {
                     if let Err(err) = manager
                         .run_http_listener_worker(
                             bind_addr,
-                            is_tls,
-                            enable_proxy_protocol,
+                            config,
                             worker_id,
                             worker_shutdown,
                             Some(desired),
@@ -712,12 +745,16 @@ impl HttpProxyManager {
     async fn run_http_listener_worker(
         self: Arc<Self>,
         bind_addr: SocketAddr,
-        is_tls: bool,
-        enable_proxy_protocol: bool,
+        config: ListenerConfig,
         worker_id: usize,
         mut shutdown_rx: watch::Receiver<bool>,
         scale_state: Option<Arc<AtomicUsize>>,
     ) -> anyhow::Result<()> {
+        let ListenerConfig {
+            is_tls,
+            enable_proxy_protocol,
+            tls_policy,
+        } = config;
         let port = bind_addr.port();
         let listener = bind_tcp_listener_with_retry(
             bind_addr,
@@ -736,10 +773,9 @@ impl HttpProxyManager {
         let proxy_arc = Arc::new(proxy);
 
         let shared_ssl_acceptor = if is_tls {
-            let rustls_config = crate::ssl::build_rustls_server_config(
+            let rustls_config = crate::ssl::build_rustls_server_config_for_policy(
                 Arc::clone(&self.cert_selector),
-                vec![b"h2".to_vec(), b"http/1.1".to_vec()],
-                false,
+                tls_policy,
             )
             .context("build rustls HTTP server config")?;
             Some(Arc::new(
@@ -1190,25 +1226,52 @@ impl HttpProxyManager {
     }
 
     #[cfg(any(test, target_os = "linux"))]
-    fn shared_tls_acceptor(&self) -> anyhow::Result<Arc<PingoraTlsAcceptor>> {
-        if let Some(acceptor) = self.tls_acceptor.read().clone() {
-            return Ok(acceptor);
+    fn shared_tls_acceptor(&self, tls_policy: TlsPolicy) -> anyhow::Result<Arc<PingoraTlsAcceptor>> {
+        if let Some(acceptor) = self.tls_acceptor.read().get(&tls_policy) {
+            return Ok(acceptor.clone());
         }
         let mut guard = self.tls_acceptor.write();
-        if let Some(acceptor) = guard.clone() {
-            return Ok(acceptor);
+        if let Some(acceptor) = guard.get(&tls_policy) {
+            return Ok(acceptor.clone());
         }
-        let rustls_config = crate::ssl::build_rustls_server_config(
+        let rustls_config = crate::ssl::build_rustls_server_config_for_policy(
             Arc::clone(&self.cert_selector),
-            vec![b"h2".to_vec(), b"http/1.1".to_vec()],
-            false,
+            tls_policy,
         )
         .context("build rustls HTTP server config")?;
         let acceptor = Arc::new(PingoraTlsAcceptor::from_server_config(Arc::new(
             rustls_config,
         )));
-        *guard = Some(acceptor.clone());
+        guard.insert(tls_policy, acceptor.clone());
         Ok(acceptor)
+    }
+
+    /// Aggregated TLS policy for the HTTPS listener serving `port`, computed
+    /// with the same union rule the socket listeners use (HTTP/2 = OR, version
+    /// floor = most permissive) so AF_XDP-steered streams honor one policy.
+    #[cfg(any(test, target_os = "linux"))]
+    fn af_xdp_https_tls_policy_sync(&self, port: u16) -> TlsPolicy {
+        self.config_store
+            .get_all_servers_sync()
+            .iter()
+            .filter_map(|server| {
+                server.https.as_ref().filter(|https| {
+                    https.is_on
+                        && https.listen.iter().any(|addr| {
+                            addr.port_range.as_deref().is_some_and(|range| {
+                                crate::config_models::port_range_contains(range, port)
+                            })
+                        })
+                })
+            })
+            .fold(None, |acc: Option<TlsPolicy>, https| {
+                let policy = server_https_tls_policy(https);
+                Some(match acc {
+                    Some(prev) => prev.union(policy),
+                    None => policy,
+                })
+            })
+            .unwrap_or_default()
     }
 
     #[cfg(any(test, target_os = "linux"))]
@@ -1776,7 +1839,8 @@ impl HttpProxyManager {
 
         let l4_stream = af_xdp_virtual_stream(client_stream, client_addr);
         let stream: pingora_core::protocols::Stream = if kind == AfXdpHttpPortKind::Https {
-            let acceptor = self.shared_tls_acceptor()?;
+            let tls_policy = self.af_xdp_https_tls_policy_sync(listen_port);
+            let acceptor = self.shared_tls_acceptor(tls_policy)?;
             let timeout = crate::l4_defense::clamp_tls_handshake_timeout(
                 self.tls_handshake_timeout(),
                 crate::l4_defense::current_pressure_level(),

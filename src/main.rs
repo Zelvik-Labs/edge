@@ -227,7 +227,7 @@ enum Commands {
     },
     /// Upgrade the installed binary from the license release hub
     Upgrade {
-        /// Release tag to install, for example v1.1.6. Defaults to latest.
+        /// Canonical release version to install, for example 26.10.2. Defaults to latest.
         #[arg(long, default_value = "latest")]
         version: String,
 
@@ -239,6 +239,10 @@ enum Commands {
         /// Packages are distributed by the license site itself.
         #[arg(long, default_value = "https://license.zelvik.net")]
         base_url: String,
+
+        /// License update key; prefer ZELVIK_UPDATE_KEY to avoid shell history exposure.
+        #[arg(long, env = "ZELVIK_UPDATE_KEY", hide_env_values = true)]
+        update_key: Option<String>,
 
         /// Override release asset name instead of auto-detecting CPU/architecture.
         #[arg(long)]
@@ -1942,11 +1946,11 @@ fn run_systemctl(_action: &str) -> anyhow::Result<bool> {
     Ok(false)
 }
 
-#[derive(Debug)]
 struct UpgradeOptions {
     version: String,
     component: String,
     base_url: String,
+    update_key: Option<String>,
     asset: Option<String>,
     install_binary: Option<PathBuf>,
     backup_dir: PathBuf,
@@ -1958,8 +1962,8 @@ struct UpgradeOptions {
 #[cfg(test)]
 use zelvik_edge::node_upgrade::select_release_asset;
 use zelvik_edge::node_upgrade::{
-    XDP_EBPF_OBJECT_NAME, detect_release_asset, download_to_file, extract_release_payload,
-    install_release_payload, install_xdp_ebpf_object_to_runtime,
+    XDP_EBPF_OBJECT_NAME, detect_release_asset, download_release_to_file, extract_release_payload,
+    install_release_payload, install_xdp_ebpf_object_to_runtime, update_key_headers, update_origin,
 };
 
 #[cfg(target_os = "linux")]
@@ -1974,20 +1978,35 @@ struct XdpObjectRepair {
     dest: PathBuf,
 }
 
-fn normalize_release_version(version: &str) -> String {
-    let trimmed = version.trim();
-    if trimmed.eq_ignore_ascii_case("latest") {
-        "latest".to_string()
-    } else if trimmed.starts_with('v') {
-        trimmed.to_string()
+fn normalize_release_version(version: &str) -> anyhow::Result<String> {
+    if version == "latest" || regex::Regex::new(
+        r"^[0-9]{2}\.(1[0-2]|[1-9])\.[1-5](\.[1-9][0-9]*)?$"
+    )?.is_match(version) {
+        Ok(version.to_string())
     } else {
-        format!("v{trimmed}")
+        anyhow::bail!("release version must be latest or canonical CalVer YY.M.W[.P]");
     }
 }
 
-fn release_download_url(base_url: &str, component: &str, version: &str, asset: &str) -> String {
-    let base = base_url.trim_end_matches('/');
-    format!("{base}/Download/{version}/{component}/{asset}")
+fn release_download_url(
+    base_url: &str,
+    component: &str,
+    version: &str,
+    asset: &str,
+) -> anyhow::Result<reqwest::Url> {
+    let mut url = update_origin(base_url)?;
+    if url.scheme() != "https" {
+        anyhow::bail!("license package downloads require HTTPS");
+    }
+    for part in [component, version, asset] {
+        if part.is_empty() || part == "." || part == ".."
+            || !part.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
+        {
+            anyhow::bail!("invalid release component, version or asset path");
+        }
+    }
+    url.set_path(&format!("/Download/{version}/{component}/{asset}"));
+    Ok(url)
 }
 
 fn unix_timestamp() -> u64 {
@@ -2293,7 +2312,10 @@ fn upgrade_binary(options: UpgradeOptions) -> anyhow::Result<()> {
         anyhow::bail!("upgrade command is currently supported only on Linux release assets");
     }
 
-    let version = normalize_release_version(&options.version);
+    let version = normalize_release_version(&options.version)?;
+    let headers = update_key_headers(options.update_key.as_deref().ok_or_else(|| {
+        anyhow::anyhow!("upgrade requires --update-key or ZELVIK_UPDATE_KEY")
+    })?)?;
     let asset = match options.asset {
         Some(asset) => asset,
         None => detect_release_asset()?.to_string(),
@@ -2301,7 +2323,7 @@ fn upgrade_binary(options: UpgradeOptions) -> anyhow::Result<()> {
     let install_binary = options.install_binary.unwrap_or(std::env::current_exe()?);
     let install_binary = install_binary.canonicalize().unwrap_or(install_binary);
     let download_url =
-        release_download_url(&options.base_url, &options.component, &version, &asset);
+        release_download_url(&options.base_url, &options.component, &version, &asset)?;
 
     println!("{}", t("upgrade.summary"));
     println!(
@@ -2365,7 +2387,7 @@ fn upgrade_binary(options: UpgradeOptions) -> anyhow::Result<()> {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
-        rt.block_on(download_to_file(&download_url, &archive_path))?;
+        rt.block_on(download_release_to_file(&download_url, &archive_path, headers))?;
 
         println!("{}", t("upgrade.extracting"));
         let payload = extract_release_payload(&archive_path, &tmp_dir)?;
@@ -2409,10 +2431,12 @@ mod upgrade_tests {
 
     #[test]
     fn normalizes_release_versions() {
-        assert_eq!(normalize_release_version("latest"), "latest");
-        assert_eq!(normalize_release_version("LATEST"), "latest");
-        assert_eq!(normalize_release_version("v1.1.6"), "v1.1.6");
-        assert_eq!(normalize_release_version("1.1.6"), "v1.1.6");
+        assert_eq!(normalize_release_version("latest").unwrap(), "latest");
+        assert_eq!(normalize_release_version("26.10.2").unwrap(), "26.10.2");
+        assert_eq!(normalize_release_version("26.10.2.1").unwrap(), "26.10.2.1");
+        for invalid in ["LATEST", "v26.10.2", "26.01.2", "26.10.0", "26.10.2.0", "26.10.2?key=secret"] {
+            assert!(normalize_release_version(invalid).is_err());
+        }
     }
 
     #[test]
@@ -2423,18 +2447,39 @@ mod upgrade_tests {
                 "Zelvik-Edge",
                 "latest",
                 "Zelvik-Edge-linux-x64-v3-avx2.tar.gz"
-            ),
+            ).unwrap().as_str(),
             "https://license.zelvik.net/Download/latest/Zelvik-Edge/Zelvik-Edge-linux-x64-v3-avx2.tar.gz"
         );
         assert_eq!(
             release_download_url(
                 "https://license.zelvik.net",
                 "Zelvik-Edge",
-                "v1.1.6",
+                "26.10.2",
                 "Zelvik-Edge-linux-arm64-generic.tar.gz"
-            ),
-            "https://license.zelvik.net/Download/v1.1.6/Zelvik-Edge/Zelvik-Edge-linux-arm64-generic.tar.gz"
+            ).unwrap().as_str(),
+            "https://license.zelvik.net/Download/26.10.2/Zelvik-Edge/Zelvik-Edge-linux-arm64-generic.tar.gz"
         );
+        for base in [
+            "http://license.zelvik.net", "https://user:key@license.zelvik.net",
+            "https://license.zelvik.net?key=secret", "https://license.zelvik.net/#secret",
+            "https://license.zelvik.net/path",
+        ] {
+            assert!(release_download_url(base, "Zelvik-Edge", "latest", "edge.tar.gz").is_err());
+        }
+        for asset in ["../edge.tar.gz", "edge.tar.gz?key=secret", "//other.example/edge.tar.gz"] {
+            assert!(release_download_url("https://license.zelvik.net", "Zelvik-Edge", "latest", asset).is_err());
+        }
+    }
+
+    #[test]
+    fn upgrade_key_is_an_explicit_option() {
+        let cli = Cli::try_parse_from([
+            "zelvik-edge", "upgrade", "--update-key", &format!("zvu_{}", "a".repeat(64))
+        ]).unwrap();
+        let Some(Commands::Upgrade { update_key, .. }) = cli.command else {
+            panic!("expected upgrade command");
+        };
+        assert_eq!(update_key.unwrap(), format!("zvu_{}", "a".repeat(64)));
     }
 
     #[test]
@@ -2943,6 +2988,7 @@ WantedBy=multi-user.target\n",
             version,
             component,
             base_url,
+            update_key,
             asset,
             install_binary,
             backup_dir,
@@ -2954,6 +3000,7 @@ WantedBy=multi-user.target\n",
                 version,
                 component,
                 base_url,
+                update_key,
                 asset,
                 install_binary,
                 backup_dir,

@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
+# Never trace key assignments, argument parsing, or the authorization header.
+set +xv
 set -euo pipefail
 
-REPO="${REPO:-Zelvik-Labs/edge}"
+UPDATE_KEY="${ZELVIK_UPDATE_KEY:-}"
+export -n UPDATE_KEY
+unset ZELVIK_UPDATE_KEY
 VERSION="${VERSION:-latest}"
 SERVICE_NAME="${SERVICE_NAME:-zelvik-edge}"
 BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/cloud-node-rust-migration}"
@@ -32,19 +36,20 @@ The script:
   1. Asks for the interface language when running interactively.
   2. Finds the current cloud-node systemd ExecStart binary or command.
   3. Backs it up under a timestamped directory.
-  4. Downloads the requested Rust release from GitHub; latest is the default.
+  4. Downloads the requested Rust package from license.zelvik.net using an update key; latest is the default.
   5. Stops any running legacy cloud-node process and unregisters old systemd units.
   6. Optionally downloads GeoLite2 mmdb files from P3TERX/GeoLite.mmdb.
   7. Overwrites the binary, re-registers the zelvik-edge command/service, and verifies startup.
 
 Usage:
-  sudo scripts/install-zelvik-edge.sh
-  sudo scripts/install-zelvik-edge.sh --fresh
+  sudo --preserve-env=ZELVIK_UPDATE_KEY scripts/install-zelvik-edge.sh
+  sudo --preserve-env=ZELVIK_UPDATE_KEY scripts/install-zelvik-edge.sh --fresh
   sudo scripts/install-zelvik-edge.sh --restore
 
+Set ZELVIK_UPDATE_KEY securely in your shell before installation (zvu_ + 64 lowercase hex digits).
 Run directly from GitHub:
-  curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo bash
-  curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo bash -s -- --fresh --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret --geoip
+  curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo --preserve-env=ZELVIK_UPDATE_KEY bash
+  curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | sudo --preserve-env=ZELVIK_UPDATE_KEY bash -s -- --fresh --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret --geoip
 
 Options:
   --install              Install, migrate, or upgrade to the Rust release.
@@ -54,8 +59,9 @@ Options:
   --restore              Restore the Go original from a previous backup.
   --restore-backup DIR   Restore from this backup dir. Default: latest backup.
   --list-backups         List available backup dirs and exit.
-  --repo OWNER/REPO       GitHub repo. Default: Zelvik/edge
-  --version VERSION      Release tag, for example v0.1.0. Default: latest
+  --update-key KEY       Update key (zvu_ + 64 lowercase hex digits); prefer ZELVIK_UPDATE_KEY
+                         to avoid exposing it in shell history or process arguments.
+  --version VERSION      CalVer, for example 26.10.2 (no v prefix). Default: latest
   --service NAME         systemd service name. Default: zelvik-edge
   --install-dir DIR      Runtime working directory. Default: existing runtime dir, or /opt/zelvik/edge
   --install-binary PATH  Installed Zelvik-Edge binary path. Default: INSTALL_DIR/zelvik-edge
@@ -78,9 +84,13 @@ Options:
   -h, --help             Show this help.
 
 Environment variables with the same names are also supported:
-  REPO, VERSION, SERVICE_NAME, INSTALL_DIR, INSTALL_BINARY, BACKUP_ROOT,
+  ZELVIK_UPDATE_KEY, VERSION, SERVICE_NAME, INSTALL_DIR, INSTALL_BINARY, BACKUP_ROOT,
   START_MODE, LANGUAGE, ZELVIK_EDGE_LANG, DOWNLOAD_GEOIP, GEOIP_DIR, MODE, RESTORE_BACKUP,
   API_ENDPOINTS, NODE_ID, NODE_SECRET, TIMEZONE.
+
+Install/upgrade and dry-run require a valid update key; restore, list-backups, and help do not.
+Packages are fetched only from https://license.zelvik.net/Download/{version}/Zelvik-Edge/{asset}.
+Redirects are rejected; GeoIP downloads never receive the update key.
 USAGE
 }
 
@@ -559,8 +569,9 @@ while [ "$#" -gt 0 ]; do
             MODE="list-backups"
             shift
             ;;
-        --repo)
-            REPO="${2:?missing repo}"
+        --update-key)
+            [ "$#" -ge 2 ] || die "missing update key; prefer ZELVIK_UPDATE_KEY"
+            UPDATE_KEY="$2"
             shift 2
             ;;
         --version)
@@ -666,6 +677,14 @@ done
 prompt_language
 
 prompt_mode
+
+if [ "$MODE" = "install" ] || [ "$MODE" = "fresh" ]; then
+    [[ "$UPDATE_KEY" =~ ^zvu_[0-9a-f]{64}$ ]] \
+        || die "install/upgrade requires a valid ZELVIK_UPDATE_KEY or --update-key (zvu_ + 64 lowercase hex digits)"
+    if [ "$VERSION" != "latest" ] && ! [[ "$VERSION" =~ ^[0-9]{2}\.(1[0-2]|[1-9])\.[1-5](\.[1-9][0-9]*)?$ ]]; then
+        die "version must be latest or canonical CalVer YY.M.W[.P], for example 26.10.2"
+    fi
+fi
 
 if [ "$MODE" = "fresh" ]; then
     ALLOW_FRESH=1
@@ -1359,24 +1378,39 @@ detect_asset_name() {
     esac
 }
 
-normalize_version() {
-    if [ "$VERSION" = "latest" ]; then
-        printf 'latest'
-    elif printf '%s' "$VERSION" | grep -q '^v'; then
-        printf '%s' "$VERSION"
-    else
-        printf 'v%s' "$VERSION"
-    fi
-}
-
 download_url_for() {
     local version="$1"
     local asset="$2"
-    if [ "$version" = "latest" ]; then
-        printf 'https://github.com/%s/releases/latest/download/%s\n' "$REPO" "$asset"
-    else
-        printf 'https://github.com/%s/releases/download/%s/%s\n' "$REPO" "$version" "$asset"
+    printf 'https://license.zelvik.net/Download/%s/Zelvik-Edge/%s\n' "$version" "$asset"
+}
+
+download_package() {
+    local url="$1"
+    local target="$2"
+    local http_status=""
+
+    # -q ignores .curlrc (including verbose/trace/redirect settings). Supply the
+    # header through stdin, never curl's argv, and never follow a Location.
+    if ! http_status="$(printf 'header = "Authorization: Bearer %s"\n' "$UPDATE_KEY" \
+        | curl -q --config - --silent --show-error --fail \
+            --proto '=https' --no-location --max-redirs 0 \
+            --retry 3 --connect-timeout 20 \
+            --output "$target" --write-out '%{http_code}' "$url")"; then
+        rm -f "$target"
+        die "package download failed; check the update key and license.zelvik.net availability"
     fi
+    case "$http_status" in
+        200)
+            ;;
+        3??)
+            rm -f "$target"
+            die "package download refused HTTP redirect ($http_status); redirects are not allowed"
+            ;;
+        *)
+            rm -f "$target"
+            die "package download failed with HTTP status $http_status"
+            ;;
+    esac
 }
 
 geoip_url_for() {
@@ -1831,7 +1865,7 @@ collect_fresh_timezone_config
 
 BACKUP_DIR="$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S)"
 ASSET_NAME="$(detect_asset_name)"
-NORMALIZED_VERSION="$(normalize_version)"
+NORMALIZED_VERSION="$VERSION"
 DOWNLOAD_URL="$(download_url_for "$NORMALIZED_VERSION" "$ASSET_NAME")"
 EXISTING_RUNTIME="not-found"
 CURRENT_BACKUP_SUFFIX="current"
@@ -1874,7 +1908,7 @@ fi
 
 section "$(is_zh && printf '安装摘要' || printf 'Install Summary')"
 kv "mode" "$MODE"
-kv "repository" "$REPO"
+kv "distribution" "https://license.zelvik.net"
 kv "version" "$NORMALIZED_VERSION"
 kv "asset" "$ASSET_NAME"
 kv "existing node" "${EXISTING_BINARY:-not found}"
@@ -1912,7 +1946,6 @@ elif [ "$EXISTING_RUNTIME" = "unknown" ]; then
 fi
 
 confirm_install
-apply_fresh_timezone
 
 TMP_DIR="$(mktemp -d)"
 cleanup() {
@@ -1920,6 +1953,23 @@ cleanup() {
 }
 trap cleanup EXIT
 
+log "downloading: $DOWNLOAD_URL"
+if [ "$DRY_RUN" -eq 0 ]; then
+    # Keep the downloaded archive and extracted contents in separate empty dirs.
+    mkdir "$TMP_DIR/package" "$TMP_DIR/extracted"
+    download_package "$DOWNLOAD_URL" "$TMP_DIR/package/$ASSET_NAME"
+    tar -xzf "$TMP_DIR/package/$ASSET_NAME" -C "$TMP_DIR/extracted"
+    [ -f "$TMP_DIR/extracted/zelvik-edge" ] || die "release archive does not contain zelvik-edge"
+    if [ ! -f "$TMP_DIR/extracted/data/zelvik-edge-xdp-ebpf.o" ]; then
+        warn "release archive does not contain data/zelvik-edge-xdp-ebpf.o; XDP attach will be unavailable until the eBPF object is installed"
+    fi
+else
+    log "+ authenticated HTTPS package download (redirects disabled): $DOWNLOAD_URL"
+    log "+ tar -xzf $TMP_DIR/package/$ASSET_NAME -C $TMP_DIR/extracted"
+fi
+unset UPDATE_KEY
+
+apply_fresh_timezone
 run mkdir -p "$BACKUP_DIR"
 
 if [ -n "$EXISTING_BINARY" ] && [ -e "$EXISTING_BINARY" ]; then
@@ -1951,7 +2001,7 @@ if [ "$DRY_RUN" -eq 0 ]; then
     {
         printf 'created_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         printf 'mode=%s\n' "$MODE"
-        printf 'repo=%s\n' "$REPO"
+        printf 'distribution=%s\n' 'https://license.zelvik.net'
         printf 'version=%s\n' "$NORMALIZED_VERSION"
         printf 'asset=%s\n' "$ASSET_NAME"
         printf 'existing_binary=%s\n' "${EXISTING_BINARY:-not found}"
@@ -2000,19 +2050,6 @@ if [ "$LEGACY_WAS_RUNNING" -eq 0 ] && systemctl_available; then
     done < <(discover_legacy_units || true)
 fi
 
-log "downloading: $DOWNLOAD_URL"
-if [ "$DRY_RUN" -eq 0 ]; then
-    curl -fL --retry 3 --connect-timeout 20 -o "$TMP_DIR/$ASSET_NAME" "$DOWNLOAD_URL"
-    tar -xzf "$TMP_DIR/$ASSET_NAME" -C "$TMP_DIR"
-    [ -f "$TMP_DIR/zelvik-edge" ] || die "release archive does not contain zelvik-edge"
-    if [ ! -f "$TMP_DIR/data/zelvik-edge-xdp-ebpf.o" ]; then
-        warn "release archive does not contain data/zelvik-edge-xdp-ebpf.o; XDP attach will be unavailable until the eBPF object is installed"
-    fi
-else
-    log "+ curl -fL --retry 3 --connect-timeout 20 -o $TMP_DIR/$ASSET_NAME $DOWNLOAD_URL"
-    log "+ tar -xzf $TMP_DIR/$ASSET_NAME -C $TMP_DIR"
-fi
-
 # Stop and unregister the old deployment BEFORE overwriting binaries/unit files.
 # This avoids restarting with a mixed Go process + Rust ExecStop/unit state.
 stop_legacy_deployment
@@ -2021,16 +2058,16 @@ unregister_legacy_services
 run mkdir -p "$INSTALL_DIR" "$INSTALL_DIR/configs" "$INSTALL_DIR/data" "$INSTALL_DIR/logs"
 migrate_runtime_layout
 if [ "$DRY_RUN" -eq 0 ]; then
-    install -m 0755 "$TMP_DIR/zelvik-edge" "$INSTALL_BINARY.new"
+    install -m 0755 "$TMP_DIR/extracted/zelvik-edge" "$INSTALL_BINARY.new"
     mv -f "$INSTALL_BINARY.new" "$INSTALL_BINARY"
-    if [ -f "$TMP_DIR/data/zelvik-edge-xdp-ebpf.o" ]; then
-        install -m 0644 "$TMP_DIR/data/zelvik-edge-xdp-ebpf.o" "$INSTALL_DIR/data/zelvik-edge-xdp-ebpf.o.new"
+    if [ -f "$TMP_DIR/extracted/data/zelvik-edge-xdp-ebpf.o" ]; then
+        install -m 0644 "$TMP_DIR/extracted/data/zelvik-edge-xdp-ebpf.o" "$INSTALL_DIR/data/zelvik-edge-xdp-ebpf.o.new"
         mv -f "$INSTALL_DIR/data/zelvik-edge-xdp-ebpf.o.new" "$INSTALL_DIR/data/zelvik-edge-xdp-ebpf.o"
     fi
 else
-    log "+ install -m 0755 $TMP_DIR/zelvik-edge $INSTALL_BINARY.new"
+    log "+ install -m 0755 $TMP_DIR/extracted/zelvik-edge $INSTALL_BINARY.new"
     log "+ mv -f $INSTALL_BINARY.new $INSTALL_BINARY"
-    log "+ install -m 0644 $TMP_DIR/data/zelvik-edge-xdp-ebpf.o $INSTALL_DIR/data/zelvik-edge-xdp-ebpf.o"
+    log "+ install -m 0644 $TMP_DIR/extracted/data/zelvik-edge-xdp-ebpf.o $INSTALL_DIR/data/zelvik-edge-xdp-ebpf.o"
 fi
 
 write_api_node_config

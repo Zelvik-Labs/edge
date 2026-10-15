@@ -1211,7 +1211,9 @@ pub struct SSLPolicyConfig {
     pub is_on: bool,
     #[serde(default, deserialize_with = "deserialize_null_default")]
     pub certs: Vec<SSLCertConfig>,
-    #[serde(rename = "http2Enabled", default)]
+    // 字段缺失 = 开启。HTTP/2 是边缘的既有行为，控制面与面板的默认也都是开，
+    // 只有显式下发 false 才关闭；否则「没写这个字段」会被静默当成关掉 h2。
+    #[serde(rename = "http2Enabled", default = "default_true")]
     pub http2_enabled: bool,
     #[serde(rename = "minVersion", default)]
     pub min_version: String,
@@ -1226,7 +1228,7 @@ impl Default for SSLPolicyConfig {
             id: 0,
             is_on: false,
             certs: Vec::new(),
-            http2_enabled: false,
+            http2_enabled: true,
             min_version: String::new(),
             hsts: None,
         }
