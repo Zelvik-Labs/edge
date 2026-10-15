@@ -161,6 +161,10 @@ struct TcpForwardContext {
     backend_ext: Option<crate::lb_factory::BackendExtension>,
     use_tls_to_backend: bool,
     metrics_guard: Option<crate::metrics::ActiveRequestMetricsGuard>,
+    /// In-flight slot for least-connections ranking, held for the whole
+    /// forwarded connection. Dropping the context — success, failure,
+    /// cancellation or timeout — releases it exactly once.
+    origin_inflight_guard: Option<crate::origin_state::OriginInflightGuard>,
 }
 
 static CLIENT_CERT_CACHE: Lazy<Mutex<LruCache<String, ParsedClientCert>>> =
@@ -1338,6 +1342,10 @@ impl TcpProxyManager {
             .get::<crate::lb_factory::BackendExtension>()
             .cloned();
         let use_tls_to_backend = backend_ext.as_ref().map(|e| e.use_tls).unwrap_or(false);
+        // Count the forwarded connection against its origin for least-connections
+        // ranking. The guard rides the context for the whole connection, so the
+        // L4 path now reflects load the same way the L7 path does.
+        let origin_inflight_guard = Some(crate::lb_factory::begin_inflight_for(&lb, origin_id));
 
         debug!(
             "TCP Proxy: Forwarding connection from {} to {} (Server ID {}, UpstreamTLS={})",
@@ -1354,6 +1362,7 @@ impl TcpProxyManager {
             backend_ext,
             use_tls_to_backend,
             metrics_guard: None,
+            origin_inflight_guard,
         })
     }
 
@@ -1776,6 +1785,9 @@ impl TcpProxyManager {
         if let Some(mut guard) = context.metrics_guard.take() {
             guard.finish();
         }
+        // The connect failed; the connection ends here, releasing its
+        // least-connections slot with the context.
+        context.origin_inflight_guard = None;
         crate::origin_state::ORIGIN_STATE_MANAGER.record_failure(context.origin_id);
     }
 
@@ -1786,6 +1798,10 @@ impl TcpProxyManager {
         context: &mut TcpForwardContext,
         result: &Result<RelayOutcome, BidirectionalStreamError>,
     ) {
+        // The relay has ended; release the least-connections slot explicitly so
+        // it never outlives the metrics bookkeeping. Failure paths that return
+        // before this drop the whole context, releasing the slot that way.
+        context.origin_inflight_guard = None;
         let (bytes_received, bytes_sent, close_reason) = match result {
             Ok(outcome) => {
                 if outcome.close_reason != RelayCloseReason::Clean {
@@ -3721,6 +3737,14 @@ mod tests {
     }
 
     async fn install_test_servers(store: &ConfigStore, servers: Vec<Arc<ServerConfig>>) {
+        install_test_servers_with_lb(store, servers, std::collections::HashMap::new()).await;
+    }
+
+    async fn install_test_servers_with_lb(
+        store: &ConfigStore,
+        servers: Vec<Arc<ServerConfig>>,
+        id_to_lb: std::collections::HashMap<i64, Arc<crate::lb_factory::AnyLoadBalancer>>,
+    ) {
         store
             .update_config(
                 1,
@@ -3730,7 +3754,7 @@ mod tests {
                 servers,
                 std::collections::HashMap::new(),
                 std::collections::HashMap::new(),
-                std::collections::HashMap::new(),
+                id_to_lb,
                 vec![],
                 vec![],
                 vec![],
@@ -3770,6 +3794,86 @@ mod tests {
                 None,
             )
             .await;
+    }
+
+    /// A least-connections pool over the given origin ids, built through the
+    /// production `build_lb` path so the shared in-flight counters are wired in.
+    fn least_conn_test_lb(ids: &[i64]) -> Arc<crate::lb_factory::AnyLoadBalancer> {
+        let origins: Vec<serde_json::Value> = ids
+            .iter()
+            .enumerate()
+            .map(|(index, id)| {
+                serde_json::json!({
+                    "id": id,
+                    "addr": format!("127.0.0.1:{}", 9700 + index),
+                    "isOn": true,
+                    "weight": 1,
+                })
+            })
+            .collect();
+        let cfg: crate::config_models::ReverseProxyConfig = serde_json::from_value(serde_json::json!({
+            "isOn": true,
+            "primaryOrigins": origins,
+            "scheduling": { "code": "least_conn", "options": {} },
+        }))
+        .unwrap();
+        let (lb, _hc) = crate::lb_factory::build_lb(
+            0,
+            &cfg,
+            2,
+            &std::collections::HashMap::new(),
+            false,
+            true,
+        );
+        lb
+    }
+
+    /// Regression for Zelvik-Labs/edge#11: a TCP connection must hold an
+    /// in-flight slot while it is open, so a second selection reflects the first
+    /// connection's load, and the slot must be released when it closes.
+    #[tokio::test]
+    async fn tcp_forward_context_tracks_least_conn_inflight() {
+        const SERVER_ID: i64 = 97_700;
+        const ORIGIN_A: i64 = 97_701;
+        const ORIGIN_B: i64 = 97_702;
+
+        let store = ConfigStore::new();
+        let mut id_to_lb = std::collections::HashMap::new();
+        id_to_lb.insert(SERVER_ID, least_conn_test_lb(&[ORIGIN_A, ORIGIN_B]));
+        let server = Arc::new(ServerConfig {
+            id: Some(SERVER_ID),
+            is_on: true,
+            ..Default::default()
+        });
+        install_test_servers_with_lb(&store, vec![server.clone()], id_to_lb).await;
+        let manager = TcpProxyManager::new(
+            store,
+            Arc::new(DynamicCertSelector::new()),
+            Arc::new(WafStateManager::new()),
+            7,
+        );
+        let counters = crate::origin_state::ORIGIN_STATE_MANAGER.inflight_counters();
+        let addr: SocketAddr = "127.0.0.1:40001".parse().unwrap();
+
+        // First connection is counted while it stays open.
+        let first = manager.tcp_forward_context(addr, &server).await.unwrap();
+        assert_eq!(counters.inflight(first.origin_id), 1);
+
+        // The second selection sees that load and moves to the other origin.
+        let second = manager.tcp_forward_context(addr, &server).await.unwrap();
+        assert_ne!(
+            first.origin_id, second.origin_id,
+            "least_conn must not keep picking the loaded origin"
+        );
+        assert_eq!(counters.inflight(first.origin_id), 1);
+        assert_eq!(counters.inflight(second.origin_id), 1);
+
+        // Closing one connection releases exactly its slot.
+        drop(first);
+        assert_eq!(counters.inflight(second.origin_id), 1);
+        drop(second);
+        assert_eq!(counters.inflight(ORIGIN_A), 0);
+        assert_eq!(counters.inflight(ORIGIN_B), 0);
     }
 
     #[tokio::test]

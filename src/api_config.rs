@@ -719,6 +719,141 @@ kernelTuning:
         assert_eq!(validate_rpc_endpoint(endpoint).unwrap(), endpoint);
     }
 
+    /// Pull a `printf '<fmt>'` format string out of the installer source. Only
+    /// the fresh-install writer is wanted: the dry-run echo prints the same keys
+    /// with a two-space indent, so a format that starts with a space is skipped.
+    fn install_printf_format(script: &str, key: &str) -> String {
+        for line in script.lines() {
+            let line = line.trim_start();
+            let Some(rest) = line.strip_prefix("printf '") else {
+                continue;
+            };
+            let Some(end) = rest.find('\'') else {
+                continue;
+            };
+            let fmt = &rest[..end];
+            if fmt.starts_with(key) {
+                return fmt.replace("\\n", "\n");
+            }
+        }
+        panic!("install script has no printf format for {key:?}");
+    }
+
+    /// Rebuild the api_node.yaml a fresh install writes, straight from the
+    /// installer's own printf format strings.
+    fn fresh_install_yaml_from_script(script: &str) -> String {
+        let secret = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+        let endpoints = install_printf_format(script, "rpc.endpoints: ")
+            .replace("%s", "[ \"http://127.0.0.1:8001\" ]");
+        let instance = install_printf_format(script, "instanceId: ")
+            .replace("%s", "\"nd_0123456789\"");
+        let credential =
+            install_printf_format(script, "secret: ").replace("%s", &format!("\"{secret}\""));
+        let relay = install_printf_format(script, "relay:");
+        let zero_copy = install_printf_format(script, "  zeroCopy: false");
+        format!("{endpoints}{instance}{credential}{relay}{zero_copy}")
+    }
+
+    /// Snapshot/restore of every process global a real `ApiConfig::load` call
+    /// touches, so the install-script regression test can exercise the true
+    /// load path without leaking state into sibling tests (the loopback and
+    /// update-endpoint tests read these same globals). Serialized with
+    /// [`RELEASE_SIGNING_TEST_LOCK`] — the same cross-module discipline those
+    /// tests already use — because parallel tests share the process.
+    struct ApiLoadGlobalsGuard {
+        // Declared first so the lock is released last (fields drop in order).
+        _lock: tokio::sync::MutexGuard<'static, ()>,
+        saved_rpc_endpoints: Option<Vec<String>>,
+        saved_update_endpoints: Option<Vec<String>>,
+        saved_home: Option<std::ffi::OsString>,
+        /// Empty `ZELVIK_EDGE_HOME` for the duration: `load` probes
+        /// `NodePaths::current().config_dir()/control-plane-runtime.json`, which
+        /// must never resolve to a developer machine's real runtime file.
+        _home: PathBuf,
+    }
+
+    impl ApiLoadGlobalsGuard {
+        fn new() -> Self {
+            let home = std::env::temp_dir().join(format!(
+                "zelvik-load-globals-{}",
+                uuid::Uuid::new_v4()
+            ));
+            fs::create_dir_all(home.join("configs")).unwrap();
+            let saved_home = std::env::var_os("ZELVIK_EDGE_HOME");
+            unsafe {
+                std::env::set_var("ZELVIK_EDGE_HOME", &home);
+            }
+            Self {
+                _lock: RELEASE_SIGNING_TEST_LOCK.blocking_lock(),
+                saved_rpc_endpoints: RUNTIME_RPC_ENDPOINTS
+                    .read()
+                    .ok()
+                    .and_then(|guard| guard.clone()),
+                saved_update_endpoints: RUNTIME_UPDATE_ENDPOINTS
+                    .read()
+                    .ok()
+                    .and_then(|guard| guard.clone()),
+                saved_home,
+                _home: home,
+            }
+        }
+    }
+
+    impl Drop for ApiLoadGlobalsGuard {
+        fn drop(&mut self) {
+            if let Ok(mut guard) = RUNTIME_RPC_ENDPOINTS.write() {
+                *guard = self.saved_rpc_endpoints.clone();
+            }
+            if let Ok(mut guard) = RUNTIME_UPDATE_ENDPOINTS.write() {
+                *guard = self.saved_update_endpoints.clone();
+            }
+            match &self.saved_home {
+                Some(value) => unsafe { std::env::set_var("ZELVIK_EDGE_HOME", value) },
+                None => unsafe { std::env::remove_var("ZELVIK_EDGE_HOME") },
+            }
+            fs::remove_dir_all(&self._home).ok();
+        }
+    }
+
+    /// Regression for the fresh-install config the script writes: it must use the
+    /// keys `ApiConfig` requires (`instanceId`, not the dead `nodeId`) and must
+    /// load through the real `ApiConfig::load`. A drift between the script and
+    /// the parser has to fail here, not on a freshly installed node.
+    #[test]
+    fn install_script_fresh_api_node_yaml_loads() {
+        // Held for the whole test: `load` mutates process globals and reads
+        // paths derived from the environment.
+        let _globals = ApiLoadGlobalsGuard::new();
+        let script = include_str!("../scripts/install-zelvik-edge.sh");
+        assert!(
+            !script.contains("printf 'nodeId:"),
+            "install script still writes the dead `nodeId` key"
+        );
+        assert!(
+            !script.contains("--node-id") && !script.contains("--secret"),
+            "install script still exposes the manual identity flags"
+        );
+
+        let yaml = fresh_install_yaml_from_script(script);
+        let dir = std::env::temp_dir().join(format!("zelvik-install-yaml-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("api_node.yaml");
+        fs::write(&path, &yaml).unwrap();
+
+        let config = ApiConfig::load(&path).expect("fresh-install api_node.yaml must load");
+        assert_eq!(config.instance_id, "nd_0123456789");
+        assert_eq!(
+            config.secret,
+            "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+        );
+        assert_eq!(
+            config.rpc_endpoints,
+            vec!["http://127.0.0.1:8001".to_string()]
+        );
+
+        fs::remove_dir_all(dir).unwrap();
+    }
+
     fn runtime_test_dir() -> (PathBuf, PathBuf) {
         let dir =
             std::env::temp_dir().join(format!("zelvik-runtime-test-{}", uuid::Uuid::new_v4()));

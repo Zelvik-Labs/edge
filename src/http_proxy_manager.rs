@@ -207,6 +207,9 @@ struct PassthroughBackendTarget {
     addr: String,
     origin_id: i64,
     proxy_protocol: ProxyProtocolConfig,
+    /// In-flight slot for least-connections ranking, held by the passthrough
+    /// connection handler for its whole lifetime (released on drop).
+    origin_inflight_guard: crate::origin_state::OriginInflightGuard,
 }
 
 #[cfg(any(test, target_os = "linux"))]
@@ -2031,6 +2034,9 @@ impl HttpProxyManager {
         let backend_addr = backend_target.addr;
         let origin_id = backend_target.origin_id;
         let proxy_protocol_to_origin = backend_target.proxy_protocol;
+        // Hold the in-flight slot for the whole passthrough connection; every
+        // exit below (admission reject, connect failure, relay end) drops it.
+        let _origin_inflight_guard = backend_target.origin_inflight_guard;
         let sni_relay_permit = MEMORY_GOVERNOR
             .try_admit_sni_relay()
             .ok_or_else(|| anyhow::anyhow!("SNI relay memory admission rejected"))?;
@@ -2395,14 +2401,16 @@ impl HttpProxyManager {
                 crate::origin_state::ORIGIN_STATE_MANAGER.is_down(origin_id)
             })
         {
+            let origin_id = crate::lb_factory::peer_origin_id(&peer);
             return Ok(PassthroughBackendTarget {
                 addr: normalize_passthrough_target(&peer.addr.to_string()),
-                origin_id: crate::lb_factory::peer_origin_id(&peer),
+                origin_id,
                 proxy_protocol: peer
                     .ext
                     .get::<crate::lb_factory::BackendExtension>()
                     .map(|ext| ext.proxy_protocol)
                     .unwrap_or_default(),
+                origin_inflight_guard: crate::lb_factory::begin_inflight_for(&lb, origin_id),
             });
         }
 
@@ -2435,14 +2443,16 @@ impl HttpProxyManager {
                     server_id
                 )
             })?;
+        let origin_id = crate::lb_factory::peer_origin_id(&peer);
         Ok(PassthroughBackendTarget {
             addr: normalize_passthrough_target(&peer.addr.to_string()),
-            origin_id: crate::lb_factory::peer_origin_id(&peer),
+            origin_id,
             proxy_protocol: peer
                 .ext
                 .get::<crate::lb_factory::BackendExtension>()
                 .map(|ext| ext.proxy_protocol)
                 .unwrap_or_default(),
+            origin_inflight_guard: crate::lb_factory::begin_inflight_for(&lb, origin_id),
         })
     }
 }
@@ -3216,6 +3226,165 @@ fn parse_tls_client_hello_sni(buf: &[u8]) -> ClientHelloParse {
 mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    /// A least-connections pool over the given origin ids, built through the
+    /// production `build_lb` path so the shared in-flight counters are wired in.
+    fn least_conn_test_lb(ids: &[i64]) -> Arc<crate::lb_factory::AnyLoadBalancer> {
+        let origins: Vec<serde_json::Value> = ids
+            .iter()
+            .enumerate()
+            .map(|(index, id)| {
+                serde_json::json!({
+                    "id": id,
+                    "addr": format!("127.0.0.1:{}", 9800 + index),
+                    "isOn": true,
+                    "weight": 1,
+                })
+            })
+            .collect();
+        let cfg: crate::config_models::ReverseProxyConfig = serde_json::from_value(serde_json::json!({
+            "isOn": true,
+            "primaryOrigins": origins,
+            "scheduling": { "code": "least_conn", "options": {} },
+        }))
+        .unwrap();
+        let (lb, _hc) = crate::lb_factory::build_lb(
+            0,
+            &cfg,
+            2,
+            &std::collections::HashMap::new(),
+            false,
+            true,
+        );
+        lb
+    }
+
+    fn test_edge_proxy() -> EdgeProxy {
+        let api_config = Arc::new(crate::api_config::ApiConfig {
+            rpc_tls: Default::default(),
+            rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
+            rpc_disable_update: true,
+            instance_id: "nd_0123456789".to_string(),
+            secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+                .to_string(),
+            comm_mode: String::new(),
+            gcloud_node_id: "1".to_string(),
+            access_log_pipeline: crate::api_config::AccessLogPipelineConfig::default(),
+            relay: Default::default(),
+            kernel_tuning: Default::default(),
+            cache: Default::default(),
+        });
+        let challenge_key = api_config
+            .challenge_key()
+            .expect("dummy credential secret derives a challenge key");
+        EdgeProxy {
+            config: Arc::new(ConfigStore::new()),
+            waf_state: Arc::new(crate::firewall::state::WafStateManager::new()),
+            api_config,
+            challenge_key,
+            cert_selector: Arc::new(DynamicCertSelector::new()),
+            waf_verifier: Arc::new(crate::firewall::verifier::WafVerifier::new(&challenge_key)),
+            tls_downstream: false,
+        }
+    }
+
+    /// Regression for Zelvik-Labs/edge#11: SNI passthrough must hold an
+    /// in-flight slot for the connection it selected, so a second selection sees
+    /// the first one's load and the slot is released when the connection ends.
+    #[tokio::test]
+    async fn sni_passthrough_tracks_least_conn_inflight() {
+        const SERVER_ID: i64 = 97_900;
+        const ORIGIN_A: i64 = 97_901;
+        const ORIGIN_B: i64 = 97_902;
+
+        let store = ConfigStore::new();
+        let mut id_to_lb = HashMap::new();
+        id_to_lb.insert(SERVER_ID, least_conn_test_lb(&[ORIGIN_A, ORIGIN_B]));
+        let server = Arc::new(ServerConfig {
+            id: Some(SERVER_ID),
+            is_on: true,
+            ..Default::default()
+        });
+        store
+            .update_config(
+                1,
+                1,
+                1,
+                1,
+                vec![server.clone()],
+                HashMap::new(),
+                HashMap::new(),
+                id_to_lb,
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                None,
+                0,
+                1,
+                true,
+                false,
+                HashMap::new(),
+                false,
+                false,
+                String::new(),
+                HashMap::new(),
+                None,
+                false,
+                false,
+                String::new(),
+                false,
+                false,
+                0,
+                false,
+                false,
+                false,
+                String::new(),
+                None,
+                None,
+                vec![],
+                vec![],
+                vec![],
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                None,
+                None,
+            )
+            .await;
+        let manager = HttpProxyManager::new(
+            store,
+            Arc::new(DynamicCertSelector::new()),
+            test_edge_proxy(),
+            Arc::new(ServerConf::default()),
+        );
+        let counters = crate::origin_state::ORIGIN_STATE_MANAGER.inflight_counters();
+
+        let first = manager
+            .select_passthrough_backend_target(&server)
+            .await
+            .unwrap();
+        assert_eq!(counters.inflight(first.origin_id), 1);
+
+        let second = manager
+            .select_passthrough_backend_target(&server)
+            .await
+            .unwrap();
+        assert_ne!(
+            first.origin_id, second.origin_id,
+            "least_conn must not keep picking the loaded origin"
+        );
+        assert_eq!(counters.inflight(first.origin_id), 1);
+        assert_eq!(counters.inflight(second.origin_id), 1);
+
+        drop(first);
+        assert_eq!(counters.inflight(second.origin_id), 1);
+        drop(second);
+        assert_eq!(counters.inflight(ORIGIN_A), 0);
+        assert_eq!(counters.inflight(ORIGIN_B), 0);
+    }
 
     fn tls_record(payload: &[u8]) -> Vec<u8> {
         let mut record = Vec::with_capacity(5 + payload.len());

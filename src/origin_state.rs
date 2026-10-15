@@ -187,6 +187,15 @@ pub struct OriginInflightGuard {
     counter: Option<Arc<AtomicUsize>>,
 }
 
+impl OriginInflightGuard {
+    /// A guard that counts nothing. Handed to load-balancing algorithms that do
+    /// not rank by in-flight count so their entry points can hold the same
+    /// guard type without ever touching the shared counter map.
+    pub fn disabled() -> Self {
+        Self { counter: None }
+    }
+}
+
 impl Drop for OriginInflightGuard {
     fn drop(&mut self) {
         if let Some(counter) = &self.counter {

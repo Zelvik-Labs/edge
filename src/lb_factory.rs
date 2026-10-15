@@ -287,6 +287,27 @@ pub fn peer_origin_id(peer: &Backend) -> i64 {
         .unwrap_or(0)
 }
 
+/// Begin the per-origin in-flight slot for a backend the caller just selected.
+///
+/// Only a least-connections pool ranks candidates by the live in-flight count
+/// ([`AnyLoadBalancer::is_least_conn`]); every other algorithm gets a disabled
+/// guard so the shared counter map stays untouched. The L4/SNI entry points
+/// call this right after selection and hold the guard for the whole lifetime of
+/// the forwarded connection or session, so every exit path (success, failure,
+/// cancellation, timeout, idle close) releases the slot exactly once. Without
+/// this the count never rises and least-connections keeps picking the same
+/// origin on those transports.
+pub fn begin_inflight_for(
+    lb: &AnyLoadBalancer,
+    origin_id: i64,
+) -> crate::origin_state::OriginInflightGuard {
+    if lb.is_least_conn() {
+        crate::origin_state::ORIGIN_STATE_MANAGER.begin_inflight(origin_id)
+    } else {
+        crate::origin_state::OriginInflightGuard::disabled()
+    }
+}
+
 /// Key used for consistent-hash selection.
 ///
 /// A non-empty key (the L7 path passes the client IP) is used as-is. An empty
@@ -1488,6 +1509,28 @@ mod tests {
         let first = lb.select(b"", 16).expect("backend");
         for _ in 0..16 {
             assert_eq!(lb.select(b"", 16).expect("backend"), first);
+        }
+    }
+
+    #[test]
+    fn begin_inflight_for_counts_only_least_conn_pools() {
+        let counters = crate::origin_state::ORIGIN_STATE_MANAGER.inflight_counters();
+
+        // A least-connections pool owns a real slot for the selected origin.
+        let least_conn = build_any_lb("least_conn", serde_json::json!({}), &[401, 402]);
+        let guard = begin_inflight_for(&least_conn, 401);
+        assert_eq!(counters.inflight(401), 1);
+        drop(guard);
+        assert_eq!(counters.inflight(401), 0);
+
+        // Every other algorithm leaves the shared map untouched.
+        for code in ["", "polling", "hash"] {
+            let other = build_any_lb(code, serde_json::json!({"hashKey": "ip"}), &[401, 402]);
+            assert!(!other.is_least_conn());
+            let guard = begin_inflight_for(&other, 401);
+            assert_eq!(counters.inflight(401), 0);
+            drop(guard);
+            assert_eq!(counters.inflight(401), 0);
         }
     }
 
