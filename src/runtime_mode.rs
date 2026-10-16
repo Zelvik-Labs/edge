@@ -197,9 +197,8 @@ impl XdpXskMode {
 /// mode. Below the floor (or for a driver absent from this table) an XSK
 /// bind could only land on the kernel-emulated generic path, which is not
 /// a supported dataplane (its skb TX path saturated under production SNI
-/// load on Debian 6.1 + virtio_net). Mirrors
-/// `xdp_driver_native_xsk_floor` in `scripts/install-zelvik-edge.sh`;
-/// keep both in sync.
+/// load on Debian 6.1 + virtio_net). The table below is the single source of
+/// truth for the floor.
 ///
 /// virtio_net gained driver XSK in 6.11 (copy); ena in 5.16, gve in 6.2;
 /// the big server NICs shipped it around the 5.4 floor.
@@ -222,8 +221,7 @@ pub fn xsk_driver_native_floor(driver: &str) -> Option<(u32, u32)> {
 /// to the driver's copy path. virtio_net advertises the flag from 6.13
 /// (RX merged in 6.11, flag + TX/wakeup in 6.13) — and still needs the
 /// hypervisor to negotiate VIRTIO_F_ACCESS_PLATFORM, so the runtime bind
-/// is always the authoritative verdict. Mirrors
-/// `xdp_driver_zerocopy_floor` in `scripts/install-zelvik-edge.sh`.
+/// is always the authoritative verdict.
 pub fn xsk_driver_zerocopy_floor(driver: &str) -> Option<(u32, u32)> {
     match driver {
         "virtio_net" => Some((6, 13)),

@@ -27,28 +27,25 @@ Zelvik Edge 是一个基于 [Pingora](https://github.com/cloudflare/pingora) 构
 
 ## 快速开始
 
-准备 `configs/api_node.yaml`：
+节点从 `<ZELVIK_EDGE_HOME>/configs/api_node.yaml` 读取凭据与端点；一键安装会为你生成它，无需手写：
 
 ```yaml
-rpc.endpoints: [ "http://127.0.0.1:8001" ]
-nodeId: "your-node-id"
-secret: "your-node-secret"
+rpc.endpoints: [ "https://rpc1.example.com:29090" ]
+nodeId: "nd_xxxxxxxxxx"
+secret: "<注册凭据>"
 ```
 
-安装或升级使用授权站 `https://license.zelvik.net` 分发的 Rust 包，需要有效的更新密钥（格式为 `zvu_` 加 64 位十六进制字符）。先在 root shell 中安全读取密钥，再运行安装脚本；密钥不写入命令历史或下载 URL：
+一键安装（由控制面 bootstrap 分发）：
 
 ```bash
-read -r -s -p 'Update key: ' ZELVIK_UPDATE_KEY; printf '\n'
-export ZELVIK_UPDATE_KEY
-curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | bash
+curl -fsSL https://cp.example.com/install/edge.sh | sudo bash -s -- \
+    --endpoint https://rpc1.example.com:29090 \
+    --artifact-base https://cp.example.com \
+    --node-id <节点 ID> \
+    --secret <注册凭据>
 ```
 
-脚本交互选择升级或全新安装；全新安装的非交互命令示例（沿用上述环境变量，`--geoip` 可选下载 GeoLite2 库）：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | bash -s -- --fresh --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret
-unset ZELVIK_UPDATE_KEY
-```
+两个地址不能混用：`--endpoint` 是控制面 **gRPC 控制端点**（对应平台设置「节点接入端点」里的 RPC 端点），会写进 `api_node.yaml` 的 `rpc.endpoints`；`--artifact-base` 是 bootstrap 取包用的 HTTP(S) 地址（对应同一处的「更新地址」）。控制台在节点注册页面会给出完整可复制命令，地址、`<节点 ID>` 与 `<注册凭据>` 均已填好。详见 [部署与运维](docs/operations.md)。
 
 也支持 `--update-key KEY`，但建议用环境变量避免密钥出现在进程参数和 shell 历史中。使用 sudo 时需显式保留该变量（`sudo --preserve-env=ZELVIK_UPDATE_KEY bash`）。安装与 dry-run 均校验密钥格式，恢复、列出备份和帮助无需密钥。包下载仅使用固定 HTTPS 地址 `/Download/{version}/Zelvik-Edge/{asset}`，默认 `latest`，指定版本示例为 `--version 26.10.2`；任何重定向都会失败，GeoIP 请求不携带更新密钥。GitHub Release 仅保留发布说明和源码，不提供二进制包或包的 Actions artifact。
 

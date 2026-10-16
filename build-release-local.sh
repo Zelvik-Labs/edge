@@ -52,4 +52,4 @@ if [ "${1:-}" = "--all-bins" ]; then
   shift
   exec cargo zigbuild --release --target "$TARGET" "$@"
 fi
-exec cargo zigbuild --release --target "$TARGET" --bin zelvik-edge "$@"
+exec cargo zigbuild --release --target "$TARGET" --bin Zelvik-Edge "$@"

@@ -743,15 +743,16 @@ kernelTuning:
     /// installer's own printf format strings.
     fn fresh_install_yaml_from_script(script: &str) -> String {
         let secret = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
-        let endpoints = install_printf_format(script, "rpc.endpoints: ")
-            .replace("%s", "[ \"http://127.0.0.1:8001\" ]");
-        let instance = install_printf_format(script, "instanceId: ")
-            .replace("%s", "\"nd_0123456789\"");
-        let credential =
-            install_printf_format(script, "secret: ").replace("%s", &format!("\"{secret}\""));
-        let relay = install_printf_format(script, "relay:");
-        let zero_copy = install_printf_format(script, "  zeroCopy: false");
-        format!("{endpoints}{instance}{credential}{relay}{zero_copy}")
+        // The endpoint list is written by a loop, so only its header comes from a
+        // format string; mirror the two-space list item the loop emits.
+        let endpoints = install_printf_format(script, "rpc.endpoints:");
+        // The installer's format strings already carry the surrounding quotes
+        // (`instanceId: "%s"`), so the substituted values are bare. Quoting them
+        // here as well produces `""nd_…""` and the YAML no longer parses.
+        let instance = install_printf_format(script, "instanceId:").replace("%s", "nd_0123456789");
+        let credential = install_printf_format(script, "secret:").replace("%s", secret);
+        let comm = install_printf_format(script, "commMode:").replace("%s", "plaintext");
+        format!("{endpoints}  - \"http://127.0.0.1:8001\"\n{instance}{credential}{comm}")
     }
 
     /// Snapshot/restore of every process global a real `ApiConfig::load` call
@@ -815,23 +816,21 @@ kernelTuning:
         }
     }
 
-    /// Regression for the fresh-install config the script writes: it must use the
-    /// keys `ApiConfig` requires (`instanceId`, not the dead `nodeId`) and must
-    /// load through the real `ApiConfig::load`. A drift between the script and
-    /// the parser has to fail here, not on a freshly installed node.
+    /// Regression for the fresh-install config the installer writes: it must use
+    /// the keys `ApiConfig` requires (`instanceId`, not the dead `nodeId`) and
+    /// must load through the real `ApiConfig::load`. A drift between the
+    /// installer and the parser has to fail here, not on a freshly installed
+    /// node — the previous installer shipped `runtime.yaml`/`secrets.env`, which
+    /// nothing in this crate reads, and every installed node aborted on startup.
     #[test]
     fn install_script_fresh_api_node_yaml_loads() {
         // Held for the whole test: `load` mutates process globals and reads
         // paths derived from the environment.
         let _globals = ApiLoadGlobalsGuard::new();
-        let script = include_str!("../scripts/install-zelvik-edge.sh");
+        let script = include_str!("../deploy/install.sh");
         assert!(
-            !script.contains("printf 'nodeId:"),
+            !script.contains("nodeId"),
             "install script still writes the dead `nodeId` key"
-        );
-        assert!(
-            !script.contains("--node-id") && !script.contains("--secret"),
-            "install script still exposes the manual identity flags"
         );
 
         let yaml = fresh_install_yaml_from_script(script);

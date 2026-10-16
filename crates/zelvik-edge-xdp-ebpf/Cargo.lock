@@ -104,19 +104,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zelvik-edge-xdp-common"
-version = "0.1.0"
-
-[[package]]
-name = "zelvik-edge-xdp-ebpf"
-version = "0.1.0"
-dependencies = [
- "aya-ebpf",
- "zelvik-edge-xdp-common",
- "network-types",
-]
-
-[[package]]
 name = "darling"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -401,6 +388,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "zelvik-edge-xdp-common"
+version = "0.1.0"
+
+[[package]]
+name = "zelvik-edge-xdp-ebpf"
+version = "0.1.0"
+dependencies = [
+ "aya-ebpf",
+ "network-types",
+ "zelvik-edge-xdp-common",
 ]
 
 [[package]]
