@@ -262,7 +262,7 @@ GeoIP 库默认必装，文件写入节点 `data/` 目录，因为运行时会�
 
 上线前建议确认：
 
-- `configs/api_node.yaml` 存在且 nodeId、secret 正确。
+- `configs/api_node.yaml` 存在且 `instanceId`、`secret` 正确（`nodeId` 不是这个文件的键）。
 - API 节点 RPC endpoint 可达。
 - 运行目录权限正确。
 - `data` 和 `logs` 可写。
