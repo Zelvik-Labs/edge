@@ -61,12 +61,27 @@ run_verification() {
     if [ "$LAST_CLEANUP_STATUS" -ne 0 ]; then exit "$LAST_CLEANUP_STATUS"; fi
 }
 
+protocol_preflight() {
+    source /workspace/scripts/orbstack-protocol.sh || return
+    configure_protocol_git /workspace/Cargo.lock /protocol.git || return
+    # Resolve every dependency without compiling. A missing private object, registry
+    # failure or changed lockfile stops all phases before nightly/xtask/eBPF work.
+    cargo metadata --locked --format-version 1 > /results/dependency-metadata.json
+}
+
 rustc --version
 cargo --version
 mbx --version
 mbx doctor --json > /results/mbx-doctor.json
 python3 -I scripts/test-clean-build-artifacts.py > /results/cleanup-tests.log 2>&1
 python3 -I scripts/test-orbstack-orchestration.py > /results/orchestration-tests.log 2>&1
+# The independent pingora workspace has no private git dependency to resolve.
+if [ "$PHASE" != pingora ]; then
+    if ! run_build dependencies protocol_preflight; then
+        printf 'Dependency preflight failed; see /results/dependencies.log. No build phases started.\n' >&2
+        exit 1
+    fi
+fi
 
 # Resolve the existing dated nightly; stable 1.99 is never used for BPF.
 NIGHTLY="$(python3 -I -c 'import tomllib; print(tomllib.load(open("/workspace/crates/zelvik-edge-xdp-ebpf/rust-toolchain.toml", "rb"))["toolchain"]["channel"])')"
