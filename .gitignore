@@ -1,4 +1,5 @@
 /target
+/release/
 /api_node.yaml
 /configs/
 /data/
