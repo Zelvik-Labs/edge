@@ -80,13 +80,7 @@
             "id": 1,
             "isOn": true,
             "name": "https://origin-bak.contract.example",
-            "proxyProtocol": {
-              "isOn": false,
-              "version": 2
-            },
             "requestHost": "",
-            "requestHostExcludingPort": true,
-            "requestHostType": 0,
             "weight": 50
           }
         ],
@@ -101,13 +95,7 @@
             "id": 1,
             "isOn": true,
             "name": "https://origin.contract.example",
-            "proxyProtocol": {
-              "isOn": false,
-              "version": 2
-            },
             "requestHost": "",
-            "requestHostExcludingPort": true,
-            "requestHostType": 0,
             "weight": 100
           }
         ],
@@ -204,7 +192,7 @@
             "name": "cluster-cache",
             "options": {
               "autoPurgeOnUpdate": true,
-              "cacheGeneration": 3903894312233256,
+              "cacheGeneration": 2245320447324118,
               "dir": "/tmp/zelvik-contract-cache",
               "ipWriteLimitCount": 5,
               "ipWriteLimitWindowSeconds": 60,
@@ -398,7 +386,6 @@
             "keepQuotes": false,
             "keepWhitespace": false
           },
-          "isOn": true,
           "javascript": {
             "isOn": true,
             "keepVarNames": false,
@@ -450,7 +437,6 @@
           "isOn": true,
           "replaceHeaders": [
             {
-              "id": 1,
               "isOn": true,
               "name": "X-Old",
               "newValue": "new"
