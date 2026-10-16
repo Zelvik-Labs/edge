@@ -294,6 +294,10 @@ zelvik-edge --monitor-port 8888
 
 ## 日志
 
+节点运行日志为文本格式，使用 `RUST_LOG` 控制级别和模块过滤；systemd 的
+`Environment=` 可设置该变量。采集 `journalctl` 或 `logs/run.log` 时按文本解析，
+不要把运行日志当成逐行 JSON。访问日志和上传协议各自使用对应的数据格式。
+
 常见日志来源：
 
 - systemd 日志：`journalctl -u zelvik-edge`

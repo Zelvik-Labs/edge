@@ -15,7 +15,6 @@ Group=zelvik-edge
 # credentials from <home>/configs/api_node.yaml.
 WorkingDirectory=@ZELVIK_EDGE_HOME@
 Environment=ZELVIK_EDGE_HOME=@ZELVIK_EDGE_HOME@
-Environment=ZELVIK_LOG_FORMAT=json
 Environment=TZ=Asia/Shanghai
 ExecStart=/usr/bin/zelvik-edge
 Restart=on-failure
