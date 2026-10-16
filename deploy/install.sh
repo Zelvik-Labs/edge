@@ -65,7 +65,7 @@ Environment variable fallbacks:
   ZELVIK_NODE_ID  or ZELVIK_INSTANCE_ID
   ZELVIK_NODE_SECRET or ZELVIK_INSTANCE_SECRET
 EOF
-    exit 1
+    exit "${1:-1}"
 }
 
 # ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ parse_args() {
             --dir=*)        CUSTOM_DIR="${1#*=}"; shift ;;
             --dir)          [ "$#" -ge 2 ] || die "--dir requires a value"; CUSTOM_DIR="$2"; shift 2 ;;
             --dry-run)      DRY_RUN=1; shift ;;
-            -h|--help)      usage ;;
+            -h|--help)      usage 0 ;;
             *)
                 printf '[install][error] unknown option: %s\n' "$1" >&2
                 usage
