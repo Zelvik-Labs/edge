@@ -1052,7 +1052,10 @@ fn apply_simple_ethtool_numeric(
 }
 
 #[cfg(target_os = "linux")]
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "dataplane operation carries explicit policy and connection context"
+)]
 fn apply_ip_link_action(
     interface: &str,
     key: &str,
@@ -1566,7 +1569,7 @@ fn command_output<const N: usize>(program: &str, args: [&str; N]) -> io::Result<
             output.status
         )));
     }
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    Ok(String::from_utf8_lossy_owned(output.stdout))
 }
 
 #[cfg(target_os = "linux")]

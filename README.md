@@ -47,6 +47,8 @@ curl -fsSL https://cp.example.com/install/edge.sh | sudo bash -s -- \
 
 两个地址不能混用：`--endpoint` 是控制面 **gRPC 控制端点**（对应平台设置「节点接入端点」里的 RPC 端点），会写进 `api_node.yaml` 的 `rpc.endpoints`；`--artifact-base` 是 bootstrap 取包用的 HTTP(S) 地址（对应同一处的「更新地址」）。控制台在节点注册页面会给出完整可复制命令，地址、`<节点 ID>` 与 `<注册凭据>` 均已填好。详见 [部署与运维](docs/operations.md)。
 
+也支持 `--update-key KEY`，但建议用环境变量避免密钥出现在进程参数和 shell 历史中。使用 sudo 时需显式保留该变量（`sudo --preserve-env=ZELVIK_UPDATE_KEY bash`）。安装与 dry-run 均校验密钥格式，恢复、列出备份和帮助无需密钥。包下载仅使用固定 HTTPS 地址 `/Download/{version}/Zelvik-Edge/{asset}`，默认 `latest`，指定版本示例为 `--version 26.10.2`；任何重定向都会失败，GeoIP 请求不携带更新密钥。GitHub Release 仅保留发布说明和源码，不提供二进制包或包的 Actions artifact。
+
 ## 文档
 
 详细文档位于 [docs](docs/README.md)：

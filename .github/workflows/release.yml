@@ -52,14 +52,14 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.98.1
+        uses: dtolnay/rust-toolchain@1.99.0
         with:
           targets: ${{ matrix.target }}
 
       - name: Normalize Rust Toolchains
         shell: bash
         env:
-          RELEASE_RUST_VERSION: "1.98.1"
+          RELEASE_RUST_VERSION: "1.99.0"
         run: |
           set -euo pipefail
 
@@ -135,37 +135,25 @@ jobs:
             sleep 10
           done
 
-      # mbx shared build cache. `backend: local` only installs mbx; cache
-      # transport is the actions/cache step below. Cache entries are
-      # ref-scoped: a run restores entries saved on its own ref or on the
-      # default branch. This workflow runs on main pushes as well as tags,
-      # so the store is warmed on refs/heads/main where every future tag
-      # run can reach it — before that change, tag-only runs could only see
-      # their own tag's store and every first build of a new tag ran cold.
-      # Each matrix leg keeps its own store (RUSTFLAGS differ per leg, so
-      # compilation fingerprints do too); the restore-key prefix matches
-      # the most recent entry for the leg regardless of the sha suffix.
+      # Install mbx for runner-local builds only. Its compiled store can contain
+      # the packaged binary, so never publish that store in a public Actions cache.
+      # Cache dependency sources separately; license.zelvik.net distributes packages.
       - name: Install mbx
         uses: jdx/mr-boxington-action@v1
         with:
           backend: local
           version: "1.14.0"
 
-      - name: mbx store cache
+      - name: Cargo dependency source cache
         uses: actions/cache@v4
-        env:
-          RUSTFLAGS: ${{ matrix.rustflags }}
-          CXXFLAGS: ${{ matrix.cxxflags }}
-          CFLAGS: ${{ matrix.cxxflags }}
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             ~/.cargo/.global-cache
-            ~/.cache/mbx
-          key: release-mbx-v1-${{ matrix.name }}-${{ github.sha }}
+          key: release-cargo-sources-v1-${{ matrix.name }}-${{ github.sha }}
           restore-keys: |
-            release-mbx-v1-${{ matrix.name }}-
+            release-cargo-sources-v1-${{ matrix.name }}-
 
       # The eBPF toolchain and object MUST be ready before the node build:
       # build.rs embeds the object designated by ZELVIK_EDGE_XDP_EBPF_SOURCE,
@@ -270,11 +258,8 @@ jobs:
           tar -czf ../$PACKAGE_NAME.tar.gz $TARGET_BINARY data/zelvik-edge-xdp-ebpf.o SHA256SUMS.txt
           cd ..
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.name }}
-          path: Zelvik-Edge-${{ matrix.name }}.tar.gz
+      # Binary packages stay on this runner. Public Actions artifacts and
+      # GitHub release assets would bypass license.zelvik.net authentication.
 
       # Bound the mbx store before actions/cache saves it — GitHub caps a
       # repo's cache at ~10 GB across all entries, and each matrix leg
@@ -333,8 +318,9 @@ jobs:
           # RC/beta/alpha tags are published as prereleases — they are
           # validation artifacts, not production releases.
           prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+          # Only source archives are attached. Binary packages are distributed
+          # exclusively by license.zelvik.net and must never bypass its auth.
           files: |
-            artifacts/**/*.tar.gz
             zelvik-edge-toa-main-source.tar.gz
             zelvik-edge-toa-sender-source.tar.gz
         env:

@@ -1,5 +1,5 @@
 use crate::config::ConfigStore;
-use crate::config_models::{ProxyProtocolConfig, ServerConfig};
+use crate::config_models::{HTTPSConfig, ProxyProtocolConfig, ServerConfig};
 use crate::l4_connection_registry::{self, L4ConnectionProtocol};
 use crate::l4_defense::L4DefenseKind;
 use crate::memory_governor::{AdmissionClass, MEMORY_GOVERNOR};
@@ -8,7 +8,7 @@ use crate::net_bind::{
 };
 use crate::proxy::EdgeProxy;
 use crate::proxy_protocol;
-use crate::ssl::DynamicCertSelector;
+use crate::ssl::{DynamicCertSelector, TlsPolicy};
 use anyhow::Context;
 use dashmap::DashMap;
 use pingora_core::apps::HttpServerApp;
@@ -50,6 +50,10 @@ use std::os::windows::io::AsRawSocket;
 struct ListenerHandle {
     is_tls: bool,
     enable_proxy_protocol: bool,
+    /// Aggregated TLS policy this listener's acceptor was built with. Kept on
+    /// the handle so `reconcile_listeners` (via `ListenerConfig`) can detect a
+    /// policy change and rebuild the listener.
+    tls_policy: TlsPolicy,
     shutdown_tx: watch::Sender<bool>,
 }
 
@@ -187,6 +191,9 @@ impl H2ConnectionDefenseState {
 struct ListenerConfig {
     is_tls: bool,
     enable_proxy_protocol: bool,
+    /// Aggregated TLS policy for this port. Part of equality so a policy change
+    /// forces `reconcile_listeners` to tear down and rebuild the acceptor.
+    tls_policy: TlsPolicy,
 }
 
 #[cfg(any(test, target_os = "linux"))]
@@ -200,6 +207,9 @@ struct PassthroughBackendTarget {
     addr: String,
     origin_id: i64,
     proxy_protocol: ProxyProtocolConfig,
+    /// In-flight slot for least-connections ranking, held by the passthrough
+    /// connection handler for its whole lifetime (released on drop).
+    origin_inflight_guard: crate::origin_state::OriginInflightGuard,
 }
 
 #[cfg(any(test, target_os = "linux"))]
@@ -317,6 +327,17 @@ impl TlsProbeKind {
     }
 }
 
+/// TLS policy for the HTTPS listener serving `https_cfg`. Servers without an
+/// active `sslPolicy` contribute the default policy (HTTP/2 off, TLS 1.2 floor).
+fn server_https_tls_policy(https_cfg: &HTTPSConfig) -> TlsPolicy {
+    https_cfg
+        .ssl_policy
+        .as_ref()
+        .filter(|policy| policy.is_on)
+        .map(TlsPolicy::from_ssl_policy)
+        .unwrap_or_default()
+}
+
 fn record_desired_listener(
     desired_ports: &mut HashMap<SocketAddr, ListenerConfig>,
     bind_addr: SocketAddr,
@@ -327,17 +348,40 @@ fn record_desired_listener(
         Entry::Vacant(entry) => {
             entry.insert(config);
         }
-        Entry::Occupied(entry) if *entry.get() == config => {}
-        Entry::Occupied(entry) => {
-            warn!(
-                "HTTP/HTTPS Proxy Manager: ignoring conflicting listener config on {} for server {} (existing TLS={}, proxy_protocol={}; requested TLS={}, proxy_protocol={})",
-                bind_addr,
-                server_id,
-                entry.get().is_tls,
-                entry.get().enable_proxy_protocol,
-                config.is_tls,
-                config.enable_proxy_protocol
-            );
+        Entry::Occupied(mut entry) => {
+            let existing = entry.get_mut();
+            if existing.is_tls != config.is_tls
+                || existing.enable_proxy_protocol != config.enable_proxy_protocol
+            {
+                warn!(
+                    "HTTP/HTTPS Proxy Manager: ignoring conflicting listener config on {} for server {} (existing TLS={}, proxy_protocol={}; requested TLS={}, proxy_protocol={})",
+                    bind_addr,
+                    server_id,
+                    existing.is_tls,
+                    existing.enable_proxy_protocol,
+                    config.is_tls,
+                    config.enable_proxy_protocol
+                );
+                return;
+            }
+            if existing.tls_policy != config.tls_policy {
+                // One rustls::ServerConfig cannot vary ALPN/versions per SNI, so
+                // servers sharing a port must share one policy. Take the union
+                // (HTTP/2 = OR, version floor = most permissive) and record it.
+                let merged = existing.tls_policy.union(config.tls_policy);
+                warn!(
+                    "HTTP/HTTPS Proxy Manager: server {} requests a TLS policy on {} that differs from other servers sharing the port (existing http2={}, min_version={:?}; requested http2={}, min_version={:?}); the shared acceptor uses http2={}, min_version={:?}",
+                    server_id,
+                    bind_addr,
+                    existing.tls_policy.http2_enabled,
+                    existing.tls_policy.min_version,
+                    config.tls_policy.http2_enabled,
+                    config.tls_policy.min_version,
+                    merged.http2_enabled,
+                    merged.min_version
+                );
+                existing.tls_policy = merged;
+            }
         }
     }
 }
@@ -353,7 +397,7 @@ pub struct HttpProxyManager {
     #[cfg(any(test, target_os = "linux"))]
     tls_proxy: OnceLock<Arc<pingora_proxy::HttpProxy<EdgeProxy>>>,
     #[cfg(any(test, target_os = "linux"))]
-    tls_acceptor: parking_lot::RwLock<Option<Arc<PingoraTlsAcceptor>>>,
+    tls_acceptor: parking_lot::RwLock<HashMap<TlsPolicy, Arc<PingoraTlsAcceptor>>>,
 }
 
 impl HttpProxyManager {
@@ -374,7 +418,7 @@ impl HttpProxyManager {
             #[cfg(any(test, target_os = "linux"))]
             tls_proxy: OnceLock::new(),
             #[cfg(any(test, target_os = "linux"))]
-            tls_acceptor: parking_lot::RwLock::new(None),
+            tls_acceptor: parking_lot::RwLock::new(HashMap::new()),
         })
     }
 
@@ -417,6 +461,7 @@ impl HttpProxyManager {
                                             ListenerConfig {
                                                 is_tls: false,
                                                 enable_proxy_protocol: enable_pp,
+                                                tls_policy: TlsPolicy::default(),
                                             },
                                             server.numeric_id(),
                                         );
@@ -462,6 +507,7 @@ impl HttpProxyManager {
                                             ListenerConfig {
                                                 is_tls: true,
                                                 enable_proxy_protocol: enable_pp,
+                                                tls_policy: server_https_tls_policy(https_cfg),
                                             },
                                             server.numeric_id(),
                                         );
@@ -486,8 +532,7 @@ impl HttpProxyManager {
             }
 
             for (bind_addr, config) in &desired_ports {
-                self.spawn_listener(*bind_addr, config.is_tls, config.enable_proxy_protocol)
-                    .await;
+                self.spawn_listener(*bind_addr, *config).await;
             }
             self.reconcile_listeners(&desired_ports);
             tokio::select! {
@@ -500,14 +545,16 @@ impl HttpProxyManager {
         }
     }
 
-    async fn spawn_listener(
-        self: &Arc<Self>,
-        bind_addr: SocketAddr,
-        is_tls: bool,
-        enable_proxy_protocol: bool,
-    ) {
+    async fn spawn_listener(self: &Arc<Self>, bind_addr: SocketAddr, config: ListenerConfig) {
+        let ListenerConfig {
+            is_tls,
+            enable_proxy_protocol,
+            tls_policy,
+        } = config;
         if let Some(existing) = self.handled_ports.get(&bind_addr) {
-            if existing.is_tls == is_tls && existing.enable_proxy_protocol == enable_proxy_protocol
+            if existing.is_tls == is_tls
+                && existing.enable_proxy_protocol == enable_proxy_protocol
+                && existing.tls_policy == tls_policy
             {
                 return;
             }
@@ -522,19 +569,20 @@ impl HttpProxyManager {
             ListenerHandle {
                 is_tls,
                 enable_proxy_protocol,
+                tls_policy,
                 shutdown_tx,
             },
         );
         info!(
-            "HTTP/HTTPS Proxy Manager: Initializing listener on {} (TLS={}, proxy_protocol={})",
-            bind_addr, is_tls, enable_proxy_protocol
+            "HTTP/HTTPS Proxy Manager: Initializing listener on {} (TLS={}, proxy_protocol={}, http2={}, min_version={:?})",
+            bind_addr, is_tls, enable_proxy_protocol, tls_policy.http2_enabled, tls_policy.min_version
         );
 
         let manager = self.clone();
         tokio::spawn(async move {
             if let Err(e) = manager
                 .clone()
-                .run_http_listener(bind_addr, is_tls, enable_proxy_protocol, shutdown_rx)
+                .run_http_listener(bind_addr, config, shutdown_rx)
                 .await
             {
                 error!("HTTP/HTTPS listener on {} failed: {}", bind_addr, e);
@@ -553,6 +601,7 @@ impl HttpProxyManager {
                     ListenerConfig {
                         is_tls: entry.value().is_tls,
                         enable_proxy_protocol: entry.value().enable_proxy_protocol,
+                        tls_policy: entry.value().tls_policy,
                     },
                 )
             })
@@ -577,10 +626,14 @@ impl HttpProxyManager {
     async fn run_http_listener(
         self: Arc<Self>,
         bind_addr: SocketAddr,
-        is_tls: bool,
-        enable_proxy_protocol: bool,
+        config: ListenerConfig,
         shutdown_rx: watch::Receiver<bool>,
     ) -> anyhow::Result<()> {
+        let ListenerConfig {
+            is_tls,
+            enable_proxy_protocol,
+            ..
+        } = config;
         let worker_count = MEMORY_GOVERNOR.http_accept_worker_count();
         info!(
             "HTTP/HTTPS Proxy Manager: starting {} accept worker(s) on {} (TLS={}, proxy_protocol={})",
@@ -598,8 +651,7 @@ impl HttpProxyManager {
                 manager
                     .run_accept_scaler(
                         bind_addr,
-                        is_tls,
-                        enable_proxy_protocol,
+                        config,
                         worker_count,
                         desired,
                         &mut scaler_shutdown,
@@ -612,14 +664,7 @@ impl HttpProxyManager {
             let worker_shutdown = shutdown_rx.clone();
             tokio::spawn(async move {
                 if let Err(err) = manager
-                    .run_http_listener_worker(
-                        bind_addr,
-                        is_tls,
-                        enable_proxy_protocol,
-                        worker_id,
-                        worker_shutdown,
-                        None,
-                    )
+                    .run_http_listener_worker(bind_addr, config, worker_id, worker_shutdown, None)
                     .await
                 {
                     error!(
@@ -629,15 +674,8 @@ impl HttpProxyManager {
                 }
             });
         }
-        self.run_http_listener_worker(
-            bind_addr,
-            is_tls,
-            enable_proxy_protocol,
-            0,
-            shutdown_rx,
-            None,
-        )
-        .await
+        self.run_http_listener_worker(bind_addr, config, 0, shutdown_rx, None)
+            .await
     }
 
     /// Spawns/stops extra accept workers so the live count tracks
@@ -647,8 +685,7 @@ impl HttpProxyManager {
     async fn run_accept_scaler(
         self: Arc<Self>,
         bind_addr: SocketAddr,
-        is_tls: bool,
-        enable_proxy_protocol: bool,
+        config: ListenerConfig,
         base_workers: usize,
         desired: Arc<AtomicUsize>,
         shutdown_rx: &mut watch::Receiver<bool>,
@@ -690,8 +727,7 @@ impl HttpProxyManager {
                     if let Err(err) = manager
                         .run_http_listener_worker(
                             bind_addr,
-                            is_tls,
-                            enable_proxy_protocol,
+                            config,
                             worker_id,
                             worker_shutdown,
                             Some(desired),
@@ -712,12 +748,16 @@ impl HttpProxyManager {
     async fn run_http_listener_worker(
         self: Arc<Self>,
         bind_addr: SocketAddr,
-        is_tls: bool,
-        enable_proxy_protocol: bool,
+        config: ListenerConfig,
         worker_id: usize,
         mut shutdown_rx: watch::Receiver<bool>,
         scale_state: Option<Arc<AtomicUsize>>,
     ) -> anyhow::Result<()> {
+        let ListenerConfig {
+            is_tls,
+            enable_proxy_protocol,
+            tls_policy,
+        } = config;
         let port = bind_addr.port();
         let listener = bind_tcp_listener_with_retry(
             bind_addr,
@@ -736,14 +776,13 @@ impl HttpProxyManager {
         let proxy_arc = Arc::new(proxy);
 
         let shared_ssl_acceptor = if is_tls {
-            let rustls_config = crate::ssl::build_rustls_server_config(
+            let rustls_config = crate::ssl::build_rustls_server_config_for_policy(
                 Arc::clone(&self.cert_selector),
-                vec![b"h2".to_vec(), b"http/1.1".to_vec()],
-                false,
+                tls_policy,
             )
             .context("build rustls HTTP server config")?;
             Some(Arc::new(
-                pingora_core::listeners::tls::Acceptor::from_server_config(rustls_config),
+                pingora_core::listeners::tls::Acceptor::from_server_config(Arc::new(rustls_config)),
             ))
         } else {
             None
@@ -751,9 +790,7 @@ impl HttpProxyManager {
         let node_id = self
             .proxy_logic
             .api_config
-            .node_id
-            .parse::<i64>()
-            .unwrap_or(0);
+            .numeric_gcloud_node_id();
 
         let mut scale_retire = std::pin::pin!(async {
             match &scale_state {
@@ -1192,23 +1229,52 @@ impl HttpProxyManager {
     }
 
     #[cfg(any(test, target_os = "linux"))]
-    fn shared_tls_acceptor(&self) -> anyhow::Result<Arc<PingoraTlsAcceptor>> {
-        if let Some(acceptor) = self.tls_acceptor.read().clone() {
-            return Ok(acceptor);
+    fn shared_tls_acceptor(&self, tls_policy: TlsPolicy) -> anyhow::Result<Arc<PingoraTlsAcceptor>> {
+        if let Some(acceptor) = self.tls_acceptor.read().get(&tls_policy) {
+            return Ok(acceptor.clone());
         }
         let mut guard = self.tls_acceptor.write();
-        if let Some(acceptor) = guard.clone() {
-            return Ok(acceptor);
+        if let Some(acceptor) = guard.get(&tls_policy) {
+            return Ok(acceptor.clone());
         }
-        let rustls_config = crate::ssl::build_rustls_server_config(
+        let rustls_config = crate::ssl::build_rustls_server_config_for_policy(
             Arc::clone(&self.cert_selector),
-            vec![b"h2".to_vec(), b"http/1.1".to_vec()],
-            false,
+            tls_policy,
         )
         .context("build rustls HTTP server config")?;
-        let acceptor = Arc::new(PingoraTlsAcceptor::from_server_config(rustls_config));
-        *guard = Some(acceptor.clone());
+        let acceptor = Arc::new(PingoraTlsAcceptor::from_server_config(Arc::new(
+            rustls_config,
+        )));
+        guard.insert(tls_policy, acceptor.clone());
         Ok(acceptor)
+    }
+
+    /// Aggregated TLS policy for the HTTPS listener serving `port`, computed
+    /// with the same union rule the socket listeners use (HTTP/2 = OR, version
+    /// floor = most permissive) so AF_XDP-steered streams honor one policy.
+    #[cfg(any(test, target_os = "linux"))]
+    fn af_xdp_https_tls_policy_sync(&self, port: u16) -> TlsPolicy {
+        self.config_store
+            .get_all_servers_sync()
+            .iter()
+            .filter_map(|server| {
+                server.https.as_ref().filter(|https| {
+                    https.is_on
+                        && https.listen.iter().any(|addr| {
+                            addr.port_range.as_deref().is_some_and(|range| {
+                                crate::config_models::port_range_contains(range, port)
+                            })
+                        })
+                })
+            })
+            .fold(None, |acc: Option<TlsPolicy>, https| {
+                let policy = server_https_tls_policy(https);
+                Some(match acc {
+                    Some(prev) => prev.union(policy),
+                    None => policy,
+                })
+            })
+            .unwrap_or_default()
     }
 
     #[cfg(any(test, target_os = "linux"))]
@@ -1256,9 +1322,7 @@ impl HttpProxyManager {
         let node_id = self
             .proxy_logic
             .api_config
-            .node_id
-            .parse::<i64>()
-            .unwrap_or(0);
+            .numeric_gcloud_node_id();
         crate::l4_defense::record_l4_event_with_pressure(
             &self.config_store,
             &self.proxy_logic.waf_state,
@@ -1371,9 +1435,7 @@ impl HttpProxyManager {
         let node_id = self
             .proxy_logic
             .api_config
-            .node_id
-            .parse::<i64>()
-            .unwrap_or(0);
+            .numeric_gcloud_node_id();
         crate::special_defense::record_tls_handshake_failure(
             &self.config_store,
             &self.proxy_logic.waf_state,
@@ -1396,9 +1458,7 @@ impl HttpProxyManager {
         let node_id = self
             .proxy_logic
             .api_config
-            .node_id
-            .parse::<i64>()
-            .unwrap_or(0);
+            .numeric_gcloud_node_id();
         crate::l4_defense::record_l4_event(
             &self.config_store,
             &self.proxy_logic.waf_state,
@@ -1419,9 +1479,7 @@ impl HttpProxyManager {
         let node_id = self
             .proxy_logic
             .api_config
-            .node_id
-            .parse::<i64>()
-            .unwrap_or(0);
+            .numeric_gcloud_node_id();
         crate::l4_defense::record_l4_event_weighted_with_pressure(crate::l4_defense::L4EventArgs {
             config_store: &self.config_store,
             waf_state: &self.proxy_logic.waf_state,
@@ -1444,9 +1502,7 @@ impl HttpProxyManager {
         let node_id = self
             .proxy_logic
             .api_config
-            .node_id
-            .parse::<i64>()
-            .unwrap_or(0);
+            .numeric_gcloud_node_id();
         crate::special_defense::record_special_defense_hit(
             &self.proxy_logic.waf_state,
             node_id,
@@ -1707,9 +1763,7 @@ impl HttpProxyManager {
                 &self.proxy_logic.waf_state,
                 self.proxy_logic
                     .api_config
-                    .node_id
-                    .parse::<i64>()
-                    .unwrap_or(0),
+                    .numeric_gcloud_node_id(),
                 client_addr.ip(),
                 || {
                     format!(
@@ -1788,7 +1842,8 @@ impl HttpProxyManager {
 
         let l4_stream = af_xdp_virtual_stream(client_stream, client_addr);
         let stream: pingora_core::protocols::Stream = if kind == AfXdpHttpPortKind::Https {
-            let acceptor = self.shared_tls_acceptor()?;
+            let tls_policy = self.af_xdp_https_tls_policy_sync(listen_port);
+            let acceptor = self.shared_tls_acceptor(tls_policy)?;
             let timeout = crate::l4_defense::clamp_tls_handshake_timeout(
                 self.tls_handshake_timeout(),
                 crate::l4_defense::current_pressure_level(),
@@ -1979,6 +2034,9 @@ impl HttpProxyManager {
         let backend_addr = backend_target.addr;
         let origin_id = backend_target.origin_id;
         let proxy_protocol_to_origin = backend_target.proxy_protocol;
+        // Hold the in-flight slot for the whole passthrough connection; every
+        // exit below (admission reject, connect failure, relay end) drops it.
+        let _origin_inflight_guard = backend_target.origin_inflight_guard;
         let sni_relay_permit = MEMORY_GOVERNOR
             .try_admit_sni_relay()
             .ok_or_else(|| anyhow::anyhow!("SNI relay memory admission rejected"))?;
@@ -2343,14 +2401,16 @@ impl HttpProxyManager {
                 crate::origin_state::ORIGIN_STATE_MANAGER.is_down(origin_id)
             })
         {
+            let origin_id = crate::lb_factory::peer_origin_id(&peer);
             return Ok(PassthroughBackendTarget {
                 addr: normalize_passthrough_target(&peer.addr.to_string()),
-                origin_id: crate::lb_factory::peer_origin_id(&peer),
+                origin_id,
                 proxy_protocol: peer
                     .ext
                     .get::<crate::lb_factory::BackendExtension>()
                     .map(|ext| ext.proxy_protocol)
                     .unwrap_or_default(),
+                origin_inflight_guard: crate::lb_factory::begin_inflight_for(&lb, origin_id),
             });
         }
 
@@ -2383,14 +2443,16 @@ impl HttpProxyManager {
                     server_id
                 )
             })?;
+        let origin_id = crate::lb_factory::peer_origin_id(&peer);
         Ok(PassthroughBackendTarget {
             addr: normalize_passthrough_target(&peer.addr.to_string()),
-            origin_id: crate::lb_factory::peer_origin_id(&peer),
+            origin_id,
             proxy_protocol: peer
                 .ext
                 .get::<crate::lb_factory::BackendExtension>()
                 .map(|ext| ext.proxy_protocol)
                 .unwrap_or_default(),
+            origin_inflight_guard: crate::lb_factory::begin_inflight_for(&lb, origin_id),
         })
     }
 }
@@ -2470,6 +2532,7 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
             // local pool instead of the global counter — one registry lookup
             // per connection instead of one global RMW per stream.
             let stream_ticket = crate::l4_connection_registry::ticket_for(&client_addr);
+            let mut malformed_streams = 0;
             loop {
                 let idle_deadline = h2_state.next_idle_deadline();
                 let lifetime_deadline = h2_state.lifetime_deadline();
@@ -2506,10 +2569,12 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                         );
                         break;
                     }
-                    result = pingora_core::protocols::http::v2::server::HttpSession::from_h2_conn(&mut h2_conn, digest.clone()) => result,
+                    result = pingora_core::protocols::http::v2::server::HttpSession::from_h2_conn_with_malformed_budget(&mut h2_conn, digest.clone(), &mut malformed_streams) => result,
                 };
                 match accept_result {
-                    Ok(Some(h2_session)) => {
+                    Ok(Some(pingora_core::protocols::http::v2::server::H2Accept::Session(
+                        h2_session,
+                    ))) => {
                         h2_state.record_stream();
                         if let Some(events) = h2_state.take_pending_l4_stream_events_if_due() {
                             manager.record_l4_event_weighted(
@@ -2626,6 +2691,17 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                                 .await;
                         });
                     }
+                    Ok(Some(pingora_core::protocols::http::v2::server::H2Accept::Rejected)) => {
+                        h2_state.record_reject();
+                        manager.record_l4_event(
+                            client_addr.ip(),
+                            L4DefenseKind::H2ConnectionAbuse,
+                            format!(
+                                "port={} peer={} reason=malformed_request rejects={}",
+                                port, client_addr, h2_state.rejected_streams
+                            ),
+                        );
+                    }
                     Ok(None) => break,
                     Err(e) => {
                         h2_state.record_error();
@@ -2694,9 +2770,7 @@ async fn process_http1_stream(args: ProcessHttp1StreamArgs) {
         let node_id = manager
             .proxy_logic
             .api_config
-            .node_id
-            .parse::<i64>()
-            .unwrap_or(0);
+            .numeric_gcloud_node_id();
         crate::l4_defense::record_completed_handshake_event(
             &manager.config_store,
             &manager.proxy_logic.waf_state,
@@ -3152,6 +3226,165 @@ fn parse_tls_client_hello_sni(buf: &[u8]) -> ClientHelloParse {
 mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    /// A least-connections pool over the given origin ids, built through the
+    /// production `build_lb` path so the shared in-flight counters are wired in.
+    fn least_conn_test_lb(ids: &[i64]) -> Arc<crate::lb_factory::AnyLoadBalancer> {
+        let origins: Vec<serde_json::Value> = ids
+            .iter()
+            .enumerate()
+            .map(|(index, id)| {
+                serde_json::json!({
+                    "id": id,
+                    "addr": format!("127.0.0.1:{}", 9800 + index),
+                    "isOn": true,
+                    "weight": 1,
+                })
+            })
+            .collect();
+        let cfg: crate::config_models::ReverseProxyConfig = serde_json::from_value(serde_json::json!({
+            "isOn": true,
+            "primaryOrigins": origins,
+            "scheduling": { "code": "least_conn", "options": {} },
+        }))
+        .unwrap();
+        let (lb, _hc) = crate::lb_factory::build_lb(
+            0,
+            &cfg,
+            2,
+            &std::collections::HashMap::new(),
+            false,
+            true,
+        );
+        lb
+    }
+
+    fn test_edge_proxy() -> EdgeProxy {
+        let api_config = Arc::new(crate::api_config::ApiConfig {
+            rpc_tls: Default::default(),
+            rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
+            rpc_disable_update: true,
+            instance_id: "nd_0123456789".to_string(),
+            secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+                .to_string(),
+            comm_mode: String::new(),
+            gcloud_node_id: "1".to_string(),
+            access_log_pipeline: crate::api_config::AccessLogPipelineConfig::default(),
+            relay: Default::default(),
+            kernel_tuning: Default::default(),
+            cache: Default::default(),
+        });
+        let challenge_key = api_config
+            .challenge_key()
+            .expect("dummy credential secret derives a challenge key");
+        EdgeProxy {
+            config: Arc::new(ConfigStore::new()),
+            waf_state: Arc::new(crate::firewall::state::WafStateManager::new()),
+            api_config,
+            challenge_key,
+            cert_selector: Arc::new(DynamicCertSelector::new()),
+            waf_verifier: Arc::new(crate::firewall::verifier::WafVerifier::new(&challenge_key)),
+            tls_downstream: false,
+        }
+    }
+
+    /// Regression for Zelvik-Labs/edge#11: SNI passthrough must hold an
+    /// in-flight slot for the connection it selected, so a second selection sees
+    /// the first one's load and the slot is released when the connection ends.
+    #[tokio::test]
+    async fn sni_passthrough_tracks_least_conn_inflight() {
+        const SERVER_ID: i64 = 97_900;
+        const ORIGIN_A: i64 = 97_901;
+        const ORIGIN_B: i64 = 97_902;
+
+        let store = ConfigStore::new();
+        let mut id_to_lb = HashMap::new();
+        id_to_lb.insert(SERVER_ID, least_conn_test_lb(&[ORIGIN_A, ORIGIN_B]));
+        let server = Arc::new(ServerConfig {
+            id: Some(SERVER_ID),
+            is_on: true,
+            ..Default::default()
+        });
+        store
+            .update_config(
+                1,
+                1,
+                1,
+                1,
+                vec![server.clone()],
+                HashMap::new(),
+                HashMap::new(),
+                id_to_lb,
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+                None,
+                0,
+                1,
+                true,
+                false,
+                HashMap::new(),
+                false,
+                false,
+                String::new(),
+                HashMap::new(),
+                None,
+                false,
+                false,
+                String::new(),
+                false,
+                false,
+                0,
+                false,
+                false,
+                false,
+                String::new(),
+                None,
+                None,
+                vec![],
+                vec![],
+                vec![],
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+                None,
+                None,
+            )
+            .await;
+        let manager = HttpProxyManager::new(
+            store,
+            Arc::new(DynamicCertSelector::new()),
+            test_edge_proxy(),
+            Arc::new(ServerConf::default()),
+        );
+        let counters = crate::origin_state::ORIGIN_STATE_MANAGER.inflight_counters();
+
+        let first = manager
+            .select_passthrough_backend_target(&server)
+            .await
+            .unwrap();
+        assert_eq!(counters.inflight(first.origin_id), 1);
+
+        let second = manager
+            .select_passthrough_backend_target(&server)
+            .await
+            .unwrap();
+        assert_ne!(
+            first.origin_id, second.origin_id,
+            "least_conn must not keep picking the loaded origin"
+        );
+        assert_eq!(counters.inflight(first.origin_id), 1);
+        assert_eq!(counters.inflight(second.origin_id), 1);
+
+        drop(first);
+        assert_eq!(counters.inflight(second.origin_id), 1);
+        drop(second);
+        assert_eq!(counters.inflight(ORIGIN_A), 0);
+        assert_eq!(counters.inflight(ORIGIN_B), 0);
+    }
 
     fn tls_record(payload: &[u8]) -> Vec<u8> {
         let mut record = Vec::with_capacity(5 + payload.len());

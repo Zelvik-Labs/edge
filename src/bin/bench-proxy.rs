@@ -17,8 +17,8 @@ use pingora_proxy::{ProxyHttp, Session};
 use std::sync::LazyLock as Lazy;
 use std::time::Duration;
 
-use zelvik_edge::cache_manager::CACHE;
 use pingora_cache::CacheKey;
+use zelvik_edge::cache_manager::CACHE;
 
 /// Minimal HTTP/3 (QUIC) listener mirroring the production `http3_proxy_manager`
 /// path: quinn Endpoint -> h3::server accept -> H3DownstreamSession ->
@@ -26,13 +26,12 @@ use pingora_cache::CacheKey;
 /// default HTTP/1.1 TCP connector (unit custom connector).
 mod h3_listener {
     use super::BenchProxy;
-    use bytes::Bytes;
-    use zelvik_edge::h3_downstream::H3DownstreamSession;
     use pingora_core::apps::HttpServerApp;
     use pingora_core::protocols::http::server::Session as ServerSession;
     use pingora_core::server::configuration::ServerConf;
     use std::net::SocketAddr;
     use std::sync::Arc;
+    use zelvik_edge::h3_downstream::H3DownstreamSession;
 
     fn load_rustls_config(cert_path: &str, key_path: &str) -> anyhow::Result<quinn::ServerConfig> {
         let cert_pem = std::fs::read(cert_path)?;
@@ -135,10 +134,6 @@ mod h3_listener {
             });
         }
     }
-
-    // Silence unused import lint when feature-gated pieces shift.
-    #[allow(dead_code)]
-    fn _t(_: Bytes) {}
 }
 
 use h3_listener as bench_h3;
@@ -180,7 +175,7 @@ impl ProxyHttp for BenchProxy {
 
     fn cache_key_callback(&self, session: &Session, _ctx: &mut Self::CTX) -> Result<CacheKey> {
         let key = session.req_header().uri.path().to_string();
-        Ok(CacheKey::new("", key.as_bytes().to_vec(), ""))
+        Ok(CacheKey::new(key.into_bytes(), ""))
     }
 
     async fn upstream_peer(

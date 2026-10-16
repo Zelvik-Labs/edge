@@ -16,7 +16,7 @@
 
 use async_trait::async_trait;
 use http::Response;
-use log::{debug, trace};
+use log::{debug, error, trace};
 use pingora_http::ResponseHeader;
 use std::sync::Arc;
 
@@ -63,7 +63,7 @@ where
                 }
             },
             Err(e) => {
-                debug!("HTTP server fails to read from downstream: {e}");
+                error!("HTTP server fails to read from downstream: {e}");
                 return None;
             }
         }
@@ -81,7 +81,7 @@ where
                 debug!("HTTP response header done.");
             }
             Err(e) => {
-                debug!(
+                error!(
                     "HTTP server fails to write to downstream: {e}, {}",
                     http.request_summary()
                 );
@@ -91,7 +91,7 @@ where
             // TODO: check if chunked encoding is needed
             match http.write_response_body(body.into(), true).await {
                 Ok(_) => debug!("HTTP response written."),
-                Err(e) => debug!(
+                Err(e) => error!(
                     "HTTP server fails to write to downstream: {e}, {}",
                     http.request_summary()
                 ),
@@ -99,9 +99,9 @@ where
         }
         let persistent_settings = HttpPersistentSettings::for_session(&http);
         match http.finish().await {
-            Ok(c) => c.map(|s| ReusedHttpStream::new(s, Some(persistent_settings))),
+            Ok(c) => c.map(|s| ReusedHttpStream::from_reusable_stream(s, persistent_settings)),
             Err(e) => {
-                debug!("HTTP server fails to finish the request: {e}");
+                error!("HTTP server fails to finish the request: {e}");
                 None
             }
         }
@@ -154,7 +154,7 @@ where
                 }
             },
             Err(e) => {
-                debug!("HTTP server fails to read from downstream: {e}");
+                error!("HTTP server fails to read from downstream: {e}");
                 return None;
             }
         }
@@ -183,7 +183,7 @@ where
                 debug!("HTTP response header done.");
             }
             Err(e) => {
-                debug!(
+                error!(
                     "HTTP server fails to write to downstream: {e}, {}",
                     http.request_summary()
                 );
@@ -200,16 +200,16 @@ where
         // TODO: check if chunked encoding is needed
         match http.response_duplex_vec(vec![task]).await {
             Ok(_) => debug!("HTTP response written."),
-            Err(e) => debug!(
+            Err(e) => error!(
                 "HTTP server fails to write to downstream: {e}, {}",
                 http.request_summary()
             ),
         }
         let persistent_settings = HttpPersistentSettings::for_session(&http);
         match http.finish().await {
-            Ok(c) => c.map(|s| ReusedHttpStream::new(s, Some(persistent_settings))),
+            Ok(c) => c.map(|s| ReusedHttpStream::from_reusable_stream(s, persistent_settings)),
             Err(e) => {
-                debug!("HTTP server fails to finish the request: {e}");
+                error!("HTTP server fails to finish the request: {e}");
                 None
             }
         }

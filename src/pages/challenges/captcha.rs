@@ -9,7 +9,7 @@ pub fn issue_html(
     waf_token: &str,
     verify_route: &str,
     return_path: &str,
-    secret: &[u8],
+    challenge_key: &[u8; 32],
     expiry: u64,
 ) -> String {
     let sfx = random_suffix();
@@ -27,7 +27,7 @@ pub fn issue_html(
         "e": expiry,
         "n": hex::encode(rand::random::<u64>().to_be_bytes()),
     });
-    let enc_token = encode_challenge_token(&pl, secret);
+    let enc_token = encode_challenge_token(&pl, challenge_key);
 
     let chars_json_str: String = {
         let items: Vec<String> = captcha_text.chars().map(|c| format!("\"{}\"", c)).collect();
@@ -132,8 +132,8 @@ btn.onclick=function(){{
     )
 }
 
-pub fn verify(token: &str, answer_hash: &str, secret: &[u8]) -> bool {
-    let payload = match crate::pages::challenges::decode_challenge_token(token, secret) {
+pub fn verify(token: &str, answer_hash: &str, challenge_key: &[u8; 32]) -> bool {
+    let payload = match crate::pages::challenges::decode_challenge_token(token, challenge_key) {
         Some(p) => p,
         None => return false,
     };

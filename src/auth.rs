@@ -23,15 +23,24 @@ fn lower_hex_eq(digest: &[u8], expected: &str) -> bool {
     true
 }
 
-/// Generates the base64 AES256-CFB encrypted token required by the API node.
-/// Uses deterministic key/IV derivation compatible with the control-plane decodeToken().
-pub fn generate_token(node_id: &str, secret: &str, node_type: &str) -> anyhow::Result<String> {
-    // Key: secret padded/truncated to 32 bytes (matching Go master)
-    let mut key = [b' '; 32];
-    let secret_bytes = secret.as_bytes();
-    let copy_len = secret_bytes.len().min(32);
-    key[..copy_len].copy_from_slice(&secret_bytes[..copy_len]);
-
+/// Generates the base64 AES256-CFB token of the **upstream parent-node relay**
+/// header (`X-Cloud-Node-Id` + token), the vendored cloud-node face that the
+/// Zelvik control channel does not replace (05-control-channel-protocol.md §9).
+///
+/// `challenge_key` is the 32-byte key derived from the instance credential
+/// secret (`ApiConfig::challenge_key`, 04 §2.4 / 05 §4.6, D7). The raw credential
+/// secret is never used here: the draft-period "pad/truncate the secret to 32
+/// bytes" keying is deleted with no fallback.
+///
+/// It is NOT the Zelvik control-channel credential: that one is the `zvc1`
+/// credential minted by the shared suite (`zelvik_suite::credential`), sent in
+/// the `zelvik-credential` metadata key. The draft-period `nodeid`/`nodeId`/
+/// `type`/`token` metadata keys are deleted with no dual read.
+pub fn generate_token(
+    node_id: &str,
+    challenge_key: &[u8; 32],
+    node_type: &str,
+) -> anyhow::Result<String> {
     // IV: node_id padded/truncated to 16 bytes (matching Go master)
     let mut iv = [b' '; 16];
     let id_bytes = node_id.as_bytes();
@@ -48,7 +57,7 @@ pub fn generate_token(node_id: &str, secret: &str, node_type: &str) -> anyhow::R
     .expect("writing to String should not fail");
 
     let mut data = payload.into_bytes();
-    let cipher = Aes256CfbEnc::new_from_slices(&key, &iv)
+    let cipher = Aes256CfbEnc::new_from_slices(challenge_key, &iv)
         .map_err(|e| anyhow::anyhow!("Invalid cipher init: {}", e))?;
 
     cipher.encrypt(&mut data);
@@ -389,5 +398,46 @@ mod tests {
         };
 
         assert!(verify_url_auth("/path", "", &config));
+    }
+
+    // ── D7: the L1→L2 relay token is keyed by the derived challenge key ──
+
+    fn decrypt_relay_token(token: &str, key: &[u8; 32], node_id: &str) -> String {
+        use cfb_mode::Decryptor;
+        let mut iv = [b' '; 16];
+        let id_bytes = node_id.as_bytes();
+        let len = id_bytes.len().min(16);
+        iv[..len].copy_from_slice(&id_bytes[..len]);
+        let mut data = general_purpose::STANDARD.decode(token).expect("base64 token");
+        Decryptor::<Aes256>::new_from_slices(key, &iv)
+            .expect("cipher init")
+            .decrypt(&mut data);
+        String::from_utf8_lossy(&data).into_owned()
+    }
+
+    #[test]
+    fn relay_token_is_keyed_by_the_derived_challenge_key_not_the_raw_secret() {
+        let secret_hex = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+        let secret = zelvik_suite::credential::decode_secret(secret_hex).expect("fixture secret");
+        let challenge_key =
+            zelvik_suite::credential::derive_challenge_key(&secret).expect("derive challenge key");
+
+        let token = generate_token("nd_0123456789", &challenge_key, "node").expect("mint token");
+        // The derived key decrypts the token back to the relay payload…
+        assert!(
+            decrypt_relay_token(&token, &challenge_key, "nd_0123456789")
+                .contains(r#""type":"node""#)
+        );
+
+        // …and the draft-period key (the raw secret truncated/padded to 32
+        // bytes) no longer does. There is no fallback path.
+        let mut legacy_key = [b' '; 32];
+        let legacy_bytes = secret_hex.as_bytes();
+        let legacy_len = legacy_bytes.len().min(32);
+        legacy_key[..legacy_len].copy_from_slice(&legacy_bytes[..legacy_len]);
+        assert!(
+            !decrypt_relay_token(&token, &legacy_key, "nd_0123456789")
+                .contains(r#""type":"node""#)
+        );
     }
 }

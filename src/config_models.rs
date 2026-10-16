@@ -740,6 +740,62 @@ pub struct NodeRuntimePush {
     pub api: Option<crate::api_config::NodeApiPush>,
     #[serde(default)]
     pub xdp: Option<crate::runtime_mode::XdpConfig>,
+    /// Active-probing (tcping) plan. Absent key means "no plan" — the engine
+    /// stops every probe, so removing the key on the control plane takes effect.
+    #[serde(default)]
+    pub probe: Option<ProbePlan>,
+}
+
+/// ProbePlan is the node's active-probing assignment: the providers enabled for
+/// the node's edge cluster, each with its cadence and labeled targets.
+#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq, Eq)]
+pub struct ProbePlan {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub providers: Vec<ProbeProviderPlan>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq, Eq)]
+pub struct ProbeProviderPlan {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub kind: String,
+    #[serde(rename = "intervalSeconds", default)]
+    pub interval_seconds: u32,
+    #[serde(rename = "timeoutMs", default)]
+    pub timeout_ms: u32,
+    #[serde(default)]
+    pub targets: Vec<ProbeTargetPlan>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq, Eq)]
+pub struct ProbeTargetPlan {
+    #[serde(rename = "targetType")]
+    pub target_type: String,
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub host: String,
+    #[serde(default)]
+    pub port: u16,
+    #[serde(rename = "ipFamily", default)]
+    pub ip_family: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub region: String,
+    #[serde(default)]
+    pub city: String,
+    #[serde(default)]
+    pub carrier: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub weight: u32,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -1155,7 +1211,9 @@ pub struct SSLPolicyConfig {
     pub is_on: bool,
     #[serde(default, deserialize_with = "deserialize_null_default")]
     pub certs: Vec<SSLCertConfig>,
-    #[serde(rename = "http2Enabled", default)]
+    // 字段缺失 = 开启。HTTP/2 是边缘的既有行为，控制面与面板的默认也都是开，
+    // 只有显式下发 false 才关闭；否则「没写这个字段」会被静默当成关掉 h2。
+    #[serde(rename = "http2Enabled", default = "default_true")]
     pub http2_enabled: bool,
     #[serde(rename = "minVersion", default)]
     pub min_version: String,
@@ -1170,7 +1228,7 @@ impl Default for SSLPolicyConfig {
             id: 0,
             is_on: false,
             certs: Vec::new(),
-            http2_enabled: false,
+            http2_enabled: true,
             min_version: String::new(),
             hsts: None,
         }

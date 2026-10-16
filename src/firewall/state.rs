@@ -1582,15 +1582,15 @@ impl WafStateManager {
 
     pub(crate) fn reserve_slot(counter: &AtomicU64, capacity: usize) -> bool {
         counter
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
                 (current < capacity as u64).then_some(current + 1)
             })
             .is_ok()
     }
 
     pub(crate) fn release_slot(counter: &AtomicU64) {
-        let _ = counter.fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
-            Some(current.saturating_sub(1))
+        counter.update(Ordering::AcqRel, Ordering::Acquire, |current| {
+            current.saturating_sub(1)
         });
     }
 
@@ -1742,10 +1742,10 @@ impl WafStateManager {
             retain
         });
         if removed > 0 {
-            let _ = self.ip_limiter_reservations.fetch_update(
+            let _ = self.ip_limiter_reservations.update(
                 Ordering::AcqRel,
                 Ordering::Acquire,
-                |current| Some(current.saturating_sub(removed)),
+                |current| current.saturating_sub(removed),
             );
         }
     }
@@ -1816,11 +1816,11 @@ impl WafStateManager {
             retain
         });
         if removed > 0 {
-            let _ = self.counter_reservations.fetch_update(
-                Ordering::AcqRel,
-                Ordering::Acquire,
-                |current| Some(current.saturating_sub(removed)),
-            );
+            let _ =
+                self.counter_reservations
+                    .update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                        current.saturating_sub(removed)
+                    });
         }
     }
 
@@ -2605,10 +2605,10 @@ impl WafStateManager {
             retain
         });
         if removed > 0 {
-            let _ = self.ip_bw_counter_reservations.fetch_update(
+            let _ = self.ip_bw_counter_reservations.update(
                 Ordering::AcqRel,
                 Ordering::Acquire,
-                |current| Some(current.saturating_sub(removed)),
+                |current| current.saturating_sub(removed),
             );
         }
     }
@@ -2676,10 +2676,10 @@ impl WafStateManager {
             retain
         });
         if removed > 0 {
-            let _ = self.candidate_stats_reservations.fetch_update(
+            let _ = self.candidate_stats_reservations.update(
                 Ordering::AcqRel,
                 Ordering::Acquire,
-                |current| Some(current.saturating_sub(removed)),
+                |current| current.saturating_sub(removed),
             );
         }
     }

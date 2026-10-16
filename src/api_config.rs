@@ -25,10 +25,33 @@ pub struct ApiConfig {
     pub rpc_endpoints: Vec<String>,
     #[serde(rename = "rpc.disableUpdate", default)]
     pub rpc_disable_update: bool,
-    #[serde(rename = "nodeId")]
-    pub node_id: String,
+    /// Server-generated edge instance id: `nd_` followed by 10 hex characters.
+    /// It is the control-channel identity: the `zelvik-instance` metadata, the
+    /// credential `iid` claim and the NodeControl node_id all carry it. A client
+    /// never chooses it.
+    #[serde(rename = "instanceId")]
+    pub instance_id: String,
+    /// The 32-byte credential key, hex-encoded, exactly as the enrollment
+    /// response returned it. The `zvc1` credential is re-minted for every RPC.
+    ///
+    /// It is the **single root key** of this node: the L1→L2 relay token and the
+    /// UAM/WAF challenge tokens do not reuse it directly, they are keyed by the
+    /// explicitly derived challenge key (04 §2.4 / 05 §4.6, D7) —
+    /// `challenge_key = HMAC-SHA256(secret, "zelvik/challenge/v1")`, see
+    /// [`ApiConfig::challenge_key`]. The draft-period implicit reuse is deleted:
+    /// no fallback, no dual read, no alias.
     #[serde(rename = "secret")]
     pub secret: String,
+    /// Registered transport policy: `plaintext` | `tls` | `mtls`. The API
+    /// compares it with the registered instance record and computes the trust
+    /// tier server-side; the node never asserts its own tier.
+    #[serde(rename = "commMode", default)]
+    pub comm_mode: String,
+    /// The upstream gcloud face's numeric node id. It is **not** an
+    /// authentication identity any more: it only travels in the vendored gcloud
+    /// request payloads and the L1->L2 parent relay header (05 §9).
+    #[serde(rename = "gcloudNodeId", default)]
+    pub gcloud_node_id: String,
     #[serde(rename = "accessLogPipeline", default)]
     pub access_log_pipeline: AccessLogPipelineConfig,
     #[serde(rename = "relay", default)]
@@ -316,6 +339,83 @@ fn default_kernel_tuning_enabled() -> bool {
 }
 
 impl ApiConfig {
+    /// The protocol role of this process. Edge nodes are always `edge`.
+    pub fn instance_kind(&self) -> zelvik_suite::credential::Kind {
+        zelvik_suite::credential::Kind::Edge
+    }
+
+    /// The decoded 32-byte credential key.
+    pub fn credential_secret(&self) -> anyhow::Result<Vec<u8>> {
+        let secret = zelvik_suite::credential::decode_secret(self.secret.trim())
+            .map_err(|e| anyhow::anyhow!("secret is not a 32-byte hex credential key: {e}"))?;
+        Ok(secret.to_vec())
+    }
+
+    /// The 32-byte challenge / relay-token HMAC key, derived from the credential
+    /// secret (04 §2.4 / 05 §4.6, D7):
+    ///
+    /// ```text
+    /// challenge_key = HMAC-SHA256(credential_secret, "zelvik/challenge/v1")
+    /// ```
+    ///
+    /// The derivation lives in the shared suite so every role derives the same
+    /// bytes; edge must not carry a second derivation. Fails closed — a secret
+    /// that is not a 32-byte credential key has no challenge key, and nothing
+    /// signs a challenge token with the raw secret instead.
+    pub fn challenge_key(&self) -> anyhow::Result<[u8; 32]> {
+        let secret = self.credential_secret()?;
+        zelvik_suite::credential::derive_challenge_key(&secret)
+            .map_err(|e| anyhow::anyhow!("challenge key derivation failed: {e}"))
+    }
+
+    /// The registered transport policy, parsed by the shared suite.
+    pub fn comm_mode(&self) -> anyhow::Result<zelvik_suite::CommMode> {
+        let raw = if self.comm_mode.trim().is_empty() {
+            "plaintext"
+        } else {
+            self.comm_mode.trim()
+        };
+        zelvik_suite::CommMode::parse(raw)
+            .map_err(|e| anyhow::anyhow!("commMode is invalid: {e}"))
+    }
+
+    /// The upstream gcloud numeric node id (0 when unset). Never an identity.
+    pub fn numeric_gcloud_node_id(&self) -> i64 {
+        self.gcloud_node_id.trim().parse::<i64>().unwrap_or(0)
+    }
+
+    /// The shared suite client configuration of this node.
+    pub fn channel_config(&self) -> anyhow::Result<zelvik_suite::channel::Config> {
+        let endpoint = self
+            .rpc_endpoints
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("no 'rpc.endpoints' configured"))?
+            .clone();
+        let mut cfg = zelvik_suite::channel::Config::new(
+            endpoint,
+            self.instance_id.trim(),
+            self.instance_kind(),
+            self.credential_secret()?,
+        );
+        cfg.comm_mode = self.comm_mode()?;
+        cfg.tls = zelvik_suite::channel::TlsConfig {
+            ca_file: self.rpc_tls.ca_file.as_ref().map(|p| p.display().to_string()),
+            cert_file: self.rpc_tls.cert_file.as_ref().map(|p| p.display().to_string()),
+            key_file: self.rpc_tls.key_file.as_ref().map(|p| p.display().to_string()),
+            domain_name: self.rpc_tls.server_name.clone(),
+        };
+        cfg.validate()
+            .map_err(|e| anyhow::anyhow!("instance identity is invalid: {e}"))?;
+        Ok(cfg)
+    }
+
+    /// The credential interceptor every control-plane client stub installs. It
+    /// injects the four `zelvik-*` metadata keys and re-mints the credential for
+    /// each RPC; no call site touches metadata by hand.
+    pub fn credential_interceptor(&self) -> anyhow::Result<zelvik_suite::channel::CredentialInterceptor> {
+        Ok(zelvik_suite::channel::CredentialInterceptor::new(&self.channel_config()?))
+    }
+
     pub fn default_paths() -> Vec<PathBuf> {
         crate::paths::NodePaths::current().api_config_candidates()
     }
@@ -347,11 +447,19 @@ impl ApiConfig {
         if config.rpc_endpoints.is_empty() {
             anyhow::bail!("no valid 'rpc.endpoints' in {:?}", path.as_ref());
         }
-        if config.node_id.is_empty() {
-            anyhow::bail!("'nodeId' required in {:?}", path.as_ref());
+        if config.instance_id.is_empty() {
+            anyhow::bail!("'instanceId' required in {:?}", path.as_ref());
         }
         if config.secret.is_empty() {
             anyhow::bail!("'secret' required in {:?}", path.as_ref());
+        }
+        // Fail closed on the identity material: a typo must stop the node at
+        // startup, never silently fall back to a legacy identity.
+        config.channel_config()?;
+        if config.gcloud_node_id.is_empty() {
+            tracing::warn!(
+                "'gcloudNodeId' is empty: the upstream gcloud payloads will carry node id 0"
+            );
         }
         Self::set_runtime_rpc_endpoints(config.rpc_endpoints.clone())?;
         LOCAL_CACHE_SENDFILE.store(
@@ -542,8 +650,9 @@ mod tests {
             r#"
 rpc.endpoints:
   - https://api.example.com
-nodeId: "1"
-secret: "secret"
+instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+gcloudNodeId: "1"
 "#,
         )
         .unwrap();
@@ -557,8 +666,9 @@ secret: "secret"
             r#"
 rpc.endpoints:
   - https://api.example.com
-nodeId: "1"
-secret: "secret"
+instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+gcloudNodeId: "1"
 "#,
         )
         .unwrap();
@@ -572,8 +682,9 @@ secret: "secret"
             r#"
 rpc.endpoints:
   - https://api.example.com
-nodeId: "1"
-secret: "secret"
+instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+gcloudNodeId: "1"
 cache:
   sendfile: true
 "#,
@@ -589,8 +700,9 @@ cache:
             r#"
 rpc.endpoints:
   - https://api.example.com
-nodeId: "1"
-secret: "secret"
+instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+gcloudNodeId: "1"
 kernelTuning:
   enabled: false
 "#,
@@ -607,6 +719,139 @@ kernelTuning:
         assert_eq!(validate_rpc_endpoint(endpoint).unwrap(), endpoint);
     }
 
+    /// Pull a `printf '<fmt>'` format string out of the installer source. Only
+    /// the fresh-install writer is wanted: the dry-run echo prints the same keys
+    /// with a two-space indent, so a format that starts with a space is skipped.
+    fn install_printf_format(script: &str, key: &str) -> String {
+        for line in script.lines() {
+            let line = line.trim_start();
+            let Some(rest) = line.strip_prefix("printf '") else {
+                continue;
+            };
+            let Some(end) = rest.find('\'') else {
+                continue;
+            };
+            let fmt = &rest[..end];
+            if fmt.starts_with(key) {
+                return fmt.replace("\\n", "\n");
+            }
+        }
+        panic!("install script has no printf format for {key:?}");
+    }
+
+    /// Rebuild the api_node.yaml a fresh install writes, straight from the
+    /// installer's own printf format strings.
+    fn fresh_install_yaml_from_script(script: &str) -> String {
+        let secret = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+        // The endpoint list is written by a loop, so only its header comes from a
+        // format string; mirror the two-space list item the loop emits.
+        let endpoints = install_printf_format(script, "rpc.endpoints:");
+        let instance =
+            install_printf_format(script, "instanceId:").replace("%s", "\"nd_0123456789\"");
+        let credential =
+            install_printf_format(script, "secret:").replace("%s", &format!("\"{secret}\""));
+        let comm = install_printf_format(script, "commMode:").replace("%s", "\"plaintext\"");
+        format!("{endpoints}  - \"http://127.0.0.1:8001\"\n{instance}{credential}{comm}")
+    }
+
+    /// Snapshot/restore of every process global a real `ApiConfig::load` call
+    /// touches, so the install-script regression test can exercise the true
+    /// load path without leaking state into sibling tests (the loopback and
+    /// update-endpoint tests read these same globals). Serialized with
+    /// [`RELEASE_SIGNING_TEST_LOCK`] — the same cross-module discipline those
+    /// tests already use — because parallel tests share the process.
+    struct ApiLoadGlobalsGuard {
+        // Declared first so the lock is released last (fields drop in order).
+        _lock: tokio::sync::MutexGuard<'static, ()>,
+        saved_rpc_endpoints: Option<Vec<String>>,
+        saved_update_endpoints: Option<Vec<String>>,
+        saved_home: Option<std::ffi::OsString>,
+        /// Empty `ZELVIK_EDGE_HOME` for the duration: `load` probes
+        /// `NodePaths::current().config_dir()/control-plane-runtime.json`, which
+        /// must never resolve to a developer machine's real runtime file.
+        _home: PathBuf,
+    }
+
+    impl ApiLoadGlobalsGuard {
+        fn new() -> Self {
+            let home = std::env::temp_dir().join(format!(
+                "zelvik-load-globals-{}",
+                uuid::Uuid::new_v4()
+            ));
+            fs::create_dir_all(home.join("configs")).unwrap();
+            let saved_home = std::env::var_os("ZELVIK_EDGE_HOME");
+            unsafe {
+                std::env::set_var("ZELVIK_EDGE_HOME", &home);
+            }
+            Self {
+                _lock: RELEASE_SIGNING_TEST_LOCK.blocking_lock(),
+                saved_rpc_endpoints: RUNTIME_RPC_ENDPOINTS
+                    .read()
+                    .ok()
+                    .and_then(|guard| guard.clone()),
+                saved_update_endpoints: RUNTIME_UPDATE_ENDPOINTS
+                    .read()
+                    .ok()
+                    .and_then(|guard| guard.clone()),
+                saved_home,
+                _home: home,
+            }
+        }
+    }
+
+    impl Drop for ApiLoadGlobalsGuard {
+        fn drop(&mut self) {
+            if let Ok(mut guard) = RUNTIME_RPC_ENDPOINTS.write() {
+                *guard = self.saved_rpc_endpoints.clone();
+            }
+            if let Ok(mut guard) = RUNTIME_UPDATE_ENDPOINTS.write() {
+                *guard = self.saved_update_endpoints.clone();
+            }
+            match &self.saved_home {
+                Some(value) => unsafe { std::env::set_var("ZELVIK_EDGE_HOME", value) },
+                None => unsafe { std::env::remove_var("ZELVIK_EDGE_HOME") },
+            }
+            fs::remove_dir_all(&self._home).ok();
+        }
+    }
+
+    /// Regression for the fresh-install config the installer writes: it must use
+    /// the keys `ApiConfig` requires (`instanceId`, not the dead `nodeId`) and
+    /// must load through the real `ApiConfig::load`. A drift between the
+    /// installer and the parser has to fail here, not on a freshly installed
+    /// node — the previous installer shipped `runtime.yaml`/`secrets.env`, which
+    /// nothing in this crate reads, and every installed node aborted on startup.
+    #[test]
+    fn install_script_fresh_api_node_yaml_loads() {
+        // Held for the whole test: `load` mutates process globals and reads
+        // paths derived from the environment.
+        let _globals = ApiLoadGlobalsGuard::new();
+        let script = include_str!("../deploy/install.sh");
+        assert!(
+            !script.contains("nodeId"),
+            "install script still writes the dead `nodeId` key"
+        );
+
+        let yaml = fresh_install_yaml_from_script(script);
+        let dir = std::env::temp_dir().join(format!("zelvik-install-yaml-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("api_node.yaml");
+        fs::write(&path, &yaml).unwrap();
+
+        let config = ApiConfig::load(&path).expect("fresh-install api_node.yaml must load");
+        assert_eq!(config.instance_id, "nd_0123456789");
+        assert_eq!(
+            config.secret,
+            "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+        );
+        assert_eq!(
+            config.rpc_endpoints,
+            vec!["http://127.0.0.1:8001".to_string()]
+        );
+
+        fs::remove_dir_all(dir).unwrap();
+    }
+
     fn runtime_test_dir() -> (PathBuf, PathBuf) {
         let dir =
             std::env::temp_dir().join(format!("zelvik-runtime-test-{}", uuid::Uuid::new_v4()));
@@ -614,7 +859,7 @@ kernelTuning:
         let local = dir.join("api.yaml");
         fs::write(
             &local,
-            "nodeId: '1'\nsecret: fixture\nrpc.endpoints: ['http://127.0.0.1:8001']\n",
+            "instanceId: 'nd_0123456789'\nsecret: '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'\nrpc.endpoints: ['http://127.0.0.1:8001']\n",
         )
         .unwrap();
         (dir, local)
@@ -678,8 +923,9 @@ kernelTuning:
             r#"
 rpc.endpoints:
   - https://api.example.com
-nodeId: "1"
-secret: "secret"
+instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+gcloudNodeId: "1"
 accessLogPipeline:
   queueCapacity: 4096
   batchSize: 256
@@ -690,8 +936,9 @@ accessLogPipeline:
             r#"
 rpc.endpoints:
   - https://api.example.com
-nodeId: "1"
-secret: "secret"
+instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+gcloudNodeId: "1"
 accessLogPipeline:
   queueCapacity: 8192
   batchSize: 256
@@ -708,7 +955,7 @@ accessLogPipeline:
     #[test]
     fn access_log_auto_defaults_do_not_drift() {
         let _: ApiConfig = serde_yaml::from_str(
-            "nodeId: '1'\nsecret: fixture\nrpc.endpoints: ['http://127.0.0.1:8001']\n",
+            "instanceId: 'nd_0123456789'\nsecret: '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'\nrpc.endpoints: ['http://127.0.0.1:8001']\n",
         )
         .unwrap();
         assert_eq!(
@@ -930,7 +1177,7 @@ mod pushed_runtime_tests {
         let local = dir.join("api.yaml");
         fs::write(
             &local,
-            "nodeId: '1'\nsecret: fixture\nrpc.endpoints: ['http://127.0.0.1:8001']\n",
+            "instanceId: 'nd_0123456789'\nsecret: '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'\nrpc.endpoints: ['http://127.0.0.1:8001']\n",
         )
         .unwrap();
         let push = NodeApiPush {
@@ -1007,8 +1254,9 @@ mod update_endpoint_tests {
             r#"
 rpc.endpoints:
   - https://api.example.com:9090
-nodeId: "1"
-secret: "secret"
+instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+gcloudNodeId: "1"
 "#,
         )
         .unwrap();
@@ -1033,6 +1281,76 @@ secret: "secret"
         assert_eq!(
             config.effective_update_endpoints(),
             vec!["https://api.example.com:9090".to_string()]
+        );
+    }
+}
+
+#[cfg(test)]
+mod challenge_key_tests {
+    use super::*;
+
+    const DUMMY_SECRET: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+    /// The D7 conformance vector for [`DUMMY_SECRET`]
+    /// (`protocol/conformance/challenge.json`): the same secret must derive the
+    /// same key in every role and language.
+    const DUMMY_CHALLENGE_KEY: &str =
+        "dc55d19595f9dcce924efb94a68c8fc901efd777a364e44f2c446a959b6a8200";
+
+    fn config_with_secret(secret: &str) -> ApiConfig {
+        serde_yaml::from_str(&format!(
+            r#"
+rpc.endpoints:
+  - https://api.example.com:9090
+instanceId: "nd_0123456789"
+secret: "{secret}"
+gcloudNodeId: "1"
+"#
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn challenge_key_matches_the_conformance_vector_and_is_stable() {
+        let config = config_with_secret(DUMMY_SECRET);
+        let key = config.challenge_key().expect("dummy secret derives");
+        assert_eq!(hex::encode(key), DUMMY_CHALLENGE_KEY);
+        // Stable across calls and across ApiConfig instances built from the same
+        // secret (no per-process salt, no time dependence).
+        assert_eq!(config.challenge_key().unwrap(), key);
+        assert_eq!(config_with_secret(DUMMY_SECRET).challenge_key().unwrap(), key);
+        // The derived key is not the root secret: the implicit reuse is gone.
+        assert_ne!(
+            key.as_slice(),
+            config.credential_secret().unwrap().as_slice()
+        );
+    }
+
+    #[test]
+    fn rotated_secret_rotates_the_challenge_key() {
+        let rotated = config_with_secret(
+            "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100",
+        )
+        .challenge_key()
+        .unwrap();
+        assert_eq!(
+            hex::encode(rotated),
+            "7cd775052ff93fe1275bdf3f9342adc1f09af4d85c0a819d777636c87d1e7d92"
+        );
+        assert_ne!(
+            rotated,
+            config_with_secret(DUMMY_SECRET).challenge_key().unwrap()
+        );
+    }
+
+    #[test]
+    fn non_credential_secret_fails_closed_instead_of_reusing_the_raw_secret() {
+        let config = config_with_secret("secret");
+        let error = config
+            .challenge_key()
+            .expect_err("a non-32-byte secret has no challenge key");
+        assert!(
+            error.to_string().contains("32-byte hex credential key"),
+            "unexpected error: {error}"
         );
     }
 }

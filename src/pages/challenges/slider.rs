@@ -7,7 +7,7 @@ pub fn issue_html(
     verify_route: &str,
     return_path: &str,
     target_anchor: u32,
-    _secret: &[u8],
+    _challenge_key: &[u8; 32],
     _expiry: u64,
 ) -> String {
     let tx = (target_anchor % 260) as f64;
@@ -175,9 +175,9 @@ pub fn verify_explicit(
     user_y: f64,
     elapsed_ms: u64,
     trace: &str,
-    secret: &[u8],
+    challenge_key: &[u8; 32],
 ) -> bool {
-    let payload = match crate::pages::challenges::decode_challenge_token(token, secret) {
+    let payload = match crate::pages::challenges::decode_challenge_token(token, challenge_key) {
         Some(p) => p,
         None => return false,
     };
@@ -324,6 +324,10 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// Stands in for `ApiConfig::challenge_key` (D7): challenge tokens are keyed
+    /// by the derived 32-byte challenge key, never by a raw credential secret.
+    const TEST_CHALLENGE_KEY: [u8; 32] = [0x11; 32];
+
     fn future_expiry() -> u64 {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -333,7 +337,7 @@ mod tests {
     }
 
     fn slider_token(payload: serde_json::Value) -> String {
-        crate::pages::challenges::encode_challenge_token(&payload, b"slider-secret")
+        crate::pages::challenges::encode_challenge_token(&payload, &TEST_CHALLENGE_KEY)
     }
 
     #[test]
@@ -344,7 +348,7 @@ mod tests {
             "/.well-known/zelvik-edge/waf-verify",
             "/return",
             120,
-            b"slider-secret",
+            &TEST_CHALLENGE_KEY,
             future_expiry(),
         );
 
@@ -395,7 +399,7 @@ mod tests {
             51.0,
             MIN_ELAPSED_MS,
             "70;84;103;126;141;149;152;151;150",
-            b"slider-secret",
+            &TEST_CHALLENGE_KEY,
         ));
 
         let wrong_type = slider_token(json!({
@@ -409,7 +413,7 @@ mod tests {
             51.0,
             MIN_ELAPSED_MS,
             "70;84;103;126;141;149;152;151;150",
-            b"slider-secret",
+            &TEST_CHALLENGE_KEY,
         ));
     }
 
@@ -427,7 +431,7 @@ mod tests {
             51.0,
             MIN_ELAPSED_MS,
             "70;84;103;126;141;149;152;151;150",
-            b"slider-secret",
+            &TEST_CHALLENGE_KEY,
         ));
     }
 }

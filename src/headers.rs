@@ -704,6 +704,26 @@ pub fn apply_compiled_request_header_policy_to_upstream(
             upstream_request.insert_header(hn.clone(), hv).ok();
         }
     }
+
+    for rh in &policy.replace_headers {
+        if !rh.is_on {
+            continue;
+        }
+        if let Some(current) = upstream_request
+            .headers
+            .get(rh.name.raw.as_str())
+            .and_then(|v| v.to_str().ok())
+        {
+            // Empty `old_value` means "set the whole value" — see `replace_rule_value`.
+            let Some(replaced) = replace_rule_value(current, &rh.old_value, &rh.new_value) else {
+                continue;
+            };
+            let Some(name) = &rh.name.parsed else {
+                continue;
+            };
+            upstream_request.insert_header(name.clone(), replaced).ok();
+        }
+    }
 }
 
 /// Applies request header policies to upstream request headers.
@@ -753,6 +773,27 @@ pub fn apply_request_header_policy_to_upstream(
         ) && upstream_request.headers.get(&hn).is_none()
         {
             upstream_request.insert_header(hn, hv).ok();
+        }
+    }
+
+    // Replace header values (only when the header already exists)
+    for rh in &policy.replace_headers {
+        if !rh.is_on {
+            continue;
+        }
+        if let Some(current) = upstream_request
+            .headers
+            .get(rh.name.as_str())
+            .and_then(|v| v.to_str().ok())
+        {
+            // Empty `old_value` means "set the whole value" — see `replace_rule_value`.
+            let Some(replaced) = replace_rule_value(current, &rh.old_value, &rh.new_value) else {
+                continue;
+            };
+            let Some(name) = cached_header_name(&rh.name) else {
+                continue;
+            };
+            upstream_request.insert_header(name, replaced).ok();
         }
     }
 }
@@ -841,6 +882,42 @@ fn replace_header_value(value: String, rule: &HTTPHeaderReplaceValue) -> String 
     }
 }
 
+/// Resolves the resulting value for one `replaceHeaders` rule, or `None` to leave the
+/// header untouched. Shared by the request-side and response-side policies
+/// (`apply_*_request_header_policy*` and `apply_*_response_header_policy*`), so both
+/// directions resolve a replacement rule identically.
+///
+/// Neither producer ever emits `oldValue`: the console UI (`admin-console`
+/// "替换匹配的请求头/响应头" -> `HeaderKVEditor`) only offers a header name and a
+/// "替换后新值", and the control-plane payload
+/// (`control-plane/internal/gcloud/testdata/site-panel.json`) fixes that same shape.
+/// Because `oldValue` carries `#[serde(default)]`, it therefore deserializes to the
+/// empty string for every rule a user can actually create.
+///
+/// An **empty** `old_value` is thus an explicit whole-value assignment: the header's
+/// value becomes `new_value` verbatim. Feeding the empty string to `str::replace`
+/// instead splices `new_value` in at *every* character boundary (`"value1"` with
+/// `"new"` becomes `"newvnewanewlnewunewenew1new"`) — a destructive output no
+/// operator could have asked for and one this file must not produce from an
+/// uninterpretable input. The rule still only fires when the header is already
+/// present (the caller checks that first), so a missing header is never added.
+///
+/// A **non-empty** `old_value` keeps the documented substring-replace semantics; if
+/// the substring is absent the header is left untouched.
+///
+/// Note on `new_value == ""`: an empty replacement sets the header to an empty value
+/// rather than deleting it, matching the `setHeaders` semantics (which insert the
+/// configured value, empty or not); deleting by name is what `deleteHeaders` is for.
+fn replace_rule_value(current: &str, old_value: &str, new_value: &str) -> Option<String> {
+    if old_value.is_empty() {
+        Some(new_value.to_string())
+    } else if current.contains(old_value) {
+        Some(current.replace(old_value, new_value))
+    } else {
+        None
+    }
+}
+
 pub fn apply_compiled_response_header_policy(
     headers: &mut pingora_http::ResponseHeader,
     policy: &CompiledHeaderPolicy,
@@ -914,15 +991,14 @@ pub fn apply_compiled_response_header_policy(
             .get(rh.name.raw.as_str())
             .and_then(|v| v.to_str().ok())
         {
-            if !current.contains(&rh.old_value) {
+            // Empty `old_value` means "set the whole value" — see `replace_rule_value`.
+            let Some(replaced) = replace_rule_value(current, &rh.old_value, &rh.new_value) else {
                 continue;
-            }
+            };
             let Some(name) = &rh.name.parsed else {
                 continue;
             };
-            headers
-                .insert_header(name.clone(), current.replace(&rh.old_value, &rh.new_value))
-                .ok();
+            headers.insert_header(name.clone(), replaced).ok();
         }
     }
 }
@@ -1002,15 +1078,14 @@ pub fn apply_response_header_policy(
             .get(rh.name.as_str())
             .and_then(|v| v.to_str().ok())
         {
-            if !current.contains(&rh.old_value) {
+            // Empty `old_value` means "set the whole value" — see `replace_rule_value`.
+            let Some(replaced) = replace_rule_value(current, &rh.old_value, &rh.new_value) else {
                 continue;
-            }
+            };
             let Some(name) = cached_header_name(&rh.name) else {
                 continue;
             };
-            headers
-                .insert_header(name, current.replace(&rh.old_value, &rh.new_value))
-                .ok();
+            headers.insert_header(name, replaced).ok();
         }
     }
 }
@@ -1049,8 +1124,10 @@ pub fn apply_response_header_policy_to_map(
             continue;
         }
         let key = rh.name.to_lowercase();
-        if let Some(current) = headers.get(&key).cloned() {
-            let replaced = current.replace(rh.old_value.as_str(), rh.new_value.as_str());
+        if let Some(current) = headers.get(&key).cloned()
+            // Empty `old_value` means "set the whole value" — see `replace_rule_value`.
+            && let Some(replaced) = replace_rule_value(&current, &rh.old_value, &rh.new_value)
+        {
             headers.insert(key, replaced);
         }
     }

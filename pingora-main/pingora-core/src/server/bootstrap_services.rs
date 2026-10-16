@@ -15,8 +15,12 @@
 #[cfg(unix)]
 pub use super::transfer_fd::Fds;
 use async_trait::async_trait;
+#[cfg(unix)]
+use log::warn;
 use log::{debug, error, info};
 use parking_lot::Mutex;
+#[cfg(unix)]
+use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
@@ -24,13 +28,21 @@ use tokio::sync::broadcast;
 use sentry::ClientOptions;
 
 #[cfg(unix)]
+use crate::server::daemon::notify_parent_ready_for_fds;
+#[cfg(unix)]
 use crate::server::ListenFds;
+#[cfg(unix)]
+use std::time::Duration;
 
 use crate::{
     prelude::Opt,
     server::{configuration::ServerConf, ExecutionPhase, ShutdownWatch},
     services::{background::BackgroundService, ServiceReadyNotifier},
 };
+
+/// Default timeout for retrying `SIGUSR1` to the parent when it fails with `EPERM`.
+#[cfg(unix)]
+const DEFAULT_DAEMON_NOTIFY_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Service that allows the bootstrap process to be delayed until after
 /// dependencies are ready
@@ -59,6 +71,19 @@ pub struct Bootstrap {
 
     #[cfg(unix)]
     listen_fds: ListenFds,
+
+    #[cfg(unix)]
+    expected_listen_addrs: Option<HashSet<String>>,
+
+    /// PID of the original parent process to notify via `SIGUSR1` after bootstrap completes.
+    /// Set when [`ServerConf::daemon_wait_for_ready`] is `true`.
+    #[cfg(unix)]
+    notify_parent_pid: Option<u32>,
+
+    /// How long to keep retrying `SIGUSR1` to the parent when it fails with `EPERM`.
+    /// See [`ServerConf::daemon_notify_timeout_seconds`].
+    #[cfg(unix)]
+    daemon_notify_timeout: std::time::Duration,
 
     #[cfg(feature = "sentry")]
     #[cfg_attr(docsrs, doc(cfg(feature = "sentry")))]
@@ -96,6 +121,15 @@ impl Bootstrap {
             upgrade_sock,
             #[cfg(unix)]
             listen_fds: Arc::new(Mutex::new(Fds::new())),
+            #[cfg(unix)]
+            expected_listen_addrs: None,
+            #[cfg(unix)]
+            notify_parent_pid: None,
+            #[cfg(unix)]
+            daemon_notify_timeout: conf
+                .daemon_notify_timeout_seconds
+                .map(|n| Duration::from_secs(n.get()))
+                .unwrap_or(DEFAULT_DAEMON_NOTIFY_TIMEOUT),
             execution_phase_watch: execution_phase_watch.clone(),
             completed: false,
             #[cfg(feature = "sentry")]
@@ -108,6 +142,20 @@ impl Bootstrap {
     #[cfg(feature = "sentry")]
     pub fn set_sentry_config(&mut self, sentry_config: Option<ClientOptions>) {
         self.sentry = sentry_config;
+    }
+
+    /// Store the parent process PID to notify via `SIGUSR1` after bootstrap completes.
+    /// Only relevant when [`ServerConf::daemon_wait_for_ready`] is `true`.
+    #[cfg(unix)]
+    pub fn set_notify_parent_pid(&mut self, pid: u32) {
+        self.notify_parent_pid = Some(pid);
+    }
+
+    /// Set the expected bind addresses and prune any inherited sockets already loaded.
+    #[cfg(unix)]
+    pub fn set_expected_listen_addrs(&mut self, addrs: HashSet<String>) {
+        Self::close_unclaimed_fds(&mut self.listen_fds.lock(), &addrs);
+        self.expected_listen_addrs = Some(addrs);
     }
 
     /// Initialize the Sentry client from the configured [`ClientOptions`] and
@@ -161,7 +209,17 @@ impl Bootstrap {
             std::process::exit(0);
         }
 
-        // load fds
+        // Notify the parent process that it can exit. It might seem like we should load the file
+        // descriptors from the old process first, but the purpose of this notification is to
+        // release the parent so that the process managing it (e.g. systemd) can continue and send
+        // a quit signal to the old process. That quit signal is required before the old process
+        // will start trying to send its file descriptors to us — so if we called load_fds first,
+        // we would be guaranteeing a timeout.
+        #[cfg(unix)]
+        if let Some(pid) = self.notify_parent_pid {
+            notify_parent_ready_for_fds(pid, self.daemon_notify_timeout);
+        }
+
         #[cfg(unix)]
         match self.load_fds(self.upgrade) {
             Ok(_) => {
@@ -190,10 +248,25 @@ impl Bootstrap {
             debug!("Trying to receive socks");
             let mut fds = Fds::new();
             fds.get_from_sock(self.upgrade_sock.as_str())?;
+            if let Some(expected) = &self.expected_listen_addrs {
+                Self::close_unclaimed_fds(&mut fds, expected);
+            }
             // Mutate through the existing Arc so all clones held by services see the update.
             *self.listen_fds.lock() = fds;
         }
         Ok(())
+    }
+
+    #[cfg(unix)]
+    fn close_unclaimed_fds(fds: &mut Fds, expected: &HashSet<String>) {
+        let closed = fds.close_unclaimed(expected);
+        if !closed.is_empty() {
+            warn!(
+                "Closed {} inherited listening socket(s) not claimed by any service: {:?}",
+                closed.len(),
+                closed
+            );
+        }
     }
 
     #[cfg(unix)]
@@ -211,5 +284,60 @@ impl BackgroundService for BootstrapService {
     ) {
         self.inner.lock().bootstrap();
         notifier.notify_ready();
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::io::{ErrorKind, Read};
+    use std::os::unix::io::{FromRawFd, IntoRawFd, OwnedFd};
+    use std::os::unix::net::UnixStream;
+
+    #[test]
+    fn expected_addresses_prune_already_loaded_fds() {
+        let (execution_phase_watch, _) = broadcast::channel(1);
+        let mut bootstrap = Bootstrap::new(&None, &ServerConf::default(), &execution_phase_watch);
+
+        // Closure is observed by reading the other end of a socket pair, which
+        // reports end-of-file exactly when its peer is gone. Checking the
+        // descriptor *number* would be racy: numbers are process-wide and
+        // reassigned lowest-free-first, so a concurrent test in this binary can
+        // be handed the number just closed and make it valid again first.
+        // Observing ends are non-blocking, so a descriptor that wrongly stayed
+        // open fails an assertion rather than hanging.
+        //
+        // A second owning handle would turn a wrongly closed descriptor into an
+        // I/O safety abort of the whole binary, so `Fds` gets raw numbers.
+        let (mut keep_peer, keep_local) = UnixStream::pair().unwrap();
+        let (mut drop_peer, drop_local) = UnixStream::pair().unwrap();
+        keep_peer.set_nonblocking(true).unwrap();
+        drop_peer.set_nonblocking(true).unwrap();
+        let keep_fd = keep_local.into_raw_fd();
+
+        {
+            let mut fds = bootstrap.listen_fds.lock();
+            fds.add("127.0.0.1:80".to_string(), keep_fd);
+            fds.add("127.0.0.1:9090".to_string(), drop_local.into_raw_fd());
+        }
+
+        bootstrap.set_expected_listen_addrs(["127.0.0.1:80".to_string()].into_iter().collect());
+
+        let fds = bootstrap.listen_fds.lock();
+        assert_eq!(*fds.get("127.0.0.1:80").unwrap(), keep_fd);
+        assert!(fds.get("127.0.0.1:9090").is_none());
+        drop(fds);
+        assert!(
+            matches!(drop_peer.read(&mut [0u8; 1]), Ok(0)),
+            "the pruned descriptor was not closed"
+        );
+        assert!(
+            matches!(keep_peer.read(&mut [0u8; 1]), Err(e) if e.kind() == ErrorKind::WouldBlock),
+            "the expected descriptor was closed"
+        );
+
+        // `Fds` does not close on drop.
+        // SAFETY: asserted open just above, and no other owner remains.
+        drop(unsafe { OwnedFd::from_raw_fd(keep_fd) });
     }
 }

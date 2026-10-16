@@ -96,11 +96,15 @@ sudo zelvik-edge ntp --no-timezone --yes
 
 ## 内置升级命令
 
-已安装 Rust 版后，可以直接使用二进制内置升级命令从 GitHub Release 拉取最新版：
+已安装 Rust 版后，可以直接使用二进制内置升级命令从授权站拉取最新版。先在授权站生成更新密钥（`zvu_` 后跟 64 位小写十六进制），用隐藏输入提供，避免密钥进入 shell 历史：
 
 ```bash
-sudo zelvik-edge upgrade
+read -rs ZELVIK_UPDATE_KEY
+export ZELVIK_UPDATE_KEY
+sudo --preserve-env=ZELVIK_UPDATE_KEY zelvik-edge upgrade
 ```
+
+CLI 同时支持 `--update-key`；推荐环境变量，避免命令行参数暴露密钥。密钥仅通过 `Authorization: Bearer` 请求头发送，不放入 URL，也不会打印或写入节点配置。下载使用 HTTPS 并拒绝重定向。
 
 默认行为：
 
@@ -113,47 +117,39 @@ sudo zelvik-edge upgrade
 非交互升级到最新版：
 
 ```bash
-sudo zelvik-edge upgrade --yes
+sudo --preserve-env=ZELVIK_UPDATE_KEY zelvik-edge upgrade --yes
 ```
 
-升级到指定版本：
+升级到指定版本（规范 CalVer，不加 `v` 前缀）：
 
 ```bash
-sudo zelvik-edge upgrade --version v1.1.6 --yes
+sudo --preserve-env=ZELVIK_UPDATE_KEY zelvik-edge upgrade --version 26.10.2 --yes
 ```
 
-使用 GitHub 镜像/代理站：
+授权站使用独立域名时，可以指定 HTTPS 基础地址（只允许 origin，不含路径、查询参数或凭据）：
 
 ```bash
-sudo zelvik-edge upgrade --github-mirror https://gh-proxy.example --yes
-```
-
-如果镜像站需要把原始 URL 放到模板中，可使用 `{url}` 占位符：
-
-```bash
-sudo zelvik-edge upgrade --github-mirror 'https://mirror.example/download?url={url}' --yes
-```
-
-使用 GitHub Enterprise 或自建镜像作为基础站点：
-
-```bash
-sudo zelvik-edge upgrade \
-  --github-base-url https://github.example.com \
-  --repo Zelvik-Labs/edge \
-  --version v1.1.6 \
-  --yes
+sudo --preserve-env=ZELVIK_UPDATE_KEY zelvik-edge upgrade --base-url https://license.example.com --yes
 ```
 
 上线前查看升级计划：
 
 ```bash
-sudo zelvik-edge upgrade --dry-run
+sudo --preserve-env=ZELVIK_UPDATE_KEY zelvik-edge upgrade --dry-run
 ```
 
 只替换二进制，不立即重启：
 
 ```bash
-sudo zelvik-edge upgrade --yes --no-restart
+sudo --preserve-env=ZELVIK_UPDATE_KEY zelvik-edge upgrade --yes --no-restart
+```
+
+管理端下发的节点升级任务从 API 的 `/v1/edge/packages/meta` 和 `/v1/edge/packages/download/...` 获取安装包；两个请求各自使用现有 `instanceId`/`secret` 铸造短期 `zvc1` 凭据，发送 suite 定义的四个 `zelvik-*` 身份头。节点不接收授权站更新密钥。HTTP 客户端复用 `commMode` 与 `rpc.tls` 的 CA、客户端证书和 `serverName`，TLS/mTLS 模式要求 HTTPS；元数据只能指向同一更新 origin 的包下载路径，所有重定向均被拒绝。
+
+使用完成后清理当前 shell 中的密钥：
+
+```bash
+unset ZELVIK_UPDATE_KEY
 ```
 
 ## 安装

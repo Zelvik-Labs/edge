@@ -1,0 +1,32 @@
+syntax = "proto3";
+package pb;
+option go_package = "./pb";
+
+// ProbeObservation is one active-probing (tcping) result from an edge node.
+// It is the payload of a TelemetryBatch whose `kind` is "probe_observation".
+// `targetId` joins back to probe_target so the fluctuation view can resolve
+// region/city/carrier/tags without re-sending them from the edge.
+message ProbeObservationBatch {
+  repeated ProbeObservation observations = 1;
+}
+
+message ProbeObservation {
+  string targetId = 1;
+  string providerId = 2;
+  string host = 3;
+  uint32 port = 4;
+  string ipFamily = 5;
+  string region = 6;
+  string city = 7;
+  string carrier = 8;
+  repeated string tags = 9;
+  bool success = 10;
+  double latencyMs = 11;
+  double jitterMs = 12;
+  double lossPercent = 13;
+  uint32 sent = 14;
+  uint32 received = 15;
+  string error = 16;
+  // eventTime is the observation window start, "2006-01-02 15:04:05.000" UTC.
+  string eventTime = 17;
+}

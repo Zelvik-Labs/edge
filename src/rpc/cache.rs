@@ -1,14 +1,12 @@
 #![allow(clippy::result_large_err)]
 
 use crate::api_config::ApiConfig;
-use crate::auth::generate_token;
 use crate::config::ConfigStore;
 use crate::config_models::{LocationConfig, ServerConfig, WebCacheConfig};
 use crate::pb;
 use futures_util::StreamExt;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
-use tonic::Request;
 use tonic::transport::Channel;
 use tracing::{info, warn};
 
@@ -512,27 +510,14 @@ pub async fn sync_cache_tasks(
     task_id: i64,
     scope_server_id: i64,
 ) -> bool {
-    let node_id_clone = api_config.node_id.clone();
-    let secret_clone = api_config.secret.clone();
+    // The shared suite interceptor owns the identity metadata (zelvik-instance /
+    // zelvik-credential / zelvik-kind / zelvik-protocol) and re-mints the
+    // credential for this RPC.
+    let interceptor = api_config.credential_interceptor().expect("control-plane identity must be valid before an RPC client is built");
     let mut client =
         pb::http_cache_task_key_service_client::HttpCacheTaskKeyServiceClient::with_interceptor(
             channel,
-            move |mut req: Request<()>| {
-                let token =
-                    generate_token(&node_id_clone, &secret_clone, "node").unwrap_or_default();
-                // node_id / token come from runtime config; defensively avoid
-                // .unwrap() so a stray non-ASCII byte cannot panic the whole
-                // interceptor task.
-                let node_id_val = node_id_clone
-                    .parse()
-                    .unwrap_or_else(|_| tonic::metadata::MetadataValue::from_static("0"));
-                let token_val = token
-                    .parse()
-                    .unwrap_or_else(|_| tonic::metadata::MetadataValue::from_static(""));
-                req.metadata_mut().insert("nodeid", node_id_val);
-                req.metadata_mut().insert("token", token_val);
-                Ok(req)
-            },
+            interceptor,
         );
 
     match client

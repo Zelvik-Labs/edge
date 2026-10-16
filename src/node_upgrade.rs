@@ -128,13 +128,65 @@ pub fn detect_release_asset() -> anyhow::Result<&'static str> {
     select_release_asset(arch, &cpuinfo, glibc_is_older_than_228())
 }
 
-pub async fn download_to_file(url: &str, target: &Path) -> anyhow::Result<()> {
-    let client = reqwest::Client::builder()
+fn download_client(timeout: Duration) -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(20))
-        .timeout(Duration::from_secs(600))
+        .timeout(timeout)
+        .redirect(reqwest::redirect::Policy::none())
         .user_agent(format!("zelvik-edge/{}", crate::RELEASE_VERSION))
-        .build()?;
-    let mut response = client.get(url).send().await?;
+}
+
+/// Credentials belong in headers, never in URLs (which are shown to operators).
+pub fn update_origin(base: &str) -> anyhow::Result<reqwest::Url> {
+    let url = reqwest::Url::parse(base)
+        .map_err(|_| anyhow::anyhow!("invalid update base URL"))?;
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || url.path() != "/"
+    {
+        anyhow::bail!("update base URL must be an HTTP(S) origin without credentials, path, query or fragment");
+    }
+    Ok(url)
+}
+
+pub fn update_key_headers(key: &str) -> anyhow::Result<reqwest::header::HeaderMap> {
+    let Some(hex) = key.strip_prefix("zvu_") else {
+        anyhow::bail!("update key must be zvu_ followed by 64 hexadecimal characters");
+    };
+    if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
+        anyhow::bail!("update key must be zvu_ followed by 64 hexadecimal characters");
+    }
+    let mut value = reqwest::header::HeaderValue::from_str(&format!("Bearer {key}"))?;
+    value.set_sensitive(true);
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(reqwest::header::AUTHORIZATION, value);
+    Ok(headers)
+}
+
+/// Direct license-hub download; node task downloads use instance authentication.
+pub async fn download_release_to_file(
+    url: &reqwest::Url,
+    target: &Path,
+    headers: reqwest::header::HeaderMap,
+) -> anyhow::Result<()> {
+    if url.scheme() != "https" {
+        anyhow::bail!("license package downloads require HTTPS");
+    }
+    let client = download_client(Duration::from_secs(600)).build()?;
+    download_to_file(&client, url.clone(), target, headers).await
+}
+
+async fn download_to_file(
+    client: &reqwest::Client,
+    url: reqwest::Url,
+    target: &Path,
+    headers: reqwest::header::HeaderMap,
+) -> anyhow::Result<()> {
+    let mut response = client.get(url).headers(headers).send().await?;
     if !response.status().is_success() {
         anyhow::bail!("download failed with HTTP status {}", response.status());
     }
@@ -487,6 +539,109 @@ pub fn install_xdp_ebpf_object_to_runtime(
 // Admin-driven task upgrade
 // ---------------------------------------------------------------------------
 
+struct NodeUpdateClient {
+    client: reqwest::Client,
+    origin: reqwest::Url,
+    server_name: Option<String>,
+}
+
+impl NodeUpdateClient {
+    async fn new(api_config: &ApiConfig, base: &str) -> anyhow::Result<Self> {
+        let origin = update_origin(base)?;
+        let mode = api_config.comm_mode()?;
+        if mode != zelvik_suite::CommMode::Plaintext && origin.scheme() != "https" {
+            anyhow::bail!("TLS node update transport requires an HTTPS endpoint");
+        }
+        let mut builder = download_client(Duration::from_secs(600));
+        let mut server_name = None;
+        if mode != zelvik_suite::CommMode::Plaintext {
+            builder = builder.tls_version_min(reqwest::tls::Version::TLS_1_3);
+            if let Some(path) = &api_config.rpc_tls.ca_file {
+                let certs = reqwest::Certificate::from_pem_bundle(&fs::read(path)?)?;
+                if certs.is_empty() {
+                    anyhow::bail!("node update CA bundle is empty");
+                }
+                builder = builder.tls_certs_merge(certs);
+            }
+            if mode == zelvik_suite::CommMode::Mtls {
+                let cert = api_config.rpc_tls.cert_file.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("mTLS node updates require rpc.tls.certFile")
+                })?;
+                let key = api_config.rpc_tls.key_file.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("mTLS node updates require rpc.tls.keyFile")
+                })?;
+                let mut pem = fs::read(cert)?;
+                pem.push(b'\n');
+                pem.extend(fs::read(key)?);
+                builder = builder.identity(reqwest::Identity::from_pem(&pem)?);
+            }
+            if let Some(name) = &api_config.rpc_tls.server_name
+                && Some(name.as_str()) != origin.host_str()
+            {
+                // Use the configured TLS name for verification/SNI while connecting
+                // to the update endpoint and preserving its HTTP authority.
+                let mut tls_url = origin.clone();
+                tls_url.set_host(Some(name))?;
+                let addresses = tokio::net::lookup_host((
+                    origin.host_str().ok_or_else(|| anyhow::anyhow!("missing update host"))?,
+                    origin.port_or_known_default().ok_or_else(|| anyhow::anyhow!("missing update port"))?,
+                )).await?.collect::<Vec<_>>();
+                if addresses.is_empty() {
+                    anyhow::bail!("node update endpoint resolved to no addresses");
+                }
+                builder = builder.resolve_to_addrs(name, &addresses);
+                server_name = Some(name.clone());
+            }
+        }
+        Ok(Self { client: builder.build()?, origin, server_name })
+    }
+
+    fn request_url(&self, mut url: reqwest::Url) -> anyhow::Result<reqwest::Url> {
+        if url.origin() != self.origin.origin() {
+            anyhow::bail!("node update URL must stay on the configured origin");
+        }
+        if let Some(name) = &self.server_name {
+            url.set_host(Some(name))?;
+        }
+        Ok(url)
+    }
+
+    fn headers(&self, api_config: &ApiConfig) -> anyhow::Result<reqwest::header::HeaderMap> {
+        use tonic::service::Interceptor;
+        let request = api_config.credential_interceptor()?.call(tonic::Request::new(()))?;
+        let mut headers = reqwest::header::HeaderMap::new();
+        for key in [
+            zelvik_suite::METADATA_INSTANCE,
+            zelvik_suite::METADATA_CREDENTIAL,
+            zelvik_suite::METADATA_KIND,
+            zelvik_suite::METADATA_PROTOCOL,
+        ] {
+            let metadata = request.metadata().get(key)
+                .ok_or_else(|| anyhow::anyhow!("missing node update identity header"))?;
+            let mut value = reqwest::header::HeaderValue::from_bytes(metadata.as_encoded_bytes())?;
+            value.set_sensitive(true);
+            headers.insert(key, value);
+        }
+        if self.server_name.is_some() {
+            headers.insert(reqwest::header::HOST, self.origin.authority().parse()?);
+        }
+        Ok(headers)
+    }
+}
+
+fn package_download_url(origin: &reqwest::Url, path: &str) -> anyhow::Result<reqwest::Url> {
+    if !path.starts_with("/v1/edge/packages/download/") || path.contains('\\') {
+        anyhow::bail!("package metadata returned an invalid download path");
+    }
+    let url = origin.join(path)?;
+    if url.origin() != origin.origin() || url.fragment().is_some()
+        || !url.path().starts_with("/v1/edge/packages/download/")
+    {
+        anyhow::bail!("package metadata download URL must stay on the configured origin");
+    }
+    Ok(url)
+}
+
 #[derive(Debug, serde::Deserialize)]
 struct PackageMeta {
     component: String,
@@ -537,11 +692,16 @@ pub async fn execute_node_upgrade(
 
     // Resolve which package the admin node wants us to install.
     let mut last_err: Option<anyhow::Error> = None;
-    let mut resolved: Option<(String, PackageMeta)> = None;
+    let mut resolved: Option<(NodeUpdateClient, PackageMeta)> = None;
     for base in &endpoints {
-        match fetch_package_meta(base, target_version.as_deref(), asset).await {
-            Ok(meta) => {
-                resolved = Some((base.clone(), meta));
+        let lookup = async {
+            let update = NodeUpdateClient::new(api_config, base).await?;
+            let meta = fetch_package_meta(&update, api_config, target_version.as_deref(), asset).await?;
+            Ok::<_, anyhow::Error>((update, meta))
+        }.await;
+        match lookup {
+            Ok(value) => {
+                resolved = Some(value);
                 break;
             }
             Err(err) => {
@@ -550,7 +710,7 @@ pub async fn execute_node_upgrade(
             }
         }
     }
-    let (base, meta) = resolved
+    let (update, meta) = resolved
         .ok_or_else(|| last_err.unwrap_or_else(|| anyhow::anyhow!("no usable update endpoint")))?;
 
     if meta.version.trim_start_matches('v') == crate::RELEASE_VERSION {
@@ -565,7 +725,7 @@ pub async fn execute_node_upgrade(
         "node upgrade: {} -> {} via {} ({} bytes, sha256 {})",
         crate::RELEASE_VERSION,
         meta.version,
-        base,
+        update.origin,
         meta.size_bytes,
         meta.sha256
     );
@@ -579,8 +739,13 @@ pub async fn execute_node_upgrade(
     let archive_path = tmp_dir.join(&meta.filename);
 
     let result = async {
-        let download_url = format!("{}{}", base.trim_end_matches('/'), meta.url);
-        download_to_file(&download_url, &archive_path).await?;
+        let download_url = package_download_url(&update.origin, &meta.url)?;
+        download_to_file(
+            &update.client,
+            update.request_url(download_url)?,
+            &archive_path,
+            update.headers(api_config)?,
+        ).await?;
 
         // Verify integrity before touching the install location.
         let bytes = fs::read(&archive_path)?;
@@ -619,24 +784,24 @@ pub async fn execute_node_upgrade(
 }
 
 async fn fetch_package_meta(
-    base: &str,
+    update: &NodeUpdateClient,
+    api_config: &ApiConfig,
     target_version: Option<&str>,
     asset: &str,
 ) -> anyhow::Result<PackageMeta> {
-    let mut url = format!(
-        "{}/v1/edge/packages/meta?component=Zelvik-Edge&asset={}",
-        base.trim_end_matches('/'),
-        urlencoding(asset)
-    );
-    if let Some(version) = target_version {
-        url.push_str(&format!("&version={}", urlencoding(version)));
+    let mut url = update.origin.join("/v1/edge/packages/meta")?;
+    {
+        let mut query = url.query_pairs_mut();
+        query.append_pair("component", "Zelvik-Edge");
+        query.append_pair("asset", asset);
+        if let Some(version) = target_version {
+            query.append_pair("version", version);
+        }
     }
-    let client = reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(10))
+    let response = update.client.get(update.request_url(url)?)
         .timeout(Duration::from_secs(30))
-        .user_agent(format!("zelvik-edge/{}", crate::RELEASE_VERSION))
-        .build()?;
-    let response = client.get(&url).send().await?;
+        .headers(update.headers(api_config)?)
+        .send().await?;
     if !response.status().is_success() {
         anyhow::bail!("package meta returned HTTP {}", response.status());
     }
@@ -644,20 +809,11 @@ async fn fetch_package_meta(
     if meta.component != "Zelvik-Edge" || meta.filename != asset {
         anyhow::bail!("package meta returned unexpected asset {}", meta.filename);
     }
-    if meta.sha256.is_empty() || !meta.url.starts_with('/') {
-        anyhow::bail!("package meta missing sha256 or relative url");
+    if meta.sha256.is_empty() {
+        anyhow::bail!("package meta missing sha256");
     }
+    package_download_url(&update.origin, &meta.url)?;
     Ok(meta)
-}
-
-fn urlencoding(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| match ch {
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => ch.to_string(),
-            _ => format!("%{:02X}", ch as u32),
-        })
-        .collect()
 }
 
 /// Restart the running service so the swapped binary takes over. The request

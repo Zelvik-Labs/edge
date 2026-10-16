@@ -750,10 +750,19 @@ impl CompiledSuffixDomainPattern {
     }
 }
 
-fn redirect_to_https_status(status: i32) -> u16 {
+/// Status codes the admin console offers for `web.redirectToHttps.status`
+/// (see `admin-console/src/features/sites/site-settings-fixtures.ts`). The edge
+/// emits any of these verbatim; anything else falls back to `301`.
+///
+/// This is the single source of truth shared by the compiled plan
+/// (`CompiledRedirectToHttpsPlan`) and the runtime fallback in `proxy.rs`, so the
+/// two paths can never drift apart again.
+pub(crate) const REDIRECT_TO_HTTPS_STATUSES: [u16; 5] = [301, 302, 303, 307, 308];
+
+pub(crate) fn redirect_to_https_status(status: i32) -> u16 {
     u16::try_from(status)
         .ok()
-        .filter(|code| matches!(*code, 301 | 302 | 307 | 308))
+        .filter(|code| REDIRECT_TO_HTTPS_STATUSES.contains(code))
         .unwrap_or(301)
 }
 

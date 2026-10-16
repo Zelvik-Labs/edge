@@ -83,11 +83,6 @@ pub mod prelude {
     pub use pingora_http::prelude::*;
     pub use pingora_timeout::*;
 
-    #[cfg(feature = "cache")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "cache")))]
-    #[allow(unused_imports)]
-    pub use pingora_cache::prelude::*;
-
     #[cfg(feature = "lb")]
     #[cfg_attr(docsrs, doc(cfg(feature = "lb")))]
     pub use pingora_load_balancing::prelude::*;

@@ -197,9 +197,8 @@ impl XdpXskMode {
 /// mode. Below the floor (or for a driver absent from this table) an XSK
 /// bind could only land on the kernel-emulated generic path, which is not
 /// a supported dataplane (its skb TX path saturated under production SNI
-/// load on Debian 6.1 + virtio_net). Mirrors
-/// `xdp_driver_native_xsk_floor` in `scripts/install-zelvik-edge.sh`;
-/// keep both in sync.
+/// load on Debian 6.1 + virtio_net). The table below is the single source of
+/// truth for the floor.
 ///
 /// virtio_net gained driver XSK in 6.11 (copy); ena in 5.16, gve in 6.2;
 /// the big server NICs shipped it around the 5.4 floor.
@@ -222,8 +221,7 @@ pub fn xsk_driver_native_floor(driver: &str) -> Option<(u32, u32)> {
 /// to the driver's copy path. virtio_net advertises the flag from 6.13
 /// (RX merged in 6.11, flag + TX/wakeup in 6.13) — and still needs the
 /// hypervisor to negotiate VIRTIO_F_ACCESS_PLATFORM, so the runtime bind
-/// is always the authoritative verdict. Mirrors
-/// `xdp_driver_zerocopy_floor` in `scripts/install-zelvik-edge.sh`.
+/// is always the authoritative verdict.
 pub fn xsk_driver_zerocopy_floor(driver: &str) -> Option<(u32, u32)> {
     match driver {
         "virtio_net" => Some((6, 13)),
@@ -1191,7 +1189,7 @@ xdp:
         assert!(!load_xdp_enabled(None, &[xdp_var("0")]).unwrap());
         assert!(load_xdp_enabled(None, &[xdp_var("true")]).unwrap());
         // File without xdp.enabled: env still applies.
-        assert!(!load_xdp_enabled(Some("nodeId: 1\n"), &[xdp_var("off")]).unwrap());
+        assert!(!load_xdp_enabled(Some("instanceId: nd_0123456789\nsecret: 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\ngcloudNodeId: 1\n"), &[xdp_var("off")]).unwrap());
         assert!(load_xdp_enabled(Some("xdp: {}\n"), clear).unwrap());
         // File is the final authority in both directions.
         assert!(load_xdp_enabled(Some("xdp:\n  enabled: true\n"), &[xdp_var("0")]).unwrap());
@@ -1241,7 +1239,7 @@ xdp:
     fn xdp_save_xdp_enabled_preserves_other_keys() {
         let _guard = runtime_config_test_guard();
         let home = xdp_home(Some(
-            "nodeId: 7\nsecret: s3\nxdp:\n  enabled: false\n  attachMode: drv\n",
+            "instanceId: nd_0123456789\nsecret: 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\ngcloudNodeId: 7\nxdp:\n  enabled: false\n  attachMode: drv\n",
         ));
         let path = home.join("configs").join("api_node.yaml");
         crate::xdp_config_wizard::save_xdp_enabled(&path, true).unwrap();
@@ -1250,8 +1248,8 @@ xdp:
         let value: serde_yaml::Value = serde_yaml::from_str(&body).unwrap();
         assert_eq!(value["xdp"]["enabled"].as_bool(), Some(true));
         assert!(value["xdp"]["attachMode"].is_null());
-        assert_eq!(value["nodeId"].as_i64(), Some(7));
-        assert_eq!(value["secret"].as_str(), Some("s3"));
+        assert_eq!(value["gcloudNodeId"].as_i64(), Some(7));
+        assert_eq!(value["instanceId"].as_str(), Some("nd_0123456789"));
         std::fs::remove_dir_all(&home).ok();
     }
 }

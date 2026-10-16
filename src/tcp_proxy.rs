@@ -113,7 +113,13 @@ pub fn configure_relay_from_api(config: &crate::api_config::ApiConfig) {
     );
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(
+    not(target_os = "linux"),
+    expect(
+        dead_code,
+        reason = "platform-specific dataplane entry points and state"
+    )
+)]
 fn relay_zero_copy_enabled() -> bool {
     RELAY_ZERO_COPY_ENABLED.load(Ordering::Relaxed)
 }
@@ -155,6 +161,10 @@ struct TcpForwardContext {
     backend_ext: Option<crate::lb_factory::BackendExtension>,
     use_tls_to_backend: bool,
     metrics_guard: Option<crate::metrics::ActiveRequestMetricsGuard>,
+    /// In-flight slot for least-connections ranking, held for the whole
+    /// forwarded connection. Dropping the context — success, failure,
+    /// cancellation or timeout — releases it exactly once.
+    origin_inflight_guard: Option<crate::origin_state::OriginInflightGuard>,
 }
 
 static CLIENT_CERT_CACHE: Lazy<Mutex<LruCache<String, ParsedClientCert>>> =
@@ -213,7 +223,7 @@ impl TcpProxyManager {
             false,
         )
         .map_err(|err| anyhow::anyhow!("build AF_XDP TCP TLS server config: {}", err))?;
-        let acceptor = Arc::new(TcpTlsAcceptor::from_server_config(rustls_config));
+        let acceptor = Arc::new(TcpTlsAcceptor::from_server_config(Arc::new(rustls_config)));
         *guard = Some(acceptor.clone());
         Ok(acceptor)
     }
@@ -234,7 +244,13 @@ impl TcpProxyManager {
         })
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "platform-specific dataplane entry points and state"
+        )
+    )]
     pub(crate) fn find_tcp_server_by_port_sync(
         &self,
         port: u16,
@@ -256,12 +272,24 @@ impl TcpProxyManager {
             })
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "platform-specific dataplane entry points and state"
+        )
+    )]
     pub(crate) fn af_xdp_is_l4_blocked(&self, ip: IpAddr) -> bool {
         crate::l4_defense::is_l4_blocked(&self.config_store, &self.waf_state, ip)
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "platform-specific dataplane entry points and state"
+        )
+    )]
     pub(crate) fn record_af_xdp_l4_event_with_pressure(
         &self,
         ip: IpAddr,
@@ -280,7 +308,10 @@ impl TcpProxyManager {
         )
     }
 
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "platform-specific dataplane entry points and state"
+    )]
     pub(crate) async fn handle_af_xdp_plain_stream<S>(
         self: Arc<Self>,
         client_stream: S,
@@ -320,7 +351,13 @@ impl TcpProxyManager {
             .await
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "platform-specific dataplane entry points and state"
+        )
+    )]
     async fn prepare_bypass_tcp_connection<S>(
         &self,
         client_stream: S,
@@ -464,7 +501,13 @@ impl TcpProxyManager {
         )))
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "platform-specific dataplane entry points and state"
+        )
+    )]
     pub(crate) async fn handle_af_xdp_tcp_stream<S>(
         self: Arc<Self>,
         client_stream: S,
@@ -515,7 +558,13 @@ impl TcpProxyManager {
         .await
     }
 
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    #[cfg_attr(
+        all(not(target_os = "linux"), not(test)),
+        expect(
+            dead_code,
+            reason = "platform-specific dataplane entry points and state"
+        )
+    )]
     pub(crate) async fn handle_af_xdp_tls_tcp_stream<S>(
         self: Arc<Self>,
         client_stream: S,
@@ -761,7 +810,7 @@ impl TcpProxyManager {
             )
             .map_err(|err| anyhow::anyhow!("build rustls TCP server config: {}", err))?;
             Some(Arc::new(
-                pingora_core::listeners::tls::Acceptor::from_server_config(rustls_config),
+                pingora_core::listeners::tls::Acceptor::from_server_config(Arc::new(rustls_config)),
             ))
         } else {
             None
@@ -836,7 +885,10 @@ impl TcpProxyManager {
     /// Keeps the live accept-worker count tracking
     /// `l4_defense::pressure_accept_worker_target`; extra workers retire
     /// themselves via their scale watch once pressure subsides.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "dataplane operation carries explicit policy and connection context"
+    )]
     async fn run_tcp_accept_scaler(
         self: Arc<Self>,
         bind_addr: SocketAddr,
@@ -906,7 +958,10 @@ impl TcpProxyManager {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "dataplane operation carries explicit policy and connection context"
+    )]
     async fn run_tcp_listener_worker(
         self: Arc<Self>,
         bind_addr: SocketAddr,
@@ -1287,6 +1342,10 @@ impl TcpProxyManager {
             .get::<crate::lb_factory::BackendExtension>()
             .cloned();
         let use_tls_to_backend = backend_ext.as_ref().map(|e| e.use_tls).unwrap_or(false);
+        // Count the forwarded connection against its origin for least-connections
+        // ranking. The guard rides the context for the whole connection, so the
+        // L4 path now reflects load the same way the L7 path does.
+        let origin_inflight_guard = Some(crate::lb_factory::begin_inflight_for(&lb, origin_id));
 
         debug!(
             "TCP Proxy: Forwarding connection from {} to {} (Server ID {}, UpstreamTLS={})",
@@ -1303,6 +1362,7 @@ impl TcpProxyManager {
             backend_ext,
             use_tls_to_backend,
             metrics_guard: None,
+            origin_inflight_guard,
         })
     }
 
@@ -1725,6 +1785,9 @@ impl TcpProxyManager {
         if let Some(mut guard) = context.metrics_guard.take() {
             guard.finish();
         }
+        // The connect failed; the connection ends here, releasing its
+        // least-connections slot with the context.
+        context.origin_inflight_guard = None;
         crate::origin_state::ORIGIN_STATE_MANAGER.record_failure(context.origin_id);
     }
 
@@ -1735,6 +1798,10 @@ impl TcpProxyManager {
         context: &mut TcpForwardContext,
         result: &Result<RelayOutcome, BidirectionalStreamError>,
     ) {
+        // The relay has ended; release the least-connections slot explicitly so
+        // it never outlives the metrics bookkeeping. Failure paths that return
+        // before this drop the whole context, releasing the slot that way.
+        context.origin_inflight_guard = None;
         let (bytes_received, bytes_sent, close_reason) = match result {
             Ok(outcome) => {
                 if outcome.close_reason != RelayCloseReason::Clean {
@@ -2250,7 +2317,7 @@ impl DirectionTaskError {
 
 type DirectionTaskResult = Result<DirectionSuccess, DirectionTaskError>;
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) async fn stream_tcp_bidirectional_with_metrics(
     server_id: i64,
     client: TcpStream,
@@ -2265,7 +2332,10 @@ pub(crate) async fn stream_tcp_bidirectional_with_metrics(
     .await
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "platform-specific dataplane entry points and state"
+)]
 pub(crate) async fn stream_sni_passthrough_bidirectional_with_metrics(
     server_id: i64,
     client: TcpStream,
@@ -2357,7 +2427,10 @@ async fn stream_tcp_bidirectional_with_metrics_options(
     stream_bidirectional_with_metrics_options(server_id, client, backend, options).await
 }
 
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "platform-specific dataplane entry points and state"
+)]
 pub(crate) async fn stream_bidirectional_with_metrics<C, B>(
     server_id: i64,
     client: C,
@@ -3406,13 +3479,25 @@ async fn maybe_consume_proxy_protocol_header(
     }
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(
+    all(not(target_os = "linux"), not(test)),
+    expect(
+        dead_code,
+        reason = "platform-specific dataplane entry points and state"
+    )
+)]
 pub(crate) struct PrefixedStream<S> {
     prefix: io::Cursor<Vec<u8>>,
     inner: S,
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(
+    all(not(target_os = "linux"), not(test)),
+    expect(
+        dead_code,
+        reason = "platform-specific dataplane entry points and state"
+    )
+)]
 impl<S> PrefixedStream<S> {
     pub(crate) fn new(prefix: Vec<u8>, inner: S) -> Self {
         Self {
@@ -3459,7 +3544,13 @@ impl<S: AsyncWrite + Unpin> AsyncWrite for PrefixedStream<S> {
     }
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(
+    all(not(target_os = "linux"), not(test)),
+    expect(
+        dead_code,
+        reason = "platform-specific dataplane entry points and state"
+    )
+)]
 pub(crate) async fn maybe_consume_proxy_protocol_header_generic<S>(
     mut stream: S,
     client_addr: SocketAddr,
@@ -3646,6 +3737,14 @@ mod tests {
     }
 
     async fn install_test_servers(store: &ConfigStore, servers: Vec<Arc<ServerConfig>>) {
+        install_test_servers_with_lb(store, servers, std::collections::HashMap::new()).await;
+    }
+
+    async fn install_test_servers_with_lb(
+        store: &ConfigStore,
+        servers: Vec<Arc<ServerConfig>>,
+        id_to_lb: std::collections::HashMap<i64, Arc<crate::lb_factory::AnyLoadBalancer>>,
+    ) {
         store
             .update_config(
                 1,
@@ -3655,7 +3754,7 @@ mod tests {
                 servers,
                 std::collections::HashMap::new(),
                 std::collections::HashMap::new(),
-                std::collections::HashMap::new(),
+                id_to_lb,
                 vec![],
                 vec![],
                 vec![],
@@ -3695,6 +3794,86 @@ mod tests {
                 None,
             )
             .await;
+    }
+
+    /// A least-connections pool over the given origin ids, built through the
+    /// production `build_lb` path so the shared in-flight counters are wired in.
+    fn least_conn_test_lb(ids: &[i64]) -> Arc<crate::lb_factory::AnyLoadBalancer> {
+        let origins: Vec<serde_json::Value> = ids
+            .iter()
+            .enumerate()
+            .map(|(index, id)| {
+                serde_json::json!({
+                    "id": id,
+                    "addr": format!("127.0.0.1:{}", 9700 + index),
+                    "isOn": true,
+                    "weight": 1,
+                })
+            })
+            .collect();
+        let cfg: crate::config_models::ReverseProxyConfig = serde_json::from_value(serde_json::json!({
+            "isOn": true,
+            "primaryOrigins": origins,
+            "scheduling": { "code": "least_conn", "options": {} },
+        }))
+        .unwrap();
+        let (lb, _hc) = crate::lb_factory::build_lb(
+            0,
+            &cfg,
+            2,
+            &std::collections::HashMap::new(),
+            false,
+            true,
+        );
+        lb
+    }
+
+    /// Regression for Zelvik-Labs/edge#11: a TCP connection must hold an
+    /// in-flight slot while it is open, so a second selection reflects the first
+    /// connection's load, and the slot must be released when it closes.
+    #[tokio::test]
+    async fn tcp_forward_context_tracks_least_conn_inflight() {
+        const SERVER_ID: i64 = 97_700;
+        const ORIGIN_A: i64 = 97_701;
+        const ORIGIN_B: i64 = 97_702;
+
+        let store = ConfigStore::new();
+        let mut id_to_lb = std::collections::HashMap::new();
+        id_to_lb.insert(SERVER_ID, least_conn_test_lb(&[ORIGIN_A, ORIGIN_B]));
+        let server = Arc::new(ServerConfig {
+            id: Some(SERVER_ID),
+            is_on: true,
+            ..Default::default()
+        });
+        install_test_servers_with_lb(&store, vec![server.clone()], id_to_lb).await;
+        let manager = TcpProxyManager::new(
+            store,
+            Arc::new(DynamicCertSelector::new()),
+            Arc::new(WafStateManager::new()),
+            7,
+        );
+        let counters = crate::origin_state::ORIGIN_STATE_MANAGER.inflight_counters();
+        let addr: SocketAddr = "127.0.0.1:40001".parse().unwrap();
+
+        // First connection is counted while it stays open.
+        let first = manager.tcp_forward_context(addr, &server).await.unwrap();
+        assert_eq!(counters.inflight(first.origin_id), 1);
+
+        // The second selection sees that load and moves to the other origin.
+        let second = manager.tcp_forward_context(addr, &server).await.unwrap();
+        assert_ne!(
+            first.origin_id, second.origin_id,
+            "least_conn must not keep picking the loaded origin"
+        );
+        assert_eq!(counters.inflight(first.origin_id), 1);
+        assert_eq!(counters.inflight(second.origin_id), 1);
+
+        // Closing one connection releases exactly its slot.
+        drop(first);
+        assert_eq!(counters.inflight(second.origin_id), 1);
+        drop(second);
+        assert_eq!(counters.inflight(ORIGIN_A), 0);
+        assert_eq!(counters.inflight(ORIGIN_B), 0);
     }
 
     #[tokio::test]

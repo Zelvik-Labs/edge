@@ -1,9 +1,3 @@
-use zelvik_edge::cache_hybrid::{HybridStorage, fast_l1_lookup};
-use zelvik_edge::config_models::{HTTPHTMLOptimizationConfig, SSLCertConfig, SSLPolicyConfig};
-use zelvik_edge::firewall::verifier::WafVerifier;
-use zelvik_edge::metrics::analyzer::analyze_request;
-use zelvik_edge::proxy::EdgeProxy;
-use zelvik_edge::ssl::{DynamicCertSelector, sync_certs};
 use criterion::{Criterion, criterion_group, criterion_main};
 use image::{DynamicImage, ImageBuffer, ImageFormat, Rgba};
 use pingora_cache::{CacheKey, CacheMeta, Storage, trace::Span};
@@ -14,6 +8,12 @@ use std::io::Cursor;
 use std::net::IpAddr;
 use std::time::Duration;
 use tokio::runtime::Runtime;
+use zelvik_edge::cache_hybrid::{HybridStorage, fast_l1_lookup};
+use zelvik_edge::config_models::{HTTPHTMLOptimizationConfig, SSLCertConfig, SSLPolicyConfig};
+use zelvik_edge::firewall::verifier::WafVerifier;
+use zelvik_edge::metrics::analyzer::analyze_request;
+use zelvik_edge::proxy::EdgeProxy;
+use zelvik_edge::ssl::{DynamicCertSelector, sync_certs};
 
 fn cache_meta_with_headers() -> CacheMeta {
     let mut header = ResponseHeader::build(200, None).expect("response header");
@@ -35,7 +35,7 @@ fn bench_fast_l1(c: &mut Criterion) {
         10 * 1024 * 1024,
         "target/targeted_fast_l1",
     )));
-    let key = CacheKey::new("http", "fast-l1.example", "/asset.txt");
+    let key = CacheKey::new("fast-l1.example", "/asset.txt");
     let key_str = key.primary_key_str().unwrap_or("fast-l1.example");
     let body = bytes::Bytes::from(vec![b'a'; 32 * 1024]);
     let meta = cache_meta_with_headers();
@@ -239,15 +239,17 @@ fn bench_analyzer_cache(c: &mut Criterion) {
 }
 
 fn bench_waf_verifier(c: &mut Criterion) {
-    let secret = "bench-secret-key-0123456789012345";
-    let verifier = WafVerifier::new(secret);
+    // The D7 challenge key the WAF-Token is keyed by (not the raw credential
+    // secret; see `ApiConfig::challenge_key`).
+    const CHALLENGE_KEY: [u8; 32] = [0x2a; 32];
+    let verifier = WafVerifier::new(&CHALLENGE_KEY);
     let ip = "203.0.113.10";
     let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123.0.0.0 Safari/537.36";
     let token = verifier.generate_token(ip, ua);
 
     let mut group = c.benchmark_group("waf_verifier");
     group.bench_function("construct", |b| {
-        b.iter(|| black_box(WafVerifier::new(black_box(secret))))
+        b.iter(|| black_box(WafVerifier::new(black_box(&CHALLENGE_KEY))))
     });
     group.bench_function("verify_existing_token", |b| {
         b.iter(|| {

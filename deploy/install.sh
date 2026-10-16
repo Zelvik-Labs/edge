@@ -237,8 +237,9 @@ if [ "$DRY_RUN" -eq 0 ]; then
                 printf '  - "%s"\n' "$_ep"
             fi
         done
-        printf 'nodeId: "%s"\n' "$NODE_ID"
+        printf 'instanceId: "%s"\n' "$NODE_ID"
         printf 'secret: "%s"\n' "$NODE_SECRET"
+        printf 'commMode: "%s"\n' "$COMM_MODE"
         if [ "$COMM_MODE" = "mtls" ]; then
             printf 'rpc.tls:\n'
             if [ -n "$TLS_CA_FILE" ]; then printf '  caFile: "%s"\n' "$TLS_CA_FILE"; fi

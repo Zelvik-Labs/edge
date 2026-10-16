@@ -5,7 +5,7 @@
 
 ## 项目形态
 
-- 根 crate `zelvik-edge`，Rust edition 2024，由 `rust-toolchain.toml` 固定到 1.98.1。
+- 根 crate `zelvik-edge`，Rust edition 2024，由 `rust-toolchain.toml` 固定到 1.99.0。
 - 生产领域：基于 Pingora 的高性能 CDN 边缘节点，覆盖 HTTP/1.1、HTTP/2、HTTP/3、QUIC、
   TCP/UDP 代理、TLS/证书、WAF、缓存、指标、日志、配置热重载和本地可观测性。
 - 主源码树在 `src/`；`crates/` 下是工作区成员，`benches/` 下是 Criterion 基准，
