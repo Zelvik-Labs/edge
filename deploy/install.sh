@@ -201,6 +201,11 @@ fi
 run_cmd install -d -m 0755 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR"
 run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "${DATA_DIR}/geoip"
 run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$LOG_DIR"
+# These two live under a path that always exists on a default install (/usr/bin,
+# /etc/systemd/system) but not under --dir; without them the binary and the unit
+# cannot be written at all.
+run_cmd install -d -m 0755 -o root -g root "$INSTALL_BIN_DIR"
+run_cmd install -d -m 0755 -o root -g root "$UNIT_DIR"
 
 # ---------------------------------------------------------------------------
 # install binary
@@ -228,6 +233,26 @@ fi
 # so a freshly installed node could not start. Do not reintroduce them.
 # ---------------------------------------------------------------------------
 run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "${EDGE_HOME}/configs"
+
+# The installer owns exactly these top-level keys. Everything else in the file
+# belongs to the operator (kernelTuning, cache.sendfile, gcloudNodeId, relay,
+# accessLogPipeline, rpc.disableUpdate, xdp, ...) and must survive a re-run:
+# this is the only file the node reads, so clobbering it silently reverts live
+# node settings on every upgrade.
+_INSTALLER_KEYS='^(rpc\.endpoints|rpc\.tls|instanceId|secret|commMode):'
+
+# Keep every line except the installer-owned keys and their indented children,
+# plus the installer's own header so a re-run does not stack copies of it.
+_preserved=""
+if [ -f "$API_CONFIG_FILE" ]; then
+    _preserved="$(awk -v owned="$_INSTALLER_KEYS" '
+        /^[^[:space:]]/ { skip = ($0 ~ owned) ? 1 : 0 }
+        skip { next }
+        /^# Rendered by deploy\/install\.sh/ { next }
+        { print }
+    ' "$API_CONFIG_FILE")"
+fi
+
 if [ "$DRY_RUN" -eq 0 ]; then
     {
         printf '# Rendered by deploy/install.sh — carries the node credential; root only.\n'
@@ -247,8 +272,15 @@ if [ "$DRY_RUN" -eq 0 ]; then
             if [ -n "$TLS_KEY_FILE" ]; then printf '  keyFile: "%s"\n' "$TLS_KEY_FILE"; fi
             if [ -n "$TLS_SERVER_NAME" ]; then printf '  serverName: "%s"\n' "$TLS_SERVER_NAME"; fi
         fi
-        # XDP is opt-in per node; the installer never enables it implicitly.
-        printf 'xdp:\n  enabled: false\n'
+        # XDP is opt-in per node. Only seed the default on a fresh install: once
+        # the operator has set it, that value is theirs and is preserved below.
+        if ! printf '%s\n' "$_preserved" | grep -q '^xdp:'; then
+            printf 'xdp:\n  enabled: false\n'
+        fi
+        if [ -n "$_preserved" ]; then
+            printf '\n# The keys below are not managed by the installer; it never rewrites them.\n'
+            printf '%s\n' "$_preserved"
+        fi
     } > "$API_CONFIG_FILE"
     # 0640, not 0600: the file is root-owned and the service runs as
     # zelvik-edge, so the owner bits never apply to the reader. 0600 made the
@@ -271,7 +303,8 @@ UNIT_SRC="${SCRIPT_DIR}/systemd/${SERVICE_NAME}.service"
 [ -f "$UNIT_SRC" ] || die "unit file not found: ${UNIT_SRC}"
 UNIT_DST="${UNIT_DIR}/${SERVICE_NAME}.service"
 if [ "$DRY_RUN" -eq 0 ]; then
-    sed "s|@ZELVIK_EDGE_HOME@|${EDGE_HOME}|g" "$UNIT_SRC" > "$UNIT_DST"
+    sed -e "s|@ZELVIK_EDGE_HOME@|${EDGE_HOME}|g" \
+        -e "s|@ZELVIK_EDGE_BIN@|${INSTALL_BIN_DIR}/${BIN_NAME}|g" "$UNIT_SRC" > "$UNIT_DST"
     chmod 0644 "$UNIT_DST"
     chown root:root "$UNIT_DST"
 else

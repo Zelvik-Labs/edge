@@ -10,13 +10,16 @@ User=zelvik-edge
 Group=zelvik-edge
 # Standalone (single-node) mode is the default. Running the binary with no
 # subcommand starts the foreground server (run_node).
-# @ZELVIK_EDGE_HOME@ is substituted by deploy/install.sh with the resolved node
-# home; the node resolves configs/, data/ and logs/ relative to it and reads its
+# @ZELVIK_EDGE_HOME@ and @ZELVIK_EDGE_BIN@ are substituted by deploy/install.sh
+# with the resolved node home and the binary it actually installed. Both must be
+# templated: with `--dir` the binary lands under that prefix, so a hardcoded
+# ExecStart would point at a path that does not exist (systemd 203/EXEC).
+# The node resolves configs/, data/ and logs/ relative to the home and reads its
 # credentials from <home>/configs/api_node.yaml.
 WorkingDirectory=@ZELVIK_EDGE_HOME@
 Environment=ZELVIK_EDGE_HOME=@ZELVIK_EDGE_HOME@
 Environment=TZ=Asia/Shanghai
-ExecStart=/usr/bin/zelvik-edge
+ExecStart=@ZELVIK_EDGE_BIN@
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=60s
