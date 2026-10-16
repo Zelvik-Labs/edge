@@ -163,11 +163,14 @@ sudo zelvik-edge upgrade --yes --no-restart
 节点由控制面 bootstrap 分发安装。控制台在节点注册页面会给出完整的可复制命令：
 
 ```bash
-curl -fsSL <控制面地址>/install/edge.sh | sudo bash -s -- \
-    --endpoint <控制面地址> \
+curl -fsSL https://cp.example.com/install/edge.sh | sudo bash -s -- \
+    --endpoint https://rpc1.example.com:29090 \
+    --artifact-base https://cp.example.com \
     --node-id <节点 ID> \
     --secret <注册凭据>
 ```
+
+两个地址不能混用：`--endpoint` 是控制面 **gRPC 控制端点**（平台设置「节点接入端点」里的 **RPC 端点**），installer 会把它写进 `api_node.yaml` 的 `rpc.endpoints`；`--artifact-base` 是 bootstrap 取包用的 HTTP(S) 地址（同一处的 **更新地址**），`install.sh` 看不到它。
 
 bootstrap 脚本从控制面的 `/v1/edge/packages/meta` 接口取包元数据，下载对应架构的 tar 包，校验 sha256 后解包并执行包内的 `install.sh`。
 
@@ -177,11 +180,13 @@ bootstrap 脚本从控制面的 `/v1/edge/packages/meta` 接口取包元数据�
 
 | 参数 | 说明 |
 |---|---|
-| `--endpoint <url>` | 控制面基址，可逗号分隔多个端点 |
+| `--endpoint <url>` | 控制面 **gRPC 控制端点**（平台「节点接入端点」的 RPC 端点），可逗号分隔多个；落到 `api_node.yaml` 的 `rpc.endpoints` |
 | `--node-id <id>` | 节点身份（也接受 `--instance-id`） |
 | `--secret <hex>` | 注册时下发的一次性凭据 |
 | `--comm-mode <plaintext\|tls\|mtls>` | 通信模式，默认 `tls` |
-| `--trust-keys <hex[,hex...]>` | 可选，钉住的信任公钥 |
+| `--trust-keys <hex[,hex...]>` | 可选，钉住的信任公钥（当前仅透传记录，节点不消费） |
+| `--tls-ca-file` / `--tls-cert-file` / `--tls-key-file` | `--comm-mode mtls` 时的客户端证书材料路径 |
+| `--tls-server-name <name>` | 覆盖 TLS SNI |
 | `--dir <path>` | 安装根目录，覆盖默认布局 |
 | `--dry-run` | 只打印动作，不写盘、不启服务 |
 
@@ -190,23 +195,25 @@ bootstrap 脚本从控制面的 `/v1/edge/packages/meta` 接口取包元数据�
 ### 安装布局
 
 ```
-/usr/bin/zelvik-edge                         二进制
-/etc/zelvik/edge/secrets.env                 节点凭据（0600，仅 root 可读）
-/etc/zelvik/edge/runtime.yaml                运行时配置
-/etc/systemd/system/zelvik-edge.service      systemd unit
-/var/lib/zelvik/edge/                        数据目录（缓存、geoip 等）
-/var/log/zelvik/                             日志目录
+/usr/bin/zelvik-edge                                    二进制
+/var/lib/zelvik/edge/configs/api_node.yaml              节点配置与凭据（0640 root:zelvik-edge）
+/etc/systemd/system/zelvik-edge.service                 systemd unit
+/var/lib/zelvik/edge/                                   节点 home（缓存、geoip、状态；ZELVIK_EDGE_HOME）
+/var/log/zelvik/                                        日志目录
 ```
 
-安装幂等：重复执行只更新二进制与凭据，不破坏数据目录。
+节点把 `configs/`、`data/`、`logs/` 都解析在 home 之下，凭据只从 `configs/api_node.yaml` 读——这是它唯一读取的配置文件。安装脚本不再写 `secrets.env` 或 `runtime.yaml`：二进制里没有任何代码读它们，写了等于让节点看起来配好了却起不来。
+
+安装幂等：重复执行只更新二进制与配置，不破坏数据目录。
 
 ### dry-run
 
 上线前验证安装步骤而不实际写盘：
 
 ```bash
-curl -fsSL <控制面地址>/install/edge.sh | sudo bash -s -- \
-    --endpoint <控制面地址> \
+curl -fsSL https://cp.example.com/install/edge.sh | sudo bash -s -- \
+    --endpoint https://rpc1.example.com:29090 \
+    --artifact-base https://cp.example.com \
     --node-id <节点 ID> \
     --secret <注册凭据> \
     --dry-run
@@ -226,8 +233,7 @@ journalctl -u zelvik-edge -f
 systemctl disable --now zelvik-edge
 rm -f /usr/bin/zelvik-edge \
       /etc/systemd/system/zelvik-edge.service \
-      /etc/zelvik/edge/secrets.env \
-      /etc/zelvik/edge/runtime.yaml
+      /var/lib/zelvik/edge/configs/api_node.yaml
 # 如需同时清除缓存和状态数据（不可恢复）：
 # rm -rf /var/lib/zelvik/edge /var/log/zelvik
 # userdel zelvik-edge

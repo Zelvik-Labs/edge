@@ -27,24 +27,25 @@ Zelvik Edge 是一个基于 [Pingora](https://github.com/cloudflare/pingora) 构
 
 ## 快速开始
 
-准备 `configs/api_node.yaml`：
+节点从 `<ZELVIK_EDGE_HOME>/configs/api_node.yaml` 读取凭据与端点；一键安装会为你生成它，无需手写：
 
 ```yaml
-rpc.endpoints: [ "http://127.0.0.1:8001" ]
-nodeId: "your-node-id"
-secret: "your-node-secret"
+rpc.endpoints: [ "https://rpc1.example.com:29090" ]
+nodeId: "nd_xxxxxxxxxx"
+secret: "<注册凭据>"
 ```
 
 一键安装（由控制面 bootstrap 分发）：
 
 ```bash
-curl -fsSL <控制面地址>/install/edge.sh | sudo bash -s -- \
-    --endpoint <控制面地址> \
+curl -fsSL https://cp.example.com/install/edge.sh | sudo bash -s -- \
+    --endpoint https://rpc1.example.com:29090 \
+    --artifact-base https://cp.example.com \
     --node-id <节点 ID> \
     --secret <注册凭据>
 ```
 
-控制台会在节点注册页面给出完整的可复制命令，其中 `<控制面地址>`、`<节点 ID>` 和 `<注册凭据>` 均已填入。详见 [部署与运维](docs/operations.md)。
+两个地址不能混用：`--endpoint` 是控制面 **gRPC 控制端点**（对应平台设置「节点接入端点」里的 RPC 端点），会写进 `api_node.yaml` 的 `rpc.endpoints`；`--artifact-base` 是 bootstrap 取包用的 HTTP(S) 地址（对应同一处的「更新地址」）。控制台在节点注册页面会给出完整可复制命令，地址、`<节点 ID>` 与 `<注册凭据>` 均已填好。详见 [部署与运维](docs/operations.md)。
 
 ## 文档
 

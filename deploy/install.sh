@@ -19,7 +19,6 @@ SERVICE_USER="zelvik-edge"
 SERVICE_GROUP="zelvik-edge"
 
 INSTALL_BIN_DIR="/usr/bin"
-CONFIG_DIR="/etc/zelvik/edge"
 DATA_DIR="/var/lib/zelvik/edge"
 LOG_DIR="/var/log/zelvik"
 UNIT_DIR="/etc/systemd/system"
@@ -29,6 +28,10 @@ NODE_ID=""
 NODE_SECRET=""
 COMM_MODE="tls"
 TRUST_KEYS=""
+TLS_CA_FILE=""
+TLS_CERT_FILE=""
+TLS_KEY_FILE=""
+TLS_SERVER_NAME=""
 CUSTOM_DIR=""
 DRY_RUN=0
 
@@ -42,13 +45,20 @@ usage() {
     cat >&2 <<'EOF'
 Usage: install.sh [OPTIONS]
 
-  --endpoint <url>                  Control-plane base URL (comma-separated for multiple)
+  --endpoint <url>                  Control-plane RPC base URL (comma-separated for multiple)
   --node-id <id>                    Node identity  (alias: --instance-id)
   --secret <hex>                    One-time registration secret
   --comm-mode <plaintext|tls|mtls>  Communication mode (default: tls)
-  --trust-keys <hex[,hex...]>       Pinned trust keys (optional)
+  --trust-keys <hex[,hex...]>       Pinned trust keys (accepted, forwarded to the node)
+  --tls-ca-file <path>              CA bundle for mTLS  (--comm-mode mtls)
+  --tls-cert-file <path>            Client certificate for mTLS
+  --tls-key-file <path>             Client key for mTLS
+  --tls-server-name <name>          Override the TLS server name
   --dir <path>                      Installation root (overrides layout defaults)
   --dry-run                         Print actions without writing to disk or starting services
+
+The node reads its credentials from <home>/configs/api_node.yaml; the installer
+renders that file. Nothing else it writes is read by the binary.
 
 Environment variable fallbacks:
   ZELVIK_ENDPOINT or API_ENDPOINTS
@@ -76,6 +86,14 @@ parse_args() {
             --comm-mode)    [ "$#" -ge 2 ] || die "--comm-mode requires a value"; COMM_MODE="$2"; shift 2 ;;
             --trust-keys=*) TRUST_KEYS="${1#*=}"; shift ;;
             --trust-keys)   [ "$#" -ge 2 ] || die "--trust-keys requires a value"; TRUST_KEYS="$2"; shift 2 ;;
+            --tls-ca-file=*)   TLS_CA_FILE="${1#*=}"; shift ;;
+            --tls-ca-file)     [ "$#" -ge 2 ] || die "--tls-ca-file requires a value"; TLS_CA_FILE="$2"; shift 2 ;;
+            --tls-cert-file=*) TLS_CERT_FILE="${1#*=}"; shift ;;
+            --tls-cert-file)   [ "$#" -ge 2 ] || die "--tls-cert-file requires a value"; TLS_CERT_FILE="$2"; shift 2 ;;
+            --tls-key-file=*)  TLS_KEY_FILE="${1#*=}"; shift ;;
+            --tls-key-file)    [ "$#" -ge 2 ] || die "--tls-key-file requires a value"; TLS_KEY_FILE="$2"; shift 2 ;;
+            --tls-server-name=*) TLS_SERVER_NAME="${1#*=}"; shift ;;
+            --tls-server-name)   [ "$#" -ge 2 ] || die "--tls-server-name requires a value"; TLS_SERVER_NAME="$2"; shift 2 ;;
             --dir=*)        CUSTOM_DIR="${1#*=}"; shift ;;
             --dir)          [ "$#" -ge 2 ] || die "--dir requires a value"; CUSTOM_DIR="$2"; shift 2 ;;
             --dry-run)      DRY_RUN=1; shift ;;
@@ -126,15 +144,18 @@ fi
 # apply --dir override
 # ---------------------------------------------------------------------------
 if [ -n "$CUSTOM_DIR" ]; then
-    CONFIG_DIR="${CUSTOM_DIR}/etc/zelvik/edge"
     DATA_DIR="${CUSTOM_DIR}/var/lib/zelvik/edge"
     LOG_DIR="${CUSTOM_DIR}/var/log/zelvik"
     INSTALL_BIN_DIR="${CUSTOM_DIR}/usr/bin"
     UNIT_DIR="${CUSTOM_DIR}/etc/systemd/system"
 fi
 
-ENV_FILE="${CONFIG_DIR}/secrets.env"
-RUNTIME_FILE="${CONFIG_DIR}/runtime.yaml"
+# The node resolves every runtime path (configs/, data/, logs/) relative to its
+# home. ZELVIK_EDGE_HOME is the only name the binary reads — see
+# src/paths.rs NodePaths::current(). The legacy CLOUD_NODE_HOME and
+# ZELVIK_CONFIG_DIR names appear nowhere in src/, so the unit no longer sets them.
+EDGE_HOME="$DATA_DIR"
+API_CONFIG_FILE="${EDGE_HOME}/configs/api_node.yaml"
 
 # ---------------------------------------------------------------------------
 # dry-run helper
@@ -147,25 +168,15 @@ run_cmd() {
     fi
 }
 
-write_file() {
-    local path="$1"
-    local mode="$2"
-    shift 2
-    if [ "$DRY_RUN" -eq 1 ]; then
-        log "[dry-run] write ${path} (mode ${mode})"
-    else
-        cat > "$path"
-        chmod "$mode" "$path"
-    fi
-}
-
 # ---------------------------------------------------------------------------
 # locate the binary (must be next to install.sh in the extracted tar)
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC_BIN="${SCRIPT_DIR}/zelvik-edge"
 [ -f "$SRC_BIN" ] || die "binary not found at ${SRC_BIN} — run from inside the extracted tar"
-[ -x "$SRC_BIN" ] || chmod 0755 "$SRC_BIN"
+if [ "$DRY_RUN" -eq 0 ]; then
+    [ -x "$SRC_BIN" ] || chmod 0755 "$SRC_BIN"
+fi
 
 # ---------------------------------------------------------------------------
 # create user (idempotent)
@@ -182,8 +193,11 @@ fi
 
 # ---------------------------------------------------------------------------
 # create directories (idempotent — never touches data/)
+#
+# There is no /etc/zelvik/edge: the node reads nothing from it, and a directory
+# that looks configured while nothing consumes it is how the previous install
+# path ended up writing files the binary never opened.
 # ---------------------------------------------------------------------------
-run_cmd install -d -m 0750 -o root -g "$SERVICE_GROUP" "$CONFIG_DIR"
 run_cmd install -d -m 0755 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR"
 run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "${DATA_DIR}/geoip"
 run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$LOG_DIR"
@@ -205,63 +219,63 @@ if [ -f "$EBPF_SRC" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# render secrets.env (0600, root:root; idempotent — overwrites on re-run)
+# render api_node.yaml (0600 — carries the node credential)
+#
+# This is the only configuration file the node reads: both
+# ApiConfig::default_paths() and RuntimeConfig::load_default() resolve
+# <ZELVIK_EDGE_HOME>/configs/api_node.yaml. The installer previously wrote
+# secrets.env and runtime.yaml here instead; nothing in src/ ever read either,
+# so a freshly installed node could not start. Do not reintroduce them.
 # ---------------------------------------------------------------------------
-run_cmd install -d -m 0750 -o root -g "$SERVICE_GROUP" "$CONFIG_DIR"
+run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "${EDGE_HOME}/configs"
 if [ "$DRY_RUN" -eq 0 ]; then
-    printf '# Rendered by deploy/install.sh — root only, never commit.\nAPI_ENDPOINTS=%s\nNODE_ID=%s\nNODE_SECRET=%s\nZELVIK_COMM_MODE=%s\n' \
-        "$ENDPOINT" "$NODE_ID" "$NODE_SECRET" "$COMM_MODE" > "$ENV_FILE"
-    if [ -n "$TRUST_KEYS" ]; then
-        printf 'ZELVIK_TRUST_KEYS=%s\n' "$TRUST_KEYS" >> "$ENV_FILE"
-    fi
-    chmod 0600 "$ENV_FILE"
-    chown root:"$SERVICE_GROUP" "$ENV_FILE"
-    log "wrote ${ENV_FILE} (0600)"
+    {
+        printf '# Rendered by deploy/install.sh — carries the node credential; root only.\n'
+        printf 'rpc.endpoints:\n'
+        printf '%s\n' "$ENDPOINT" | tr ',' '\n' | while IFS= read -r _ep; do
+            if [ -n "$_ep" ]; then
+                printf '  - "%s"\n' "$_ep"
+            fi
+        done
+        printf 'nodeId: "%s"\n' "$NODE_ID"
+        printf 'secret: "%s"\n' "$NODE_SECRET"
+        if [ "$COMM_MODE" = "mtls" ]; then
+            printf 'rpc.tls:\n'
+            if [ -n "$TLS_CA_FILE" ]; then printf '  caFile: "%s"\n' "$TLS_CA_FILE"; fi
+            if [ -n "$TLS_CERT_FILE" ]; then printf '  certFile: "%s"\n' "$TLS_CERT_FILE"; fi
+            if [ -n "$TLS_KEY_FILE" ]; then printf '  keyFile: "%s"\n' "$TLS_KEY_FILE"; fi
+            if [ -n "$TLS_SERVER_NAME" ]; then printf '  serverName: "%s"\n' "$TLS_SERVER_NAME"; fi
+        fi
+        # XDP is opt-in per node; the installer never enables it implicitly.
+        printf 'xdp:\n  enabled: false\n'
+    } > "$API_CONFIG_FILE"
+    # 0640, not 0600: the file is root-owned and the service runs as
+    # zelvik-edge, so the owner bits never apply to the reader. 0600 made the
+    # node abort with EACCES on its own config.
+    chmod 0640 "$API_CONFIG_FILE"
+    chown root:"$SERVICE_GROUP" "$API_CONFIG_FILE"
+    log "wrote ${API_CONFIG_FILE} (0640)"
 else
-    log "[dry-run] write ${ENV_FILE} (0600)"
-fi
-
-# ---------------------------------------------------------------------------
-# render runtime.yaml if not already present (don't overwrite operator edits)
-# ---------------------------------------------------------------------------
-if [ ! -f "$RUNTIME_FILE" ] || [ "$DRY_RUN" -eq 1 ]; then
-    if [ "$DRY_RUN" -eq 0 ]; then
-        cat > "$RUNTIME_FILE" <<EOF
-runtime:
-  mode: standalone
-cluster:
-  enabled: false
-  type: standalone
-  name: edge-standalone-01
-  namespace: default
-  cache:
-    localMetaDir: ${DATA_DIR}/cache-meta
-    maxFastL1Bytes: 0
-    sharedMaxBytes: 100GiB
-    minFreeBytes: 10GiB
-    shardStrategy: hash_mod
-    shards:
-      - id: shard-00
-        path: ${DATA_DIR}/cache-shard-00
-        weight: 1
-        replicas: 1
-xdp:
-  enabled: false
-EOF
-        chmod 0640 "$RUNTIME_FILE"
-        chown root:"$SERVICE_GROUP" "$RUNTIME_FILE"
-        log "wrote ${RUNTIME_FILE}"
-    else
-        log "[dry-run] write ${RUNTIME_FILE}"
-    fi
+    log "[dry-run] write ${API_CONFIG_FILE} (0640)"
 fi
 
 # ---------------------------------------------------------------------------
 # install systemd unit
+#
+# The shipped unit is a template: @ZELVIK_EDGE_HOME@ is replaced with the
+# resolved node home so `--dir` overrides stay consistent between the unit and
+# the config tree it reads.
 # ---------------------------------------------------------------------------
 UNIT_SRC="${SCRIPT_DIR}/systemd/${SERVICE_NAME}.service"
 [ -f "$UNIT_SRC" ] || die "unit file not found: ${UNIT_SRC}"
-run_cmd install -m 0644 -o root -g root "$UNIT_SRC" "${UNIT_DIR}/${SERVICE_NAME}.service"
+UNIT_DST="${UNIT_DIR}/${SERVICE_NAME}.service"
+if [ "$DRY_RUN" -eq 0 ]; then
+    sed "s|@ZELVIK_EDGE_HOME@|${EDGE_HOME}|g" "$UNIT_SRC" > "$UNIT_DST"
+    chmod 0644 "$UNIT_DST"
+    chown root:root "$UNIT_DST"
+else
+    log "[dry-run] render ${UNIT_DST} with ZELVIK_EDGE_HOME=${EDGE_HOME}"
+fi
 
 if [ "$DRY_RUN" -eq 0 ]; then
     if command -v systemctl >/dev/null 2>&1; then

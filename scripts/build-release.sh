@@ -49,6 +49,23 @@ done
 
 # Resolve default arch from the host.
 HOST_OS="$(uname -s)"
+
+# ---------- tar flags --------------------------------------------------------
+# macOS bsdtar embeds extended attributes (e.g. com.apple.provenance) into the
+# archive as LIBARCHIVE.xattr.* records. GNU tar on Linux then prints
+# "Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'"
+# once per file, polluting the bootstrap/installer output. COPYFILE_DISABLE=1
+# stops bsdtar writing ._ AppleDouble entries; --no-xattrs stops it embedding the
+# xattr records themselves. Linux GNU tar produces neither, so it needs no flags.
+# --no-mac-metadata does NOT help here: it only suppresses ._ sidecar files, not
+# the xattr records inside the archive.
+TAR_EXTRA=""
+if [ "$HOST_OS" = "Darwin" ]; then
+    COPYFILE_DISABLE=1
+    export COPYFILE_DISABLE
+    TAR_EXTRA="--no-xattrs"
+fi
+
 if [ -z "$ARCH" ]; then
     HOST_ARCH="$(uname -m)"
     case "$HOST_ARCH" in
@@ -71,47 +88,57 @@ mkdir -p "$OUT_DIR"
 
 # ---------------------------------------------------------------------------
 # Step 1: build the binary
+#
+# Cargo's [[bin]] name is case-sensitive: the product binary is `Zelvik-Edge`
+# (see Cargo.toml and .github/workflows/release.yml). It is copied into the
+# package as `zelvik-edge` below.
 # ---------------------------------------------------------------------------
+BIN_TARGET="Zelvik-Edge"
 printf '[build-release] building %s for %s ...\n' "$PKG_STEM" "$TRIPLE"
 
+# Locate the built binary across the target layouts cargo/zigbuild may use.
+locate_bin() {
+    for candidate in \
+        "${REPO_ROOT}/target/${TRIPLE}/release/${BIN_TARGET}" \
+        "${REPO_ROOT}/target/${ARCH}-unknown-linux-gnu/release/${BIN_TARGET}" \
+        "${REPO_ROOT}/target/release/${BIN_TARGET}"
+    do
+        if [ -f "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
 if [ "$HOST_OS" = "Darwin" ]; then
-    # macOS: reuse the existing cross-compile script which handles sysroot,
-    # zigbuild, eBPF object compilation, and cargo flags.
-    # build-release-local.sh builds x86_64 by default; for aarch64 we need
-    # the aarch64 sysroot path — delegate but override the target.
+    # macOS: reuse the existing cross-compile script, which owns the sysroot,
+    # zigbuild, LLVM tool and glibc-floor setup. It cross-compiles x86_64 only
+    # (the sysroot under ~/tools/sysroot-x86_64-linux-gnu is x86_64).
     LOCAL_BUILD="${REPO_ROOT}/build-release-local.sh"
     [ -x "$LOCAL_BUILD" ] || { printf 'build-release-local.sh not found or not executable\n' >&2; exit 1; }
-    if [ "$ARCH" = "aarch64" ]; then
-        printf '[build-release] WARNING: aarch64 cross-compile from macOS requires\n' >&2
-        printf '  a separate aarch64 sysroot; see build-release-local.sh for the\n' >&2
-        printf '  x86_64 sysroot setup. Set ZELVIK_EDGE_ARCH=aarch64 and ensure\n' >&2
-        printf '  ~/tools/sysroot-aarch64-linux-gnu exists before proceeding.\n' >&2
-        # Pass through; the user must have set up the aarch64 sysroot.
-        GLIBC="${ZELVIK_EDGE_GLIBC:-2.36}"
-        export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C target-cpu=generic -L native=${HOME}/tools/sysroot-aarch64-linux-gnu/usr/lib/aarch64-linux-gnu"
-        export CFLAGS_aarch64_unknown_linux_gnu="-I${HOME}/tools/sysroot-aarch64-linux-gnu/usr/include"
-        cd "$REPO_ROOT"
-        cargo zigbuild --release --target "aarch64-unknown-linux-gnu.${GLIBC}" --bin zelvik-edge
-        BIN_PATH="${REPO_ROOT}/target/aarch64-unknown-linux-gnu/release/zelvik-edge"
-    else
-        cd "$REPO_ROOT"
-        bash "$LOCAL_BUILD"
-        GLIBC="${ZELVIK_EDGE_GLIBC:-2.36}"
-        BIN_PATH="${REPO_ROOT}/target/x86_64-unknown-linux-gnu.${GLIBC}/release/zelvik-edge"
-        # build-release-local.sh may put the binary under the versioned target triple
-        # or the plain triple; find whichever exists.
-        if [ ! -f "$BIN_PATH" ]; then
-            BIN_PATH="${REPO_ROOT}/target/x86_64-unknown-linux-gnu/release/zelvik-edge"
-        fi
+    if [ "$ARCH" != "x86_64" ]; then
+        printf 'error: macOS cross-compile is wired for x86_64 only.\n' >&2
+        printf '       build-release-local.sh uses the x86_64 sysroot\n' >&2
+        printf '       (~/tools/sysroot-x86_64-linux-gnu). Build aarch64 in a\n' >&2
+        printf '       Linux/OrbStack container instead:\n' >&2
+        printf '         bash scripts/test-orbstack.sh arm64 check\n' >&2
+        exit 1
     fi
-else
-    # Linux: native cargo build.
     cd "$REPO_ROOT"
-    cargo build --release --bin zelvik-edge
-    BIN_PATH="${REPO_ROOT}/target/release/zelvik-edge"
+    bash "$LOCAL_BUILD"
+else
+    # Linux: native build for the requested arch. --target is used so a
+    # cross toolchain (if present) picks the right triple; on a native build
+    # it resolves to the same directory cargo would use anyway.
+    cd "$REPO_ROOT"
+    cargo build --release --target "$TRIPLE" --bin "$BIN_TARGET"
 fi
 
-[ -f "$BIN_PATH" ] || { printf 'binary not found after build: %s\n' "$BIN_PATH" >&2; exit 1; }
+BIN_PATH="$(locate_bin)" || {
+    printf 'error: binary not found after build (looked for %s under target/)\n' "$BIN_TARGET" >&2
+    exit 1
+}
 printf '[build-release] binary: %s (%d bytes)\n' "$BIN_PATH" "$(wc -c < "$BIN_PATH")"
 
 # ---------------------------------------------------------------------------
@@ -180,7 +207,8 @@ OUT_TAR="${OUT_DIR}/${PKG_NAME}"
 OUT_SHA="${OUT_DIR}/${PKG_NAME%.tar.gz}.sha256"
 
 # Use -C so the archive root contains the files directly (no top-level dir).
-tar -czf "$OUT_TAR" -C "$STAGE_DIR" .
+# shellcheck disable=SC2086  # TAR_EXTRA is intentionally word-split (empty or one flag).
+tar $TAR_EXTRA -czf "$OUT_TAR" -C "$STAGE_DIR" .
 
 SHA256="$(shasum -a 256 "$OUT_TAR" | awk '{print $1}')"
 SIZE="$(wc -c < "$OUT_TAR")"
