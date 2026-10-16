@@ -181,9 +181,6 @@ class ProtocolTests(ProtocolFixture, unittest.TestCase):
             metadata_env["RUSTC"] = subprocess.run(
                 ["rustup", "which", "rustc"], cwd=self.root, capture_output=True,
                 text=True, check=True).stdout.strip()
-        # Model the container's host-owned read-only bind: trust must come from the
-        # process-scoped safe.directory, not the (unmounted) global config.
-        metadata_env["GIT_TEST_ASSUME_DIFFERENT_OWNER"] = "1"
         result = self.shell(
             'configure_protocol_git "$2" "$3"\ncd "$4"\n'
             '"$5" metadata --locked --format-version 1',
@@ -197,6 +194,35 @@ class ProtocolTests(ProtocolFixture, unittest.TestCase):
         self.assertEqual(self.lock.read_text(), self.lock_text)
         self.assertFalse((self.root / "target").exists())
 
+    def test_process_scoped_config_is_the_only_trust_and_rewrite_source(self):
+        # GIT_TEST_ASSUME_DIFFERENT_OWNER must not be used to model the container's
+        # bind: it is a git-internal test hook whose effect differs by version and
+        # by code path (git 2.39.5 honours it for `git fetch` but not for
+        # `git rev-parse`; Apple git 2.54 differs again), and no config source —
+        # `-c`, env-injected or file — authorises a foreign-owned `file://` remote
+        # in 2.39.5. So assert what configure_protocol_git actually exports instead,
+        # which is deterministic everywhere.
+        self.prepare()
+        result = self.shell(
+            'configure_protocol_git "$2" "$3"\n'
+            'printf "global=%s\\n" "$GIT_CONFIG_GLOBAL"\n'
+            'printf "system=%s\\n" "$GIT_CONFIG_NOSYSTEM"\n'
+            'printf "count=%s\\n" "$GIT_CONFIG_COUNT"\n'
+            'printf "cli=%s\\n" "$CARGO_NET_GIT_FETCH_WITH_CLI"\n'
+            'git config --get-all safe.directory\n'
+            'git config --get-regexp "^url\\."\n',
+            self.lock, self.mirror)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        lines = result.stdout.splitlines()
+        self.assertIn("global=/dev/null", lines)
+        self.assertIn("system=1", lines)
+        self.assertIn("count=3", lines)
+        self.assertIn("cli=true", lines)
+        # safe.directory is scoped to the mirror; the host's global config is
+        # excluded so nothing else can be trusted by accident.
+        self.assertIn(str(self.mirror), lines)
+        self.assertIn("url.file://" + str(self.mirror) + ".insteadof " + self.url, lines)
+
     def test_container_rejects_wrong_mirror_tag(self):
         self.prepare()
         other = self.git("-C", str(self.upstream), "rev-parse", "HEAD").stdout.strip()
@@ -206,31 +232,62 @@ class ProtocolTests(ProtocolFixture, unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("does not match Cargo.lock", result.stderr)
 
-    def test_dependency_failure_stops_before_build_stages(self):
-        self.prepare()
+    def run_gate(self, phase="check", cargo_status=0, cleanup_status=0):
+        """Run the real dependency gate, then a build sentinel it must not reach."""
         source = SCRIPT.read_text()
         functions = source[source.index("run_build() {"):source.index("rustc --version")]
-        functions = (functions.replace("/workspace/scripts/orbstack-protocol.sh", str(self.helper))
-                     .replace("/workspace/Cargo.lock", str(self.lock))
+        # The gate is the region between the pingora comment that introduces it
+        # and the comment that introduces the eBPF prerequisites, which the gate
+        # must still run before. Both are real script text, so this fails loudly
+        # if either moves.
+        gate = source[source.index('# The independent pingora workspace'):
+                      source.index("# The pingora phase compiles only pingora-main")]
+        for text in (functions, gate):
+            self.assertIn("/results/", text)
+        functions = (functions.replace("/workspace/Cargo.lock", str(self.lock))
                      .replace("/protocol.git", str(self.mirror))
                      .replace("/results/", str(self.root) + "/"))
-        # Use the actual dependency-stage invocation, followed by a build sentinel.
-        gate = source[source.index('# The independent pingora workspace'):source.index("# Resolve the existing dated nightly")]
-        script = ('set -euo pipefail\nPHASE=check\nOVERALL_STATUS=0\nLAST_CLEANUP_STATUS=0\n'
-                  'cleanup() { return 0; }\ncargo() { return 37; }\n' + functions + gate +
-                  '\nprintf build-started > "$1"\n')
+        gate = gate.replace("/results/", str(self.root) + "/")
+        script = (f'set -euo pipefail\nPHASE={phase}\nOVERALL_STATUS=0\nLAST_CLEANUP_STATUS=0\n'
+                  f'cleanup() {{ return {cleanup_status}; }}\ncargo() {{ return {cargo_status}; }}\n'
+                  'source "$1"\n' + functions + gate +
+                  '\nprintf build-started > "$2"\n')
         marker = self.root / "build-started"
-        result = subprocess.run(["bash", "-c", script, "fixture", str(marker)],
+        result = subprocess.run(["bash", "-c", script, "fixture", str(self.helper), str(marker)],
                                 env=self.env, cwd=self.root, text=True, capture_output=True)
+        return result, marker
+
+    def test_dependency_failure_stops_before_build_stages(self):
+        self.prepare()
+        result, marker = self.run_gate(cargo_status=37)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(marker.exists())
         self.assertEqual((self.root / "dependencies-exit-status.txt").read_text(), "37\n")
         self.assertIn("Dependency preflight failed", result.stderr)
 
+    def test_dependency_cleanup_failure_is_not_reported_as_a_dependency_failure(self):
+        self.prepare()
+        # The preflight resolves (cargo succeeds) but the cleanup that follows it
+        # fails. The reader must be sent to the cleanup log, not the dependency log.
+        result, marker = self.run_gate(cleanup_status=4)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(marker.exists())
+        self.assertEqual((self.root / "dependencies-exit-status.txt").read_text(), "0\n")
+        self.assertIn("Cleanup after the dependency preflight failed", result.stderr)
+        self.assertNotIn("Dependency preflight failed", result.stderr)
+
+    def test_pingora_phase_skips_the_dependency_gate(self):
+        self.prepare()
+        result, marker = self.run_gate(phase="pingora", cargo_status=37)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(marker.exists())
+        self.assertFalse((self.root / "dependencies-exit-status.txt").exists())
+
 
 class HostLifecycleTests(ProtocolFixture, unittest.TestCase):
     def run_host(self, build_status=0, run_status=0, signal=False, list_status=0,
-                 remove_status=0, phase="check", volume_status=0):
+                 remove_status=0, phase="check", volume_status=0, keep_cache=0,
+                 volume_inspect_status=0):
         fixture = self.root / "edge fixture"
         scripts = fixture / "scripts"
         scripts.mkdir(parents=True)
@@ -258,6 +315,8 @@ class HostLifecycleTests(ProtocolFixture, unittest.TestCase):
             '    print("fixture-image")\n'
             'if args[2:4] == ["volume", "rm"]:\n'
             '    sys.exit(int(os.environ["VOLUME_STATUS"]))\n'
+            'if args[2:4] == ["volume", "inspect"]:\n'
+            '    sys.exit(int(os.environ["VOLUME_INSPECT_STATUS"]))\n'
             'if args[2] == "build":\n'
             '    sys.exit(int(os.environ["BUILD_STATUS"]))\n'
             'if args[2] == "run":\n'
@@ -274,7 +333,9 @@ class HostLifecycleTests(ProtocolFixture, unittest.TestCase):
                    ZELVIK_EDGE_TEST_RESULTS=str(self.root / "results"), DOCKER_CALLS=str(calls),
                    BUILD_STATUS=str(build_status), RUN_STATUS=str(run_status),
                    SEND_SIGNAL=str(int(signal)), LIST_STATUS=str(list_status),
-                   REMOVE_STATUS=str(remove_status), VOLUME_STATUS=str(volume_status))
+                   REMOVE_STATUS=str(remove_status), VOLUME_STATUS=str(volume_status),
+                   VOLUME_INSPECT_STATUS=str(volume_inspect_status),
+                   ZELVIK_EDGE_TEST_KEEP_CACHE=str(keep_cache))
         result = subprocess.run(["bash", str(scripts / "test-orbstack.sh"), "arm64", phase],
                                 cwd=self.root, env=env, text=True, capture_output=True)
         if list_status or remove_status:
@@ -304,6 +365,41 @@ class HostLifecycleTests(ProtocolFixture, unittest.TestCase):
             "zelvik-edge-orb-test:1.99.0-arm64-")
         self.assertTrue(all(v.startswith("zelvik-edge-test-") and v.endswith("-arm64-" + run_id)
                             for v in volumes))
+
+    def test_keep_cache_reuses_tooling_volumes_and_removes_the_rest(self):
+        result, calls = self.run_host(keep_cache=1)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        run = next(c for c in calls if c[0] == "run")
+        mounts = [run[i + 1] for i, value in enumerate(run) if value == "--mount"]
+        self.assertIn("type=volume,source=zelvik-edge-test-tools-arm64,target=/tooling", mounts)
+        self.assertIn(
+            "type=volume,source=zelvik-edge-test-rustup-arm64,target=/usr/local/rustup", mounts)
+        # Only the arch-keyed tooling volumes survive; the three per-run volumes
+        # still go, so nothing accumulates across runs.
+        removed = [c[2] for c in calls if c[:2] == ["volume", "rm"]]
+        self.assertEqual(len(removed), 3)
+        self.assertFalse(any(v.endswith("-tools-arm64") or v.endswith("-rustup-arm64")
+                             for v in removed))
+        self.assertIn("Retaining cache volume zelvik-edge-test-tools-arm64", result.stderr)
+        self.assertIn("Retaining cache volume zelvik-edge-test-rustup-arm64", result.stderr)
+
+    def test_keep_cache_does_not_recreate_existing_tooling_volumes(self):
+        result, calls = self.run_host(keep_cache=1, volume_inspect_status=0)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(sorted(c[2] for c in calls if c[:2] == ["volume", "inspect"]),
+                         ["zelvik-edge-test-rustup-arm64", "zelvik-edge-test-tools-arm64"])
+        self.assertEqual(len([c for c in calls if c[:2] == ["volume", "create"]]), 3)
+
+    def test_keep_cache_creates_missing_tooling_volumes(self):
+        result, calls = self.run_host(keep_cache=1, volume_inspect_status=1)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len([c for c in calls if c[:2] == ["volume", "create"]]), 5)
+
+    def test_keep_cache_rejects_other_values_before_creating_anything(self):
+        result, calls = self.run_host(keep_cache=2)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("ZELVIK_EDGE_TEST_KEEP_CACHE must be 0 or 1", result.stderr)
+        self.assertEqual(calls, [])
 
     def test_host_fetch_failure_skips_docker_and_cleans_temp(self):
         self.lock.write_text(self.lock_text.replace(self.rev, "0" * 40))
@@ -347,6 +443,16 @@ class HostLifecycleTests(ProtocolFixture, unittest.TestCase):
         result, calls = self.run_host(signal=True)
         self.assertEqual(result.returncode, 143, result.stderr)
         self.assertIn(["rm", "-fv", "fixture-cid"], calls)
+
+    def test_host_volume_removal_failure_returns_nonzero_and_attempts_every_volume(self):
+        # A failed volume removal must surface, and must not abandon the remaining
+        # volumes: leaving four of five behind is exactly the leak this cleanup
+        # exists to prevent.
+        result, calls = self.run_host(volume_status=33)
+        self.assertEqual(result.returncode, 33, result.stderr)
+        volumes = [c for c in calls if c[:2] == ["volume", "rm"]]
+        self.assertEqual(len(volumes), 5)
+        self.assertTrue(any(c[:2] == ["image", "rm"] for c in calls))
 
 
 if __name__ == "__main__":

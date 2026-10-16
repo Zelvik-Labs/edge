@@ -48,18 +48,35 @@ AMD64 在 Apple Silicon 上通过 OrbStack 仿真运行，耗时不能用于推�
 脚本从 `Cargo.lock` 读取完整 commit SHA，抓取到临时 bare 仓库，
 并为锁定的 tag 建立指向该 commit 的本地引用；上游 tag 移动不会改变依赖。
 抓取失败立即停止，尚未构建 Docker 镜像。诊断见 `protocol-fetch.log`。
-`pingora` 阶段只构建独立的 `pingora-main` workspace，不解析私有依赖，
-因此跳过预检、不挂载该仓库。
+`pingora` 阶段只构建独立的 `pingora-main` workspace：既不解析私有依赖
+（跳过预检、不挂载该仓库），也不安装 dated nightly、不构建 bpf-linker 与
+xtask/eBPF——该 workspace 的成员全是上游 crate，没有任何 build script 或
+代码引用 `ZELVIK_EDGE_XDP_EBPF_SOURCE`。`all` 阶段两者都做。
+阶段划分由 `scripts/orbstack-protocol.sh` 的 `phase_builds_main_workspace`
+一处决定，宿主与容器共用，未知阶段名直接报错退出，不会静默跳过预检。
 
 容器只读挂载这个临时仓库，通过仅作用于本进程及子进程的 Git URL
 重写和 Cargo CLI Git 后端读取对象；不传 token、不挂载宿主 Git 配置或
 Cargo Git 缓存，不改 `Cargo.toml` / `Cargo.lock` 的依赖身份。
+该 bind 的属主问题已在真实容器里实测：OrbStack 把宿主文件映射成容器内
+uid 0，测试容器也以 root 运行，所以 `git ls-remote file:///protocol.git`
+不需要任何信任配置即可读取（实测 exit 0）。脚本仍然导出
+`safe.directory=<mirror>`，但它救不了这条路径——git 2.39.5 下无论是
+`-c`、环境注入还是配置文件，都不能让 `file://` 远程接受属主不同的仓库，
+而 `--git-dir` 形式的命令本来就不做该校验。真正决定成败的是 bind 属主与
+容器 uid 是否一致；若以后把容器改成非 root 用户配 root 属主的 bind，
+预检会失败，这不是该配置能修的。
 容器在安装 nightly、构建 xtask/eBPF 前执行 `cargo metadata --locked`；
 失败时所有编译阶段停止，诊断见 `dependencies.log`，成功的完整依赖图见
-`dependency-metadata.json`。公共 registry 依赖仍需网络或容器 registry 缓存。
+`dependency-metadata.json`。若预检成功但其后的清理失败，报错指向
+`dependencies-cleanup.log` 而非 `dependencies.log`，两种情况都记录在
+`dependencies-exit-status.txt` 里，不把清理失败误报成依赖解析失败。
+公共 registry 依赖仍需网络或容器 registry 缓存。
 退出（包括失败或 INT/TERM）时删除临时仓库、本次容器、镜像与缓存卷；
 不按容器名误删其他运行。若容器删除本身失败，保留其只读 bind 与资源
 并返回非零，给出容器 ID，由人工处理后重跑，避免删掉仍在使用的 bind。
+清理阶段会先解除全部 EXIT/INT/TERM trap：清理途中的第二次 Ctrl-C 不再
+中断拆除，否则容器、卷、镜像与临时仓库会原样留下。
 
 ## 缓存与动态清理
 
@@ -68,6 +85,17 @@ Cargo Git 缓存，不改 `Cargo.toml` / `Cargo.lock` 的依赖身份。
 结束（含失败与信号）时删除；宿主不留持久 Cargo/mbx 缓存，代价是每次
 重新下载 registry 与工具链。macOS 的 Cargo/mbx 目录不挂载到 Linux；
 ARM64 与 AMD64 不共享原生链接对象，运行之间也不复用。
+
+这个默认代价是实打实的：`tools` 卷里的 bpf-linker `0.11.1` 每次都从源码
+`cargo install --locked` 重新编译（这是整轮最慢的一步），dated nightly 也
+每次重新安装。反复调试同一架构时可以用 `ZELVIK_EDGE_TEST_KEEP_CACHE=1`
+只保留按架构命名的 `zelvik-edge-test-tools-<arch>` 与
+`zelvik-edge-test-rustup-<arch>` 两个卷，其余三个卷与镜像仍然每轮删除，
+所以不会跨轮堆积。默认值为 `0`，即全部删除；取值只接受 `0` 或 `1`，
+其他值在任何资源创建之前报错退出。保留的卷按架构复用，工具链是否过期由
+容器内的 rustup 与 bpf-linker 版本检查决定（`bpf-linker --version` 不是
+`0.11.1` 就重装），不依赖卷的时间戳。要彻底清掉保留的卷：
+`docker volume rm zelvik-edge-test-tools-<arch> zelvik-edge-test-rustup-<arch>`。
 
 容器默认预算：mbx action store 3 GiB、managed targets 5 GiB、incremental
 1 GiB、合计 8 GiB。预算是逻辑字节的清理目标，不是实时磁盘配额；
@@ -115,8 +143,11 @@ mbx 管理的符号链接通过 `mbx clean <workspace>` 处理，普通 target
 关键 Pingora crate 检查与库测试。独立验证阶段发生失败时继续其余阶段，
 每个阶段单独记录退出状态，最终仍返回非零；eBPF 等构建前置步骤或清理
 失败则立即停止。脚本的离线自测使用本地 Git/Cargo 小型 fixture 验证锁定
-revision 解析，并用 Docker stub 验证失败与信号清理；不执行编译、不连接
-GitHub、不创建容器、镜像或缓存卷，不能替代真实 Docker/Linux 验证。
+revision 解析，并用 Docker stub 验证失败与信号清理；覆盖容器删除查询/删除
+失败、卷删除失败仍逐个尝试、依赖预检失败与"预检成功但清理失败"两种退出
+文案、`pingora` 阶段跳过依赖门、以及保留缓存时的卷命名与存在性探测。
+不执行编译、不连接 GitHub、不创建容器、镜像或缓存卷，不能替代真实
+Docker/Linux 验证。
 
 以下不能从编译或默认测试结果推断：
 

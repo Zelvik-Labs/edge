@@ -7,6 +7,14 @@ PHASE="${2:-all}"
 case "$ARCH" in arm64|amd64) ;; *) printf 'usage: %s [arm64|amd64] [all|check|test|clippy|pingora]\n' "$0" >&2; exit 2 ;; esac
 case "$PHASE" in all|check|test|clippy|pingora) ;; *) printf 'unknown phase: %s\n' "$PHASE" >&2; exit 2 ;; esac
 
+source "$ROOT/scripts/orbstack-protocol.sh"
+# ZELVIK_EDGE_TEST_KEEP_CACHE=1 opts into keeping the tools/rustup volumes
+# (bpf-linker and the dated nightly are rebuilt from scratch otherwise), with
+# reuse keyed by ARCH. Everything else is still removed on every exit. Validated
+# before anything is created so a bad value cannot leak a temp root.
+KEEP_CACHE="${ZELVIK_EDGE_TEST_KEEP_CACHE:-0}"
+case "$KEEP_CACHE" in 0|1) ;; *) printf 'ZELVIK_EDGE_TEST_KEEP_CACHE must be 0 or 1\n' >&2; exit 2 ;; esac
+
 RESULTS="${ZELVIK_EDGE_TEST_RESULTS:-$ROOT/../artifacts/edge-orb-tests/$(date +%Y%m%d-%H%M%S)-$ARCH}"
 mkdir -p "$RESULTS"
 RESULTS="$(cd "$RESULTS" && pwd)"
@@ -19,9 +27,10 @@ CIDFILE="$TEMP_ROOT/container.cid"
 VOLUMES=()
 MIRROR_ARGS=()
 IMAGE_ATTEMPTED=0
+
 cleanup() {
     local status=$? cleanup_status=0 cid remaining volume
-    trap - EXIT
+    trap - EXIT INT TERM
     if [ -s "$CIDFILE" ]; then
         cid="$(<"$CIDFILE")"
         if remaining="$(docker --context orbstack container ls -aq --filter "id=$cid")"; then
@@ -39,6 +48,13 @@ cleanup() {
     fi
     if [ "${#VOLUMES[@]}" -gt 0 ]; then
         for volume in "${VOLUMES[@]}"; do
+            # Retained cache volumes outlive the run on purpose; every other
+            # volume is removed even when an earlier removal failed.
+            case ",$KEEP_CACHE:$volume" in
+                ,1:zelvik-edge-test-tools-$ARCH | ,1:zelvik-edge-test-rustup-$ARCH)
+                    printf 'Retaining cache volume %s (ZELVIK_EDGE_TEST_KEEP_CACHE=1).\n' "$volume" >&2
+                    continue ;;
+            esac
             docker --context orbstack volume rm "$volume" >/dev/null || cleanup_status=$?
         done
     fi
@@ -59,8 +75,11 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 mkdir "$CONTEXT"
-if [ "$PHASE" != pingora ]; then
-    source "$ROOT/scripts/orbstack-protocol.sh"
+# The pingora phase compiles only the independent pingora-main workspace: it has
+# no private git dependency to resolve. One shared decision point with the
+# container runner, so a new phase cannot be routed through (or away from) the
+# private preflight in only one of them.
+if phase_builds_main_workspace "$PHASE"; then
     # Authenticate and validate the exact locked revision before any image/toolchain build.
     prepare_protocol_mirror "$ROOT/Cargo.lock" "$MIRROR" \
         > "$RESULTS/protocol-fetch.log" 2>&1 || {
@@ -76,9 +95,18 @@ docker --context orbstack build --platform "linux/$ARCH" \
     2>&1 | tee "$RESULTS/image-build.log"
 
 # Every resource belongs to this invocation; no persistent host Cargo/mbx caches.
+# With ZELVIK_EDGE_TEST_KEEP_CACHE=1 the tools/rustup volumes are reused by name
+# (no RUN_ID) so nightly and bpf-linker survive; the others stay per-run.
 for cache in workspace registry rustup tools mbx; do
-    volume="zelvik-edge-test-$cache-$ARCH-$RUN_ID"
-    docker --context orbstack volume create "$volume" >/dev/null
+    volume="zelvik-edge-test-$cache-$ARCH"
+    keep=0
+    case ",$KEEP_CACHE:$cache" in ,1:tools | ,1:rustup) keep=1 ;; esac
+    if [ "$keep" -eq 0 ]; then
+        volume="$volume-$RUN_ID"
+        docker --context orbstack volume create "$volume" >/dev/null
+    elif ! docker --context orbstack volume inspect "$volume" >/dev/null 2>&1; then
+        docker --context orbstack volume create "$volume" >/dev/null
+    fi
     VOLUMES+=("$volume")
 done
 docker --context orbstack run --rm --platform "linux/$ARCH" \

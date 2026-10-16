@@ -4,6 +4,10 @@ set -euo pipefail
 export PATH="/tooling/bin:$PATH"
 PHASE="${ZELVIK_EDGE_TEST_PHASE:-all}"
 ARCH="${ZELVIK_EDGE_TEST_ARCH:?architecture is required}"
+# Validated here as well as on the host: an unrecognised phase must stop the run,
+# not fall through phase_builds_main_workspace's error branch into a skipped
+# dependency preflight and an empty build.
+case "$PHASE" in all|check|test|clippy|pingora) ;; *) printf 'unknown phase: %s\n' "$PHASE" >&2; exit 2 ;; esac
 OVERALL_STATUS=0
 LAST_CLEANUP_STATUS=0
 
@@ -12,7 +16,17 @@ rsync -a --delete --exclude=target --exclude=.git --exclude=.DS_Store \
     --exclude=/data --exclude=/runtime --exclude=/configs --exclude=/api_node.yaml \
     --exclude=.env --exclude='.env.*' /source/ /workspace/
 cd /workspace
-export CLANG=/usr/bin/clang LD=/usr/bin/ld.lld OBJCOPY=/usr/bin/llvm-objcopy
+# Shared with the host runner. Sourced here, at the top, so both the phase
+# predicate below and the private-dependency preflight see one definition.
+source /workspace/scripts/orbstack-protocol.sh
+# CLANG/OBJCOPY are read by crates that build C and eBPF objects (libxdp-sys,
+# libbpf-sys) and llvm versions are the right choice for both. Do NOT export LD:
+# libxdp-sys' build script runs `$LD -r -b binary --format=binary` to embed a raw
+# object and falls back to `ld` when LD is unset. ld.lld has no binary input
+# format and fails with "target emulation unknown", so exporting it here breaks
+# the build of every crate that links against libxdp. Rust's own linking still
+# uses lld through `-C link-arg=-fuse-ld=lld` below.
+export CLANG=/usr/bin/clang OBJCOPY=/usr/bin/llvm-objcopy
 case "$ARCH" in
     arm64) export RUSTFLAGS='-C target-cpu=generic -C link-arg=-fuse-ld=lld' ;;
     amd64) export RUSTFLAGS='-C target-cpu=x86-64-v2 -C link-arg=-fuse-ld=lld' ;;
@@ -62,7 +76,6 @@ run_verification() {
 }
 
 protocol_preflight() {
-    source /workspace/scripts/orbstack-protocol.sh || return
     configure_protocol_git /workspace/Cargo.lock /protocol.git || return
     # Resolve every dependency without compiling. A missing private object, registry
     # failure or changed lockfile stops all phases before nightly/xtask/eBPF work.
@@ -76,37 +89,52 @@ mbx doctor --json > /results/mbx-doctor.json
 python3 -I scripts/test-clean-build-artifacts.py > /results/cleanup-tests.log 2>&1
 python3 -I scripts/test-orbstack-orchestration.py > /results/orchestration-tests.log 2>&1
 # The independent pingora workspace has no private git dependency to resolve.
-if [ "$PHASE" != pingora ]; then
+if phase_builds_main_workspace "$PHASE"; then
     if ! run_build dependencies protocol_preflight; then
-        printf 'Dependency preflight failed; see /results/dependencies.log. No build phases started.\n' >&2
+        # run_build returns the command status when the command failed and the
+        # cleanup status otherwise, so the recorded status decides which of the
+        # two actually stopped us. Reporting a failed cleanup as a failed
+        # dependency resolution would send the reader to the wrong log.
+        if [ "$(< /results/dependencies-exit-status.txt)" != 0 ]; then
+            printf 'Dependency preflight failed; see /results/dependencies.log. No build phases started.\n' >&2
+        else
+            printf 'Cleanup after the dependency preflight failed; see /results/dependencies-cleanup.log. No build phases started.\n' >&2
+        fi
         exit 1
     fi
 fi
 
-# Resolve the existing dated nightly; stable 1.99 is never used for BPF.
-NIGHTLY="$(python3 -I -c 'import tomllib; print(tomllib.load(open("/workspace/crates/zelvik-edge-xdp-ebpf/rust-toolchain.toml", "rb"))["toolchain"]["channel"])')"
-rustup toolchain install "$NIGHTLY" --profile minimal -c rust-src -c rustc-dev \
-    > /results/ebpf-toolchain.log 2>&1
-if [ ! -x /tooling/bin/bpf-linker ] || \
-    ! /tooling/bin/bpf-linker --version | grep -q '0.11.1'; then
-    SYSROOT="$(rustup run "$NIGHTLY" rustc --print sysroot)"
-    LLVM_LIBRARY="$(find "$SYSROOT/lib" -name 'libLLVM.so.*' -print -quit)"
-    test -n "$LLVM_LIBRARY"
-    ln -sf "$LLVM_LIBRARY" "$SYSROOT/lib/libLLVM.so"
-    LLVM_PREFIX="$SYSROOT" rustup run "$NIGHTLY" cargo install bpf-linker \
-        --version 0.11.1 --locked --root /tooling > /results/bpf-linker-install.log 2>&1
-fi
+# The pingora phase compiles only pingora-main, a separate workspace whose
+# members are all upstream crates: no build script there, and no reference to
+# ZELVIK_EDGE_XDP_EBPF_SOURCE, the xtask or the nightly toolchain anywhere under
+# it. Installing the nightly and building bpf-linker from source is the most
+# expensive step of this run, so skip it when nothing will consume it.
+if phase_builds_main_workspace "$PHASE"; then
+    # Resolve the existing dated nightly; stable 1.99 is never used for BPF.
+    NIGHTLY="$(python3 -I -c 'import tomllib; print(tomllib.load(open("/workspace/crates/zelvik-edge-xdp-ebpf/rust-toolchain.toml", "rb"))["toolchain"]["channel"])')"
+    rustup toolchain install "$NIGHTLY" --profile minimal -c rust-src -c rustc-dev \
+        > /results/ebpf-toolchain.log 2>&1
+    if [ ! -x /tooling/bin/bpf-linker ] || \
+        ! /tooling/bin/bpf-linker --version | grep -q '0.11.1'; then
+        SYSROOT="$(rustup run "$NIGHTLY" rustc --print sysroot)"
+        LLVM_LIBRARY="$(find "$SYSROOT/lib" -name 'libLLVM.so.*' -print -quit)"
+        test -n "$LLVM_LIBRARY"
+        ln -sf "$LLVM_LIBRARY" "$SYSROOT/lib/libLLVM.so"
+        LLVM_PREFIX="$SYSROOT" rustup run "$NIGHTLY" cargo install bpf-linker \
+            --version 0.11.1 --locked --root /tooling > /results/bpf-linker-install.log 2>&1
+    fi
 
-# Copy xtask out before clearing its target, then invoke it without Cargo's
-# wrapper environment. Its nested nightly build cannot contend with a parent.
-run_build xtask bash -c \
-    'mbx build --locked --manifest-path xtask/Cargo.toml && install -m 0755 xtask/target/debug/xtask /tooling/zelvik-xtask'
-run_build ebpf env -u CARGO_TARGET_DIR -u RUSTFLAGS /tooling/zelvik-xtask build-ebpf
-export ZELVIK_EDGE_XDP_EBPF_SOURCE=/workspace/data/zelvik-edge-xdp-ebpf.o
-test -s "$ZELVIK_EDGE_XDP_EBPF_SOURCE"
-ZELVIK_EDGE_XDP_EBPF_SHA256="$(sha256sum "$ZELVIK_EDGE_XDP_EBPF_SOURCE")"
-export ZELVIK_EDGE_XDP_EBPF_SHA256="${ZELVIK_EDGE_XDP_EBPF_SHA256%% *}"
-printf '%s\n' "$ZELVIK_EDGE_XDP_EBPF_SHA256" > /results/ebpf-sha256.txt
+    # Copy xtask out before clearing its target, then invoke it without Cargo's
+    # wrapper environment. Its nested nightly build cannot contend with a parent.
+    run_build xtask bash -c \
+        'mbx build --locked --manifest-path xtask/Cargo.toml && install -m 0755 xtask/target/debug/xtask /tooling/zelvik-xtask'
+    run_build ebpf env -u CARGO_TARGET_DIR -u RUSTFLAGS /tooling/zelvik-xtask build-ebpf
+    export ZELVIK_EDGE_XDP_EBPF_SOURCE=/workspace/data/zelvik-edge-xdp-ebpf.o
+    test -s "$ZELVIK_EDGE_XDP_EBPF_SOURCE"
+    ZELVIK_EDGE_XDP_EBPF_SHA256="$(sha256sum "$ZELVIK_EDGE_XDP_EBPF_SOURCE")"
+    export ZELVIK_EDGE_XDP_EBPF_SHA256="${ZELVIK_EDGE_XDP_EBPF_SHA256%% *}"
+    printf '%s\n' "$ZELVIK_EDGE_XDP_EBPF_SHA256" > /results/ebpf-sha256.txt
+fi
 
 if [ "$PHASE" = all ] || [ "$PHASE" = check ]; then
     run_verification check mbx check --locked --all-targets
