@@ -35,17 +35,16 @@ nodeId: "your-node-id"
 secret: "your-node-secret"
 ```
 
-安装或升级到 GitHub 最新 Rust Release（自动检测现有部署：有则迁移/升级，无则全新安装；输出中英双语）：
+一键安装（由控制面 bootstrap 分发）：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | bash
+curl -fsSL <控制面地址>/install/edge.sh | sudo bash -s -- \
+    --endpoint <控制面地址> \
+    --node-id <节点 ID> \
+    --secret <注册凭据>
 ```
 
-全新安装的一条非交互命令示例（GeoLite2 库由本仓库 `geoip/` 提供，默认必装）：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Zelvik-Labs/edge/main/scripts/install-zelvik-edge.sh | bash -s -- --yes --api-endpoint http://127.0.0.1:8001 --node-id your-node-id --secret your-node-secret
-```
+控制台会在节点注册页面给出完整的可复制命令，其中 `<控制面地址>`、`<节点 ID>` 和 `<注册凭据>` 均已填入。详见 [部署与运维](docs/operations.md)。
 
 ## 文档
 
