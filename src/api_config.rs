@@ -746,11 +746,12 @@ kernelTuning:
         // The endpoint list is written by a loop, so only its header comes from a
         // format string; mirror the two-space list item the loop emits.
         let endpoints = install_printf_format(script, "rpc.endpoints:");
-        let instance =
-            install_printf_format(script, "instanceId:").replace("%s", "\"nd_0123456789\"");
-        let credential =
-            install_printf_format(script, "secret:").replace("%s", &format!("\"{secret}\""));
-        let comm = install_printf_format(script, "commMode:").replace("%s", "\"plaintext\"");
+        // The installer's format strings already carry the surrounding quotes
+        // (`instanceId: "%s"`), so the substituted values are bare. Quoting them
+        // here as well produces `""nd_…""` and the YAML no longer parses.
+        let instance = install_printf_format(script, "instanceId:").replace("%s", "nd_0123456789");
+        let credential = install_printf_format(script, "secret:").replace("%s", secret);
+        let comm = install_printf_format(script, "commMode:").replace("%s", "plaintext");
         format!("{endpoints}  - \"http://127.0.0.1:8001\"\n{instance}{credential}{comm}")
     }
 
