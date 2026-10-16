@@ -276,3 +276,210 @@ async fn inline_certificate_site_policy_matches_material_after_synthetic_id_assi
             .is_none()
     );
 }
+
+/// Console/control-plane replace rules are `{name, newValue}` only —
+/// `admin-console/src/features/sites/site-settings-fixtures.ts` and
+/// `tests/fixtures/control-plane/site-edge.json` never carry `oldValue`, so the field
+/// deserializes to `""`. An empty `oldValue` must mean "set the whole header value";
+/// `str::replace("", new)` would instead splice `new` between every character
+/// (`"value1"` -> `"newvnewanewlnewunewenew1new"`). These assertions check the *final
+/// header value* produced by every consumer of `replace_headers`, not just that the
+/// payload deserializes.
+#[test]
+fn replace_header_rule_value_semantics_for_console_payloads() {
+    use std::collections::HashMap;
+    use zelvik_edge::config_models::HTTPHeaderPolicy;
+    use zelvik_edge::headers::{
+        CompiledHeaderPolicy, RequestTemplateVars, apply_compiled_response_header_policy,
+        apply_response_header_policy, apply_response_header_policy_to_map,
+    };
+
+    let vars = RequestTemplateVars {
+        scheme: "https",
+        method: "GET",
+        host: "site.example",
+        request_uri: "/",
+        path: "/",
+        query: "",
+        port: "443",
+        referer: "",
+        referer_block: "",
+        user_agent: "contract-test",
+        content_type: "",
+        remote_addr: "198.51.100.7",
+    };
+
+    let policy = |rule: serde_json::Value| -> HTTPHeaderPolicy {
+        serde_json::from_value(serde_json::json!({ "isOn": true, "replaceHeaders": [rule] }))
+            .unwrap()
+    };
+
+    // Applies the policy through every `replace_headers` consumer (raw response path,
+    // compiled response path, legacy map path) and collects the resulting values. The
+    // three must agree; an `Option<String>` of `None` means the header is absent.
+    let apply_all = |policy: &HTTPHeaderPolicy, name: &str, initial: Option<&str>| {
+        let mut raw = pingora_http::ResponseHeader::build(200u16, None).unwrap();
+        let mut compiled = pingora_http::ResponseHeader::build(200u16, None).unwrap();
+        let mut map = HashMap::new();
+        if let Some(value) = initial {
+            raw.insert_header(name.to_string(), value).unwrap();
+            compiled.insert_header(name.to_string(), value).unwrap();
+            map.insert(name.to_lowercase(), value.to_string());
+        }
+        apply_response_header_policy(&mut raw, policy, &vars, 200, "GET", "site.example");
+        apply_compiled_response_header_policy(
+            &mut compiled,
+            &CompiledHeaderPolicy::compile(policy),
+            &vars,
+            200,
+            "GET",
+            "site.example",
+        );
+        apply_response_header_policy_to_map(&mut map, policy);
+        [
+            raw.headers
+                .get(name)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string),
+            compiled
+                .headers
+                .get(name)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string),
+            map.get(&name.to_lowercase()).cloned(),
+        ]
+    };
+
+    // (a) Missing `oldValue` (the only shape the console can produce): set the whole
+    //     value to `newValue`; no per-character splicing.
+    let no_old_value =
+        policy(serde_json::json!({ "isOn": true, "name": "X-Old", "newValue": "new" }));
+    for got in apply_all(&no_old_value, "X-Old", Some("value1")) {
+        assert_eq!(
+            got.as_deref(),
+            Some("new"),
+            "empty oldValue must set the whole header value"
+        );
+    }
+
+    // (b) A non-empty `oldValue` keeps substring-replace semantics.
+    let substring = policy(
+        serde_json::json!({ "isOn": true, "name": "X-Old", "oldValue": "o", "newValue": "0" }),
+    );
+    for got in apply_all(&substring, "X-Old", Some("foo")) {
+        assert_eq!(
+            got.as_deref(),
+            Some("f00"),
+            "non-empty oldValue must still substring-replace"
+        );
+    }
+
+    // (c) A replace rule never creates a header that was not already present.
+    for got in apply_all(&no_old_value, "X-Old", None) {
+        assert_eq!(got, None, "a replace rule must not add a missing header");
+    }
+}
+
+/// The request-side consumers must apply `requestHeaderPolicy.replaceHeaders` too. The
+/// fixture's rule (`site-edge.json`, `{"isOn":true,"name":"X-Old","newValue":"new"}`,
+/// no `oldValue`) previously reached upstream untouched, because the request policy only
+/// walked the delete/set/add arrays. These assertions check the *outgoing request*
+/// header value produced by both request-side consumers.
+#[test]
+fn request_header_replace_rule_from_fixture_sets_whole_value_upstream() {
+    use pingora_http::RequestHeader;
+    use zelvik_edge::config_models::HTTPHeaderPolicy;
+    use zelvik_edge::headers::{
+        CompiledHeaderPolicy, RequestTemplateVars,
+        apply_compiled_request_header_policy_to_upstream, apply_request_header_policy_to_upstream,
+    };
+
+    let node: NodeConfigPayload =
+        serde_json::from_str(include_str!("fixtures/control-plane/site-edge.json")).unwrap();
+    let policy = node.servers[0]
+        .web
+        .as_ref()
+        .unwrap()
+        .request_header_policy
+        .clone()
+        .unwrap();
+    let rule = policy
+        .replace_headers
+        .first()
+        .expect("fixture requestHeaderPolicy carries a replaceHeaders rule");
+    assert_eq!(rule.name, "X-Old");
+    assert_eq!(rule.old_value, "", "the fixture rule carries no oldValue");
+    assert_eq!(rule.new_value, "new");
+
+    let vars = RequestTemplateVars {
+        scheme: "https",
+        method: "GET",
+        host: "site.example",
+        request_uri: "/",
+        path: "/",
+        query: "",
+        port: "443",
+        referer: "",
+        referer_block: "",
+        user_agent: "contract-test",
+        content_type: "",
+        remote_addr: "198.51.100.7",
+    };
+
+    // Applies the policy through both request-side consumers (raw and compiled) and
+    // returns the value of `name` on the outgoing request (`None` = header absent).
+    let apply_request = |policy: &HTTPHeaderPolicy, name: &str, initial: Option<&str>| {
+        let mut raw = RequestHeader::build("GET", b"/", None).unwrap();
+        let mut compiled = RequestHeader::build("GET", b"/", None).unwrap();
+        if let Some(value) = initial {
+            raw.insert_header(name.to_string(), value).unwrap();
+            compiled.insert_header(name.to_string(), value).unwrap();
+        }
+        apply_request_header_policy_to_upstream(&mut raw, policy, &vars);
+        apply_compiled_request_header_policy_to_upstream(
+            &mut compiled,
+            &CompiledHeaderPolicy::compile(policy),
+            &vars,
+        );
+        [
+            raw.headers
+                .get(name)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string),
+            compiled
+                .headers
+                .get(name)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string),
+        ]
+    };
+
+    // (a) The fixture's rule has no `oldValue`: set the whole value to `newValue`.
+    for got in apply_request(&policy, "X-Old", Some("value1")) {
+        assert_eq!(
+            got.as_deref(),
+            Some("new"),
+            "requestHeaderPolicy.replaceHeaders must set the outgoing header to newValue"
+        );
+    }
+
+    // (b) A non-empty `oldValue` still substring-replaces on the request side.
+    let mut substring = policy.clone();
+    substring.replace_headers[0].old_value = "o".to_string();
+    substring.replace_headers[0].new_value = "0".to_string();
+    for got in apply_request(&substring, "X-Old", Some("foo")) {
+        assert_eq!(
+            got.as_deref(),
+            Some("f00"),
+            "non-empty oldValue must still substring-replace on the request side"
+        );
+    }
+
+    // (c) A replace rule never adds a request header that was not already present.
+    for got in apply_request(&policy, "X-Old", None) {
+        assert_eq!(
+            got, None,
+            "a replace rule must not add a missing request header"
+        );
+    }
+}
