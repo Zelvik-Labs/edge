@@ -93,7 +93,10 @@ they exist.
 | 构建产物清理（每次构建后必跑） | `bash scripts/clean-build-artifacts.sh` |
 | 本机 OrbStack Linux 检查与测试 | `bash scripts/test-orbstack.sh [arm64\|amd64] [all\|check\|test\|clippy\|pingora]` |
 
-OrbStack uses isolated, architecture-specific build/cache volumes; see
+OrbStack uses per-run, architecture-specific build/cache volumes and removes them
+on exit, including on failure and signals; `ZELVIK_EDGE_TEST_KEEP_CACHE=1` keeps
+only the two arch-keyed tooling volumes (`tools`, `rustup`) so bpf-linker and the
+dated nightly are not rebuilt from source every run. See
 [docs/orbstack-build-tests.md](docs/orbstack-build-tests.md). Clean only after
 build processes exit. The cleanup script checks Cargo locks and delegates managed
 target removal to mbx; never recursively delete an mbx target symlink destination.
