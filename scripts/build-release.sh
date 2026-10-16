@@ -172,17 +172,20 @@ Zelvik-Edge ${VERSION} — release package
 
 Installed by the control-plane bootstrap via:
   curl -fsSL <cp>/install/edge.sh | sudo bash -s -- \\
-    --endpoint <cp-url> --node-id <id> --secret <hex>
+    --endpoint <rpc-endpoint> --artifact-base <cp-url> \\
+    --node-id <id> --secret <secret>
 
 Or directly after extracting this archive:
-  sudo ./install.sh --endpoint <cp-url> --node-id <id> --secret <hex>
+  sudo ./install.sh --endpoint <rpc-endpoint> --node-id <id> --secret <secret>
 
 Layout installed by install.sh:
-  /usr/bin/zelvik-edge                   binary
-  /etc/zelvik/edge/secrets.env           node credentials (0600)
-  /etc/zelvik/edge/runtime.yaml          runtime config
+  /usr/bin/zelvik-edge                          binary
+  /var/lib/zelvik/edge/configs/api_node.yaml    node credentials and config
+                                                (0640 root:zelvik-edge; the only
+                                                config file the node reads)
   /etc/systemd/system/zelvik-edge.service
-  /var/lib/zelvik/edge/                  data / cache
+  /var/lib/zelvik/edge/                         node home: data / cache / geoip
+  /var/log/zelvik/                              logs
 
 Service management:
   systemctl status zelvik-edge
@@ -192,8 +195,7 @@ Uninstall:
   systemctl disable --now zelvik-edge
   rm -f /usr/bin/zelvik-edge \\
         /etc/systemd/system/zelvik-edge.service \\
-        /etc/zelvik/edge/secrets.env \\
-        /etc/zelvik/edge/runtime.yaml
+        /var/lib/zelvik/edge/configs/api_node.yaml
   # Remove data directory only if you want to discard cache and state:
   # rm -rf /var/lib/zelvik/edge /var/log/zelvik
   # userdel zelvik-edge
