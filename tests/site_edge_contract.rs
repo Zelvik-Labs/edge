@@ -483,3 +483,110 @@ fn request_header_replace_rule_from_fixture_sets_whole_value_upstream() {
         );
     }
 }
+
+/// Cross-repo contract guard: every JSON key the console / control-plane emit for a site
+/// server must be modelled by an Edge serde struct. serde silently drops a key that
+/// matches no field — no error, no warning, no log — so an unmodelled key looks like it
+/// was applied while never being consumed. That is exactly how `web.optimization.isOn`
+/// and the origin-level `proxyProtocol` / `requestHostType` / `requestHostExcludingPort`
+/// drifted (admin-console#9).
+///
+/// The check is a round-trip: deserialize the fixture into `NodeConfigPayload`, serialize
+/// it back, and require the fixture's key set to be a *subset* of the round-tripped key
+/// set at every path. A fixture key with no counterpart in the round-trip is one that no
+/// field claims; the model can only re-emit a key it deserialized. Fields the fixture
+/// omits but the model defaults (e.g. `telemetry`) only ever appear in the round-trip, so
+/// the subset direction is the correct one.
+///
+/// Free-form JSON subtrees (fields typed `serde_json::Value` / `HashMap<String, Value>`)
+/// hold keys Edge deliberately does not model — they are configuration *data*, not a
+/// schema, and they round-trip verbatim. They are listed in `FREE_JSON_SUBTREES` and left
+/// unvisited, so this guard never demands a struct field for their contents.
+#[test]
+fn fixture_keys_are_all_modelled_by_edge_config() {
+    // Root-relative paths whose *contents* are opaque free-form JSON — intentionally not
+    // modelled, consumed by the feature that owns the subtree:
+    //   - `reverseProxy.scheduling.options`: `SchedulingConfig.options: Value`, carries the
+    //     scheduling algorithm's own parameters (e.g. `{hashKey}`).
+    //   - `web.auth.policyRefs[].authPolicy.params`: `AuthPolicyConfig.params: Value`, the
+    //     per-auth-type parameter bag (users, realm, …).
+    //   - `web.cache.cachePolicy.options`: `WebCacheConfig.options: Option<HashMap<String,
+    //     Value>>`, cache tuning knobs interpreted by name.
+    //   - `web.firewallPolicy.inbound.groups[].sets[].actions[].options`:
+    //     `WAFActionConfig.options: Value`, per-action payload (`{status, body, …}`).
+    const FREE_JSON_SUBTREES: &[&str] = &[
+        "/servers[]/reverseProxy/scheduling/options",
+        "/servers[]/web/auth/policyRefs[]/authPolicy/params",
+        "/servers[]/web/cache/cachePolicy/options",
+        "/servers[]/web/firewallPolicy/inbound/groups[]/sets[]/actions[]/options",
+    ];
+
+    // Keys this guard still flags but that admin-console#9 did NOT remove. The control-plane
+    // cache projection writes `cachePolicy.enabled` from the cache cluster policy's `Enabled`
+    // (`internal/gcloud/policies.go`). Edge models the equivalent *site* gate as
+    // `web.cache.isOn` (`WebCacheConfig.is_on`, set from the same `row.Enabled`) and drops
+    // this duplicate on every payload path — both the site `cachePolicy` and the node
+    // `httpCachePolicies` use `HTTPCachePolicy`, which has no `enabled` field. Kept and
+    // reported rather than deleted: removing it touches control-plane cache wiring, and
+    // whether Edge should honour a *disabled* cluster policy is a separate question. Every
+    // entry here must still be observed below, so a stale entry fails loudly.
+    const REPORTED_UNMODELLED: &[&str] = &["/servers[]/web/cache/cachePolicy/enabled"];
+
+    let raw = include_str!("fixtures/control-plane/site-edge.json");
+    let original: serde_json::Value = serde_json::from_str(raw).unwrap();
+    let node: NodeConfigPayload = serde_json::from_str(raw).unwrap();
+    let round = serde_json::to_value(&node).unwrap();
+
+    let mut missing = Vec::new();
+    collect_unmodelled_keys(&original, &round, "", FREE_JSON_SUBTREES, &mut missing);
+    for reported in REPORTED_UNMODELLED {
+        assert!(
+            missing.iter().any(|path| path == reported),
+            "stale allowlist entry: {reported} is now modelled by Edge — drop it"
+        );
+    }
+    let unexpected: Vec<&String> = missing
+        .iter()
+        .filter(|path| !REPORTED_UNMODELLED.contains(&path.as_str()))
+        .collect();
+    assert!(
+        unexpected.is_empty(),
+        "fixture carries keys Edge does not model; serde drops them silently: {unexpected:#?}"
+    );
+}
+
+fn collect_unmodelled_keys(
+    original: &serde_json::Value,
+    round: &serde_json::Value,
+    path: &str,
+    free_json: &[&str],
+    out: &mut Vec<String>,
+) {
+    match original {
+        serde_json::Value::Object(map) => {
+            for (key, value) in map {
+                let child = format!("{path}/{key}");
+                if free_json.contains(&child.as_str()) {
+                    continue; // opaque subtree: contents are data, not a schema
+                }
+                match round.get(key) {
+                    Some(round_value) => {
+                        collect_unmodelled_keys(value, round_value, &child, free_json, out);
+                    }
+                    None => out.push(child),
+                }
+            }
+        }
+        serde_json::Value::Array(items) => {
+            if let serde_json::Value::Array(round_items) = round
+                && round_items.len() == items.len()
+            {
+                let child = format!("{path}[]");
+                for (value, round_value) in items.iter().zip(round_items) {
+                    collect_unmodelled_keys(value, round_value, &child, free_json, out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
