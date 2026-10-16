@@ -43,11 +43,31 @@ AMD64 在 Apple Silicon 上通过 OrbStack 仿真运行，耗时不能用于推�
 复制到独立测试工作区卷；宿主的 target 符号链接、配置、运行目录、
 本地数据和 Git 元数据不会复制进去。测试不开放宿主监听端口。
 
+私有 `zelvik-suite` 依赖先在宿主预检：宿主 Git 必须能读取
+`https://github.com/Zelvik-Labs/protocol`（例如先运行 `gh auth setup-git`）。
+脚本从 `Cargo.lock` 读取完整 commit SHA，抓取到临时 bare 仓库，
+并为锁定的 tag 建立指向该 commit 的本地引用；上游 tag 移动不会改变依赖。
+抓取失败立即停止，尚未构建 Docker 镜像。诊断见 `protocol-fetch.log`。
+`pingora` 阶段只构建独立的 `pingora-main` workspace，不解析私有依赖，
+因此跳过预检、不挂载该仓库。
+
+容器只读挂载这个临时仓库，通过仅作用于本进程及子进程的 Git URL
+重写和 Cargo CLI Git 后端读取对象；不传 token、不挂载宿主 Git 配置或
+Cargo Git 缓存，不改 `Cargo.toml` / `Cargo.lock` 的依赖身份。
+容器在安装 nightly、构建 xtask/eBPF 前执行 `cargo metadata --locked`；
+失败时所有编译阶段停止，诊断见 `dependencies.log`，成功的完整依赖图见
+`dependency-metadata.json`。公共 registry 依赖仍需网络或容器 registry 缓存。
+退出（包括失败或 INT/TERM）时删除临时仓库、本次容器、镜像与缓存卷；
+不按容器名误删其他运行。若容器删除本身失败，保留其只读 bind 与资源
+并返回非零，给出容器 ID，由人工处理后重跑，避免删掉仍在使用的 bind。
+
 ## 缓存与动态清理
 
-每种架构有独立的 `zelvik-edge-test-{workspace,registry,rustup,tools,mbx}-<arch>`
-卷。macOS 的 Cargo/mbx 目录不挂载到 Linux；ARM64 与 AMD64 不共享
-原生链接对象。
+每次运行的 `zelvik-edge-test-{workspace,registry,rustup,tools,mbx}-<arch>-<run>`
+卷和 `zelvik-edge-orb-test:1.99.0-<arch>-<run>` 镜像都以运行 ID 命名，
+结束（含失败与信号）时删除；宿主不留持久 Cargo/mbx 缓存，代价是每次
+重新下载 registry 与工具链。macOS 的 Cargo/mbx 目录不挂载到 Linux；
+ARM64 与 AMD64 不共享原生链接对象，运行之间也不复用。
 
 容器默认预算：mbx action store 3 GiB、managed targets 5 GiB、incremental
 1 GiB、合计 8 GiB。预算是逻辑字节的清理目标，不是实时磁盘配额；
@@ -94,7 +114,9 @@ mbx 管理的符号链接通过 `mbx clean <workspace>` 处理，普通 target
 集成测试、correctness/suspicious Clippy 门禁，以及启用 rustls 的
 关键 Pingora crate 检查与库测试。独立验证阶段发生失败时继续其余阶段，
 每个阶段单独记录退出状态，最终仍返回非零；eBPF 等构建前置步骤或清理
-失败则立即停止。脚本的控制流自测不代表已经在 Docker 中执行验证。
+失败则立即停止。脚本的离线自测使用本地 Git/Cargo 小型 fixture 验证锁定
+revision 解析，并用 Docker stub 验证失败与信号清理；不执行编译、不连接
+GitHub、不创建容器、镜像或缓存卷，不能替代真实 Docker/Linux 验证。
 
 以下不能从编译或默认测试结果推断：
 
