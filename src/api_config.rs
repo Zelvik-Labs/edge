@@ -375,8 +375,7 @@ impl ApiConfig {
         } else {
             self.comm_mode.trim()
         };
-        zelvik_suite::CommMode::parse(raw)
-            .map_err(|e| anyhow::anyhow!("commMode is invalid: {e}"))
+        zelvik_suite::CommMode::parse(raw).map_err(|e| anyhow::anyhow!("commMode is invalid: {e}"))
     }
 
     /// The upstream gcloud numeric node id (0 when unset). Never an identity.
@@ -399,9 +398,21 @@ impl ApiConfig {
         );
         cfg.comm_mode = self.comm_mode()?;
         cfg.tls = zelvik_suite::channel::TlsConfig {
-            ca_file: self.rpc_tls.ca_file.as_ref().map(|p| p.display().to_string()),
-            cert_file: self.rpc_tls.cert_file.as_ref().map(|p| p.display().to_string()),
-            key_file: self.rpc_tls.key_file.as_ref().map(|p| p.display().to_string()),
+            ca_file: self
+                .rpc_tls
+                .ca_file
+                .as_ref()
+                .map(|p| p.display().to_string()),
+            cert_file: self
+                .rpc_tls
+                .cert_file
+                .as_ref()
+                .map(|p| p.display().to_string()),
+            key_file: self
+                .rpc_tls
+                .key_file
+                .as_ref()
+                .map(|p| p.display().to_string()),
             domain_name: self.rpc_tls.server_name.clone(),
         };
         cfg.validate()
@@ -412,8 +423,12 @@ impl ApiConfig {
     /// The credential interceptor every control-plane client stub installs. It
     /// injects the four `zelvik-*` metadata keys and re-mints the credential for
     /// each RPC; no call site touches metadata by hand.
-    pub fn credential_interceptor(&self) -> anyhow::Result<zelvik_suite::channel::CredentialInterceptor> {
-        Ok(zelvik_suite::channel::CredentialInterceptor::new(&self.channel_config()?))
+    pub fn credential_interceptor(
+        &self,
+    ) -> anyhow::Result<zelvik_suite::channel::CredentialInterceptor> {
+        Ok(zelvik_suite::channel::CredentialInterceptor::new(
+            &self.channel_config()?,
+        ))
     }
 
     pub fn default_paths() -> Vec<PathBuf> {
@@ -503,13 +518,97 @@ impl ApiConfig {
         Ok(())
     }
 
+    /// Update only `rpc.endpoints` in the existing `api_node.yaml`, preserving
+    /// operator-owned and unknown keys (for example the `xdp` section) that the
+    /// typed [`ApiConfig`] does not model. Serializing the typed struct over
+    /// the file would silently drop them.
+    pub fn write_rpc_endpoints_default(&self, endpoints: &[String]) -> anyhow::Result<()> {
+        let endpoints = validate_rpc_endpoints(endpoints.to_vec())?;
+        let node_paths = crate::paths::NodePaths::current();
+        fs::create_dir_all(node_paths.config_dir())?;
+        let target = node_paths.api_config_file();
+        let mut root = match fs::read(&target) {
+            Ok(content) => match serde_yaml::from_slice::<serde_yaml::Value>(&content)? {
+                serde_yaml::Value::Mapping(mapping) => mapping,
+                _ => anyhow::bail!("api_node.yaml root is not a YAML mapping"),
+            },
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                let mut config = self.clone();
+                config.rpc_endpoints = endpoints;
+                return config.write_default();
+            }
+            Err(err) => return Err(err.into()),
+        };
+        let value = serde_yaml::Value::Sequence(
+            endpoints
+                .into_iter()
+                .map(serde_yaml::Value::String)
+                .collect(),
+        );
+        root.insert(
+            serde_yaml::Value::String("rpc.endpoints".to_string()),
+            value,
+        );
+        let content = serde_yaml::to_string(&serde_yaml::Value::Mapping(root))?;
+        fs::write(target, content)?;
+        Ok(())
+    }
+
+    /// The current RPC candidate membership. A runtime override — even an
+    /// explicitly empty one — is authoritative; the local `rpc.endpoints` list
+    /// is only the bootstrap seed used when no discovery result exists. A
+    /// poisoned lock fails closed rather than falling back to the seed.
     pub fn effective_rpc_endpoints(&self) -> Vec<String> {
-        RUNTIME_RPC_ENDPOINTS
-            .read()
-            .ok()
-            .and_then(|guard| guard.clone())
-            .filter(|endpoints| !endpoints.is_empty())
-            .unwrap_or_else(|| self.rpc_endpoints.clone())
+        match RUNTIME_RPC_ENDPOINTS.read() {
+            Ok(guard) => guard.clone().unwrap_or_else(|| self.rpc_endpoints.clone()),
+            Err(_) => Vec::new(),
+        }
+    }
+
+    /// Endpoints used only by the discovery/control bootstrap to ask the
+    /// control plane for the current aggregate. When the authoritative
+    /// membership is empty (or has no scheme compatible with this node), the
+    /// local `rpc.endpoints` seed is used so recovery does not require a
+    /// restart. Data-plane callers must keep using
+    /// [`Self::effective_rpc_endpoints`], which remains fail-closed.
+    pub fn discovery_rpc_endpoints(&self) -> Vec<String> {
+        let mode = match self.comm_mode() {
+            Ok(mode) => mode,
+            Err(err) => {
+                tracing::warn!("cannot resolve commMode for API node discovery: {}", err);
+                return Vec::new();
+            }
+        };
+        let membership = self.effective_rpc_endpoints();
+        let membership_was_empty = membership.is_empty();
+        let compatible_membership = membership
+            .into_iter()
+            .filter(|endpoint| rpc_endpoint_matches_comm_mode(endpoint, mode))
+            .collect::<Vec<_>>();
+        if !compatible_membership.is_empty() {
+            return compatible_membership;
+        }
+
+        let seed = self
+            .rpc_endpoints
+            .iter()
+            .filter(|endpoint| rpc_endpoint_matches_comm_mode(endpoint, mode))
+            .cloned()
+            .collect::<Vec<_>>();
+        if seed.is_empty() {
+            tracing::warn!(
+                "no local rpc.endpoints are compatible with commMode; API node discovery cannot connect"
+            );
+        } else if membership_was_empty {
+            tracing::debug!(
+                "RPC membership is empty; using the local rpc.endpoints seed for API node discovery"
+            );
+        } else {
+            tracing::warn!(
+                "RPC membership has no endpoint compatible with commMode; using the local rpc.endpoints seed for discovery"
+            );
+        }
+        seed
     }
 
     /// HTTP(S) base URLs serving node upgrade packages. The admin pushes the
@@ -533,15 +632,58 @@ impl ApiConfig {
         }
     }
 
+    /// Replace the runtime RPC candidate membership. Empty is a valid,
+    /// authoritative state: it means the control plane advertised no enabled
+    /// API node members, so callers must fail closed instead of falling back
+    /// to a stale list.
     pub fn set_runtime_rpc_endpoints(endpoints: Vec<String>) -> anyhow::Result<()> {
         let endpoints = validate_rpc_endpoints(endpoints)?;
-        if endpoints.is_empty() {
-            anyhow::bail!("no valid RPC endpoints supplied");
-        }
-        if let Ok(mut guard) = RUNTIME_RPC_ENDPOINTS.write() {
-            *guard = Some(endpoints);
+        let mut guard = RUNTIME_RPC_ENDPOINTS
+            .write()
+            .map_err(|_| anyhow::anyhow!("runtime RPC endpoint state is poisoned"))?;
+        *guard = Some(endpoints);
+        Ok(())
+    }
+
+    /// Reorder the current membership so `endpoint` is preferred. The endpoint
+    /// must already be a member: this is a switch, not an insert, so a stale
+    /// `changeAPINode` command can never resurrect a removed address. The
+    /// membership is re-read under the write lock, so a concurrent discovery
+    /// update cannot be overwritten with an older list.
+    pub fn prefer_runtime_rpc_endpoint(fallback: &[String], endpoint: &str) -> anyhow::Result<()> {
+        let endpoint = validate_rpc_endpoint(endpoint)?;
+        let mut guard = RUNTIME_RPC_ENDPOINTS
+            .write()
+            .map_err(|_| anyhow::anyhow!("runtime RPC endpoint state is poisoned"))?;
+        let endpoints = guard.get_or_insert_with(|| fallback.to_vec());
+        let position = endpoints
+            .iter()
+            .position(|candidate| candidate == &endpoint)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "endpoint {endpoint:?} is not part of the configured API node membership"
+                )
+            })?;
+        if position != 0 {
+            let endpoint = endpoints.remove(position);
+            endpoints.insert(0, endpoint);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn snapshot_runtime_rpc_endpoints() -> Option<Vec<String>> {
+    RUNTIME_RPC_ENDPOINTS
+        .read()
+        .ok()
+        .and_then(|guard| guard.clone())
+}
+
+#[cfg(test)]
+pub(crate) fn restore_runtime_rpc_endpoints(snapshot: Option<Vec<String>>) {
+    if let Ok(mut guard) = RUNTIME_RPC_ENDPOINTS.write() {
+        *guard = snapshot;
     }
 }
 
@@ -585,6 +727,26 @@ pub fn validate_rpc_endpoints(endpoints: Vec<String>) -> anyhow::Result<Vec<Stri
         }
     }
     Ok(normalized)
+}
+
+/// Whether a URI scheme is compatible with the node's registered transport
+/// mode. Plaintext nodes use `http`; TLS and mTLS nodes use `https`.
+pub fn rpc_scheme_matches_comm_mode(scheme: &str, mode: zelvik_suite::CommMode) -> bool {
+    match mode {
+        zelvik_suite::CommMode::Plaintext => scheme == "http",
+        zelvik_suite::CommMode::Tls | zelvik_suite::CommMode::Mtls => scheme == "https",
+    }
+}
+
+/// Whether a normalized RPC endpoint's scheme matches the node's transport
+/// mode. This is the discovery-time check; the transport layer enforces the
+/// same rule before sending credentials.
+pub fn rpc_endpoint_matches_comm_mode(endpoint: &str, mode: zelvik_suite::CommMode) -> bool {
+    let scheme = endpoint
+        .split_once("://")
+        .map(|(scheme, _)| scheme)
+        .unwrap_or_default();
+    rpc_scheme_matches_comm_mode(scheme, mode)
 }
 
 #[cfg(test)]
@@ -775,10 +937,8 @@ kernelTuning:
 
     impl ApiLoadGlobalsGuard {
         fn new() -> Self {
-            let home = std::env::temp_dir().join(format!(
-                "zelvik-load-globals-{}",
-                uuid::Uuid::new_v4()
-            ));
+            let home =
+                std::env::temp_dir().join(format!("zelvik-load-globals-{}", uuid::Uuid::new_v4()));
             fs::create_dir_all(home.join("configs")).unwrap();
             let saved_home = std::env::var_os("ZELVIK_EDGE_HOME");
             unsafe {
@@ -834,7 +994,8 @@ kernelTuning:
         );
 
         let yaml = fresh_install_yaml_from_script(script);
-        let dir = std::env::temp_dir().join(format!("zelvik-install-yaml-{}", uuid::Uuid::new_v4()));
+        let dir =
+            std::env::temp_dir().join(format!("zelvik-install-yaml-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("api_node.yaml");
         fs::write(&path, &yaml).unwrap();
@@ -1053,7 +1214,8 @@ pub fn reset_release_signing_key() {
 /// Serializes every test that mutates the process-global pinned key slot —
 /// lock in the test fn before install/reset, hold until done.
 #[cfg(test)]
-pub(crate) static RELEASE_SIGNING_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+pub(crate) static RELEASE_SIGNING_TEST_LOCK: tokio::sync::Mutex<()> =
+    tokio::sync::Mutex::const_new(());
 
 /// verify_release_signature checks `signature_digest` as an Ed25519 signature
 /// over `release_id` against the pinned platform key.
@@ -1251,6 +1413,9 @@ mod update_endpoint_tests {
     // process-global push override, so splitting into parallel tests would race.
     #[test]
     fn update_endpoints_follow_pushed_value_then_rpc_fallback() {
+        // The fallback reads the process-global RPC membership; serialize with
+        // every other test that mutates it.
+        let _guard = RELEASE_SIGNING_TEST_LOCK.blocking_lock();
         let config: ApiConfig = serde_yaml::from_str(
             r#"
 rpc.endpoints:
@@ -1318,7 +1483,10 @@ gcloudNodeId: "1"
         // Stable across calls and across ApiConfig instances built from the same
         // secret (no per-process salt, no time dependence).
         assert_eq!(config.challenge_key().unwrap(), key);
-        assert_eq!(config_with_secret(DUMMY_SECRET).challenge_key().unwrap(), key);
+        assert_eq!(
+            config_with_secret(DUMMY_SECRET).challenge_key().unwrap(),
+            key
+        );
         // The derived key is not the root secret: the implicit reuse is gone.
         assert_ne!(
             key.as_slice(),
@@ -1328,11 +1496,10 @@ gcloudNodeId: "1"
 
     #[test]
     fn rotated_secret_rotates_the_challenge_key() {
-        let rotated = config_with_secret(
-            "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100",
-        )
-        .challenge_key()
-        .unwrap();
+        let rotated =
+            config_with_secret("ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100")
+                .challenge_key()
+                .unwrap();
         assert_eq!(
             hex::encode(rotated),
             "7cd775052ff93fe1275bdf3f9342adc1f09af4d85c0a819d777636c87d1e7d92"
@@ -1352,6 +1519,196 @@ gcloudNodeId: "1"
         assert!(
             error.to_string().contains("32-byte hex credential key"),
             "unexpected error: {error}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod runtime_rpc_endpoint_tests {
+    use super::*;
+
+    /// Serializes tests that mutate the process-global runtime membership and
+    /// restores the previous value even when an assertion panics.
+    struct RuntimeRpcEndpointsGuard {
+        _lock: tokio::sync::MutexGuard<'static, ()>,
+        saved: Option<Vec<String>>,
+    }
+
+    impl RuntimeRpcEndpointsGuard {
+        fn new() -> Self {
+            let lock = RELEASE_SIGNING_TEST_LOCK.blocking_lock();
+            let saved = RUNTIME_RPC_ENDPOINTS
+                .read()
+                .ok()
+                .and_then(|guard| guard.clone());
+            Self { _lock: lock, saved }
+        }
+    }
+
+    impl Drop for RuntimeRpcEndpointsGuard {
+        fn drop(&mut self) {
+            if let Ok(mut guard) = RUNTIME_RPC_ENDPOINTS.write() {
+                *guard = self.saved.clone();
+            }
+        }
+    }
+
+    fn config_with_endpoints(endpoints: &[&str]) -> ApiConfig {
+        let list = endpoints
+            .iter()
+            .map(|endpoint| format!("  - \"{endpoint}\"\n"))
+            .collect::<String>();
+        serde_yaml::from_str(&format!(
+            r#"rpc.endpoints:
+{list}instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+gcloudNodeId: "1"
+"#
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn validate_rpc_endpoints_preserves_the_complete_ordered_list() {
+        let endpoints = vec![
+            " https://api-b.example.com/ ".to_string(),
+            "https://api-a.example.com".to_string(),
+            "https://api-b.example.com".to_string(),
+        ];
+
+        assert_eq!(
+            validate_rpc_endpoints(endpoints).unwrap(),
+            vec!["https://api-b.example.com", "https://api-a.example.com"]
+        );
+    }
+
+    /// Negative control: the previous implementation filtered out an empty
+    /// runtime list and fell back to the bootstrap seed, so a discovery result
+    /// of "no members" could never take effect.
+    #[test]
+    fn empty_runtime_membership_does_not_fall_back_to_bootstrap() {
+        let _guard = RuntimeRpcEndpointsGuard::new();
+        let config = config_with_endpoints(&["http://127.0.0.1:8001", "http://127.0.0.1:8002"]);
+
+        ApiConfig::set_runtime_rpc_endpoints(Vec::new()).unwrap();
+
+        assert!(config.effective_rpc_endpoints().is_empty());
+    }
+
+    #[test]
+    fn replacing_runtime_membership_drops_explicitly_removed_candidates() {
+        let _guard = RuntimeRpcEndpointsGuard::new();
+        let config = config_with_endpoints(&["http://127.0.0.1:8001", "http://127.0.0.1:8002"]);
+        ApiConfig::set_runtime_rpc_endpoints(vec![
+            "http://127.0.0.1:8001".to_string(),
+            "http://127.0.0.1:8002".to_string(),
+        ])
+        .unwrap();
+
+        ApiConfig::set_runtime_rpc_endpoints(vec!["http://127.0.0.1:8002".to_string()]).unwrap();
+
+        assert_eq!(
+            config.effective_rpc_endpoints(),
+            vec!["http://127.0.0.1:8002".to_string()]
+        );
+    }
+
+    #[test]
+    fn prefer_runtime_endpoint_only_reorders_existing_members() {
+        let _guard = RuntimeRpcEndpointsGuard::new();
+        let config = config_with_endpoints(&["http://127.0.0.1:8001", "http://127.0.0.1:8002"]);
+        ApiConfig::set_runtime_rpc_endpoints(vec![
+            "http://127.0.0.1:8001".to_string(),
+            "http://127.0.0.1:8002".to_string(),
+        ])
+        .unwrap();
+
+        ApiConfig::prefer_runtime_rpc_endpoint(&config.rpc_endpoints, "http://127.0.0.1:8002")
+            .unwrap();
+        assert_eq!(
+            config.effective_rpc_endpoints(),
+            vec![
+                "http://127.0.0.1:8002".to_string(),
+                "http://127.0.0.1:8001".to_string()
+            ]
+        );
+
+        let error =
+            ApiConfig::prefer_runtime_rpc_endpoint(&config.rpc_endpoints, "http://127.0.0.1:8003")
+                .expect_err("an unknown endpoint must not be inserted");
+        assert!(
+            error
+                .to_string()
+                .contains("not part of the configured API node membership")
+        );
+        assert_eq!(
+            config.effective_rpc_endpoints(),
+            vec![
+                "http://127.0.0.1:8002".to_string(),
+                "http://127.0.0.1:8001".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn prefer_runtime_endpoint_seeds_from_bootstrap_without_adding_addresses() {
+        let _guard = RuntimeRpcEndpointsGuard::new();
+        let config = config_with_endpoints(&["http://127.0.0.1:8001", "http://127.0.0.1:8002"]);
+        if let Ok(mut guard) = RUNTIME_RPC_ENDPOINTS.write() {
+            *guard = None;
+        }
+
+        ApiConfig::prefer_runtime_rpc_endpoint(&config.rpc_endpoints, "http://127.0.0.1:8002")
+            .unwrap();
+        assert_eq!(
+            config.effective_rpc_endpoints(),
+            vec![
+                "http://127.0.0.1:8002".to_string(),
+                "http://127.0.0.1:8001".to_string()
+            ]
+        );
+
+        assert!(
+            ApiConfig::prefer_runtime_rpc_endpoint(&config.rpc_endpoints, "http://127.0.0.1:8003")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn discovery_endpoints_use_seed_only_when_membership_is_empty() {
+        let _guard = RuntimeRpcEndpointsGuard::new();
+        let config = config_with_endpoints(&["http://127.0.0.1:8001"]);
+
+        ApiConfig::set_runtime_rpc_endpoints(Vec::new()).unwrap();
+        assert_eq!(
+            config.discovery_rpc_endpoints(),
+            vec!["http://127.0.0.1:8001".to_string()]
+        );
+        assert!(config.effective_rpc_endpoints().is_empty());
+
+        ApiConfig::set_runtime_rpc_endpoints(vec!["http://127.0.0.1:8002".to_string()]).unwrap();
+        assert_eq!(
+            config.discovery_rpc_endpoints(),
+            vec!["http://127.0.0.1:8002".to_string()]
+        );
+    }
+
+    #[test]
+    fn discovery_endpoints_filter_incompatible_schemes_and_use_seed() {
+        let _guard = RuntimeRpcEndpointsGuard::new();
+        let config = config_with_endpoints(&["http://127.0.0.1:8001"]);
+
+        // The node is plaintext (no commMode in the fixture); an https
+        // membership is unusable for it, so discovery falls back to the seed
+        // while the data-plane accessor still reports the raw membership.
+        ApiConfig::set_runtime_rpc_endpoints(vec!["https://api.example.com".to_string()]).unwrap();
+        assert_eq!(
+            config.effective_rpc_endpoints(),
+            vec!["https://api.example.com".to_string()]
+        );
+        assert_eq!(
+            config.discovery_rpc_endpoints(),
+            vec!["http://127.0.0.1:8001".to_string()]
         );
     }
 }
