@@ -195,6 +195,8 @@ struct ApiEndpointDiscovery {
     advertised: usize,
     /// Advertised addresses rejected by endpoint validation.
     invalid: Vec<String>,
+    /// Advertised addresses whose scheme does not match this node's commMode.
+    incompatible: Vec<String>,
 }
 
 /// Build the durable candidate membership from the control-plane aggregate.
@@ -202,31 +204,48 @@ struct ApiEndpointDiscovery {
 /// `isOn` is the configured lifecycle state; heartbeat/ready state is
 /// deliberately not consulted. A transiently offline API node therefore stays
 /// in the membership, while disabling a node or deleting its address removes
-/// it. Invalid addresses are reported separately so an all-invalid response
-/// cannot be mistaken for an authoritative empty membership.
-fn discover_api_endpoints(nodes: &[pb::ApiNode]) -> ApiEndpointDiscovery {
+/// it. Invalid addresses and addresses whose scheme does not match the node's
+/// registered transport mode are reported separately so an all-invalid
+/// response cannot be mistaken for an authoritative empty membership.
+fn discover_api_endpoints(
+    nodes: &[pb::ApiNode],
+    comm_mode: zelvik_suite::CommMode,
+) -> ApiEndpointDiscovery {
     let mut endpoints = Vec::new();
     let mut advertised = 0usize;
     let mut invalid = Vec::new();
+    let mut incompatible = Vec::new();
     for node in nodes {
         if !node.is_on {
             continue;
         }
         for addr in &node.access_addrs {
             advertised += 1;
-            match crate::api_config::validate_rpc_endpoint(addr) {
-                Ok(endpoint) => {
-                    if !endpoints.contains(&endpoint) {
-                        endpoints.push(endpoint);
-                    }
-                }
+            let endpoint = match crate::api_config::validate_rpc_endpoint(addr) {
+                Ok(endpoint) => endpoint,
                 Err(err) => {
                     warn!(
                         "Ignoring invalid discovered API endpoint {:?}: {}",
                         addr, err
                     );
                     invalid.push(addr.clone());
+                    continue;
                 }
+            };
+            if !crate::api_config::rpc_endpoint_matches_comm_mode(&endpoint, comm_mode) {
+                // Never persist a candidate that would force this node to speak
+                // a different transport mode. This is the last local check;
+                // the control-plane aggregate is filtered by commMode too.
+                warn!(
+                    "Ignoring discovered API endpoint {:?}: scheme does not match commMode {:?}",
+                    addr,
+                    comm_mode.as_str()
+                );
+                incompatible.push(addr.clone());
+                continue;
+            }
+            if !endpoints.contains(&endpoint) {
+                endpoints.push(endpoint);
             }
         }
     }
@@ -234,6 +253,7 @@ fn discover_api_endpoints(nodes: &[pb::ApiNode]) -> ApiEndpointDiscovery {
         endpoints,
         advertised,
         invalid,
+        incompatible,
     }
 }
 
@@ -242,7 +262,10 @@ enum ApiMembershipUpdate {
     Unchanged,
     Replace(Vec<String>),
     Clear,
-    RejectInvalid,
+    RejectInvalid {
+        invalid: Vec<String>,
+        incompatible: Vec<String>,
+    },
 }
 
 fn plan_api_membership_update(
@@ -255,9 +278,13 @@ fn plan_api_membership_update(
     if discovery.endpoints.is_empty() {
         if discovery.advertised > 0 {
             // A successful response whose advertised addresses are all invalid
-            // is malformed input, not an authoritative empty membership. Keep
-            // the working set instead of wiping it on a typo.
-            return ApiMembershipUpdate::RejectInvalid;
+            // or incompatible is malformed input for this node, not an
+            // authoritative empty membership. Keep the working set instead of
+            // wiping it on a typo or a transport-mode mismatch.
+            return ApiMembershipUpdate::RejectInvalid {
+                invalid: discovery.invalid.clone(),
+                incompatible: discovery.incompatible.clone(),
+            };
         }
         return ApiMembershipUpdate::Clear;
     }
@@ -285,15 +312,21 @@ async fn observe_endpoint_connectivity(
 async fn apply_api_membership_update(api_config: &ApiConfig, update: ApiMembershipUpdate) -> bool {
     match update {
         ApiMembershipUpdate::Unchanged => true,
-        ApiMembershipUpdate::RejectInvalid => {
+        ApiMembershipUpdate::RejectInvalid {
+            invalid,
+            incompatible,
+        } => {
             report_node_log_with_context(
                 api_config,
                 "error",
                 "API_NODE",
-                "rejected discovered API node endpoints: every advertised address is invalid",
+                "rejected discovered API node endpoints: every advertised address is invalid or incompatible with commMode",
                 None,
                 Some("apiNodeEndpointRejected"),
-                None,
+                Some(serde_json::json!({
+                    "invalid": invalid,
+                    "incompatible": incompatible,
+                })),
             )
             .await;
             false
@@ -356,12 +389,11 @@ async fn apply_api_membership_update(api_config: &ApiConfig, update: ApiMembersh
                 .await;
             }
 
-            // Persist the full configured membership before switching runtime,
-            // so a failed write leaves the previous (still valid) candidates
-            // active and the next sync retries.
-            let mut new_config = api_config.clone();
-            new_config.rpc_endpoints = endpoints.clone();
-            if let Err(e) = new_config.write_default() {
+            // Persist only `rpc.endpoints` into the existing YAML mapping, so
+            // operator-owned/unknown keys (for example `xdp`) survive. Write
+            // before switching runtime so a failure leaves the previous
+            // candidates active and the next sync retries.
+            if let Err(e) = api_config.write_rpc_endpoints_default(&endpoints) {
                 debug!("Failed to write updated api_node config: {}", e);
                 report_node_log_with_context(
                     api_config,
@@ -400,12 +432,33 @@ async fn apply_api_membership_update(api_config: &ApiConfig, update: ApiMembersh
     }
 }
 
+/// Build the client used only for the discovery RPC. When the data-plane
+/// membership is empty or contains no endpoint compatible with this node's
+/// commMode, use the local `rpc.endpoints` seed so a re-enabled API can be
+/// observed without a process restart. Data-plane RPCs keep using
+/// `SharedRpcClient`/`effective_rpc_endpoints`, which remains fail-closed.
+async fn discovery_client(api_config: &ApiConfig) -> anyhow::Result<RpcClient> {
+    let membership = api_config.effective_rpc_endpoints();
+    let discovery = api_config.discovery_rpc_endpoints();
+    if discovery.is_empty() {
+        anyhow::bail!("no RPC endpoint is usable for API node discovery");
+    }
+    if discovery == membership {
+        return Ok(SharedRpcClient::get(api_config).await?.as_rpc_client());
+    }
+    debug!(
+        "using discovery-only RPC endpoints because the authoritative membership is empty or incompatible: {:?}",
+        discovery
+    );
+    RpcClient::new_with_endpoints(api_config, &discovery, false).await
+}
+
 pub async fn sync_api_nodes(api_config: &ApiConfig) -> bool {
     if api_config.rpc_disable_update {
         return true;
     }
-    let client = match SharedRpcClient::get(api_config).await {
-        Ok(shared) => shared.as_rpc_client(),
+    let client = match discovery_client(api_config).await {
+        Ok(client) => client,
         Err(e) => {
             debug!("Failed to connect for api-node sync: {}", e);
             report_node_log_with_context(
@@ -447,11 +500,38 @@ pub async fn sync_api_nodes(api_config: &ApiConfig) -> bool {
         }
     };
 
-    let discovery = discover_api_endpoints(&resp.api_nodes);
+    let comm_mode = match api_config.comm_mode() {
+        Ok(mode) => mode,
+        Err(e) => {
+            report_node_log_with_context(
+                api_config,
+                "error",
+                "API_NODE",
+                &format!(
+                    "rejected discovered API node endpoints: invalid commMode: {}",
+                    e
+                ),
+                None,
+                Some("apiNodeEndpointRejected"),
+                None,
+            )
+            .await;
+            return false;
+        }
+    };
+
+    let discovery = discover_api_endpoints(&resp.api_nodes, comm_mode);
     if !discovery.invalid.is_empty() {
         warn!(
             "Ignored {} invalid access address(es) in the API node discovery response",
             discovery.invalid.len()
+        );
+    }
+    if !discovery.incompatible.is_empty() {
+        warn!(
+            "Ignored {} access address(es) incompatible with commMode {} in the API node discovery response",
+            discovery.incompatible.len(),
+            comm_mode.as_str()
         );
     }
 
@@ -463,6 +543,7 @@ pub async fn sync_api_nodes(api_config: &ApiConfig) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use zelvik_suite::CommMode;
 
     fn api_node(id: i64, is_on: bool, access_addrs: &[&str]) -> pb::ApiNode {
         pb::ApiNode {
@@ -478,14 +559,17 @@ mod tests {
 
     #[test]
     fn discovery_keeps_every_configured_address_for_enabled_nodes() {
-        let discovery = discover_api_endpoints(&[
-            api_node(
-                1,
-                true,
-                &["https://api-a.example.com", "https://api-b.example.com"],
-            ),
-            api_node(2, true, &["https://api-c.example.com"]),
-        ]);
+        let discovery = discover_api_endpoints(
+            &[
+                api_node(
+                    1,
+                    true,
+                    &["https://api-a.example.com", "https://api-b.example.com"],
+                ),
+                api_node(2, true, &["https://api-c.example.com"]),
+            ],
+            CommMode::Tls,
+        );
 
         assert_eq!(
             discovery.endpoints,
@@ -508,7 +592,7 @@ mod tests {
         let mut node = api_node(1, true, &["https://api-a.example.com"]);
         node.status_json = br#"{"isOn":false,"heartbeat":{"healthy":false}}"#.to_vec();
 
-        let discovery = discover_api_endpoints(&[node]);
+        let discovery = discover_api_endpoints(&[node], CommMode::Tls);
 
         assert_eq!(
             discovery.endpoints,
@@ -518,8 +602,10 @@ mod tests {
 
     #[test]
     fn disabled_nodes_remove_their_addresses_from_membership() {
-        let discovery =
-            discover_api_endpoints(&[api_node(1, false, &["https://api-a.example.com"])]);
+        let discovery = discover_api_endpoints(
+            &[api_node(1, false, &["https://api-a.example.com"])],
+            CommMode::Tls,
+        );
 
         assert!(discovery.endpoints.is_empty());
         assert_eq!(discovery.advertised, 0);
@@ -531,27 +617,97 @@ mod tests {
 
     #[test]
     fn all_invalid_addresses_do_not_clear_working_membership() {
-        let discovery = discover_api_endpoints(&[api_node(1, true, &["not a url"])]);
+        let discovery = discover_api_endpoints(&[api_node(1, true, &["not a url"])], CommMode::Tls);
 
         assert!(discovery.endpoints.is_empty());
         assert_eq!(discovery.advertised, 1);
         assert_eq!(discovery.invalid, vec!["not a url".to_string()]);
+        assert!(discovery.incompatible.is_empty());
         assert_eq!(
             plan_api_membership_update(&discovery, &["https://old.example.com".to_string()]),
-            ApiMembershipUpdate::RejectInvalid
+            ApiMembershipUpdate::RejectInvalid {
+                invalid: vec!["not a url".to_string()],
+                incompatible: Vec::new(),
+            }
+        );
+    }
+
+    #[test]
+    fn discovery_rejects_plaintext_endpoint_for_tls_node() {
+        let discovery = discover_api_endpoints(
+            &[api_node(1, true, &["http://api-a.example.com"])],
+            CommMode::Tls,
+        );
+
+        assert!(discovery.endpoints.is_empty());
+        assert_eq!(discovery.advertised, 1);
+        assert!(discovery.invalid.is_empty());
+        assert_eq!(
+            discovery.incompatible,
+            vec!["http://api-a.example.com".to_string()]
+        );
+        assert_eq!(
+            plan_api_membership_update(&discovery, &["https://old.example.com".to_string()]),
+            ApiMembershipUpdate::RejectInvalid {
+                invalid: Vec::new(),
+                incompatible: vec!["http://api-a.example.com".to_string()],
+            }
+        );
+    }
+
+    #[test]
+    fn discovery_rejects_https_endpoint_for_plaintext_node() {
+        let discovery = discover_api_endpoints(
+            &[api_node(1, true, &["https://api-a.example.com"])],
+            CommMode::Plaintext,
+        );
+
+        assert!(discovery.endpoints.is_empty());
+        assert!(discovery.invalid.is_empty());
+        assert_eq!(
+            discovery.incompatible,
+            vec!["https://api-a.example.com".to_string()]
+        );
+    }
+
+    #[test]
+    fn discovery_persists_only_scheme_compatible_members() {
+        let discovery = discover_api_endpoints(
+            &[api_node(
+                1,
+                true,
+                &["http://api-a.example.com", "https://api-b.example.com"],
+            )],
+            CommMode::Tls,
+        );
+
+        assert_eq!(
+            discovery.endpoints,
+            vec!["https://api-b.example.com".to_string()]
+        );
+        assert_eq!(
+            discovery.incompatible,
+            vec!["http://api-a.example.com".to_string()]
+        );
+        assert_eq!(
+            plan_api_membership_update(&discovery, &["https://old.example.com".to_string()]),
+            ApiMembershipUpdate::Replace(vec!["https://api-b.example.com".to_string()])
         );
     }
 
     #[test]
     fn duplicate_addresses_are_deduplicated_in_stable_first_seen_order() {
-        let discovery = discover_api_endpoints(&[
-            api_node(
-                2,
-                true,
-                &["https://api-b.example.com", "https://api-a.example.com"],
-            ),
-            api_node(1, true, &["https://api-a.example.com"]),
-        ]);
+        let discovery = discover_api_endpoints(
+            &[
+                api_node(
+                    2,
+                    true,
+                    &["https://api-b.example.com", "https://api-a.example.com"],
+                ),
+                api_node(1, true, &["https://api-a.example.com"]),
+            ],
+            CommMode::Tls,
+        );
 
         assert_eq!(
             discovery.endpoints,
@@ -564,8 +720,10 @@ mod tests {
 
     #[test]
     fn unchanged_membership_is_not_rewritten() {
-        let discovery =
-            discover_api_endpoints(&[api_node(1, true, &["https://api-a.example.com"])]);
+        let discovery = discover_api_endpoints(
+            &[api_node(1, true, &["https://api-a.example.com"])],
+            CommMode::Tls,
+        );
 
         assert_eq!(
             plan_api_membership_update(&discovery, &["https://api-a.example.com".to_string()]),
@@ -651,6 +809,7 @@ mod tests {
             endpoints: candidates.clone(),
             advertised: candidates.len(),
             invalid: Vec::new(),
+            incompatible: Vec::new(),
         };
         let update = plan_api_membership_update(&discovery, &api.effective_rpc_endpoints());
         assert_eq!(update, ApiMembershipUpdate::Replace(candidates.clone()));
@@ -662,5 +821,111 @@ mod tests {
                 .expect("persisted config parses");
         assert_eq!(persisted.rpc_endpoints, candidates);
         assert_eq!(api.effective_rpc_endpoints(), candidates);
+    }
+
+    /// Finding 3: the membership write must merge into the existing YAML
+    /// mapping, not serialize the typed struct over it. Parse the result as
+    /// raw YAML so a dropped operator-owned key is visible.
+    #[tokio::test]
+    async fn membership_write_preserves_operator_owned_yaml_keys() {
+        let guard = TestHomeGuard::new().await;
+        let path = guard.home.join("configs").join("api_node.yaml");
+        std::fs::write(
+            &path,
+            r#"rpc.endpoints:
+  - "http://127.0.0.1:9"
+instanceId: "nd_0123456789"
+secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+commMode: "plaintext"
+xdp:
+  enabled: false
+operatorUnknown:
+  keep: "yes"
+kernelTuning:
+  enabled: false
+"#,
+        )
+        .unwrap();
+        let api: ApiConfig =
+            serde_yaml::from_slice(&std::fs::read(&path).expect("seed config")).unwrap();
+        let candidates = vec![
+            "http://127.0.0.1:1".to_string(),
+            "http://127.0.0.1:2".to_string(),
+        ];
+
+        api.write_rpc_endpoints_default(&candidates).unwrap();
+
+        let raw: serde_yaml::Value =
+            serde_yaml::from_slice(&std::fs::read(&path).expect("written config")).unwrap();
+        assert_eq!(
+            raw.get("xdp")
+                .and_then(|value| value.get("enabled"))
+                .and_then(serde_yaml::Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            raw.get("operatorUnknown")
+                .and_then(|value| value.get("keep"))
+                .and_then(serde_yaml::Value::as_str),
+            Some("yes")
+        );
+        assert_eq!(
+            raw.get("kernelTuning")
+                .and_then(|value| value.get("enabled"))
+                .and_then(serde_yaml::Value::as_bool),
+            Some(false)
+        );
+        let persisted = raw
+            .get("rpc.endpoints")
+            .and_then(serde_yaml::Value::as_sequence)
+            .expect("rpc.endpoints sequence")
+            .iter()
+            .map(|value| value.as_str().expect("endpoint string").to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(persisted, candidates);
+    }
+
+    /// Finding 1: an authoritative empty membership must not remove the
+    /// ability to ask the control plane again. The discovery client must use
+    /// the local seed while the data-plane membership is empty, and a
+    /// non-empty aggregate must restore the membership without a restart.
+    #[tokio::test]
+    async fn empty_membership_keeps_discovery_reachable_and_restores_candidates() {
+        let _guard = TestHomeGuard::new().await;
+        let api = test_api_config(vec!["http://127.0.0.1:1".to_string()]);
+        api.write_default().unwrap();
+        ApiConfig::set_runtime_rpc_endpoints(Vec::new()).unwrap();
+        assert!(api.effective_rpc_endpoints().is_empty());
+
+        let error = discovery_client(&api)
+            .await
+            .err()
+            .expect("the seed endpoint is unreachable, so the attempt must fail");
+        let message = error.to_string();
+        assert!(
+            message.contains("http://127.0.0.1:1"),
+            "discovery did not use the local seed: {message}"
+        );
+        assert!(
+            !message.contains("No RPC endpoints configured"),
+            "discovery used the empty data-plane membership: {message}"
+        );
+
+        let discovery = ApiEndpointDiscovery {
+            endpoints: vec!["http://127.0.0.1:2".to_string()],
+            advertised: 1,
+            invalid: Vec::new(),
+            incompatible: Vec::new(),
+        };
+        let update = plan_api_membership_update(&discovery, &api.effective_rpc_endpoints());
+        assert_eq!(
+            update,
+            ApiMembershipUpdate::Replace(vec!["http://127.0.0.1:2".to_string()])
+        );
+        assert!(apply_api_membership_update(&api, update).await);
+        assert_eq!(
+            api.effective_rpc_endpoints(),
+            vec!["http://127.0.0.1:2".to_string()]
+        );
     }
 }

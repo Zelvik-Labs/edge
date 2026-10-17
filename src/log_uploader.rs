@@ -202,6 +202,14 @@ impl AccessLogUploadWorker {
             return self.channel.as_ref();
         }
 
+        let comm_mode = match self.api_config.comm_mode() {
+            Ok(mode) => mode,
+            Err(err) => {
+                error!("Invalid commMode for LogUploader: {}", err);
+                return None;
+            }
+        };
+
         for api_endpoint in self.api_config.effective_rpc_endpoints() {
             let api_endpoint = match crate::api_config::validate_rpc_endpoint(&api_endpoint) {
                 Ok(endpoint) => endpoint,
@@ -210,6 +218,16 @@ impl AccessLogUploadWorker {
                     continue;
                 }
             };
+            if !crate::api_config::rpc_endpoint_matches_comm_mode(&api_endpoint, comm_mode) {
+                // Never send the access-log credential to a scheme the node's
+                // registered transport mode forbids.
+                error!(
+                    "Rejected LogUploader RPC endpoint {}: scheme does not match commMode {:?}",
+                    api_endpoint,
+                    comm_mode.as_str()
+                );
+                continue;
+            }
             let endpoint = match tonic::transport::Endpoint::from_shared(api_endpoint.clone()) {
                 Ok(ep) => ep
                     .connect_timeout(self.request_timeout)

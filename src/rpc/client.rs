@@ -137,7 +137,17 @@ impl RpcClient {
                 }
             };
 
-            let endpoint = Self::configure_tls(endpoint, api_config)?;
+            let endpoint = match Self::configure_tls(endpoint, api_config) {
+                Ok(endpoint) => endpoint,
+                Err(err) => {
+                    last_err = Some(anyhow::anyhow!(
+                        "Rejected RPC endpoint {}: {}",
+                        api_endpoint,
+                        err
+                    ));
+                    continue;
+                }
+            };
             let channel = Self::configure_endpoint(endpoint, profile).connect().await;
 
             match channel {
@@ -200,8 +210,18 @@ impl RpcClient {
     }
 
     fn configure_tls(endpoint: Endpoint, api: &ApiConfig) -> anyhow::Result<Endpoint> {
+        let mode = api.comm_mode()?;
+        let scheme = endpoint.uri().scheme_str().unwrap_or_default();
+        if !crate::api_config::rpc_scheme_matches_comm_mode(scheme, mode) {
+            // A stale persisted list must never make a tls/mtls node send its
+            // credential over http, or a plaintext node adopt an https scheme.
+            anyhow::bail!(
+                "RPC endpoint scheme {scheme:?} does not match commMode {:?}",
+                mode.as_str()
+            );
+        }
         let cfg = &api.rpc_tls;
-        if endpoint.uri().scheme_str() != Some("https") {
+        if scheme != "https" {
             if cfg.cert_file.is_some() || cfg.key_file.is_some() || cfg.ca_file.is_some() {
                 anyhow::bail!("RPC TLS credentials require an https endpoint");
             }
@@ -1233,6 +1253,28 @@ mod tests {
             kernel_tuning: Default::default(),
             cache: Default::default(),
         }
+    }
+
+    #[test]
+    fn configure_tls_enforces_the_node_comm_mode() {
+        let mut api = test_api_config(vec!["http://127.0.0.1:1".to_string()]);
+        api.comm_mode = "tls".to_string();
+        let endpoint =
+            tonic::transport::Endpoint::from_shared("http://127.0.0.1:1".to_string()).unwrap();
+        let error = super::RpcClient::configure_tls(endpoint, &api).unwrap_err();
+        assert!(
+            error.to_string().contains("does not match commMode"),
+            "unexpected error: {error}"
+        );
+
+        api.comm_mode = "plaintext".to_string();
+        let endpoint =
+            tonic::transport::Endpoint::from_shared("https://api.example.com".to_string()).unwrap();
+        let error = super::RpcClient::configure_tls(endpoint, &api).unwrap_err();
+        assert!(
+            error.to_string().contains("does not match commMode"),
+            "unexpected error: {error}"
+        );
     }
 
     /// Serializes tests that touch the process-global shared channel and the

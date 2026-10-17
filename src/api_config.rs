@@ -518,6 +518,42 @@ impl ApiConfig {
         Ok(())
     }
 
+    /// Update only `rpc.endpoints` in the existing `api_node.yaml`, preserving
+    /// operator-owned and unknown keys (for example the `xdp` section) that the
+    /// typed [`ApiConfig`] does not model. Serializing the typed struct over
+    /// the file would silently drop them.
+    pub fn write_rpc_endpoints_default(&self, endpoints: &[String]) -> anyhow::Result<()> {
+        let endpoints = validate_rpc_endpoints(endpoints.to_vec())?;
+        let node_paths = crate::paths::NodePaths::current();
+        fs::create_dir_all(node_paths.config_dir())?;
+        let target = node_paths.api_config_file();
+        let mut root = match fs::read(&target) {
+            Ok(content) => match serde_yaml::from_slice::<serde_yaml::Value>(&content)? {
+                serde_yaml::Value::Mapping(mapping) => mapping,
+                _ => anyhow::bail!("api_node.yaml root is not a YAML mapping"),
+            },
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                let mut config = self.clone();
+                config.rpc_endpoints = endpoints;
+                return config.write_default();
+            }
+            Err(err) => return Err(err.into()),
+        };
+        let value = serde_yaml::Value::Sequence(
+            endpoints
+                .into_iter()
+                .map(serde_yaml::Value::String)
+                .collect(),
+        );
+        root.insert(
+            serde_yaml::Value::String("rpc.endpoints".to_string()),
+            value,
+        );
+        let content = serde_yaml::to_string(&serde_yaml::Value::Mapping(root))?;
+        fs::write(target, content)?;
+        Ok(())
+    }
+
     /// The current RPC candidate membership. A runtime override — even an
     /// explicitly empty one — is authoritative; the local `rpc.endpoints` list
     /// is only the bootstrap seed used when no discovery result exists. A
@@ -527,6 +563,52 @@ impl ApiConfig {
             Ok(guard) => guard.clone().unwrap_or_else(|| self.rpc_endpoints.clone()),
             Err(_) => Vec::new(),
         }
+    }
+
+    /// Endpoints used only by the discovery/control bootstrap to ask the
+    /// control plane for the current aggregate. When the authoritative
+    /// membership is empty (or has no scheme compatible with this node), the
+    /// local `rpc.endpoints` seed is used so recovery does not require a
+    /// restart. Data-plane callers must keep using
+    /// [`Self::effective_rpc_endpoints`], which remains fail-closed.
+    pub fn discovery_rpc_endpoints(&self) -> Vec<String> {
+        let mode = match self.comm_mode() {
+            Ok(mode) => mode,
+            Err(err) => {
+                tracing::warn!("cannot resolve commMode for API node discovery: {}", err);
+                return Vec::new();
+            }
+        };
+        let membership = self.effective_rpc_endpoints();
+        let membership_was_empty = membership.is_empty();
+        let compatible_membership = membership
+            .into_iter()
+            .filter(|endpoint| rpc_endpoint_matches_comm_mode(endpoint, mode))
+            .collect::<Vec<_>>();
+        if !compatible_membership.is_empty() {
+            return compatible_membership;
+        }
+
+        let seed = self
+            .rpc_endpoints
+            .iter()
+            .filter(|endpoint| rpc_endpoint_matches_comm_mode(endpoint, mode))
+            .cloned()
+            .collect::<Vec<_>>();
+        if seed.is_empty() {
+            tracing::warn!(
+                "no local rpc.endpoints are compatible with commMode; API node discovery cannot connect"
+            );
+        } else if membership_was_empty {
+            tracing::debug!(
+                "RPC membership is empty; using the local rpc.endpoints seed for API node discovery"
+            );
+        } else {
+            tracing::warn!(
+                "RPC membership has no endpoint compatible with commMode; using the local rpc.endpoints seed for discovery"
+            );
+        }
+        seed
     }
 
     /// HTTP(S) base URLs serving node upgrade packages. The admin pushes the
@@ -645,6 +727,26 @@ pub fn validate_rpc_endpoints(endpoints: Vec<String>) -> anyhow::Result<Vec<Stri
         }
     }
     Ok(normalized)
+}
+
+/// Whether a URI scheme is compatible with the node's registered transport
+/// mode. Plaintext nodes use `http`; TLS and mTLS nodes use `https`.
+pub fn rpc_scheme_matches_comm_mode(scheme: &str, mode: zelvik_suite::CommMode) -> bool {
+    match mode {
+        zelvik_suite::CommMode::Plaintext => scheme == "http",
+        zelvik_suite::CommMode::Tls | zelvik_suite::CommMode::Mtls => scheme == "https",
+    }
+}
+
+/// Whether a normalized RPC endpoint's scheme matches the node's transport
+/// mode. This is the discovery-time check; the transport layer enforces the
+/// same rule before sending credentials.
+pub fn rpc_endpoint_matches_comm_mode(endpoint: &str, mode: zelvik_suite::CommMode) -> bool {
+    let scheme = endpoint
+        .split_once("://")
+        .map(|(scheme, _)| scheme)
+        .unwrap_or_default();
+    rpc_scheme_matches_comm_mode(scheme, mode)
 }
 
 #[cfg(test)]
@@ -1569,6 +1671,44 @@ gcloudNodeId: "1"
         assert!(
             ApiConfig::prefer_runtime_rpc_endpoint(&config.rpc_endpoints, "http://127.0.0.1:8003")
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn discovery_endpoints_use_seed_only_when_membership_is_empty() {
+        let _guard = RuntimeRpcEndpointsGuard::new();
+        let config = config_with_endpoints(&["http://127.0.0.1:8001"]);
+
+        ApiConfig::set_runtime_rpc_endpoints(Vec::new()).unwrap();
+        assert_eq!(
+            config.discovery_rpc_endpoints(),
+            vec!["http://127.0.0.1:8001".to_string()]
+        );
+        assert!(config.effective_rpc_endpoints().is_empty());
+
+        ApiConfig::set_runtime_rpc_endpoints(vec!["http://127.0.0.1:8002".to_string()]).unwrap();
+        assert_eq!(
+            config.discovery_rpc_endpoints(),
+            vec!["http://127.0.0.1:8002".to_string()]
+        );
+    }
+
+    #[test]
+    fn discovery_endpoints_filter_incompatible_schemes_and_use_seed() {
+        let _guard = RuntimeRpcEndpointsGuard::new();
+        let config = config_with_endpoints(&["http://127.0.0.1:8001"]);
+
+        // The node is plaintext (no commMode in the fixture); an https
+        // membership is unusable for it, so discovery falls back to the seed
+        // while the data-plane accessor still reports the raw membership.
+        ApiConfig::set_runtime_rpc_endpoints(vec!["https://api.example.com".to_string()]).unwrap();
+        assert_eq!(
+            config.effective_rpc_endpoints(),
+            vec!["https://api.example.com".to_string()]
+        );
+        assert_eq!(
+            config.discovery_rpc_endpoints(),
+            vec!["http://127.0.0.1:8001".to_string()]
         );
     }
 }

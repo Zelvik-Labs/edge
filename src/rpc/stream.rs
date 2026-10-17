@@ -127,7 +127,10 @@ async fn apply_stream_cache_policy(cache_policy_json: &[u8]) -> Result<(), Strin
 }
 
 pub async fn start_node_stream(api_config: ApiConfig, config_store: Arc<ConfigStore>) {
-    let mut last_endpoints = api_config.effective_rpc_endpoints();
+    // The control stream may use the local discovery seed while the data-plane
+    // membership is empty, so a re-enabled API can be observed without a
+    // restart. Data-plane RPCs keep using `effective_rpc_endpoints()`.
+    let mut last_endpoints = api_config.discovery_rpc_endpoints();
     let mut fail_count: u32 = 0;
     const MAX_BACKOFF: Duration = Duration::from_secs(15);
 
@@ -136,7 +139,7 @@ pub async fn start_node_stream(api_config: ApiConfig, config_store: Arc<ConfigSt
             match RpcClient::new_stream_with_endpoints(&api_config, &last_endpoints, false).await {
                 Ok(client) => client,
                 Err(e) => {
-                    last_endpoints = api_config.effective_rpc_endpoints();
+                    last_endpoints = api_config.discovery_rpc_endpoints();
                     fail_count = fail_count.saturating_add(1);
                     let delay = stream_backoff(fail_count, MAX_BACKOFF);
                     warn!(
@@ -159,14 +162,14 @@ pub async fn start_node_stream(api_config: ApiConfig, config_store: Arc<ConfigSt
         match stream_result {
             Ok(_) => {
                 fail_count = 0;
-                last_endpoints = api_config.effective_rpc_endpoints();
+                last_endpoints = api_config.discovery_rpc_endpoints();
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
             Err(e) => {
                 fail_count = fail_count.saturating_add(1);
                 let delay = stream_backoff(fail_count, MAX_BACKOFF);
                 warn!("Node stream error: {}. Reconnecting in {:?}...", e, delay);
-                last_endpoints = api_config.effective_rpc_endpoints();
+                last_endpoints = api_config.discovery_rpc_endpoints();
                 tokio::time::sleep(delay).await;
             }
         }
@@ -244,6 +247,9 @@ async fn run_tonic_stream(
     config_store: Arc<ConfigStore>,
     hold: Option<Duration>,
 ) -> anyhow::Result<NodeStreamProbeResult> {
+    // Change detection is against the authoritative data-plane membership.
+    // While that membership is empty, the stream may be connected to the local
+    // discovery seed; any non-empty membership change reconnects it.
     let connected_endpoints = api_config.effective_rpc_endpoints();
     let initial_node_id = config_store.get_node_id().await;
     if initial_node_id <= 0 {
