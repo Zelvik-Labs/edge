@@ -90,7 +90,7 @@ they exist.
 | Vendored pingora | `cargo check --manifest-path pingora-main/Cargo.toml -p pingora-core -p pingora-http -p pingora-cache -p pingora-proxy --all-targets` |
 | Project tooling | `cargo xtask <subcommand>` |
 | macOS → Linux release | `bash scripts/build-release-local.sh [--all-bins]` |
-| 构建产物清理（每次构建后必跑） | `bash scripts/clean-build-artifacts.sh` |
+| 构建产物清理（**只在磁盘吃紧时**，不是每轮） | `bash scripts/clean-build-artifacts.sh` |
 | 本机 OrbStack Linux 检查与测试 | `bash scripts/test-orbstack.sh [arm64\|amd64] [all\|check\|test\|clippy\|pingora]` |
 
 OrbStack uses per-run, architecture-specific build/cache volumes and removes them
@@ -100,6 +100,12 @@ dated nightly are not rebuilt from source every run. See
 [docs/orbstack-build-tests.md](docs/orbstack-build-tests.md). Clean only after
 build processes exit. The cleanup script checks Cargo locks and delegates managed
 target removal to mbx; never recursively delete an mbx target symlink destination.
+
+**构建缓存保留，只在磁盘吃紧时回收**（2026-10-17 用户指令）。`target/`、mbx 对象、
+`node_modules/.vite`、Go build cache、pnpm store 都是**缓存**，不是产物：清掉它们会让
+每一轮迭代退化成冷构建（实测 Go 冷/热差 10.7×，Rust 更差）。不要「每次构建后」跑
+清理脚本；只在磁盘确实吃紧时按预算回收，并优先清可丢弃的产物（`dist/`、发布包、
+旧快照）。清理脚本本身是磁盘回收工具，不是每轮例行步骤。
 
 **Local and CI use different CPU baselines.** `.cargo/config.toml` sets
 `rustflags = ["-C", "target-cpu=native"]`; CI overrides with
