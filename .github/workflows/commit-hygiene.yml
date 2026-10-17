@@ -16,7 +16,7 @@ permissions:
 jobs:
   attribution:
     name: Attribution / commit-message check
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, Linux, X64, zelvik-ci]
     timeout-minutes: 5
     steps:
       - name: Checkout
@@ -45,9 +45,12 @@ jobs:
 
           # before 为全 0 表示新建分支或首次推送，没有可用的 base，
           # 退化为只检查 head 这一个提交。
+          # 必须用 head^! 而不是裸 head：裸 head 传给 git rev-list 会被当作
+          # 起点并遍历其全部祖先，退化成扫全历史；head^! 只选中 head 本身
+          # （root 提交也有效）。
           if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
             echo "::notice::无可用 base（新建分支或首次推送），只检查 $head"
-            echo "range=$head" >> "$GITHUB_OUTPUT"
+            echo "range=${head}^!" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -66,7 +69,7 @@ jobs:
 
   no-new-suppression:
     name: No new warning suppression
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, Linux, X64, zelvik-ci]
     timeout-minutes: 5
     steps:
       - name: Checkout
@@ -92,9 +95,10 @@ jobs:
           fi
           head="$HEAD_SHA"
 
+          # head^! 只选中 head 本身（root 提交也有效），不遍历祖先。
           if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
             echo "::notice::无可用 base（新建分支或首次推送），只检查 $head"
-            echo "range=$head" >> "$GITHUB_OUTPUT"
+            echo "range=${head}^!" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 

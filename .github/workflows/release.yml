@@ -12,7 +12,7 @@ concurrency:
 jobs:
   build:
     name: Build - ${{ matrix.name }}
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, Linux, X64, zelvik-ci]
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -91,36 +91,25 @@ jobs:
 
           packages=(cmake build-essential golang-go protobuf-compiler pkg-config libelf-dev zlib1g-dev libpcap0.8-dev)
 
-          # GitHub ubuntu-22.04 runners pin apt to azure.archive.ubuntu.com via
-          # Mirrorlist. When that host stalls, apt-get update hangs until the
-          # job timeout. Pin archive.ubuntu.com (and ports for arm64) instead.
+          # 自托管 runner 是 Ubuntu 24.04 (noble)，自带 amd64 发行版源，原先为
+          # GitHub 托管镜像写的「改写 sources 并钉死 jammy」不再适用：在 noble 上
+          # 满足 jammy 依赖要求把 libc6 从 2.39 降级到 2.35，apt-get -y 会直接拒绝
+          # （E: Packages were downgraded ... without --allow-downgrades）。
+          # amd64 用 runner 自己的源；arm64 交叉编译仍要显式补 ports 源（见下）。
           sudo tee /etc/apt/apt.conf.d/99ci-timeouts >/dev/null <<'EOF'
           Acquire::Retries "3";
           Acquire::http::Timeout "20";
           Acquire::https::Timeout "20";
           Acquire::ftp::Timeout "20";
           EOF
-          sudo mkdir -p /etc/apt/sources.list.d.disabled
-          sudo mv /etc/apt/sources.list /etc/apt/sources.list.d.disabled/sources.list 2>/dev/null || true
-          sudo mv /etc/apt/apt-mirrors.txt /etc/apt/sources.list.d.disabled/apt-mirrors.txt 2>/dev/null || true
-          for source in /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
-            [ -e "$source" ] || continue
-            sudo mv "$source" /etc/apt/sources.list.d.disabled/
-          done
-          sudo tee /etc/apt/sources.list.d/ubuntu-amd64.list >/dev/null <<'EOF'
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-backports main restricted universe multiverse
-          deb [arch=amd64] http://security.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
-          EOF
 
           if [ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]; then
             sudo dpkg --add-architecture arm64
             sudo tee /etc/apt/sources.list.d/ubuntu-ports-arm64.list >/dev/null <<'EOF'
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-backports main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-backports main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main restricted universe multiverse
           EOF
             packages+=(gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libelf-dev:arm64 zlib1g-dev:arm64 libpcap0.8-dev:arm64)
           fi
@@ -275,7 +264,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs:
       - build
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, Linux, X64, zelvik-ci]
     permissions:
       contents: write
     steps:

@@ -10,7 +10,7 @@ concurrency:
 jobs:
   check:
     name: Check / Clippy - linux-x64
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, Linux, X64, zelvik-ci]
     timeout-minutes: 45
     env:
       # .cargo/config.toml sets target-cpu=native, but rust-cache restores
@@ -36,27 +36,16 @@ jobs:
 
           packages=(cmake build-essential clang pkg-config perl protobuf-compiler libclang-dev libelf-dev zlib1g-dev libzstd-dev libpcap0.8-dev m4 llvm)
 
-          # GitHub ubuntu-22.04 runners pin apt to azure.archive.ubuntu.com via
-          # Mirrorlist. When that host stalls, apt-get update hangs until the
-          # job timeout. Pin archive.ubuntu.com instead.
+          # 自托管 runner 是 Ubuntu 24.04 (noble)，自带发行版源，因此原先为
+          # GitHub 托管镜像写的「改写 sources 并钉死 jammy」不再适用：在 noble 上
+          # 满足 jammy 的依赖要求把 libc6 从 2.39 降级到 2.35，而 apt-get -y 会直接
+          # 拒绝（E: Packages were downgraded ... without --allow-downgrades），
+          # 三次重试后 exit 1。改用 runner 自己的源，只保留超时与重试。
           sudo tee /etc/apt/apt.conf.d/99ci-timeouts >/dev/null <<'EOF'
           Acquire::Retries "3";
           Acquire::http::Timeout "20";
           Acquire::https::Timeout "20";
           Acquire::ftp::Timeout "20";
-          EOF
-          sudo mkdir -p /etc/apt/sources.list.d.disabled
-          sudo mv /etc/apt/sources.list /etc/apt/sources.list.d.disabled/sources.list 2>/dev/null || true
-          sudo mv /etc/apt/apt-mirrors.txt /etc/apt/sources.list.d.disabled/apt-mirrors.txt 2>/dev/null || true
-          for source in /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
-            [ -e "$source" ] || continue
-            sudo mv "$source" /etc/apt/sources.list.d.disabled/
-          done
-          sudo tee /etc/apt/sources.list.d/ubuntu-amd64.list >/dev/null <<'EOF'
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-backports main restricted universe multiverse
-          deb [arch=amd64] http://security.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
           EOF
           sudo rm -rf /var/lib/apt/lists/*
           for attempt in 1 2 3; do
@@ -119,7 +108,7 @@ jobs:
 
   test:
     name: Test - linux-x64
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, Linux, X64, zelvik-ci]
     timeout-minutes: 60
     env:
       # Same rationale as the check job: target-cpu=native artifacts in the
@@ -145,19 +134,6 @@ jobs:
           Acquire::http::Timeout "20";
           Acquire::https::Timeout "20";
           Acquire::ftp::Timeout "20";
-          EOF
-          sudo mkdir -p /etc/apt/sources.list.d.disabled
-          sudo mv /etc/apt/sources.list /etc/apt/sources.list.d.disabled/sources.list 2>/dev/null || true
-          sudo mv /etc/apt/apt-mirrors.txt /etc/apt/sources.list.d.disabled/apt-mirrors.txt 2>/dev/null || true
-          for source in /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
-            [ -e "$source" ] || continue
-            sudo mv "$source" /etc/apt/sources.list.d.disabled/
-          done
-          sudo tee /etc/apt/sources.list.d/ubuntu-amd64.list >/dev/null <<'EOF'
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-backports main restricted universe multiverse
-          deb [arch=amd64] http://security.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
           EOF
           sudo rm -rf /var/lib/apt/lists/*
           for attempt in 1 2 3; do
