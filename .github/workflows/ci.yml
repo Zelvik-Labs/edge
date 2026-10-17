@@ -10,7 +10,7 @@ concurrency:
 jobs:
   check:
     name: Check / Clippy - linux-x64
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, Linux, X64, zelvik-ci]
     timeout-minutes: 45
     env:
       # .cargo/config.toml sets target-cpu=native, but rust-cache restores
@@ -19,9 +19,44 @@ jobs:
       # (observed twice compiling pingora-pool). RUSTFLAGS env overrides
       # config.toml; pin the CI baseline to the minimum release target.
       RUSTFLAGS: "-C target-cpu=x86-64-v2"
+      # cargo 默认用内置 git 后端，**不读** GIT_CONFIG_COUNT/KEY/VALUE 环境变量；
+      # 凭据步骤靠 url.*.insteadOf 把 https 改写成 ssh，必须切到 git CLI 后端才生效。
+      # 暖缓存命中（rust-cache 里已有 ~/.cargo/git/db）时不会暴露，冷缓存才失败。
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      # Cargo.toml 经 https git 依赖私有仓 protocol（zelvik-suite）。凭据是**只读 deploy key**
+      # （仓库 secret PROTOCOL_DEPLOY_KEY），只对 protocol 有效；不用个人长期 token，
+      # 也不在 runner 主机上落任何凭据。把 https URL 改写成 ssh URL 让 git 用这把 key。
+      # 托管 runner 上曾靠 rust-cache 里已有的 ~/.cargo/git/db 侥幸跳过 clone，
+      # 自托管冷缓存必须真 clone，缺这一步就会在依赖解析阶段失败。
+      - name: 私有 protocol 依赖凭据（只读 deploy key）
+        run: |
+          set -euo pipefail
+          if [ -z "${PROTOCOL_DEPLOY_KEY:-}" ]; then
+            echo "::error::缺少仓库 secret PROTOCOL_DEPLOY_KEY：protocol 为私有仓库，没有凭据无法拉取依赖。"
+            exit 1
+          fi
+
+          key="$RUNNER_TEMP/protocol_deploy_key"
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$PROTOCOL_DEPLOY_KEY" > "$key"
+
+          # 主机密钥来自 HTTPS 接口而不是首次连接的 TOFU，避免第一次连接就被固定成伪造密钥。
+          curl -fsSL https://api.github.com/meta \
+            | grep -oE '"ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+"' \
+            | tr -d '"' | sed 's/^/github.com /' > "$RUNNER_TEMP/known_hosts"
+
+          {
+            echo "GIT_SSH_COMMAND=ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+            echo "GIT_CONFIG_COUNT=1"
+            echo "GIT_CONFIG_KEY_0=url.git@github.com:Zelvik-Labs/protocol.insteadOf"
+            echo "GIT_CONFIG_VALUE_0=https://github.com/Zelvik-Labs/protocol"
+          } >> "$GITHUB_ENV"
+        env:
+          PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.99.0
@@ -36,27 +71,16 @@ jobs:
 
           packages=(cmake build-essential clang pkg-config perl protobuf-compiler libclang-dev libelf-dev zlib1g-dev libzstd-dev libpcap0.8-dev m4 llvm)
 
-          # GitHub ubuntu-22.04 runners pin apt to azure.archive.ubuntu.com via
-          # Mirrorlist. When that host stalls, apt-get update hangs until the
-          # job timeout. Pin archive.ubuntu.com instead.
+          # 自托管 runner 是 Ubuntu 24.04 (noble)，自带发行版源，因此原先为
+          # GitHub 托管镜像写的「改写 sources 并钉死 jammy」不再适用：在 noble 上
+          # 满足 jammy 的依赖要求把 libc6 从 2.39 降级到 2.35，而 apt-get -y 会直接
+          # 拒绝（E: Packages were downgraded ... without --allow-downgrades），
+          # 三次重试后 exit 1。改用 runner 自己的源，只保留超时与重试。
           sudo tee /etc/apt/apt.conf.d/99ci-timeouts >/dev/null <<'EOF'
           Acquire::Retries "3";
           Acquire::http::Timeout "20";
           Acquire::https::Timeout "20";
           Acquire::ftp::Timeout "20";
-          EOF
-          sudo mkdir -p /etc/apt/sources.list.d.disabled
-          sudo mv /etc/apt/sources.list /etc/apt/sources.list.d.disabled/sources.list 2>/dev/null || true
-          sudo mv /etc/apt/apt-mirrors.txt /etc/apt/sources.list.d.disabled/apt-mirrors.txt 2>/dev/null || true
-          for source in /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
-            [ -e "$source" ] || continue
-            sudo mv "$source" /etc/apt/sources.list.d.disabled/
-          done
-          sudo tee /etc/apt/sources.list.d/ubuntu-amd64.list >/dev/null <<'EOF'
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-backports main restricted universe multiverse
-          deb [arch=amd64] http://security.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
           EOF
           sudo rm -rf /var/lib/apt/lists/*
           for attempt in 1 2 3; do
@@ -119,15 +143,57 @@ jobs:
 
   test:
     name: Test - linux-x64
-    runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    runs-on: [self-hosted, Linux, X64, zelvik-ci]
+    # 60 分钟不够：`CARGO_BUILD_JOBS=2` 把并行度减半，构建时间随之上去。
+    # 原来的 60 分钟里大部分时间也不是在编译，而是在内存上限附近颠簸（见下）。
+    timeout-minutes: 90
     env:
       # Same rationale as the check job: target-cpu=native artifacts in the
       # shared rust-cache SIGILL on older runner hardware.
       RUSTFLAGS: "-C target-cpu=x86-64-v2"
+      # 同 check job：cargo 内置 git 后端不读 GIT_CONFIG_*，凭据步骤的
+      # url.*.insteadOf 改写只有在 git CLI 后端下才生效。
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      # 主池 runner Pod 的 limits.memory 是 6Gi，而 cargo 按可见 CPU 默认开 4 个
+      # 并行 rustc，单个 rustc 的 anon-rss 实测就有 3.0GiB —— 峰值把 cgroup 顶爆，
+      # 内核 OOM killer 挑中的是 Runner.Listener 本身，于是作业不是「失败」而是
+      # 「runner 失联」，连失败原因都留不下来。
+      # 限到 2 个并发：不改产物、不降可调试性，只是构建慢一些。
+      CARGO_BUILD_JOBS: "2"
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      # Cargo.toml 经 https git 依赖私有仓 protocol（zelvik-suite）。凭据是**只读 deploy key**
+      # （仓库 secret PROTOCOL_DEPLOY_KEY），只对 protocol 有效；不用个人长期 token，
+      # 也不在 runner 主机上落任何凭据。把 https URL 改写成 ssh URL 让 git 用这把 key。
+      # 托管 runner 上曾靠 rust-cache 里已有的 ~/.cargo/git/db 侥幸跳过 clone，
+      # 自托管冷缓存必须真 clone，缺这一步就会在依赖解析阶段失败。
+      - name: 私有 protocol 依赖凭据（只读 deploy key）
+        run: |
+          set -euo pipefail
+          if [ -z "${PROTOCOL_DEPLOY_KEY:-}" ]; then
+            echo "::error::缺少仓库 secret PROTOCOL_DEPLOY_KEY：protocol 为私有仓库，没有凭据无法拉取依赖。"
+            exit 1
+          fi
+
+          key="$RUNNER_TEMP/protocol_deploy_key"
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$PROTOCOL_DEPLOY_KEY" > "$key"
+
+          # 主机密钥来自 HTTPS 接口而不是首次连接的 TOFU，避免第一次连接就被固定成伪造密钥。
+          curl -fsSL https://api.github.com/meta \
+            | grep -oE '"ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+"' \
+            | tr -d '"' | sed 's/^/github.com /' > "$RUNNER_TEMP/known_hosts"
+
+          {
+            echo "GIT_SSH_COMMAND=ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+            echo "GIT_CONFIG_COUNT=1"
+            echo "GIT_CONFIG_KEY_0=url.git@github.com:Zelvik-Labs/protocol.insteadOf"
+            echo "GIT_CONFIG_VALUE_0=https://github.com/Zelvik-Labs/protocol"
+          } >> "$GITHUB_ENV"
+        env:
+          PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.99.0
@@ -145,19 +211,6 @@ jobs:
           Acquire::http::Timeout "20";
           Acquire::https::Timeout "20";
           Acquire::ftp::Timeout "20";
-          EOF
-          sudo mkdir -p /etc/apt/sources.list.d.disabled
-          sudo mv /etc/apt/sources.list /etc/apt/sources.list.d.disabled/sources.list 2>/dev/null || true
-          sudo mv /etc/apt/apt-mirrors.txt /etc/apt/sources.list.d.disabled/apt-mirrors.txt 2>/dev/null || true
-          for source in /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
-            [ -e "$source" ] || continue
-            sudo mv "$source" /etc/apt/sources.list.d.disabled/
-          done
-          sudo tee /etc/apt/sources.list.d/ubuntu-amd64.list >/dev/null <<'EOF'
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy-backports main restricted universe multiverse
-          deb [arch=amd64] http://security.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
           EOF
           sudo rm -rf /var/lib/apt/lists/*
           for attempt in 1 2 3; do

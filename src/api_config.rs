@@ -759,11 +759,15 @@ mod tests {
 
         assert!(normalized.upload_concurrency > 1);
         assert!(normalized.upload_concurrency <= MAX_ACCESS_LOG_UPLOAD_CONCURRENCY);
+        // 比对的是 `Default` 实际用的那两个**冻结**常量，而不是内存治理器的实时读数。
+        // `AUTO_ACCESS_LOG_*` 是 Lazy：首次使用时从治理器取一次，之后不再变
+        // （`ApiConfig::load` 还显式 force 它们，好让配置默认值在进程生命周期内稳定）。
+        // 而治理器的读数随可用内存刷新，所以「冻结值 vs 实时值」在内存波动的机器上
+        // 必然偶发差 1——CI 上实测 `left: 48693, right: 48692`，一套 1028 个用例里
+        // 就它一个红，把整个 Test 作业拖成失败。
         assert_eq!(
             normalized.queue_capacity,
-            crate::memory_governor::MEMORY_GOVERNOR
-                .access_log_queue_capacity()
-                .max(crate::memory_governor::MEMORY_GOVERNOR.access_log_batch_size())
+            default_access_log_queue_capacity().max(default_access_log_batch_size())
         );
         assert_eq!(
             normalized.batch_queue_capacity(),
