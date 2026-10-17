@@ -19,6 +19,10 @@ jobs:
       # (observed twice compiling pingora-pool). RUSTFLAGS env overrides
       # config.toml; pin the CI baseline to the minimum release target.
       RUSTFLAGS: "-C target-cpu=x86-64-v2"
+      # cargo 默认用内置 git 后端，**不读** GIT_CONFIG_COUNT/KEY/VALUE 环境变量；
+      # 凭据步骤靠 url.*.insteadOf 把 https 改写成 ssh，必须切到 git CLI 后端才生效。
+      # 暖缓存命中（rust-cache 里已有 ~/.cargo/git/db）时不会暴露，冷缓存才失败。
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -145,6 +149,9 @@ jobs:
       # Same rationale as the check job: target-cpu=native artifacts in the
       # shared rust-cache SIGILL on older runner hardware.
       RUSTFLAGS: "-C target-cpu=x86-64-v2"
+      # 同 check job：cargo 内置 git 后端不读 GIT_CONFIG_*，凭据步骤的
+      # url.*.insteadOf 改写只有在 git CLI 后端下才生效。
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
