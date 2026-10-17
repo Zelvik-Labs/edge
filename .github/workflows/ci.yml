@@ -23,6 +23,37 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      # Cargo.toml 经 https git 依赖私有仓 protocol（zelvik-suite）。凭据是**只读 deploy key**
+      # （仓库 secret PROTOCOL_DEPLOY_KEY），只对 protocol 有效；不用个人长期 token，
+      # 也不在 runner 主机上落任何凭据。把 https URL 改写成 ssh URL 让 git 用这把 key。
+      # 托管 runner 上曾靠 rust-cache 里已有的 ~/.cargo/git/db 侥幸跳过 clone，
+      # 自托管冷缓存必须真 clone，缺这一步就会在依赖解析阶段失败。
+      - name: 私有 protocol 依赖凭据（只读 deploy key）
+        run: |
+          set -euo pipefail
+          if [ -z "${PROTOCOL_DEPLOY_KEY:-}" ]; then
+            echo "::error::缺少仓库 secret PROTOCOL_DEPLOY_KEY：protocol 为私有仓库，没有凭据无法拉取依赖。"
+            exit 1
+          fi
+
+          key="$RUNNER_TEMP/protocol_deploy_key"
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$PROTOCOL_DEPLOY_KEY" > "$key"
+
+          # 主机密钥来自 HTTPS 接口而不是首次连接的 TOFU，避免第一次连接就被固定成伪造密钥。
+          curl -fsSL https://api.github.com/meta \
+            | grep -oE '"ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+"' \
+            | tr -d '"' | sed 's/^/github.com /' > "$RUNNER_TEMP/known_hosts"
+
+          {
+            echo "GIT_SSH_COMMAND=ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+            echo "GIT_CONFIG_COUNT=1"
+            echo "GIT_CONFIG_KEY_0=url.git@github.com:Zelvik-Labs/protocol.insteadOf"
+            echo "GIT_CONFIG_VALUE_0=https://github.com/Zelvik-Labs/protocol"
+          } >> "$GITHUB_ENV"
+        env:
+          PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.99.0
         with:
@@ -117,6 +148,37 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      # Cargo.toml 经 https git 依赖私有仓 protocol（zelvik-suite）。凭据是**只读 deploy key**
+      # （仓库 secret PROTOCOL_DEPLOY_KEY），只对 protocol 有效；不用个人长期 token，
+      # 也不在 runner 主机上落任何凭据。把 https URL 改写成 ssh URL 让 git 用这把 key。
+      # 托管 runner 上曾靠 rust-cache 里已有的 ~/.cargo/git/db 侥幸跳过 clone，
+      # 自托管冷缓存必须真 clone，缺这一步就会在依赖解析阶段失败。
+      - name: 私有 protocol 依赖凭据（只读 deploy key）
+        run: |
+          set -euo pipefail
+          if [ -z "${PROTOCOL_DEPLOY_KEY:-}" ]; then
+            echo "::error::缺少仓库 secret PROTOCOL_DEPLOY_KEY：protocol 为私有仓库，没有凭据无法拉取依赖。"
+            exit 1
+          fi
+
+          key="$RUNNER_TEMP/protocol_deploy_key"
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$PROTOCOL_DEPLOY_KEY" > "$key"
+
+          # 主机密钥来自 HTTPS 接口而不是首次连接的 TOFU，避免第一次连接就被固定成伪造密钥。
+          curl -fsSL https://api.github.com/meta \
+            | grep -oE '"ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+"' \
+            | tr -d '"' | sed 's/^/github.com /' > "$RUNNER_TEMP/known_hosts"
+
+          {
+            echo "GIT_SSH_COMMAND=ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+            echo "GIT_CONFIG_COUNT=1"
+            echo "GIT_CONFIG_KEY_0=url.git@github.com:Zelvik-Labs/protocol.insteadOf"
+            echo "GIT_CONFIG_VALUE_0=https://github.com/Zelvik-Labs/protocol"
+          } >> "$GITHUB_ENV"
+        env:
+          PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.99.0
