@@ -160,33 +160,28 @@ impl RpcClient {
         Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Unable to connect to any RPC endpoint")))
     }
 
-    pub async fn ping_endpoint(api_config: &ApiConfig, endpoint: &str) -> bool {
-        let endpoint = match crate::api_config::validate_rpc_endpoint(endpoint) {
-            Ok(endpoint) => endpoint,
-            Err(_) => return false,
-        };
-        let endpoint = match Channel::from_shared(endpoint) {
-            Ok(endpoint) => match endpoint.user_agent("grpc-go/1.0") {
-                Ok(endpoint) => endpoint,
-                Err(_) => return false,
-            },
-            Err(_) => return false,
-        };
+    /// Probe one candidate endpoint without changing any membership state.
+    /// Configuration errors, connection failures and authentication failures
+    /// are all returned to the caller; callers that only need a boolean can
+    /// use `.is_ok()`. Authentication errors are never converted into a
+    /// different-endpoint fallback here.
+    pub async fn probe_endpoint(
+        api_config: &ApiConfig,
+        endpoint: &str,
+    ) -> Result<(), tonic::Status> {
+        let endpoint = crate::api_config::validate_rpc_endpoint(endpoint)
+            .map_err(|err| tonic::Status::invalid_argument(err.to_string()))?;
+        let endpoint = Channel::from_shared(endpoint)
+            .map_err(|err| tonic::Status::invalid_argument(format!("invalid URI: {err}")))?
+            .user_agent("grpc-go/1.0")
+            .map_err(|err| tonic::Status::invalid_argument(format!("invalid user-agent: {err}")))?;
 
-        let endpoint = match Self::configure_tls(endpoint, api_config) {
-            Ok(endpoint) => endpoint,
-            Err(err) => {
-                tracing::warn!("RPC TLS configuration failed: {err}");
-                return false;
-            }
-        };
-        let channel = match Self::configure_endpoint(endpoint, RpcConnectionProfile::PingProbe)
+        let endpoint = Self::configure_tls(endpoint, api_config)
+            .map_err(|err| tonic::Status::invalid_argument(err.to_string()))?;
+        let channel = Self::configure_endpoint(endpoint, RpcConnectionProfile::PingProbe)
             .connect()
             .await
-        {
-            Ok(channel) => channel,
-            Err(_) => return false,
-        };
+            .map_err(|err| tonic::Status::unavailable(format!("connect failed: {err}")))?;
 
         let mut service = pb::ping_service_client::PingServiceClient::with_interceptor(
             channel,
@@ -197,7 +192,7 @@ impl RpcClient {
         .max_decoding_message_size(RPC_MAX_MESSAGE_BYTES)
         .max_encoding_message_size(RPC_MAX_MESSAGE_BYTES);
 
-        service.ping(pb::PingRequest {}).await.is_ok()
+        service.ping(pb::PingRequest {}).await.map(|_| ())
     }
 
     pub fn channel(&self) -> Channel {
@@ -946,16 +941,15 @@ impl SharedRpcClient {
     /// with auto-reconnect and HTTP/2 multiplexing on each connection.
     pub async fn get(api_config: &ApiConfig) -> anyhow::Result<Self> {
         let endpoints = api_config.effective_rpc_endpoints();
-        if endpoints.is_empty() {
-            anyhow::bail!("No RPC endpoints configured");
-        }
 
         // Fast path: reuse existing shared state.
         // Unlike the previous single-endpoint approach, the balance_channel
         // already includes all endpoints and tonic manages connection states internally.
         let guard = SHARED_RPC.load();
         if let Some(state) = guard.as_ref() {
-            // Check if endpoints have changed — if so, dynamically update (mirrors Go's UpdateConfig)
+            // Check if endpoints have changed — if so, dynamically update (mirrors Go's UpdateConfig).
+            // This also runs for an empty membership so removed candidates are
+            // purged from the channel before the caller fails closed below.
             if state.current_endpoints != endpoints {
                 Self::apply_endpoint_changes_with_config(
                     api_config,
@@ -968,10 +962,17 @@ impl SharedRpcClient {
                 new_state.current_endpoints = endpoints.clone();
                 SHARED_RPC.store(Arc::new(Some(new_state)));
             }
+            if endpoints.is_empty() {
+                anyhow::bail!("No RPC endpoints configured");
+            }
             return Ok(Self {
                 channel: state.channel.clone(),
                 api_config: api_config.clone(),
             });
+        }
+
+        if endpoints.is_empty() {
+            anyhow::bail!("No RPC endpoints configured");
         }
 
         // Slow path: build new balance_channel with all endpoints
@@ -993,12 +994,10 @@ impl SharedRpcClient {
     /// Force-refresh the shared channel endpoints when API node changes.
     /// Mirrors Go's `UpdateConfig()` — replaces the endpoint list without
     /// rebuilding the Channel. Existing in-flight RPCs continue on their
-    /// current connections; new RPCs route to the updated endpoints.
+    /// current connections; new RPCs route to the updated endpoints. An empty
+    /// membership removes every endpoint instead of preserving a stale cache.
     pub fn refresh(api_config: &ApiConfig) -> anyhow::Result<()> {
         let endpoints = api_config.effective_rpc_endpoints();
-        if endpoints.is_empty() {
-            anyhow::bail!("No RPC endpoints configured");
-        }
 
         let guard = SHARED_RPC.load();
         if let Some(state) = guard.as_ref() {
@@ -1048,6 +1047,16 @@ impl SharedRpcClient {
         old_endpoints: &[String],
         new_endpoints: &[String],
     ) -> anyhow::Result<()> {
+        // Build every new endpoint first: a URI or TLS error must not leave the
+        // balance channel half-updated after old endpoints were already removed.
+        let mut insertions = Vec::new();
+        for new_ep in new_endpoints {
+            if !old_endpoints.contains(new_ep) {
+                let endpoint = RpcClient::configure_tls(Self::build_endpoint(new_ep)?, api)?;
+                insertions.push((new_ep.clone(), endpoint));
+            }
+        }
+
         // Remove endpoints that are no longer in the list
         for old_ep in old_endpoints {
             if !new_endpoints.contains(old_ep) {
@@ -1059,15 +1068,12 @@ impl SharedRpcClient {
             }
         }
         // Insert new endpoints
-        for new_ep in new_endpoints {
-            if !old_endpoints.contains(new_ep) {
-                let endpoint = RpcClient::configure_tls(Self::build_endpoint(new_ep)?, api)?;
-                endpoint_tx
-                    .try_send(Change::Insert(new_ep.clone(), endpoint))
-                    .map_err(|err| {
-                        anyhow::anyhow!("failed to insert RPC endpoint {}: {}", new_ep, err)
-                    })?;
-            }
+        for (new_ep, endpoint) in insertions {
+            endpoint_tx
+                .try_send(Change::Insert(new_ep.clone(), endpoint))
+                .map_err(|err| {
+                    anyhow::anyhow!("failed to insert RPC endpoint {}: {}", new_ep, err)
+                })?;
         }
         Ok(())
     }
@@ -1162,5 +1168,119 @@ mod tests {
                 .unwrap_err();
 
         assert!(err.to_string().contains("failed to insert RPC endpoint"));
+    }
+
+    #[test]
+    fn clearing_endpoint_list_removes_every_old_candidate() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+        SharedRpcClient::apply_endpoint_changes(
+            &tx,
+            &[
+                "http://127.0.0.1:1".to_string(),
+                "http://127.0.0.1:2".to_string(),
+            ],
+            &[],
+        )
+        .unwrap();
+
+        let mut removed = Vec::new();
+        while let Ok(change) = rx.try_recv() {
+            let Change::Remove(endpoint) = change else {
+                panic!("unexpected endpoint change")
+            };
+            removed.push(endpoint);
+        }
+        assert_eq!(
+            removed,
+            vec![
+                "http://127.0.0.1:1".to_string(),
+                "http://127.0.0.1:2".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn invalid_new_endpoint_does_not_remove_old_candidates() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+        let err = SharedRpcClient::apply_endpoint_changes(
+            &tx,
+            &["http://127.0.0.1:1".to_string()],
+            &["http://127.0.0.1:2".to_string(), "not a url".to_string()],
+        )
+        .unwrap_err();
+
+        assert!(
+            err.to_string().contains("invalid RPC endpoint"),
+            "unexpected error: {err}"
+        );
+        assert!(
+            rx.try_recv().is_err(),
+            "no removal may be sent before every new endpoint validates"
+        );
+    }
+
+    fn test_api_config(endpoints: Vec<String>) -> crate::api_config::ApiConfig {
+        crate::api_config::ApiConfig {
+            rpc_tls: Default::default(),
+            rpc_endpoints: endpoints,
+            rpc_disable_update: false,
+            instance_id: "nd_0123456789".into(),
+            secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".into(),
+            comm_mode: String::new(),
+            gcloud_node_id: "1".into(),
+            access_log_pipeline: Default::default(),
+            relay: Default::default(),
+            kernel_tuning: Default::default(),
+            cache: Default::default(),
+        }
+    }
+
+    /// Serializes tests that touch the process-global shared channel and the
+    /// runtime membership, restoring both even when an assertion panics.
+    struct SharedRpcTestGuard {
+        _lock: tokio::sync::MutexGuard<'static, ()>,
+        runtime_endpoints: Option<Vec<String>>,
+    }
+
+    impl SharedRpcTestGuard {
+        async fn new() -> Self {
+            let lock = crate::api_config::RELEASE_SIGNING_TEST_LOCK.lock().await;
+            let runtime_endpoints = crate::api_config::snapshot_runtime_rpc_endpoints();
+            SharedRpcClient::reset_for_test();
+            Self {
+                _lock: lock,
+                runtime_endpoints,
+            }
+        }
+    }
+
+    impl Drop for SharedRpcTestGuard {
+        fn drop(&mut self) {
+            SharedRpcClient::reset_for_test();
+            crate::api_config::restore_runtime_rpc_endpoints(self.runtime_endpoints.clone());
+        }
+    }
+
+    /// Negative control: the previous `refresh` rejected an empty membership
+    /// before touching the balance channel, leaving removed endpoints cached in
+    /// the shared state. `get` then still reported the stale list.
+    #[tokio::test]
+    async fn empty_membership_purges_shared_channel_and_fails_closed() {
+        let _guard = SharedRpcTestGuard::new().await;
+        let api = test_api_config(vec!["http://127.0.0.1:1".to_string()]);
+        crate::api_config::ApiConfig::set_runtime_rpc_endpoints(api.rpc_endpoints.clone()).unwrap();
+        SharedRpcClient::get(&api)
+            .await
+            .expect("the shared balance channel should build without connecting");
+
+        crate::api_config::ApiConfig::set_runtime_rpc_endpoints(Vec::new()).unwrap();
+        SharedRpcClient::refresh(&api).expect("empty membership refresh must not bail");
+
+        {
+            let guard = super::SHARED_RPC.load();
+            let state = guard.as_ref().as_ref().expect("shared state");
+            assert!(state.current_endpoints.is_empty());
+        }
+        assert!(SharedRpcClient::get(&api).await.is_err());
     }
 }

@@ -450,7 +450,10 @@ impl AccessLogUploadWorker {
     > {
         // The shared suite interceptor owns the identity metadata and re-mints
         // the credential for every upload.
-        let interceptor = self.api_config.credential_interceptor().expect("control-plane identity must be valid before an upload client is built");
+        let interceptor = self
+            .api_config
+            .credential_interceptor()
+            .expect("control-plane identity must be valid before an upload client is built");
         pb::http_access_log_service_client::HttpAccessLogServiceClient::with_interceptor(
             channel,
             interceptor,
@@ -572,7 +575,6 @@ pub struct NodeLogUploader {
     request_timeout: Duration,
     retry_queue: VecDeque<pb::NodeLog>,
     retry_queue_capacity: usize,
-    channel: Option<Channel>,
     consecutive_failures: u32,
     next_attempt_at: Instant,
 }
@@ -597,7 +599,6 @@ impl NodeLogUploader {
             request_timeout: Duration::from_secs(10),
             retry_queue: VecDeque::with_capacity(retry_queue_capacity.min(1024)),
             retry_queue_capacity,
-            channel: None,
             consecutive_failures: 0,
             next_attempt_at: Instant::now(),
         }
@@ -642,41 +643,6 @@ impl NodeLogUploader {
         Duration::from_secs(5u64.saturating_mul(1u64 << shift).min(300))
     }
 
-    async fn get_or_connect_channel(&mut self) -> Option<&Channel> {
-        if self.channel.is_some() {
-            return self.channel.as_ref();
-        }
-
-        let api_endpoint = self
-            .api_config
-            .effective_rpc_endpoints()
-            .first()
-            .cloned()
-            .unwrap_or_default();
-
-        let endpoint = match tonic::transport::Endpoint::from_shared(api_endpoint) {
-            Ok(ep) => ep
-                .connect_timeout(self.request_timeout)
-                .keep_alive_timeout(Duration::from_secs(10))
-                .tcp_keepalive(Some(Duration::from_secs(30))),
-            Err(err) => {
-                error!("Invalid API endpoint for NodeLogUploader: {}", err);
-                return None;
-            }
-        };
-
-        match endpoint.connect().await {
-            Ok(channel) => {
-                self.channel = Some(channel);
-                self.channel.as_ref()
-            }
-            Err(err) => {
-                warn!("Failed to connect for NodeLogUploader: {}", err);
-                None
-            }
-        }
-    }
-
     #[allow(clippy::result_large_err)]
     async fn flush_batch(&mut self, buffer: &mut Vec<pb::NodeLog>) {
         let fresh = std::mem::replace(buffer, Vec::with_capacity(self.batch_size));
@@ -691,26 +657,23 @@ impl NodeLogUploader {
         let retry_copy = logs_to_send.clone();
         let count = logs_to_send.len();
 
-        let Some(channel) = self.get_or_connect_channel().await.cloned() else {
-            crate::pipeline_metrics::add(
-                crate::pipeline_metrics::PipelineCounter::NodeLogUploadFailed,
-                count as u64,
-            );
-            self.note_upload_failure();
-            self.requeue_node_logs(logs_to_send);
-            return;
+        // Use the shared balance channel so every configured candidate is
+        // available and the node-wide RPC TLS/mTLS configuration is applied.
+        // Selecting only the first endpoint silently ignored the rest.
+        let rpc = match crate::rpc::client::SharedRpcClient::get(&self.api_config).await {
+            Ok(shared) => shared.as_rpc_client(),
+            Err(e) => {
+                crate::pipeline_metrics::add(
+                    crate::pipeline_metrics::PipelineCounter::NodeLogUploadFailed,
+                    count as u64,
+                );
+                warn!("Failed to connect for NodeLogUploader: {}", e);
+                self.note_upload_failure();
+                self.requeue_node_logs(logs_to_send);
+                return;
+            }
         };
-
-        let interceptor = self.api_config.credential_interceptor().expect("control-plane identity must be valid before an upload client is built");
-
-        let mut client = pb::node_log_service_client::NodeLogServiceClient::with_interceptor(
-            channel,
-            interceptor,
-        )
-        .send_compressed(CompressionEncoding::Gzip)
-        .accept_compressed(CompressionEncoding::Gzip)
-        .max_decoding_message_size(RPC_MAX_MESSAGE_BYTES)
-        .max_encoding_message_size(RPC_MAX_MESSAGE_BYTES);
+        let mut client = rpc.node_log_service();
 
         let request = pb::CreateNodeLogsRequest {
             node_logs: logs_to_send,
@@ -729,7 +692,6 @@ impl NodeLogUploader {
                 warn!("Failed to upload node logs: {}", e);
                 self.note_upload_failure();
                 self.requeue_node_logs(retry_copy);
-                self.channel = None;
             }
             Err(_) => {
                 crate::pipeline_metrics::add(
@@ -739,7 +701,6 @@ impl NodeLogUploader {
                 warn!("Node log upload timed out after {:?}", self.request_timeout);
                 self.note_upload_failure();
                 self.requeue_node_logs(retry_copy);
-                self.channel = None;
             }
         }
     }

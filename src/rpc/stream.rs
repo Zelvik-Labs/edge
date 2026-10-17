@@ -806,25 +806,50 @@ async fn handle_message(
                                 String::new()
                             }
                         };
-                        if !endpoint.is_empty()
-                            && !RpcClient::ping_endpoint(api_config, &endpoint).await
-                        {
-                            is_ok = false;
-                            message_reply = "endpoint health check failed".to_string();
-                        }
-                        if is_ok {
-                            match ApiConfig::set_runtime_rpc_endpoints(vec![endpoint]) {
-                                Ok(()) => {
-                                    if let Err(e) =
-                                        crate::rpc::client::SharedRpcClient::refresh(api_config)
-                                    {
-                                        is_ok = false;
-                                        message_reply = format!("refresh failed: {}", e);
+                        if !endpoint.is_empty() {
+                            let current = api_config.effective_rpc_endpoints();
+                            if !current.iter().any(|candidate| candidate == &endpoint) {
+                                // This is a switch command, not an insert. An
+                                // address outside the current aggregate must
+                                // never be resurrected from a stale cache.
+                                is_ok = false;
+                                message_reply =
+                                    "endpoint is not part of the configured API node membership"
+                                        .to_string();
+                            } else {
+                                match RpcClient::probe_endpoint(api_config, &endpoint).await {
+                                    Ok(()) => {
+                                        // Re-check membership under the write
+                                        // lock: a concurrent discovery update
+                                        // may have removed it while we probed.
+                                        match ApiConfig::prefer_runtime_rpc_endpoint(
+                                            &current, &endpoint,
+                                        ) {
+                                            Ok(()) => {
+                                                if let Err(e) =
+                                                    crate::rpc::client::SharedRpcClient::refresh(
+                                                        api_config,
+                                                    )
+                                                {
+                                                    is_ok = false;
+                                                    message_reply =
+                                                        format!("refresh failed: {}", e);
+                                                }
+                                            }
+                                            Err(e) => {
+                                                is_ok = false;
+                                                message_reply = format!("endpoint rejected: {}", e);
+                                            }
+                                        }
                                     }
-                                }
-                                Err(e) => {
-                                    is_ok = false;
-                                    message_reply = format!("endpoint rejected: {}", e);
+                                    Err(status) => {
+                                        // Keep the durable membership intact: a
+                                        // transient probe failure only rejects
+                                        // this switch request.
+                                        is_ok = false;
+                                        message_reply =
+                                            format!("endpoint health check failed: {}", status);
+                                    }
                                 }
                             }
                         }

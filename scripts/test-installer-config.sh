@@ -10,6 +10,7 @@
 #      /usr/bin/zelvik-edge。现在单元是模板，@ZELVIK_EDGE_BIN@ 由安装器替换。
 #   2. 重跑安装器整文件覆盖 api_node.yaml，把运维设的 xdp / kernelTuning /
 #      gcloudNodeId 等键丢掉。现在只重写安装器自己拥有的键。
+#   3. --endpoint 的逗号分隔列表必须完整、按序落盘；重跑不得只留首项或残留旧项。
 #
 # 用法：bash scripts/test-installer-config.sh
 # 需要 docker；没有 docker 时跳过（不伪造通过）。
@@ -40,7 +41,8 @@ DIR=/opt/zelvik
 UNIT="$DIR/etc/systemd/system/zelvik-edge.service"
 CFG="$DIR/var/lib/zelvik/edge/configs/api_node.yaml"
 
-bash "$W/install.sh" --dir "$DIR" --endpoint https://cp.example.com \
+bash "$W/install.sh" --dir "$DIR" \
+    --endpoint 'https://cp1.example.com,https://cp2.example.com,https://cp3.example.com' \
     --node-id nd_test --secret abc123 --comm-mode tls >/tmp/install1.log 2>&1 \
     || { tail -20 /tmp/install1.log; exit 1; }
 
@@ -51,26 +53,56 @@ expect() { # expect <label> <file> <pattern>
 absent() { # absent <label> <file> <pattern>
     if grep -qF -- "$3" "$2"; then echo "FAIL $1: $2 不该有 $3"; fail=1; else echo "OK   $1"; fi
 }
+endpoints() { # endpoints <file> — emit rpc.endpoints list entries in file order
+    awk '
+        /^rpc\.endpoints:[[:space:]]*$/ { in_list = 1; next }
+        /^[^[:space:]]/ { in_list = 0 }
+        in_list && /^  - "/ {
+            line = $0
+            sub(/^  - "/, "", line)
+            sub(/"$/, "", line)
+            print line
+        }
+    ' "$1"
+}
+expect_endpoints() { # expect_endpoints <label> <file> <comma-separated expected>
+    local label="$1" file="$2" expected="$3" actual
+    actual="$(endpoints "$file" | paste -sd, -)"
+    if [ "$actual" = "$expected" ]; then
+        echo "OK   $label"
+    else
+        echo "FAIL $label: expected [$expected], got [$actual]"
+        fail=1
+    fi
+}
 
 # 1) --dir：二进制落点、单元 ExecStart、建目录三者必须一致
 [ -x "$DIR/usr/bin/zelvik-edge" ] && echo "OK   二进制落在 $DIR/usr/bin" || { echo "FAIL 二进制未安装到 --dir 前缀"; fail=1; }
 expect "单元 ExecStart 指向实际二进制"  "$UNIT" "ExecStart=$DIR/usr/bin/zelvik-edge"
 absent "单元不含写死的 /usr/bin/zelvik-edge" "$UNIT" "ExecStart=/usr/bin/zelvik-edge"
 
-# 2) 首装写出安装器拥有的键，且 xdp 默认关闭
+# 2) 首装写出安装器拥有的键，且 xdp 默认关闭。
+#    --endpoint 的逗号分隔完整列表必须逐项、按序写入，不能只留第一项。
 for k in 'rpc.endpoints:' 'instanceId: "nd_test"' 'secret: "abc123"' 'commMode: "tls"' 'enabled: false'; do
     expect "首装含 $k" "$CFG" "$k"
 done
+expect_endpoints "首装保留完整有序 endpoint 列表" "$CFG" \
+    'https://cp1.example.com,https://cp2.example.com,https://cp3.example.com'
 
 # 3) 运维改动后重跑：拥有的键更新，运维的键原样保留
 sed -i 's/^xdp:$/xdp:\n  enabled: true/' "$CFG"
 { printf 'kernelTuning:\n  rmemMax: 16777216\n'; printf 'gcloudNodeId: "1001"\n'; } >> "$CFG"
 
-bash "$W/install.sh" --dir "$DIR" --endpoint https://cp2.example.com \
+bash "$W/install.sh" --dir "$DIR" \
+    --endpoint 'https://cp4.example.com,https://cp5.example.com' \
     --node-id nd_test2 --secret def456 --comm-mode tls >/tmp/install2.log 2>&1 \
     || { tail -20 /tmp/install2.log; exit 1; }
 
-expect "重跑更新 endpoint"      "$CFG" '"https://cp2.example.com"'
+expect_endpoints "重跑替换为新的完整有序 endpoint 列表" "$CFG" \
+    'https://cp4.example.com,https://cp5.example.com'
+absent "重跑移除旧 endpoint 1"  "$CFG" '"https://cp1.example.com"'
+absent "重跑移除旧 endpoint 2"  "$CFG" '"https://cp2.example.com"'
+absent "重跑移除旧 endpoint 3"  "$CFG" '"https://cp3.example.com"'
 expect "重跑更新 instanceId"    "$CFG" 'instanceId: "nd_test2"'
 expect "重跑更新 secret"        "$CFG" 'secret: "def456"'
 absent "重跑不保留旧 secret"    "$CFG" 'secret: "abc123"'
