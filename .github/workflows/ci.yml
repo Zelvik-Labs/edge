@@ -144,7 +144,9 @@ jobs:
   test:
     name: Test - linux-x64
     runs-on: [self-hosted, Linux, X64, zelvik-ci]
-    timeout-minutes: 60
+    # 60 分钟不够：`CARGO_BUILD_JOBS=2` 把并行度减半，构建时间随之上去。
+    # 原来的 60 分钟里大部分时间也不是在编译，而是在内存上限附近颠簸（见下）。
+    timeout-minutes: 90
     env:
       # Same rationale as the check job: target-cpu=native artifacts in the
       # shared rust-cache SIGILL on older runner hardware.
@@ -152,6 +154,12 @@ jobs:
       # 同 check job：cargo 内置 git 后端不读 GIT_CONFIG_*，凭据步骤的
       # url.*.insteadOf 改写只有在 git CLI 后端下才生效。
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      # 主池 runner Pod 的 limits.memory 是 6Gi，而 cargo 按可见 CPU 默认开 4 个
+      # 并行 rustc，单个 rustc 的 anon-rss 实测就有 3.0GiB —— 峰值把 cgroup 顶爆，
+      # 内核 OOM killer 挑中的是 Runner.Listener 本身，于是作业不是「失败」而是
+      # 「runner 失联」，连失败原因都留不下来。
+      # 限到 2 个并发：不改产物、不降可调试性，只是构建慢一些。
+      CARGO_BUILD_JOBS: "2"
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
