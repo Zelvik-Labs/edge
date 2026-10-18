@@ -685,40 +685,20 @@ impl RpcClient {
         .max_encoding_message_size(RPC_MAX_MESSAGE_BYTES)
     }
 
-    pub fn ip_library_artifact_service(
+    pub fn asset_control_service(
         &self,
-    ) -> pb::ip_library_artifact_service_client::IpLibraryArtifactServiceClient<
+    ) -> zelvik_suite::pb::asset::v1::asset_control_client::AssetControlClient<
         tonic::service::interceptor::InterceptedService<
             Channel,
             zelvik_suite::channel::CredentialInterceptor,
         >,
     > {
-        pb::ip_library_artifact_service_client::IpLibraryArtifactServiceClient::with_interceptor(
+        zelvik_suite::pb::asset::v1::asset_control_client::AssetControlClient::with_interceptor(
             self.channel.clone(),
             Self::interceptor(&self.api_config),
         )
-        .send_compressed(CompressionEncoding::Gzip)
-        .accept_compressed(CompressionEncoding::Gzip)
-        .max_decoding_message_size(RPC_TRANSFER_MESSAGE_BYTES)
-        .max_encoding_message_size(RPC_TRANSFER_MESSAGE_BYTES)
-    }
-
-    pub fn file_chunk_service(
-        &self,
-    ) -> pb::file_chunk_service_client::FileChunkServiceClient<
-        tonic::service::interceptor::InterceptedService<
-            Channel,
-            zelvik_suite::channel::CredentialInterceptor,
-        >,
-    > {
-        pb::file_chunk_service_client::FileChunkServiceClient::with_interceptor(
-            self.channel.clone(),
-            Self::interceptor(&self.api_config),
-        )
-        .send_compressed(CompressionEncoding::Gzip)
-        .accept_compressed(CompressionEncoding::Gzip)
-        .max_decoding_message_size(RPC_TRANSFER_MESSAGE_BYTES)
-        .max_encoding_message_size(RPC_TRANSFER_MESSAGE_BYTES)
+        .max_decoding_message_size(RPC_MAX_MESSAGE_BYTES)
+        .max_encoding_message_size(RPC_MAX_MESSAGE_BYTES)
     }
 
     pub fn ssl_cert_service(
@@ -1052,6 +1032,7 @@ impl SharedRpcClient {
             instance_id: "nd_0123456789".into(),
             secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".into(),
             comm_mode: String::new(),
+            trust_keys: Vec::new(),
             gcloud_node_id: "1".into(),
             access_log_pipeline: Default::default(),
             relay: Default::default(),
@@ -1247,6 +1228,7 @@ mod tests {
             instance_id: "nd_0123456789".into(),
             secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".into(),
             comm_mode: String::new(),
+            trust_keys: Vec::new(),
             gcloud_node_id: "1".into(),
             access_log_pipeline: Default::default(),
             relay: Default::default(),

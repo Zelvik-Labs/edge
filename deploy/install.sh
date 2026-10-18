@@ -49,7 +49,7 @@ Usage: install.sh [OPTIONS]
   --node-id <id>                    Node identity  (alias: --instance-id)
   --secret <hex>                    One-time registration secret
   --comm-mode <plaintext|tls|mtls>  Communication mode (default: tls)
-  --trust-keys <hex[,hex...]>       Pinned trust keys (accepted, forwarded to the node)
+  --trust-keys <hex[,hex...]>       Pinned Ed25519 geo distribution public keys
   --tls-ca-file <path>              CA bundle for mTLS  (--comm-mode mtls)
   --tls-cert-file <path>            Client certificate for mTLS
   --tls-key-file <path>             Client key for mTLS
@@ -64,6 +64,7 @@ Environment variable fallbacks:
   ZELVIK_ENDPOINT or API_ENDPOINTS
   ZELVIK_NODE_ID  or ZELVIK_INSTANCE_ID
   ZELVIK_NODE_SECRET or ZELVIK_INSTANCE_SECRET
+  ZELVIK_EDGE_TRUST_KEYS or --trust-keys
 EOF
     exit "${1:-1}"
 }
@@ -119,6 +120,15 @@ if [ -z "$NODE_ID" ]; then
 fi
 if [ -z "$NODE_SECRET" ]; then
     NODE_SECRET="${ZELVIK_NODE_SECRET:-${ZELVIK_INSTANCE_SECRET:-}}"
+fi
+if [ -z "$TRUST_KEYS" ]; then
+    TRUST_KEYS="${ZELVIK_EDGE_TRUST_KEYS:-}"
+fi
+if [ -n "$TRUST_KEYS" ]; then
+    printf '%s\n' "$TRUST_KEYS" | tr ',' '\n' | while IFS= read -r _key; do
+        [ "${#_key}" -eq 64 ] || die "each --trust-keys entry must be 32 bytes in hex"
+        case "$_key" in *[!0-9a-fA-F]*) die "--trust-keys is not hex" ;; esac
+    done || exit 1
 fi
 
 # ---------------------------------------------------------------------------
@@ -199,7 +209,7 @@ fi
 # path ended up writing files the binary never opened.
 # ---------------------------------------------------------------------------
 run_cmd install -d -m 0755 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR"
-run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "${DATA_DIR}/geoip"
+run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "${DATA_DIR}/data/geo"
 run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$LOG_DIR"
 # These two live under a path that always exists on a default install (/usr/bin,
 # /etc/systemd/system) but not under --dir; without them the binary and the unit
@@ -240,6 +250,9 @@ run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "${EDGE_HOME}/
 # this is the only file the node reads, so clobbering it silently reverts live
 # node settings on every upgrade.
 _INSTALLER_KEYS='^(rpc\.endpoints|rpc\.tls|instanceId|secret|commMode):'
+if [ -n "$TRUST_KEYS" ]; then
+    _INSTALLER_KEYS='^(rpc\.endpoints|rpc\.tls|instanceId|secret|commMode|trustKeys):'
+fi
 
 # Keep every line except the installer-owned keys and their indented children,
 # plus the installer's own header so a re-run does not stack copies of it.
@@ -265,6 +278,12 @@ if [ "$DRY_RUN" -eq 0 ]; then
         printf 'instanceId: "%s"\n' "$NODE_ID"
         printf 'secret: "%s"\n' "$NODE_SECRET"
         printf 'commMode: "%s"\n' "$COMM_MODE"
+        if [ -n "$TRUST_KEYS" ]; then
+            printf 'trustKeys:\n'
+            printf '%s\n' "$TRUST_KEYS" | tr ',' '\n' | while IFS= read -r _key; do
+                printf '  - "%s"\n' "$_key"
+            done
+        fi
         if [ "$COMM_MODE" = "mtls" ]; then
             printf 'rpc.tls:\n'
             if [ -n "$TLS_CA_FILE" ]; then printf '  caFile: "%s"\n' "$TLS_CA_FILE"; fi

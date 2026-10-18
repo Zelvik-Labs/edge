@@ -74,16 +74,8 @@ impl NodePaths {
         self.data_dir().join("cache")
     }
 
-    pub fn geoip_city_file(&self) -> PathBuf {
-        self.data_dir().join("GeoLite2-City.mmdb")
-    }
-
-    pub fn geoip_asn_file(&self) -> PathBuf {
-        self.data_dir().join("GeoLite2-ASN.mmdb")
-    }
-
-    pub fn geoip_country_file(&self) -> PathBuf {
-        self.data_dir().join("GeoLite2-Country.mmdb")
+    pub fn geo_root(&self) -> PathBuf {
+        self.data_dir().join("geo")
     }
 
     pub fn legacy_pid_file(&self) -> PathBuf {
@@ -104,18 +96,6 @@ impl NodePaths {
 
     pub fn legacy_cache_dir(&self) -> PathBuf {
         self.root.join("configs/cache/disk")
-    }
-
-    pub fn legacy_geoip_city_file(&self) -> PathBuf {
-        self.root.join("GeoLite2-City.mmdb")
-    }
-
-    pub fn legacy_geoip_asn_file(&self) -> PathBuf {
-        self.root.join("GeoLite2-ASN.mmdb")
-    }
-
-    pub fn legacy_geoip_country_file(&self) -> PathBuf {
-        self.root.join("GeoLite2-Country.mmdb")
     }
 
     pub fn api_config_candidates(&self) -> Vec<PathBuf> {
@@ -144,18 +124,6 @@ impl NodePaths {
             self.mace_metrics_db_dir(),
             self.legacy_mace_metrics_db_dir(),
         ]
-    }
-
-    pub fn geoip_city_candidates(&self) -> Vec<PathBuf> {
-        vec![self.geoip_city_file(), self.legacy_geoip_city_file()]
-    }
-
-    pub fn geoip_asn_candidates(&self) -> Vec<PathBuf> {
-        vec![self.geoip_asn_file(), self.legacy_geoip_asn_file()]
-    }
-
-    pub fn geoip_country_candidates(&self) -> Vec<PathBuf> {
-        vec![self.geoip_country_file(), self.legacy_geoip_country_file()]
     }
 
     pub fn ensure_runtime_dirs(&self) -> std::io::Result<()> {

@@ -423,6 +423,7 @@ mod tests {
             // The snapshot HMAC fixtures sign with the literal "secret".
             secret: "secret".into(),
             comm_mode: String::new(),
+            trust_keys: Vec::new(),
             gcloud_node_id: "nd_test".into(),
             access_log_pipeline: Default::default(),
             relay: Default::default(),
@@ -919,6 +920,7 @@ mod loopback_tests {
                 // The loopback server signs with the same credential key.
                 secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".into(),
                 comm_mode: String::new(),
+                trust_keys: Vec::new(),
                 gcloud_node_id: "nd_test".into(),
                 access_log_pipeline: Default::default(),
                 relay: Default::default(),

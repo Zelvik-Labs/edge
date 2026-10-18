@@ -1,6 +1,5 @@
 use arc_swap::ArcSwapOption;
 use lru::LruCache;
-use maxminddb::geoip2;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::net::IpAddr;
@@ -8,8 +7,8 @@ use std::num::NonZeroUsize;
 use std::sync::LazyLock as Lazy;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use tracing::warn;
 use woothee::parser::Parser;
+use zelvik_geo_runtime::{GeoStore, GeoView};
 
 pub struct GeoInfo {
     pub country: Arc<str>,
@@ -59,90 +58,42 @@ impl Clone for RequestStats {
     }
 }
 
+static GEO_STORE: Lazy<ArcSwapOption<GeoStore>> = Lazy::new(ArcSwapOption::empty);
 static GEO_AVAILABLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static GEO_CITY_BYTES: AtomicU64 = AtomicU64::new(0);
 static GEO_CITY_GENERATION: AtomicU64 = AtomicU64::new(0);
 static GEO_ASN_BYTES: AtomicU64 = AtomicU64::new(0);
+static GEO_ASN_AVAILABLE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-static GEO_CITY_READER: Lazy<ArcSwapOption<maxminddb::Reader<maxminddb::Mmap>>> =
-    Lazy::new(ArcSwapOption::empty);
-
-pub fn initialize_geoip_readers() {
-    for path in crate::paths::NodePaths::current().geoip_city_candidates() {
-        if path.exists() {
-            if let Err(err) = reload_city_reader(&path) {
-                warn!(
-                    "Failed to load GeoIP City database at {}: {}",
-                    path.display(),
-                    err
-                );
-            }
-            return;
-        }
-    }
-}
-
-pub fn reload_city_reader(path: &std::path::Path) -> anyhow::Result<()> {
-    // SAFETY: the GeoIP database is only replaced via download-to-temp plus
-    // atomic rename (rpc/files.rs install_city_database), so the inode this
-    // reader mmaps is never modified or truncated in place.
-    let reader = unsafe { maxminddb::Reader::open_mmap(path)? };
-    reader.verify()?;
-    anyhow::ensure!(
-        reader
-            .metadata()
-            .database_type
-            .to_ascii_lowercase()
-            .contains("city"),
-        "GeoIP database is not a City database: {}",
-        reader.metadata().database_type
-    );
-    GEO_CITY_READER.store(Some(Arc::new(reader)));
-    GEO_CITY_BYTES.store(
-        std::fs::metadata(path)
-            .map(|metadata| metadata.len())
-            .unwrap_or(0),
-        Ordering::Release,
-    );
-    GEO_CITY_GENERATION.fetch_add(1, Ordering::AcqRel);
-    GEO_AVAILABLE.store(true, std::sync::atomic::Ordering::Release);
+/// Installs the one geo store the query path reads. The control-side agent and
+/// the request path share this `Arc`, so an activation is visible to lookups
+/// without a second mmap or a path-based reload.
+///
+/// Cached lookups from the previous generation are dropped here: the bundle
+/// identity is part of a geo answer, and serving a cached country for an IP
+/// after the data changed would silently mix generations. In-flight lookups
+/// keep the snapshot they already loaded (ArcSwap), so a clear cannot tear one.
+pub fn install_geo_store(
+    store: Arc<GeoStore>,
+    city_bytes: u64,
+    asn_bytes: u64,
+    asn_loaded: bool,
+) {
+    let generation = store.generation();
+    GEO_CITY_BYTES.store(city_bytes, Ordering::Release);
+    GEO_ASN_BYTES.store(asn_bytes, Ordering::Release);
+    GEO_ASN_AVAILABLE.store(asn_loaded, Ordering::Release);
+    GEO_CITY_GENERATION.store(generation, Ordering::Release);
+    GEO_AVAILABLE.store(store.current().is_some(), Ordering::Release);
     GEO_CACHE.clear();
-    Ok(())
+    GEO_STORE.store(Some(store));
 }
 
-static GEO_ASN_READER: Lazy<Option<maxminddb::Reader<maxminddb::Mmap>>> = Lazy::new(|| {
-    let paths = crate::paths::NodePaths::current().geoip_asn_candidates();
-    for path in &paths {
-        if path.exists() {
-            // SAFETY: GeoIP databases are only installed via atomic rename;
-            // see reload_city_reader.
-            return match unsafe { maxminddb::Reader::open_mmap(path) } {
-                Ok(r) => {
-                    GEO_ASN_BYTES.store(
-                        std::fs::metadata(path)
-                            .map(|metadata| metadata.len())
-                            .unwrap_or(0),
-                        Ordering::Release,
-                    );
-                    Some(r)
-                }
-                Err(e) => {
-                    warn!(
-                        "Failed to load GeoIP ASN database at {}: {}. ASN stats will be disabled.",
-                        path.display(),
-                        e
-                    );
-                    None
-                }
-            };
-        }
-    }
-    warn!(
-        "Failed to load GeoIP ASN database from {:?}. ASN stats will be disabled.",
-        paths
-    );
-    None
-});
+fn active_geo_view() -> Option<Arc<dyn GeoView>> {
+    GEO_STORE
+        .load_full()
+        .and_then(|store| store.current().map(|snapshot| snapshot as Arc<dyn GeoView>))
+}
 
 const CACHE_SHARDS: usize = 64;
 const GEO_CACHE_ENTRY_ESTIMATED_BYTES: u64 = 384;
@@ -210,8 +161,10 @@ impl<K: Hash + Eq, V: Clone> ShardedLru<K, V> {
     }
 }
 
-// Cache for GeoIP results (IP -> GeoInfo)
-static GEO_CACHE: Lazy<ShardedLru<IpAddr, Option<GeoInfo>>> =
+// Cache for GeoIP results (IP -> (bundle generation, GeoInfo)). The generation
+// is part of the key: a cached answer from a previous bundle must never be
+// served after an activation, even if the cache clear races with this lookup.
+static GEO_CACHE: Lazy<ShardedLru<IpAddr, (u64, Option<GeoInfo>)>> =
     Lazy::new(|| ShardedLru::new(cache_capacity_per_shard(GEO_CACHE_ENTRY_ESTIMATED_BYTES, 4)));
 
 // Cache for User-Agent results (UA string -> (Arc<str>, Arc<str>))
@@ -221,21 +174,23 @@ static UA_CACHE: Lazy<ShardedLru<String, UaCacheValue>> =
 
 static UA_PARSER: Lazy<Parser> = Lazy::new(Parser::new);
 
-pub fn analyze_request(ip: IpAddr, ua: &str) -> RequestStats {
-    // Fast path: skip Mutex lock when GeoIP database is unavailable
-    let geo = if GEO_AVAILABLE.load(std::sync::atomic::Ordering::Relaxed) {
-        let mutex = GEO_CACHE.get_shard(&ip);
-        let mut cache = mutex.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(cached) = cache.get(&ip) {
-            cached.clone()
-        } else {
-            let res = lookup_geo_internal(ip);
-            cache.put(ip, res.clone());
-            res
+fn cached_geo(ip: IpAddr) -> Option<GeoInfo> {
+    let view = active_geo_view()?;
+    let generation = view.generation();
+    let mutex = GEO_CACHE.get_shard(&ip);
+    let mut cache = mutex.lock().unwrap_or_else(|e| e.into_inner());
+    match cache.get(&ip) {
+        Some((cached_generation, cached)) if *cached_generation == generation => cached.clone(),
+        _ => {
+            let result = lookup_geo_on(view.as_ref(), ip);
+            cache.put(ip, (generation, result.clone()));
+            result
         }
-    } else {
-        None
-    };
+    }
+}
+
+pub fn analyze_request(ip: IpAddr, ua: &str) -> RequestStats {
+    let geo = cached_geo(ip);
 
     let (browser, browser_version, os, os_version) = if ua.is_empty() {
         (Arc::from(""), Arc::from(""), Arc::from(""), Arc::from(""))
@@ -274,80 +229,45 @@ pub fn analyze_request(ip: IpAddr, ua: &str) -> RequestStats {
     }
 }
 
-fn get_isp_name(ip: IpAddr) -> String {
-    if let Some(reader) = &*GEO_ASN_READER {
-        match reader
-            .lookup(ip)
-            .and_then(|result| result.decode::<geoip2::Asn>())
-        {
-            Ok(Some(asn)) => asn
-                .autonomous_system_organization
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| "Unknown".to_string()),
-            Err(_) => "Unknown".to_string(),
-            Ok(None) => "Unknown".to_string(),
-        }
-    } else {
-        "Unknown".to_string()
-    }
-}
-
-fn lookup_geo_internal(ip: IpAddr) -> Option<GeoInfo> {
-    if let Some(reader) = GEO_CITY_READER.load_full() {
-        match reader
-            .lookup(ip)
-            .and_then(|result| result.decode::<geoip2::City>())
-        {
-            Ok(Some(city)) => Some(GeoInfo {
-                country: Arc::from(city.country.names.english.unwrap_or_default()),
-                country_id: city.country.geoname_id.map(|id| id as i64).unwrap_or(0),
-                country_iso: Arc::from(city.country.iso_code.unwrap_or_default()),
-                region: Arc::from(
-                    city.subdivisions
-                        .first()
-                        .and_then(|sd| sd.names.english)
-                        .unwrap_or_default(),
-                ),
-                region_id: city
-                    .subdivisions
-                    .first()
-                    .and_then(|sd| sd.geoname_id)
-                    .map(|id| id as i64)
-                    .unwrap_or(0),
-                region_iso: Arc::from(
-                    city.subdivisions
-                        .first()
-                        .and_then(|sd| sd.iso_code)
-                        .unwrap_or_default(),
-                ),
-                city: Arc::from(city.city.names.english.unwrap_or_default()),
-                city_id: city.city.geoname_id.map(|id| id as i64).unwrap_or(0),
-                provider: Arc::from(get_isp_name(ip)),
-            }),
-            Err(_) => None,
-            Ok(None) => None,
-        }
-    } else {
-        None
-    }
+fn lookup_geo_on(view: &dyn GeoView, ip: IpAddr) -> Option<GeoInfo> {
+    let lookup = view.lookup_full(ip);
+    let record = lookup.record?;
+    Some(GeoInfo {
+        country: Arc::from(
+            record
+                .country_name
+                .or_else(|| record.country_iso.clone())
+                .unwrap_or_default(),
+        ),
+        country_id: record.country_id.map(i64::from).unwrap_or(0),
+        country_iso: Arc::from(record.country_iso.unwrap_or_default()),
+        region: Arc::from(
+            record
+                .subdivision_name
+                .or_else(|| record.subdivision_iso.clone())
+                .unwrap_or_default(),
+        ),
+        region_id: record.subdivision_id.map(i64::from).unwrap_or(0),
+        region_iso: Arc::from(record.subdivision_iso.unwrap_or_default()),
+        city: Arc::from(record.city_name.unwrap_or_default()),
+        city_id: record.city_id.map(i64::from).unwrap_or(0),
+        provider: Arc::from(record.asn_org.unwrap_or_else(|| "Unknown".to_string())),
+    })
 }
 
 pub fn lookup_isp_name(ip: IpAddr) -> Arc<str> {
-    Arc::from(get_isp_name(ip))
+    active_geo_view()
+        .and_then(|view| view.lookup_asn(ip))
+        .and_then(|(_, org)| org)
+        .map(Arc::from)
+        .unwrap_or_else(|| Arc::from("Unknown"))
 }
 
 pub fn lookup_asn_number(ip: IpAddr) -> i64 {
-    if let Some(reader) = &*GEO_ASN_READER {
-        match reader
-            .lookup(ip)
-            .and_then(|result| result.decode::<geoip2::Asn>())
-        {
-            Ok(Some(asn)) => asn.autonomous_system_number.map(i64::from).unwrap_or(0),
-            Ok(None) | Err(_) => 0,
-        }
-    } else {
-        0
-    }
+    active_geo_view()
+        .and_then(|view| view.lookup_asn(ip))
+        .map(|(number, _)| i64::from(number))
+        .unwrap_or(0)
 }
 
 pub fn lookup_asn_label(ip: IpAddr) -> Arc<str> {
@@ -360,7 +280,7 @@ pub fn lookup_asn_label(ip: IpAddr) -> Arc<str> {
 }
 
 pub fn asn_database_available() -> bool {
-    GEO_ASN_READER.is_some()
+    GEO_ASN_AVAILABLE.load(Ordering::Acquire)
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -383,7 +303,7 @@ pub fn geoip_memory_snapshot() -> GeoIpMemorySnapshot {
 }
 
 pub fn lookup_geo(ip: IpAddr) -> Option<GeoInfo> {
-    lookup_geo_internal(ip)
+    cached_geo(ip)
 }
 
 pub fn reclaim_geo_ua_caches(clear_all: bool) -> (usize, usize) {
@@ -410,6 +330,63 @@ mod tests {
 
         assert_eq!(&*first.browser, &*second.browser);
         assert_eq!(&*first.os, &*second.os);
+    }
+
+    #[test]
+    fn edge_geo_info_reads_names_and_ids_from_one_snapshot_record() {
+        struct View;
+        impl zelvik_geo_runtime::GeoView for View {
+            fn lookup(&self, _addr: IpAddr) -> zelvik_geo_runtime::GeoLookup {
+                zelvik_geo_runtime::GeoLookup {
+                    record: Some(zelvik_geo_runtime::GeoRecord {
+                        country_iso: Some("CN".to_string()),
+                        country_id: Some(1814991),
+                        country_name: Some("China".to_string()),
+                        subdivision_iso: Some("BJ".to_string()),
+                        subdivision_id: Some(2038349),
+                        subdivision_name: Some("Beijing".to_string()),
+                        city_name: Some("Beijing".to_string()),
+                        city_id: Some(1816670),
+                        asn: Some(64500),
+                        asn_org: Some("Example Network".to_string()),
+                    }),
+                    city_matched_net: Some("1.2.3.0/24".parse().unwrap()),
+                    country_matched_net: Some("1.2.3.0/24".parse().unwrap()),
+                    asn_matched_net: Some("1.2.0.0/16".parse().unwrap()),
+                    generation: 9,
+                    bundle_id: Arc::from("gb_edge"),
+                }
+            }
+            fn match_cidr_set(
+                &self,
+                _addr: IpAddr,
+                _set: &str,
+            ) -> Option<zelvik_geo_runtime::IgpMatch> {
+                None
+            }
+            fn cidr_set_names(&self) -> Vec<&str> {
+                Vec::new()
+            }
+            fn has_asn(&self) -> bool {
+                true
+            }
+            fn generation(&self) -> u64 {
+                9
+            }
+            fn bundle_id(&self) -> &str {
+                "gb_edge"
+            }
+        }
+
+        let info = lookup_geo_on(&View, "1.2.3.4".parse().unwrap()).expect("record");
+        assert_eq!(&*info.country, "China");
+        assert_eq!(info.country_id, 1814991);
+        assert_eq!(&*info.country_iso, "CN");
+        assert_eq!(&*info.region, "Beijing");
+        assert_eq!(info.region_id, 2038349);
+        assert_eq!(&*info.city, "Beijing");
+        assert_eq!(info.city_id, 1816670);
+        assert_eq!(&*info.provider, "Example Network");
     }
 
     #[test]

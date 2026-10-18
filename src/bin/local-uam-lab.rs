@@ -172,6 +172,7 @@ fn main() -> anyhow::Result<()> {
         instance_id: "nd_0123456789".to_string(),
         secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".to_string(),
         comm_mode: String::new(),
+        trust_keys: Vec::new(),
         gcloud_node_id: "1".to_string(),
         access_log_pipeline: AccessLogPipelineConfig::default(),
         relay: Default::default(),

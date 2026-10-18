@@ -49,6 +49,7 @@ fn real_api_config_from_env() -> anyhow::Result<Option<ApiConfig>> {
         instance_id,
         secret,
         comm_mode,
+        trust_keys: Vec::new(),
         gcloud_node_id,
         access_log_pipeline: Default::default(),
         relay: Default::default(),
@@ -902,99 +903,38 @@ async fn real_api_grpc_documentation_snapshot() -> anyhow::Result<()> {
         )?,
     }
 
-    let mut artifact_service = client.ip_library_artifact_service();
-    let artifact_file_id = match artifact_service
-        .find_public_ip_library_artifact(pb::FindPublicIpLibraryArtifactRequest {})
+    // Geo data is consumed through zelvik.asset.v1.AssetControl, not the
+    // removed per-file IP library artifact path. This probe records the
+    // manifest surface without downloading an asset.
+    let mut asset_service = client.asset_control_service();
+    match asset_service
+        .get_asset_manifest(zelvik_suite::pb::asset::v1::GetAssetManifestRequest {
+            meta: Some(zelvik_suite::pb::control::v1::EnvelopeMeta {
+                schema_version: zelvik_suite::SCHEMA_VERSION_ASSET.to_string(),
+                base_version: 0,
+                patch_seq: 0,
+                min_reader_version: zelvik_suite::PROTOCOL_VERSION.to_string(),
+            }),
+            node_id: api_config.instance_id.clone(),
+            known_generation: 0,
+        })
         .await
     {
         Ok(resp) => {
-            let artifact = resp.into_inner().ip_library_artifact;
-            let file_id = artifact.as_ref().map(|item| item.file_id).unwrap_or(0);
-            let sample = artifact.map(|item| {
+            let resp = resp.into_inner();
+            print_doc_sample(
+                "AssetControl.GetAssetManifest",
                 serde_json::json!({
-                    "id": item.id,
-                    "fileId": item.file_id,
-                    "createdAt": item.created_at,
-                    "metaJSON": json_bytes_summary(&item.meta_json, 2),
-                    "isPublic": item.is_public,
-                    "name": item.name,
-                    "code": item.code,
-                    "file": item.file.map(|file| serde_json::json!({
-                        "id": file.id,
-                        "filename": file.filename,
-                        "size": file.size,
-                        "createdAt": file.created_at,
-                        "isPublic": file.is_public,
-                        "mimeType": file.mime_type,
-                        "type": file.r#type,
-                    })),
-                })
-            });
-            print_doc_sample(
-                "IPLibraryArtifactService.FindPublicIPLibraryArtifact",
-                serde_json::json!({ "artifact": sample }),
+                    "hasBundle": resp.bundle.is_some(),
+                    "updateRequired": resp.update_required,
+                    "rollbackGeneration": resp.rollback_generation,
+                }),
             )?;
-            file_id
         }
-        Err(err) => {
-            print_doc_sample(
-                "IPLibraryArtifactService.FindPublicIPLibraryArtifact.error",
-                serde_json::json!({ "code": format!("{:?}", err.code()), "message": err.message() }),
-            )?;
-            0
-        }
-    };
-
-    if artifact_file_id > 0 {
-        let mut file_chunk_service = client.file_chunk_service();
-        match file_chunk_service
-            .find_all_file_chunk_ids(pb::FindAllFileChunkIdsRequest {
-                file_id: artifact_file_id,
-                access_ticket: String::new(),
-            })
-            .await
-        {
-            Ok(resp) => {
-                let ids = resp.into_inner().file_chunk_ids;
-                print_doc_sample(
-                    "FileChunkService.FindAllFileChunkIds",
-                    serde_json::json!({
-                        "fileId": artifact_file_id,
-                        "count": ids.len(),
-                        "firstIds": ids.iter().take(5).copied().collect::<Vec<_>>(),
-                    }),
-                )?;
-                if let Some(first_id) = ids.first().copied() {
-                    match file_chunk_service
-                        .download_file_chunk(pb::DownloadFileChunkRequest {
-                            file_chunk_id: first_id,
-                            access_ticket: String::new(),
-                        })
-                        .await
-                    {
-                        Ok(resp) => {
-                            let bytes = resp
-                                .into_inner()
-                                .file_chunk
-                                .map(|chunk| chunk.data.len())
-                                .unwrap_or(0);
-                            print_doc_sample(
-                                "FileChunkService.DownloadFileChunk",
-                                serde_json::json!({ "fileChunkId": first_id, "dataBytes": bytes }),
-                            )?;
-                        }
-                        Err(err) => print_doc_sample(
-                            "FileChunkService.DownloadFileChunk.error",
-                            serde_json::json!({ "code": format!("{:?}", err.code()), "message": err.message() }),
-                        )?,
-                    }
-                }
-            }
-            Err(err) => print_doc_sample(
-                "FileChunkService.FindAllFileChunkIds.error",
-                serde_json::json!({ "code": format!("{:?}", err.code()), "message": err.message() }),
-            )?,
-        }
+        Err(err) => print_doc_sample(
+            "AssetControl.GetAssetManifest.error",
+            serde_json::json!({ "code": format!("{:?}", err.code()), "message": err.message() }),
+        )?,
     }
 
     let mut client_agent_service = client.client_agent_ip_service();

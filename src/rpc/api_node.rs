@@ -739,6 +739,7 @@ mod tests {
             instance_id: "nd_0123456789".into(),
             secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".into(),
             comm_mode: String::new(),
+            trust_keys: Vec::new(),
             gcloud_node_id: "1".into(),
             access_log_pipeline: Default::default(),
             relay: Default::default(),
