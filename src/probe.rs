@@ -72,7 +72,15 @@ pub fn apply_plan(plan: Option<ProbePlan>) {
         // across a provider's targets, so the plan is not cloned per target.
         let provider = Arc::new(provider.clone());
         for target in &provider.targets {
-            if target.host.trim().is_empty() || target.port == 0 {
+            // Identity and family come from the control plane plan: an Edge row
+            // must carry the exact check/cluster the quality view authorizes.
+            if target.kind != "tcp"
+                || target.check_id.is_empty()
+                || target.cluster_id.is_empty()
+                || target.host.trim().is_empty()
+                || target.port == 0
+            {
+                warn!(target = %target.id, "network quality target rejected: incomplete plan identity");
                 continue;
             }
             if spawned >= MAX_TARGETS {
@@ -153,6 +161,9 @@ async fn probe_once(
     };
     pb::ProbeObservation {
         target_id: target.id.clone(),
+        kind: target.kind.clone(),
+        check_id: target.check_id.clone(),
+        cluster_id: target.cluster_id.clone(),
         provider_id: provider.id.clone(),
         host: target.host.clone(),
         port: u32::from(target.port),
@@ -328,6 +339,9 @@ mod tests {
     async fn tcp_ping_enforces_family_and_cidr_is_connected_without_dns() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let target = ProbeTargetPlan {
+            kind: "tcp".into(),
+            check_id: "probe:tcp:0123456789abcdef".into(),
+            cluster_id: "ec_test".into(),
             target_type: "cidr".into(),
             host: "127.0.0.1/32".into(),
             port: listener.local_addr().unwrap().port(),
@@ -368,6 +382,9 @@ mod tests {
             enabled: true,
             providers: vec![ProbeProviderPlan {
                 targets: vec![ProbeTargetPlan {
+                    kind: "tcp".into(),
+                    check_id: "probe:tcp:feedfacefeedface".into(),
+                    cluster_id: "ec_test".into(),
                     target_type: "host".into(),
                     host: "127.0.0.1".into(),
                     port: 9,
@@ -391,12 +408,37 @@ mod tests {
     #[test]
     fn probe_wire_contract_preserves_target_type_and_family() {
         let target: ProbeTargetPlan = serde_json::from_str(
-            r#"{"targetType":"cidr","host":"2001:db8::/32","port":443,"ipFamily":"v6"}"#,
+            r#"{"kind":"tcp","checkId":"probe:tcp:0123456789abcdef","clusterId":"ec_test","targetType":"cidr","host":"2001:db8::/32","port":443,"ipFamily":"v6"}"#,
         )
         .unwrap();
         assert_eq!(target.target_type, "cidr");
         assert_eq!(target.ip_family, "v6");
+        assert_eq!(target.check_id, "probe:tcp:0123456789abcdef");
+        assert_eq!(target.cluster_id, "ec_test");
         assert_eq!(serde_json::to_value(target).unwrap()["targetType"], "cidr");
+    }
+
+    #[test]
+    fn plan_identity_and_kind_survive_the_wire() {
+        let plan: ProbePlan = serde_json::from_str(
+            r#"{"enabled":true,"providers":[{"id":"pp_quality","kind":"custom","intervalSeconds":60,"timeoutMs":3000,"targets":[{"id":"pt_q","kind":"tcp","checkId":"probe:tcp:0123456789abcdef","clusterId":"ec_q","targetType":"host","host":"203.0.113.7","port":443,"ipFamily":"v4"}]}]}"#,
+        )
+        .unwrap();
+        let target = &plan.providers[0].targets[0];
+        assert_eq!(target.kind, "tcp");
+        assert_eq!(target.check_id, "probe:tcp:0123456789abcdef");
+        assert_eq!(target.cluster_id, "ec_q");
+        let observation = pb::ProbeObservation {
+            kind: target.kind.clone(),
+            check_id: target.check_id.clone(),
+            cluster_id: target.cluster_id.clone(),
+            ..Default::default()
+        };
+        let encoded = prost::Message::encode_to_vec(&observation);
+        let decoded = <pb::ProbeObservation as prost::Message>::decode(encoded.as_slice()).unwrap();
+        assert_eq!(decoded.check_id, "probe:tcp:0123456789abcdef");
+        assert_eq!(decoded.cluster_id, "ec_q");
+        assert_eq!(decoded.kind, "tcp");
     }
 
     #[test]

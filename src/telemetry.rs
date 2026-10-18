@@ -568,6 +568,59 @@ async fn persist_node_logs(buffer: &mut Vec<pb::NodeLog>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Mirrors probe.rs: the Edge executor builds the batch from the pushed plan
+    // identity and hands it to telemetry::enqueue for "probe_observation".
+    #[test]
+    fn probe_observation_batch_reaches_the_spool_with_plan_identity() {
+        let plan: crate::config_models::ProbePlan = serde_json::from_str(
+            r#"{"enabled":true,"providers":[{"id":"pp_q","kind":"zstaticcdn","intervalSeconds":60,"timeoutMs":3000,"targets":[{"id":"pt_q","kind":"tcp","checkId":"probe:tcp:0123456789abcdef","clusterId":"ec_q","targetType":"host","host":"203.0.113.7","port":443,"ipFamily":"v4"}]}]}"#,
+        )
+        .unwrap();
+        let target = &plan.providers[0].targets[0];
+        let observation = pb::ProbeObservation {
+            target_id: target.id.clone(),
+            provider_id: plan.providers[0].id.clone(),
+            kind: target.kind.clone(),
+            check_id: target.check_id.clone(),
+            cluster_id: target.cluster_id.clone(),
+            host: target.host.clone(),
+            port: u32::from(target.port),
+            ip_family: target.ip_family.clone(),
+            success: true,
+            latency_ms: 18.5,
+            sent: 3,
+            received: 3,
+            event_time: "2026-10-14 00:00:00.000".into(),
+            ..Default::default()
+        };
+        let batch = pb::ProbeObservationBatch {
+            observations: vec![observation],
+        };
+        let path = std::env::temp_dir().join(format!("telemetry-probe-{}", uuid::Uuid::new_v4()));
+        let spool = Spool::open(&path, false, 1 << 20).unwrap();
+        spool
+            .append(
+                "probe_observation",
+                prost::Message::encode_to_vec(&batch),
+                0,
+                false,
+                1,
+            )
+            .unwrap();
+        let queued = spool.front().unwrap().expect("queued probe batch");
+        assert_eq!(queued.kind, "probe_observation");
+        let decoded =
+            <pb::ProbeObservationBatch as prost::Message>::decode(queued.payload.as_slice())
+                .unwrap();
+        let row = &decoded.observations[0];
+        assert_eq!(row.check_id, "probe:tcp:0123456789abcdef");
+        assert_eq!(row.cluster_id, "ec_q");
+        assert_eq!(row.kind, "tcp");
+        assert_eq!(row.sent, 3);
+        assert!(row.success);
+    }
+
     #[test]
     fn restart_preserves_batch_until_matching_receipt() {
         let path = std::env::temp_dir().join(format!("telemetry-{}", uuid::Uuid::new_v4()));

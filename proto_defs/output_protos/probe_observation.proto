@@ -29,4 +29,7 @@ message ProbeObservation {
   string error = 16;
   // eventTime is the observation window start, "2006-01-02 15:04:05.000" UTC.
   string eventTime = 17;
+  string kind = 18;
+  string checkId = 19;
+  string clusterId = 20;
 }

@@ -774,6 +774,11 @@ pub struct ProbeProviderPlan {
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq, Eq)]
 pub struct ProbeTargetPlan {
+    pub kind: String,
+    #[serde(rename = "checkId")]
+    pub check_id: String,
+    #[serde(rename = "clusterId")]
+    pub cluster_id: String,
     #[serde(rename = "targetType")]
     pub target_type: String,
     #[serde(default)]
