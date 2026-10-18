@@ -1,22 +1,28 @@
-//! Active TCP-ping (tcping) probing.
+//! Active network-quality probing (tcping, HTTP and TLS).
 //!
 //! The control plane pushes a per-node plan through `nodeJSON.runtime.probe`
 //! (see [`crate::config_models::ProbePlan`]). Each target is probed on its
 //! provider's cadence; every cycle produces one `probe_observation` telemetry
 //! batch. There is no local target list — probing follows the pushed plan only.
 //!
+//! Which kinds appear is a property of the source, not of this executor: the
+//! built-in zstaticcdn catalog is L4-only and its rows are `kind=tcp`, while a
+//! custom source may dispatch `http`/`https` or `tls` here.
+//!
 //! A plan is applied atomically: bumping the generation retires the previous
 //! target tasks, so a removed target stops probing immediately.
 
 use crate::config_models::{ProbePlan, ProbeProviderPlan, ProbeTargetPlan};
 use crate::pb;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use rustls::pki_types::ServerName;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
 use tokio::time::{MissedTickBehavior, timeout};
+use tokio_rustls::TlsConnector;
 use tracing::{debug, warn};
 
 /// TCP SYNs per cycle. Loss and jitter are computed over these samples.
@@ -30,6 +36,47 @@ const MIN_INTERVAL_SECS: u32 = 5;
 const MAX_INTERVAL_SECS: u32 = 86400;
 const MIN_TIMEOUT_MS: u32 = 100;
 const MAX_TIMEOUT_MS: u32 = 60000;
+
+/// Probe kinds this executor can run. `dns` belongs to the probe node's service
+/// health chain and is deliberately absent.
+const KIND_TCP: &str = "tcp";
+const KIND_HTTP: &str = "http";
+const KIND_TLS: &str = "tls";
+
+/// Shared HTTP client for `http` targets: redirects are not followed, because a
+/// 3xx is itself a successful probe result rather than a hop to chase.
+static HTTP_CLIENT: LazyLock<Result<reqwest::Client, String>> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|err| format!("http client: {err}"))
+});
+
+/// Shared TLS client config for `tls` targets: native roots and full chain +
+/// hostname verification, so an expired, self-signed or wrong-host certificate
+/// fails the handshake instead of counting as reachable.
+static TLS_CONFIG: LazyLock<Result<Arc<rustls::ClientConfig>, String>> = LazyLock::new(|| {
+    let provider = crate::tls_crypto::default_crypto_provider();
+    let mut roots = rustls::RootCertStore::empty();
+    let native = rustls_native_certs::load_native_certs();
+    for cert in native.certs {
+        roots
+            .add(cert)
+            .map_err(|err| format!("tls root store: {err}"))?;
+    }
+    if !native.errors.is_empty() {
+        warn!(
+            errors = native.errors.len(),
+            "probe TLS: ignored native root store errors"
+        );
+    }
+    let config = rustls::ClientConfig::builder_with_provider(provider.into())
+        .with_protocol_versions(&[&rustls::version::TLS12, &rustls::version::TLS13])
+        .map_err(|err| format!("tls config: {err}"))?
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    Ok(Arc::new(config))
+});
 
 /// Monotonic plan generation. A target task exits once it no longer matches.
 static GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -74,13 +121,16 @@ pub fn apply_plan(plan: Option<ProbePlan>) {
         for target in &provider.targets {
             // Identity and family come from the control plane plan: an Edge row
             // must carry the exact check/cluster the quality view authorizes.
-            if target.kind != "tcp"
+            // The kind decides which executor runs, not whether the target is
+            // admitted: zstaticcdn's L4-only nature is expressed by its catalog
+            // rows being tcp, not by a rule here.
+            if !matches!(target.kind.as_str(), KIND_TCP | KIND_HTTP | KIND_TLS)
                 || target.check_id.is_empty()
                 || target.cluster_id.is_empty()
                 || target.host.trim().is_empty()
                 || target.port == 0
             {
-                warn!(target = %target.id, "network quality target rejected: incomplete plan identity");
+                warn!(target = %target.id, kind = %target.kind, "network quality target rejected: incomplete plan identity or unsupported kind");
                 continue;
             }
             if spawned >= MAX_TARGETS {
@@ -127,9 +177,10 @@ async fn run_target(generation: u64, provider: Arc<ProbeProviderPlan>, target: P
     }
 }
 
-/// probe_once runs one cycle of TCP SYNs and folds the samples into a single
-/// observation: latency is the mean of successful RTTs, jitter the mean
-/// absolute difference between consecutive RTTs, loss the failed fraction.
+/// probe_once runs one cycle of samples for the target's kind and folds them
+/// into a single observation: latency is the mean of successful RTTs, jitter
+/// the mean absolute difference between consecutive RTTs, loss the failed
+/// fraction.
 async fn probe_once(
     provider: &ProbeProviderPlan,
     target: &ProbeTargetPlan,
@@ -141,7 +192,7 @@ async fn probe_once(
     let mut last_error = String::new();
     for _ in 0..SAMPLES_PER_CYCLE {
         sent += 1;
-        match tcp_ping(target, timeout_dur).await {
+        match probe_sample(target, timeout_dur).await {
             Ok(rtt) => {
                 received += 1;
                 rtts.push(rtt);
@@ -183,6 +234,115 @@ async fn probe_once(
     }
 }
 
+/// probe_sample dispatches one sample to the executor the plan kind names.
+async fn probe_sample(target: &ProbeTargetPlan, timeout_dur: Duration) -> Result<f64, String> {
+    match target.kind.as_str() {
+        KIND_TCP => tcp_ping(target, timeout_dur).await,
+        KIND_HTTP => http_probe(target, timeout_dur).await,
+        KIND_TLS => tls_probe(target, timeout_dur).await,
+        other => Err(format!("unsupported probe kind {other}")),
+    }
+}
+
+/// http_probe_url resolves the request URL from the plan. A `url` target already
+/// carries its scheme; a `host` target is an HTTP endpoint on its plan port.
+fn http_probe_url(target: &ProbeTargetPlan) -> Result<String, String> {
+    match target.target_type.as_str() {
+        "url" => Ok(target.host.clone()),
+        "host" => {
+            // An IPv6 literal needs brackets inside a URL authority.
+            let host = if target.host.starts_with('[') {
+                target.host.clone()
+            } else if let Ok(addr) = target.host.parse::<Ipv6Addr>() {
+                format!("[{addr}]")
+            } else {
+                target.host.clone()
+            };
+            Ok(format!("http://{host}:{}/", target.port))
+        }
+        other => Err(format!(
+            "http probes require a host or url target, got {other}"
+        )),
+    }
+}
+
+/// http_probe issues one request and treats 2xx/3xx as success. The status code
+/// is reported in `error` when the response is a failure: the observation wire
+/// format has no status column, and latency is the request's elapsed time.
+///
+/// Unlike `tcp`/`tls`, address selection follows the HTTP client's own
+/// resolution, so `ipFamily` is a preference here rather than a hard filter.
+async fn http_probe(target: &ProbeTargetPlan, timeout_dur: Duration) -> Result<f64, String> {
+    let url = http_probe_url(target)?;
+    let url = reqwest::Url::parse(&url).map_err(|err| format!("url: {err}"))?;
+    let client = HTTP_CLIENT.as_ref().map_err(|err| err.clone())?;
+    let start = Instant::now();
+    let response = timeout(timeout_dur, client.get(url).send())
+        .await
+        .map_err(|_| "timeout".to_string())?
+        .map_err(|err| format!("http: {err}"))?;
+    let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
+    let status = response.status();
+    if status.is_success() || status.is_redirection() {
+        return Ok(elapsed_ms);
+    }
+    Err(format!("http status {}", status.as_u16()))
+}
+
+/// tls_endpoint extracts the hostname and port a TLS handshake must target. A
+/// url target keeps its explicit port, otherwise the plan port applies.
+fn tls_endpoint(target: &ProbeTargetPlan) -> Result<(String, u16), String> {
+    match target.target_type.as_str() {
+        "url" => {
+            let url =
+                reqwest::Url::parse(&target.host).map_err(|err| format!("url: {err}"))?;
+            let host = url
+                .host_str()
+                .ok_or_else(|| "url has no host".to_string())?
+                .to_string();
+            Ok((host, url.port().unwrap_or(target.port)))
+        }
+        "host" => Ok((target.host.clone(), target.port)),
+        other => Err(format!("tls probes require a host or url target, got {other}")),
+    }
+}
+
+/// tls_probe completes a verified TLS handshake and returns its duration. A
+/// certificate rustls cannot verify fails the handshake, so an expired or
+/// self-signed endpoint is a failed probe rather than a reachable one.
+async fn tls_probe(target: &ProbeTargetPlan, timeout_dur: Duration) -> Result<f64, String> {
+    let (host, port) = tls_endpoint(target)?;
+    let server_name = ServerName::try_from(host.clone()).map_err(|err| format!("sni: {err}"))?;
+    let config = TLS_CONFIG.as_ref().map_err(|err| err.clone())?;
+    let start = Instant::now();
+    let addrs = lookup_addrs(&host, port, timeout_dur).await?;
+    let remaining = timeout_dur.saturating_sub(start.elapsed());
+    if remaining.is_zero() {
+        return Err("timeout".into());
+    }
+    let stream = timeout(remaining, TcpStream::connect(&addrs[..]))
+        .await
+        .map_err(|_| "timeout".to_string())?
+        .map_err(|err| err.to_string())?;
+    let remaining = timeout_dur.saturating_sub(start.elapsed());
+    if remaining.is_zero() {
+        return Err("timeout".into());
+    }
+    // RTT covers the handshake only: resolution and TCP connect are budgeted
+    // separately so a slow resolver cannot look like a slow TLS endpoint.
+    let handshake_start = Instant::now();
+    let stream = timeout(
+        remaining,
+        TlsConnector::from(Arc::clone(config)).connect(server_name, stream),
+    )
+    .await
+    .map_err(|_| "timeout".to_string())?
+    .map_err(|err| format!("tls: {err}"))?;
+    let rtt_ms = handshake_start.elapsed().as_secs_f64() * 1000.0;
+    drop(stream);
+    Ok(rtt_ms)
+}
+
 /// Each CIDR sample chooses one usable address uniformly without expanding
 /// the network. IPv4 network/broadcast addresses are excluded below /31;
 /// IPv6 has no broadcast address. The full IPv6 /0 is handled without overflow.
@@ -220,6 +380,15 @@ fn matches_family(addr: IpAddr, family: &str) -> bool {
     }
 }
 
+/// lookup_addrs resolves a host to socket addresses within the probe timeout.
+async fn lookup_addrs(host: &str, port: u16, timeout_dur: Duration) -> Result<Vec<SocketAddr>, String> {
+    match timeout(timeout_dur, tokio::net::lookup_host((host, port))).await {
+        Ok(Ok(iter)) => Ok(iter.collect::<Vec<_>>()),
+        Ok(Err(err)) => Err(format!("resolve: {err}")),
+        Err(_) => Err("resolve timeout".into()),
+    }
+}
+
 async fn tcp_ping(target: &ProbeTargetPlan, timeout_dur: Duration) -> Result<f64, String> {
     let start = Instant::now();
     let addrs = match target.target_type.as_str() {
@@ -227,16 +396,7 @@ async fn tcp_ping(target: &ProbeTargetPlan, timeout_dur: Duration) -> Result<f64
             let ip = cidr_sample(&target.host, rand::random())?;
             vec![std::net::SocketAddr::new(ip, target.port)]
         }
-        "host" => match timeout(
-            timeout_dur,
-            tokio::net::lookup_host((target.host.as_str(), target.port)),
-        )
-        .await
-        {
-            Ok(Ok(iter)) => iter.collect::<Vec<_>>(),
-            Ok(Err(err)) => return Err(format!("resolve: {err}")),
-            Err(_) => return Err("resolve timeout".into()),
-        },
+        "host" => lookup_addrs(&target.host, target.port, timeout_dur).await?,
         _ => return Err("invalid target type".into()),
     };
     let addrs: Vec<_> = addrs
@@ -378,6 +538,7 @@ mod tests {
 
     #[tokio::test]
     async fn identical_plan_does_not_restart_generation_and_removal_stops_tasks() {
+        let _guard = PLAN_TEST_LOCK.lock().unwrap();
         let plan = ProbePlan {
             enabled: true,
             providers: vec![ProbeProviderPlan {
@@ -451,6 +612,201 @@ mod tests {
     fn jitter_is_mean_absolute_difference() {
         assert!((mean_jitter(&[10.0, 14.0, 11.0]) - 3.5).abs() < f64::EPSILON);
     }
+
+    // ---- L7 (http/tls) quality probe tests (begin) ----
+
+    /// apply_plan mutates process-wide statics, so plan tests must not overlap.
+    static PLAN_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// l7_target builds one plan target for a kind under test.
+    fn l7_target(kind: &str, target_type: &str, host: &str, port: u16) -> ProbeTargetPlan {
+        ProbeTargetPlan {
+            id: format!("pt_{kind}"),
+            kind: kind.into(),
+            check_id: format!("probe:{kind}:0123456789abcdef"),
+            cluster_id: "ec_l7".into(),
+            target_type: target_type.into(),
+            host: host.into(),
+            port,
+            ip_family: "v4".into(),
+            ..Default::default()
+        }
+    }
+
+    /// serve_http answers every request with one fixed response, then closes.
+    async fn serve_http(response: &'static str) -> u16 {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut stream, _)) = listener.accept().await else {
+                    return;
+                };
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 1024];
+                    let _ = stream.read(&mut buf).await;
+                    let _ = stream.write_all(response.as_bytes()).await;
+                    let _ = stream.flush().await;
+                });
+            }
+        });
+        port
+    }
+
+    /// serve_tcp accepts connections and either drops them at once (a failed
+    /// TLS handshake) or holds them open forever (a timeout).
+    async fn serve_tcp(hold: bool) -> u16 {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let mut held = Vec::new();
+            loop {
+                let Ok((stream, _)) = listener.accept().await else {
+                    return;
+                };
+                if hold {
+                    held.push(stream);
+                } else {
+                    drop(stream);
+                }
+            }
+        });
+        port
+    }
+
+    async fn sample(kind: &str, port: u16, timeout_dur: Duration) -> pb::ProbeObservation {
+        probe_once(
+            &ProbeProviderPlan::default(),
+            &l7_target(kind, "host", "127.0.0.1", port),
+            timeout_dur,
+        )
+        .await
+    }
+
+    /// 2xx and 3xx are success; anything else is a failure that reports the
+    /// status code, and the elapsed request time is kept as the latency.
+    #[tokio::test]
+    async fn http_probe_succeeds_on_2xx_and_3xx_and_fails_on_other_status() {
+        let ok = serve_http("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await;
+        let observation = sample("http", ok, Duration::from_secs(5)).await;
+        assert!(observation.success, "{}", observation.error);
+        assert_eq!(observation.kind, "http");
+        assert_eq!(observation.received, SAMPLES_PER_CYCLE);
+        assert!(observation.latency_ms > 0.0);
+        assert!(observation.error.is_empty());
+
+        let redirect = serve_http(
+            "HTTP/1.1 302 Found\r\nLocation: https://elsewhere.example/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        )
+        .await;
+        let observation = sample("http", redirect, Duration::from_secs(5)).await;
+        assert!(observation.success, "{}", observation.error);
+        assert_eq!(observation.received, SAMPLES_PER_CYCLE);
+
+        let missing = serve_http("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await;
+        let observation = sample("http", missing, Duration::from_secs(5)).await;
+        assert!(!observation.success);
+        assert_eq!(observation.received, 0);
+        assert_eq!(observation.loss_percent, 100.0);
+        assert!(
+            observation.error.contains("404"),
+            "status code must be reported: {}",
+            observation.error
+        );
+
+        let broken = serve_http("HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await;
+        let observation = sample("http", broken, Duration::from_secs(5)).await;
+        assert!(!observation.success);
+        assert!(
+            observation.error.contains("500"),
+            "status code must be reported: {}",
+            observation.error
+        );
+    }
+
+    /// A TLS endpoint that cannot complete a verified handshake is a failure.
+    #[tokio::test]
+    async fn tls_probe_fails_when_the_handshake_fails() {
+        let port = serve_tcp(false).await;
+        let observation = sample("tls", port, Duration::from_secs(5)).await;
+        assert!(!observation.success);
+        assert_eq!(observation.kind, "tls");
+        assert_eq!(observation.received, 0);
+        assert_eq!(observation.loss_percent, 100.0);
+        assert!(
+            !observation.error.is_empty(),
+            "a failed handshake must carry a reason"
+        );
+    }
+
+    /// A peer that never answers is a timeout for both L7 kinds, not a hang.
+    #[tokio::test]
+    async fn l7_probe_times_out_when_the_peer_never_answers() {
+        for kind in ["http", "tls"] {
+            let port = serve_tcp(true).await;
+            let observation = sample(kind, port, Duration::from_millis(300)).await;
+            assert!(!observation.success, "{kind} must not pass on a silent peer");
+            assert_eq!(observation.received, 0, "{kind}");
+            assert_eq!(observation.error, "timeout", "{kind}");
+        }
+    }
+
+    /// The plan admits the kinds this executor runs and drops the rest, keeping
+    /// the pushed check/cluster identity intact.
+    #[tokio::test]
+    async fn plan_dispatches_l7_kinds_and_drops_unknown_kinds() {
+        let _guard = PLAN_TEST_LOCK.lock().unwrap();
+        let plan = ProbePlan {
+            enabled: true,
+            providers: vec![ProbeProviderPlan {
+                id: "pp_custom".into(),
+                kind: "custom".into(),
+                targets: vec![
+                    l7_target("tcp", "host", "127.0.0.1", 9),
+                    l7_target("http", "host", "127.0.0.1", 9),
+                    l7_target("tls", "host", "127.0.0.1", 9),
+                    l7_target("dns", "host", "127.0.0.1", 9),
+                    ProbeTargetPlan {
+                        kind: String::new(),
+                        ..l7_target("tcp", "host", "127.0.0.1", 9)
+                    },
+                ],
+                ..Default::default()
+            }],
+        };
+        apply_plan(Some(plan));
+        assert_eq!(
+            TASKS.lock().len(),
+            3,
+            "tcp/http/tls must be dispatched, dns and an empty kind must not"
+        );
+        apply_plan(None);
+        assert!(TASKS.lock().is_empty());
+    }
+
+    /// The observation an L7 target produces keeps the plan identity the
+    /// authorizer pins, with the kind the plan named.
+    #[tokio::test]
+    async fn l7_observation_carries_plan_identity_and_kind() {
+        let ok = serve_http("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await;
+        let target = l7_target("http", "host", "127.0.0.1", ok);
+        let provider = ProbeProviderPlan {
+            id: "pp_custom".into(),
+            ..Default::default()
+        };
+        let observation = probe_once(&provider, &target, Duration::from_secs(5)).await;
+        assert_eq!(observation.kind, "http");
+        assert_eq!(observation.check_id, "probe:http:0123456789abcdef");
+        assert_eq!(observation.cluster_id, "ec_l7");
+        assert_eq!(observation.provider_id, "pp_custom");
+        assert_eq!(observation.target_id, "pt_http");
+        assert_eq!(observation.port, u32::from(ok));
+        assert_eq!(observation.ip_family, "v4");
+        assert_eq!(observation.event_time.len(), 23);
+    }
+
+    // ---- L7 (http/tls) quality probe tests (end) ----
 
     #[test]
     fn clamps_apply_defaults_and_bounds() {

@@ -5336,6 +5336,7 @@ dependencies = [
  "sysinfo",
  "tar",
  "tokio",
+ "tokio-rustls",
  "tokio-stream",
  "tonic",
  "tonic-prost",
