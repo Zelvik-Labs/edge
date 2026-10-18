@@ -88,6 +88,8 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 # github.com (`gh auth setup-git`). `protocol/suite/rust` is the same crate, so
 # the tag is the published form of what used to be the local path dependency.
 zelvik-suite = { git = "https://github.com/Zelvik-Labs/protocol", tag = "rust/v0.0.1" }
+# Edge and DNS consume the exact same Geo snapshot implementation.
+zelvik-geo-runtime = { path = "../dns/crates/zelvik-geo-runtime" }
 urlencoding = "2.1.3"
 uuid = { version = "1.24.1", features = ["v4"] }
 webp = "0.3.1"

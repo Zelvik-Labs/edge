@@ -2167,6 +2167,9 @@ name = "ipnet"
 version = "2.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a756c3fac73139e83f14c2d742155dd2b78d3ee56597b419a0579b7bdd6dd78"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "ipnetwork"
@@ -5347,6 +5350,7 @@ dependencies = [
  "xsk-rs",
  "zelvik-edge-transport",
  "zelvik-edge-xdp-common",
+ "zelvik-geo-runtime",
  "zelvik-suite",
  "zstd",
 ]
@@ -5366,9 +5370,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "zelvik-geo-runtime"
+version = "26.10.2"
+dependencies = [
+ "anyhow",
+ "arc-swap",
+ "hex",
+ "ipnet",
+ "ipnetwork",
+ "maxminddb",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.20",
+ "tracing",
+]
+
+[[package]]
 name = "zelvik-suite"
 version = "26.10.2"
-source = "git+https://github.com/Zelvik-Labs/protocol?tag=rust%2Fv0.0.1#987809d18ddf003042fba85d07b5aaa509e7115a"
+source = "git+https://github.com/Zelvik-Labs/protocol?tag=rust%2Fv0.0.1#62afb60e07ef777f9f9124005344e323e5679c3b"
 dependencies = [
  "base64 0.23.1",
  "hmac",

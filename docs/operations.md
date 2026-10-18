@@ -180,13 +180,13 @@ bootstrap 脚本从控制面的 `/v1/edge/packages/meta` 接口取包元数据�
 | `--node-id <id>` | 节点身份（也接受 `--instance-id`） |
 | `--secret <hex>` | 注册时下发的一次性凭据 |
 | `--comm-mode <plaintext\|tls\|mtls>` | 通信模式，默认 `tls` |
-| `--trust-keys <hex[,hex...]>` | 可选，钉住的信任公钥（当前仅透传记录，节点不消费） |
+| `--trust-keys <hex[,hex...]>` | Ed25519 Geo 分发公钥，写入 `trustKeys`；按公钥 SHA-256 选键验签，缺少钉扎时拒绝下载新代次 |
 | `--tls-ca-file` / `--tls-cert-file` / `--tls-key-file` | `--comm-mode mtls` 时的客户端证书材料路径 |
 | `--tls-server-name <name>` | 覆盖 TLS SNI |
 | `--dir <path>` | 安装根目录，覆盖默认布局 |
 | `--dry-run` | 只打印动作，不写盘、不启服务 |
 
-环境变量兜底：`ZELVIK_ENDPOINT`/`API_ENDPOINTS`、`ZELVIK_NODE_ID`/`ZELVIK_INSTANCE_ID`、`ZELVIK_NODE_SECRET`/`ZELVIK_INSTANCE_SECRET`。
+环境变量兜底：`ZELVIK_ENDPOINT`/`API_ENDPOINTS`、`ZELVIK_NODE_ID`/`ZELVIK_INSTANCE_ID`、`ZELVIK_NODE_SECRET`/`ZELVIK_INSTANCE_SECRET`、`ZELVIK_EDGE_TRUST_KEYS`。
 
 ### 安装布局
 
@@ -194,7 +194,7 @@ bootstrap 脚本从控制面的 `/v1/edge/packages/meta` 接口取包元数据�
 /usr/bin/zelvik-edge                                    二进制
 /var/lib/zelvik/edge/configs/api_node.yaml              节点配置与凭据（0640 root:zelvik-edge）
 /etc/systemd/system/zelvik-edge.service                 systemd unit
-/var/lib/zelvik/edge/                                   节点 home（缓存、geoip、状态；ZELVIK_EDGE_HOME）
+/var/lib/zelvik/edge/                                   节点 home（缓存、data/geo 整代地理库、状态；ZELVIK_EDGE_HOME）
 /var/log/zelvik/                                        日志目录
 ```
 
@@ -254,7 +254,10 @@ systemctl daemon-reload
 
 本版本重新整理 systemd 生命周期管理：新安装的服务使用 `Type=simple` 直接托管前台进程；`stop` 会等待真实退出并在必要时强制结束；`restart` 不再固定等待 1 秒，而是确认旧进程退出后再启动。
 
-GeoIP 库默认必装，文件写入节点 `data/` 目录，因为运行时会优先从 `data/GeoLite2-City.mmdb` 和 `data/GeoLite2-ASN.mmdb` 读取。旧版工作目录 GeoIP 文件仍作为迁移 fallback。
+GeoIP 不再由安装包或节点本地文件提供。节点通过 `zelvik.asset.v1.AssetControl`
+拉取控制面发布的整代签名 bundle，原子安装到 `data/geo/`；`trustKeys` 钉扎
+Ed25519 公钥，按公钥 SHA-256 选键验签。City 是必需组件，ASN/Country 可选；
+旧版 `data/GeoLite2-*.mmdb` 与 `geoip/` 目录不再读取。
 
 恢复时脚本会停止当前服务，恢复 `go-original` 二进制、`/usr/bin/zelvik-edge` 和 systemd unit，并将当前 Rust 文件备份到 `restore-current-*` 目录。手动回滚也可以停止服务后恢复备份目录中的文件，再执行 `systemctl daemon-reload` 与 `systemctl start zelvik-edge`。
 
@@ -267,7 +270,7 @@ GeoIP 库默认必装，文件写入节点 `data/` 目录，因为运行时会�
 - 运行目录权限正确。
 - `data` 和 `logs` 可写。
 - 缓存目录可写且容量充足。
-- GeoIP 数据文件存在。
+- `trustKeys` 至少钉扎一个与 CP 发布签名 key 对应的公钥；`data/geo` 可写。
 - 监听端口没有被其它进程占用。
 - systemd `LimitNOFILE` 足够大。
 

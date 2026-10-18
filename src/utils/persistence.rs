@@ -10,12 +10,7 @@ pub struct PersistentState {
     pub task_version: i64,
     pub deleted_content_version: i64,
     pub ocsp_version: i64,
-    #[serde(default)]
-    pub geoip_city_file_id: i64,
-    #[serde(default)]
-    pub geoip_city_file_size: u64,
-    #[serde(default)]
-    pub geoip_city_sha256: String,
+
 }
 
 pub fn load_state() -> PersistentState {

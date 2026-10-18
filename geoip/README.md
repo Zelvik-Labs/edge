@@ -1,7 +1,10 @@
 # GeoIP 数据库 / GeoIP Databases
 
-本目录是安装脚本使用的 GeoLite2 数据库唯一来源。
-This directory is the canonical GeoIP source used by the installer.
+**已弃用 / Deprecated.** 自 26.10.2 起节点不再读取本目录，也不由安装包分发。
+Geo 数据由控制面从 P3TERX/GeoLite.mmdb 拉取、按整代签名发布，节点经
+`zelvik.asset.v1.AssetControl` 安装到 `data/geo/`。本目录仅保留历史快照。
+The node no longer reads this directory; geo data is published by the control
+plane as signed whole-generation bundles and consumed over AssetControl.
 
 | 文件 File | 内容 Content |
 |---|---|

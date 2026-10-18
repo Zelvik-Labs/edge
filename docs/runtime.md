@@ -101,7 +101,7 @@ zelvik-edge upgrade --version v1.1.7 --github-base-url https://github.example.co
 - `data/zelvik-edge-xdp-ebpf.o`：可选的外部 XDP eBPF 对象（`cargo xtask build-ebpf` 生成）。默认加载的是构建期内嵌进二进制的对象；仅当 `xdp.ebpfObject` 或 `ZELVIK_EDGE_XDP_EBPF_OBJECT_PATH` 显式指定时才读取该文件。
 - `data/metrics.mace`：统计、缓存元数据和本地运行时防火墙封禁状态持久化。
 - `data/cache`：默认磁盘缓存目录。
-- `data/GeoLite2-City.mmdb`、`data/GeoLite2-ASN.mmdb`：GeoIP 数据库。
+- `data/geo/`：AssetControl 整代 Geo bundle（City 必需，ASN/Country 可选）。
 - `logs/run.log`：节点运行日志；systemd 和内置后台模式都会追加写入。
 
 生产部署时应保持工作目录稳定。旧版 `../data/*`、根目录 `api_node.yaml` 和工作目录下的 GeoIP 文件仅作为迁移 fallback 读取。
