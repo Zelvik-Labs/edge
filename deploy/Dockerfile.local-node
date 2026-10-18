@@ -1,0 +1,44 @@
+# Zelvik-Edge data-plane image (standalone for compose/single-node).
+# The Edge builds against vendored pingora; use the repo's rust toolchain.
+# Build from repo root:  docker build -f deploy/Dockerfile.edge -t zelvik-edge:2026.1.08.0 .
+FROM rust:1.99-bookworm AS builder
+WORKDIR /build
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends pkg-config libssl-dev clang llvm \
+    && rm -rf /var/lib/apt/lists/*
+# Copy workspace manifests and heavy vendored subdirs to maximize cache reuse.
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+COPY pingora-main ./pingora-main
+COPY proto ./proto
+COPY proto_defs ./proto_defs
+COPY toa-main ./toa-main
+COPY toa-sender ./toa-sender
+COPY vendor ./vendor
+# Vendor is large; only needed if offline. See .cargo/config.toml.
+COPY .cargo ./.cargo
+COPY src ./src
+# 本机镜像：私有 git 依赖 patch 成本地 protocol 检出；zelvik-geo-runtime 是
+# ../dns 的相对路径依赖，故把 dns 仓作为额外构建上下文放进 /dns。
+COPY --from=protocol suite/rust /protocol/suite/rust
+COPY --from=dns crates/zelvik-geo-runtime /dns/crates/zelvik-geo-runtime
+RUN printf '%s\n' \
+    '[patch."https://github.com/Zelvik-Labs/protocol"]' \
+    'zelvik-suite = { path = "/protocol/suite/rust" }' >> .cargo/config.toml
+# patch 会改变解析结果，锁文件必须重算，故本机镜像不加 --locked。
+RUN CARGO_BUILD_JOBS=3 cargo build --release
+
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl tzdata iproute2 kmod libcap2-bin \
+    && rm -rf /var/lib/apt/lists/*
+RUN useradd --system --no-create-home --home-dir /var/lib/zelvik/edge --shell /usr/sbin/nologin zelvik-edge
+WORKDIR /app
+COPY --from=builder /build/target/release/Zelvik-Edge /usr/local/bin/zelvik-edge
+RUN mkdir -p /etc/zelvik/edge /var/lib/zelvik/edge \
+    && chown -R zelvik-edge:zelvik-edge /var/lib/zelvik/edge
+# Edge needs NET_BIND_SERVICE / NET_RAW / NET_ADMIN at runtime (compose cap_add).
+USER zelvik-edge
+EXPOSE 80 443 443/udp 19090
+# CLOUD_NODE_MODE=standalone, CLOUD_NODE_HOME configured at runtime.
+ENTRYPOINT ["/usr/local/bin/zelvik-edge"]
