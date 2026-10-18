@@ -234,10 +234,10 @@ pub async fn start_config_syncer(
     loop {
         debug!("RPC_NODE: Starting periodic configuration sync check.");
 
-        let client = match SharedRpcClient::get(&api_config).await {
+        let shared = match SharedRpcClient::get(&api_config).await {
             Ok(shared) => {
                 connect_backoff = Duration::from_secs(5);
-                shared.as_rpc_client()
+                shared
             }
             Err(e) => {
                 warn!("Failed to connect to API node: {}. Will retry...", e);
@@ -246,6 +246,15 @@ pub async fn start_config_syncer(
                 continue;
             }
         };
+        // An enrolled instance stays `pending` until it registers on the
+        // control channel; the role RPCs below are refused before that.
+        if let Err(e) = shared.ensure_registered().await {
+            warn!("Edge instance registration failed: {}. Will retry...", e);
+            tokio::time::sleep(connect_backoff).await;
+            connect_backoff = (connect_backoff.saturating_mul(2)).min(Duration::from_secs(300));
+            continue;
+        }
+        let client = shared.as_rpc_client();
 
         let mut node_service = client.node_service();
 

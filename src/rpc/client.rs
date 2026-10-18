@@ -7,10 +7,15 @@ use tonic::codec::CompressionEncoding;
 use arc_swap::ArcSwap;
 use std::sync::Arc;
 use std::sync::LazyLock as Lazy;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::mpsc::Sender;
+use tokio::sync::{Mutex as AsyncMutex, OnceCell};
 use tonic::transport::channel::Change;
 use tonic::transport::{Channel, Endpoint};
+use tracing::warn;
+use zelvik_suite::channel::{Client as IdentityClient, Config as ChannelConfig};
+use zelvik_suite::pb::control::v1::RegisterInstanceRequest;
 
 pub const RPC_MAX_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
 pub const RPC_TRANSFER_MESSAGE_BYTES: usize = 512 * 1024 * 1024;
@@ -55,12 +60,99 @@ impl RpcConnectionProfile {
 pub struct RpcClient {
     channel: Channel,
     api_config: ApiConfig,
+    /// Activation state of this instance on the control channel, plus the
+    /// serialised first attempt. Without `ControlChannel.RegisterInstance` the
+    /// instance stays `pending` and every role RPC is refused, which is exactly
+    /// what a real edge node hit.
+    registration: Arc<RegistrationGate>,
 }
 
 impl RpcClient {
     pub async fn new(api_config: &ApiConfig) -> anyhow::Result<Self> {
         let endpoints = api_config.effective_rpc_endpoints();
         Self::connect(api_config, &endpoints, RpcConnectionProfile::Default).await
+    }
+
+    /// Activates this instance on the control channel before the first role
+    /// RPC. An enrolled-but-never-registered instance stays `pending`, and the
+    /// control plane then refuses every role call — the failure a real edge
+    /// node hit.
+    ///
+    /// Idempotent: an instance that already registered in this process is a
+    /// no-op, and concurrent callers serialise behind one attempt. Registration
+    /// is idempotent server-side (an active instance only refreshes its
+    /// facts), so a failed attempt is retried by the next caller — the flag is
+    /// only set after the control plane accepted.
+    pub async fn ensure_registered(&self) -> anyhow::Result<()> {
+        if self.registration.registered.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        let gate = self.registration.clone();
+        let _serialised = gate.lock.lock().await;
+        if gate.registered.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        let cfg = self.identity_channel_config()?;
+        let mut client = match gate.identity.get() {
+            Some(client) => client.clone(),
+            None => {
+                let client = IdentityClient::connect(cfg.clone())
+                    .await
+                    .map_err(|err| anyhow::anyhow!("connect identity channel: {err}"))?;
+                // A concurrent attempt may have won the cell; keep that one.
+                gate.identity.get_or_init(async || client).await.clone()
+            }
+        };
+        // The identity plane validates both the declared kind and the envelope
+        // schema: a default request is rejected with "instance kind is
+        // unspecified" (observed against the real control plane). Every field
+        // below is the same one the DNS control transport sends.
+        let response = client
+            .register_instance(RegisterInstanceRequest {
+                meta: Some(zelvik_suite::pb::control::v1::EnvelopeMeta {
+                    schema_version: zelvik_suite::SCHEMA_VERSION_CONTROL.to_string(),
+                    base_version: 0,
+                    patch_seq: 0,
+                    min_reader_version: zelvik_suite::PROTOCOL_VERSION.to_string(),
+                }),
+                instance_id: cfg.instance_id.clone(),
+                kind: zelvik_suite::credential::Kind::Edge.to_proto() as i32,
+                comm_mode: cfg.comm_mode.to_proto() as i32,
+                software_version: env!("CARGO_PKG_VERSION").to_string(),
+                suite_version: zelvik_suite::PROTOCOL_VERSION.to_string(),
+                ..RegisterInstanceRequest::default()
+            })
+            .await
+            .map_err(|err| anyhow::anyhow!("RegisterInstance: {err}"))?;
+        if !response.accepted {
+            anyhow::bail!(
+                "control plane refused the registration (status {:?})",
+                response.enrollment_status
+            );
+        }
+        gate.registered.store(true, Ordering::Release);
+        tracing::info!(
+            instance_id = %cfg.instance_id,
+            enrollment_status = %response.enrollment_status,
+            "edge instance registered on the control channel"
+        );
+        Ok(())
+    }
+
+    /// The identity-channel configuration handed to the shared suite. Uses the
+    /// data-plane seed order (`effective_rpc_endpoints`) so the credential never
+    /// goes to an endpoint a revoked membership removed.
+    fn identity_channel_config(&self) -> anyhow::Result<ChannelConfig> {
+        let mut cfg = self.api_config.channel_config()?;
+        cfg.endpoint = self
+            .api_config
+            .effective_rpc_endpoints()
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("No RPC endpoints configured"))?;
+        cfg.validate()
+            .map_err(|err| anyhow::anyhow!("instance identity is invalid: {err}"))?;
+        Ok(cfg)
     }
 
     /// Create a client for a stream, attempting all endpoints. If `force` is
@@ -155,6 +247,7 @@ impl RpcClient {
                     return Ok(Self {
                         channel,
                         api_config: api_config.clone(),
+                        registration: Arc::new(RegistrationGate::new()),
                     });
                 }
                 Err(err) => {
@@ -915,15 +1008,45 @@ impl RpcClient {
 static SHARED_RPC: Lazy<ArcSwap<Option<SharedRpcState>>> =
     Lazy::new(|| ArcSwap::from_pointee(None));
 
-struct SharedRpcState {
+/// Serialises the first `RegisterInstance` of this process and caches the
+/// connected identity channel. It outlives any single `RpcClient` (which is
+/// cloned freely), so startup callers cannot each send their own registration.
+pub struct RegistrationGate {
+    lock: AsyncMutex<()>,
+    identity: OnceCell<IdentityClient>,
+    registered: AtomicBool,
+}
+
+impl Default for RegistrationGate {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RegistrationGate {
+    pub fn new() -> Self {
+        Self {
+            lock: AsyncMutex::new(()),
+            identity: OnceCell::new(),
+            registered: AtomicBool::new(false),
+        }
+    }
+}
+
+pub struct SharedRpcState {
     channel: Channel,
     endpoint_tx: Sender<Change<String, Endpoint>>,
     current_endpoints: Vec<String>,
+    /// Instance activation state shared by every `RpcClient` derived from this
+    /// process-global channel: it serialises the first `RegisterInstance` so
+    /// concurrent startup callers send one and the rest wait for its outcome.
+    registration: Arc<RegistrationGate>,
 }
 
 pub struct SharedRpcClient {
     channel: Channel,
     api_config: ApiConfig,
+    registration: Arc<RegistrationGate>,
 }
 
 impl SharedRpcClient {
@@ -968,6 +1091,7 @@ impl SharedRpcClient {
             return Ok(Self {
                 channel: state.channel.clone(),
                 api_config: api_config.clone(),
+                registration: state.registration.clone(),
             });
         }
 
@@ -979,15 +1103,18 @@ impl SharedRpcClient {
         let (channel, endpoint_tx) = Channel::balance_channel::<String>(1024);
         Self::apply_endpoint_changes_with_config(api_config, &endpoint_tx, &[], &endpoints)?;
 
+        let registration = Arc::new(RegistrationGate::new());
         SHARED_RPC.store(Arc::new(Some(SharedRpcState {
             channel: channel.clone(),
             endpoint_tx,
             current_endpoints: endpoints.clone(),
+            registration: registration.clone(),
         })));
 
         Ok(Self {
             channel,
             api_config: api_config.clone(),
+            registration,
         })
     }
 
@@ -1090,12 +1217,37 @@ impl SharedRpcClient {
         Ok(endpoint)
     }
 
+    /// The process-wide registration gate shared by every `RpcClient` derived
+    /// from this channel. A lazily rebuilt shared state gets a fresh gate, so
+    /// registration re-runs instead of being assumed.
+    pub fn registration_gate(&self) -> Arc<RegistrationGate> {
+        SHARED_RPC
+            .load()
+            .as_ref()
+            .as_ref()
+            .map(|state| state.registration.clone())
+            .unwrap_or_else(|| self.registration.clone())
+    }
+
+    /// Activates this instance before the first role RPC. Safe to call on every
+    /// connection attempt: an already-registered instance returns immediately.
+    pub async fn ensure_registered(&self) -> anyhow::Result<()> {
+        self.as_rpc_client().ensure_registered().await
+    }
+
     /// Convert to an RpcClient so all existing service factory methods work unchanged.
     /// This is zero-cost — Channel::clone just increments an Arc refcount.
     pub fn as_rpc_client(&self) -> RpcClient {
         RpcClient {
             channel: self.channel.clone(),
             api_config: self.api_config.clone(),
+            // A client derived from the shared channel must see the same
+            // activation as one built from the identity config; otherwise a
+            // lazily rebuilt shared state would re-register on every call.
+            registration: match SHARED_RPC.load().as_ref() {
+                Some(state) => state.registration.clone(),
+                None => Arc::new(RegistrationGate::new()),
+            },
         }
     }
 }
@@ -1106,6 +1258,7 @@ impl Clone for SharedRpcState {
             channel: self.channel.clone(),
             endpoint_tx: self.endpoint_tx.clone(),
             current_endpoints: self.current_endpoints.clone(),
+            registration: self.registration.clone(),
         }
     }
 }
@@ -1306,5 +1459,145 @@ mod tests {
             assert!(state.current_endpoints.is_empty());
         }
         assert!(SharedRpcClient::get(&api).await.is_err());
+    }
+
+    /// Negative control: before `ensure_registered` the control plane never saw
+    /// a `RegisterInstance`, so the instance stayed `pending` and every role
+    /// RPC was refused. The fake server records every request, so a node that
+    /// skips registration (or sends a default request) fails here.
+    #[tokio::test]
+    async fn ensure_registered_activates_the_edge_instance_once() {
+        use std::sync::Arc as StdArc;
+        use zelvik_suite::pb::control::v1::{
+            HeartbeatRequest, HeartbeatResponse, RegisterInstanceRequest,
+            RegisterInstanceResponse, RotateCredentialRequest, RotateCredentialResponse,
+            control_channel_server::{ControlChannel, ControlChannelServer},
+        };
+
+        struct Fake(StdArc<tokio::sync::Mutex<Vec<RegisterInstanceRequest>>>);
+        #[tonic::async_trait]
+        impl ControlChannel for Fake {
+            async fn register_instance(
+                &self,
+                request: tonic::Request<RegisterInstanceRequest>,
+            ) -> Result<tonic::Response<RegisterInstanceResponse>, tonic::Status> {
+                self.0.lock().await.push(request.into_inner());
+                Ok(tonic::Response::new(RegisterInstanceResponse {
+                    accepted: true,
+                    enrollment_status: "active".into(),
+                    ..RegisterInstanceResponse::default()
+                }))
+            }
+            async fn heartbeat(
+                &self,
+                _request: tonic::Request<HeartbeatRequest>,
+            ) -> Result<tonic::Response<HeartbeatResponse>, tonic::Status> {
+                Err(tonic::Status::unimplemented("not used by this test"))
+            }
+            async fn rotate_credential(
+                &self,
+                _request: tonic::Request<RotateCredentialRequest>,
+            ) -> Result<tonic::Response<RotateCredentialResponse>, tonic::Status> {
+                Err(tonic::Status::unimplemented("not used by this test"))
+            }
+        }
+
+        let _guard = SharedRpcTestGuard::new().await;
+        let seen = StdArc::new(tokio::sync::Mutex::new(Vec::new()));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server_seen = seen.clone();
+        tokio::spawn(async move {
+            let _ = tonic::transport::Server::builder()
+                .add_service(ControlChannelServer::new(Fake(server_seen)).max_decoding_message_size(
+                    super::RPC_MAX_MESSAGE_BYTES,
+                ))
+                .serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(listener))
+                .await;
+        });
+
+        // Negative control first: with the control plane unreachable the
+        // attempt must fail *and* leave the gate unset, so the next caller
+        // retries instead of believing the instance is active.
+        let unreachable = test_api_config(vec!["http://127.0.0.1:1".to_string()]);
+        crate::api_config::ApiConfig::set_runtime_rpc_endpoints(unreachable.rpc_endpoints.clone())
+            .unwrap();
+        let dead = SharedRpcClient::get(&unreachable).await.expect("shared client");
+        assert!(
+            dead.ensure_registered().await.is_err(),
+            "an unreachable control plane must not report success"
+        );
+        assert!(
+            dead.ensure_registered().await.is_err(),
+            "a failed registration must be retried, not latched"
+        );
+        assert!(seen.lock().await.is_empty());
+
+        let api = test_api_config(vec![format!("http://{addr}")]);
+        crate::api_config::ApiConfig::set_runtime_rpc_endpoints(api.rpc_endpoints.clone()).unwrap();
+        let shared = SharedRpcClient::get(&api).await.expect("shared client");
+
+        shared.ensure_registered().await.expect("registration accepted");
+        // Idempotent: the second call is a no-op, not a second RPC.
+        shared
+            .ensure_registered()
+            .await
+            .expect("second call is a no-op");
+        shared
+            .as_rpc_client()
+            .ensure_registered()
+            .await
+            .expect("derived client shares the gate");
+
+        let requests = seen.lock().await;
+        assert_eq!(requests.len(), 1, "registration must be sent exactly once");
+        let request = &requests[0];
+        let meta = request.meta.as_ref().expect("envelope meta is mandatory");
+        assert_eq!(
+            meta.schema_version,
+            zelvik_suite::SCHEMA_VERSION_CONTROL,
+            "the identity plane rejects the wrong schema"
+        );
+        assert_eq!(meta.min_reader_version, zelvik_suite::PROTOCOL_VERSION);
+        assert_eq!(request.instance_id, api.instance_id);
+        assert_eq!(
+            request.kind,
+            zelvik_suite::credential::Kind::Edge.to_proto() as i32,
+            "the edge must declare Kind::Edge"
+        );
+        assert_eq!(
+            request.comm_mode,
+            zelvik_suite::CommMode::parse("plaintext").unwrap().to_proto() as i32
+        );
+        assert_eq!(request.software_version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(request.suite_version, zelvik_suite::PROTOCOL_VERSION);
+    }
+}
+
+/// Activates this instance on the control channel at startup, before any role
+/// RPC. Registration is idempotent server-side, so a control plane that is not
+/// reachable yet is retried with capped backoff until it accepts — the instance
+/// is useless while `pending`, and every syncer re-checks the same
+/// process-wide flag on its own retry path anyway.
+pub async fn register_instance_with_retry(api_config: ApiConfig, max_backoff: Duration) {
+    let mut backoff = Duration::from_secs(2);
+    loop {
+        let attempt = async {
+            let shared = SharedRpcClient::get(&api_config).await?;
+            shared.ensure_registered().await
+        }
+        .await;
+        match attempt {
+            Ok(()) => return,
+            Err(err) => {
+                warn!(
+                    error = %err,
+                    backoff = ?backoff,
+                    "edge instance registration failed; retrying"
+                );
+                tokio::time::sleep(backoff).await;
+                backoff = (backoff.saturating_mul(2)).min(max_backoff);
+            }
+        }
     }
 }

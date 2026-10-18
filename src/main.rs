@@ -3437,6 +3437,12 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         false,
     ));
     // 3. Start Background Syncers
+    // Activation comes first: until this instance registers on the control
+    // channel it stays `pending` and every role RPC below is refused.
+    let ac_reg = api_config.clone();
+    rt.spawn(async move {
+        rpc::register_instance_with_retry(ac_reg, Duration::from_secs(60)).await;
+    });
     let cs = config_store.clone();
     let ac = api_config.clone();
     let il = ip_list_manager.clone();

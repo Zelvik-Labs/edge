@@ -2,7 +2,7 @@ use crate::api_config::ApiConfig;
 use crate::config::ConfigStore;
 use crate::config_models::HTTPCachePolicy;
 use crate::pb;
-use crate::rpc::client::RpcClient;
+use crate::rpc::client::{RpcClient, SharedRpcClient};
 use base64::{Engine as _, engine::general_purpose};
 use serde::Deserialize as _;
 use serde::de::Error as _;
@@ -135,6 +135,21 @@ pub async fn start_node_stream(api_config: ApiConfig, config_store: Arc<ConfigSt
     const MAX_BACKOFF: Duration = Duration::from_secs(15);
 
     loop {
+        // The node stream is a role RPC: a pending instance is refused before
+        // it registers, so activation comes first on every reconnect attempt.
+        // Idempotent — after the first success this is one atomic load.
+        if let Ok(shared) = SharedRpcClient::get(&api_config).await
+            && let Err(e) = shared.ensure_registered().await
+        {
+            fail_count = fail_count.saturating_add(1);
+            let delay = stream_backoff(fail_count, MAX_BACKOFF);
+            warn!(
+                "Edge instance registration failed: {}. Retrying in {:?}...",
+                e, delay
+            );
+            tokio::time::sleep(delay).await;
+            continue;
+        }
         let client =
             match RpcClient::new_stream_with_endpoints(&api_config, &last_endpoints, false).await {
                 Ok(client) => client,

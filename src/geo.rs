@@ -434,6 +434,12 @@ impl GrpcAssetTransport {
         let shared = SharedRpcClient::get(&self.api_config)
             .await
             .context("connect for geo asset control")?;
+        // The asset plane is a role RPC too: a pending instance is refused
+        // until it registers on the control channel.
+        shared
+            .ensure_registered()
+            .await
+            .context("register the edge instance for geo asset control")?;
         Ok(shared.as_rpc_client().asset_control_service())
     }
 

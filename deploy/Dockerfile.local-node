@@ -1,13 +1,48 @@
+# 本机开发镜像（不入发布链路）。
+# - 私有依赖 zelvik-suite 用 --build-context protocol 打成本地检出，锁文件需重解析，故不加 --locked；
+#   **发布构建必须用 tag rust/v0.0.1 对应的提交**，不要用这份镜像产物。
+# - Edge 依赖 ../dns/crates/zelvik-geo-runtime，用 --build-context dns 挂入。
 # Zelvik-Edge data-plane image (standalone for compose/single-node).
 # The Edge builds against vendored pingora; use the repo's rust toolchain.
 # Build from repo root:  docker build -f deploy/Dockerfile.edge -t zelvik-edge:2026.1.08.0 .
 FROM rust:1.99-bookworm AS builder
 WORKDIR /build
+# Build-script dependencies of the vendored C libraries, each one found by an
+# actual failed build rather than guessed:
+#   cmake   libz-ng-sys configures the bundled zlib-ng through the cmake crate
+#           ("is `cmake` not installed?" without it); libwebp-sys needs it too
+#   nasm    the assembler zlib-ng uses on x86_64
+#   libelf-dev / zlib1g-dev
+#           libbpf-sys and libxdp-sys compile the bundled libbpf with make
+#           ("fatal error: libelf.h: No such file or directory" without them)
+#   libclang-dev
+#           clang-sys (bindgen) needs libclang.so at build time
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends pkg-config libssl-dev clang llvm \
+    && apt-get install -y --no-install-recommends \
+        pkg-config libssl-dev clang llvm libclang-dev protobuf-compiler \
+        cmake nasm libelf-dev zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
+# The XDP eBPF object is embedded in the binary, so a Linux build needs the
+# pinned nightly (rust-src) and bpf-linker 0.11.1 — the same pair CI installs
+# (`.github/workflows/ci.yml`). Distro LLVM is too old for bpf-linker, so
+# LLVM_PREFIX points at the toolchain's own sysroot, which ships the
+# version-exact libLLVM.so. Kept in its own layer, before the source COPYs, so
+# a source change never rebuilds it.
+COPY crates/zelvik-edge-xdp-ebpf/rust-toolchain.toml /tmp/ebpf-rust-toolchain.toml
+RUN set -eux; \
+    EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' /tmp/ebpf-rust-toolchain.toml | head -1)"; \
+    test -n "$EBPF_NIGHTLY"; \
+    rustup toolchain install "$EBPF_NIGHTLY" --profile minimal -c rust-src -c rustc-dev; \
+    SYSROOT="$(rustup run "$EBPF_NIGHTLY" rustc --print sysroot)"; \
+    ln -sf "$(find "$SYSROOT/lib" -name 'libLLVM.so.*' -print -quit)" "$SYSROOT/lib/libLLVM.so"; \
+    LLVM_PREFIX="$SYSROOT" cargo +"$EBPF_NIGHTLY" install bpf-linker --version 0.11.1 --locked; \
+    bpf-linker --version
 # Copy workspace manifests and heavy vendored subdirs to maximize cache reuse.
 COPY Cargo.toml Cargo.lock ./
+# build.rs generates the protobuf modules into OUT_DIR, builds the eBPF object
+# and exports ZELVIK_EDGE_XDP_EBPF_OBJECT; without it `tonic::include_proto!`
+# fails with "environment variable `OUT_DIR` not defined at compile time".
+COPY build.rs ./
 COPY crates ./crates
 COPY pingora-main ./pingora-main
 COPY proto ./proto
@@ -18,15 +53,24 @@ COPY vendor ./vendor
 # Vendor is large; only needed if offline. See .cargo/config.toml.
 COPY .cargo ./.cargo
 COPY src ./src
+COPY benches ./benches
+COPY tests ./tests
 # 本机镜像：私有 git 依赖 patch 成本地 protocol 检出；zelvik-geo-runtime 是
 # ../dns 的相对路径依赖，故把 dns 仓作为额外构建上下文放进 /dns。
-COPY --from=protocol suite/rust /protocol/suite/rust
+COPY --from=protocol . /protocol
 COPY --from=dns crates/zelvik-geo-runtime /dns/crates/zelvik-geo-runtime
 RUN printf '%s\n' \
     '[patch."https://github.com/Zelvik-Labs/protocol"]' \
     'zelvik-suite = { path = "/protocol/suite/rust" }' >> .cargo/config.toml
 # patch 会改变解析结果，锁文件必须重算，故本机镜像不加 --locked。
-RUN CARGO_BUILD_JOBS=3 cargo build --release
+# `target/` and the cargo registry live in BuildKit cache mounts so a rebuild
+# after a source edit is incremental instead of a cold ~30min compile; the
+# binary is copied out of the mount in the same step because the cache mount is
+# not part of the layer.
+RUN --mount=type=cache,target=/build/target,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    CARGO_BUILD_JOBS=3 cargo build --release \
+    && cp target/release/Zelvik-Edge /build/Zelvik-Edge
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
@@ -34,7 +78,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd --system --no-create-home --home-dir /var/lib/zelvik/edge --shell /usr/sbin/nologin zelvik-edge
 WORKDIR /app
-COPY --from=builder /build/target/release/Zelvik-Edge /usr/local/bin/zelvik-edge
+COPY --from=builder /build/Zelvik-Edge /usr/local/bin/zelvik-edge
 RUN mkdir -p /etc/zelvik/edge /var/lib/zelvik/edge \
     && chown -R zelvik-edge:zelvik-edge /var/lib/zelvik/edge
 # Edge needs NET_BIND_SERVICE / NET_RAW / NET_ADMIN at runtime (compose cap_add).
