@@ -8,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc, OnceLock,
-        atomic::{AtomicI64, AtomicU8, Ordering},
+        atomic::{AtomicI64, AtomicU8, AtomicU64, Ordering},
     },
     time::Duration,
 };
@@ -70,14 +70,184 @@ pub struct Spool {
     bucket: Bucket,
     meta: Mutex<Meta>,
     path: PathBuf,
+    budget: LaneBudget,
+    #[cfg(test)]
+    fixed_disk: Option<(u64, u64)>,
+}
+/// Capacity policy of the durable spool.
+///
+/// The reserve is *adaptive*: a fixed ratio of the disk's total size caps it, a
+/// floor keeps a minimum tail free, and on a tight disk the floor yields to a
+/// quarter of what is actually available. Applying the ratio as a cap is what
+/// stops a large `total` from reserving more than the disk has free — the old
+/// `max(total / 50, 1 GiB)` did exactly that and turned a nearly-full disk into
+/// "capacity 0 for every lane".
+///
+/// Consequence worth stating plainly: on a filesystem smaller than
+/// `RESERVE_FLOOR * RESERVE_RATIO` (3.2 GiB) the 1/50 share is below the floor,
+/// so the reserve is proportional rather than a full 64 MiB. That keeps a small
+/// disk usable instead of reserving a quarter of it, at the cost of a smaller
+/// absolute tail than `RESERVE_FLOOR` promises on large disks.
+///
+/// From that free budget `core` additionally holds back a slice for the detail
+/// lane, and both lanes hold back whatever the *other* lane has already written
+/// but not acknowledged. The reservation is one-sided on purpose: core is
+/// charged for detail so billing batches cannot spend the detail slice, while
+/// detail is not charged for core because a fresh filesystem reading already
+/// reflects core's bytes and detail is the fallback lane that lives in whatever
+/// core leaves. Charging both lanes for each other would let the two budgets
+/// sum past the free space, which is what the original `core_reserve` comment
+/// intended but the code (reserving from the wrong lane) never achieved.
+const RESERVE_FLOOR: u64 = 64 << 20;
+const RESERVE_RATIO: u64 = 50;
+/// At most a quarter of the *available* space may be reserved, so a lane's
+/// capacity never drops below 3/4 of what is free (and is 0 only when the disk
+/// is actually full).
+const RESERVE_AVAILABLE_DIVISOR: u64 = 4;
+/// Slice of the free budget held back from `core` so that quality observations
+/// (and other detail telemetry) keep a place to land while billing batches are
+/// flushing — core is prioritised, not monopolising. Capped by the pool, so a
+/// disk with less free space than this simply hands core the whole remainder.
+const CORE_PEER_RESERVE_MIN: u64 = 32 << 20;
+/// Never hold back more than an eighth of the free budget for the other lane;
+/// on a very tight disk core keeps the larger share.
+const CORE_PEER_RESERVE_DIVISOR: u64 = 8;
+/// Bytes the spool is allowed to add, always leaving the reserve untouched.
+///
+/// The reserve is `min(total / RESERVE_RATIO, max(FLOOR, available / 4))`: the
+/// disk's 1/50 share caps it, a floor keeps a minimum tail free, and on a tight
+/// disk the floor yields to a quarter of what is actually available. Because
+/// the expression is capped by the 1/50 share, the reserve can never exceed the
+/// free budget — the equivalent `clamp(FLOOR, available / 4)` panics outright
+/// once `available < FLOOR`, and a full disk must degrade to a closed lane
+/// rather than abort the node.
+pub fn available_bytes(total: u64, available: u64, reserved: u64) -> u64 {
+    let reserve = (total / RESERVE_RATIO)
+        .min((available / RESERVE_AVAILABLE_DIVISOR).max(RESERVE_FLOOR));
+    available.saturating_sub(reserve).saturating_sub(reserved)
+}
+/// Capacity of one lane over (total, available) bytes, where `reserved_for_peer`
+/// is what the *other* lane already holds in the shared counter.
+///
+/// The core lane additionally holds back `max(available / 8, 32 MiB)`, capped by
+/// the pool, so a bursting core cannot consume the space quality observations
+/// need. The detail lane holds back nothing: it is the fallback lane and lives
+/// in whatever core leaves, and charging both lanes for each other would let
+/// the two budgets sum past the free space.
+pub fn lane_capacity(
     core: bool,
+    total: u64,
+    available: u64,
+    reserved_for_peer: u64,
     limit: u64,
+) -> u64 {
+    if limit > 0 {
+        return limit;
+    }
+    if core {
+        let declared = (available / CORE_PEER_RESERVE_DIVISOR).max(CORE_PEER_RESERVE_MIN);
+        // Capped by the pool (the equivalent clamp would panic once the pool is
+        // smaller than the minimum).
+        let peer_reserve = declared
+            .min(available.saturating_sub(available_bytes(total, available, 0)))
+            .max(reserved_for_peer);
+        available_bytes(total, available, peer_reserve)
+    } else {
+        available_bytes(total, available, reserved_for_peer)
+    }
+}
+/// Per-lane accounting shared by the two spools, which live on one filesystem
+/// and therefore compete for one pool of free space. Each spool records what it
+/// has written here, so a lane's capacity is a real upper bound on the pool's
+/// growth rather than a per-lane view of the whole disk.
+struct LaneCounter {
+    used: AtomicU64,
+}
+impl LaneCounter {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            used: AtomicU64::new(0),
+        })
+    }
+    fn used(&self) -> u64 {
+        self.used.load(Ordering::Relaxed)
+    }
+    fn add_used(&self, bytes: u64) {
+        self.used.fetch_add(bytes, Ordering::Relaxed);
+    }
+    fn sub_used(&self, bytes: u64) {
+        self.used.fetch_sub(bytes, Ordering::Relaxed);
+    }
+    /// Bytes the *other* lane holds, as seen by the core lane. Core reserves
+    /// space for detail and must therefore respect detail's footprint; detail
+    /// reads nothing because its budget is the fallback that absorbs whatever
+    /// core leaves (and a fresh filesystem reading already reflects core).
+    fn reserved_for_peer(&self, core: bool) -> u64 {
+        if core { self.used() } else { 0 }
+    }
+}
+/// One lane's durable budget: its configured ceiling, whether it is the core
+/// lane (which decides who is charged), and the counter shared with the other
+/// lane that records the pool's growth.
+struct LaneBudget {
+    limit: u64,
+    core: bool,
+    counter: Arc<LaneCounter>,
 }
 fn mace_error(e: OpCode) -> anyhow::Error {
     anyhow::anyhow!("telemetry spool: {e:?}")
 }
+/// Distinguishes "the disk cannot take this batch" from every other spool
+/// failure, so operators and alerts can point straight at capacity instead of
+/// reading a generic `spool exhausted`.
+#[derive(Debug)]
+pub enum SpoolError {
+    Capacity {
+        required: u64,
+        available: u64,
+        core: bool,
+    },
+}
+impl std::fmt::Display for SpoolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Capacity {
+                required,
+                available,
+                core,
+            } => write!(
+                f,
+                "telemetry spool exhausted reason=spool_capacity lane={} requiredBytes={required} availableBytes={available}",
+                if *core { "core" } else { "detail" }
+            ),
+        }
+    }
+}
+impl std::error::Error for SpoolError {}
+/// True when a spool error was a capacity rejection. Callers keep their own
+/// drop/retain policy; this only classifies the cause.
+pub fn is_capacity_exhausted(error: &(dyn std::error::Error + 'static)) -> bool {
+    let mut current = Some(error);
+    while let Some(err) = current {
+        if err.downcast_ref::<SpoolError>().is_some() {
+            return true;
+        }
+        current = err.source();
+    }
+    false
+}
 impl Spool {
     pub fn open(path: &Path, core: bool, limit: u64) -> anyhow::Result<Self> {
+        Self::open_lane(path, core, limit, None)
+    }
+    /// Opens a spool, optionally attached to the other lane's usage counter so
+    /// both budgets see one shared pool of free space.
+    fn open_lane(
+        path: &Path,
+        core: bool,
+        limit: u64,
+        shared: Option<Arc<LaneCounter>>,
+    ) -> anyhow::Result<Self> {
         std::fs::create_dir_all(path)?;
         let mut opts = Options::new(path);
         opts.sync_on_write = true;
@@ -102,32 +272,63 @@ impl Spool {
             Err(OpCode::NotFound) => Meta::default(),
             Err(e) => return Err(mace_error(e)),
         };
+        let counter = shared.unwrap_or_else(LaneCounter::new);
+        counter.add_used(meta.bytes);
         Ok(Self {
             _db: db,
             bucket,
             meta: Mutex::new(meta),
             path: path.to_owned(),
-            core,
-            limit,
+            budget: LaneBudget { limit, core, counter },
+            #[cfg(test)]
+            fixed_disk: None,
         })
     }
     fn capacity(&self) -> u64 {
-        if self.limit > 0 {
-            return self.limit;
+        if self.budget.limit > 0 {
+            return self.budget.limit;
+        }
+        let (total, available) = match self.disk_space() {
+            Some(space) => space,
+            None => return 0,
+        };
+        lane_capacity(
+            self.budget.core,
+            total,
+            available,
+            self.budget
+                .counter
+                .reserved_for_peer(self.budget.core),
+            0,
+        )
+    }
+    /// (total, available) of the filesystem holding this spool, using the
+    /// longest matching mount point.
+    fn disk_space(&self) -> Option<(u64, u64)> {
+        #[cfg(test)]
+        if let Some(space) = self.fixed_disk {
+            return Some(space);
         }
         let disks = sysinfo::Disks::new_with_refreshed_list();
-        let disk = disks
+        disks
             .iter()
             .filter(|d| self.path.starts_with(d.mount_point()))
-            .max_by_key(|d| d.mount_point().as_os_str().len());
-        match disk {
-            Some(d) => {
-                let reserve = (d.total_space() / 50).max(1 << 30);
-                let core_reserve = if self.core { 0 } else { 256 << 20 };
-                d.available_space().saturating_sub(reserve + core_reserve)
-            }
-            None => 0,
-        }
+            .max_by_key(|d| d.mount_point().as_os_str().len())
+            .map(|d| (d.total_space(), d.available_space()))
+    }
+    /// Test hook: fix the (total, available) the spool believes the filesystem
+    /// reports, so capacity decisions are exercised without filling a disk. A
+    /// real filesystem reading already reflects this node's own writes, so the
+    /// fake one is a snapshot too.
+    #[cfg(test)]
+    fn with_disk(mut self, total: u64, available: u64) -> Self {
+        self.fixed_disk = Some((total, available));
+        self
+    }
+    #[cfg(test)]
+    fn with_peer(mut self, shared: Arc<LaneCounter>) -> Self {
+        self.budget.counter = shared;
+        self
     }
     pub fn append(
         &self,
@@ -161,13 +362,24 @@ impl Spool {
         }
         let encoded = zstd::encode_all(batch.encode_to_vec().as_slice(), 3)?;
         let available = self.capacity();
-        if encoded.len() as u64 > available
-            || self.limit > 0 && meta.bytes.saturating_add(encoded.len() as u64) > available
-        {
+        let required = encoded.len() as u64;
+        // A lane is out of room when the batch cannot fit in the free budget at
+        // all, or when this chained queue's accumulation would pass the limit
+        // it was opened with. `available` is already a per-lane budget that
+        // accounts for the other lane, so neither lane can spend the other's
+        // share.
+        let over_limit = self.budget.limit > 0
+            && meta.bytes.saturating_add(required) > self.budget.limit;
+        if required > available || over_limit {
             // The caller decides whether the batch is dropped (record a gap)
             // or retained in memory for the next window — a full spool is not
             // itself proof of loss.
-            anyhow::bail!("telemetry spool exhausted")
+            return Err(SpoolError::Capacity {
+                required,
+                available,
+                core: self.budget.core,
+            }
+            .into());
         }
         let mut next = meta.clone();
         next.tail += 1;
@@ -184,9 +396,10 @@ impl Spool {
         txn.upsert(b"meta", serde_json::to_vec(&next)?)
             .map_err(mace_error)?;
         txn.commit().map_err(mace_error)?;
-        let level = capacity_level(next.bytes, available, self.limit);
+        let level = capacity_level(next.bytes, available, self.budget.limit);
         *meta = next;
-        escalate_capacity(level, self.core);
+        self.budget.counter.add_used(encoded.len() as u64);
+        escalate_capacity(level, self.budget.core);
         Ok(batch.batch_id)
     }
     pub fn front(&self) -> anyhow::Result<Option<pb::TelemetryBatch>> {
@@ -229,8 +442,9 @@ impl Spool {
         txn.upsert(b"meta", serde_json::to_vec(&next)?)
             .map_err(mace_error)?;
         txn.commit().map_err(mace_error)?;
-        let level = capacity_level(next.bytes, self.capacity(), self.limit);
+        let level = capacity_level(next.bytes, self.capacity(), self.budget.limit);
         *meta = next;
+        self.budget.counter.sub_used(size as u64);
         // Falling below a threshold re-arms escalation for the next incident.
         ALERT_LEVEL.fetch_min(level, Ordering::Relaxed);
         Ok(())
@@ -266,7 +480,7 @@ impl Spool {
             "pendingBatches": pending,
             "pendingBytes": meta.bytes,
             "remainingBytes": available,
-            "capacityLevel": capacity_level(meta.bytes, available, self.limit),
+            "capacityLevel": capacity_level(meta.bytes, available, self.budget.limit),
             "oldestAt": if pending > 0 { meta.oldest_at } else { 0 },
             "exhaustEtaSecs": if rate > 0 { available / rate.max(1) } else { 0 },
             "lastFailureAt": LAST_FAILURE.load(Ordering::Relaxed),
@@ -371,7 +585,15 @@ fn emit_meta(kind: &str, gap_kind: &str, reason: &str, start: i64, end: i64) {
 pub fn initialize() -> anyhow::Result<()> {
     let path = NodePaths::current().data_dir().join("telemetry");
     let core = Arc::new(Spool::open(&path.join("core"), true, 0)?);
-    let detail = Arc::new(Spool::open(&path.join("detail"), false, 0)?);
+    // Both lanes write to one filesystem, so the detail lane joins the core
+    // lane's accounting: core's footprint is subtracted from detail's budget
+    // and vice versa, while each keeps its own ceiling.
+    let detail = Arc::new(Spool::open_lane(
+        &path.join("detail"),
+        false,
+        0,
+        Some(core.budget.counter.clone()),
+    )?);
     QUEUES
         .set(Queues { core, detail })
         .map_err(|_| anyhow::anyhow!("telemetry already initialized"))
@@ -568,6 +790,274 @@ async fn persist_node_logs(buffer: &mut Vec<pb::NodeLog>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const GIB: u64 = 1 << 30;
+    const MIB: u64 = 1 << 20;
+    /// The live acceptance disk: 240 GiB with 3.8 GiB free.
+    const TIGHT_TOTAL: u64 = 240 * GIB;
+    const TIGHT_AVAILABLE: u64 = 3_800 * MIB + 300 * MIB;
+
+    /// A spool whose filesystem readings are fixed, for capacity cases that
+    /// cannot be built by actually filling a disk.
+    /// The bytes core holds back for the detail lane, as `lane_capacity`
+    /// composes it.
+    fn core_reserved_bytes(total: u64, available: u64) -> u64 {
+        let declared = (available / CORE_PEER_RESERVE_DIVISOR).max(CORE_PEER_RESERVE_MIN);
+        declared
+            .min(available.saturating_sub(available_bytes(total, available, 0)))
+            .max(0)
+    }
+
+    /// Bytes that survive zstd level 3, so `append` measures them at face
+    /// value. A zeros payload compresses thousands of times over and could
+    /// never trip a capacity guard.
+    fn incompressible(len: usize) -> Vec<u8> {
+        let mut state = 0x9e37_79b9_7f4a_7c15u64;
+        (0..len)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                state as u8
+            })
+            .collect()
+    }
+
+    fn spool_with_disk(core: bool, limit: u64, total: u64, available: u64) -> (Spool, PathBuf) {
+        let path = std::env::temp_dir().join(format!("telemetry-cap-{}", uuid::Uuid::new_v4()));
+        let spool = Spool::open(&path, core, limit)
+            .unwrap()
+            .with_disk(total, available);
+        (spool, path)
+    }
+
+    /// Verbatim copy of the pre-fix policy, kept so the regression case fails
+    /// (capacity == 0) if anyone restores `max(total / 50, 1 GiB)` without
+    /// clamping the reserve against what is actually available.
+    #[allow(dead_code)]
+    fn pre_fix_capacity(total: u64, available: u64, core: bool) -> u64 {
+        let reserve = (total / 50).max(GIB);
+        let core_reserve = if core { 0 } else { 256 * MIB };
+        available.saturating_sub(reserve + core_reserve)
+    }
+
+    // The live acceptance scenario: a bind-mounted host disk of 240 GiB with
+    // 3.8 GiB free. The pre-fix reserve was 4.6 GiB, so every lane went to
+    // zero and stayed there even though 3.8 GiB was free.
+    #[test]
+    fn tight_disk_keeps_a_positive_adaptive_budget() {
+        let total = TIGHT_TOTAL;
+        let available = TIGHT_AVAILABLE;
+
+        // Negative control: the old formula closes the spool for both lanes.
+        assert_eq!(pre_fix_capacity(total, available, true), 0);
+        assert_eq!(pre_fix_capacity(total, available, false), 0);
+        // The old ceiling was a 1 GiB floor, far larger than the ~1 GiB quarter
+        // of free space the fix is willing to hold back.
+        assert!((total / 50).max(GIB) > available / RESERVE_AVAILABLE_DIVISOR);
+
+        // The fix: enough room for both lanes to keep working, while the disk
+        // keeps a reserve proportional to what is actually free.
+        let core = lane_capacity(true, total, available, 0, 0);
+        let detail = lane_capacity(false, total, available, 0, 0);
+        assert!(
+            core > 0 && detail > 0,
+            "both lanes must keep a positive budget: core={core} detail={detail}"
+        );
+
+        // Never more than the free space, and detail's own pool is never
+        // smaller than core could leave it: the reserve is one pool, not one
+        // per lane. Two independent carves would let core + detail exceed the
+        // disk (2.69 + 3.22 > 4.30 GiB in this very scenario).
+        assert!(core <= available);
+        assert!(detail <= available);
+        assert_eq!(detail, available_bytes(total, available, 0));
+        assert_eq!(
+            core,
+            available_bytes(total, available, core_reserved_bytes(total, available))
+        );
+        assert!(core < detail, "core must reserve a slice for detail");
+    }
+
+    // The reserve must adapt with available space instead of tracking total
+    // size, and a full disk must still be a hard stop.
+    #[test]
+    fn reserve_adapts_to_available_space_and_stops_at_zero_free() {
+        // The 1/50 share of a 240 GiB disk (4.8 GiB) is what caps the reserve
+        // here, because it is far below max(FLOOR, available / 4).
+        let expected_reserve =
+            |available: u64| (TIGHT_TOTAL / RESERVE_RATIO).min((available / 4).max(RESERVE_FLOOR));
+        // Large free space: the total/50 share is the binding ceiling, so
+        // 2 GiB of a 100 GiB disk stays reserved.
+        assert_eq!(
+            available_bytes(100 * GIB, 90 * GIB, 0),
+            90 * GIB - 2 * GIB
+        );
+        // Tight free space: the ceiling is clamped to a quarter of free space.
+        assert_eq!(
+            available_bytes(TIGHT_TOTAL, TIGHT_AVAILABLE, 0),
+            TIGHT_AVAILABLE - expected_reserve(TIGHT_AVAILABLE)
+        );
+        // No free space: the lane is closed, never over-quota into zero, and
+        // never a panic from an inverted clamp on a full disk.
+        assert_eq!(available_bytes(TIGHT_TOTAL, 0, 0), 0);
+        assert_eq!(available_bytes(TIGHT_TOTAL, 1, 0), 0);
+        assert_eq!(lane_capacity(true, TIGHT_TOTAL, 0, 0, 0), 0);
+        assert_eq!(lane_capacity(false, TIGHT_TOTAL, 0, 0, 0), 0);
+    }
+
+    // A real spool must reach the same decision through `append`, so the fix is
+    // not just arithmetic sitting beside the code path that runs in production.
+    #[test]
+    fn append_uses_the_adaptive_budget_on_a_tight_disk() {
+        let total = TIGHT_TOTAL;
+        let available = TIGHT_AVAILABLE;
+        assert_eq!(pre_fix_capacity(total, available, true), 0);
+        let (spool, path) = spool_with_disk(true, 0, total, available);
+        // The decision path itself reports a usable budget, not zero.
+        let budget = spool.capacity();
+        assert!(budget > 0, "tight disk must not close the spool");
+        assert_eq!(
+            budget,
+            available_bytes(total, available, core_reserved_bytes(total, available))
+        );
+        // A restrained batch lands on a disk the pre-fix policy had closed.
+        spool
+            .append("node_metric", incompressible(4 * MIB as usize), 0, false, 1)
+            .unwrap();
+        // An explicitly limited queue still enforces its ceiling: the fix does
+        // not turn capacity checking off, it changes what capacity is.
+        let (limited, limited_path) = spool_with_disk(true, MIB, total, available);
+        limited
+            .append("node_metric", incompressible(64 * 1024), 0, false, 1)
+            .unwrap();
+        assert!(
+            limited
+                .append("node_metric", incompressible(2 * MIB as usize), 0, false, 2)
+                .is_err(),
+            "a batch past the queue ceiling must be refused"
+        );
+        drop(spool);
+        drop(limited);
+        std::fs::remove_dir_all(path).unwrap();
+        std::fs::remove_dir_all(limited_path).unwrap();
+    }
+
+    // Requirement: detail keeps a landing place once core has filled its own
+    // budget, and core is charged for the slice set aside for detail.
+    #[test]
+    fn detail_still_enqueues_after_core_fills_its_budget() {
+        let total = 20 * GIB;
+        let available = total / 2;
+        let (core, core_path) = spool_with_disk(true, MIB, total, available);
+        let (detail, detail_path) = spool_with_disk(false, 0, total, available);
+        let detail = detail.with_peer(core.budget.counter.clone());
+
+        let core_budget = core.capacity();
+        let detail_budget = detail.capacity();
+        assert_eq!(core_budget, MIB);
+        // Detail's budget is the pool itself: detail is the fallback lane and
+        // is not charged core's peer reserve.
+        assert_eq!(detail_budget, available_bytes(total, available, 0));
+        // Isolation is by construction, not by luck: core's budget leaves out
+        // the detail carve, and detail's budget ignores core's ceiling.
+        assert!(detail_budget > 0);
+        assert!(core_budget < detail_budget);
+
+        // Fill core to its ceiling.
+        let mut appended = 0u32;
+        while core.append("node_metric", vec![7; 64 * 1024], 0, false, 1).is_ok() {
+            appended += 1;
+        }
+        assert!(appended > 0);
+        // The queue stops just short of its ceiling rather than overrunning it.
+        assert!(core.budget.counter.used() > 0);
+        assert!(core.budget.counter.used() <= MIB);
+        // Core is done for this window; it cannot spend detail's slice.
+        assert!(core.append("node_metric", vec![7; 64 * 1024], 0, false, 1).is_err());
+
+        // Detail still lands its observation, which is the starvation the
+        // inverted `core_reserve` (charged to detail instead of core) caused.
+        detail
+            .append("probe_observation", vec![9; 8 * 1024], 0, false, 3)
+            .unwrap();
+        assert_eq!(detail.front().unwrap().unwrap().kind, "probe_observation");
+
+        drop(core);
+        drop(detail);
+        std::fs::remove_dir_all(core_path).unwrap();
+        std::fs::remove_dir_all(detail_path).unwrap();
+    }
+
+    // The invariants must hold across the whole parameter space, not only at the
+    // scenario the acceptance run happened to hit. A completely full disk must
+    // return zero capacity rather than panicking inside a clamp.
+    #[test]
+    fn capacity_invariants_hold_across_disk_sizes() {
+        for total in [64 * MIB, GIB, 20 * GIB, 240 * GIB, 8 * GIB * 1024] {
+            let mut available = total;
+            while available > 0 {
+                let core = lane_capacity(true, total, available, 0, 0);
+                let detail = lane_capacity(false, total, available, 0, 0);
+                for (lane, capacity, is_core) in
+                    [("core", core, true), ("detail", detail, false)]
+                {
+                    assert!(capacity <= available, "{lane} over-quota: {total}/{available}");
+                    let released = available - capacity;
+                    let base = (total / RESERVE_RATIO).min(
+                        (available / RESERVE_AVAILABLE_DIVISOR).max(RESERVE_FLOOR),
+                    );
+                    let peer = if is_core {
+                        core_reserved_bytes(total, available)
+                    } else {
+                        0
+                    };
+                    assert!(
+                        released <= base + peer,
+                        "{lane} released {released} exceeds reserve {base} + peer {peer}"
+                    );
+                }
+                // The reserve is capped by this disk's 1/50 share, so the spool
+                // cannot reserve more than the disk can spare.
+                let reserve = available - available_bytes(total, available, 0);
+                assert!(reserve <= total / RESERVE_RATIO);
+                assert!(reserve <= available);
+                // Keep the sweep strictly decreasing: once `available` is
+                // smaller than 64 the step would be zero and the loop would
+                // never terminate.
+                let step = (available / 64).max(1);
+                available = available.saturating_sub(step);
+            }
+            // A full disk is a closed lane, never a panic.
+            assert_eq!(available_bytes(total, 0, 0), 0);
+            assert_eq!(lane_capacity(true, total, 0, 0, 0), 0);
+            assert_eq!(lane_capacity(false, total, 0, 0, 0), 0);
+        }
+    }
+
+    // Requirement: a capacity refusal is identifiable, and is not every refusal.
+    #[test]
+    fn capacity_refusal_is_distinguishable_from_other_failures() {
+        let (spool, path) = spool_with_disk(true, 1 * MIB, TIGHT_TOTAL, TIGHT_AVAILABLE);
+        let err = spool
+            .append("node_metric", incompressible(2 * MIB as usize), 0, false, 1)
+            .expect_err("batch larger than the lane budget must be refused");
+        let rendered = err.to_string();
+        assert!(
+            rendered.contains("reason=spool_capacity"),
+            "capacity refusal must carry its own reason code: {rendered}"
+        );
+        assert!(
+            rendered.contains("lane=core"),
+            "capacity refusal must name the lane: {rendered}"
+        );
+        assert!(is_capacity_exhausted(err.as_ref()));
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+        // An unrelated spool-level failure is not classified as capacity.
+        let other = std::io::Error::other("telemetry spool: not found");
+        assert!(!is_capacity_exhausted(&other));
+    }
 
     // Mirrors probe.rs: the Edge executor builds the batch from the pushed plan
     // identity and hands it to telemetry::enqueue for "probe_observation".
