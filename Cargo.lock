@@ -5372,7 +5372,7 @@ dependencies = [
 
 [[package]]
 name = "zelvik-geo-runtime"
-version = "26.10.2"
+version = "26.10.3"
 dependencies = [
  "anyhow",
  "arc-swap",
