@@ -179,19 +179,28 @@ async fn flush_observations(generation: u64) {
         if GENERATION.load(Ordering::SeqCst) != generation {
             break;
         }
-        let drained = std::mem::take(&mut *OUTBOX.lock());
-        if drained.is_empty() {
+        let Some(batch) = drain_outbox() else {
             continue;
-        }
-        let count = drained.len();
-        let batch = pb::ProbeObservationBatch {
-            observations: drained.clone(),
         };
+        let count = batch.observations.len();
+        let drained = batch.observations.clone();
         if let Err(err) = crate::telemetry::enqueue("probe_observation", &batch, 0, false).await {
             warn!(observation_count = count, error = %err, "probe observation enqueue failed; retained");
             OUTBOX.lock().extend(drained);
         }
     }
+}
+
+/// drain_outbox 把当前窗口的观测合并成一个批次；空窗口返回 None。
+///
+/// 合并是吞吐的关键：93 个目标 × 15 秒 = 每分钟 372 条，一条一批会把
+/// detail 通道压到 60 批/分钟的上限，从这里开始就必然积压。
+fn drain_outbox() -> Option<pb::ProbeObservationBatch> {
+    let drained = std::mem::take(&mut *OUTBOX.lock());
+    if drained.is_empty() {
+        return None;
+    }
+    Some(pb::ProbeObservationBatch { observations: drained })
 }
 
 /// run_target probes one target every interval until the plan generation
@@ -493,6 +502,26 @@ fn event_time_now() -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    /// 合并上报的核心契约：同一窗口内的多条观测必须进入同一个批次，
+    /// 否则 detail 通道的「一批一次 RTT」会重新变成吞吐上限。
+    #[test]
+    fn drain_outbox_merges_window_observations_into_one_batch() {
+        OUTBOX.lock().clear();
+        assert!(drain_outbox().is_none(), "空窗口不应产生批次");
+        for index in 0..93u32 {
+            OUTBOX.lock().push(pb::ProbeObservation {
+                target_id: format!("pt_{index}"),
+                ..Default::default()
+            });
+        }
+        let batch = drain_outbox().expect("窗口内有观测时必须产出批次");
+        assert_eq!(batch.observations.len(), 93);
+        assert_eq!(batch.observations[7].target_id, "pt_7");
+        assert!(drain_outbox().is_none(), "取走之后缓冲必须清空，避免重复上报");
+    }
+
     use super::*;
 
     #[test]
