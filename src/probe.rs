@@ -2,8 +2,10 @@
 //!
 //! The control plane pushes a per-node plan through `nodeJSON.runtime.probe`
 //! (see [`crate::config_models::ProbePlan`]). Each target is probed on its
-//! provider's cadence; every cycle produces one `probe_observation` telemetry
-//! batch. There is no local target list — probing follows the pushed plan only.
+//! provider's cadence; every cycle pushes one observation into a shared buffer
+//! that a per-second flusher folds into a single `probe_observation` batch, so
+//! N targets cost one upload per second instead of N. There is no local target
+//! list — probing follows the pushed plan only.
 //!
 //! Which kinds appear is a property of the source, not of this executor: the
 //! built-in zstaticcdn catalog is L4-only and its rows are `kind=tcp`, while a
@@ -78,6 +80,16 @@ static TLS_CONFIG: LazyLock<Result<Arc<rustls::ClientConfig>, String>> = LazyLoc
     Ok(Arc::new(config))
 });
 
+/// 观测缓冲：每个目标的每个周期只往这里推一条，由 flusher 合并成一批上报。
+///
+/// 一条观测一个批次会让 detail 通道的串行上传成为吞吐上限（实测恒为
+/// 60 批/分钟），目标一多就必然积压、滞后单调增长。合并后一次上传承载
+/// 该窗口内的全部观测，吞吐随目标数线性扩展，而通道压力恒定。
+static OUTBOX: LazyLock<parking_lot::Mutex<Vec<pb::ProbeObservation>>> =
+    LazyLock::new(|| parking_lot::Mutex::new(Vec::new()));
+/// 合并窗口。与 flusher 的 tick 一致，避免同一观测跨窗口。
+const FLUSH_INTERVAL: Duration = Duration::from_secs(1);
+
 /// Monotonic plan generation. A target task exits once it no longer matches.
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 static TASKS: LazyLock<parking_lot::Mutex<Vec<JoinHandle<()>>>> =
@@ -112,6 +124,8 @@ pub fn apply_plan(plan: Option<ProbePlan>) {
             return;
         }
     };
+    // 计划生效即启动合并上报任务；清空计划时它随 generation 一起退出。
+    tasks.push(tokio::spawn(flush_observations(generation)));
     let mut spawned = 0usize;
     let mut trimmed = 0usize;
     for provider in &plan.providers {
@@ -155,6 +169,31 @@ pub fn apply_plan(plan: Option<ProbePlan>) {
     debug!(targets = spawned, "probe plan applied");
 }
 
+/// flush_observations 把缓冲里的观测每秒合并成一个批次入队一次。
+/// 空窗口不发包；入队失败时把观测放回缓冲，下一个窗口重试。
+async fn flush_observations(generation: u64) {
+    let mut ticker = tokio::time::interval(FLUSH_INTERVAL);
+    ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    loop {
+        ticker.tick().await;
+        if GENERATION.load(Ordering::SeqCst) != generation {
+            break;
+        }
+        let drained = std::mem::take(&mut *OUTBOX.lock());
+        if drained.is_empty() {
+            continue;
+        }
+        let count = drained.len();
+        let batch = pb::ProbeObservationBatch {
+            observations: drained.clone(),
+        };
+        if let Err(err) = crate::telemetry::enqueue("probe_observation", &batch, 0, false).await {
+            warn!(observation_count = count, error = %err, "probe observation enqueue failed; retained");
+            OUTBOX.lock().extend(drained);
+        }
+    }
+}
+
 /// run_target probes one target every interval until the plan generation
 /// changes or the task is aborted.
 async fn run_target(generation: u64, provider: Arc<ProbeProviderPlan>, target: ProbeTargetPlan) {
@@ -168,12 +207,7 @@ async fn run_target(generation: u64, provider: Arc<ProbeProviderPlan>, target: P
             break;
         }
         let observation = probe_once(&provider, &target, timeout_dur).await;
-        let batch = pb::ProbeObservationBatch {
-            observations: vec![observation],
-        };
-        if let Err(err) = crate::telemetry::enqueue("probe_observation", &batch, 0, false).await {
-            warn!(target = %target.id, error = %err, "probe observation enqueue failed");
-        }
+        OUTBOX.lock().push(observation);
     }
 }
 

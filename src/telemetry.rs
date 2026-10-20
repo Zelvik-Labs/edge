@@ -98,6 +98,9 @@ pub struct Spool {
 /// core leaves. Charging both lanes for each other would let the two budgets
 /// sum past the free space, which is what the original `core_reserve` comment
 /// intended but the code (reserving from the wrong lane) never achieved.
+/// 同时在途的上传批次上限。批次本身已按秒合并，8 路足以吃掉 RTT，
+/// 又不至于在断网恢复瞬间把节点和 API 一起打满。
+const REPLAY_CONCURRENCY: usize = 8;
 const RESERVE_FLOOR: u64 = 64 << 20;
 const RESERVE_RATIO: u64 = 50;
 /// At most a quarter of the *available* space may be reserved, so a lane's
@@ -403,13 +406,20 @@ impl Spool {
         Ok(batch.batch_id)
     }
     pub fn front(&self) -> anyhow::Result<Option<pb::TelemetryBatch>> {
+        self.at(0)
+    }
+
+    /// at 读取队首之后的第 offset 个批次，不推进 head：并发上传时用它预取，
+    /// 确认仍按 head 顺序推进，因此「已落库」语义不变。
+    pub fn at(&self, offset: u64) -> anyhow::Result<Option<pb::TelemetryBatch>> {
         let meta = self.meta.lock();
-        if meta.head == meta.tail {
+        let sequence = meta.head.saturating_add(offset);
+        if sequence >= meta.tail {
             return Ok(None);
         }
         let view = self.bucket.view().map_err(mace_error)?;
         let raw = view
-            .get(format!("batch:{:020}", meta.head).as_bytes())
+            .get(format!("batch:{:020}", sequence).as_bytes())
             .map_err(mace_error)?;
         let decoded = zstd::decode_all(raw.slice())?;
         Ok(Some(pb::TelemetryBatch::decode(decoded.as_slice())?))
@@ -671,47 +681,95 @@ pub async fn replay(api: ApiConfig, core: bool) {
     };
     let mut failures = 0u32;
     loop {
-        let read = spool.clone();
-        let batch = match tokio::task::spawn_blocking(move || read.front()).await {
-            Ok(Ok(Some(b))) => b,
-            Ok(Ok(None)) => {
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                continue;
+        // 预取一批并发上传：串行「取一个发一个」在目标多时会把吞吐压到
+        // 约 60 批/分钟（每批一次 RTT）。并发上传后按 head 顺序确认，
+        // 「已落库」的语义不变，失败的批次仍留在队首重试。
+        let mut prefetched: Vec<pb::TelemetryBatch> = Vec::with_capacity(REPLAY_CONCURRENCY);
+        for offset in 0..REPLAY_CONCURRENCY as u64 {
+            let read = spool.clone();
+            match tokio::task::spawn_blocking(move || read.at(offset)).await {
+                Ok(Ok(Some(batch))) => prefetched.push(batch),
+                Ok(Ok(None)) => break,
+                Ok(Err(err)) => {
+                    error!(error=%err, "telemetry persistent queue read failed");
+                    break;
+                }
+                Err(err) => {
+                    error!(?err, "telemetry persistent queue read failed");
+                    break;
+                }
             }
-            result => {
-                error!(?result, "telemetry persistent queue read failed");
-                tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+        if prefetched.is_empty() {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            continue;
+        }
+
+        let client = match SharedRpcClient::get(&api).await {
+            Ok(client) => client.as_rpc_client(),
+            Err(err) => {
+                backoff(core, &mut failures, err).await;
                 continue;
             }
         };
-        let result = async {
-            let client = SharedRpcClient::get(&api).await?.as_rpc_client();
-            let mut service = client.telemetry_service();
-            let receipt =
-                tokio::time::timeout(Duration::from_secs(30), service.upload_batch(batch))
-                    .await??
-                    .into_inner();
-            let ack = spool.clone();
-            tokio::task::spawn_blocking(move || ack.acknowledge(&receipt)).await??;
-            Ok::<_, anyhow::Error>(())
-        }
-        .await;
-        match result {
-            Ok(()) => {
-                failures = 0;
-            }
-            Err(e) => {
-                if failures == 0 {
-                    LAST_FAILURE.store(crate::utils::time::now_timestamp(), Ordering::Relaxed);
-                    error!(core, error=%e, "URGENT: telemetry write failed; retained on node until durable receipt");
-                } else {
-                    warn!(core, error=%e, "telemetry batch remains pending");
+        // 并发上传：每个批次一次 RPC，但不再互相等待 RTT。
+        let mut uploads = Vec::with_capacity(prefetched.len());
+        for batch in prefetched {
+            let client = client.clone();
+            uploads.push(tokio::spawn(async move {
+                let mut service = client.telemetry_service();
+                let receipt =
+                    tokio::time::timeout(Duration::from_secs(30), service.upload_batch(batch)).await;
+                match receipt {
+                    Ok(Ok(receipt)) => Ok(receipt.into_inner()),
+                    Ok(Err(err)) => Err(anyhow::Error::from(err)),
+                    Err(err) => Err(anyhow::Error::from(err)),
                 }
-                failures = failures.saturating_add(1);
-                tokio::time::sleep(Duration::from_secs((1u64 << failures.min(6)).min(60))).await;
+            }));
+        }
+        // 按队首顺序确认：任何一批失败就停在那里，后面的批次不越过它确认。
+        let mut settled = true;
+        for handle in uploads {
+            let receipt = match handle.await {
+                Ok(Ok(receipt)) => receipt,
+                Ok(Err(err)) => {
+                    backoff(core, &mut failures, err).await;
+                    settled = false;
+                    break;
+                }
+                Err(err) => {
+                    backoff(core, &mut failures, anyhow::Error::from(err)).await;
+                    settled = false;
+                    break;
+                }
+            };
+            let ack = spool.clone();
+            if let Err(err) = tokio::task::spawn_blocking(move || ack.acknowledge(&receipt)).await
+                .map_err(anyhow::Error::from)
+                .and_then(|inner| inner)
+            {
+                backoff(core, &mut failures, err).await;
+                settled = false;
+                break;
             }
+        }
+        if settled {
+            failures = 0;
         }
     }
+}
+
+/// backoff 记录并退避一次上传失败；首次失败升级为 ERROR，避免静默积压。
+async fn backoff(core: bool, failures: &mut u32, err: anyhow::Error) {
+    if *failures == 0 {
+        LAST_FAILURE.store(crate::utils::time::now_timestamp(), Ordering::Relaxed);
+        error!(core, error=%err, "URGENT: telemetry write failed; retained on node until durable receipt");
+    } else {
+        warn!(core, error=%err, "telemetry batch remains pending");
+    }
+    let n = failures.saturating_add(1);
+    *failures = n;
+    tokio::time::sleep(Duration::from_secs((1u64 << n.min(6)).min(60))).await;
 }
 pub async fn access_logs(mut rx: tokio::sync::mpsc::Receiver<pb::HttpAccessLog>) {
     let mut buffer = Vec::new();
