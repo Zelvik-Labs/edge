@@ -12,7 +12,7 @@
 #       --node-id abc123 --secret deadbeef
 set -eu
 
-VERSION="26.10.2"
+VERSION="26.10.3"
 BIN_NAME="zelvik-edge"
 SERVICE_NAME="zelvik-edge"
 SERVICE_USER="zelvik-edge"
