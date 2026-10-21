@@ -194,6 +194,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Native arm64 runners need neither amd64 mirror pinning nor x86 cross
+          # toolchains: install the native packages and stop here.
+          if [ "$(uname -m)" != "x86_64" ]; then
+            sudo apt-get update -y
+            sudo apt-get install -y --no-install-recommends cmake build-essential protobuf-compiler pkg-config libelf-dev zlib1g-dev libpcap0.8-dev
+            exit 0
+          fi
 
           packages=(cmake build-essential golang-go protobuf-compiler pkg-config libelf-dev zlib1g-dev libpcap0.8-dev)
 
@@ -282,6 +289,24 @@ jobs:
           rm -rf "$GITHUB_WORKSPACE/../dns"
           GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519_dns -o IdentitiesOnly=yes" \
             git clone --depth 1 git@github.com:Zelvik-Labs/dns.git "$GITHUB_WORKSPACE/../dns"
+
+      - name: Checkout private dependency (protocol)
+        shell: bash
+        env:
+          PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PROTOCOL_DEPLOY_KEY" ]; then
+            echo "::error::PROTOCOL_DEPLOY_KEY is not configured; zelvik-suite git dependency cannot be fetched" >&2
+            exit 1
+          fi
+          install -d -m 0700 ~/.ssh
+          printf "%s\n" "$PROTOCOL_DEPLOY_KEY" > ~/.ssh/id_ed25519_protocol
+          chmod 0600 ~/.ssh/id_ed25519_protocol
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git config --global url."git@github.com:".insteadOf "https://github.com/"
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519_protocol -o IdentitiesOnly=yes" \
+            git ls-remote git@github.com:Zelvik-Labs/protocol.git HEAD > /dev/null
 
       - name: Cargo dependency source cache
         uses: actions/cache@v4
