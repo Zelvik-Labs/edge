@@ -428,26 +428,65 @@ def cmd_prepare(args: argparse.Namespace) -> None:
             handle.write("publish=true\n")
 
 
-def _find_asset(release: dict, name: str) -> dict | None:
-    # The portal returns assets as a list of records; an earlier client assumed a
-    # name->record mapping. Accept both so a real release is never mistaken for a
-    # broken payload.
+def _asset_records(release: dict) -> list[dict]:
+    """Normalise the two portal asset shapes to a list of asset records.
+
+    The admin API (`GET /api/v1/admin/releases`) returns a flat list of DB rows
+    with snake_case fields (`size_bytes`, `has_file`, `git_commit`). The public
+    API returns a component -> list mapping with camelCase fields. Reading only
+    one shape made every real admin response look like an empty/broken payload.
+    """
     assets = release.get("assets")
     if assets is None:
-        return None
-    if isinstance(assets, dict):
-        record = assets.get(name)
-        return record if isinstance(record, dict) else None
+        return []
     if isinstance(assets, list):
-        for record in assets:
-            if isinstance(record, dict) and record.get("name") == name:
-                return record
-        return None
+        return [record for record in assets if isinstance(record, dict)]
+    if isinstance(assets, dict):
+        records: list[dict] = []
+        for value in assets.values():
+            if isinstance(value, dict):
+                records.append(value)
+            elif isinstance(value, list):
+                records.extend(record for record in value if isinstance(record, dict))
+        return records
     fail("portal release assets payload is neither a list nor an object")
-    for asset in assets.get(COMPONENT, []):
-        if asset.get("name") == name:
-            return asset
+
+
+def _component_assets(release: dict) -> list[dict]:
+    return [
+        record
+        for record in _asset_records(release)
+        if str(record.get("component", COMPONENT)) == COMPONENT
+    ]
+
+
+def _find_asset(release: dict, name: str) -> dict | None:
+    matches = [
+        record
+        for record in _component_assets(release)
+        if str(record.get("name")) == name
+    ]
+    if len(matches) > 1:
+        fail(f"portal release has duplicate asset rows for {name}")
+    return matches[0] if matches else None
+
+
+def _asset_size(asset: dict) -> int | None:
+    for key in ("size_bytes", "sizeBytes"):
+        value = asset.get(key)
+        if value is not None:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                fail(f"asset {asset.get('name')} has a non-numeric {key}: {value!r}")
     return None
+
+
+def _asset_has_file(asset: dict) -> bool:
+    for key in ("has_file", "hasFile"):
+        if key in asset:
+            return bool(asset[key])
+    return False
 
 
 def cmd_upload(args: argparse.Namespace) -> None:
@@ -475,14 +514,14 @@ def cmd_upload(args: argparse.Namespace) -> None:
     if existing is not None:
         same = (
             str(existing.get("sha256", "")).lower() == digest
-            and int(existing.get("sizeBytes", -1)) == size
+            and _asset_size(existing) == size
         )
         if not same:
             fail(
                 f"refusing to overwrite {name}: portal has sha256={existing.get('sha256')} "
-                f"size={existing.get('sizeBytes')}, local has sha256={digest} size={size}"
+                f"size={_asset_size(existing)}, local has sha256={digest} size={size}"
             )
-        if existing.get("hasFile"):
+        if _asset_has_file(existing):
             print(f"idempotent: {name} already has identical bytes; no upload")
         else:
             print(f"repair: {name} metadata exists but payload is missing; re-uploading")
@@ -501,11 +540,11 @@ def cmd_upload(args: argparse.Namespace) -> None:
         if release is None:
             fail(f"release {args.version} disappeared after upload")
         stored = _find_asset(release, name)
-        if stored is None or not stored.get("hasFile"):
+        if stored is None or not _asset_has_file(stored):
             fail(f"portal release metadata does not expose {name} with a stored payload")
         if (
             str(stored.get("sha256", "")).lower() != digest
-            or int(stored.get("sizeBytes", -1)) != size
+            or _asset_size(stored) != size
         ):
             fail(f"portal metadata for {name} disagrees with the uploaded bytes")
     receipt = {
@@ -585,8 +624,8 @@ def cmd_promote(args: argparse.Namespace) -> None:
     if release is None:
         fail(f"release {args.version} does not exist")
     _validate_release(release, args.version, args.source_commit)
-    assets = (release.get("assets") or {}).get(COMPONENT)
-    if not isinstance(assets, list):
+    assets = _component_assets(release)
+    if not assets:
         fail(f"release {args.version} has no {COMPONENT} assets")
     server_names = {str(asset.get("name")) for asset in assets}
     if server_names != set(EXPECTED_ASSETS):
@@ -597,16 +636,16 @@ def cmd_promote(args: argparse.Namespace) -> None:
     for name in EXPECTED_ASSETS:
         asset = next(a for a in assets if a.get("name") == name)
         receipt = receipts[name]
-        if not asset.get("hasFile"):
+        if not _asset_has_file(asset):
             fail(f"{name} has metadata but no uploaded payload")
         if str(asset.get("sha256", "")).lower() != receipt["sha256"].lower():
             fail(
                 f"{name} portal sha256 {asset.get('sha256')} != receipt "
                 f"{receipt['sha256']}"
             )
-        if int(asset.get("sizeBytes", -1)) != receipt["size"]:
+        if _asset_size(asset) != receipt["size"]:
             fail(
-                f"{name} portal size {asset.get('sizeBytes')} != receipt {receipt['size']}"
+                f"{name} portal size {_asset_size(asset)} != receipt {receipt['size']}"
             )
 
     key, ephemeral_id = _download_key(portal, args.version)
@@ -637,8 +676,9 @@ def cmd_promote(args: argparse.Namespace) -> None:
 
     portal.set_latest(release["id"])
     verified = portal.release(args.version)
-    if verified is None or not verified.get("is_latest_stable"):
-        fail(f"set-latest returned but {args.version} is not is_latest_stable")
+    latest = verified and (verified.get("is_latest_stable") or verified.get("isLatestStable"))
+    if not latest:
+        fail(f"set-latest returned but {args.version} is not latest stable")
     print(f"promoted {args.version} to stable latest (source={args.source_commit})")
 
 

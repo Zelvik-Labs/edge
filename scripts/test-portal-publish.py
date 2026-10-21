@@ -66,30 +66,34 @@ class MockPortal:
             "assets": {},
         }
         if assets:
-            release["assets"] = {"Zelvik-Edge": []}
+            release["assets"] = {"Zelvik-Edge": {}}
         self.releases[version] = release
         return release
 
-    def asset_list(self, release: dict) -> dict:
-        return {
-            "Zelvik-Edge": [
-                {
-                    "name": name,
-                    "component": "Zelvik-Edge",
-                    "sha256": meta["sha256"],
-                    "sizeBytes": meta["size"],
-                    "hasFile": True,
-                }
-                for name, meta in release["assets"].get("Zelvik-Edge", {}).items()
-            ]
-        }
+    def asset_list(self, release: dict) -> list[dict]:
+        # Mirror GET /api/v1/admin/releases: a flat list of DB rows, snake_case,
+        # including size_bytes/has_file. This is the shape that broke run
+        # 39618077647 after prepare succeeded.
+        return [
+            {
+                "id": "ast_" + name,
+                "release_id": release["id"],
+                "version": release["version"],
+                "name": name,
+                "component": "Zelvik-Edge",
+                "sha256": meta["sha256"],
+                "size_bytes": meta["size"],
+                "has_file": True,
+            }
+            for name, meta in release["assets"].get("Zelvik-Edge", {}).items()
+        ]
 
     def release_json(self, release: dict) -> dict:
         return {
             "id": release["id"],
             "version": release["version"],
             "channel": release["channel"],
-            "gitCommit": release["gitCommit"],
+            "git_commit": release["gitCommit"],
             "is_latest_stable": release["is_latest_stable"],
             "is_latest_beta": False,
             "paused": release["paused"],
