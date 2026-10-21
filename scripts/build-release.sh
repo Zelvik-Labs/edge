@@ -95,9 +95,10 @@ esac
 
 TRIPLE="${ARCH}-unknown-linux-gnu"
 PKG_STEM="zelvik-edge-${ARCH}-unknown-linux-gnu"
-# The product version is part of the archive name so a package can never be
-# mistaken for a different release; verify-release-package.sh enforces it.
-PKG_NAME="${PKG_STEM}-${VERSION}.tar.gz"
+# Kept exactly as the control-plane bootstrap and license site look it up; a
+# patch release must not invent a new name. The version travels in the packaged
+# VERSION file, BUILD-METADATA.txt and the binary itself.
+PKG_NAME="${PKG_STEM}.tar.gz"
 
 mkdir -p "$OUT_DIR"
 
@@ -194,6 +195,15 @@ printf '%s\n' "$VERSION" > "${STAGE_DIR}/VERSION"
 
 mkdir -p "${STAGE_DIR}/systemd"
 cp "${REPO_ROOT}/deploy/systemd/zelvik-edge.service" "${STAGE_DIR}/systemd/zelvik-edge.service"
+
+# What actually produced this package: the product version, the CPU baseline
+# and the flags. The version is otherwise invisible in the archive name.
+{
+    printf 'product_version=%s\n' "$VERSION"
+    printf 'cargo_version=%s\n' "$ZELVIK_CARGO_VERSION"
+    printf 'target=%s\n' "$TRIPLE"
+    printf 'cpu_baseline=%s\n' "${ZELVIK_EDGE_TARGET_CPU:-host}"
+} > "${STAGE_DIR}/BUILD-METADATA.txt"
 
 if [ -f "$EBPF_OBJ" ]; then
     mkdir -p "${STAGE_DIR}/data"

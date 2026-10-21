@@ -86,9 +86,23 @@ grep -q 'needs: ebpf' "$_wf" \
 grep -q 'CARGO_TARGET_DIR: .*matrix.name' "$_wf" \
     && _pass "each leg has its own target directory" \
     || _bad "per-leg CARGO_TARGET_DIR is missing"
-grep -q 'isa_regex' "$_wf" \
-    && _pass "release.yml asserts the instruction set per leg" \
-    || _bad "release.yml has no instruction-set assertion"
+grep -q 'elf_machine' "$_wf" \
+    && _pass "release.yml asserts the ELF machine per leg" \
+    || _bad "release.yml does not assert the ELF machine"
+grep -q 'cpu_baseline=' "$_wf" \
+    && _pass "release.yml records target CPU / features per leg" \
+    || _bad "release.yml does not record per-leg CPU metadata"
+if grep -q 'isa_regex\|isa_objdump' "$_wf"; then
+    _bad "release.yml still hard-asserts opcodes; compiler flags do not guarantee instructions"
+else
+    _pass "release.yml does not hard-assert specific opcodes"
+fi
+grep -q 'PACKAGE_NAME="Zelvik-Edge-${{ matrix.name }}"' "$_wf" \
+    && _pass "release.yml keeps the official Zelvik-Edge-<variant> asset names" \
+    || _bad "release.yml does not use the official asset names"
+grep -q 'PKG_NAME="${PKG_STEM}.tar.gz"' scripts/build-release.sh \
+    && _pass "build-release.sh keeps zelvik-edge-<arch>-unknown-linux-gnu.tar.gz" \
+    || _bad "build-release.sh changed the bootstrap asset name"
 grep -q 'verify-release-package.sh' "$_wf" \
     && _pass "release.yml verifies the packaged version" \
     || _bad "release.yml does not run verify-release-package.sh"

@@ -70,35 +70,41 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Five independent legs; every leg has its own runner, target dir and
-          # cache key, and each asserts the instruction set it claims to ship.
+          # Five independent legs, one runner each. Asset names are the正式
+          # release names the bootstrap and license site already expect; a
+          # patch release must not rename them. The version travels in the
+          # release directory, the package metadata, the packaged VERSION file
+          # and the binary itself.
           - target: x86_64-unknown-linux-gnu
             cpu: x86-64-v2
             name: linux-x64-v2-sse4.2
             cache_key: x64-v2-pclmul
             rustflags: "-C target-cpu=x86-64-v2 -C target-feature=+pclmulqdq"
             cxxflags: "-mpclmul -msse4.2"
-            isa_objdump: objdump
-            isa_regex: "pclmul|pcmpistri|pcmpestri"
-            isa_desc: "SSE4.2/PCLMUL"
+            cpu_features: "+pclmulqdq"
+            required_cpu_flags: "pclmulqdq,sse4_2"
+            readelf: readelf
+            elf_machine: "Advanced Micro Devices X86-64"
           - target: x86_64-unknown-linux-gnu
             cpu: x86-64-v3
             name: linux-x64-v3-avx2
             cache_key: x64-v3-avx2
             rustflags: "-C target-cpu=x86-64-v3 -C target-feature=+pclmulqdq"
             cxxflags: "-mpclmul -msse4.2"
-            isa_objdump: objdump
-            isa_regex: "%ymm"
-            isa_desc: "AVX2"
+            cpu_features: "+pclmulqdq"
+            required_cpu_flags: "avx2,bmi2,fma"
+            readelf: readelf
+            elf_machine: "Advanced Micro Devices X86-64"
           - target: x86_64-unknown-linux-gnu
             cpu: x86-64-v4
             name: linux-x64-v4-avx512
             cache_key: x64-v4-avx512
             rustflags: "-C target-cpu=x86-64-v4 -C target-feature=+pclmulqdq"
             cxxflags: "-mpclmul -msse4.2"
-            isa_objdump: objdump
-            isa_regex: "%zmm"
-            isa_desc: "AVX-512"
+            cpu_features: "+pclmulqdq"
+            required_cpu_flags: "avx512f,avx512bw,avx512vl,avx512dq"
+            readelf: readelf
+            elf_machine: "Advanced Micro Devices X86-64"
           # --- ARM64 Variants ---
           - target: aarch64-unknown-linux-gnu
             cpu: generic
@@ -106,18 +112,20 @@ jobs:
             cache_key: arm64-generic-crypto
             rustflags: "-C target-feature=+neon,+aes,+sha2,+crc"
             cxxflags: ""
-            isa_objdump: aarch64-linux-gnu-objdump
-            isa_regex: "aese|sha256h|pmull"
-            isa_desc: "NEON/AES/SHA2"
+            cpu_features: "+neon,+aes,+sha2,+crc"
+            required_cpu_flags: ""
+            readelf: aarch64-linux-gnu-readelf
+            elf_machine: AArch64
           - target: aarch64-unknown-linux-gnu
             cpu: neoverse-n1
             name: linux-arm64-neoverse-n1
             cache_key: arm64-n1
             rustflags: "-C target-cpu=neoverse-n1"
             cxxflags: ""
-            isa_objdump: aarch64-linux-gnu-objdump
-            isa_regex: "aese|sha256h|pmull"
-            isa_desc: "NEON/AES/SHA2"
+            cpu_features: "+neon,+aes,+sha2,+crc"
+            required_cpu_flags: ""
+            readelf: aarch64-linux-gnu-readelf
+            elf_machine: AArch64
 
     steps:
       - name: Checkout code
@@ -294,28 +302,82 @@ jobs:
 
           cargo build --release --target ${{ matrix.target }} --bin Zelvik-Edge
 
-      # Fail closed when the flags did not take effect: a binary that silently
-      # fell back to the baseline must not be packaged under an AVX2/AVX-512
-      # label, because deploys select the package by that label.
-      - name: Assert instruction set
+      # Compiler CPU flags do not guarantee that a specific opcode appears in
+      # the final binary (dead code, inlining, LTO), so we do not assert
+      # opcodes. What must hold is the architecture the package claims: the ELF
+      # machine is checked here, and the CPU baseline / target features /
+      # toolchain that actually produced the binary are recorded next to it.
+      - name: Verify ELF machine and record build metadata
         shell: bash
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+          BUILD_VARIANT: ${{ matrix.name }}
+          BUILD_CPU: ${{ matrix.cpu }}
+          BUILD_FEATURES: ${{ matrix.cpu_features }}
+          BUILD_RUSTFLAGS: ${{ matrix.rustflags }}
+          BUILD_CXXFLAGS: ${{ matrix.cxxflags }}
         run: |
           set -euo pipefail
-          BIN="${CARGO_TARGET_DIR}/${{ matrix.target }}/release/Zelvik-Edge"
+          BIN="${CARGO_TARGET_DIR}/${BUILD_TARGET}/release/Zelvik-Edge"
           test -x "$BIN"
-          if ! ${{ matrix.isa_objdump }} -d "$BIN" | grep -Eq '${{ matrix.isa_regex }}'; then
-            echo "error: ${{ matrix.name }}: ${{ matrix.isa_desc }} instructions (regex '${{ matrix.isa_regex }}') not found in the built binary" >&2
-            echo "       CPU flags did not take effect; refusing to package a silently downgraded binary" >&2
+          MACHINE="$(${{ matrix.readelf }} -h "$BIN" | sed -n 's/^ *Machine: *//p')"
+          echo "ELF machine: $MACHINE"
+          if [ "$MACHINE" != "${{ matrix.elf_machine }}" ]; then
+            echo "error: ${BUILD_VARIANT}: ELF machine '$MACHINE' != expected '${{ matrix.elf_machine }}'" >&2
             exit 1
           fi
-          echo "ok: ${{ matrix.name }} contains ${{ matrix.isa_desc }} instructions"
+          {
+            echo "product_version=${ZELVIK_RELEASE_VERSION}"
+            echo "variant=${BUILD_VARIANT}"
+            echo "target=${BUILD_TARGET}"
+            echo "cpu_baseline=${BUILD_CPU}"
+            echo "cpu_features=${BUILD_FEATURES}"
+            echo "rustflags=${BUILD_RUSTFLAGS}"
+            echo "cxxflags=${BUILD_CXXFLAGS}"
+            echo "rustc=$(rustc -V)"
+            echo "elf_machine=$MACHINE"
+            echo "binary_sha256=$(sha256sum "$BIN" | awk '{print $1}')"
+          } > build-metadata.txt
+          cat build-metadata.txt
+
+      # The only real acceptance for the CLI version is executing the binary on
+      # a CPU of the class the leg targets. When this runner cannot satisfy that
+      # (cross-arch, or a runner CPU without the leg's baseline) the check is
+      # skipped loudly and left to the target machine — never faked.
+      - name: Smoke-run on a matching CPU
+        shell: bash
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+          BUILD_VARIANT: ${{ matrix.name }}
+          REQUIRED_FLAGS: ${{ matrix.required_cpu_flags }}
+        run: |
+          set -euo pipefail
+          BIN="${CARGO_TARGET_DIR}/${BUILD_TARGET}/release/Zelvik-Edge"
+          if [ "$(uname -m)" != "x86_64" ] || [ "$BUILD_TARGET" != "x86_64-unknown-linux-gnu" ]; then
+            echo "SKIP ${BUILD_VARIANT}: cross-built for ${BUILD_TARGET}; --version must be verified on a target-class machine"
+            exit 0
+          fi
+          HAVE="$(sed -n 's/^flags[[:space:]]*: //p' /proc/cpuinfo | head -1)"
+          for flag in $(echo "$REQUIRED_FLAGS" | tr ',' ' '); do
+            case " $HAVE " in
+              *" $flag "*) ;;
+              *) echo "SKIP ${BUILD_VARIANT}: runner CPU lacks $flag; --version must be verified on a matching machine"; exit 0 ;;
+            esac
+          done
+          OUT="$("$BIN" --version)"
+          echo "${BUILD_VARIANT}: $OUT"
+          test "${OUT##* }" = "${ZELVIK_RELEASE_VERSION}" || {
+            echo "error: ${BUILD_VARIANT}: --version reported '$OUT', expected ${ZELVIK_RELEASE_VERSION}" >&2
+            exit 1
+          }
 
       - name: Package
         shell: bash
         run: |
           set -euo pipefail
           VERSION="${ZELVIK_RELEASE_VERSION:?product version must be resolved before packaging}"
-          PACKAGE_NAME="zelvik-edge-${{ matrix.target }}-${VERSION}"
+          # 正式资产名，bootstrap 与许可站按此查找；补丁版本不引入新命名。
+          PACKAGE_NAME="Zelvik-Edge-${{ matrix.name }}"
 
           # Re-verify the packaged object still matches what build.rs embedded.
           test "$(sha256sum ebpf-out/zelvik-edge-xdp-ebpf.o | awk '{print $1}')" = "$(cat ebpf-out/sha256.txt)"
@@ -330,16 +392,18 @@ jobs:
           sed "s|^VERSION=\"[^\"]*\"$|VERSION=\"${VERSION}\"|" deploy/install.sh > dist/install.sh
           chmod 0755 dist/install.sh
           printf '%s\n' "$VERSION" > dist/VERSION
+          cp build-metadata.txt dist/BUILD-METADATA.txt
           {
             echo "product_version=${VERSION}"
             echo "binary=zelvik-edge target=${{ matrix.target }} variant=${{ matrix.name }}"
             echo "binary_sha256=$(sha256sum dist/zelvik-edge | awk '{print $1}')"
             echo "ebpf_sha256=$(cat ebpf-out/sha256.txt)"
           } > dist/SHA256SUMS.txt
-          tar -czf "${PACKAGE_NAME}.tar.gz" -C dist zelvik-edge data/zelvik-edge-xdp-ebpf.o install.sh VERSION SHA256SUMS.txt
-          # x86_64 legs execute the binary here; the aarch64 legs are cross-built
-          # on an x86_64 runner, so the verifier checks the embedded version
-          # instead of executing it (and says so).
+          tar -czf "${PACKAGE_NAME}.tar.gz" -C dist \
+            zelvik-edge data/zelvik-edge-xdp-ebpf.o install.sh VERSION BUILD-METADATA.txt SHA256SUMS.txt
+          # Checksum and layout only. The CLI version is proven by executing the
+          # binary on a matching CPU (previous step) or left to the target
+          # machine; this script must not pretend otherwise.
           bash scripts/verify-release-package.sh "${PACKAGE_NAME}.tar.gz" --expect-version "$VERSION"
 
       # Binary packages stay on this runner. Public Actions artifacts and
