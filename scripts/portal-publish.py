@@ -429,9 +429,21 @@ def cmd_prepare(args: argparse.Namespace) -> None:
 
 
 def _find_asset(release: dict, name: str) -> dict | None:
-    assets = release.get("assets") or {}
-    if not isinstance(assets, dict):
-        fail("portal release assets payload is not an object")
+    # The portal returns assets as a list of records; an earlier client assumed a
+    # name->record mapping. Accept both so a real release is never mistaken for a
+    # broken payload.
+    assets = release.get("assets")
+    if assets is None:
+        return None
+    if isinstance(assets, dict):
+        record = assets.get(name)
+        return record if isinstance(record, dict) else None
+    if isinstance(assets, list):
+        for record in assets:
+            if isinstance(record, dict) and record.get("name") == name:
+                return record
+        return None
+    fail("portal release assets payload is neither a list nor an object")
     for asset in assets.get(COMPONENT, []):
         if asset.get("name") == name:
             return asset
