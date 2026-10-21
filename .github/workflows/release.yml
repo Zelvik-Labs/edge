@@ -287,8 +287,15 @@ jobs:
           chmod 0600 ~/.ssh/id_ed25519_dns
           ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
           rm -rf "$GITHUB_WORKSPACE/../dns"
-          GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519_dns -o IdentitiesOnly=yes" \
-            git clone --depth 1 git@github.com:Zelvik-Labs/dns.git "$GITHUB_WORKSPACE/../dns"
+          # Both private dependencies are fetched over SSH; a shared agent avoids
+          # pinning one identity per cargo invocation.
+          printf "%s\n" "${{ secrets.PROTOCOL_DEPLOY_KEY }}" > ~/.ssh/id_ed25519_protocol
+          chmod 0600 ~/.ssh/id_ed25519_protocol
+          eval "$(ssh-agent -s)" > /dev/null
+          ssh-add ~/.ssh/id_ed25519_dns ~/.ssh/id_ed25519_protocol > /dev/null 2>&1
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          git config --global url."git@github.com:".insteadOf "https://github.com/"
+          git clone --depth 1 git@github.com:Zelvik-Labs/dns.git "$GITHUB_WORKSPACE/../dns"
 
       - name: Checkout private dependency (protocol)
         shell: bash
