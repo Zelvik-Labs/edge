@@ -42,11 +42,15 @@ chmod 0755 "$W/zelvik-edge"
 printf '26.10.3.1\n' > "$W/VERSION"
 
 # 容器没有 systemd：用假命令覆盖安装后的启动/注册校验，避免依赖真实 PID1。
-FAKEBIN=/fakebin; mkdir -p "$FAKEBIN"
+FAKEBIN=/fakebin; rm -rf "$FAKEBIN"; mkdir -p "$FAKEBIN/state"
 cat > "$FAKEBIN/systemctl" <<'EOS'
 #!/bin/sh
+state=/fakebin/state
 case "$1" in
-  is-active) [ "$#" -ge 3 ] && [ "$3" = "--quiet" ] && exit 0; echo active ;;
+  is-active)
+    if [ -f "$state/fail-active" ]; then exit 1; fi
+    [ "$#" -ge 3 ] && [ "$3" = "--quiet" ] && exit 0
+    echo active ;;
   show) echo 4242 ;;
   *) exit 0 ;;
 esac
@@ -124,6 +128,52 @@ for k in 'rpc.endpoints:' 'instanceId: "nd_test"' 'secret: "abc123"' 'commMode: 
 done
 expect_endpoints "首装保留完整有序 endpoint 列表" "$CFG" \
     'https://cp1.example.com,https://cp2.example.com,https://cp3.example.com'
+
+# 3b) CA 同文件重跑：源就是 <home>/pki/cp-ca.pem，不得 self-copy 失败。
+if command -v openssl >/dev/null 2>&1; then
+    openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/ca.key -out /tmp/ca.pem         -days 2 -subj '/CN=test' >/dev/null 2>&1
+    CA_SHA=$(openssl x509 -in /tmp/ca.pem -outform DER | sha256sum | cut -d' ' -f1)
+    bash "$W/install.sh" --install-dir "$HOME_DIR" --endpoint https://cp1.example.com         --node-id nd_test --secret abc123 --tls-ca-file /tmp/ca.pem         --tls-ca-sha256 "$CA_SHA" >/tmp/install-ca1.log 2>&1         || { tail -20 /tmp/install-ca1.log; fail=1; }
+    bash "$W/install.sh" --install-dir "$HOME_DIR" --endpoint https://cp1.example.com         --node-id nd_test --secret abc123 --tls-ca-file "$HOME_DIR/pki/cp-ca.pem"         --tls-ca-sha256 "$CA_SHA" >/tmp/install-ca2.log 2>&1         || { tail -20 /tmp/install-ca2.log; fail=1; }
+    expect "CA 同文件重跑不 self-copy" /tmp/install-ca2.log "no copy needed"
+    owner "pki 目录 root:zelvik-edge 0750" "$HOME_DIR/pki" 'root:750'
+    owner "CA 0644 root" "$HOME_DIR/pki/cp-ca.pem" 'root:644'
+else
+    echo "SKIP openssl missing: CA 同文件用例未运行"
+fi
+
+# 3c) 失败回滚：新版本启动即退出，安装器必须恢复旧二进制并保留 data/。
+mkdir -p /pkg-v2/systemd
+cp "$W/install.sh" /pkg-v2/install.sh
+cp "$W/systemd/zelvik-edge.service" /pkg-v2/systemd/
+printf '26.10.3.2
+' > /pkg-v2/VERSION
+printf '#!/bin/sh
+case "$1" in
+  --version) echo "zelvik-edge 26.10.3.2" ;;
+  *) exit 1 ;;
+esac
+' > /pkg-v2/zelvik-edge
+chmod 0755 /pkg-v2/zelvik-edge /pkg-v2/install.sh
+echo 'keep-me' > "$HOME_DIR/data/user.marker"
+touch "$FAKEBIN/state/fail-active"
+if bash /pkg-v2/install.sh --install-dir "$HOME_DIR" --endpoint https://cp1.example.com     --node-id nd_test --secret abc123 --allow-unregistered >/tmp/install-rollback.log 2>&1; then
+    echo "FAIL 回滚：失败的安装退出码为 0"; fail=1
+else
+    echo "OK   失败安装以非零退出"
+    expect "回滚日志" /tmp/install-rollback.log "rolling back"
+    if [ "$("$HOME_DIR/bin/zelvik-edge" --version)" = "zelvik-edge 26.10.3.1" ]; then
+        echo "OK   二进制回滚到 v1"
+    else
+        echo "FAIL 二进制未回滚"; fail=1
+    fi
+    if [ "$(cat "$HOME_DIR/data/user.marker")" = "keep-me" ]; then
+        echo "OK   data 保留"
+    else
+        echo "FAIL data 丢失"; fail=1
+    fi
+fi
+rm -f "$FAKEBIN/state/fail-active"
 
 # 4) 运维改动后重跑：拥有的键更新，运维的键原样保留。
 sed -i 's/^xdp:$/xdp:\n  enabled: true/' "$CFG"
