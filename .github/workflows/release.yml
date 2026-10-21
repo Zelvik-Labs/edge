@@ -322,8 +322,8 @@ jobs:
           chmod 0600 ~/.ssh/config
           # Cargo resolves zelvik-suite from https://github.com/Zelvik-Labs/protocol;
           # rewrite that URL to the alias whose only identity is the protocol key.
-          git config --global url."git@zelvik-protocol:Zelvik-Labs/protocol".insteadOf "https://github.com/Zelvik-Labs/protocol"
-          git config --global url."git@zelvik-protocol:Zelvik-Labs/protocol".insteadOf "git@github.com:Zelvik-Labs/protocol"
+          git config --global --add url."git@zelvik-protocol:Zelvik-Labs/protocol".insteadOf "https://github.com/Zelvik-Labs/protocol"
+          git config --global --add url."git@zelvik-protocol:Zelvik-Labs/protocol".insteadOf "git@github.com:Zelvik-Labs/protocol"
           # Both keys must reach their own repository before a build depends on them.
           git ls-remote git@zelvik-dns:Zelvik-Labs/dns.git HEAD > /dev/null
           git ls-remote git@zelvik-protocol:Zelvik-Labs/protocol.git HEAD > /dev/null
