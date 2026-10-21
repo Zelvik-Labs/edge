@@ -10,46 +10,131 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # One eBPF build for the whole release. Every leg downloads the exact bytes
+  # whose SHA256 was verified here, so build.rs embeds the packaged object and
+  # holds it to the same digest (ZELVIK_EDGE_XDP_EBPF_SHA256).
+  ebpf:
+    name: Build eBPF object (shared)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.99.0
+
+      - name: Build XDP eBPF Object
+        shell: bash
+        env:
+          # bpf-linker is pinned to the combination verified in validation;
+          # bumping it requires re-running the XDP/AF_XDP smoke matrix.
+          BPF_LINKER_VERSION: "0.11.1"
+        run: |
+          set -euo pipefail
+          # The dated nightly lives in one place only: the eBPF crate's
+          # rust-toolchain.toml. xtask build-ebpf and build.rs resolve the same
+          # channel, so the toolchain installed here is provably the one used.
+          EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/zelvik-edge-xdp-ebpf/rust-toolchain.toml | head -1)"
+          test -n "$EBPF_NIGHTLY"
+          rustup toolchain install "$EBPF_NIGHTLY" --profile minimal -c rust-src -c rustc-dev
+          rustup run "$EBPF_NIGHTLY" rustc --version
+          SYSROOT="$(rustup run "$EBPF_NIGHTLY" rustc --print sysroot)"
+          ln -sf "$(find "$SYSROOT/lib" -name 'libLLVM.so.*' -print -quit)" "$SYSROOT/lib/libLLVM.so"
+          LLVM_PREFIX="$SYSROOT" cargo +"$EBPF_NIGHTLY" install bpf-linker --version "$BPF_LINKER_VERSION" --locked
+          bpf-linker --version
+          rm -f data/zelvik-edge-xdp-ebpf.o
+          cargo xtask build-ebpf
+          test -s data/zelvik-edge-xdp-ebpf.o
+          mkdir -p ebpf-out
+          cp data/zelvik-edge-xdp-ebpf.o ebpf-out/zelvik-edge-xdp-ebpf.o
+          sha256sum ebpf-out/zelvik-edge-xdp-ebpf.o | awk '{print $1}' > ebpf-out/sha256.txt
+          cat ebpf-out/sha256.txt
+
+      - name: Upload shared eBPF object
+        uses: actions/upload-artifact@v4
+        with:
+          name: ebpf-object
+          path: ebpf-out
+          if-no-files-found: error
+          retention-days: 3
+
+  # Five matrix legs run in parallel, one runner each: no leg waits on another
+  # leg's cache, target directory or toolchain.
   build:
     name: Build - ${{ matrix.name }}
+    needs: ebpf
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         include:
-          # --- x86_64 Variants ---
+          # Five independent legs; every leg has its own runner, target dir and
+          # cache key, and each asserts the instruction set it claims to ship.
           - target: x86_64-unknown-linux-gnu
             cpu: x86-64-v2
             name: linux-x64-v2-sse4.2
+            cache_key: x64-v2-pclmul
             rustflags: "-C target-cpu=x86-64-v2 -C target-feature=+pclmulqdq"
             cxxflags: "-mpclmul -msse4.2"
+            isa_objdump: objdump
+            isa_regex: "pclmul|pcmpistri|pcmpestri"
+            isa_desc: "SSE4.2/PCLMUL"
           - target: x86_64-unknown-linux-gnu
             cpu: x86-64-v3
             name: linux-x64-v3-avx2
+            cache_key: x64-v3-avx2
             rustflags: "-C target-cpu=x86-64-v3 -C target-feature=+pclmulqdq"
             cxxflags: "-mpclmul -msse4.2"
+            isa_objdump: objdump
+            isa_regex: "%ymm"
+            isa_desc: "AVX2"
           - target: x86_64-unknown-linux-gnu
             cpu: x86-64-v4
             name: linux-x64-v4-avx512
+            cache_key: x64-v4-avx512
             rustflags: "-C target-cpu=x86-64-v4 -C target-feature=+pclmulqdq"
             cxxflags: "-mpclmul -msse4.2"
-
+            isa_objdump: objdump
+            isa_regex: "%zmm"
+            isa_desc: "AVX-512"
           # --- ARM64 Variants ---
           - target: aarch64-unknown-linux-gnu
             cpu: generic
             name: linux-arm64-generic
+            cache_key: arm64-generic-crypto
             rustflags: "-C target-feature=+neon,+aes,+sha2,+crc"
             cxxflags: ""
+            isa_objdump: aarch64-linux-gnu-objdump
+            isa_regex: "aese|sha256h|pmull"
+            isa_desc: "NEON/AES/SHA2"
           - target: aarch64-unknown-linux-gnu
             cpu: neoverse-n1
             name: linux-arm64-neoverse-n1
+            cache_key: arm64-n1
             rustflags: "-C target-cpu=neoverse-n1"
             cxxflags: ""
+            isa_objdump: aarch64-linux-gnu-objdump
+            isa_regex: "aese|sha256h|pmull"
+            isa_desc: "NEON/AES/SHA2"
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      # The product version is never written in this workflow: it is resolved
+      # from VERSION-MANIFEST.toml and exported to every later step, so the CLI
+      # --version, the registration report, install.sh and the package name all
+      # come from one value.
+      - name: Resolve and check product version
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/check-version-consistency.sh
+          VERSION="$(bash scripts/release-version.sh --print)"
+          echo "ZELVIK_RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "product version: $VERSION"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.99.0
@@ -135,14 +220,24 @@ jobs:
             sleep 10
           done
 
-      # Install mbx for runner-local builds only. Its compiled store can contain
-      # the packaged binary, so never publish that store in a public Actions cache.
-      # Cache dependency sources separately; license.zelvik.net distributes packages.
-      - name: Install mbx
-        uses: jdx/mr-boxington-action@v1
+      # The eBPF object is built exactly once (job "ebpf") and reused by every
+      # leg. build.rs holds the embedded object to the recorded SHA256, so a
+      # missing or substituted artifact fails the build instead of embedding a
+      # stale object.
+      - name: Download shared eBPF object
+        uses: actions/download-artifact@v4
         with:
-          backend: local
-          version: "1.14.0"
+          name: ebpf-object
+          path: ebpf-out
+
+      - name: Verify shared eBPF object
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s ebpf-out/zelvik-edge-xdp-ebpf.o
+          test -s ebpf-out/sha256.txt
+          test "$(sha256sum ebpf-out/zelvik-edge-xdp-ebpf.o | awk '{print $1}')" = "$(cat ebpf-out/sha256.txt)"
+          echo "shared eBPF sha256: $(cat ebpf-out/sha256.txt)"
 
       - name: Cargo dependency source cache
         uses: actions/cache@v4
@@ -151,57 +246,22 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ~/.cargo/.global-cache
-          key: release-cargo-sources-v1-${{ matrix.name }}-${{ github.sha }}
+          key: release-cargo-sources-v1-${{ matrix.cache_key }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            release-cargo-sources-v1-${{ matrix.name }}-
+            release-cargo-sources-v1-${{ matrix.cache_key }}-
 
-      # The eBPF toolchain and object MUST be ready before the node build:
-      # build.rs embeds the object designated by ZELVIK_EDGE_XDP_EBPF_SOURCE,
-      # so the embedded bytes are byte-identical to the packaged object by
-      # construction, and ZELVIK_EDGE_XDP_EBPF_SHA256 makes any stale or
-      # foreign object a hard build failure rather than a silent embed.
-      - name: Install eBPF Toolchain
-        shell: bash
-        env:
-          # bpf-linker is pinned to the combination verified in validation;
-          # bumping it requires re-running the XDP/AF_XDP smoke matrix.
-          BPF_LINKER_VERSION: "0.11.1"
-        run: |
-          set -euo pipefail
-          # The dated nightly lives in one place only: the eBPF crate's
-          # rust-toolchain.toml. xtask `build-ebpf` and build.rs resolve the
-          # same channel, so the toolchain installed here is provably the one
-          # every downstream consumer uses.
-          EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/zelvik-edge-xdp-ebpf/rust-toolchain.toml | head -1)"
-          test -n "$EBPF_NIGHTLY"
-          echo "EBPF_NIGHTLY=$EBPF_NIGHTLY" >> "$GITHUB_ENV"
-          rustup toolchain install "$EBPF_NIGHTLY" --profile minimal -c rust-src -c rustc-dev
-          rustup run "$EBPF_NIGHTLY" rustc --version
-          # bpf-linker links against libLLVM (>= the LLVM providing
-          # LLVMGetDINodeTag). Distro LLVM is too old; the toolchain's own
-          # rustc-dev component ships the version-exact shared lib, so
-          # point LLVM_PREFIX at the sysroot and provide the unversioned
-          # soname the linker looks for.
-          SYSROOT="$(rustup run "$EBPF_NIGHTLY" rustc --print sysroot)"
-          ln -sf "$(find "$SYSROOT/lib" -name 'libLLVM.so.*' -print -quit)" "$SYSROOT/lib/libLLVM.so"
-          export LLVM_PREFIX="$SYSROOT"
-          # Plain cargo, not mbx: `+toolchain` is rustup-shim syntax that
-          # mbx does not forward, and this one-off host tool gains nothing
-          # from the compilation cache.
-          cargo +"$EBPF_NIGHTLY" install bpf-linker --version "$BPF_LINKER_VERSION" --locked
-          bpf-linker --version
+      # Independent target directory per leg: no leg can poison another leg's
+      # incremental state, and the key pins target + CPU flags + toolchain +
+      # lockfile so a stale cache can never satisfy a different ISA build.
+      - name: Target cache (per leg)
+        uses: actions/cache@v4
+        with:
+          path: target/${{ matrix.name }}
+          key: release-target-v1-${{ matrix.cache_key }}-${{ matrix.target }}-rust1.99.0-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            release-target-v1-${{ matrix.cache_key }}-${{ matrix.target }}-rust1.99.0-
 
-      - name: Build XDP eBPF Object
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Never let a stale object survive into the package: remove any
-          # checked-in or cached artifact before rebuilding from source.
-          rm -f data/zelvik-edge-xdp-ebpf.o
-          mbx xtask build-ebpf
-          test -s data/zelvik-edge-xdp-ebpf.o
-          sha256sum data/zelvik-edge-xdp-ebpf.o
-          sha256sum data/zelvik-edge-xdp-ebpf.o | awk '{print $1}' > ebpf-sha256.txt
+
 
       - name: Build
         shell: bash
@@ -209,10 +269,12 @@ jobs:
           RUSTFLAGS: ${{ matrix.rustflags }}
           CXXFLAGS: ${{ matrix.cxxflags }}
           CFLAGS: ${{ matrix.cxxflags }}
-          ZELVIK_EDGE_XDP_EBPF_SOURCE: data/zelvik-edge-xdp-ebpf.o
+          ZELVIK_EDGE_XDP_EBPF_SOURCE: ebpf-out/zelvik-edge-xdp-ebpf.o
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/${{ matrix.name }}
+          ZELVIK_RELEASE_VERSION: ${{ env.ZELVIK_RELEASE_VERSION }}
         run: |
           set -euo pipefail
-          export ZELVIK_EDGE_XDP_EBPF_SHA256="$(cat ebpf-sha256.txt)"
+          export ZELVIK_EDGE_XDP_EBPF_SHA256="$(cat ebpf-out/sha256.txt)"
           # 1. Handle ARM Linkers
           if [ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]; then
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
@@ -230,45 +292,58 @@ jobs:
             export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
           fi
 
-          mbx build --release --target ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }} --bin Zelvik-Edge
+
+      # Fail closed when the flags did not take effect: a binary that silently
+      # fell back to the baseline must not be packaged under an AVX2/AVX-512
+      # label, because deploys select the package by that label.
+      - name: Assert instruction set
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN="${CARGO_TARGET_DIR}/${{ matrix.target }}/release/Zelvik-Edge"
+          test -x "$BIN"
+          if ! ${{ matrix.isa_objdump }} -d "$BIN" | grep -Eq '${{ matrix.isa_regex }}'; then
+            echo "error: ${{ matrix.name }}: ${{ matrix.isa_desc }} instructions (regex '${{ matrix.isa_regex }}') not found in the built binary" >&2
+            echo "       CPU flags did not take effect; refusing to package a silently downgraded binary" >&2
+            exit 1
+          fi
+          echo "ok: ${{ matrix.name }} contains ${{ matrix.isa_desc }} instructions"
 
       - name: Package
         shell: bash
         run: |
           set -euo pipefail
-          # Cargo [[bin]] name 区分大小写：产物是 Zelvik-Edge，包内重命名为小写。
-          ORIGINAL_BINARY="Zelvik-Edge"
-          TARGET_BINARY="zelvik-edge"
-          PACKAGE_NAME="Zelvik-Edge-${{ matrix.name }}"
+          VERSION="${ZELVIK_RELEASE_VERSION:?product version must be resolved before packaging}"
+          PACKAGE_NAME="zelvik-edge-${{ matrix.target }}-${VERSION}"
 
-          # Re-verify the packaged object still matches what build.rs
-          # embedded (same file by construction; belt-and-suspenders).
-          test "$(sha256sum data/zelvik-edge-xdp-ebpf.o | awk '{print $1}')" = "$(cat ebpf-sha256.txt)"
+          # Re-verify the packaged object still matches what build.rs embedded.
+          test "$(sha256sum ebpf-out/zelvik-edge-xdp-ebpf.o | awk '{print $1}')" = "$(cat ebpf-out/sha256.txt)"
 
           mkdir -p dist/data
-          cp target/${{ matrix.target }}/release/$ORIGINAL_BINARY dist/$TARGET_BINARY
-          cp data/zelvik-edge-xdp-ebpf.o dist/data/zelvik-edge-xdp-ebpf.o
+          cp "${CARGO_TARGET_DIR}/${{ matrix.target }}/release/Zelvik-Edge" dist/zelvik-edge
+          chmod 0755 dist/zelvik-edge
+          cp ebpf-out/zelvik-edge-xdp-ebpf.o dist/data/zelvik-edge-xdp-ebpf.o
+          # deploy/install.sh is a template; the shipped copy carries the same
+          # product version as the binary, and verify-release-package.sh fails
+          # the job if the binary, installer, VERSION file and name disagree.
+          sed "s|^VERSION=\"[^\"]*\"$|VERSION=\"${VERSION}\"|" deploy/install.sh > dist/install.sh
+          chmod 0755 dist/install.sh
+          printf '%s\n' "$VERSION" > dist/VERSION
           {
-            echo "binary=$(basename "$TARGET_BINARY") target=${{ matrix.target }} variant=${{ matrix.name }}"
-            echo "binary_sha256=$(sha256sum "dist/$TARGET_BINARY" | awk '{print $1}')"
-            echo "ebpf_sha256=$(cat ebpf-sha256.txt)"
-            echo "ebpf_toolchain=${EBPF_NIGHTLY} bpf-linker=0.11.1"
+            echo "product_version=${VERSION}"
+            echo "binary=zelvik-edge target=${{ matrix.target }} variant=${{ matrix.name }}"
+            echo "binary_sha256=$(sha256sum dist/zelvik-edge | awk '{print $1}')"
+            echo "ebpf_sha256=$(cat ebpf-out/sha256.txt)"
           } > dist/SHA256SUMS.txt
-          cd dist
-          tar -czf ../$PACKAGE_NAME.tar.gz $TARGET_BINARY data/zelvik-edge-xdp-ebpf.o SHA256SUMS.txt
-          cd ..
+          tar -czf "${PACKAGE_NAME}.tar.gz" -C dist zelvik-edge data/zelvik-edge-xdp-ebpf.o install.sh VERSION SHA256SUMS.txt
+          # x86_64 legs execute the binary here; the aarch64 legs are cross-built
+          # on an x86_64 runner, so the verifier checks the embedded version
+          # instead of executing it (and says so).
+          bash scripts/verify-release-package.sh "${PACKAGE_NAME}.tar.gz" --expect-version "$VERSION"
 
       # Binary packages stay on this runner. Public Actions artifacts and
       # GitHub release assets would bypass license.zelvik.net authentication.
-
-      # Bound the mbx store before actions/cache saves it — GitHub caps a
-      # repo's cache at ~10 GB across all entries, and each matrix leg
-      # saves its own entry. A missing object is rebuilt on demand, so
-      # pruning only costs hits, never correctness.
-      - name: Prune mbx store
-        if: always()
-        shell: bash
-        run: mbx gc --max-size 1500MB || true
 
   release:
     name: Create Release

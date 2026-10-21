@@ -118,7 +118,7 @@ impl RpcClient {
                 instance_id: cfg.instance_id.clone(),
                 kind: zelvik_suite::credential::Kind::Edge.to_proto() as i32,
                 comm_mode: cfg.comm_mode.to_proto() as i32,
-                software_version: env!("CARGO_PKG_VERSION").to_string(),
+                software_version: crate::RELEASE_VERSION.to_string(),
                 suite_version: zelvik_suite::PROTOCOL_VERSION.to_string(),
                 ..RegisterInstanceRequest::default()
             })
@@ -1569,7 +1569,7 @@ mod tests {
             request.comm_mode,
             zelvik_suite::CommMode::parse("plaintext").unwrap().to_proto() as i32
         );
-        assert_eq!(request.software_version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(request.software_version, crate::RELEASE_VERSION);
         assert_eq!(request.suite_version, zelvik_suite::PROTOCOL_VERSION);
     }
 }

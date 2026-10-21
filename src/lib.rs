@@ -114,6 +114,18 @@ mod version_tests {
         Some((yy, m, w, p))
     }
 
+    /// The injected product version may only extend the Cargo package version
+    /// with a patch segment; a different base means the two sources drifted.
+    #[test]
+    fn release_version_extends_cargo_base() {
+        let cargo = env!("CARGO_PKG_VERSION");
+        let release = super::RELEASE_VERSION;
+        assert!(
+            release == cargo || release.starts_with(&format!("{cargo}.")),
+            "RELEASE_VERSION {release:?} must equal or extend Cargo version {cargo:?}"
+        );
+    }
+
     #[test]
     fn release_version_is_valid_calver() {
         let v = super::RELEASE_VERSION;

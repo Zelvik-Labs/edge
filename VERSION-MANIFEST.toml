@@ -5,9 +5,14 @@
 # release; it appears in release tags / product_version only — the Cargo
 # version stays three-part.
 product = "Zelvik-Edge"
-product_version = "26.9.0"
-release_tag = "v26.9.0"
-version_scheme = "YY.MM.PATCH"
+# Single source of truth for the shipped product version, including the
+# optional CalVer patch segment that Cargo cannot express. Scripts derive it
+# via scripts/release-version.sh; never hand-write it anywhere else.
+product_version = "26.10.3.1"
+# Three-segment base that must equal [package].version in Cargo.toml.
+cargo_version = "26.10.3"
+release_tag = "v26.10.3.1"
+version_scheme = "YY.MM.PATCH[.x]"
 
 [upstream]
 project = "cloud-node-rust"

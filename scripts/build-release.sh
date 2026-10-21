@@ -18,11 +18,16 @@
 #
 # Usage:
 #   bash scripts/build-release.sh
-#   bash scripts/build-release.sh --arch aarch64 --version 26.10.2
+#   bash scripts/build-release.sh --arch aarch64 --version VERSION
+#
+# The product version comes from VERSION-MANIFEST.toml through
+# scripts/release-version.sh; --version only asserts an expectation.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION="26.10.2"
+# shellcheck source=scripts/release-version.sh
+. "${REPO_ROOT}/scripts/release-version.sh"
+VERSION="${ZELVIK_RELEASE_VERSION}"
 ARCH=""
 OUT_DIR="${RELEASE_OUT_DIR:-${REPO_ROOT}/release}"
 
@@ -31,7 +36,7 @@ usage() {
 Usage: build-release.sh [--arch x86_64|aarch64] [--version VERSION]
 
   --arch     Target architecture: x86_64 or aarch64 (default: host arch)
-  --version  Version string embedded in the package name (default: 26.10.2)
+  --version  Expected product version; must equal VERSION-MANIFEST.toml
 EOF
     exit 1
 }
@@ -46,6 +51,14 @@ while [ "$#" -gt 0 ]; do
         *) printf 'unknown option: %s\n' "$1" >&2; usage ;;
     esac
 done
+
+# The manifest is the only writer of the product version. --version exists so a
+# caller can assert what it expects, never to override it.
+if [ "$VERSION" != "$ZELVIK_RELEASE_VERSION" ]; then
+    printf 'error: --version %s disagrees with VERSION-MANIFEST.toml product_version %s\n' \
+        "$VERSION" "$ZELVIK_RELEASE_VERSION" >&2
+    exit 1
+fi
 
 # Resolve default arch from the host.
 HOST_OS="$(uname -s)"
@@ -82,7 +95,9 @@ esac
 
 TRIPLE="${ARCH}-unknown-linux-gnu"
 PKG_STEM="zelvik-edge-${ARCH}-unknown-linux-gnu"
-PKG_NAME="${PKG_STEM}.tar.gz"
+# The product version is part of the archive name so a package can never be
+# mistaken for a different release; verify-release-package.sh enforces it.
+PKG_NAME="${PKG_STEM}-${VERSION}.tar.gz"
 
 mkdir -p "$OUT_DIR"
 
@@ -115,7 +130,7 @@ if [ "$HOST_OS" = "Darwin" ]; then
     # macOS: reuse the existing cross-compile script, which owns the sysroot,
     # zigbuild, LLVM tool and glibc-floor setup. It cross-compiles x86_64 only
     # (the sysroot under ~/tools/sysroot-x86_64-linux-gnu is x86_64).
-    LOCAL_BUILD="${REPO_ROOT}/build-release-local.sh"
+    LOCAL_BUILD="${REPO_ROOT}/scripts/build-release-local.sh"
     [ -x "$LOCAL_BUILD" ] || { printf 'build-release-local.sh not found or not executable\n' >&2; exit 1; }
     if [ "$ARCH" != "x86_64" ]; then
         printf 'error: macOS cross-compile is wired for x86_64 only.\n' >&2
@@ -156,8 +171,26 @@ trap 'rm -rf "$STAGE_DIR"' EXIT
 cp "$BIN_PATH" "${STAGE_DIR}/zelvik-edge"
 chmod 0755 "${STAGE_DIR}/zelvik-edge"
 
-cp "${REPO_ROOT}/deploy/install.sh" "${STAGE_DIR}/install.sh"
+# The installer must ship the same product version as the binary.
+# deploy/install.sh is the template; this is the only place its VERSION is
+# written for a release, and a template without exactly one assignment is a
+# build error rather than a silently mismatched package.
+INSTALLER_SRC="${REPO_ROOT}/deploy/install.sh"
+INSTALLER_ASSIGNMENTS="$(grep -c '^VERSION="' "$INSTALLER_SRC" || true)"
+if [ "$INSTALLER_ASSIGNMENTS" != "1" ]; then
+    printf 'error: %s must contain exactly one VERSION="..." assignment (found %s)\n' \
+        "$INSTALLER_SRC" "${INSTALLER_ASSIGNMENTS:-0}" >&2
+    exit 1
+fi
+sed "s|^VERSION=\"[^\"]*\"$|VERSION=\"${VERSION}\"|" "$INSTALLER_SRC" > "${STAGE_DIR}/install.sh"
+STAGED_INSTALLER_VERSION="$(sed -n 's/^VERSION="\([^"]*\)"$/\1/p' "${STAGE_DIR}/install.sh")"
+if [ "$STAGED_INSTALLER_VERSION" != "$VERSION" ]; then
+    printf 'error: staged install.sh VERSION %s != product %s\n' \
+        "${STAGED_INSTALLER_VERSION:-<missing>}" "$VERSION" >&2
+    exit 1
+fi
 chmod 0755 "${STAGE_DIR}/install.sh"
+printf '%s\n' "$VERSION" > "${STAGE_DIR}/VERSION"
 
 mkdir -p "${STAGE_DIR}/systemd"
 cp "${REPO_ROOT}/deploy/systemd/zelvik-edge.service" "${STAGE_DIR}/systemd/zelvik-edge.service"
@@ -211,6 +244,13 @@ OUT_SHA="${OUT_DIR}/${PKG_NAME%.tar.gz}.sha256"
 # Use -C so the archive root contains the files directly (no top-level dir).
 # shellcheck disable=SC2086  # TAR_EXTRA is intentionally word-split (empty or one flag).
 tar $TAR_EXTRA -czf "$OUT_TAR" -C "$STAGE_DIR" .
+
+# Fail closed: never leave an archive whose CLI, installer or name disagree.
+if ! bash "${REPO_ROOT}/scripts/verify-release-package.sh" "$OUT_TAR" --expect-version "$VERSION"; then
+    rm -f "$OUT_TAR" "$OUT_SHA"
+    printf 'error: package verification failed; %s removed\n' "$OUT_TAR" >&2
+    exit 1
+fi
 
 SHA256="$(shasum -a 256 "$OUT_TAR" | awk '{print $1}')"
 SIZE="$(wc -c < "$OUT_TAR")"

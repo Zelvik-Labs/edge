@@ -26,9 +26,13 @@
 # - cross-ld.sh: ld.lld -m elf_x86_64 — libxdp-sys' GNU-ld-style binary
 #   embed step; /usr/bin/ld is Apple's and rejects GNU flags.
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 unset CARGO_TARGET_DIR CARGO_ENCODED_RUSTFLAGS RUSTFLAGS RUSTC_WRAPPER CARGO_BUILD_TARGET
+
+# shellcheck source=scripts/release-version.sh
+. "$(pwd)/scripts/release-version.sh"
+export ZELVIK_RELEASE_VERSION
 
 SYSROOT="$HOME/.local/share/cross-sysroot/debian-amd64"
 export PKG_CONFIG_PATH="$SYSROOT/usr/lib/x86_64-linux-gnu/pkgconfig"
@@ -41,9 +45,10 @@ export AR="${AR:-/opt/homebrew/opt/llvm/bin/llvm-ar}"
 # x86-64-v2 default: matches the CI baseline and the fleet floor — the
 # XDP node runs Ivy Bridge Xeons (AVX, no AVX2/BMI2/FMA) and v3 SIGILLs
 # there. Override with ZELVIK_EDGE_TARGET_CPU for v3-capable targets.
-# ZELVIK_RELEASE_VERSION (CalVer YY.M.W[.P]) flows through to option_env! in
-# src/lib.rs; unset it falls back to the Cargo package version. option_env!
-# is recorded in dep-info, so changing it forces a real recompile.
+# ZELVIK_RELEASE_VERSION (CalVer YY.M.W[.P]) is resolved from
+# VERSION-MANIFEST.toml by scripts/release-version.sh and exported below; it
+# flows through option_env! in src/lib.rs, and option_env! is recorded in
+# dep-info, so changing it forces a real recompile. Never hand-write it here.
 TARGET_CPU="${ZELVIK_EDGE_TARGET_CPU:-x86-64-v2}"
 export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C target-cpu=$TARGET_CPU -L $SYSROOT/usr/lib/x86_64-linux-gnu"
 GLIBC="${ZELVIK_EDGE_GLIBC:-2.36}"
