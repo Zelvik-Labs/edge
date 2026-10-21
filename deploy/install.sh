@@ -228,7 +228,10 @@ log "installed binary to ${INSTALL_BIN_DIR}/${BIN_NAME}"
 # ---------------------------------------------------------------------------
 EBPF_SRC="${SCRIPT_DIR}/data/zelvik-edge-xdp-ebpf.o"
 if [ -f "$EBPF_SRC" ]; then
-    run_cmd install -d -m 0755 -o root -g root "${DATA_DIR}/data"
+    # The node process writes its pid file and cache under <home>/data, so the
+    # directory belongs to the service user; only the object itself is root-owned
+    # (it is read, never written).
+    run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "${DATA_DIR}/data"
     run_cmd install -m 0644 -o root -g root "$EBPF_SRC" "${DATA_DIR}/data/zelvik-edge-xdp-ebpf.o"
     log "installed eBPF object to ${DATA_DIR}/data/zelvik-edge-xdp-ebpf.o"
 fi
@@ -284,7 +287,9 @@ if [ "$DRY_RUN" -eq 0 ]; then
                 printf '  - "%s"\n' "$_key"
             done
         fi
-        if [ "$COMM_MODE" = "mtls" ]; then
+        # rpc.tls 与 commMode 是两件事：tls 模式校验服务端证书，自签/IP 证书同样
+        # 需要 caFile 或 serverName 才能握手成功；只有客户端证书属于 mtls 专用。
+        if [ -n "$TLS_CA_FILE" ] || [ -n "$TLS_SERVER_NAME" ] || [ "$COMM_MODE" = "mtls" ]; then
             printf 'rpc.tls:\n'
             if [ -n "$TLS_CA_FILE" ]; then printf '  caFile: "%s"\n' "$TLS_CA_FILE"; fi
             if [ -n "$TLS_CERT_FILE" ]; then printf '  certFile: "%s"\n' "$TLS_CERT_FILE"; fi
