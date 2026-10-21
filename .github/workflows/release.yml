@@ -129,8 +129,8 @@ jobs:
             rustflags: "-C target-feature=+neon,+aes,+sha2,+crc"
             cxxflags: ""
             cpu_features: "+neon,+aes,+sha2,+crc"
-            required_cpu_flags: ""
-            readelf: aarch64-linux-gnu-readelf
+            required_cpu_flags: "asimd,aes,sha2,crc32"
+            readelf: readelf
             elf_machine: AArch64
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
@@ -140,8 +140,8 @@ jobs:
             rustflags: "-C target-cpu=neoverse-n1"
             cxxflags: ""
             cpu_features: "+neon,+aes,+sha2,+crc"
-            required_cpu_flags: ""
-            readelf: aarch64-linux-gnu-readelf
+            required_cpu_flags: "asimd,aes,sha2,crc32"
+            readelf: readelf
             elf_machine: AArch64
 
     steps:
@@ -365,21 +365,29 @@ jobs:
         run: |
           set -euo pipefail
           export ZELVIK_EDGE_XDP_EBPF_SHA256="$(cat ebpf-out/sha256.txt)"
-          # 1. Handle ARM Linkers
+          # Use native tools on the arm64 runners. The prefixed cross compiler
+          # is installed only when building ARM on an x86_64 host.
           if [ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]; then
-            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_AR=aarch64-linux-gnu-ar
-            export CC=aarch64-linux-gnu-gcc
-            export CXX=aarch64-linux-gnu-g++
-            export LD=aarch64-linux-gnu-ld
-            export AR=aarch64-linux-gnu-ar
-            export OBJCOPY=aarch64-linux-gnu-objcopy
-            export READELF=aarch64-linux-gnu-readelf
-            export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-            export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
-            export AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
-            export PKG_CONFIG_ALLOW_CROSS=1
-            export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+            tool_prefix=""
+            if [ "$(uname -m)" != "aarch64" ]; then
+              tool_prefix="aarch64-linux-gnu-"
+              export PKG_CONFIG_ALLOW_CROSS=1
+              export PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+            fi
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER="${tool_prefix}gcc"
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_AR="${tool_prefix}ar"
+            export CC="${tool_prefix}gcc"
+            export CXX="${tool_prefix}g++"
+            export LD="${tool_prefix}ld"
+            export AR="${tool_prefix}ar"
+            export OBJCOPY="${tool_prefix}objcopy"
+            export READELF="${tool_prefix}readelf"
+            export CC_aarch64_unknown_linux_gnu="$CC"
+            export CXX_aarch64_unknown_linux_gnu="$CXX"
+            export AR_aarch64_unknown_linux_gnu="$AR"
+            for tool in "$CC" "$CXX" "$LD" "$AR" "$OBJCOPY" "$READELF"; do
+              command -v "$tool"
+            done
           fi
 
           cargo build --release --target ${{ matrix.target }} --bin Zelvik-Edge
@@ -423,8 +431,9 @@ jobs:
           cat build-metadata.txt
 
       # The only real acceptance for the CLI version is executing the binary on
-      # a CPU of the class the leg targets. When this runner cannot satisfy that
-      # (cross-arch, or a runner CPU without the leg's baseline) the check is
+      # a CPU of the class the leg targets. Each leg now runs on a runner of its
+      # own architecture, so a native build must actually execute here; only a
+      # real cross-architecture leg (or a runner missing the leg's baseline) is
       # skipped loudly and left to the target machine — never faked.
       - name: Smoke-run on a matching CPU
         shell: bash
@@ -435,11 +444,19 @@ jobs:
         run: |
           set -euo pipefail
           BIN="${CARGO_TARGET_DIR}/${BUILD_TARGET}/release/Zelvik-Edge"
-          if [ "$(uname -m)" != "x86_64" ] || [ "$BUILD_TARGET" != "x86_64-unknown-linux-gnu" ]; then
-            echo "SKIP ${BUILD_VARIANT}: cross-built for ${BUILD_TARGET}; --version must be verified on a target-class machine"
+          case "$BUILD_TARGET" in
+            x86_64-unknown-linux-gnu) TARGET_ARCH=x86_64; CPUINFO_FLAGS=flags ;;
+            aarch64-unknown-linux-gnu) TARGET_ARCH=aarch64; CPUINFO_FLAGS=Features ;;
+            *)
+              echo "error: ${BUILD_VARIANT}: unknown target ${BUILD_TARGET}; no smoke-run definition" >&2
+              exit 1
+              ;;
+          esac
+          if [ "$(uname -m)" != "$TARGET_ARCH" ]; then
+            echo "SKIP ${BUILD_VARIANT}: cross-built for ${BUILD_TARGET}; --version must be verified on a ${TARGET_ARCH} machine"
             exit 0
           fi
-          HAVE="$(sed -n 's/^flags[[:space:]]*: //p' /proc/cpuinfo | head -1)"
+          HAVE="$(sed -n "s/^${CPUINFO_FLAGS}[[:space:]]*: //p" /proc/cpuinfo | head -1)"
           for flag in $(echo "$REQUIRED_FLAGS" | tr ',' ' '); do
             case " $HAVE " in
               *" $flag "*) ;;
