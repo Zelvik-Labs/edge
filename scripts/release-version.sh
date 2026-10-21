@@ -64,10 +64,15 @@ export ZELVIK_RELEASE_VERSION="$ZELVIK_PRODUCT_VERSION"
 export ZELVIK_CARGO_VERSION
 export ZELVIK_RELEASE_TAG="$_rv_tag"
 
-case "${1:-}" in
-    --print) printf '%s\n' "$ZELVIK_RELEASE_VERSION" ;;
-    --cargo-version) printf '%s\n' "$ZELVIK_CARGO_VERSION" ;;
-    --tag) printf '%s\n' "$ZELVIK_RELEASE_TAG" ;;
-    "") ;;
-    *) printf 'usage: %s [--print|--cargo-version|--tag]\n' "$0" >&2; exit 1 ;;
-esac
+# Parse arguments only when executed directly. When sourced (build-release.sh
+# passes --arch/--version to itself), the caller's positional parameters are
+# not ours to interpret — reading them here made the build exit on "--arch".
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    case "${1:-}" in
+        --print) printf '%s\n' "$ZELVIK_RELEASE_VERSION" ;;
+        --cargo-version) printf '%s\n' "$ZELVIK_CARGO_VERSION" ;;
+        --tag) printf '%s\n' "$ZELVIK_RELEASE_TAG" ;;
+        "") ;;
+        *) printf 'usage: %s [--print|--cargo-version|--tag]\n' "$0" >&2; exit 1 ;;
+    esac
+fi

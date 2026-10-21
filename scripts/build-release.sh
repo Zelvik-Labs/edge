@@ -174,17 +174,17 @@ chmod 0755 "${STAGE_DIR}/zelvik-edge"
 
 # The installer must ship the same product version as the binary.
 # deploy/install.sh is the template; this is the only place its VERSION is
-# written for a release, and a template without exactly one assignment is a
-# build error rather than a silently mismatched package.
+# written for a release. Exactly one numeric VERSION fallback is required;
+# the runtime assignment reading the package's VERSION file stays unchanged.
 INSTALLER_SRC="${REPO_ROOT}/deploy/install.sh"
-INSTALLER_ASSIGNMENTS="$(grep -c '^VERSION="' "$INSTALLER_SRC" || true)"
+INSTALLER_ASSIGNMENTS="$(grep -Ec '^VERSION="[0-9]+(\.[0-9]+){2,3}"$' "$INSTALLER_SRC" || true)"
 if [ "$INSTALLER_ASSIGNMENTS" != "1" ]; then
     printf 'error: %s must contain exactly one VERSION="..." assignment (found %s)\n' \
         "$INSTALLER_SRC" "${INSTALLER_ASSIGNMENTS:-0}" >&2
     exit 1
 fi
-sed "s|^VERSION=\"[^\"]*\"$|VERSION=\"${VERSION}\"|" "$INSTALLER_SRC" > "${STAGE_DIR}/install.sh"
-STAGED_INSTALLER_VERSION="$(sed -n 's/^VERSION="\([^"]*\)"$/\1/p' "${STAGE_DIR}/install.sh")"
+sed -E "s|^VERSION=\"[0-9]+(\.[0-9]+){2,3}\"$|VERSION=\"${VERSION}\"|" "$INSTALLER_SRC" > "${STAGE_DIR}/install.sh"
+STAGED_INSTALLER_VERSION="$(sed -En 's/^VERSION="([0-9]+(\.[0-9]+){2,3})"$/\1/p' "${STAGE_DIR}/install.sh")"
 if [ "$STAGED_INSTALLER_VERSION" != "$VERSION" ]; then
     printf 'error: staged install.sh VERSION %s != product %s\n' \
         "${STAGED_INSTALLER_VERSION:-<missing>}" "$VERSION" >&2

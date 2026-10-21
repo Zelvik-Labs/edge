@@ -52,11 +52,11 @@ grep -q 'verify-release-package.sh' scripts/build-release.sh \
     && _pass "build-release.sh verifies the package before publishing" \
     || _bad "build-release.sh does not call verify-release-package.sh"
 
-# 4. Installer: one assignment, patched at packaging time to the product version.
-_assignments="$(grep -c '^VERSION="' deploy/install.sh || true)"
+# 4. Installer: one numeric fallback literal; runtime VERSION-file reads are separate.
+_assignments="$(grep -Ec '^VERSION="[0-9]+(\.[0-9]+){2,3}"$' deploy/install.sh || true)"
 if [ "$_assignments" = "1" ]; then
-    _pass "deploy/install.sh has exactly one VERSION assignment (injection target)"
-    _installer="$(sed -n 's/^VERSION="\([^"]*\)"$/\1/p' deploy/install.sh)"
+    _pass "deploy/install.sh has exactly one numeric VERSION fallback (injection target)"
+    _installer="$(sed -En 's/^VERSION="([0-9]+(\.[0-9]+){2,3})"$/\1/p' deploy/install.sh)"
     if [ "$_installer" = "$_product" ]; then
         _pass "deploy/install.sh VERSION = $_installer"
     elif [ "$_installer" = "$_cargo" ]; then

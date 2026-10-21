@@ -47,23 +47,24 @@ esac
 _tmp="$(mktemp -d)"
 trap 'rm -rf "$_tmp"' EXIT
 tar -xzf "$_pkg" -C "$_tmp"
-for f in zelvik-edge install.sh VERSION; do
+for f in zelvik-edge install.sh VERSION BUILD-METADATA.txt systemd/zelvik-edge.service; do
     [ -f "$_tmp/$f" ] || _fail "package is missing $f"
 done
+_ok "required members present (binary, installer, VERSION, BUILD-METADATA, systemd unit)"
 
-_installer_version="$(sed -n 's/^VERSION="\([^"]*\)"$/\1/p' "$_tmp/install.sh" | head -1)"
+# Match the single numeric fallback literal only. The installer also reads
+# the packaged VERSION file at runtime; preserve that assignment unchanged.
+_installer_version="$(sed -En 's/^VERSION="([0-9]+(\.[0-9]+){2,3})"$/\1/p' "$_tmp/install.sh")"
 [ "$_installer_version" = "$ZELVIK_RELEASE_VERSION" ] || _fail "install.sh VERSION ${_installer_version:-<missing>} != product $ZELVIK_RELEASE_VERSION"
-_ok "install.sh VERSION = $_installer_version"
+_ok "install.sh VERSION literal = $_installer_version"
 
 _pkg_version="$(tr -d '[:space:]' < "$_tmp/VERSION")"
 [ "$_pkg_version" = "$ZELVIK_RELEASE_VERSION" ] || _fail "packaged VERSION ${_pkg_version:-<empty>} != product $ZELVIK_RELEASE_VERSION"
 _ok "packaged VERSION = $_pkg_version"
 
-if [ -f "$_tmp/BUILD-METADATA.txt" ]; then
-    _meta_version="$(sed -n 's/^product_version=//p' "$_tmp/BUILD-METADATA.txt" | head -1)"
-    [ "$_meta_version" = "$ZELVIK_RELEASE_VERSION" ] || _fail "BUILD-METADATA product_version ${_meta_version:-<missing>} != product $ZELVIK_RELEASE_VERSION"
-    _ok "BUILD-METADATA product_version = $_meta_version"
-fi
+_meta_version="$(sed -n 's/^product_version=//p' "$_tmp/BUILD-METADATA.txt" | head -1)"
+[ "$_meta_version" = "$ZELVIK_RELEASE_VERSION" ] || _fail "BUILD-METADATA product_version ${_meta_version:-<missing>} != product $ZELVIK_RELEASE_VERSION"
+_ok "BUILD-METADATA product_version = $_meta_version"
 
 echo "verify-package: PASS $_pkg (metadata at $ZELVIK_RELEASE_VERSION)"
 echo "note: the binary's --version is proven by executing it on a matching CPU, not here"

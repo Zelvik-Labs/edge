@@ -66,6 +66,10 @@ jobs:
     needs: ebpf
     runs-on: ubuntu-22.04
     timeout-minutes: 90
+    # Job-level so every step (build, ELF check, smoke run, package) sees the
+    # same directory under set -u; a step-local env would be unbound later.
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target/${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
@@ -140,6 +144,7 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/check-version-consistency.sh
+          bash scripts/test-release-packaging.sh
           VERSION="$(bash scripts/release-version.sh --print)"
           echo "ZELVIK_RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "product version: $VERSION"
@@ -278,7 +283,6 @@ jobs:
           CXXFLAGS: ${{ matrix.cxxflags }}
           CFLAGS: ${{ matrix.cxxflags }}
           ZELVIK_EDGE_XDP_EBPF_SOURCE: ebpf-out/zelvik-edge-xdp-ebpf.o
-          CARGO_TARGET_DIR: ${{ github.workspace }}/target/${{ matrix.name }}
           ZELVIK_RELEASE_VERSION: ${{ env.ZELVIK_RELEASE_VERSION }}
         run: |
           set -euo pipefail
@@ -389,10 +393,14 @@ jobs:
           # deploy/install.sh is a template; the shipped copy carries the same
           # product version as the binary, and verify-release-package.sh fails
           # the job if the binary, installer, VERSION file and name disagree.
-          sed "s|^VERSION=\"[^\"]*\"$|VERSION=\"${VERSION}\"|" deploy/install.sh > dist/install.sh
+          sed -E "s|^VERSION=\"[0-9]+(\.[0-9]+){2,3}\"$|VERSION=\"${VERSION}\"|" deploy/install.sh > dist/install.sh
           chmod 0755 dist/install.sh
           printf '%s\n' "$VERSION" > dist/VERSION
           cp build-metadata.txt dist/BUILD-METADATA.txt
+          # The installer writes the systemd unit from the package; shipping
+          # without it fails only after files are already on disk.
+          mkdir -p dist/systemd
+          cp deploy/systemd/zelvik-edge.service dist/systemd/zelvik-edge.service
           {
             echo "product_version=${VERSION}"
             echo "binary=zelvik-edge target=${{ matrix.target }} variant=${{ matrix.name }}"
@@ -400,7 +408,8 @@ jobs:
             echo "ebpf_sha256=$(cat ebpf-out/sha256.txt)"
           } > dist/SHA256SUMS.txt
           tar -czf "${PACKAGE_NAME}.tar.gz" -C dist \
-            zelvik-edge data/zelvik-edge-xdp-ebpf.o install.sh VERSION BUILD-METADATA.txt SHA256SUMS.txt
+            zelvik-edge data/zelvik-edge-xdp-ebpf.o install.sh VERSION BUILD-METADATA.txt \
+            systemd/zelvik-edge.service SHA256SUMS.txt
           # Checksum and layout only. The CLI version is proven by executing the
           # binary on a matching CPU (previous step) or left to the target
           # machine; this script must not pretend otherwise.
