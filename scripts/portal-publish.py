@@ -384,9 +384,13 @@ def _git_version() -> str:
 def _validate_release(release: dict, version: str, source_commit: str) -> None:
     if str(release.get("version", "")).lstrip("v") != version:
         fail(f"portal release version {release.get('version')} != {version}")
-    if release.get("gitCommit") != source_commit:
+    # The portal serialises snake_case (git_commit); camelCase is tolerated because
+    # an earlier client version read that spelling. Reading only one of them makes
+    # every legitimate release look like it has no source and blocks publishing.
+    recorded = release.get("git_commit") or release.get("gitCommit")
+    if recorded != source_commit:
         fail(
-            f"portal release {version} records source {release.get('gitCommit')}, "
+            f"portal release {version} records source {recorded}, "
             f"not the immutable tag commit {source_commit}; refusing to publish"
         )
     if release.get("channel") != "stable":
