@@ -4,6 +4,7 @@ version = "26.10.3"
 edition = "2024"
 rust-version = "1.99.0"
 description = "Zelvik Edge CDN and global traffic data plane"
+license = "AGPL-3.0-or-later"
 
 [package.metadata.zelvik]
 product = "Zelvik-Edge"

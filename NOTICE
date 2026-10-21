@@ -1,0 +1,22 @@
+Zelvik Edge
+Copyright (C) 2026 Zelvik
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. See LICENSE.
+
+Third-party components under their own upstream licenses
+--------------------------------------------------------
+The following directories are vendored upstream projects or controlled forks
+and are NOT covered by this project's AGPL-3.0 license. Each keeps the license
+shipped with it:
+
+  pingora-main/          Cloudflare Pingora (Apache License 2.0)
+  toa-main/              TOA source-address extension (Apache License 2.0)
+  toa-sender/            TOA sender utilities (Apache License 2.0)
+  vendor/smoltcp-edge/   controlled fork of smoltcp 0.14.0 (upstream 0BSD/MIT);
+                         divergences: vendor/smoltcp-edge/DIVERGENCE.md
+  vendor/libinjectionrs/ libinjection Rust bindings (upstream license)
+
+Trademark and brand names are not licensed by AGPL-3.0; see TRADEMARK.md.

@@ -10,7 +10,7 @@ concurrency:
 jobs:
   check:
     name: Check / Clippy - linux-x64
-    runs-on: [self-hosted, Linux, X64, zelvik-ci]
+    runs-on: ubuntu-22.04
     timeout-minutes: 45
     env:
       # .cargo/config.toml sets target-cpu=native, but rust-cache restores
@@ -143,7 +143,7 @@ jobs:
 
   test:
     name: Test - linux-x64
-    runs-on: [self-hosted, Linux, X64, zelvik-ci]
+    runs-on: ubuntu-22.04
     # 60 分钟不够：`CARGO_BUILD_JOBS=2` 把并行度减半，构建时间随之上去。
     # 原来的 60 分钟里大部分时间也不是在编译，而是在内存上限附近颠簸（见下）。
     timeout-minutes: 90

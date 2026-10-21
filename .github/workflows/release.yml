@@ -64,7 +64,7 @@ jobs:
   build:
     name: Build - ${{ matrix.name }}
     needs: ebpf
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     # Job-level so every step (build, ELF check, smoke run, package) sees the
     # same directory under set -u; a step-local env would be unbound later.
@@ -80,6 +80,7 @@ jobs:
           # release directory, the package metadata, the packaged VERSION file
           # and the binary itself.
           - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-22.04
             cpu: x86-64-v2
             name: linux-x64-v2-sse4.2
             cache_key: x64-v2-pclmul
@@ -90,6 +91,7 @@ jobs:
             readelf: readelf
             elf_machine: "Advanced Micro Devices X86-64"
           - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-22.04
             cpu: x86-64-v3
             name: linux-x64-v3-avx2
             cache_key: x64-v3-avx2
@@ -100,6 +102,7 @@ jobs:
             readelf: readelf
             elf_machine: "Advanced Micro Devices X86-64"
           - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-22.04
             cpu: x86-64-v4
             name: linux-x64-v4-avx512
             cache_key: x64-v4-avx512
@@ -111,6 +114,7 @@ jobs:
             elf_machine: "Advanced Micro Devices X86-64"
           # --- ARM64 Variants ---
           - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
             cpu: generic
             name: linux-arm64-generic
             cache_key: arm64-generic-crypto
@@ -121,6 +125,7 @@ jobs:
             readelf: aarch64-linux-gnu-readelf
             elf_machine: AArch64
           - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
             cpu: neoverse-n1
             name: linux-arm64-neoverse-n1
             cache_key: arm64-n1
@@ -473,3 +478,56 @@ jobs:
             zelvik-edge-toa-sender-source.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 把本次 tag 的二进制推送到授权站（stable）。授权站是所有节点升级的唯一来源，
+  # GitHub Release 只留源码归档，不挂二进制。
+  publish:
+    name: Publish to license portal
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      PORTAL_URL: ${{ vars.ZELVIK_PORTAL_URL || 'https://license.zelvik.net' }}
+      PORTAL_ADMIN_USER: ${{ secrets.ZELVIK_PORTAL_ADMIN_USER }}
+      PORTAL_ADMIN_PASSWORD: ${{ secrets.ZELVIK_PORTAL_ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$PORTAL_ADMIN_PASSWORD" ]; then
+            echo "::notice::portal credentials are not configured; skipping publish"
+            exit 0
+          fi
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$VERSION" = "26.10.3" ]; then
+            echo "::error::refusing to publish over the existing 26.10.3 release" >&2; exit 1
+          fi
+          TOKEN=$(curl -fsS -X POST "$PORTAL_URL/api/v1/admin/login" \
+            -H "content-type: application/json" \
+            -d "$(printf '{"username":"%s","password":"%s"}' "$PORTAL_ADMIN_USER" "$PORTAL_ADMIN_PASSWORD")" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+          REL_ID="rel_$(echo "$VERSION" | tr . -)"
+          BODY=$(printf '{"version":"%s","channel":"stable","summary":"Zelvik Edge %s","git_commit":"%s","components":["Zelvik-Edge"],"changelog":[]}' \
+            "$VERSION" "$VERSION" "$GITHUB_SHA")
+          CODE=$(curl -sS -o /tmp/rel.json -w "%{http_code}" -X POST "$PORTAL_URL/api/v1/admin/releases" \
+            -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" -d "$BODY")
+          case "$CODE" in
+            201) ;;
+            409) echo "release already exists, uploading assets only" ;;
+            *) cat /tmp/rel.json >&2; exit 1 ;;
+          esac
+          find artifacts -name "Zelvik-Edge-*.tar.gz" -type f | sort | while read -r f; do
+            name=$(basename "$f")
+            echo "uploading $name"
+            curl -fsS -X PUT "$PORTAL_URL/api/v1/admin/releases/$REL_ID/assets/upload?component=Zelvik-Edge&name=$name&asset_type=archive&os=linux" \
+              -H "Authorization: Bearer $TOKEN" -H "content-type: application/octet-stream" \
+              --data-binary "@$f" > /dev/null
+          done
+          curl -fsS -X POST "$PORTAL_URL/api/v1/admin/releases/$REL_ID/set-latest" \
+            -H "Authorization: Bearer $TOKEN" > /dev/null
+          echo "published $VERSION (stable)"

@@ -16,7 +16,7 @@ permissions:
 jobs:
   attribution:
     name: Attribution / commit-message check
-    runs-on: [self-hosted, Linux, X64, zelvik-ci]
+    runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
       - name: Checkout
@@ -69,7 +69,7 @@ jobs:
 
   no-new-suppression:
     name: No new warning suppression
-    runs-on: [self-hosted, Linux, X64, zelvik-ci]
+    runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
       - name: Checkout

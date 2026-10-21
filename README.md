@@ -135,4 +135,9 @@ Zelvik Edge 已接入主要边缘节点能力，并持续优化以下方向：
 
 ## 开源协议
 
-本项目基于 Apache License 2.0 协议开源。
+Zelvik Edge 以 **GNU Affero General Public License v3.0（AGPL-3.0）** 开源，全文见 [LICENSE](LICENSE)。
+
+- 通过网络对外提供本程序修改后的服务，同样需要按 AGPL-3.0 向使用者提供对应源代码。
+- pingora-main/、toa-main/、toa-sender/、vendor/ 属于上游或受控分支代码，仍按其原始许可证分发，不因本仓库改为 AGPL 而改变，详见 [NOTICE](NOTICE)。
+- 商标与品牌名不在 AGPL-3.0 授权范围内，见 [TRADEMARK.md](TRADEMARK.md)。
+- 控制面、管理控制台、DNS、探针等其余仓库为本项目私有组件，不开源。
