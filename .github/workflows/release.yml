@@ -260,6 +260,29 @@ jobs:
           test "$(sha256sum ebpf-out/zelvik-edge-xdp-ebpf.o | awk '{print $1}')" = "$(cat ebpf-out/sha256.txt)"
           echo "shared eBPF sha256: $(cat ebpf-out/sha256.txt)"
 
+      # zelvik-geo-runtime lives in the private dns repo and is referenced as
+      # ../dns/crates/zelvik-geo-runtime. An open-source repo must still build
+      # from a clean checkout, so CI materialises that sibling path with a
+      # read-only deploy key; without the secret the step fails loudly instead
+      # of producing a package that cannot be reproduced.
+      - name: Checkout private dependency (dns)
+        shell: bash
+        env:
+          DNS_DEPLOY_KEY: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DNS_DEPLOY_KEY" ]; then
+            echo "::error::ZELVIK_DNS_DEPLOY_KEY is not configured; zelvik-geo-runtime cannot be resolved" >&2
+            exit 1
+          fi
+          install -d -m 0700 ~/.ssh
+          printf "%s\n" "$DNS_DEPLOY_KEY" > ~/.ssh/id_ed25519_dns
+          chmod 0600 ~/.ssh/id_ed25519_dns
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          rm -rf "$GITHUB_WORKSPACE/../dns"
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519_dns -o IdentitiesOnly=yes" \
+            git clone --depth 1 git@github.com:Zelvik-Labs/dns.git "$GITHUB_WORKSPACE/../dns"
+
       - name: Cargo dependency source cache
         uses: actions/cache@v4
         with:
