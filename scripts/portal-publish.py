@@ -46,6 +46,13 @@ SHA256 = re.compile(r"^[0-9a-f]{64}$")
 GIT_COMMIT = re.compile(r"^[0-9a-f]{40}$")
 SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._+~-]+$")
 
+# Cloudflare's managed/bot rules answer the Python-urllib default User-Agent
+# with HTTP 403 "error code: 1010" before the request reaches the license site
+# (run 39613697640). Every portal request therefore carries this fixed client
+# identity. It is a plain header, not a credential, and TLS verification stays
+# fully enabled.
+PORTAL_USER_AGENT = "Zelvik-Release/1.0 (+https://github.com/Zelvik-Labs/edge)"
+
 GITHUB_ACTIONS = os.environ.get("GITHUB_ACTIONS") == "true"
 _SECRETS: list[str] = []
 
@@ -121,6 +128,17 @@ def _write_json_atomic(path: Path, payload: dict) -> None:
             pass
 
 
+def _cloudflare_hint(status: int, detail: str) -> str:
+    """Explain a Cloudflare client-signature block instead of blaming credentials."""
+    if status == 403 and "1010" in detail:
+        return (
+            " (likely a Cloudflare client-signature block: error code 1010, not a "
+            "credential failure; the request was sent with User-Agent "
+            f"{PORTAL_USER_AGENT!r})"
+        )
+    return ""
+
+
 class Portal:
     def __init__(self, base_url: str, timeout: int = 180) -> None:
         self.base_url = base_url.rstrip("/")
@@ -138,6 +156,7 @@ class Portal:
         expected: tuple[int, ...] = (200,),
     ) -> tuple[int, bytes, dict[str, str]]:
         request_headers = dict(headers or {})
+        request_headers["User-Agent"] = PORTAL_USER_AGENT
         if auth:
             token = self._token or self.login()
             request_headers["Authorization"] = f"Bearer {token}"
@@ -153,6 +172,7 @@ class Portal:
             detail = exc.read().decode("utf-8", "replace")[:2000]
             raise PortalError(
                 f"{method} {path} returned HTTP {exc.code}: {detail}"
+                f"{_cloudflare_hint(exc.code, detail)}"
             ) from exc
         except urllib.error.URLError as exc:
             raise PortalError(f"{method} {path} failed: {exc.reason}") from exc
@@ -288,7 +308,10 @@ class Portal:
         filename = urllib.parse.quote(name)
         request = urllib.request.Request(
             f"{self.base_url}/Download/{query}/{component}/{filename}",
-            headers={"Authorization": f"Bearer {key}"},
+            headers={
+                "Authorization": f"Bearer {key}",
+                "User-Agent": PORTAL_USER_AGENT,
+            },
             method="GET",
         )
         digest = hashlib.sha256()
@@ -303,7 +326,10 @@ class Portal:
                         handle.write(chunk)
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", "replace")[:2000]
-            raise PortalError(f"download {name} returned HTTP {exc.code}: {detail}") from exc
+            raise PortalError(
+                f"download {name} returned HTTP {exc.code}: {detail}"
+                f"{_cloudflare_hint(exc.code, detail)}"
+            ) from exc
         except urllib.error.URLError as exc:
             raise PortalError(f"download {name} failed: {exc.reason}") from exc
         actual = digest.hexdigest()

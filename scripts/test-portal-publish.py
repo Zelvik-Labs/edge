@@ -36,6 +36,9 @@ ASSETS = [
     "Zelvik-Edge-linux-arm64-generic.tar.gz",
     "Zelvik-Edge-linux-arm64-neoverse-n1.tar.gz",
 ]
+# Cloudflare answers the Python-urllib default User-Agent with 403 error 1010,
+# so the client must present this fixed identity on every request.
+USER_AGENT = "Zelvik-Release/1.0 (+https://github.com/Zelvik-Labs/edge)"
 
 
 class MockPortal:
@@ -47,6 +50,8 @@ class MockPortal:
         self.uploads: list[tuple[str, str, int]] = []
         self.downloads: list[str] = []
         self.set_latest_calls: list[str] = []
+        self.user_agents: list[str] = []
+        self.block_1010 = False
         self.next_token = 0
         self.port = 0
 
@@ -102,6 +107,12 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args: object) -> None:
         pass
 
+    def parse_request(self) -> bool:
+        ok = super().parse_request()
+        if ok:
+            self.state.user_agents.append(self.headers.get("User-Agent", ""))
+        return ok
+
     def _json(self, status: int, payload: dict) -> None:
         body = json.dumps(payload).encode()
         self.send_response(status)
@@ -155,6 +166,14 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         body = self._body()
         if parsed.path == "/api/v1/admin/login":
+            if self.state.block_1010:
+                blocked = b"error code: 1010"
+                self.send_response(403)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Content-Length", str(len(blocked)))
+                self.end_headers()
+                self.wfile.write(blocked)
+                return
             payload = json.loads(body or b"{}")
             if payload.get("username") == "ci-admin" and payload.get("password") == "correct-password":
                 self.state.next_token += 1
@@ -452,6 +471,36 @@ class PortalPublishTests(unittest.TestCase):
         token = next(iter(self.state.sessions))
         self.assertNotIn(token, result.stdout + result.stderr)
 
+    def test_every_request_carries_the_explicit_non_default_user_agent(self) -> None:
+        self.prepare()
+        self.upload_all()
+        result = self.promote()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertGreaterEqual(len(self.state.user_agents), 10)
+        self.assertEqual(set(self.state.user_agents), {USER_AGENT})
+        for user_agent in self.state.user_agents:
+            self.assertFalse(
+                user_agent.lower().startswith("python-urllib"),
+                f"a request still used the Cloudflare-blocked default UA: {user_agent!r}",
+            )
+        # The session token is never leaked next to the client identity either.
+        token = next(iter(self.state.sessions))
+        self.assertNotIn(token, result.stdout + result.stderr)
+
+    def test_cloudflare_1010_names_the_client_signature_block(self) -> None:
+        self.state.block_1010 = True
+        result = self.run_cli(
+            "prepare", "--tag", TAG, "--source-commit", self.commit, "--version", VERSION
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("HTTP 403", result.stderr)
+        self.assertIn("1010", result.stderr)
+        self.assertIn("Cloudflare", result.stderr)
+        self.assertIn("not a credential failure", result.stderr)
+        self.assertIn(USER_AGENT, result.stderr)
+        # A blocked login cannot create or mutate a release.
+        self.assertEqual(self.state.releases, {})
+
 
 class WorkflowValidationTests(unittest.TestCase):
     def test_yaml_jobs_matrix_and_artifact_contract(self) -> None:
@@ -529,6 +578,19 @@ class WorkflowValidationTests(unittest.TestCase):
             if step.get("uses", "").startswith("actions/upload-artifact@"):
                 self.assertIn("receipts", str(step["with"]["path"]))
                 self.assertNotIn("dist", str(step["with"]["path"]))
+
+    def test_portal_client_keeps_tls_verification_enabled(self) -> None:
+        script = (ROOT / "scripts" / "portal-publish.py").read_text()
+        self.assertIn(f'PORTAL_USER_AGENT = "{USER_AGENT}"', script)
+        for forbidden in (
+            "CERT_NONE",
+            "check_hostname = False",
+            "verify=False",
+            "_create_unverified_context",
+            "--insecure",
+            "curl -k",
+        ):
+            self.assertNotIn(forbidden, script, f"portal client must not disable TLS: {forbidden}")
 
     def test_run_blocks_are_bash_syntax_valid(self) -> None:
         try:
