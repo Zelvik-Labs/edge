@@ -73,6 +73,11 @@ jobs:
     # same directory under set -u; a step-local env would be unbound later.
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target/${{ matrix.name }}
+      # Fetch private git dependencies through the git CLI. cargo's libgit2
+      # backend ignores the ~/.ssh/config host aliases that pin one deploy key
+      # per repository, which is why the protocol dependency authenticated as the
+      # wrong key and failed with "Repository not found"; the CLI honours them.
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
     strategy:
       fail-fast: false
       matrix:
@@ -268,52 +273,62 @@ jobs:
           echo "shared eBPF sha256: $(cat ebpf-out/sha256.txt)"
 
       # zelvik-geo-runtime lives in the private dns repo and is referenced as
-      # ../dns/crates/zelvik-geo-runtime. An open-source repo must still build
-      # from a clean checkout, so CI materialises that sibling path with a
-      # read-only deploy key; without the secret the step fails loudly instead
-      # of producing a package that cannot be reproduced.
-      - name: Checkout private dependency (dns)
+      # ../dns/crates/zelvik-geo-runtime; zelvik-suite is a private cargo git
+      # dependency. An open-source repo must still build from a clean checkout,
+      # so CI materialises the sibling path and authenticates the git
+      # dependency; without the secrets the step fails loudly instead of
+      # producing a package that cannot be reproduced.
+      #
+      # One key per repository, pinned by an SSH host alias (IdentitiesOnly) plus
+      # a URL rewrite. A shared ssh-agent is the wrong shape here: GitHub accepts
+      # whichever valid deploy key it is offered first, and a key registered for
+      # another repository then authenticates without access to this one —
+      # run 39603222428 failed exactly that way ("Repository not found" with both
+      # keys in one agent), so cargo must never be able to offer the dns key for
+      # the protocol repository.
+      - name: Checkout private dependencies (dns, protocol)
         shell: bash
         env:
           DNS_DEPLOY_KEY: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
+          PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
         run: |
           set -euo pipefail
           if [ -z "$DNS_DEPLOY_KEY" ]; then
             echo "::error::ZELVIK_DNS_DEPLOY_KEY is not configured; zelvik-geo-runtime cannot be resolved" >&2
             exit 1
           fi
-          install -d -m 0700 ~/.ssh
-          printf "%s\n" "$DNS_DEPLOY_KEY" > ~/.ssh/id_ed25519_dns
-          chmod 0600 ~/.ssh/id_ed25519_dns
-          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-          rm -rf "$GITHUB_WORKSPACE/../dns"
-          # Both private dependencies are fetched over SSH; a shared agent avoids
-          # pinning one identity per cargo invocation.
-          printf "%s\n" "${{ secrets.PROTOCOL_DEPLOY_KEY }}" > ~/.ssh/id_ed25519_protocol
-          chmod 0600 ~/.ssh/id_ed25519_protocol
-          eval "$(ssh-agent -s)" > /dev/null
-          ssh-add ~/.ssh/id_ed25519_dns ~/.ssh/id_ed25519_protocol > /dev/null 2>&1
-          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
-          git config --global url."git@github.com:".insteadOf "https://github.com/"
-          git clone --depth 1 git@github.com:Zelvik-Labs/dns.git "$GITHUB_WORKSPACE/../dns"
-
-      - name: Checkout private dependency (protocol)
-        shell: bash
-        env:
-          PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
-        run: |
-          set -euo pipefail
           if [ -z "$PROTOCOL_DEPLOY_KEY" ]; then
             echo "::error::PROTOCOL_DEPLOY_KEY is not configured; zelvik-suite git dependency cannot be fetched" >&2
             exit 1
           fi
           install -d -m 0700 ~/.ssh
+          printf "%s\n" "$DNS_DEPLOY_KEY" > ~/.ssh/id_ed25519_dns
           printf "%s\n" "$PROTOCOL_DEPLOY_KEY" > ~/.ssh/id_ed25519_protocol
-          chmod 0600 ~/.ssh/id_ed25519_protocol
+          chmod 0600 ~/.ssh/id_ed25519_dns ~/.ssh/id_ed25519_protocol
           ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-          git config --global url."git@github.com:".insteadOf "https://github.com/"
-          GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519_protocol -o IdentitiesOnly=yes" \
-            git ls-remote git@github.com:Zelvik-Labs/protocol.git HEAD > /dev/null
+          cat > ~/.ssh/config <<'SSH_CONFIG'
+          Host zelvik-dns
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/id_ed25519_dns
+            IdentitiesOnly yes
+
+          Host zelvik-protocol
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/id_ed25519_protocol
+            IdentitiesOnly yes
+          SSH_CONFIG
+          chmod 0600 ~/.ssh/config
+          # Cargo resolves zelvik-suite from https://github.com/Zelvik-Labs/protocol;
+          # rewrite that URL to the alias whose only identity is the protocol key.
+          git config --global url."git@zelvik-protocol:Zelvik-Labs/protocol".insteadOf "https://github.com/Zelvik-Labs/protocol"
+          git config --global url."git@zelvik-protocol:Zelvik-Labs/protocol".insteadOf "git@github.com:Zelvik-Labs/protocol"
+          # Both keys must reach their own repository before a build depends on them.
+          git ls-remote git@zelvik-dns:Zelvik-Labs/dns.git HEAD > /dev/null
+          git ls-remote git@zelvik-protocol:Zelvik-Labs/protocol.git HEAD > /dev/null
+          rm -rf "$GITHUB_WORKSPACE/../dns"
+          git clone --depth 1 git@zelvik-dns:Zelvik-Labs/dns.git "$GITHUB_WORKSPACE/../dns"
 
       - name: Cargo dependency source cache
         uses: actions/cache@v4
