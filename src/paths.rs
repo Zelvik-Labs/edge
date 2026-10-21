@@ -241,9 +241,10 @@ pub fn is_safe_home_path(path: &Path) -> bool {
     path.to_str().is_some_and(|value| {
         // Conservative whitelist: these characters can be interpolated into a
         // systemd unit and a shell wrapper without quoting traps.
-        value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'/')
-        }) && !value.contains("/../")
+        value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'/'))
+            && !value.contains("/../")
             && !value.ends_with("/..")
     })
 }

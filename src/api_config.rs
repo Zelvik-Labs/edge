@@ -488,11 +488,18 @@ impl ApiConfig {
                 "'gcloudNodeId' is empty: the upstream gcloud payloads will carry node id 0"
             );
         }
-        let membership_path = crate::paths::NodePaths::current().data_dir().join("rpc-endpoints.json");
+        let membership_path = crate::paths::NodePaths::current()
+            .data_dir()
+            .join("rpc-endpoints.json");
         let membership = match fs::read(&membership_path) {
             Ok(bytes) => validate_rpc_endpoints(serde_json::from_slice(&bytes)?)?,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => config.rpc_endpoints.clone(),
-            Err(err) => return Err(anyhow::anyhow!("cannot read {}: {err}", membership_path.display())),
+            Err(err) => {
+                return Err(anyhow::anyhow!(
+                    "cannot read {}: {err}",
+                    membership_path.display()
+                ));
+            }
         };
         Self::set_runtime_rpc_endpoints(membership)?;
         LOCAL_CACHE_SENDFILE.store(
@@ -545,12 +552,17 @@ impl ApiConfig {
         let node_paths = crate::paths::NodePaths::try_current()?;
         fs::create_dir_all(node_paths.data_dir())?;
         let target = node_paths.data_dir().join("rpc-endpoints.json");
-        let temp = node_paths.data_dir().join(format!("rpc-endpoints.{}.tmp", uuid::Uuid::new_v4()));
+        let temp = node_paths
+            .data_dir()
+            .join(format!("rpc-endpoints.{}.tmp", uuid::Uuid::new_v4()));
         let result = (|| -> anyhow::Result<()> {
             if temp.exists() {
                 fs::remove_file(&temp)?;
             }
-            let mut file = fs::OpenOptions::new().write(true).create_new(true).open(&temp)?;
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temp)?;
             file.write_all(&serde_json::to_vec(&endpoints)?)?;
             file.sync_all()?;
             fs::rename(&temp, &target)?;

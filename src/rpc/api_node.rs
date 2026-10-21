@@ -885,8 +885,9 @@ kernelTuning:
             .collect::<Vec<_>>();
         assert_eq!(persisted, vec!["http://127.0.0.1:9".to_string()]);
         let membership: Vec<String> = serde_json::from_slice(
-            &std::fs::read(guard.home.join("data/rpc-endpoints.json")).unwrap()
-        ).unwrap();
+            &std::fs::read(guard.home.join("data/rpc-endpoints.json")).unwrap(),
+        )
+        .unwrap();
         assert_eq!(membership, candidates);
     }
 
