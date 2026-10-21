@@ -51,6 +51,10 @@ struct Meta {
     meter_started: i64,
     #[serde(default)]
     meter_bytes: u64,
+    #[serde(default)]
+    acked_ahead: u64,
+    #[serde(default)]
+    acked_ahead_bytes: u64,
 }
 impl Default for Meta {
     fn default() -> Self {
@@ -62,6 +66,8 @@ impl Default for Meta {
             oldest_at: 0,
             meter_started: 0,
             meter_bytes: 0,
+            acked_ahead: 0,
+            acked_ahead_bytes: 0,
         }
     }
 }
@@ -257,6 +263,9 @@ impl Spool {
         opts.wal_buffer_size = 1 << 20;
         opts.wal_file_size = 4 << 20;
         opts.lru_capacity = 8 << 20;
+        opts.stat_mask_cache_count = 128;
+        opts.data_handle_cache_capacity = 16;
+        opts.blob_handle_cache_capacity = 8;
         let db = Mace::new(opts.validate().map_err(mace_error)?).map_err(mace_error)?;
         let options = BucketOptions {
             cache_capacity: 8 << 20,
@@ -275,6 +284,12 @@ impl Spool {
             Err(OpCode::NotFound) => Meta::default(),
             Err(e) => return Err(mace_error(e)),
         };
+        anyhow::ensure!(
+            meta.head <= meta.tail
+                && meta.acked_ahead <= meta.tail - meta.head
+                && meta.acked_ahead_bytes <= meta.bytes,
+            "invalid telemetry spool counters"
+        );
         let counter = shared.unwrap_or_else(LaneCounter::new);
         counter.add_used(meta.bytes);
         Ok(Self {
@@ -409,55 +424,173 @@ impl Spool {
         self.at(0)
     }
 
-    /// at 读取队首之后的第 offset 个批次，不推进 head：并发上传时用它预取，
-    /// 确认仍按 head 顺序推进，因此「已落库」语义不变。
+    /// Read the offset-th unconfirmed batch. Durable receipts ahead of a
+    /// rejected head are skipped, including after reopening the spool.
     pub fn at(&self, offset: u64) -> anyhow::Result<Option<pb::TelemetryBatch>> {
         let meta = self.meta.lock();
-        let sequence = meta.head.saturating_add(offset);
-        if sequence >= meta.tail {
+        if offset >= meta.tail - meta.head - meta.acked_ahead {
             return Ok(None);
         }
         let view = self.bucket.view().map_err(mace_error)?;
-        let raw = view
-            .get(format!("batch:{:020}", sequence).as_bytes())
-            .map_err(mace_error)?;
-        let decoded = zstd::decode_all(raw.slice())?;
-        Ok(Some(pb::TelemetryBatch::decode(decoded.as_slice())?))
+        let mut remaining = offset;
+        for sequence in meta.head..meta.tail {
+            match view.get(format!("ack:{sequence:020}").as_bytes()) {
+                Ok(_) => continue,
+                Err(OpCode::NotFound) => {}
+                Err(err) => return Err(mace_error(err)),
+            }
+            let raw = view
+                .get(format!("batch:{sequence:020}").as_bytes())
+                .map_err(mace_error)?;
+            if remaining == 0 {
+                let decoded = zstd::decode_all(raw.slice())?;
+                let batch = pb::TelemetryBatch::decode(decoded.as_slice())?;
+                anyhow::ensure!(
+                    batch.sequence == sequence
+                        && batch.batch_id == format!("{}:{sequence}", meta.boot),
+                    "telemetry spool batch identity mismatch"
+                );
+                return Ok(Some(batch));
+            }
+            remaining -= 1;
+        }
+        anyhow::bail!("telemetry spool pending count mismatch")
     }
+    fn replay_window(&self, cursor: u64) -> anyhow::Result<(Vec<pb::TelemetryBatch>, u64)> {
+        let meta = self.meta.lock();
+        let start = if cursor < meta.head || cursor >= meta.tail {
+            meta.head
+        } else {
+            cursor
+        };
+        let view = self.bucket.view().map_err(mace_error)?;
+        let mut batches = Vec::with_capacity(REPLAY_CONCURRENCY);
+        let mut sequence = start;
+        while sequence < meta.tail && batches.len() < REPLAY_CONCURRENCY {
+            match view.get(format!("ack:{sequence:020}").as_bytes()) {
+                Ok(_) => {}
+                Err(OpCode::NotFound) => {
+                    let raw = view
+                        .get(format!("batch:{sequence:020}").as_bytes())
+                        .map_err(mace_error)?;
+                    let batch = pb::TelemetryBatch::decode(
+                        zstd::decode_all(raw.slice())?.as_slice(),
+                    )?;
+                    anyhow::ensure!(
+                        batch.sequence == sequence
+                            && batch.batch_id == format!("{}:{sequence}", meta.boot),
+                        "telemetry spool batch identity mismatch"
+                    );
+                    batches.push(batch);
+                }
+                Err(err) => return Err(mace_error(err)),
+            }
+            sequence += 1;
+        }
+        Ok((batches, sequence))
+    }
+
     pub fn acknowledge(&self, receipt: &pb::TelemetryReceipt) -> anyhow::Result<()> {
         let mut meta = self.meta.lock();
-        if receipt.sequence != meta.head
-            || receipt.batch_id != format!("{}:{}", meta.boot, meta.head)
+        let sequence = receipt.sequence;
+        if receipt.batch_id != format!("{}:{sequence}", meta.boot)
             || receipt.durable_at <= 0
             || receipt.backend != "direct"
+            || sequence >= meta.tail
         {
             anyhow::bail!("invalid durable telemetry receipt")
         }
-        let key = format!("batch:{:020}", meta.head);
+        if sequence < meta.head {
+            return Ok(());
+        }
         let txn = self.bucket.begin().map_err(mace_error)?;
-        let size = txn.get(key.as_bytes()).map_err(mace_error)?.slice().len();
+        let ack_key = format!("ack:{sequence:020}");
+        match txn.get(ack_key.as_bytes()) {
+            Ok(_) => return Ok(()),
+            Err(OpCode::NotFound) => {}
+            Err(err) => return Err(mace_error(err)),
+        }
+        let key = format!("batch:{sequence:020}");
+        let size = txn.get(key.as_bytes()).map_err(mace_error)?.slice().len() as u64;
         let mut next = meta.clone();
-        next.head += 1;
-        next.bytes = next.bytes.saturating_sub(size as u64);
-        if next.head == next.tail {
-            next.oldest_at = 0;
+        if sequence == meta.head {
+            next.head += 1;
+            next.bytes -= size;
+            txn.del(key.as_bytes()).map_err(mace_error)?;
+            if next.head == next.tail {
+                next.oldest_at = 0;
+            } else {
+                let raw = txn
+                    .get(format!("batch:{:020}", next.head).as_bytes())
+                    .map_err(mace_error)?;
+                let decoded = zstd::decode_all(raw.slice())?;
+                next.oldest_at = pb::TelemetryBatch::decode(decoded.as_slice())?.occurred_at;
+            }
+        } else {
+            // A real backend receipt permits independent confirmation. Keep
+            // the payload until the head catches up; never discard failures.
+            txn.upsert(ack_key.as_bytes(), receipt.durable_at.to_le_bytes())
+                .map_err(mace_error)?;
+            next.acked_ahead += 1;
+            next.acked_ahead_bytes += size;
+        }
+        txn.upsert(b"meta", serde_json::to_vec(&next)?)
+            .map_err(mace_error)?;
+        txn.commit().map_err(mace_error)?;
+        let freed = meta.bytes - next.bytes;
+        *meta = next;
+        self.budget.counter.sub_used(freed);
+        ALERT_LEVEL.fetch_min(
+            capacity_level(meta.bytes, self.capacity(), self.budget.limit),
+            Ordering::Relaxed,
+        );
+        Ok(())
+    }
+
+    /// Retire a bounded run of batches already confirmed out of order. A
+    /// rejected head stops this operation and remains available for retry.
+    fn collapse_confirmed(&self, max: usize) -> anyhow::Result<usize> {
+        let mut meta = self.meta.lock();
+        if meta.acked_ahead == 0 {
+            return Ok(0);
+        }
+        let txn = self.bucket.begin().map_err(mace_error)?;
+        let mut next = meta.clone();
+        let mut removed = 0;
+        while removed < max && next.head < next.tail {
+            let ack_key = format!("ack:{:020}", next.head);
+            match txn.get(ack_key.as_bytes()) {
+                Ok(_) => {}
+                Err(OpCode::NotFound) => break,
+                Err(err) => return Err(mace_error(err)),
+            }
+            let key = format!("batch:{:020}", next.head);
+            let size = txn.get(key.as_bytes()).map_err(mace_error)?.slice().len() as u64;
+            txn.del(key.as_bytes()).map_err(mace_error)?;
+            txn.del(ack_key.as_bytes()).map_err(mace_error)?;
+            next.head += 1;
+            next.bytes -= size;
+            next.acked_ahead -= 1;
+            next.acked_ahead_bytes -= size;
+            removed += 1;
+        }
+        if removed == 0 {
+            return Ok(0);
+        }
+        next.oldest_at = if next.head == next.tail {
+            0
         } else {
             let raw = txn
                 .get(format!("batch:{:020}", next.head).as_bytes())
                 .map_err(mace_error)?;
-            let decoded = zstd::decode_all(raw.slice())?;
-            next.oldest_at = pb::TelemetryBatch::decode(decoded.as_slice())?.occurred_at;
-        }
-        txn.del(key.as_bytes()).map_err(mace_error)?;
+            pb::TelemetryBatch::decode(zstd::decode_all(raw.slice())?.as_slice())?.occurred_at
+        };
         txn.upsert(b"meta", serde_json::to_vec(&next)?)
             .map_err(mace_error)?;
         txn.commit().map_err(mace_error)?;
-        let level = capacity_level(next.bytes, self.capacity(), self.budget.limit);
+        self.budget.counter.sub_used(meta.bytes - next.bytes);
         *meta = next;
-        self.budget.counter.sub_used(size as u64);
-        // Falling below a threshold re-arms escalation for the next incident.
-        ALERT_LEVEL.fetch_min(level, Ordering::Relaxed);
-        Ok(())
+        Ok(removed)
     }
     pub fn save_state(&self, key: &str, raw: &[u8]) -> anyhow::Result<()> {
         let txn = self.bucket.begin().map_err(mace_error)?;
@@ -479,7 +612,7 @@ impl Spool {
     pub fn snapshot(&self) -> serde_json::Value {
         let meta = self.meta.lock();
         let available = self.capacity();
-        let pending = meta.tail - meta.head;
+        let pending = meta.tail - meta.head - meta.acked_ahead;
         let elapsed = crate::utils::time::now_timestamp() - meta.meter_started;
         let rate = if pending > 0 && elapsed > 0 {
             meta.meter_bytes / elapsed as u64
@@ -488,7 +621,8 @@ impl Spool {
         };
         serde_json::json!({
             "pendingBatches": pending,
-            "pendingBytes": meta.bytes,
+            "pendingBytes": meta.bytes - meta.acked_ahead_bytes,
+            "retainedBytes": meta.bytes,
             "remainingBytes": available,
             "capacityLevel": capacity_level(meta.bytes, available, self.budget.limit),
             "oldestAt": if pending > 0 { meta.oldest_at } else { 0 },
@@ -668,6 +802,40 @@ pub fn snapshot() -> serde_json::Value {
         None => serde_json::json!({"status": "unavailable"}),
     }
 }
+type Upload = (
+    String,
+    u64,
+    tokio::task::JoinHandle<anyhow::Result<pb::TelemetryReceipt>>,
+);
+
+async fn settle_uploads(spool: Arc<Spool>, uploads: Vec<Upload>) -> (usize, Option<anyhow::Error>) {
+    let mut confirmed = 0;
+    let mut failure = None;
+    for (batch_id, sequence, handle) in uploads {
+        let result = async {
+            let receipt = handle.await??;
+            anyhow::ensure!(
+                receipt.batch_id == batch_id && receipt.sequence == sequence,
+                "telemetry response does not match the uploaded batch"
+            );
+            let ack = spool.clone();
+            tokio::task::spawn_blocking(move || ack.acknowledge(&receipt)).await??;
+            Ok::<_, anyhow::Error>(())
+        }
+        .await;
+        match result {
+            Ok(()) => confirmed += 1,
+            Err(err) => {
+                warn!(%batch_id, sequence, error=%err, "telemetry upload remains unconfirmed");
+                if failure.is_none() {
+                    failure = Some(err);
+                }
+            }
+        }
+    }
+    (confirmed, failure)
+}
+
 pub async fn replay(api: ApiConfig, core: bool) {
     let _ = RT.set(tokio::runtime::Handle::current());
     let Some(queues) = QUEUES.get() else {
@@ -680,26 +848,33 @@ pub async fn replay(api: ApiConfig, core: bool) {
         queues.detail.clone()
     };
     let mut failures = 0u32;
+    let mut cursor = 0;
     loop {
-        // 预取一批并发上传：串行「取一个发一个」在目标多时会把吞吐压到
-        // 约 60 批/分钟（每批一次 RTT）。并发上传后按 head 顺序确认，
-        // 「已落库」的语义不变，失败的批次仍留在队首重试。
-        let mut prefetched: Vec<pb::TelemetryBatch> = Vec::with_capacity(REPLAY_CONCURRENCY);
-        for offset in 0..REPLAY_CONCURRENCY as u64 {
-            let read = spool.clone();
-            match tokio::task::spawn_blocking(move || read.at(offset)).await {
-                Ok(Ok(Some(batch))) => prefetched.push(batch),
-                Ok(Ok(None)) => break,
-                Ok(Err(err)) => {
-                    error!(error=%err, "telemetry persistent queue read failed");
-                    break;
-                }
-                Err(err) => {
-                    error!(?err, "telemetry persistent queue read failed");
-                    break;
-                }
-            }
+        let compact = spool.clone();
+        if let Err(err) = tokio::task::spawn_blocking(move || compact.collapse_confirmed(256))
+            .await
+            .map_err(anyhow::Error::from)
+            .and_then(|result| result)
+        {
+            backoff(core, &mut failures, err).await;
+            continue;
         }
+        // Pre-fetch unconfirmed batches. A failed older batch stays on disk,
+        // while later durable receipts are remembered independently.
+        let read = spool.clone();
+        let (prefetched, next_cursor) = match tokio::task::spawn_blocking(move || {
+            read.replay_window(cursor)
+        })
+        .await
+        .map_err(anyhow::Error::from)
+        .and_then(|result| result)
+        {
+            Ok(window) => window,
+            Err(err) => {
+                backoff(core, &mut failures, err).await;
+                continue;
+            }
+        };
         if prefetched.is_empty() {
             tokio::time::sleep(Duration::from_secs(1)).await;
             continue;
@@ -716,7 +891,9 @@ pub async fn replay(api: ApiConfig, core: bool) {
         let mut uploads = Vec::with_capacity(prefetched.len());
         for batch in prefetched {
             let client = client.clone();
-            uploads.push(tokio::spawn(async move {
+            let batch_id = batch.batch_id.clone();
+            let sequence = batch.sequence;
+            let handle = tokio::spawn(async move {
                 let mut service = client.telemetry_service();
                 let receipt =
                     tokio::time::timeout(Duration::from_secs(30), service.upload_batch(batch)).await;
@@ -725,35 +902,23 @@ pub async fn replay(api: ApiConfig, core: bool) {
                     Ok(Err(err)) => Err(anyhow::Error::from(err)),
                     Err(err) => Err(anyhow::Error::from(err)),
                 }
-            }));
+            });
+            uploads.push((batch_id, sequence, handle));
         }
-        // 按队首顺序确认：任何一批失败就停在那里，后面的批次不越过它确认。
-        let mut settled = true;
-        for handle in uploads {
-            let receipt = match handle.await {
-                Ok(Ok(receipt)) => receipt,
-                Ok(Err(err)) => {
-                    backoff(core, &mut failures, err).await;
-                    settled = false;
-                    break;
-                }
-                Err(err) => {
-                    backoff(core, &mut failures, anyhow::Error::from(err)).await;
-                    settled = false;
-                    break;
-                }
-            };
-            let ack = spool.clone();
-            if let Err(err) = tokio::task::spawn_blocking(move || ack.acknowledge(&receipt)).await
-                .map_err(anyhow::Error::from)
-                .and_then(|inner| inner)
-            {
+        let (confirmed, failure) = settle_uploads(spool.clone(), uploads).await;
+        cursor = next_cursor;
+        if let Some(err) = failure {
+            // A poison head must not impose minute-long retries on healthy
+            // observations. Errors remain visible and their payloads retained.
+            if confirmed > 0 {
+                LAST_FAILURE.store(crate::utils::time::now_timestamp(), Ordering::Relaxed);
+                warn!(core, confirmed, error=%err, "telemetry replay partially confirmed; rejected batches retained");
+                failures = failures.saturating_add(1);
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            } else {
                 backoff(core, &mut failures, err).await;
-                settled = false;
-                break;
             }
-        }
-        if settled {
+        } else {
             failures = 0;
         }
     }
@@ -863,7 +1028,6 @@ mod tests {
         let declared = (available / CORE_PEER_RESERVE_DIVISOR).max(CORE_PEER_RESERVE_MIN);
         declared
             .min(available.saturating_sub(available_bytes(total, available, 0)))
-            .max(0)
     }
 
     /// Bytes that survive zstd level 3, so `append` measures them at face
@@ -889,10 +1053,106 @@ mod tests {
         (spool, path)
     }
 
+    fn receipt_for(batch: &pb::TelemetryBatch) -> pb::TelemetryReceipt {
+        pb::TelemetryReceipt {
+            batch_id: batch.batch_id.clone(),
+            sequence: batch.sequence,
+            backend: "direct".into(),
+            durable_at: 1000,
+        }
+    }
+
+    #[test]
+    fn out_of_order_receipts_preserve_rejected_head_across_reopen() {
+        let (spool, path) = spool_with_disk(false, MIB, GIB, GIB);
+        for at in [100, 200, 300] {
+            spool.append("probe_observation", vec![at as u8], 0, false, at).unwrap();
+        }
+        let first = spool.at(0).unwrap().unwrap();
+        let second = spool.at(1).unwrap().unwrap();
+        let third = spool.at(2).unwrap().unwrap();
+        spool.acknowledge(&receipt_for(&second)).unwrap();
+        spool.acknowledge(&receipt_for(&third)).unwrap();
+        spool.acknowledge(&receipt_for(&second)).unwrap();
+        assert_eq!(spool.snapshot()["pendingBatches"], 1);
+        assert!(spool.at(1).unwrap().is_none());
+        assert_eq!(spool.front().unwrap().unwrap().batch_id, first.batch_id);
+        assert_eq!(spool.collapse_confirmed(256).unwrap(), 0);
+        drop(spool);
+
+        let spool = Spool::open(&path, false, MIB).unwrap();
+        assert_eq!(spool.snapshot()["pendingBatches"], 1);
+        assert!(spool.at(1).unwrap().is_none());
+        assert_eq!(spool.front().unwrap().unwrap().payload, first.payload);
+        spool.acknowledge(&receipt_for(&first)).unwrap();
+        assert_eq!(spool.collapse_confirmed(1).unwrap(), 1);
+        assert_eq!(spool.collapse_confirmed(256).unwrap(), 1);
+        assert!(spool.front().unwrap().is_none());
+        assert_eq!(spool.snapshot()["pendingBytes"], 0);
+        assert_eq!(spool.snapshot()["retainedBytes"], 0);
+        assert_eq!(spool.budget.counter.used(), 0);
+        spool.acknowledge(&receipt_for(&third)).unwrap();
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn failed_head_does_not_discard_later_upload_receipts() {
+        let (spool, path) = spool_with_disk(false, MIB, GIB, GIB);
+        let spool = Arc::new(spool);
+        spool.append("node_log", vec![1], 0, false, 100).unwrap();
+        spool.append("probe_observation", vec![2], 0, false, 200).unwrap();
+        let first = spool.at(0).unwrap().unwrap();
+        let second = spool.at(1).unwrap().unwrap();
+        let good = receipt_for(&second);
+        let uploads = vec![
+            (first.batch_id.clone(), first.sequence, tokio::spawn(async {
+                Err(anyhow::Error::from(tonic::Status::unavailable("assignment unavailable")))
+            })),
+            (second.batch_id, second.sequence, tokio::spawn(async { Ok(good) })),
+        ];
+        let (confirmed, failure) = settle_uploads(spool.clone(), uploads).await;
+        assert_eq!(confirmed, 1);
+        assert!(failure.unwrap().to_string().contains("assignment unavailable"));
+        assert_eq!(spool.front().unwrap().unwrap().batch_id, first.batch_id);
+        assert_eq!(spool.snapshot()["pendingBatches"], 1);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn replay_cursor_reaches_batches_beyond_a_failed_window() {
+        let (spool, path) = spool_with_disk(false, MIB, GIB, GIB);
+        for _ in 0..REPLAY_CONCURRENCY + 1 {
+            spool.append("node_log", vec![], 0, false, 100).unwrap();
+        }
+        let (first, cursor) = spool.replay_window(0).unwrap();
+        assert_eq!(first.len(), REPLAY_CONCURRENCY);
+        let (later, cursor) = spool.replay_window(cursor).unwrap();
+        assert_eq!(later.len(), 1);
+        assert_eq!(later[0].sequence, REPLAY_CONCURRENCY as u64 + 1);
+        let (retry, _) = spool.replay_window(cursor).unwrap();
+        assert_eq!(retry[0].batch_id, first[0].batch_id);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn replay_reports_missing_unconfirmed_payloads() {
+        let (spool, path) = spool_with_disk(false, MIB, GIB, GIB);
+        spool.append("node_log", vec![1], 0, false, 100).unwrap();
+        let txn = spool.bucket.begin().unwrap();
+        txn.del(b"batch:00000000000000000001").unwrap();
+        txn.commit().unwrap();
+        assert!(spool.front().is_err());
+        assert!(spool.replay_window(0).is_err());
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
     /// Verbatim copy of the pre-fix policy, kept so the regression case fails
     /// (capacity == 0) if anyone restores `max(total / 50, 1 GiB)` without
     /// clamping the reserve against what is actually available.
-    #[allow(dead_code)]
     fn pre_fix_capacity(total: u64, available: u64, core: bool) -> u64 {
         let reserve = (total / 50).max(GIB);
         let core_reserve = if core { 0 } else { 256 * MIB };
@@ -1096,7 +1356,7 @@ mod tests {
     // Requirement: a capacity refusal is identifiable, and is not every refusal.
     #[test]
     fn capacity_refusal_is_distinguishable_from_other_failures() {
-        let (spool, path) = spool_with_disk(true, 1 * MIB, TIGHT_TOTAL, TIGHT_AVAILABLE);
+        let (spool, path) = spool_with_disk(true, MIB, TIGHT_TOTAL, TIGHT_AVAILABLE);
         let err = spool
             .append("node_metric", incompressible(2 * MIB as usize), 0, false, 1)
             .expect_err("batch larger than the lane budget must be refused");

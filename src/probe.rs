@@ -183,10 +183,9 @@ async fn flush_observations(generation: u64) {
             continue;
         };
         let count = batch.observations.len();
-        let drained = batch.observations.clone();
         if let Err(err) = crate::telemetry::enqueue("probe_observation", &batch, 0, false).await {
             warn!(observation_count = count, error = %err, "probe observation enqueue failed; retained");
-            OUTBOX.lock().extend(drained);
+            OUTBOX.lock().extend(batch.observations);
         }
     }
 }
@@ -522,8 +521,6 @@ mod tests {
         assert!(drain_outbox().is_none(), "取走之后缓冲必须清空，避免重复上报");
     }
 
-    use super::*;
-
     #[test]
     fn cidr_sampling_is_bounded_and_excludes_v4_network_and_broadcast() {
         for seed in [0, 1, 2, u128::MAX] {
@@ -620,7 +617,7 @@ mod tests {
         };
         apply_plan(Some(plan.clone()));
         let generation = GENERATION.load(Ordering::SeqCst);
-        assert_eq!(TASKS.lock().len(), 1);
+        assert_eq!(TASKS.lock().len(), 2, "one target and its batch flusher");
         apply_plan(Some(plan));
         assert_eq!(GENERATION.load(Ordering::SeqCst), generation);
         apply_plan(None);
@@ -841,8 +838,8 @@ mod tests {
         apply_plan(Some(plan));
         assert_eq!(
             TASKS.lock().len(),
-            3,
-            "tcp/http/tls must be dispatched, dns and an empty kind must not"
+            4,
+            "tcp/http/tls and their shared batch flusher must be dispatched"
         );
         apply_plan(None);
         assert!(TASKS.lock().is_empty());

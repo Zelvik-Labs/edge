@@ -52,7 +52,10 @@ LimitNOFILE=1048576
 LimitNPROC=65536
 TasksMax=65536
 LimitMEMLOCK=infinity
-MemoryMax=16G
+# No fixed MemoryMax: the node sizes its budgets to min(host RAM, cgroup
+# limit). A hard cap belongs in a site-specific drop-in, not in the shipped
+# unit; the old 16G value silently exceeded small hosts and defeated pressure
+# accounting.
 CPUQuota=800%
 
 [Install]

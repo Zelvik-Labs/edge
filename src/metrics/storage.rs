@@ -52,13 +52,16 @@ impl MaceMemoryTier {
 }
 
 fn select_mace_capacity_bytes(cgroup_max: u64, cgroup_high: u64, host_total: u64) -> u64 {
-    if cgroup_max > 0 {
-        cgroup_max
+    let limit = if cgroup_max > 0 {
+        Some(cgroup_max)
     } else if cgroup_high > 0 {
-        cgroup_high
+        Some(cgroup_high)
     } else {
-        host_total
-    }
+        None
+    };
+    // The cgroup limit is an upper bound, not a larger host: a stale 16G
+    // unit on a 2G VM must not select the 2GiB Mace tier.
+    limit.map_or(host_total.max(1), |max| host_total.min(max).max(1))
 }
 
 fn stable_mace_capacity_bytes() -> u64 {
@@ -2399,12 +2402,12 @@ mod tests {
     use std::sync::atomic::{AtomicI64, AtomicU64};
 
     #[test]
-    fn mace_capacity_prefers_cgroup_ceiling_over_host_memory() {
+    fn mace_capacity_uses_the_smaller_host_or_cgroup_limit() {
         let host = 64u64 << 30;
         assert_eq!(
             select_mace_capacity_bytes(512 << 20, 0, host),
             512 << 20,
-            "hard memory.max must win over host total"
+            "hard memory.max must win when it is below host total"
         );
         assert_eq!(
             select_mace_capacity_bytes(0, 2 << 30, host),
@@ -2415,6 +2418,11 @@ mod tests {
             select_mace_capacity_bytes(0, 0, host),
             host,
             "unmanaged node falls back to host memory"
+        );
+        assert_eq!(
+            select_mace_capacity_bytes(16 << 30, 0, 2 << 30),
+            2 << 30,
+            "a cgroup cap above host RAM must not select a larger store tier"
         );
     }
 

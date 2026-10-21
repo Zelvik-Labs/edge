@@ -3420,14 +3420,37 @@ impl Default for BudgetedMemorySnapshot {
     }
 }
 
+/// Effective memory ceiling for budgets: the smaller of physical host RAM and
+/// the cgroup limit. A cgroup limit larger than the host (for example a 16G
+/// service unit on a 2G VM) must not inflate the governor's budgets; a
+/// container limit smaller than the host must still win.
+fn effective_total_bytes(host_total: u64, cgroup_max: Option<u64>) -> u64 {
+    match cgroup_max {
+        Some(max) if max > 0 => host_total.min(max).max(1),
+        _ => host_total.max(1),
+    }
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn effective_available_bytes(total: u64, used: u64, host_available: Option<u64>) -> u64 {
+    let remaining = total.saturating_sub(used);
+    host_available.map_or(remaining, |available| remaining.min(available))
+}
+
 fn read_memory_snapshot() -> MemorySnapshot {
     let mut sys = sysinfo::System::new();
     sys.refresh_memory();
 
     #[cfg(target_os = "linux")]
-    let mut total_bytes = sys.total_memory().max(MIN_MEMORY_TOTAL_BYTES);
+    let mut total_bytes = effective_total_bytes(
+        sys.total_memory().max(MIN_MEMORY_TOTAL_BYTES),
+        None,
+    );
     #[cfg(not(target_os = "linux"))]
-    let total_bytes = sys.total_memory().max(MIN_MEMORY_TOTAL_BYTES);
+    let total_bytes = effective_total_bytes(
+        sys.total_memory().max(MIN_MEMORY_TOTAL_BYTES),
+        None,
+    );
     #[cfg(target_os = "linux")]
     let mut used_bytes = sys.used_memory().min(total_bytes);
     #[cfg(not(target_os = "linux"))]
@@ -3458,6 +3481,7 @@ fn read_memory_snapshot() -> MemorySnapshot {
 
     #[cfg(target_os = "linux")]
     {
+        let host_available = linux_mem_available_bytes();
         match linux_cgroup_memory_effective() {
             Some(cgroup) => {
                 cgroup_managed = true;
@@ -3471,13 +3495,21 @@ fn read_memory_snapshot() -> MemorySnapshot {
                 // layer below still bounds the account physically.
                 cgroup_headroom_bytes = cgroup_levels_headroom(&cgroup.levels);
                 if let Some(max) = cgroup.max_bytes {
-                    total_bytes = max.max(1);
+                    // The cgroup limit is a ceiling, not a second host. When
+                    // it exceeds physical RAM (a stale/generic unit on a
+                    // smaller VM), budgets must use the host total.
+                    total_bytes = effective_total_bytes(total_bytes, Some(max));
                     if cgroup.current_known {
                         used_bytes = cgroup.current_bytes.min(total_bytes);
-                        available_before_reserve = total_bytes.saturating_sub(used_bytes);
+                        available_before_reserve = effective_available_bytes(
+                            total_bytes,
+                            used_bytes,
+                            host_available,
+                        );
+                        used_bytes = total_bytes.saturating_sub(available_before_reserve);
                         raw_available_bytes = Some(available_before_reserve);
                         availability = MemoryAvailability::Known;
-                    } else if let Some(mem_available) = linux_mem_available_bytes() {
+                    } else if let Some(mem_available) = host_available {
                         // Current unreadable: fall back to host accounting
                         // instead of reporting the cgroup as empty.
                         available_before_reserve = mem_available.min(total_bytes);
@@ -3485,7 +3517,7 @@ fn read_memory_snapshot() -> MemorySnapshot {
                         raw_available_bytes = Some(available_before_reserve);
                         availability = MemoryAvailability::Degraded;
                     }
-                } else if let Some(mem_available) = linux_mem_available_bytes() {
+                } else if let Some(mem_available) = host_available {
                     available_before_reserve = mem_available.min(total_bytes);
                     used_bytes = total_bytes.saturating_sub(available_before_reserve);
                     raw_available_bytes = Some(available_before_reserve);
@@ -3501,13 +3533,18 @@ fn read_memory_snapshot() -> MemorySnapshot {
                 }
             }
             None => {
-                if let Some(mem_available) = linux_mem_available_bytes() {
+                if let Some(mem_available) = host_available {
                     available_before_reserve = mem_available.min(total_bytes);
                     used_bytes = total_bytes.saturating_sub(available_before_reserve);
                     raw_available_bytes = Some(available_before_reserve);
                     availability = MemoryAvailability::Known;
                 }
             }
+        }
+        if let Some(headroom) = cgroup_headroom_bytes {
+            available_before_reserve = available_before_reserve.min(headroom);
+            used_bytes = total_bytes.saturating_sub(available_before_reserve);
+            raw_available_bytes = Some(available_before_reserve);
         }
     }
 
@@ -4939,6 +4976,40 @@ fn read_current_fd_count() -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn effective_memory_total_uses_the_smaller_host_or_cgroup_limit() {
+        assert_eq!(
+            effective_total_bytes(2 << 30, Some(16 << 30)),
+            2 << 30,
+            "a cgroup cap above host RAM must not inflate budgets"
+        );
+        assert_eq!(
+            effective_total_bytes(64 << 30, Some(2 << 30)),
+            2 << 30,
+            "a container limit below host RAM must still cap budgets"
+        );
+        assert_eq!(
+            effective_total_bytes(4 << 30, None),
+            4 << 30,
+            "an unmanaged node uses host RAM"
+        );
+    }
+
+    #[test]
+    fn effective_memory_available_respects_host_pressure_and_container_usage() {
+        assert_eq!(
+            effective_available_bytes(2 << 30, 512 << 20, Some(256 << 20)),
+            256 << 20,
+            "memory used outside the service is not available to its budgets"
+        );
+        assert_eq!(
+            effective_available_bytes(1 << 30, 768 << 20, Some(32 << 30)),
+            256 << 20,
+            "a roomy host does not bypass a nearly full container"
+        );
+        assert_eq!(effective_available_bytes(1 << 30, 2 << 30, None), 0);
+    }
 
     /// Concurrent admission: total settled count must never exceed the
     /// class limit even while hundreds of threads race try_admit + drop.
