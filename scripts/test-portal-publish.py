@@ -356,6 +356,21 @@ class PortalPublishTests(unittest.TestCase):
             result = self.upload(name)
             self.assertEqual(result.returncode, 0, result.stderr)
 
+    def seed_asset(self, name: str, payload: bytes, promoted: bool = False) -> tuple[str, int]:
+        """Create a release with one already-stored asset (admin snake_case shape)."""
+        release = self.state.add_release(VERSION, self.commit)
+        release["is_latest_stable"] = promoted
+        digest = hashlib.sha256(payload).hexdigest()
+        release["assets"].setdefault("Zelvik-Edge", {})[name] = {
+            "sha256": digest,
+            "size": len(payload),
+        }
+        self.state.packages[(VERSION, name)] = payload
+        return digest, len(payload)
+
+    def receipt(self, name: str) -> dict:
+        return json.loads((self.receipts / f"{Path(name).stem}.json").read_text())
+
     def promote(self) -> subprocess.CompletedProcess:
         return self.run_cli(
             "promote",
@@ -383,7 +398,7 @@ class PortalPublishTests(unittest.TestCase):
         self.assertIn("not the immutable tag commit", result.stderr)
         self.assertEqual(self.state.set_latest_calls, [])
 
-    def test_upload_same_bytes_is_idempotent_and_different_bytes_refused(self) -> None:
+    def test_upload_same_bytes_is_idempotent(self) -> None:
         self.prepare()
         first = self.upload(ASSETS[0])
         self.assertEqual(first.returncode, 0, first.stderr)
@@ -392,24 +407,40 @@ class PortalPublishTests(unittest.TestCase):
         self.assertEqual(second.returncode, 0, second.stderr)
         self.assertEqual(len(self.state.uploads), 1)
         self.assertIn("idempotent", second.stdout)
-        original_sha = self.state.releases[VERSION]["assets"]["Zelvik-Edge"][ASSETS[0]]["sha256"]
-        hostile = Path(self.tmp) / "hostile.tar.gz"
-        hostile.write_bytes(b"different bytes")
-        # Same official name, different digest: must be rejected before any PUT.
-        target = self.packages / ASSETS[0]
-        backup = target.read_bytes()
-        try:
-            target.write_bytes(b"different bytes")
-            refused = self.upload(ASSETS[0])
-        finally:
-            target.write_bytes(backup)
-        self.assertNotEqual(refused.returncode, 0)
-        self.assertIn("refusing to overwrite", refused.stderr)
-        self.assertEqual(len(self.state.uploads), 1)
+
+    def test_upload_reuses_existing_bytes_when_unpromoted(self) -> None:
+        portal_bytes = b"portal-validated-bytes-" * 41
+        portal_sha, portal_size = self.seed_asset(ASSETS[1], portal_bytes, promoted=False)
+        result = self.upload(ASSETS[1])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("reusing existing", result.stdout)
+        # Reuse must not overwrite: no PUT happened and the stored bytes stay.
+        self.assertEqual(self.state.uploads, [])
         self.assertEqual(
-            self.state.releases[VERSION]["assets"]["Zelvik-Edge"][ASSETS[0]]["sha256"],
-            original_sha,
+            self.state.releases[VERSION]["assets"]["Zelvik-Edge"][ASSETS[1]]["sha256"],
+            portal_sha,
         )
+        receipt = self.receipt(ASSETS[1])
+        self.assertEqual(receipt["sha256"], portal_sha)
+        self.assertEqual(receipt["size"], portal_size)
+
+    def test_upload_refuses_overwrite_when_promoted(self) -> None:
+        self.seed_asset(ASSETS[2], b"already-promoted-bytes" * 23, promoted=True)
+        result = self.upload(ASSETS[2])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("refusing to overwrite", result.stderr)
+        self.assertEqual(self.state.uploads, [])
+
+    def test_upload_rejects_inconsistent_metadata(self) -> None:
+        name = ASSETS[3]
+        payload = (self.packages / name).read_bytes()
+        digest, size = self.seed_asset(name, payload, promoted=False)
+        # Same digest, different size: never reuse or overwrite, fail closed.
+        self.state.releases[VERSION]["assets"]["Zelvik-Edge"][name]["size"] = size + 1
+        result = self.upload(name)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("metadata is inconsistent", result.stderr)
+        self.assertEqual(self.state.uploads, [])
 
     def test_upload_missing_credentials_fails_closed(self) -> None:
         self.prepare()

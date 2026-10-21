@@ -511,21 +511,39 @@ def cmd_upload(args: argparse.Namespace) -> None:
         fail(f"release {args.version} does not exist; prepare must run first")
     _validate_release(release, args.version, args.source_commit)
     existing = _find_asset(release, name)
-    if existing is not None:
-        same = (
-            str(existing.get("sha256", "")).lower() == digest
-            and _asset_size(existing) == size
-        )
-        if not same:
+    if existing is not None and _asset_has_file(existing):
+        existing_sha = str(existing.get("sha256", "")).lower()
+        existing_size = _asset_size(existing)
+        if not SHA256.fullmatch(existing_sha) or not existing_size or existing_size <= 0:
             fail(
-                f"refusing to overwrite {name}: portal has sha256={existing.get('sha256')} "
-                f"size={_asset_size(existing)}, local has sha256={digest} size={size}"
+                f"portal asset {name} has invalid stored metadata: "
+                f"sha256={existing_sha!r} size={existing_size!r}"
             )
-        if _asset_has_file(existing):
+        if existing_sha == digest and existing_size == size:
             print(f"idempotent: {name} already has identical bytes; no upload")
+        elif existing_sha == digest or existing_size == size:
+            fail(
+                f"portal asset {name} metadata is inconsistent: "
+                f"sha256={existing_sha} size={existing_size}, "
+                f"local sha256={digest} size={size}"
+            )
+        elif not (release.get("is_latest_stable") or release.get("isLatestStable")):
+            # Same immutable source commit, release not promoted yet: an earlier
+            # attempt already uploaded verified bytes. Do NOT overwrite; reuse
+            # the stored bytes and attest them in the receipt.
+            print(
+                f"reusing existing {name} sha256={existing_sha} size={existing_size} "
+                f"(local build sha256={digest} size={size}); not overwriting"
+            )
+            digest, size = existing_sha, existing_size
         else:
-            print(f"repair: {name} metadata exists but payload is missing; re-uploading")
-            existing = None
+            fail(
+                f"refusing to overwrite {name}: portal has sha256={existing_sha} "
+                f"size={existing_size}, local has sha256={digest} size={size}"
+            )
+    elif existing is not None:
+        print(f"repair: {name} metadata exists but payload is missing; re-uploading")
+        existing = None
     if existing is None:
         uploaded = portal.upload_asset(release["id"], name, package)
         if (
