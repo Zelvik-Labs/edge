@@ -50,8 +50,8 @@ zelvik-edge --monitor-port 8888 --monitor-clear
 - `start`：启动节点；已注册 systemd unit 时委托 `systemctl start`，否则使用内置后台进程管理。
 - `stop`：停止后台节点。
 - `restart`：先停止再启动。
-- `status`：读取 PID 文件和文件锁判断节点状态。
-- `install`：注册 `/usr/bin/zelvik-edge` wrapper 和 systemd service。
+- `status`：Linux 下以 `systemctl show` 的 `is-active`/`MainPID` 为权威，PID 文件只作非 systemd 环境的兜底；输出同时打印解析到的节点 home。
+- `install`：注册 `/usr/local/bin/zelvik-edge` wrapper（export `ZELVIK_EDGE_HOME=<home>` 后 exec `<home>/bin/zelvik-edge`）和 systemd service。
 - `upgrade`：从 GitHub Release 下载匹配当前 CPU/架构的最新版或指定版本，确认后备份并替换当前二进制，同时安装 release 包内的 `data/zelvik-edge-xdp-ebpf.o`。
 - `ntp`：交互式或非交互式设置系统时区，并按内置 NTP 源校准系统时钟；守护进程自动 NTP 只校准程序内部偏移。
 - `firewall init`：初始化本地 `nftables` table/set/chain/drop rule。

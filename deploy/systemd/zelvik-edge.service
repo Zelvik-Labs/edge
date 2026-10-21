@@ -1,6 +1,6 @@
 [Unit]
 Description=Zelvik Edge (CDN / global traffic data-plane node)
-Documentation=file:/usr/share/doc/zelvik-edge/README.md
+Documentation=file:/opt/zelvik/edge/README.install
 Wants=network-online.target
 After=network-online.target zelvik-api.service
 
@@ -8,14 +8,12 @@ After=network-online.target zelvik-api.service
 Type=simple
 User=zelvik-edge
 Group=zelvik-edge
-# Standalone (single-node) mode is the default. Running the binary with no
-# subcommand starts the foreground server (run_node).
+
 # @ZELVIK_EDGE_HOME@ and @ZELVIK_EDGE_BIN@ are substituted by deploy/install.sh
-# with the resolved node home and the binary it actually installed. Both must be
-# templated: with `--dir` the binary lands under that prefix, so a hardcoded
-# ExecStart would point at a path that does not exist (systemd 203/EXEC).
-# The node resolves configs/, data/ and logs/ relative to the home and reads its
-# credentials from <home>/configs/api_node.yaml.
+# with the resolved component home and the binary it actually installed
+# (<home>/bin/zelvik-edge). Both must be templated: the home is selectable via
+# --install-dir, so a hardcoded ExecStart would 203/EXEC or, worse, run a stale
+# copy. The wrapper /usr/local/bin/zelvik-edge exports the same home.
 WorkingDirectory=@ZELVIK_EDGE_HOME@
 Environment=ZELVIK_EDGE_HOME=@ZELVIK_EDGE_HOME@
 Environment=TZ=Asia/Shanghai
@@ -37,11 +35,18 @@ ProtectKernelModules=false
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
+
 AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_NET_ADMIN
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_NET_ADMIN
-# ProtectSystem=strict makes everything read-only; the node still owns its home
-# (snapshots, cache, metrics, the control-plane-pushed runtime override).
-ReadWritePaths=@ZELVIK_EDGE_HOME@
+
+# ProtectSystem=strict makes everything read-only. The service user owns only
+# data/ (pid file, cache, geo store, control-plane runtime override, upgrade
+# requests) and logs/. bin/, configs/, pki/ and backups/ stay root-controlled:
+# the node reads them, never writes them. The root upgrade helper is a separate
+# unit (zelvik-edge-upgrade.service) and is not granted by this one.
+ReadWritePaths=@ZELVIK_EDGE_HOME@/data
+ReadWritePaths=@ZELVIK_EDGE_HOME@/logs
+
 # Edge sizing: dedicated CPU/NIC; scale memory/FD per bandwidth (docs/08).
 LimitNOFILE=1048576
 LimitNPROC=65536
