@@ -43,9 +43,14 @@ printf '26.10.3.1\n' > "$W/VERSION"
 
 # 容器没有 systemd：用假命令覆盖安装后的启动/注册校验，避免依赖真实 PID1。
 FAKEBIN=/fakebin; rm -rf "$FAKEBIN"; mkdir -p "$FAKEBIN/state"
+REAL_INSTALL=$(command -v install)
+REAL_MV=$(command -v mv)
 cat > "$FAKEBIN/systemctl" <<'EOS'
 #!/bin/sh
 state=/fakebin/state
+if [ "$1" = restart ] && [ -f "$state/fail-restart" ]; then
+    rm -f "$state/fail-restart"; exit 99
+fi
 case "$1" in
   is-active)
     if [ -f "$state/fail-active" ]; then exit 1; fi
@@ -54,6 +59,20 @@ case "$1" in
   show) echo 4242 ;;
   *) exit 0 ;;
 esac
+EOS
+cat > "$FAKEBIN/install" <<EOS
+#!/bin/sh
+case "\$*" in
+  *".zelvik-edge.install."*) if [ -e /fakebin/state/fail-install ]; then rm -f /fakebin/state/fail-install; exit 97; fi ;;
+esac
+exec "$REAL_INSTALL" "\$@"
+EOS
+cat > "$FAKEBIN/mv" <<EOS
+#!/bin/sh
+case "\$*" in
+  *".zelvik-edge.service."*) if [ -e /fakebin/state/fail-mv ]; then rm -f /fakebin/state/fail-mv; exit 98; fi ;;
+esac
+exec "$REAL_MV" "\$@"
 EOS
 cat > "$FAKEBIN/journalctl" <<'EOS'
 #!/bin/sh
@@ -174,6 +193,36 @@ else
     fi
 fi
 rm -f "$FAKEBIN/state/fail-active"
+
+# 3d) 真实命令故障注入：install/mv/restart 失败都必须回滚到 v1。
+mkdir -p /pkg-v2b/systemd
+cp "$W/install.sh" /pkg-v2b/install.sh
+cp "$W/systemd/zelvik-edge.service" /pkg-v2b/systemd/
+printf '26.10.3.2\n' > /pkg-v2b/VERSION
+printf '#!/bin/sh\ncase "$1" in\n  --version) echo "zelvik-edge 26.10.3.2" ;;\n  *) trap "exit 0" TERM INT; while :; do sleep 5; done ;;\nesac\n' > /pkg-v2b/zelvik-edge
+chmod 0755 /pkg-v2b/zelvik-edge /pkg-v2b/install.sh
+chmod 0700 "$HOME_DIR/pki"
+for fault in fail-install fail-mv fail-restart; do
+    touch "$FAKEBIN/state/$fault"
+    if bash /pkg-v2b/install.sh --install-dir "$HOME_DIR" --endpoint https://cp1.example.com \
+        --node-id nd_test --secret abc123 --allow-unregistered >/tmp/install-$fault.log 2>&1; then
+        echo "FAIL $fault: install exited 0"; fail=1
+    else
+        echo "OK   $fault: install exited non-zero"
+        expect "$fault rollback" /tmp/install-$fault.log "rolling back"
+        expect "$fault rollback complete" /tmp/install-$fault.log "rollback complete"
+        if [ "$("$HOME_DIR/bin/zelvik-edge" --version)" = "zelvik-edge 26.10.3.1" ]; then
+            echo "OK   $fault: binary rolled back"
+        else
+            echo "FAIL $fault: binary not rolled back"; fail=1
+        fi
+        if [ "$(stat -c '%a' "$HOME_DIR/pki")" = "700" ]; then
+            echo "OK   $fault: pki mode restored"
+        else
+            echo "FAIL $fault: pki mode not restored"; fail=1
+        fi
+    fi
+done
 
 # 4) 运维改动后重跑：拥有的键更新，运维的键原样保留。
 sed -i 's/^xdp:$/xdp:\n  enabled: true/' "$CFG"

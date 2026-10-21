@@ -50,9 +50,13 @@ ALLOW_UNREGISTERED=0
 REGISTER_TIMEOUT=60
 
 INSTALL_BACKUP=""
+INSTALL_BACKUP_READY=0
+INSTALL_STARTED=0
 INSTALL_COMMITTED=0
 SERVICE_WAS_ACTIVE=0
+OLD_BINARY_VERSION=""
 ROLLBACK_RUNNING=0
+ROLLBACK_STATUS=0
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -60,11 +64,24 @@ ROLLBACK_RUNNING=0
 log()  { printf '[install] %s\n' "$*"; }
 die()  {
     printf '[install][error] %s\n' "$*" >&2
-    if [ -n "$INSTALL_BACKUP" ] && [ "$INSTALL_COMMITTED" -eq 0 ]; then
-        rollback_install
-    fi
     exit 1
 }
+
+# Every exit path after the backup is complete must roll back, including
+# plain command failures under set -e and INT/TERM. die() only reports; the
+# EXIT trap owns recovery so there is exactly one rollback implementation.
+on_exit() {
+    _exit_code=$?
+    trap - EXIT INT TERM
+    if [ "$INSTALL_STARTED" -eq 1 ] && [ "$INSTALL_COMMITTED" -eq 0 ] && [ "$INSTALL_BACKUP_READY" -eq 1 ]; then
+        rollback_install
+        if [ "$_exit_code" -eq 0 ]; then _exit_code=1; fi
+    fi
+    exit "$_exit_code"
+}
+trap on_exit EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 usage() {
     cat >&2 <<'EOF'
@@ -391,39 +408,62 @@ validate_client_credentials() {
 }
 
 # ---------------------------------------------------------------------------
-# backup / rollback for an installed tree. data/ is never touched.
+# durable replacement and backup / rollback
 # ---------------------------------------------------------------------------
+sync_file() { sync -f "$1" 2>/dev/null || sync; }
+sync_dir()  { sync -f "$1" 2>/dev/null || sync; }
+
+# Replace <dst> with <tmp> only after the temp is durable, then make the rename
+# durable by syncing the parent directory. Every install-time write uses this.
+commit_file() { # commit_file <tmp> <dst> <parent-dir>
+    sync_file "$1" || return 1
+    mv -f "$1" "$2" || return 1
+    sync_dir "$3" || return 1
+}
+
 backup_install() {
     INSTALL_BACKUP="$BACKUP_DIR/install-$(date '+%Y%m%dT%H%M%S')-$$"
-    install -d -m 0700 -o root -g root "$INSTALL_BACKUP"
-    backup_one bin/zelvik-edge zelvik-edge
-    backup_one configs/api_node.yaml api_node.yaml
-    backup_one pki/cp-ca.pem cp-ca.pem
-    backup_one pki/client.crt client.crt
-    backup_one pki/client.key client.key
+    install -d -m 0700 -o root -g root "$INSTALL_BACKUP" || return 1
+    backup_one bin/zelvik-edge zelvik-edge || return 1
+    backup_one configs/api_node.yaml api_node.yaml || return 1
+    backup_one pki/cp-ca.pem cp-ca.pem || return 1
+    backup_one pki/client.crt client.crt || return 1
+    backup_one pki/client.key client.key || return 1
+    if [ -n "$PKI_ORIG_META" ]; then
+        printf '%s\n' "$PKI_ORIG_META" > "$INSTALL_BACKUP/pki-meta" || return 1
+        : > "$INSTALL_BACKUP/had-pki-meta" || return 1
+    fi
 }
 
 backup_one() { # backup_one <relative-to-home> <backup-name>
     _src="$EDGE_HOME/$1"
     if [ -e "$_src" ]; then
-        cp -a "$_src" "$INSTALL_BACKUP/$2"
-        : > "$INSTALL_BACKUP/had-$2"
+        cp -a "$_src" "$INSTALL_BACKUP/$2" || return 1
+        : > "$INSTALL_BACKUP/had-$2" || return 1
     fi
 }
 
 backup_path() { # backup_path <path> <backup-name>
     if [ -e "$1" ]; then
-        cp -a "$1" "$INSTALL_BACKUP/$2"
-        : > "$INSTALL_BACKUP/had-$2"
+        cp -a "$1" "$INSTALL_BACKUP/$2" || return 1
+        : > "$INSTALL_BACKUP/had-$2" || return 1
     fi
+}
+
+backup_sync() {
+    for _f in "$INSTALL_BACKUP"/*; do
+        [ -f "$_f" ] || continue
+        sync_file "$_f" || return 1
+    done
+    sync_dir "$INSTALL_BACKUP"
 }
 
 restore_home_file() { # restore_home_file <relative> <backup-name> <mode> <owner:group>
     _dst="$EDGE_HOME/$1"
     if [ -f "$INSTALL_BACKUP/had-$2" ]; then
         _tmp="$_dst.rollback.$$"
-        install -m "$3" -o "${4%%:*}" -g "${4##*:}" "$INSTALL_BACKUP/$2" "$_tmp"
-        mv -f "$_tmp" "$_dst"
+        install -m "$3" -o "${4%%:*}" -g "${4##*:}" "$INSTALL_BACKUP/$2" "$_tmp" || return 1
+        commit_file "$_tmp" "$_dst" "$(dirname "$_dst")"
     else
         rm -f "$_dst"
     fi
@@ -432,44 +472,84 @@ restore_home_file() { # restore_home_file <relative> <backup-name> <mode> <owner
 restore_path() { # restore_path <path> <backup-name> <mode> <owner:group>
     if [ -f "$INSTALL_BACKUP/had-$2" ]; then
         _tmp="$1.rollback.$$"
-        install -m "$3" -o "${4%%:*}" -g "${4##*:}" "$INSTALL_BACKUP/$2" "$_tmp"
-        mv -f "$_tmp" "$1"
+        install -m "$3" -o "${4%%:*}" -g "${4##*:}" "$INSTALL_BACKUP/$2" "$_tmp" || return 1
+        commit_file "$_tmp" "$1" "$(dirname "$1")"
     else
         rm -f "$1"
     fi
 }
 
 rollback_install() {
-    [ "$ROLLBACK_RUNNING" -eq 0 ] || return 0
+    [ "$ROLLBACK_RUNNING" -eq 0 ] || return "$ROLLBACK_STATUS"
     ROLLBACK_RUNNING=1
-    # Rollback is best-effort: one failed restore must not abort the others.
     set +e
-    log "installation failed after writes; rolling back bin/config/unit/wrapper/CA (data/ preserved)"
-    restore_home_file bin/zelvik-edge zelvik-edge 0755 root:root
-    restore_home_file configs/api_node.yaml api_node.yaml 0640 "root:$SERVICE_GROUP"
-    restore_home_file pki/cp-ca.pem cp-ca.pem 0644 root:root
-    restore_home_file pki/client.crt client.crt 0644 "root:$SERVICE_GROUP"
-    restore_home_file pki/client.key client.key 0640 "root:$SERVICE_GROUP"
+    log "installation failed; rolling back bin/config/unit/wrapper/CA (data/ preserved)"
+    _failures=""
+    _step() { # _step <name> <command...>
+        _name="$1"; shift
+        "$@"
+        _step_rc=$?
+        if [ "$_step_rc" -eq 0 ]; then
+            log "rollback: $_name ok"
+        else
+            log "rollback: $_name FAILED rc=$_step_rc"
+            _failures="$_failures $_name:$_step_rc"
+        fi
+        return "$_step_rc"
+    }
+    _step restore-bin restore_home_file bin/zelvik-edge zelvik-edge 0755 root:root
+    _step restore-config restore_home_file configs/api_node.yaml api_node.yaml 0640 "root:$SERVICE_GROUP"
+    _step restore-ca restore_home_file pki/cp-ca.pem cp-ca.pem 0644 root:root
+    _step restore-client-cert restore_home_file pki/client.crt client.crt 0644 "root:$SERVICE_GROUP"
+    _step restore-client-key restore_home_file pki/client.key client.key 0640 "root:$SERVICE_GROUP"
     if [ -f "$INSTALL_BACKUP/had-xdp-object" ]; then
-        install -m 0644 -o root -g root "$INSTALL_BACKUP/xdp-object" "$DATA_DIR/.xdp-object.rollback.$$"
-        mv -f "$DATA_DIR/.xdp-object.rollback.$$" "$DATA_DIR/zelvik-edge-xdp-ebpf.o"
+        _step restore-xdp install -m 0644 -o root -g root "$INSTALL_BACKUP/xdp-object" "$DATA_DIR/.xdp-object.rollback.$$"
+        _step install-xdp mv -f "$DATA_DIR/.xdp-object.rollback.$$" "$DATA_DIR/zelvik-edge-xdp-ebpf.o"
     else
-        rm -f "$DATA_DIR/zelvik-edge-xdp-ebpf.o"
+        _step remove-xdp rm -f "$DATA_DIR/zelvik-edge-xdp-ebpf.o"
     fi
-    if [ ! -f "$INSTALL_BACKUP/had-unit" ]; then
-        systemctl disable "$SERVICE_NAME.service" >/dev/null 2>&1 || true
+    if [ -f "$INSTALL_BACKUP/had-pki-meta" ]; then
+        _mode=$(sed -n '1s/ .*//p' "$INSTALL_BACKUP/pki-meta")
+        _owner=$(sed -n '1s/^[^ ]* //p' "$INSTALL_BACKUP/pki-meta")
+        _step restore-pki-mode chmod "$_mode" "$PKI_DIR"
+        _step restore-pki-owner chown "$_owner" "$PKI_DIR"
     fi
-    restore_path "$UNIT_DST" unit 0644 root:root
-    restore_path "$WRAPPER" wrapper 0755 root:root
-    restore_path "/usr/bin/$BIN_NAME" legacy-bin 0755 root:root
-    systemctl daemon-reload >/dev/null 2>&1 || true
+    _step restore-unit restore_path "$UNIT_DST" unit 0644 root:root
+    _step restore-wrapper restore_path "$WRAPPER" wrapper 0755 root:root
+    _step restore-legacy restore_path "/usr/bin/$BIN_NAME" legacy-bin 0755 root:root
+    _step daemon-reload systemctl daemon-reload
     if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
-        systemctl restart "$SERVICE_NAME.service" >/dev/null 2>&1 || true
+        _step restart-old systemctl restart "$SERVICE_NAME.service"
+        _i=0; _active=1
+        while [ "$_i" -lt 15 ]; do
+            if systemctl is-active --quiet "$SERVICE_NAME.service"; then _active=0; break; fi
+            sleep 1; _i=$((_i + 1))
+        done
+        if [ "$_active" -ne 0 ]; then _failures="$_failures service-not-active"; fi
+    else
+        # The service was not running before the install; rollback must not
+        # leave a freshly started process behind.
+        systemctl stop "$SERVICE_NAME.service" >/dev/null 2>&1
+        if systemctl is-active --quiet "$SERVICE_NAME.service"; then
+            _failures="$_failures service-unexpectedly-active"
+        fi
     fi
-    log "rollback complete; backup kept at $INSTALL_BACKUP"
+    if [ -n "$OLD_BINARY_VERSION" ]; then
+        _restored=$("$BIN_DIR/$BIN_NAME" --version 2>/dev/null | head -n 1)
+        if [ "$_restored" != "$OLD_BINARY_VERSION" ]; then
+            _failures="$_failures binary-version:$_restored"
+        fi
+    fi
+    if [ -z "$_failures" ]; then
+        log "rollback complete; backup kept at $INSTALL_BACKUP"
+        ROLLBACK_STATUS=0
+    else
+        log "rollback INCOMPLETE:$_failures"
+        ROLLBACK_STATUS=1
+    fi
     set -e
+    return "$ROLLBACK_STATUS"
 }
-
 # ---------------------------------------------------------------------------
 # create user (idempotent)
 # ---------------------------------------------------------------------------
@@ -487,6 +567,13 @@ fi
 # cannot run must never stop the live service or overwrite its binary.
 preflight
 
+# Capture the pre-install pki directory mode before the layout chmods it; a
+# failed upgrade must restore it, not leave the installer mode behind.
+PKI_ORIG_META=""
+if [ -d "$PKI_DIR" ]; then
+    PKI_ORIG_META=$(stat -c '%a %u:%g' "$PKI_DIR")
+fi
+
 # ---------------------------------------------------------------------------
 # create the layout
 # ---------------------------------------------------------------------------
@@ -497,7 +584,11 @@ run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR"
 run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR/geo"
 run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$LOG_DIR"
 run_cmd install -d -m 0700 -o root -g root "$BACKUP_DIR"
-run_cmd install -d -m 0750 -o root -g "$SERVICE_GROUP" "$PKI_DIR"
+# Do not let install -d rewrite an existing pki mode before the backup has
+# captured it; enforcement happens after INSTALL_BACKUP_READY.
+if [ ! -d "$PKI_DIR" ]; then
+    run_cmd install -d -m 0750 -o root -g "$SERVICE_GROUP" "$PKI_DIR"
+fi
 if [ ! -d "$UNIT_DIR" ]; then run_cmd install -d -m 0755 -o root -g root "$UNIT_DIR"; fi
 if [ ! -d "$WRAPPER_DIR" ]; then run_cmd install -d -m 0755 -o root -g root "$WRAPPER_DIR"; fi
 
@@ -505,8 +596,8 @@ if [ "$DRY_RUN" -eq 0 ]; then
     chown root:root "$EDGE_HOME" "$BIN_DIR" "$BACKUP_DIR"
     chmod 0755 "$EDGE_HOME" "$BIN_DIR"
     chmod 0700 "$BACKUP_DIR"
-    chown root:"$SERVICE_GROUP" "$CONFIG_DIR" "$PKI_DIR"
-    chmod 0750 "$CONFIG_DIR" "$PKI_DIR"
+    chown root:"$SERVICE_GROUP" "$CONFIG_DIR"
+    chmod 0750 "$CONFIG_DIR"
     chown "$SERVICE_USER":"$SERVICE_GROUP" "$DATA_DIR" "$DATA_DIR/geo" "$LOG_DIR"
     chmod 0750 "$DATA_DIR" "$DATA_DIR/geo" "$LOG_DIR"
 fi
@@ -518,52 +609,63 @@ if [ "$DRY_RUN" -eq 1 ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# transaction: backup, stop, replace, restart, verify; die() rolls back
+# transaction: backup, stop, replace, restart, verify. The EXIT trap rolls
+# back on any failure; nothing is replaced before the backup is durable.
 # ---------------------------------------------------------------------------
 command -v systemctl >/dev/null 2>&1 || die "systemctl not found"
 systemctl is-active --quiet "$SERVICE_NAME.service" && SERVICE_WAS_ACTIVE=1 || true
-backup_install
-backup_path "$UNIT_DST" unit
-backup_path "$WRAPPER" wrapper
-backup_path "/usr/bin/$BIN_NAME" legacy-bin
-backup_path "$DATA_DIR/zelvik-edge-xdp-ebpf.o" xdp-object
-log "backup written to $INSTALL_BACKUP"
+OLD_BINARY_VERSION=""
+if [ -x "$BIN_DIR/$BIN_NAME" ]; then
+    OLD_BINARY_VERSION=$("$BIN_DIR/$BIN_NAME" --version 2>/dev/null | head -n 1)
+fi
+backup_install || die "cannot back up the installed tree; nothing was replaced"
+backup_path "$UNIT_DST" unit || die "cannot back up the unit; nothing was replaced"
+backup_path "$WRAPPER" wrapper || die "cannot back up the wrapper; nothing was replaced"
+backup_path "/usr/bin/$BIN_NAME" legacy-bin || die "cannot back up the legacy binary; nothing was replaced"
+backup_path "$DATA_DIR/zelvik-edge-xdp-ebpf.o" xdp-object || die "cannot back up the eBPF object; nothing was replaced"
+backup_sync || die "cannot persist the backup; nothing was replaced"
+INSTALL_BACKUP_READY=1
+INSTALL_STARTED=1
+# Enforce the pki directory mode only after the backup captured the previous
+# one; a backup failure must not leave the install mode behind.
+chown root:"$SERVICE_GROUP" "$PKI_DIR" || die "cannot set owner on $PKI_DIR"
+chmod 0750 "$PKI_DIR" || die "cannot set mode on $PKI_DIR"
+log "backup written to $INSTALL_BACKUP (old binary: ${OLD_BINARY_VERSION:-none})"
 
 if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
     systemctl stop "$SERVICE_NAME.service" || die "cannot stop $SERVICE_NAME.service before replacing the binary"
 fi
 
-# Binary: install to a same-directory temp then rename. Never install over a
-# running binary (ETXTBSY) and never leave a half-written executable in place.
+# Binary: install to a same-directory temp, sync it, rename, sync the parent.
 _bin_tmp="$BIN_DIR/.$BIN_NAME.install.$$"
-install -m 0755 -o root -g root "$SRC_BIN" "$_bin_tmp"
+install -m 0755 -o root -g root "$SRC_BIN" "$_bin_tmp" || die "cannot stage $SRC_BIN"
 _installed=$("$_bin_tmp" --version 2>/dev/null | head -n 1) || true
 [ "$_installed" = "zelvik-edge $VERSION" ] || die "staged binary reports '$_installed', expected zelvik-edge $VERSION"
-mv -f "$_bin_tmp" "$BIN_DIR/$BIN_NAME"
+commit_file "$_bin_tmp" "$BIN_DIR/$BIN_NAME" "$BIN_DIR" || die "cannot replace $BIN_DIR/$BIN_NAME"
 log "installed binary to $BIN_DIR/$BIN_NAME (version $VERSION)"
 
 if [ -f "$SCRIPT_DIR/README.install" ]; then
-    cp -f "$SCRIPT_DIR/README.install" "$EDGE_HOME/.README.install.$$"
-    chmod 0644 "$EDGE_HOME/.README.install.$$"
-    chown root:root "$EDGE_HOME/.README.install.$$"
-    mv -f "$EDGE_HOME/.README.install.$$" "$EDGE_HOME/README.install"
+    _readme_tmp="$EDGE_HOME/.README.install.$$"
+    cp -f "$SCRIPT_DIR/README.install" "$_readme_tmp" || die "cannot stage README.install"
+    chmod 0644 "$_readme_tmp" && chown root:root "$_readme_tmp" || die "cannot chmod README.install"
+    commit_file "$_readme_tmp" "$EDGE_HOME/README.install" "$EDGE_HOME" || die "cannot install README.install"
 fi
 
 EBPF_SRC="$SCRIPT_DIR/data/zelvik-edge-xdp-ebpf.o"
 if [ -f "$EBPF_SRC" ]; then
     _obj_tmp="$DATA_DIR/.zelvik-edge-xdp-ebpf.o.$$"
-    install -m 0644 -o root -g root "$EBPF_SRC" "$_obj_tmp"
-    mv -f "$_obj_tmp" "$DATA_DIR/zelvik-edge-xdp-ebpf.o"
+    install -m 0644 -o root -g root "$EBPF_SRC" "$_obj_tmp" || die "cannot stage the eBPF object"
+    commit_file "$_obj_tmp" "$DATA_DIR/zelvik-edge-xdp-ebpf.o" "$DATA_DIR" || die "cannot install the eBPF object"
     log "installed eBPF object to $DATA_DIR/zelvik-edge-xdp-ebpf.o"
 fi
 
-# CA and client credentials: persist under pki/ with temp+rename. A source that
-# is already the destination (bootstrap reused the persisted CA path) is a
+# CA and client credentials: persist under pki/ with temp+sync+rename. A source
+# that is already the destination (bootstrap reused the persisted CA path) is a
 # no-op, not a self-copy failure.
 if [ -n "$CA_CONFIG_PATH" ] && [ -n "$TLS_CA_FILE" ] && ! same_file "$TLS_CA_FILE" "$PKI_DIR/cp-ca.pem"; then
     _ca_tmp="$PKI_DIR/.cp-ca.pem.$$"
-    install -m 0644 -o root -g root "$TLS_CA_FILE" "$_ca_tmp"
-    mv -f "$_ca_tmp" "$PKI_DIR/cp-ca.pem"
+    install -m 0644 -o root -g root "$TLS_CA_FILE" "$_ca_tmp" || die "cannot stage the control-plane CA"
+    commit_file "$_ca_tmp" "$PKI_DIR/cp-ca.pem" "$PKI_DIR" || die "cannot persist the control-plane CA"
     log "persisted control-plane CA to $PKI_DIR/cp-ca.pem"
 elif same_file "$TLS_CA_FILE" "$PKI_DIR/cp-ca.pem"; then
     log "control-plane CA source is already $PKI_DIR/cp-ca.pem; no copy needed"
@@ -576,12 +678,12 @@ if [ -n "$CLIENT_CERT_PATH" ]; then
     if [ -n "$TLS_CERT_FILE" ] && ! same_file "$TLS_CERT_FILE" "$CLIENT_CERT_PATH"; then
         _crt_tmp="$PKI_DIR/.client.crt.$$"
         install -m 0644 -o root -g "$SERVICE_GROUP" "$TLS_CERT_FILE" "$_crt_tmp" || die "cannot persist client certificate"
-        mv -f "$_crt_tmp" "$CLIENT_CERT_PATH" || die "cannot install client certificate"
+        commit_file "$_crt_tmp" "$CLIENT_CERT_PATH" "$PKI_DIR" || die "cannot install client certificate"
     fi
     if [ -n "$TLS_KEY_FILE" ] && ! same_file "$TLS_KEY_FILE" "$CLIENT_KEY_PATH"; then
         _key_tmp="$PKI_DIR/.client.key.$$"
         install -m 0640 -o root -g "$SERVICE_GROUP" "$TLS_KEY_FILE" "$_key_tmp" || die "cannot persist client key"
-        mv -f "$_key_tmp" "$CLIENT_KEY_PATH" || die "cannot install client key"
+        commit_file "$_key_tmp" "$CLIENT_KEY_PATH" "$PKI_DIR" || die "cannot install client key"
     fi
     log "persisted mTLS client certificate to $CLIENT_CERT_PATH (key 0640 root:$SERVICE_GROUP)"
 fi
@@ -630,10 +732,9 @@ _cfg_tmp="$CONFIG_DIR/.api_node.yaml.$$"
         printf '\n# The keys below are not managed by the installer; it never rewrites them.\n'
         printf '%s\n' "$_preserved"
     fi
-} > "$_cfg_tmp"
-chmod 0640 "$_cfg_tmp"
-chown root:"$SERVICE_GROUP" "$_cfg_tmp"
-mv -f "$_cfg_tmp" "$API_CONFIG_FILE"
+} > "$_cfg_tmp" || die "cannot render $API_CONFIG_FILE"
+chmod 0640 "$_cfg_tmp" && chown root:"$SERVICE_GROUP" "$_cfg_tmp" || die "cannot set mode on $API_CONFIG_FILE"
+commit_file "$_cfg_tmp" "$API_CONFIG_FILE" "$CONFIG_DIR" || die "cannot install $API_CONFIG_FILE"
 log "wrote $API_CONFIG_FILE (0640 root:$SERVICE_GROUP)"
 
 # Wrapper and unit through same-directory temps as well.
@@ -643,10 +744,9 @@ _wrapper_tmp="$WRAPPER_DIR/.$BIN_NAME.install.$$"
     printf '# Installed by deploy/install.sh — pins the node home.\n'
     printf 'export ZELVIK_EDGE_HOME=%s\n' "$EDGE_HOME"
     printf 'exec %s/%s "$@"\n' "$BIN_DIR" "$BIN_NAME"
-} > "$_wrapper_tmp"
-chmod 0755 "$_wrapper_tmp"
-chown root:root "$_wrapper_tmp"
-mv -f "$_wrapper_tmp" "$WRAPPER"
+} > "$_wrapper_tmp" || die "cannot render the wrapper"
+chmod 0755 "$_wrapper_tmp" && chown root:root "$_wrapper_tmp" || die "cannot set mode on the wrapper"
+commit_file "$_wrapper_tmp" "$WRAPPER" "$WRAPPER_DIR" || die "cannot install the wrapper"
 log "wrote wrapper $WRAPPER"
 
 OLD_UNIT_EXEC=""
@@ -654,18 +754,16 @@ if [ -f "$UNIT_DST" ]; then
     OLD_UNIT_EXEC=$(sed -n 's/^[[:space:]]*ExecStart=[[:space:]]*\([^[:space:]]*\).*/\1/p' "$UNIT_DST" | head -n 1)
 fi
 if [ "$OLD_UNIT_EXEC" = "/usr/bin/$BIN_NAME" ]; then
-    rm -f "/usr/bin/$BIN_NAME"
+    rm -f "/usr/bin/$BIN_NAME" || die "cannot remove superseded /usr/bin/$BIN_NAME"
     log "removed superseded binary /usr/bin/$BIN_NAME (unit now starts $BIN_DIR/$BIN_NAME)"
 fi
 
 _unit_tmp="$UNIT_DIR/.$SERVICE_NAME.service.$$"
 sed -e "s|@ZELVIK_EDGE_HOME@|$EDGE_HOME|g" \
-    -e "s|@ZELVIK_EDGE_BIN@|$BIN_DIR/$BIN_NAME|g" "$UNIT_SRC" > "$_unit_tmp"
-chmod 0644 "$_unit_tmp"
-chown root:root "$_unit_tmp"
-mv -f "$_unit_tmp" "$UNIT_DST"
+    -e "s|@ZELVIK_EDGE_BIN@|$BIN_DIR/$BIN_NAME|g" "$UNIT_SRC" > "$_unit_tmp" || die "cannot render the unit"
+chmod 0644 "$_unit_tmp" && chown root:root "$_unit_tmp" || die "cannot set mode on the unit"
+commit_file "$_unit_tmp" "$UNIT_DST" "$UNIT_DIR" || die "cannot install the unit"
 log "wrote unit $UNIT_DST (ExecStart=$BIN_DIR/$BIN_NAME)"
-
 # ---------------------------------------------------------------------------
 # start and prove it works. Any die() here rolls back the files above.
 # ---------------------------------------------------------------------------
@@ -720,9 +818,9 @@ verify_registration() {
 
 verify_installed_binary
 _JOURNAL_SINCE=$(date '+%Y-%m-%d %H:%M:%S')
-systemctl daemon-reload
-systemctl enable "$SERVICE_NAME.service" >/dev/null
-systemctl restart "$SERVICE_NAME.service"
+systemctl daemon-reload || die "systemctl daemon-reload failed"
+systemctl enable "$SERVICE_NAME.service" >/dev/null || die "cannot enable $SERVICE_NAME.service"
+systemctl restart "$SERVICE_NAME.service" || die "systemctl restart $SERVICE_NAME.service failed"
 verify_running_service
 verify_registration
 
