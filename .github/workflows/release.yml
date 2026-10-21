@@ -1,28 +1,135 @@
 name: Release
 
-# Releases run on manual dispatch only; no tag or branch triggers.
+# Stable tags publish automatically. A manual dispatch may rebuild an immutable
+# tag from the fixed workflow on main (source_ref) and publish only when the
+# publish input is true. Beta/rc tags are rejected before any portal write.
 
 on:
   workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Immutable tag to build, e.g. v26.10.3.1 (empty = dispatched commit; publishing requires a tag)"
+        required: false
+        default: ""
+      publish:
+        description: "Upload packages to license.zelvik.net and promote the stable channel"
+        required: true
+        default: false
+        type: boolean
   push:
     tags:
       - "v*"
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-${{ inputs.source_ref || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
+  # Resolve the one source commit this run may publish. The workflow/scripts
+  # come from the dispatched revision (main for a retry); the product source
+  # comes from the immutable tag. A tag is never moved and a branch commit is
+  # never presented as a release commit.
+  prepare:
+    name: Resolve immutable source
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      publish: ${{ steps.resolve.outputs.publish }}
+      version: ${{ steps.resolve.outputs.version }}
+      source_commit: ${{ steps.resolve.outputs.source_commit }}
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
+      release_id: ${{ steps.resolve.outputs.release_id }}
+    env:
+      PORTAL_URL: ${{ vars.ZELVIK_PORTAL_URL || 'https://license.zelvik.net' }}
+      PORTAL_ADMIN_USER: ${{ secrets.ZELVIK_PORTAL_ADMIN_USER }}
+      PORTAL_ADMIN_PASSWORD: ${{ secrets.ZELVIK_PORTAL_ADMIN_PASSWORD }}
+    steps:
+      - name: Checkout pipeline
+        uses: actions/checkout@v5
+        with:
+          path: pipeline
+          fetch-depth: 1
+
+      - name: Checkout source ref
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
+          path: source
+          fetch-depth: 0
+
+      - name: Resolve tag, version and source commit
+        id: resolve
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_PUBLISH: ${{ inputs.publish }}
+          DISPATCH_SOURCE_REF: ${{ inputs.source_ref }}
+          PUSH_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          cd source
+          PUBLISH=false
+          RELEASE_ID=""
+          TAG=""
+          COMMIT="$(git rev-parse HEAD)"
+          if [ "${EVENT_NAME}" = "push" ]; then
+            TAG="${PUSH_TAG}"
+            PUBLISH=true
+          else
+            if [ "${DISPATCH_PUBLISH:-false}" = "true" ]; then
+              PUBLISH=true
+            fi
+            if [ -n "${DISPATCH_SOURCE_REF}" ]; then
+              TAG="${DISPATCH_SOURCE_REF#refs/tags/}"
+            fi
+          fi
+          if [ "${PUBLISH}" = "true" ]; then
+            [ -n "${TAG}" ] || { echo "::error::publish=true requires source_ref to be an immutable tag" >&2; exit 1; }
+            case "${TAG}" in
+              v*) ;;
+              *) echo "::error::source_ref ${TAG} is not a v* release tag" >&2; exit 1 ;;
+            esac
+            TAG_COMMIT="$(git rev-parse --verify "refs/tags/${TAG}^{commit}")" || {
+              echo "::error::source_ref ${TAG} is not a tag in the source checkout" >&2; exit 1;
+            }
+            [ "${TAG_COMMIT}" = "${COMMIT}" ] || {
+              echo "::error::tag ${TAG} points at ${TAG_COMMIT}, but checkout is ${COMMIT}" >&2; exit 1;
+            }
+            VERSION="$(bash scripts/release-version.sh --print)"
+            python3 "${GITHUB_WORKSPACE}/pipeline/scripts/portal-publish.py" prepare               --tag "${TAG}" --source-commit "${COMMIT}" --version "${VERSION}"
+            RELEASE_ID="$(sed -n 's/^release_id=//p' "${GITHUB_OUTPUT}" | tail -1)"
+          else
+            VERSION="$(bash scripts/release-version.sh --print)"
+            echo "::notice::validation-only dispatch: no portal upload or promotion"
+          fi
+          echo "publish=${PUBLISH}" >> "${GITHUB_OUTPUT}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "source_commit=${COMMIT}" >> "${GITHUB_OUTPUT}"
+          echo "release_tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "release_id=${RELEASE_ID}" >> "${GITHUB_OUTPUT}"
+          echo "source=${COMMIT} tag=${TAG} version=${VERSION} publish=${PUBLISH}"
+
   # One eBPF build for the whole release. Every leg downloads the exact bytes
   # whose SHA256 was verified here, so build.rs embeds the packaged object and
   # holds it to the same digest (ZELVIK_EDGE_XDP_EBPF_SHA256).
   ebpf:
     name: Build eBPF object (shared)
+    needs: prepare
     runs-on: ubuntu-22.04
     timeout-minutes: 30
+    outputs:
+      publish: ${{ needs.prepare.outputs.publish }}
+      version: ${{ needs.prepare.outputs.version }}
+      source_commit: ${{ needs.prepare.outputs.source_commit }}
+      release_tag: ${{ needs.prepare.outputs.release_tag }}
     steps:
-      - name: Checkout code
+      - name: Checkout source commit
         uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.source_commit }}
+          fetch-depth: 1
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.99.0
@@ -73,6 +180,7 @@ jobs:
     # same directory under set -u; a step-local env would be unbound later.
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target/${{ matrix.name }}
+      PIPELINE_DIR: ${{ github.workspace }}/.ci-pipeline
       # Fetch private git dependencies through the git CLI. cargo's libgit2
       # backend ignores the ~/.ssh/config host aliases that pin one deploy key
       # per repository, which is why the protocol dependency authenticated as the
@@ -145,8 +253,21 @@ jobs:
             elf_machine: AArch64
 
     steps:
-      - name: Checkout code
+      - name: Checkout source commit
         uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.ebpf.outputs.source_commit }}
+          fetch-depth: 1
+
+      # The publishing tool belongs to the workflow revision (main for a retry),
+      # not to the immutable product tag: that is how a fixed publish path can
+      # retry the same tag without moving it or rebuilding a different commit.
+      - name: Checkout pipeline scripts
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: .ci-pipeline
+          fetch-depth: 1
 
       # The product version is never written in this workflow: it is resolved
       # from VERSION-MANIFEST.toml and exported to every later step, so the CLI
@@ -510,8 +631,33 @@ jobs:
           # machine; this script must not pretend otherwise.
           bash scripts/verify-release-package.sh "${PACKAGE_NAME}.tar.gz" --expect-version "$VERSION"
 
-      # Binary packages stay on this runner. Public Actions artifacts and
-      # GitHub release assets would bypass license.zelvik.net authentication.
+      # Binary packages go straight to the authenticated license portal. The
+      # matrix never uploads the package itself as an Actions artifact; only the
+      # small receipt is shared with the publish job.
+      - name: Upload package to license portal
+        if: needs.ebpf.outputs.publish == 'true'
+        shell: bash
+        env:
+          PORTAL_URL: ${{ vars.ZELVIK_PORTAL_URL || 'https://license.zelvik.net' }}
+          PORTAL_ADMIN_USER: ${{ secrets.ZELVIK_PORTAL_ADMIN_USER }}
+          PORTAL_ADMIN_PASSWORD: ${{ secrets.ZELVIK_PORTAL_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          VERSION="${ZELVIK_RELEASE_VERSION:?product version must be resolved before upload}"
+          python3 "${PIPELINE_DIR}/scripts/portal-publish.py" upload \
+            --package "Zelvik-Edge-${{ matrix.name }}.tar.gz" \
+            --version "${VERSION}" \
+            --source-commit "${{ needs.ebpf.outputs.source_commit }}" \
+            --receipt-dir receipts
+
+      - name: Upload release receipt
+        if: needs.ebpf.outputs.publish == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: receipt-${{ matrix.name }}
+          path: receipts
+          if-no-files-found: error
+          retention-days: 3
 
   release:
     name: Create Release
@@ -558,9 +704,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           body_path: .github/release-body/body.md
-          # RC/beta/alpha tags are published as prereleases — they are
-          # validation artifacts, not production releases.
-          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+          # Stable only. prepare rejects rc/beta/alpha tags before this job runs;
+          # this flag must never turn a release into a prerelease.
+          prerelease: false
           # Only source archives are attached. Binary packages are distributed
           # exclusively by license.zelvik.net and must never bypass its auth.
           files: |
@@ -569,55 +715,41 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # 把本次 tag 的二进制推送到授权站（stable）。授权站是所有节点升级的唯一来源，
-  # GitHub Release 只留源码归档，不挂二进制。
+  # Promotion is a separate job from the upload: it must see exactly the five
+  # receipts, re-check the portal metadata AND the bytes actually downloaded
+  # over authenticated HTTP, and only then move the stable channel. A missing
+  # receipt, a duplicate, a 0-file release or a digest mismatch fails red and
+  # never calls set-latest.
   publish:
-    name: Publish to license portal
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    name: Verify receipts and promote stable
+    if: needs.prepare.outputs.publish == 'true'
+    needs: [prepare, build]
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     env:
       PORTAL_URL: ${{ vars.ZELVIK_PORTAL_URL || 'https://license.zelvik.net' }}
       PORTAL_ADMIN_USER: ${{ secrets.ZELVIK_PORTAL_ADMIN_USER }}
       PORTAL_ADMIN_PASSWORD: ${{ secrets.ZELVIK_PORTAL_ADMIN_PASSWORD }}
+      PORTAL_UPDATE_KEY: ${{ secrets.ZELVIK_PORTAL_UPDATE_KEY }}
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Checkout pipeline scripts
+        uses: actions/checkout@v5
         with:
-          path: artifacts
-      - name: Publish
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Download release receipts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: receipt-*
+          path: receipts
+          merge-multiple: true
+
+      - name: Promote stable only after five verified downloads
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "$PORTAL_ADMIN_PASSWORD" ]; then
-            echo "::notice::portal credentials are not configured; skipping publish"
-            exit 0
-          fi
-          VERSION="${GITHUB_REF_NAME#v}"
-          if [ "$VERSION" = "26.10.3" ]; then
-            echo "::error::refusing to publish over the existing 26.10.3 release" >&2; exit 1
-          fi
-          TOKEN=$(curl -fsS -X POST "$PORTAL_URL/api/v1/admin/login" \
-            -H "content-type: application/json" \
-            -d "$(printf '{"username":"%s","password":"%s"}' "$PORTAL_ADMIN_USER" "$PORTAL_ADMIN_PASSWORD")" \
-            | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
-          REL_ID="rel_$(echo "$VERSION" | tr . -)"
-          BODY=$(printf '{"version":"%s","channel":"stable","summary":"Zelvik Edge %s","git_commit":"%s","components":["Zelvik-Edge"],"changelog":[]}' \
-            "$VERSION" "$VERSION" "$GITHUB_SHA")
-          CODE=$(curl -sS -o /tmp/rel.json -w "%{http_code}" -X POST "$PORTAL_URL/api/v1/admin/releases" \
-            -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" -d "$BODY")
-          case "$CODE" in
-            201) ;;
-            409) echo "release already exists, uploading assets only" ;;
-            *) cat /tmp/rel.json >&2; exit 1 ;;
-          esac
-          find artifacts -name "Zelvik-Edge-*.tar.gz" -type f | sort | while read -r f; do
-            name=$(basename "$f")
-            echo "uploading $name"
-            curl -fsS -X PUT "$PORTAL_URL/api/v1/admin/releases/$REL_ID/assets/upload?component=Zelvik-Edge&name=$name&asset_type=archive&os=linux" \
-              -H "Authorization: Bearer $TOKEN" -H "content-type: application/octet-stream" \
-              --data-binary "@$f" > /dev/null
-          done
-          curl -fsS -X POST "$PORTAL_URL/api/v1/admin/releases/$REL_ID/set-latest" \
-            -H "Authorization: Bearer $TOKEN" > /dev/null
-          echo "published $VERSION (stable)"
+          python3 scripts/portal-publish.py promote \
+            --receipts receipts \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --source-commit "${{ needs.prepare.outputs.source_commit }}"
