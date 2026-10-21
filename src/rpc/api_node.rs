@@ -816,11 +816,11 @@ mod tests {
         assert_eq!(update, ApiMembershipUpdate::Replace(candidates.clone()));
         assert!(apply_api_membership_update(&api, update).await);
 
-        let path = guard.home.join("configs").join("api_node.yaml");
-        let persisted: ApiConfig =
-            serde_yaml::from_slice(&std::fs::read(path).expect("persisted config"))
-                .expect("persisted config parses");
-        assert_eq!(persisted.rpc_endpoints, candidates);
+        let path = guard.home.join("data").join("rpc-endpoints.json");
+        let persisted: Vec<String> =
+            serde_json::from_slice(&std::fs::read(path).expect("persisted membership"))
+                .expect("persisted membership parses");
+        assert_eq!(persisted, candidates);
         assert_eq!(api.effective_rpc_endpoints(), candidates);
     }
 
@@ -883,7 +883,11 @@ kernelTuning:
             .iter()
             .map(|value| value.as_str().expect("endpoint string").to_string())
             .collect::<Vec<_>>();
-        assert_eq!(persisted, candidates);
+        assert_eq!(persisted, vec!["http://127.0.0.1:9".to_string()]);
+        let membership: Vec<String> = serde_json::from_slice(
+            &std::fs::read(guard.home.join("data/rpc-endpoints.json")).unwrap()
+        ).unwrap();
+        assert_eq!(membership, candidates);
     }
 
     /// Finding 1: an authoritative empty membership must not remove the

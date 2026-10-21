@@ -444,9 +444,9 @@ impl ApiConfig {
         Lazy::force(&AUTO_ACCESS_LOG_BATCH_SIZE);
         let content = fs::read_to_string(&path)?;
         let mut config: ApiConfig = serde_yaml::from_str(&content)?;
-        let override_path = crate::paths::NodePaths::current()
-            .config_dir()
-            .join("control-plane-runtime.json");
+        // The override lives under data/: configs/ is root-controlled and the
+        // service user only reads it, so writing the push there fails EACCES.
+        let override_path = crate::paths::NodePaths::current().control_plane_runtime_file();
         if override_path.exists() {
             let pushed: NodeApiPush = serde_json::from_slice(&fs::read(&override_path)?)?;
             // The pushed update base never enters ApiConfig itself; it only
@@ -488,7 +488,13 @@ impl ApiConfig {
                 "'gcloudNodeId' is empty: the upstream gcloud payloads will carry node id 0"
             );
         }
-        Self::set_runtime_rpc_endpoints(config.rpc_endpoints.clone())?;
+        let membership_path = crate::paths::NodePaths::current().data_dir().join("rpc-endpoints.json");
+        let membership = match fs::read(&membership_path) {
+            Ok(bytes) => validate_rpc_endpoints(serde_json::from_slice(&bytes)?)?,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => config.rpc_endpoints.clone(),
+            Err(err) => return Err(anyhow::anyhow!("cannot read {}: {err}", membership_path.display())),
+        };
+        Self::set_runtime_rpc_endpoints(membership)?;
         LOCAL_CACHE_SENDFILE.store(
             match config.cache.sendfile {
                 Some(true) => 1,
@@ -530,40 +536,31 @@ impl ApiConfig {
         Ok(())
     }
 
-    /// Update only `rpc.endpoints` in the existing `api_node.yaml`, preserving
-    /// operator-owned and unknown keys (for example the `xdp` section) that the
-    /// typed [`ApiConfig`] does not model. Serializing the typed struct over
-    /// the file would silently drop them.
+    /// Persist discovered membership under data/, leaving root-controlled
+    /// credentials and the operator's bootstrap seed untouched. An empty list
+    /// remains authoritative after restart; discovery can still use the seed.
     pub fn write_rpc_endpoints_default(&self, endpoints: &[String]) -> anyhow::Result<()> {
+        use std::io::Write;
         let endpoints = validate_rpc_endpoints(endpoints.to_vec())?;
-        let node_paths = crate::paths::NodePaths::current();
-        fs::create_dir_all(node_paths.config_dir())?;
-        let target = node_paths.api_config_file();
-        let mut root = match fs::read(&target) {
-            Ok(content) => match serde_yaml::from_slice::<serde_yaml::Value>(&content)? {
-                serde_yaml::Value::Mapping(mapping) => mapping,
-                _ => anyhow::bail!("api_node.yaml root is not a YAML mapping"),
-            },
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                let mut config = self.clone();
-                config.rpc_endpoints = endpoints;
-                return config.write_default();
+        let node_paths = crate::paths::NodePaths::try_current()?;
+        fs::create_dir_all(node_paths.data_dir())?;
+        let target = node_paths.data_dir().join("rpc-endpoints.json");
+        let temp = node_paths.data_dir().join(format!("rpc-endpoints.{}.tmp", uuid::Uuid::new_v4()));
+        let result = (|| -> anyhow::Result<()> {
+            if temp.exists() {
+                fs::remove_file(&temp)?;
             }
-            Err(err) => return Err(err.into()),
-        };
-        let value = serde_yaml::Value::Sequence(
-            endpoints
-                .into_iter()
-                .map(serde_yaml::Value::String)
-                .collect(),
-        );
-        root.insert(
-            serde_yaml::Value::String("rpc.endpoints".to_string()),
-            value,
-        );
-        let content = serde_yaml::to_string(&serde_yaml::Value::Mapping(root))?;
-        fs::write(target, content)?;
-        Ok(())
+            let mut file = fs::OpenOptions::new().write(true).create_new(true).open(&temp)?;
+            file.write_all(&serde_json::to_vec(&endpoints)?)?;
+            file.sync_all()?;
+            fs::rename(&temp, &target)?;
+            fs::File::open(node_paths.data_dir())?.sync_all()?;
+            Ok(())
+        })();
+        if result.is_err() && temp.exists() {
+            fs::remove_file(temp)?;
+        }
+        result
     }
 
     /// The current RPC candidate membership. A runtime override — even an
@@ -625,7 +622,7 @@ impl ApiConfig {
 
     /// HTTP(S) base URLs serving node upgrade packages. The admin pushes the
     /// download base via `runtime.api.update` over the RPC channel (persisted
-    /// to control-plane-runtime.json); without a push the node derives the
+    /// to <home>/data/control-plane-runtime.json); without a push the node derives the
     /// address from `rpc.endpoints`, which is correct whenever the same admin
     /// origin fronts both the gRPC channel and the package download endpoint.
     pub fn effective_update_endpoints(&self) -> Vec<String> {
@@ -945,9 +942,9 @@ kernelTuning:
         saved_rpc_endpoints: Option<Vec<String>>,
         saved_update_endpoints: Option<Vec<String>>,
         saved_home: Option<std::ffi::OsString>,
-        /// Empty `ZELVIK_EDGE_HOME` for the duration: `load` probes
-        /// `NodePaths::current().config_dir()/control-plane-runtime.json`, which
-        /// must never resolve to a developer machine's real runtime file.
+        /// Temporary `ZELVIK_EDGE_HOME` for the duration: `load` probes
+        /// `NodePaths::current().control_plane_runtime_file()`, which must never
+        /// resolve to a developer machine's real runtime file.
         _home: PathBuf,
     }
 
@@ -1274,7 +1271,7 @@ impl NodeApiPush {
             .iter()
             .find(|path| path.exists())
             .ok_or_else(|| anyhow::anyhow!("local API configuration missing"))?;
-        self.prepare_at(path, &crate::paths::NodePaths::current().config_dir())
+        self.prepare_at(path, &crate::paths::NodePaths::current().data_dir())
     }
     fn prepare_at(&self, path: &Path, dir: &Path) -> anyhow::Result<PreparedNodeApiPush> {
         let mut config: ApiConfig = serde_yaml::from_slice(&fs::read(path)?)?;

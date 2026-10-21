@@ -163,7 +163,8 @@ curl -fsSL https://cp.example.com/install/edge.sh | sudo bash -s -- \
     --endpoint https://rpc1.example.com:29090 \
     --artifact-base https://cp.example.com \
     --node-id <节点 ID> \
-    --secret <注册凭据>
+    --secret <注册凭据> \
+    --install-dir /opt/zelvik/edge
 ```
 
 两个地址不能混用：`--endpoint` 是控制面 **gRPC 控制端点**（平台设置「节点接入端点」里的 **RPC 端点**），installer 会把它写进 `api_node.yaml` 的 `rpc.endpoints`；`--artifact-base` 是 bootstrap 取包用的 HTTP(S) 地址（同一处的 **更新地址**），`install.sh` 看不到它。
@@ -181,26 +182,56 @@ bootstrap 脚本从控制面的 `/v1/edge/packages/meta` 接口取包元数据�
 | `--secret <hex>` | 注册时下发的一次性凭据 |
 | `--comm-mode <plaintext\|tls\|mtls>` | 通信模式，默认 `tls` |
 | `--trust-keys <hex[,hex...]>` | Ed25519 Geo 分发公钥，写入 `trustKeys`；按公钥 SHA-256 选键验签，缺少钉扎时拒绝下载新代次 |
-| `--tls-ca-file` / `--tls-cert-file` / `--tls-key-file` | `--comm-mode mtls` 时的客户端证书材料路径 |
+| `--tls-ca-file <path>` | 控制面 CA（X.509）。安装器复制到 `<home>/pki/cp-ca.pem`（0644 root）并写入 `rpc.tls.caFile`，**不引用临时路径** |
+| `--tls-ca-sha256 <hex>` | 上述证书 DER 编码的 SHA-256（`openssl x509 -outform DER \| sha256sum`）；提供时安装前校验，不匹配立即失败 |
+| `--tls-cert-file` / `--tls-key-file` | `--comm-mode mtls` 时的客户端证书材料路径 |
 | `--tls-server-name <name>` | 覆盖 TLS SNI |
-| `--dir <path>` | 安装根目录，覆盖默认布局 |
+| `--install-dir <path>` | **组件 home**（不是 FHS staging 前缀），默认 `/opt/zelvik/edge`；重跑时省略则沿用现有 unit 探测到的 home |
+| `--allow-unregistered` | 离线安装：显式跳过“安装后必须已注册”的校验（节点运行期仍持续重试注册） |
+| `--register-timeout <seconds>` | 等待首次注册成功的秒数，默认 60 |
 | `--dry-run` | 只打印动作，不写盘、不启服务 |
+
+`--dir` 已删除：它表示“文件系统 staging 前缀（伪根）”，与组件 home 语义冲突。传入会直接报错并提示使用 `--install-dir`，不保留别名。
 
 环境变量兜底：`ZELVIK_ENDPOINT`/`API_ENDPOINTS`、`ZELVIK_NODE_ID`/`ZELVIK_INSTANCE_ID`、`ZELVIK_NODE_SECRET`/`ZELVIK_INSTANCE_SECRET`、`ZELVIK_EDGE_TRUST_KEYS`。
 
 ### 安装布局
 
 ```
-/usr/bin/zelvik-edge                                    二进制
-/var/lib/zelvik/edge/configs/api_node.yaml              节点配置与凭据（0640 root:zelvik-edge）
-/etc/systemd/system/zelvik-edge.service                 systemd unit
-/var/lib/zelvik/edge/                                   节点 home（缓存、data/geo 整代地理库、状态；ZELVIK_EDGE_HOME）
-/var/log/zelvik/                                        日志目录
+/opt/zelvik/edge/bin/zelvik-edge                        二进制（root:root 0755）
+/opt/zelvik/edge/configs/api_node.yaml                  节点配置与凭据（0640 root:zelvik-edge）
+/opt/zelvik/edge/pki/cp-ca.pem                          控制面 CA（0644 root；rpc.tls.caFile 指向它）
+/opt/zelvik/edge/data/                                  服务用户数据：pid、缓存、data/geo、控制面 runtime override（zelvik-edge:zelvik-edge 0750）
+/opt/zelvik/edge/logs/                                  日志目录（zelvik-edge:zelvik-edge 0750）
+/opt/zelvik/edge/backups/                               root-only 备份（root:root 0700）
+/etc/systemd/system/zelvik-edge.service                 systemd unit（ExecStart 指向 <home>/bin/zelvik-edge）
+/usr/local/bin/zelvik-edge                              wrapper：export ZELVIK_EDGE_HOME=<home> 后 exec <home>/bin/zelvik-edge
 ```
+
+权限边界：`bin/`、`configs/`、`pki/`、`backups/` 归 root 控制，服务用户只读；`data/` 与 `logs/` 归服务用户，服务只写这两处。原先把 `data/` 的创建挂在“tar 里带 eBPF 对象”条件下，导致不带 `data/*.o` 的包安装后 `data/` 仍是 root 属主，节点写 pid 文件 EACCES 并反复重启；现在 `data/` 无条件创建并 chown 给服务用户，eBPF 对象本身仍是 root 0644。
 
 节点把 `configs/`、`data/`、`logs/` 都解析在 home 之下，凭据只从 `configs/api_node.yaml` 读——这是它唯一读取的配置文件。安装脚本不再写 `secrets.env` 或 `runtime.yaml`：二进制里没有任何代码读它们，写了等于让节点看起来配好了却起不来。
 
 安装幂等：重复执行只更新二进制与配置，不破坏数据目录。
+
+### 安装后校验
+
+安装器不再以 `systemctl restart` 的返回码作为成功依据。重启后会依次校验：
+
+1. `systemctl is-active` 在连续 15 秒窗口内保持 active；
+2. `systemctl show -p MainPID --value zelvik-edge.service` 非 0；
+3. `<home>/bin/zelvik-edge --version` 与包内 `VERSION` 一致；
+4. 控制面接受注册（journal 中出现 `registered on the control channel`），等待上限 `--register-timeout`。
+
+任一项失败都会打印 `journalctl -u zelvik-edge -n 60` 并以非零退出。纯离线环境必须显式传 `--allow-unregistered`，否则安装按失败处理（节点运行期仍会持续重试注册）。
+
+核对安装结果：
+
+```bash
+systemctl show -p ActiveState -p MainPID -p ExecStart -p Environment -p WorkingDirectory zelvik-edge.service
+stat -c '%n %U:%G %a' /opt/zelvik/edge/{bin,configs,data,logs,backups}
+cd /tmp && /usr/local/bin/zelvik-edge status
+```
 
 ### dry-run
 
@@ -212,6 +243,7 @@ curl -fsSL https://cp.example.com/install/edge.sh | sudo bash -s -- \
     --artifact-base https://cp.example.com \
     --node-id <节点 ID> \
     --secret <注册凭据> \
+    --install-dir /opt/zelvik/edge \
     --dry-run
 ```
 
@@ -227,14 +259,18 @@ journalctl -u zelvik-edge -f
 
 ```bash
 systemctl disable --now zelvik-edge
-rm -f /usr/bin/zelvik-edge \
-      /etc/systemd/system/zelvik-edge.service \
-      /var/lib/zelvik/edge/configs/api_node.yaml
-# 如需同时清除缓存和状态数据（不可恢复）：
-# rm -rf /var/lib/zelvik/edge /var/log/zelvik
+rm -f /usr/local/bin/zelvik-edge /etc/systemd/system/zelvik-edge.service
+# 凭据与 CA（保留则会随目录一起被删除）：
+rm -f /opt/zelvik/edge/configs/api_node.yaml /opt/zelvik/edge/pki/cp-ca.pem
+# 如需同时清除缓存、状态、日志与升级备份（不可恢复）：
+# rm -rf /opt/zelvik/edge/data /opt/zelvik/edge/logs /opt/zelvik/edge/backups
+# 彻底删除 home（含二进制）：
+# rm -rf /opt/zelvik/edge
 # userdel zelvik-edge
 systemctl daemon-reload
 ```
+
+升级备份在 `<home>/backups/`（root:root 0700），卸载时不会自动删除；确认不再需要回滚后再手工清理。旧版本安装在 `/var/lib/zelvik/edge` 时，安装器重跑会沿用该 home（不自动搬数据）；要改用 `/opt/zelvik/edge` 必须按“停服务 → 移动 home → 改写 unit → 重跑安装器”的显式迁移流程执行。
 
 ## 1.1.2 说明
 

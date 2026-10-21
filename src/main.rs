@@ -1,4 +1,3 @@
-#[cfg(target_os = "linux")]
 use anyhow::Context;
 use chrono::{Local, TimeZone};
 use clap::{Parser, Subcommand, ValueEnum};
@@ -1889,6 +1888,34 @@ fn is_systemd_invocation() -> bool {
         || std::env::var_os("JOURNAL_STREAM").is_some()
 }
 
+
+#[cfg(target_os = "linux")]
+fn systemd_service_active_state() -> Option<String> {
+    let output = Command::new("systemctl")
+        .arg("is-active")
+        .arg("zelvik-edge.service")
+        .output()
+        .ok()?;
+    let state = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    (!state.is_empty()).then_some(state)
+}
+
+#[cfg(target_os = "linux")]
+fn systemd_service_main_pid() -> Option<u32> {
+    let output = Command::new("systemctl")
+        .args(["show", "-p", "MainPID", "--value", "zelvik-edge.service"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse::<u32>()
+        .ok()
+        .filter(|pid| *pid != 0)
+}
+
 #[cfg(target_os = "linux")]
 fn systemd_service_is_active() -> bool {
     Command::new("systemctl")
@@ -1970,7 +1997,7 @@ use zelvik_edge::node_upgrade::{
 const ZELVIK_EDGE_SYSTEMD_SERVICE: &str = "zelvik-edge.service";
 #[cfg(target_os = "linux")]
 const ZELVIK_EDGE_SYSTEMD_SERVICE_PATH: &str = "/etc/systemd/system/zelvik-edge.service";
-const ZELVIK_EDGE_WRAPPER_PATH: &str = "/usr/bin/zelvik-edge";
+const ZELVIK_EDGE_WRAPPER_PATH: &str = "/usr/local/bin/zelvik-edge";
 
 #[derive(Debug, PartialEq, Eq)]
 struct XdpObjectRepair {
@@ -2207,6 +2234,13 @@ fn runtime_root_from_inputs(
 }
 
 fn runtime_root_for_upgrade(install_binary: &Path) -> anyhow::Result<PathBuf> {
+    // One resolver for the whole binary: the wrapper pins the home, the unit
+    // names it, and the installer default is the same directory. Only when the
+    // node is run from an unpacked tree with no installation at all does the
+    // legacy wrapper/ExecStart discovery below apply.
+    if let Ok(paths) = zelvik_edge::paths::NodePaths::try_current() {
+        return Ok(paths.runtime_root().to_path_buf());
+    }
     let service_text = zelvik_edge_service_text();
     runtime_root_from_inputs(
         std::env::var_os("ZELVIK_EDGE_HOME").map(PathBuf::from),
@@ -2814,8 +2848,14 @@ fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
 
-            let node_paths = zelvik_edge::paths::NodePaths::current();
-            node_paths.ensure_runtime_dirs().ok();
+            let node_paths = zelvik_edge::paths::NodePaths::try_current()
+                .context("cannot resolve the Zelvik-Edge home")?;
+            node_paths.ensure_runtime_dirs().with_context(|| {
+                format!(
+                    "cannot create the runtime directories under {}",
+                    node_paths.runtime_root().display()
+                )
+            })?;
 
             // Single-fork daemonize
             unsafe {
@@ -2880,6 +2920,35 @@ fn main() -> anyhow::Result<()> {
         Some(Commands::Status) => {
             println!("{}: {}", t("status.version"), zelvik_edge::RELEASE_VERSION);
             println!("{}: {}", t("status.build_time"), build_time_display());
+            // The home is printed so an operator running the wrapper from any
+            // directory can see which tree the binary resolved. A broken home
+            // must not hide systemd/pid status: report it and continue.
+            match zelvik_edge::paths::NodePaths::try_current() {
+                Ok(node_paths) => {
+                    println!("{}: {}", t("status.home"), node_paths.runtime_root().display())
+                }
+                Err(err) => eprintln!("warning: cannot resolve the Zelvik-Edge home: {err:#}"),
+            }
+            // Under systemd the unit is the authority: is-active and MainPID
+            // describe the process systemd actually supervises. The pid file is
+            // only a fallback for non-systemd hosts (it can be stale or left
+            // behind by an earlier install).
+            #[cfg(target_os = "linux")]
+            if systemd_service_exists()
+                && let Some(state) = systemd_service_active_state()
+            {
+                let main_pid = systemd_service_main_pid();
+                if state == "active" {
+                    if let Some(pid) = main_pid {
+                        println!("{} (PID: {})", t("status.running"), pid);
+                    } else {
+                        println!("{} (state: {state}, MainPID missing)", t("status.stopped"));
+                    }
+                } else {
+                    println!("{} ({}: {state})", t("status.stopped"), t("status.systemd_state"));
+                }
+                return Ok(());
+            }
             if let Some(instance) = check_running() {
                 println!("{} (PID: {})", t("status.running"), instance.pid);
             } else {
@@ -2912,35 +2981,73 @@ fn main() -> anyhow::Result<()> {
         Some(Commands::Install) => {
             #[cfg(target_os = "linux")]
             {
+                // This mirrors the layout deploy/install.sh owns: the binary
+                // lives in <home>/bin, /usr/local/bin only pins the home, and the
+                // unit starts that exact binary. Never write the real binary into
+                // /usr/bin: that produced a second copy the unit did not start.
+                let node_paths = zelvik_edge::paths::NodePaths::try_current()
+                    .context("cannot resolve the Zelvik-Edge home for install")?;
+                let home = node_paths.runtime_root().to_path_buf();
+                let bin_dir = home.join("bin");
+                fs::create_dir_all(&bin_dir)?;
+                use std::os::unix::fs::PermissionsExt;
+
+                if !zelvik_edge::paths::is_safe_home_path(&home) {
+                    anyhow::bail!(
+                        "refusing to install under {}: the home must be an absolute path other than '/' without whitespace or control characters",
+                        home.display()
+                    );
+                }
                 let exe_path = std::env::current_exe()?.canonicalize()?;
-                let work_dir = std::env::current_dir()?.canonicalize()?;
+                let installed = bin_dir.join("zelvik-edge");
+                // Compare canonical paths: with a symlinked home, installed is
+                // not canonical, and copying the running executable onto
+                // itself truncates it mid-copy.
+                let installed_canonical = installed.canonicalize().unwrap_or_else(|_| installed.clone());
+                if exe_path != installed_canonical {
+                    let temp = bin_dir.join(format!(".zelvik-edge.install.{}", std::process::id()));
+                    fs::copy(&exe_path, &temp)?;
+                    fs::set_permissions(&temp, fs::Permissions::from_mode(0o755))?;
+                    fs::File::open(&temp)?.sync_all()?;
+                    fs::rename(&temp, &installed)?;
+                    fs::File::open(&bin_dir)?.sync_all()?;
+                } else {
+                    fs::set_permissions(&installed, fs::Permissions::from_mode(0o755))?;
+                }
 
-                // 1. Create global command wrapper
-                let bin_path = "/usr/bin/zelvik-edge";
+                // 1. Global wrapper: pins ZELVIK_EDGE_HOME so an invocation from
+                // any directory resolves this home's configs/ and data/.
+                let bin_path = ZELVIK_EDGE_WRAPPER_PATH;
                 let wrapper_script = format!(
-                    "#!/bin/bash\ncd {}\n{} \"$@\"\n",
-                    work_dir.display(),
-                    exe_path.display()
+                    "#!/bin/sh\nexport ZELVIK_EDGE_HOME={}\nexec {} \"$@\"\n",
+                    home.display(),
+                    installed.display()
                 );
-
-                if let Err(e) = fs::write(bin_path, wrapper_script) {
+                // Write through a temp file and rename: the wrapper is
+                // root-owned regardless of any pre-existing file at that path,
+                // and /usr/local/bin itself is never chowned/chmodded.
+                let wrapper_tmp = format!("{bin_path}.install.{}", std::process::id());
+                if let Err(e) = fs::write(&wrapper_tmp, wrapper_script) {
                     eprintln!(
                         "Failed to create global command at {}. Please run with sudo. Error: {}",
-                        bin_path, e
+                        wrapper_tmp, e
                     );
                     std::process::exit(1);
                 }
-
-                use std::os::unix::fs::PermissionsExt;
-                if let Ok(metadata) = fs::metadata(bin_path) {
-                    let mut perms = metadata.permissions();
+                {
+                    let mut perms = fs::metadata(&wrapper_tmp)?.permissions();
                     perms.set_mode(0o755);
-                    let _ = fs::set_permissions(bin_path, perms);
+                    fs::set_permissions(&wrapper_tmp, perms)?;
                 }
-
+                if let Err(e) = fs::rename(&wrapper_tmp, bin_path) {
+                    let _ = fs::remove_file(&wrapper_tmp);
+                    eprintln!("Failed to install global command at {bin_path}: {e}");
+                    std::process::exit(1);
+                }
                 println!("{}", t("install.global_ok"));
 
-                // 2. Create Systemd service
+                // 2. Systemd unit + the same writable-only-data/logs confinement
+                // deploy/systemd/zelvik-edge.service uses.
                 let service_path = "/etc/systemd/system/zelvik-edge.service";
                 let service_content = format!(
                     "[Unit]\n\
@@ -2948,23 +3055,19 @@ Description=Zelvik-Edge High Performance Cloud Node\n\
 After=network.target\n\n\
 [Service]\n\
 Type=simple\n\
-WorkingDirectory={}\n\
-Environment=ZELVIK_EDGE_HOME={}\n\
-ExecStart={}\n\
-ExecStop={} stop\n\
-TimeoutStopSec=35\n\
-KillMode=process\n\
+WorkingDirectory={home}\n\
+Environment=ZELVIK_EDGE_HOME={home}\n\
+ExecStart={installed}\n\
 Restart=on-failure\n\
 RestartSec=10\n\
-LimitNOFILE=1048576\n\n\
+LimitNOFILE=1048576\n\
+ReadWritePaths={home}/data\n\
+ReadWritePaths={home}/logs\n\n\
 [Install]\n\
 WantedBy=multi-user.target\n",
-                    work_dir.display(),
-                    work_dir.display(),
-                    exe_path.display(),
-                    exe_path.display()
+                    home = home.display(),
+                    installed = installed.display()
                 );
-
                 if let Err(e) = fs::write(service_path, service_content) {
                     eprintln!(
                         "Failed to create systemd service at {}. Error: {}",
@@ -3197,8 +3300,14 @@ impl pingora_core::services::background::BackgroundService for XdpShutdownServic
 }
 
 fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()> {
-    let node_paths = zelvik_edge::paths::NodePaths::current();
-    node_paths.ensure_runtime_dirs().ok();
+    let node_paths = zelvik_edge::paths::NodePaths::try_current()
+        .context("cannot resolve the Zelvik-Edge home")?;
+    node_paths.ensure_runtime_dirs().with_context(|| {
+        format!(
+            "cannot create the runtime directories under {}",
+            node_paths.runtime_root().display()
+        )
+    })?;
 
     // Panic sites must survive a dropped run.log batch or a journald that
     // cannot store (e.g. a full filesystem): mirror every panic to
@@ -3299,7 +3408,13 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     }
 
     // 1. Load API Config
-    let api_config = ApiConfig::load_default().expect("Failed to load configs/api_node.yaml");
+    let api_config = ApiConfig::load_default().map_err(|err| {
+        anyhow::anyhow!(
+            "failed to load configs/api_node.yaml: home={} candidates={:?}: {err:#}",
+            node_paths.runtime_root().display(),
+            node_paths.api_config_candidates()
+        )
+    })?;
     zelvik_edge::tcp_proxy::configure_relay_from_api(&api_config);
     let numeric_node_id = api_config.numeric_gcloud_node_id();
     logging::set_numeric_node_id(numeric_node_id);
@@ -3314,8 +3429,13 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         access_log_pipeline.queue_capacity,
         Duration::from_millis(access_log_pipeline.warning_interval_ms),
     );
-    let mut runtime_config =
-        RuntimeConfig::load_default().expect("Failed to load configs/api_node.yaml");
+    let mut runtime_config = RuntimeConfig::load_default().map_err(|err| {
+        anyhow::anyhow!(
+            "failed to load runtime configuration: home={} candidates={:?}: {err:#}",
+            node_paths.runtime_root().display(),
+            node_paths.api_config_candidates()
+        )
+    })?;
     RuntimeConfig::set_current(runtime_config.clone());
     repair_missing_xdp_ebpf_object_for_current_runtime(&node_paths);
     if runtime_config.xdp.enabled && runtime_config.xdp.interfaces.is_empty() {

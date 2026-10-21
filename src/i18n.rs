@@ -149,6 +149,21 @@ const STRINGS: &[(&str, &str, &str)] = &[
         "Zelvik-Edge 已停止。",
     ),
     (
+        "status.home",
+        "Node home",
+        "节点 home",
+    ),
+    (
+        "status.systemd_state",
+        "systemd state",
+        "systemd 状态",
+    ),
+    (
+        "status.main_pid",
+        "MainPID",
+        "MainPID",
+    ),
+    (
         "status.already_running",
         "Zelvik-Edge is already running",
         "Zelvik-Edge 已在运行",
