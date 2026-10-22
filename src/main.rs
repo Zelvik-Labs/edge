@@ -3046,8 +3046,7 @@ fn main() -> anyhow::Result<()> {
                 }
                 println!("{}", t("install.global_ok"));
 
-                // 2. Systemd unit + the same writable-only-data/logs confinement
-                // deploy/systemd/zelvik-edge.service uses.
+                // 2. Dedicated CDN nodes run as root, matching deploy/install.sh.
                 let service_path = "/etc/systemd/system/zelvik-edge.service";
                 let service_content = format!(
                     "[Unit]\n\
@@ -3055,14 +3054,14 @@ Description=Zelvik-Edge High Performance Cloud Node\n\
 After=network.target\n\n\
 [Service]\n\
 Type=simple\n\
+User=root\n\
+Group=root\n\
 WorkingDirectory={home}\n\
 Environment=ZELVIK_EDGE_HOME={home}\n\
 ExecStart={installed}\n\
 Restart=on-failure\n\
 RestartSec=10\n\
 LimitNOFILE=1048576\n\
-ReadWritePaths={home}/data\n\
-ReadWritePaths={home}/logs\n\n\
 [Install]\n\
 WantedBy=multi-user.target\n",
                     home = home.display(),

@@ -13,12 +13,9 @@
 #   sudo ./install.sh --endpoint https://cp.example.com \
 #       --node-id abc123 --secret deadbeef
 #
-# Directory ownership (26.10.3.1):
-#   <home>/bin, <home>/configs, <home>/backups   root:root
-#   <home>/data, <home>/logs                     <service user>
-#   <home>/pki                                   root:<service group> 0750
-#   <home>/configs/api_node.yaml                 0640 root:<service group>
-#   <home>/pki/client.key                        0640 root:<service group>
+# Dedicated CDN nodes run as root, including task-driven package upgrades.
+# The component home and its managed directories are owned by root:root;
+# existing cached files are preserved without a recursive ownership rewrite.
 set -eu
 
 # build-release.sh may overwrite this from the release argument; the package's
@@ -27,8 +24,8 @@ set -eu
 VERSION="26.10.3"
 BIN_NAME="zelvik-edge"
 SERVICE_NAME="zelvik-edge"
-SERVICE_USER="zelvik-edge"
-SERVICE_GROUP="zelvik-edge"
+SERVICE_USER="root"
+SERVICE_GROUP="root"
 
 DEFAULT_INSTALL_DIR="/opt/zelvik/edge"
 UNIT_DIR="/etc/systemd/system"
@@ -551,18 +548,6 @@ rollback_install() {
     return "$ROLLBACK_STATUS"
 }
 # ---------------------------------------------------------------------------
-# create user (idempotent)
-# ---------------------------------------------------------------------------
-if [ "$DRY_RUN" -eq 0 ]; then
-    if ! id "$SERVICE_USER" >/dev/null 2>&1; then
-        useradd --system --no-create-home \
-            --home-dir "$EDGE_HOME" \
-            --shell /usr/sbin/nologin \
-            "$SERVICE_USER"
-        log "created user $SERVICE_USER"
-    fi
-fi
-
 # Preflight before any write to an installed tree. A wrong CA or a package that
 # cannot run must never stop the live service or overwrite its binary.
 preflight
@@ -579,13 +564,23 @@ fi
 # ---------------------------------------------------------------------------
 run_cmd install -d -m 0755 -o root -g root "$EDGE_HOME"
 run_cmd install -d -m 0755 -o root -g root "$BIN_DIR"
-run_cmd install -d -m 0750 -o root -g "$SERVICE_GROUP" "$CONFIG_DIR"
-run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR"
-run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR/geo"
-run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$LOG_DIR"
+# Existing data/logs/configs keep their ownership: if this upgrade fails and the
+# rollback restores the previous non-root unit, that service must still be able
+# to read them. Only directories created by this installer get the new root
+# ownership. Root itself can read either layout.
+if [ ! -d "$CONFIG_DIR" ]; then
+    run_cmd install -d -m 0750 -o root -g "$SERVICE_GROUP" "$CONFIG_DIR"
+fi
+if [ ! -d "$DATA_DIR" ]; then
+    run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR"
+fi
+if [ ! -d "$DATA_DIR/geo" ]; then
+    run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR/geo"
+fi
+if [ ! -d "$LOG_DIR" ]; then
+    run_cmd install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$LOG_DIR"
+fi
 run_cmd install -d -m 0700 -o root -g root "$BACKUP_DIR"
-# Do not let install -d rewrite an existing pki mode before the backup has
-# captured it; enforcement happens after INSTALL_BACKUP_READY.
 if [ ! -d "$PKI_DIR" ]; then
     run_cmd install -d -m 0750 -o root -g "$SERVICE_GROUP" "$PKI_DIR"
 fi
@@ -596,10 +591,6 @@ if [ "$DRY_RUN" -eq 0 ]; then
     chown root:root "$EDGE_HOME" "$BIN_DIR" "$BACKUP_DIR"
     chmod 0755 "$EDGE_HOME" "$BIN_DIR"
     chmod 0700 "$BACKUP_DIR"
-    chown root:"$SERVICE_GROUP" "$CONFIG_DIR"
-    chmod 0750 "$CONFIG_DIR"
-    chown "$SERVICE_USER":"$SERVICE_GROUP" "$DATA_DIR" "$DATA_DIR/geo" "$LOG_DIR"
-    chmod 0750 "$DATA_DIR" "$DATA_DIR/geo" "$LOG_DIR"
 fi
 
 if [ "$DRY_RUN" -eq 1 ]; then
@@ -626,10 +617,6 @@ backup_path "$DATA_DIR/zelvik-edge-xdp-ebpf.o" xdp-object || die "cannot back up
 backup_sync || die "cannot persist the backup; nothing was replaced"
 INSTALL_BACKUP_READY=1
 INSTALL_STARTED=1
-# Enforce the pki directory mode only after the backup captured the previous
-# one; a backup failure must not leave the install mode behind.
-chown root:"$SERVICE_GROUP" "$PKI_DIR" || die "cannot set owner on $PKI_DIR"
-chmod 0750 "$PKI_DIR" || die "cannot set mode on $PKI_DIR"
 log "backup written to $INSTALL_BACKUP (old binary: ${OLD_BINARY_VERSION:-none})"
 
 if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then

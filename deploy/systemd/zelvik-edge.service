@@ -6,8 +6,8 @@ After=network-online.target zelvik-api.service
 
 [Service]
 Type=simple
-User=zelvik-edge
-Group=zelvik-edge
+User=root
+Group=root
 
 # @ZELVIK_EDGE_HOME@ and @ZELVIK_EDGE_BIN@ are substituted by deploy/install.sh
 # with the resolved component home and the binary it actually installed
@@ -24,10 +24,11 @@ TimeoutStopSec=60s
 KillMode=mixed
 KillSignal=SIGTERM
 
-# Edge attaches eBPF (XDP), binds low ports and may raise interface affinity.
-# Provide the capabilities it needs; non-root user still applies.
+# Dedicated CDN hosts run Edge as root for XDP, network tuning and supervised
+# package upgrades. Keep the normal root capability set and writable install
+# paths: upgrades back up under /var/backups/zelvik/edge-upgrade, replace bin/
+# and the eBPF object, then ask systemd to restart with rollback supervision.
 NoNewPrivileges=true
-ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 ProtectKernelTunables=true
@@ -35,17 +36,6 @@ ProtectKernelModules=false
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
-
-AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_NET_ADMIN
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_NET_ADMIN
-
-# ProtectSystem=strict makes everything read-only. The service user owns only
-# data/ (pid file, cache, geo store, control-plane runtime override, upgrade
-# requests) and logs/. bin/, configs/, pki/ and backups/ stay root-controlled:
-# the node reads them, never writes them. The root upgrade helper is a separate
-# unit (zelvik-edge-upgrade.service) and is not granted by this one.
-ReadWritePaths=@ZELVIK_EDGE_HOME@/data
-ReadWritePaths=@ZELVIK_EDGE_HOME@/logs
 
 # Edge sizing: dedicated CPU/NIC; scale memory/FD per bandwidth (docs/08).
 LimitNOFILE=1048576

@@ -133,13 +133,18 @@ expect "单元 WorkingDirectory 指向同一 home" "$UNIT" "WorkingDirectory=$HO
 expect "wrapper 导出 ZELVIK_EDGE_HOME" "$WRAPPER" "export ZELVIK_EDGE_HOME=$HOME_DIR"
 expect "wrapper exec 同一二进制" "$WRAPPER" "exec $HOME_DIR/bin/zelvik-edge"
 
-# 2) 无 data/*.o 的包也必须把 data 交给服务用户；configs/bin/backups 归 root。
-owner "data 归服务用户" "$HOME_DIR/data" 'zelvik-edge:750'
-owner "logs 归服务用户" "$HOME_DIR/logs" 'zelvik-edge:750'
+# 2) 专用 CDN 主机默认 root 运行；新目录归 root，缓存内容原样保留。
+expect "服务以 root 运行" "$UNIT" "User=root"
+expect "服务使用 root 组" "$UNIT" "Group=root"
+absent "升级安装目录可写" "$UNIT" "ProtectSystem="
+absent "root 能力未裁剪" "$UNIT" "CapabilityBoundingSet="
+absent "不再指定非 root ambient 能力" "$UNIT" "AmbientCapabilities="
+owner "data 归 root" "$HOME_DIR/data" 'root:750'
+owner "logs 归 root" "$HOME_DIR/logs" 'root:750'
 owner "bin 归 root" "$HOME_DIR/bin" 'root:755'
 owner "configs 归 root" "$HOME_DIR/configs" 'root:750'
 owner "backups 归 root" "$HOME_DIR/backups" 'root:700'
-owner "api_node.yaml 0640 root:zelvik-edge" "$CFG" 'root:640'
+owner "api_node.yaml 0640 root:root" "$CFG" 'root:640'
 
 # 3) 首装写出安装器拥有的键，且 xdp 默认关闭。
 for k in 'rpc.endpoints:' 'instanceId: "nd_test"' 'secret: "abc123"' 'commMode: "tls"' 'enabled: false'; do
@@ -155,7 +160,7 @@ if command -v openssl >/dev/null 2>&1; then
     bash "$W/install.sh" --install-dir "$HOME_DIR" --endpoint https://cp1.example.com         --node-id nd_test --secret abc123 --tls-ca-file /tmp/ca.pem         --tls-ca-sha256 "$CA_SHA" >/tmp/install-ca1.log 2>&1         || { tail -20 /tmp/install-ca1.log; fail=1; }
     bash "$W/install.sh" --install-dir "$HOME_DIR" --endpoint https://cp1.example.com         --node-id nd_test --secret abc123 --tls-ca-file "$HOME_DIR/pki/cp-ca.pem"         --tls-ca-sha256 "$CA_SHA" >/tmp/install-ca2.log 2>&1         || { tail -20 /tmp/install-ca2.log; fail=1; }
     expect "CA 同文件重跑不 self-copy" /tmp/install-ca2.log "no copy needed"
-    owner "pki 目录 root:zelvik-edge 0750" "$HOME_DIR/pki" 'root:750'
+    owner "pki 目录 root:root 0750" "$HOME_DIR/pki" 'root:750'
     owner "CA 0644 root" "$HOME_DIR/pki/cp-ca.pem" 'root:644'
 else
     echo "SKIP openssl missing: CA 同文件用例未运行"
@@ -265,6 +270,18 @@ if bash "$W/install.sh" --dir /tmp/staging --endpoint 'https://cp4.example.com' 
     echo "FAIL --dir 未被拒绝"; fail=1
 else
     if grep -q 'Use --install-dir' /tmp/install5.log; then echo "OK   --dir 被拒绝并指向 --install-dir"; else echo "FAIL --dir 报错信息缺失"; tail -5 /tmp/install5.log; fail=1; fi
+fi
+
+# 7) 切到 root 时不得改写既有 data/logs 属主：失败回滚到旧非 root 单元后
+# 旧服务仍要能读取它们。
+chown 1000:1000 "$HOME_DIR/data" "$HOME_DIR/logs"
+bash "$W/install.sh" --endpoint 'https://cp4.example.com' \
+    --node-id nd_test2 --secret def456 --comm-mode tls >/tmp/install6.log 2>&1 \
+    || { tail -20 /tmp/install6.log; fail=1; }
+if [ "$(stat -c '%u' "$HOME_DIR/data")" = "1000" ] && [ "$(stat -c '%u' "$HOME_DIR/logs")" = "1000" ]; then
+    echo "OK   既有 data/logs 属主保留"
+else
+    echo "FAIL 既有 data/logs 属主被改写"; fail=1
 fi
 
 exit "$fail"
