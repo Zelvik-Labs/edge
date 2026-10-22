@@ -215,8 +215,10 @@ class Portal:
             raise PortalError("releases response is not a list")
         return releases
 
-    def release(self, version: str) -> dict | None:
+    def release(self, version: str, bucket: str = "Zelvik-Edge") -> dict | None:
         for release in self.releases():
+            if str(release.get("bucket", "")) != bucket:
+                continue
             if str(release.get("version", "")).lstrip("v") == version.lstrip("v"):
                 return release
         return None
@@ -229,6 +231,7 @@ class Portal:
                 "summary": f"Zelvik Edge {version}",
                 "git_commit": source_commit,
                 "components": [COMPONENT],
+                "bucket": "Zelvik-Edge",
                 "changelog": [],
             }
         ).encode()

@@ -59,6 +59,7 @@ class MockPortal:
         release = {
             "id": "rel_" + version.replace(".", "-"),
             "version": version,
+            "bucket": "Zelvik-Edge",
             "channel": "stable",
             "gitCommit": commit,
             "is_latest_stable": False,
@@ -92,6 +93,7 @@ class MockPortal:
         return {
             "id": release["id"],
             "version": release["version"],
+            "bucket": release.get("bucket", "Zelvik-Edge"),
             "channel": release["channel"],
             "git_commit": release["gitCommit"],
             "is_latest_stable": release["is_latest_stable"],

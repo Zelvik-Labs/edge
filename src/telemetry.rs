@@ -1,6 +1,11 @@
 //! Durable producer queues. API memory is not a delivery acknowledgement.
-use crate::{api_config::ApiConfig, paths::NodePaths, pb, rpc::client::SharedRpcClient};
-use mace::{Bucket, BucketOptions, Mace, OpCode, Options};
+use crate::{
+    api_config::ApiConfig,
+    paths::NodePaths,
+    pb,
+    rpc::client::{RPC_NODE_STREAM_MESSAGE_BYTES, SharedRpcClient},
+};
+use mace::{Bucket, BucketOptions, Mace, OpCode, Options, TxnKV};
 use parking_lot::Mutex;
 use prost::Message;
 use serde::{Deserialize, Serialize};
@@ -13,6 +18,8 @@ use std::{
     time::Duration,
 };
 use tracing::{debug, error, warn};
+use zelvik_suite::controlerr::Code as ControlCode;
+use zelvik_suite::{TRAILER_ERROR, TRAILER_RETRYABLE};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -55,6 +62,31 @@ struct Meta {
     acked_ahead: u64,
     #[serde(default)]
     acked_ahead_bytes: u64,
+    /// Durable loss accounting. Every field below is written in the same Mace
+    /// transaction that removes the payload it describes, so a crash can never
+    /// leave a loss uncounted, unreasoned or unreported.
+    #[serde(default)]
+    quarantined: u64,
+    #[serde(default)]
+    retryable_failures: u64,
+    #[serde(default)]
+    terminal_failures: u64,
+    #[serde(default)]
+    oversize_dropped: u64,
+    /// Id of the next durable loss record (see [`LossRecord`]).
+    #[serde(default)]
+    journal_id: u64,
+    /// Reason of the most recent loss, restored on reopen.
+    #[serde(default)]
+    last_loss_reason: String,
+    /// This lane's own gap bounds: the durable half of the process-wide
+    /// `GAP_START`/`GAP_END`/`GAP_CORE`, merged back into the statics on open.
+    #[serde(default)]
+    gap_start: i64,
+    #[serde(default)]
+    gap_end: i64,
+    #[serde(default)]
+    gap_has_core: bool,
 }
 impl Default for Meta {
     fn default() -> Self {
@@ -68,6 +100,15 @@ impl Default for Meta {
             meter_bytes: 0,
             acked_ahead: 0,
             acked_ahead_bytes: 0,
+            quarantined: 0,
+            retryable_failures: 0,
+            terminal_failures: 0,
+            oversize_dropped: 0,
+            journal_id: 0,
+            last_loss_reason: String::new(),
+            gap_start: 0,
+            gap_end: 0,
+            gap_has_core: false,
         }
     }
 }
@@ -77,6 +118,16 @@ pub struct Spool {
     meta: Mutex<Meta>,
     path: PathBuf,
     budget: LaneBudget,
+    /// Durable loss accounting, mirrored from [`Meta`]: batches dropped after a
+    /// permanent rejection, the per-class upload failure counters, single
+    /// records too large to batch, and the reason of the most recent loss. Kept
+    /// per lane so a status reader can tell which lane lost data and why, and
+    /// restored from the durable meta on open so a restart does not forget it.
+    quarantined: AtomicU64,
+    retryable_failures: AtomicU64,
+    terminal_failures: AtomicU64,
+    oversize_dropped: AtomicU64,
+    last_loss_reason: parking_lot::RwLock<String>,
     #[cfg(test)]
     fixed_disk: Option<(u64, u64)>,
 }
@@ -216,6 +267,14 @@ pub enum SpoolError {
         available: u64,
         core: bool,
     },
+    /// A finished batch the wire cannot carry, envelope included. Its own
+    /// variant because the two refusals need opposite responses: a capacity
+    /// refusal is worth retrying once the spool drains, a size refusal is
+    /// permanent for those bytes and the producer must split or journal them.
+    BatchTooLarge {
+        bytes: usize,
+        limit: usize,
+    },
 }
 impl std::fmt::Display for SpoolError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -229,21 +288,73 @@ impl std::fmt::Display for SpoolError {
                 "telemetry spool exhausted reason=spool_capacity lane={} requiredBytes={required} availableBytes={available}",
                 if *core { "core" } else { "detail" }
             ),
+            Self::BatchTooLarge { bytes, limit } => write!(
+                f,
+                "telemetry spool refused a batch over the message budget reason=batch_too_large encodedBytes={bytes} limitBytes={limit}"
+            ),
         }
     }
 }
 impl std::error::Error for SpoolError {}
-/// True when a spool error was a capacity rejection. Callers keep their own
-/// drop/retain policy; this only classifies the cause.
-pub fn is_capacity_exhausted(error: &(dyn std::error::Error + 'static)) -> bool {
+/// Walks an error chain and returns the spool refusal it carries, if any.
+fn spool_refusal<'a>(error: &'a (dyn std::error::Error + 'static)) -> Option<&'a SpoolError> {
     let mut current = Some(error);
     while let Some(err) = current {
-        if err.downcast_ref::<SpoolError>().is_some() {
-            return true;
+        if let Some(spool) = err.downcast_ref::<SpoolError>() {
+            return Some(spool);
         }
         current = err.source();
     }
-    false
+    None
+}
+/// True when a spool error was a capacity rejection. Callers keep their own
+/// drop/retain policy; this only classifies the cause.
+pub fn is_capacity_exhausted(error: &(dyn std::error::Error + 'static)) -> bool {
+    matches!(spool_refusal(error), Some(SpoolError::Capacity { .. }))
+}
+/// True when a spool error was the wire-size refusal rather than a full disk.
+pub fn is_batch_too_large(error: &(dyn std::error::Error + 'static)) -> bool {
+    matches!(spool_refusal(error), Some(SpoolError::BatchTooLarge { .. }))
+}
+/// One durable record of a lost batch or record.
+///
+/// The record is written in the same Mace transaction that removes the payload
+/// it describes, so a crash can never separate the loss from its audit. It is
+/// deleted only when the API's durable receipt for the gap batch carrying it
+/// arrives — a best-effort marker is not proof of delivery.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LossRecord {
+    /// Identity of the dropped batch (empty for a record too large to batch).
+    batch_id: String,
+    /// Sequence of the dropped batch (0 when it never had one).
+    sequence: u64,
+    /// The lane that lost the data: `core` or `detail`.
+    lane: String,
+    /// The telemetry kind that was lost.
+    kind: String,
+    /// When the lost data was produced.
+    event_time: i64,
+    /// The gap reason reported upstream, e.g. `unattributed_pre_assignment`.
+    reason: String,
+    /// The API's own message for the rejection.
+    error: String,
+    /// Free-form attribution, e.g. the encoded size of an oversized record.
+    metadata: String,
+    /// Sequence of the gap batch that reports this loss upstream.
+    ///
+    /// Zero means there is nothing to deliver: the loss was the refusal of a
+    /// meta batch (`gap`/`alert`), which must not be answered with another
+    /// marker. Such a record is evidence, not a pending delivery.
+    gap_sequence: u64,
+    /// True once the API permanently refused the gap marker itself.
+    delivery_failed: bool,
+}
+fn loss_key(id: u64) -> String {
+    format!("loss:{id:020}")
+}
+fn loss_gap_key(sequence: u64) -> String {
+    format!("lossgap:{sequence:020}")
 }
 impl Spool {
     pub fn open(path: &Path, core: bool, limit: u64) -> anyhow::Result<Self> {
@@ -292,12 +403,28 @@ impl Spool {
         );
         let counter = shared.unwrap_or_else(LaneCounter::new);
         counter.add_used(meta.bytes);
+        // A restart must not forget that this lane lost data: the counters, the
+        // last reason and the gap bounds come back from the durable meta, and
+        // the process-wide gap statics are seeded from this lane's half.
+        let (quarantined, retryable, terminal, oversize) = (
+            meta.quarantined,
+            meta.retryable_failures,
+            meta.terminal_failures,
+            meta.oversize_dropped,
+        );
+        let last_loss_reason = meta.last_loss_reason.clone();
+        restore_gap_bounds(meta.gap_start, meta.gap_end, meta.gap_has_core);
         Ok(Self {
             _db: db,
             bucket,
             meta: Mutex::new(meta),
             path: path.to_owned(),
             budget: LaneBudget { limit, core, counter },
+            quarantined: AtomicU64::new(quarantined),
+            retryable_failures: AtomicU64::new(retryable),
+            terminal_failures: AtomicU64::new(terminal),
+            oversize_dropped: AtomicU64::new(oversize),
+            last_loss_reason: parking_lot::RwLock::new(last_loss_reason),
             #[cfg(test)]
             fixed_disk: None,
         })
@@ -377,6 +504,18 @@ impl Spool {
         batch.sequence = meta.tail;
         if batch.source_boot_id.is_empty() {
             batch.source_boot_id = PROCESS_BOOT.clone();
+        }
+        // The wire carries the serialized batch, envelope included, so the cap
+        // is enforced here on the finished message and for every producer kind.
+        // A producer that can split does so before this call; one that cannot
+        // gets a typed refusal instead of a batch the RPC layer would reject.
+        let wire_bytes = batch.encoded_len();
+        if wire_bytes > MAX_BATCH_ENCODED_BYTES {
+            return Err(SpoolError::BatchTooLarge {
+                bytes: wire_bytes,
+                limit: MAX_BATCH_ENCODED_BYTES,
+            }
+            .into());
         }
         let encoded = zstd::encode_all(batch.encode_to_vec().as_slice(), 3)?;
         let available = self.capacity();
@@ -517,6 +656,9 @@ impl Spool {
             next.head += 1;
             next.bytes -= size;
             txn.del(key.as_bytes()).map_err(mace_error)?;
+            // A receipt for a loss marker is the only proof that the API durably
+            // recorded the gap; until it arrives the audit stays on disk.
+            confirm_loss_delivery(&txn, sequence)?;
             if next.head == next.tail {
                 next.oldest_at = 0;
             } else {
@@ -533,6 +675,7 @@ impl Spool {
                 .map_err(mace_error)?;
             next.acked_ahead += 1;
             next.acked_ahead_bytes += size;
+            confirm_loss_delivery(&txn, sequence)?;
         }
         txn.upsert(b"meta", serde_json::to_vec(&next)?)
             .map_err(mace_error)?;
@@ -592,6 +735,250 @@ impl Spool {
         *meta = next;
         Ok(removed)
     }
+    /// P0-3 — drop the head batch after the API rejected it permanently.
+    ///
+    /// A batch that can never be accepted must not sit at the head of the queue
+    /// and hold every later observation hostage. Removing it is a loss, and the
+    /// loss is never silent and never half-recorded: the payload removal, the
+    /// head advance, the lane's counters, the gap bounds, the durable
+    /// [`LossRecord`] and the gap batch that reports the loss upstream all
+    /// commit in ONE Mace transaction. A crash before the commit keeps the batch
+    /// and loses nothing; a crash after it keeps the audit.
+    ///
+    /// The gap batch joins this same lane, so the audit record and the marker
+    /// carrying it share one bucket — and therefore one transaction and one
+    /// receipt. [`Self::acknowledge`] deletes the record only when the API's
+    /// durable receipt for that marker arrives, so a best-effort marker is never
+    /// mistaken for proof of delivery.
+    ///
+    /// Accounting stays consistent: the payload's bytes leave `bytes`, the head
+    /// advances, and `acked_ahead`/`acked_ahead_bytes` are untouched because the
+    /// receipts of later batches are keyed by sequence and quarantine never
+    /// renumbers. `oldest_at` follows the new head exactly as `acknowledge`
+    /// leaves it.
+    ///
+    /// Returns `false` when `sequence` is no longer the head: the batch was
+    /// confirmed (or already removed) meanwhile, so the caller must not treat it
+    /// as quarantined.
+    fn quarantine_head(&self, sequence: u64, reason: &str, error: &str) -> anyhow::Result<bool> {
+        let mut meta = self.meta.lock();
+        if sequence != meta.head || meta.head >= meta.tail {
+            return Ok(false);
+        }
+        let txn = self.bucket.begin().map_err(mace_error)?;
+        let key = format!("batch:{sequence:020}");
+        let raw = txn.get(key.as_bytes()).map_err(mace_error)?;
+        let size = raw.slice().len() as u64;
+        let batch = pb::TelemetryBatch::decode(zstd::decode_all(raw.slice())?.as_slice())?;
+        let kind = batch.kind.clone();
+        let event_time = if batch.occurred_at > 0 {
+            batch.occurred_at
+        } else {
+            crate::utils::time::now_timestamp()
+        };
+        // A marker the API refuses must not be answered with another marker:
+        // otherwise one rejected audit would generate audits forever.
+        let is_meta = kind == "gap" || kind == "alert";
+        txn.del(key.as_bytes()).map_err(mace_error)?;
+        let mut next = meta.clone();
+        next.head += 1;
+        next.bytes -= size;
+        next.quarantined = self.quarantined.load(Ordering::Relaxed) + 1;
+        next.retryable_failures = self.retryable_failures.load(Ordering::Relaxed);
+        next.terminal_failures = self.terminal_failures.load(Ordering::Relaxed);
+        next.oversize_dropped = self.oversize_dropped.load(Ordering::Relaxed);
+        next.last_loss_reason = reason.to_owned();
+        next.gap_start = if meta.gap_start == 0 {
+            event_time
+        } else {
+            meta.gap_start
+        };
+        next.gap_end = meta.gap_end.max(event_time);
+        next.gap_has_core = meta.gap_has_core || kind == "core" || kind == "bandwidth";
+        let loss = LossRecord {
+            batch_id: batch.batch_id.clone(),
+            sequence,
+            lane: self.lane().to_owned(),
+            kind: kind.clone(),
+            event_time,
+            reason: reason.to_owned(),
+            error: error.to_owned(),
+            metadata: format!("retainedBytes={size}"),
+            ..Default::default()
+        };
+        if is_meta {
+            // The audit this marker carried is now undeliverable: keep the
+            // record as evidence and stop re-reporting it.
+            match txn.get(loss_gap_key(sequence).as_bytes()) {
+                Ok(carried) => {
+                    let carried_key = carried.slice().to_vec();
+                    if let Ok(record) = txn.get(&carried_key) {
+                        let mut failed: LossRecord = serde_json::from_slice(record.slice())?;
+                        failed.delivery_failed = true;
+                        txn.upsert(&carried_key, serde_json::to_vec(&failed)?)
+                            .map_err(mace_error)?;
+                    }
+                    txn.del(loss_gap_key(sequence).as_bytes())
+                        .map_err(mace_error)?;
+                }
+                Err(OpCode::NotFound) => {}
+                Err(err) => return Err(mace_error(err)),
+            }
+        }
+        let (gap_sequence, gap_bytes) = self.write_loss(&txn, &mut next, loss, !is_meta)?;
+        next.oldest_at = if next.head == next.tail {
+            0
+        } else if gap_sequence != 0 && next.head == gap_sequence {
+            // The lane was empty and the only batch left is the marker written
+            // in this very transaction, which this snapshot cannot read back.
+            event_time
+        } else {
+            let raw = txn
+                .get(format!("batch:{:020}", next.head).as_bytes())
+                .map_err(mace_error)?;
+            pb::TelemetryBatch::decode(zstd::decode_all(raw.slice())?.as_slice())?.occurred_at
+        };
+        txn.upsert(b"meta", serde_json::to_vec(&next)?)
+            .map_err(mace_error)?;
+        txn.commit().map_err(mace_error)?;
+        // Only now that the transaction is durable: the removed payload leaves
+        // the pool and the marker it was replaced by joins it.
+        self.budget.counter.sub_used(size);
+        self.budget.counter.add_used(gap_bytes);
+        self.quarantined.fetch_add(1, Ordering::Relaxed);
+        *self.last_loss_reason.write() = reason.to_owned();
+        *meta = next;
+        drop(meta);
+        // The process-wide view and the operator log. The durable report is the
+        // loss record plus the gap batch committed above, so this deliberately
+        // does not emit a second, best-effort marker for the same incident.
+        note_gap(&kind, event_time, reason);
+        Ok(true)
+    }
+
+    /// Append the durable loss record and, unless this is a meta batch, the gap
+    /// batch that reports it upstream. Both join the caller's transaction, so
+    /// the loss and its audit share one commit.
+    ///
+    /// The marker is deliberately not capacity-checked: it is a few hundred
+    /// bytes, it replaces a payload that was just freed, and an audit that the
+    /// disk refused would be a silent loss again.
+    ///
+    /// Returns the gap batch's sequence and its spool bytes (both 0 when no
+    /// marker was created).
+    fn write_loss(
+        &self,
+        txn: &TxnKV<'_>,
+        next: &mut Meta,
+        mut loss: LossRecord,
+        allow_gap_batch: bool,
+    ) -> anyhow::Result<(u64, u64)> {
+        let id = next.journal_id;
+        next.journal_id += 1;
+        let mut gap_sequence = 0;
+        let mut gap_bytes = 0;
+        if allow_gap_batch {
+            let sequence = next.tail;
+            let batch = gap_batch_for_loss(next, &loss, sequence);
+            let encoded = zstd::encode_all(batch.encode_to_vec().as_slice(), 3)?;
+            txn.upsert(format!("batch:{sequence:020}").as_bytes(), &encoded)
+                .map_err(mace_error)?;
+            txn.upsert(loss_gap_key(sequence).as_bytes(), loss_key(id).as_bytes())
+                .map_err(mace_error)?;
+            next.tail += 1;
+            next.bytes = next.bytes.saturating_add(encoded.len() as u64);
+            next.meter_bytes += encoded.len() as u64;
+            loss.gap_sequence = sequence;
+            gap_sequence = sequence;
+            gap_bytes = encoded.len() as u64;
+        }
+        txn.upsert(loss_key(id).as_bytes(), serde_json::to_vec(&loss)?)
+            .map_err(mace_error)?;
+        Ok((gap_sequence, gap_bytes))
+    }
+
+    /// Journal a loss that is not a queued batch — today, one record too large
+    /// to fit in any batch. The record and the gap marker that reports it commit
+    /// together, so the loss cannot be counted without being attributable.
+    fn journal_loss(&self, loss: LossRecord) -> anyhow::Result<()> {
+        let mut meta = self.meta.lock();
+        let txn = self.bucket.begin().map_err(mace_error)?;
+        let mut next = meta.clone();
+        next.quarantined = self.quarantined.load(Ordering::Relaxed);
+        next.retryable_failures = self.retryable_failures.load(Ordering::Relaxed);
+        next.terminal_failures = self.terminal_failures.load(Ordering::Relaxed);
+        next.oversize_dropped = self.oversize_dropped.load(Ordering::Relaxed);
+        next.last_loss_reason = loss.reason.clone();
+        next.gap_start = if meta.gap_start == 0 {
+            loss.event_time
+        } else {
+            meta.gap_start
+        };
+        next.gap_end = meta.gap_end.max(loss.event_time);
+        next.gap_has_core =
+            meta.gap_has_core || loss.kind == "core" || loss.kind == "bandwidth";
+        let (_, gap_bytes) = self.write_loss(&txn, &mut next, loss.clone(), true)?;
+        txn.upsert(b"meta", serde_json::to_vec(&next)?)
+            .map_err(mace_error)?;
+        txn.commit().map_err(mace_error)?;
+        self.budget.counter.add_used(gap_bytes);
+        *self.last_loss_reason.write() = next.last_loss_reason.clone();
+        *meta = next;
+        drop(meta);
+        note_gap(&loss.kind, loss.event_time, &loss.reason);
+        Ok(())
+    }
+
+    /// Journal one record too large for any batch: count it, keep every field an
+    /// auditor needs, and report it upstream through its own gap marker instead
+    /// of shipping an empty batch or a bare error.
+    fn journal_oversize(&self, kind: &str, encoded_bytes: usize) -> anyhow::Result<()> {
+        self.oversize_dropped.fetch_add(1, Ordering::Relaxed);
+        self.journal_loss(LossRecord {
+            lane: self.lane().to_owned(),
+            kind: kind.to_owned(),
+            event_time: crate::utils::time::now_timestamp(),
+            reason: format!("{OVERSIZE_REASON} encodedBytes={encoded_bytes}"),
+            metadata: format!("encodedBytes={encoded_bytes}"),
+            ..Default::default()
+        })
+    }
+
+    fn lane(&self) -> &'static str {
+        if self.budget.core { "core" } else { "detail" }
+    }
+
+    /// The durable loss record with this journal id, if it has not been
+    /// delivered yet.
+    #[cfg(test)]
+    fn loss_record(&self, id: u64) -> anyhow::Result<Option<LossRecord>> {
+        let view = self.bucket.view().map_err(mace_error)?;
+        match view.get(loss_key(id).as_bytes()) {
+            Ok(raw) => Ok(Some(serde_json::from_slice(raw.slice())?)),
+            Err(OpCode::NotFound) => Ok(None),
+            Err(err) => Err(mace_error(err)),
+        }
+    }
+
+    /// This lane's durable gap bounds, `(start, end, has_core)`.
+    #[cfg(test)]
+    fn gap_bounds(&self) -> (i64, i64, bool) {
+        let meta = self.meta.lock();
+        (meta.gap_start, meta.gap_end, meta.gap_has_core)
+    }
+
+    /// P1-2 — count one failed upload per class. Retryable failures keep their
+    /// payload; terminal ones end up quarantined when they are the head.
+    ///
+    /// The counts live in memory between journal writes and become durable with
+    /// the next quarantine or oversize journal, which persists the live values.
+    fn note_failure(&self, class: UploadClass) {
+        match class {
+            UploadClass::Retryable => self.retryable_failures.fetch_add(1, Ordering::Relaxed),
+            UploadClass::Terminal(_) => self.terminal_failures.fetch_add(1, Ordering::Relaxed),
+        };
+    }
+
     pub fn save_state(&self, key: &str, raw: &[u8]) -> anyhow::Result<()> {
         let txn = self.bucket.begin().map_err(mace_error)?;
         txn.upsert(format!("state:{key}").as_bytes(), raw)
@@ -628,6 +1015,17 @@ impl Spool {
             "oldestAt": if pending > 0 { meta.oldest_at } else { 0 },
             "exhaustEtaSecs": if rate > 0 { available / rate.max(1) } else { 0 },
             "lastFailureAt": LAST_FAILURE.load(Ordering::Relaxed),
+            // P1-2: the queue's own position and its loss/refusal counters.
+            "head": meta.head,
+            "tail": meta.tail,
+            "ackedAhead": meta.acked_ahead,
+            "quarantinedBatches": self.quarantined.load(Ordering::Relaxed),
+            "retryableFailures": self.retryable_failures.load(Ordering::Relaxed),
+            "terminalFailures": self.terminal_failures.load(Ordering::Relaxed),
+            "oversizeDropped": self.oversize_dropped.load(Ordering::Relaxed),
+            // Total losses ever journaled by this lane, delivered or not.
+            "journaledLosses": meta.journal_id,
+            "lastQuarantineReason": self.last_loss_reason.read().clone(),
         })
     }
 }
@@ -663,8 +1061,23 @@ static GAP_END: AtomicI64 = AtomicI64::new(0);
 static GAP_CORE: AtomicI64 = AtomicI64::new(0);
 static GAP_REPORTED: AtomicI64 = AtomicI64::new(0);
 static ALERT_LEVEL: AtomicU8 = AtomicU8::new(0);
+/// P1-2: the reason of the most recent gap, so a status reader can see *why*
+/// data was dropped without correlating logs. The durable trail is the loss
+/// record and the gap marker that carries it upstream.
+static LAST_GAP_REASON: std::sync::LazyLock<parking_lot::RwLock<String>> =
+    std::sync::LazyLock::new(|| parking_lot::RwLock::new(String::new()));
 
-pub fn record_gap(kind: &str, at: i64, reason: &str) {
+pub fn last_gap_reason() -> String {
+    LAST_GAP_REASON.read().clone()
+}
+
+/// Update the process-wide gap view and log the incident.
+///
+/// This is the in-process half only: it emits nothing. A caller that owns a
+/// durable loss record must not emit a second, best-effort marker for the same
+/// incident, or one loss would be reported twice upstream.
+fn note_gap(kind: &str, at: i64, reason: &str) {
+    *LAST_GAP_REASON.write() = reason.to_owned();
     let _ = GAP_START.compare_exchange(0, at, Ordering::Relaxed, Ordering::Relaxed);
     GAP_END.fetch_max(at, Ordering::Relaxed);
     if kind == "core" || kind == "bandwidth" {
@@ -676,12 +1089,67 @@ pub fn record_gap(kind: &str, at: i64, reason: &str) {
         at,
         "TELEMETRY DATA GAP: service continues; affected billing windows must remain unsettled"
     );
-    // Emit one durable gap marker per incident start; re-emits only after the
-    // marker itself was acknowledged upstream (gap start resets on resolution).
+}
+
+/// Record a gap for a loss that has no durable journal of its own, updating the
+/// process-wide view and emitting one best-effort marker per incident start
+/// (re-emits only after the marker itself was acknowledged upstream).
+pub fn record_gap(kind: &str, at: i64, reason: &str) {
+    note_gap(kind, at, reason);
     let start = GAP_START.load(Ordering::Relaxed);
     if GAP_REPORTED.fetch_max(start, Ordering::Relaxed) < start {
         emit_meta("gap", kind, reason, start, at);
     }
+}
+
+/// Seed the process-wide gap statics from a lane's durable bounds. Merging, not
+/// assigning, keeps the union across both lanes and across repeated opens.
+fn restore_gap_bounds(start: i64, end: i64, has_core: bool) {
+    if start > 0 {
+        let _ = GAP_START.compare_exchange(0, start, Ordering::Relaxed, Ordering::Relaxed);
+        GAP_END.fetch_max(end, Ordering::Relaxed);
+    }
+    if has_core {
+        GAP_CORE.store(1, Ordering::Relaxed);
+    }
+}
+
+/// The gap batch that carries one loss upstream. Its envelope is the same shape
+/// `emit_meta` uses for a gap marker, so the API persists it as a `telemetry_gap`
+/// row; a real timestamp is allowed for a gap range where a completion marker
+/// would have to sit on the five-minute grid.
+fn gap_batch_for_loss(meta: &Meta, loss: &LossRecord, sequence: u64) -> pb::TelemetryBatch {
+    pb::TelemetryBatch {
+        schema_version: 1,
+        batch_id: format!("{}:{sequence}", meta.boot),
+        boot_id: meta.boot.clone(),
+        sequence,
+        source_boot_id: PROCESS_BOOT.clone(),
+        kind: "gap".into(),
+        has_gap: true,
+        gap_kind: loss.kind.clone(),
+        gap_reason: loss.reason.clone(),
+        window_start: loss.event_time,
+        occurred_at: loss.event_time,
+        ..Default::default()
+    }
+}
+
+/// Mark a loss delivered. A real receipt for its gap batch means the API has
+/// durably recorded the gap, so the audit record can go. Both keys live in this
+/// lane's bucket, so this joins the acknowledgement transaction.
+fn confirm_loss_delivery(txn: &TxnKV<'_>, gap_sequence: u64) -> anyhow::Result<()> {
+    let gap_key = loss_gap_key(gap_sequence);
+    match txn.get(gap_key.as_bytes()) {
+        Ok(carried) => {
+            let carried_key = carried.slice().to_vec();
+            txn.del(carried_key.as_slice()).map_err(mace_error)?;
+            txn.del(gap_key.as_bytes()).map_err(mace_error)?;
+        }
+        Err(OpCode::NotFound) => {}
+        Err(err) => return Err(mace_error(err)),
+    }
+    Ok(())
 }
 fn escalate_capacity(level: u8, core: bool) {
     if level < 80 {
@@ -769,6 +1237,12 @@ pub async fn enqueue<M: Message>(
     complete: bool,
 ) -> anyhow::Result<()> {
     let payload = message.encode_to_vec();
+    // The probe flusher hands its whole per-second observation batch to one
+    // call, so this is the last place those records can still be split into
+    // wire-sized batches; every other producer splits its own before enqueueing.
+    if kind == "probe_observation" {
+        return enqueue_observations(payload, window, complete).await;
+    }
     let spool = queue(kind)?;
     let kind = kind.to_owned();
     let at = crate::utils::time::now_timestamp();
@@ -776,6 +1250,56 @@ pub async fn enqueue<M: Message>(
         .await??;
     Ok(())
 }
+
+/// Split a `probe_observation` payload into wire-sized batches.
+///
+/// Returns the encoded sub-payloads that fit, plus the encoded size of every
+/// observation too large for any batch, so the caller can journal those without
+/// keeping their bytes. A payload that is not a decodable observation batch is
+/// handed back whole: the spool's own cap then refuses it by name rather than a
+/// decode guess silently reshaping the data.
+fn split_observation_payload(payload: &[u8]) -> (Vec<Vec<u8>>, Vec<usize>) {
+    let Ok(batch) = <pb::ProbeObservationBatch as Message>::decode(payload) else {
+        return (vec![payload.to_vec()], Vec::new());
+    };
+    let (batches, oversize) =
+        split_records(batch.observations, payload_budget("probe_observation"));
+    (
+        batches
+            .into_iter()
+            .map(|observations| pb::ProbeObservationBatch { observations }.encode_to_vec())
+            .collect(),
+        oversize.iter().map(record_cost).collect(),
+    )
+}
+
+/// Enqueue a probe observation batch, splitting it to the wire cap first.
+///
+/// The flusher re-queues the whole batch when this returns an error, so a record
+/// journaled as too large must not also be reported as a failure: only a failed
+/// enqueue of the batches that fit is an error, and those are the ones worth
+/// retrying.
+async fn enqueue_observations(
+    payload: Vec<u8>,
+    window: i64,
+    complete: bool,
+) -> anyhow::Result<()> {
+    let (batches, oversize) = split_observation_payload(&payload);
+    for bytes in oversize {
+        journal_oversize("probe_observation", bytes).await?;
+    }
+    let spool = queue("probe_observation")?;
+    let at = crate::utils::time::now_timestamp();
+    for payload in batches {
+        let spool = spool.clone();
+        tokio::task::spawn_blocking(move || {
+            spool.append("probe_observation", payload, window, complete, at)
+        })
+        .await??;
+    }
+    Ok(())
+}
+
 pub async fn enqueue_prepared(batch: pb::TelemetryBatch) -> anyhow::Result<()> {
     let spool = queue(&batch.kind)?;
     tokio::task::spawn_blocking(move || spool.append_prepared(batch)).await??;
@@ -792,15 +1316,28 @@ pub fn load_state(key: &str) -> anyhow::Result<Option<Vec<u8>>> {
 }
 pub fn snapshot() -> serde_json::Value {
     match QUEUES.get() {
-        Some(q) => serde_json::json!({
-            "core": q.core.snapshot(),
-            "detail": q.detail.snapshot(),
-            "gapStart": GAP_START.load(Ordering::Relaxed),
-            "gapEnd": GAP_END.load(Ordering::Relaxed),
-            "gapHasCore": GAP_CORE.load(Ordering::Relaxed) != 0,
-        }),
+        Some(q) => snapshot_of(&q.core, &q.detail),
         None => serde_json::json!({"status": "unavailable"}),
     }
+}
+
+/// The telemetry block of the node status: both lanes' own snapshots plus the
+/// process-wide gap state. Split out of [`snapshot`] so the shape can be
+/// asserted without a live spool pair.
+fn snapshot_of(core: &Spool, detail: &Spool) -> serde_json::Value {
+    serde_json::json!({
+        "core": core.snapshot(),
+        "detail": detail.snapshot(),
+        "gapStart": GAP_START.load(Ordering::Relaxed),
+        "gapEnd": GAP_END.load(Ordering::Relaxed),
+        "gapHasCore": GAP_CORE.load(Ordering::Relaxed) != 0,
+        // P1-2: why the last gap happened, and how many single records were too
+        // large to ever be batched. The counters are per lane and summed here
+        // for the node view.
+        "lastGapReason": last_gap_reason(),
+        "oversizeDroppedObservations": core.oversize_dropped.load(Ordering::Relaxed)
+            + detail.oversize_dropped.load(Ordering::Relaxed),
+    })
 }
 type Upload = (
     String,
@@ -808,9 +1345,223 @@ type Upload = (
     tokio::task::JoinHandle<anyhow::Result<pb::TelemetryReceipt>>,
 );
 
-async fn settle_uploads(spool: Arc<Spool>, uploads: Vec<Upload>) -> (usize, Option<anyhow::Error>) {
+/// P0-2 — how an upload result must be treated.
+///
+/// The classification is the difference between "retry and keep the payload"
+/// and "this batch will never be accepted, drop it with a durable audit".
+/// Retrying a terminal rejection forever is what turns one poisoned batch into a
+/// frozen lane: the head never advances, every later batch is re-sent in vain,
+/// and the spool grows until the disk fills. Destroying data the API never
+/// refused is the opposite failure and just as bad, so the rules are:
+///
+/// * The stable `zelvik-error` code wins over the gRPC category, because the
+///   category is only a bucket while the code is the API's statement about this
+///   batch.
+/// * Without a stable code, only an unambiguous payload refusal drops data.
+/// * Anything an authorization decision can reverse keeps the queue: credentials
+///   and instance authorizations are re-issued, and the batches already on disk
+///   are still the node's to deliver once they are.
+///
+/// | signal | class | why |
+/// | --- | --- | --- |
+/// | `zelvik-error: telemetry.assignment_before_first` | Terminal | data older than the node's first assignment; nobody can accept it |
+/// | `zelvik-error: control.batch_too_large` | Terminal | resending these bytes cannot shrink them |
+/// | `zelvik-error: control.rate_limited` | Retryable | the API was busy, not unwilling |
+/// | `zelvik-error: control.credential_*` / `control.instance_*` | Retryable | a revocable authorization must not cost the queue |
+/// | `zelvik-retryable: false` (other codes) | Terminal | the server stated the class for a code we do not special-case |
+/// | `InvalidArgument` | Terminal | the payload violates the schema; resending cannot fix it |
+/// | `AlreadyExists` | Terminal | the batch identity is already taken by other content |
+/// | `OutOfRange` | Terminal | a field is outside the accepted range |
+/// | `Unimplemented` | Terminal | the API does not serve this kind |
+/// | `ResourceExhausted` + a size message | Terminal | a size refusal is permanent for these bytes |
+/// | `ResourceExhausted` otherwise | Retryable | a plain resource shortage is the server's problem |
+/// | `FailedPrecondition` without the stable code | Retryable | the same category also means "not ready yet" |
+/// | `PermissionDenied`, `Unauthenticated` | Retryable | assignment and credential checks are revocable |
+/// | `Unavailable`, `DeadlineExceeded`, `Internal`, `Unknown`, `Aborted`, `Cancelled` | Retryable | transport or server fault, unrelated to the payload |
+/// | *(client 30 s timeout — no status at all)* | Retryable | no answer is not a rejection |
+/// | *(malformed receipt, spool error, task panic)* | Retryable | nothing proves the API refused the payload |
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum UploadClass {
+    Retryable,
+    Terminal(TerminalReason),
+}
+
+/// The stable code the API uses for a batch older than this node's first
+/// telemetry assignment. The code travels in the `zelvik-error` trailer, which
+/// is what makes the rejection attributable; the gRPC category alone is not.
+const ERROR_ASSIGNMENT_BEFORE_FIRST: &str = "telemetry.assignment_before_first";
+
+/// Why a batch was rejected for good. Each reason maps to the gap reason the
+/// loss record carries, so a dropped batch is attributable from the status alone.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TerminalReason {
+    /// The batch predates this node's first telemetry assignment.
+    PreAssignment,
+    InvalidArgument,
+    AlreadyExists,
+    OutOfRange,
+    Unimplemented,
+    ResourceExhausted,
+    /// The server said `zelvik-retryable: false` without a code we know.
+    ServerRejected,
+}
+
+impl TerminalReason {
+    /// The gap reason recorded for a quarantined batch.
+    fn gap_reason(self) -> &'static str {
+        match self {
+            Self::PreAssignment => "unattributed_pre_assignment",
+            Self::InvalidArgument => "terminal_invalid_argument",
+            Self::AlreadyExists => "terminal_already_exists",
+            Self::OutOfRange => "terminal_out_of_range",
+            Self::Unimplemented => "terminal_unimplemented",
+            Self::ResourceExhausted => "terminal_resource_exhausted",
+            Self::ServerRejected => "terminal_server_rejected",
+        }
+    }
+}
+
+/// Read one trailer from a status, if the API sent it.
+fn trailer<'a>(status: &'a tonic::Status, key: &str) -> Option<&'a str> {
+    status.metadata().get(key).and_then(|value| value.to_str().ok())
+}
+
+/// Codes whose refusal is an authorization decision that a later credential or
+/// assignment push can reverse.
+fn is_authorization_code(code: &str) -> bool {
+    [
+        ControlCode::CredentialMissing,
+        ControlCode::CredentialInvalid,
+        ControlCode::CredentialExpired,
+        ControlCode::InstanceUnknown,
+        ControlCode::InstanceSuspended,
+        ControlCode::InstanceRevoked,
+    ]
+    .iter()
+    .any(|candidate| candidate.as_str() == code)
+}
+
+/// True when a `ResourceExhausted` message names a size, which makes the refusal
+/// about these bytes rather than about the server's spare capacity.
+fn is_size_refusal(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+    ["size", "too large", "exceeds", "byte limit"]
+        .iter()
+        .any(|marker| message.contains(marker))
+}
+
+/// The classification table above, as code.
+fn classify_status(status: &tonic::Status) -> UploadClass {
+    let code = trailer(status, TRAILER_ERROR);
+    if code == Some(ERROR_ASSIGNMENT_BEFORE_FIRST) {
+        return UploadClass::Terminal(TerminalReason::PreAssignment);
+    }
+    if code.is_some_and(is_authorization_code) {
+        // Revoked and expired credentials are re-issued, and an instance
+        // authorization can be restored. The batches already on disk are still
+        // the node's to deliver, so a revocable refusal never drops them —
+        // even when the server marks it non-retryable.
+        return UploadClass::Retryable;
+    }
+    if code == Some(ControlCode::BatchTooLarge.as_str()) {
+        // The protocol marks `control.batch_too_large` retryable, meaning
+        // "retry with a smaller batch"; this batch's bytes can never shrink.
+        return UploadClass::Terminal(TerminalReason::ResourceExhausted);
+    }
+    if code == Some(ControlCode::RateLimited.as_str()) {
+        return UploadClass::Retryable;
+    }
+    if let Some(retryable) = trailer(status, TRAILER_RETRYABLE) {
+        // The server stated the class for a code we do not special-case.
+        return if retryable == "false" {
+            UploadClass::Terminal(TerminalReason::ServerRejected)
+        } else {
+            UploadClass::Retryable
+        };
+    }
+    match status.code() {
+        tonic::Code::Unavailable
+        | tonic::Code::DeadlineExceeded
+        | tonic::Code::Internal
+        | tonic::Code::Unknown
+        | tonic::Code::Aborted
+        | tonic::Code::Cancelled => UploadClass::Retryable,
+        // The API's own payload checks, which carry no stable code: the batch
+        // violates the schema, so resending it repeats the refusal.
+        tonic::Code::InvalidArgument => UploadClass::Terminal(TerminalReason::InvalidArgument),
+        tonic::Code::AlreadyExists => UploadClass::Terminal(TerminalReason::AlreadyExists),
+        tonic::Code::OutOfRange => UploadClass::Terminal(TerminalReason::OutOfRange),
+        tonic::Code::Unimplemented => UploadClass::Terminal(TerminalReason::Unimplemented),
+        // A size refusal is permanent for these bytes; a plain resource shortage
+        // is the server's, not the batch's.
+        tonic::Code::ResourceExhausted => {
+            if is_size_refusal(status.message()) {
+                UploadClass::Terminal(TerminalReason::ResourceExhausted)
+            } else {
+                UploadClass::Retryable
+            }
+        }
+        // Assignment and route checks arrive as `PermissionDenied`, but the
+        // credential behind them is revocable and may be re-issued, so the queue
+        // is kept rather than destroyed. `FailedPrecondition` without the stable
+        // code is "not ready yet" for the same reason.
+        _ => UploadClass::Retryable,
+    }
+}
+
+/// Classify a failed upload. Only a status the API chose may drop data: the
+/// 30 s client timeout, a cancelled task, a malformed receipt and a spool error
+/// all arrive as plain `anyhow` errors and stay retryable.
+fn classify_upload_failure(error: &anyhow::Error) -> UploadClass {
+    match error.downcast_ref::<tonic::Status>() {
+        Some(status) => classify_status(status),
+        None => UploadClass::Retryable,
+    }
+}
+
+/// What the replay loop must do after a window was settled.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WindowAction {
+    /// The window made progress — confirmations, or a quarantined head that
+    /// unblocked the lane: take the next window immediately.
+    Continue,
+    /// Part of the window landed: the rejected batches stay for the next pass.
+    Pause,
+    /// Nothing landed: exponential backoff.
+    Backoff,
+}
+
+struct WindowOutcome {
+    confirmed: usize,
+    /// First failure in sequence order, with its class, for logging and backoff.
+    failure: Option<(UploadClass, anyhow::Error)>,
+    /// Sequence of the head batch quarantined in this window, if any.
+    quarantined: Option<u64>,
+}
+
+impl WindowOutcome {
+    fn action(&self) -> WindowAction {
+        if self.quarantined.is_some() || self.failure.is_none() {
+            WindowAction::Continue
+        } else if self.confirmed > 0 {
+            WindowAction::Pause
+        } else {
+            WindowAction::Backoff
+        }
+    }
+}
+
+/// Upload a prefetched window, acknowledge every receipt, and quarantine the
+/// head when the API rejected it permanently.
+///
+/// A terminal failure only ever removes the *head*: the head is the batch that
+/// blocks the lane, and a batch that failed behind it may still be accepted
+/// once it is the head. Anything that is not the head keeps its payload and its
+/// place, so this can never discard data the API did not explicitly refuse.
+async fn upload_window(spool: Arc<Spool>, uploads: Vec<Upload>) -> WindowOutcome {
     let mut confirmed = 0;
-    let mut failure = None;
+    let mut failure: Option<(UploadClass, anyhow::Error)> = None;
+    let mut rejected_head: Option<(u64, &'static str, String)> = None;
     for (batch_id, sequence, handle) in uploads {
         let result = async {
             let receipt = handle.await??;
@@ -826,14 +1577,48 @@ async fn settle_uploads(spool: Arc<Spool>, uploads: Vec<Upload>) -> (usize, Opti
         match result {
             Ok(()) => confirmed += 1,
             Err(err) => {
-                warn!(%batch_id, sequence, error=%err, "telemetry upload remains unconfirmed");
+                let class = classify_upload_failure(&err);
+                spool.note_failure(class);
+                warn!(%batch_id, sequence, class=?class, error=%err, "telemetry upload remains unconfirmed");
+                if rejected_head.is_none()
+                    && let UploadClass::Terminal(reason) = class
+                {
+                    // Uploads are in sequence order, so the first terminal
+                    // failure is the lowest one: the only quarantine candidate.
+                    // The API's own message is kept with the durable audit.
+                    rejected_head = Some((sequence, reason.gap_reason(), err.to_string()));
+                }
                 if failure.is_none() {
-                    failure = Some(err);
+                    failure = Some((class, err));
                 }
             }
         }
     }
-    (confirmed, failure)
+    let mut quarantined = None;
+    if let Some((sequence, reason, error)) = rejected_head {
+        let head = spool.clone();
+        let removed =
+            tokio::task::spawn_blocking(move || head.quarantine_head(sequence, reason, &error))
+                .await
+                .map_err(anyhow::Error::from)
+                .and_then(|result| result);
+        match removed {
+            Ok(true) => quarantined = Some(sequence),
+            // Not the head any more: it was confirmed meanwhile, so there is
+            // nothing to drop.
+            Ok(false) => {}
+            Err(err) => {
+                if failure.is_none() {
+                    failure = Some((UploadClass::Retryable, err));
+                }
+            }
+        }
+    }
+    WindowOutcome {
+        confirmed,
+        failure,
+        quarantined,
+    }
 }
 
 pub async fn replay(api: ApiConfig, core: bool) {
@@ -905,21 +1690,48 @@ pub async fn replay(api: ApiConfig, core: bool) {
             });
             uploads.push((batch_id, sequence, handle));
         }
-        let (confirmed, failure) = settle_uploads(spool.clone(), uploads).await;
+        let outcome = upload_window(spool.clone(), uploads).await;
         cursor = next_cursor;
-        if let Some(err) = failure {
-            // A poison head must not impose minute-long retries on healthy
-            // observations. Errors remain visible and their payloads retained.
-            if confirmed > 0 {
+        if let Some(sequence) = outcome.quarantined {
+            // P0-3: a permanently rejected head was dropped with an auditable
+            // gap, so the batches behind it keep flowing in this same pass
+            // instead of waiting out a backoff they did not cause.
+            warn!(
+                core,
+                sequence,
+                confirmed = outcome.confirmed,
+                "telemetry head batch quarantined; gap recorded and the lane continues"
+            );
+        }
+        match outcome.action() {
+            // Progress: a poisoned head is gone, or everything landed.
+            WindowAction::Continue => failures = 0,
+            WindowAction::Pause => {
+                // A poison head must not impose minute-long retries on healthy
+                // observations. Errors remain visible and their payloads retained.
+                let confirmed = outcome.confirmed;
+                let error = outcome
+                    .failure
+                    .as_ref()
+                    .map(|(_, err)| err.to_string())
+                    .unwrap_or_default();
                 LAST_FAILURE.store(crate::utils::time::now_timestamp(), Ordering::Relaxed);
-                warn!(core, confirmed, error=%err, "telemetry replay partially confirmed; rejected batches retained");
+                warn!(
+                    core,
+                    confirmed,
+                    error,
+                    "telemetry replay partially confirmed; rejected batches retained"
+                );
                 failures = failures.saturating_add(1);
                 tokio::time::sleep(Duration::from_secs(1)).await;
-            } else {
+            }
+            WindowAction::Backoff => {
+                let err = outcome
+                    .failure
+                    .map(|(_, err)| err)
+                    .unwrap_or_else(|| anyhow::anyhow!("telemetry upload window failed"));
                 backoff(core, &mut failures, err).await;
             }
-        } else {
-            failures = 0;
         }
     }
 }
@@ -936,6 +1748,106 @@ async fn backoff(core: bool, failures: &mut u32, err: anyhow::Error) {
     *failures = n;
     tokio::time::sleep(Duration::from_secs((1u64 << n.min(6)).min(60))).await;
 }
+/// P0-4 — encoded-size ceiling for one telemetry batch.
+///
+/// The wire carries the *serialized* `TelemetryBatch`, envelope included, so the
+/// cap applies to the whole message and every producer must keep its payload
+/// inside [`payload_budget`]. `RPC_NODE_STREAM_MESSAGE_BYTES` is 8 MiB, and the
+/// API's own payload field allows 48 MiB, but the smallest of those limits is
+/// the one that decides; a quarter of the message budget stays free for the gRPC
+/// frame prefix, the credential interceptor and any envelope the API adds around
+/// the batch. Compressing a too-large batch would hide the problem rather than
+/// fix it, so the cap is measured on the uncompressed serialization.
+const MAX_BATCH_ENCODED_BYTES: usize = RPC_NODE_STREAM_MESSAGE_BYTES / 4 * 3;
+/// The payload field's own cost inside a `TelemetryBatch`: the field tag plus a
+/// length varint, which is at most five bytes for a payload under 2^32.
+const PAYLOAD_FIELD_OVERHEAD: usize = 1 + 5;
+/// Gap reason for a single record too large to fit in any batch.
+const OVERSIZE_REASON: &str = "observation_over_batch_cap";
+
+/// What one record costs inside a length-delimited repeated field: the field
+/// tag, the payload's length prefix and the payload — exactly its contribution
+/// to the request's serialized size, and it allocates nothing (`encoded_len`
+/// walks the message, it does not encode it).
+fn record_cost<M: Message>(record: &M) -> usize {
+    prost::encoding::message::encoded_len(1, record)
+}
+
+/// Budget one producer's payload may use so that the batch carrying it stays
+/// under [`MAX_BATCH_ENCODED_BYTES`] once serialized *with its envelope*.
+///
+/// The envelope is measured, not guessed: `encoded_len` walks the message
+/// without encoding it, and the boot id, kind and binding versions are the ones
+/// this process would actually write. The two fields the envelope does not have
+/// yet — the sequence and the batch id — are measured at their worst case, and
+/// the empty payload field is not counted by `encoded_len` at all, which is why
+/// [`PAYLOAD_FIELD_OVERHEAD`] is added back.
+fn payload_budget(kind: &str) -> usize {
+    let binding = binding();
+    let envelope = pb::TelemetryBatch {
+        schema_version: 1,
+        batch_id: format!("{}:{:020}", "0".repeat(36), u64::MAX),
+        boot_id: "0".repeat(36),
+        sequence: u64::MAX,
+        kind: kind.into(),
+        occurred_at: i64::MIN,
+        window_start: i64::MIN,
+        source_boot_id: "0".repeat(36),
+        assignment_version: binding.assignment_version,
+        route_version: binding.route_version,
+        ..Default::default()
+    };
+    MAX_BATCH_ENCODED_BYTES
+        .saturating_sub(envelope.encoded_len())
+        .saturating_sub(PAYLOAD_FIELD_OVERHEAD)
+}
+
+/// Split a producer's pending records into batches whose payload stays inside
+/// `budget` — the per-kind budget from [`payload_budget`], which already leaves
+/// room for the envelope.
+///
+/// The count caps (512 access logs, 128 node logs) remain an upper bound on a
+/// batch; this cap is what keeps a batch of *large* records — a fat `paramsJSON`,
+/// a long log line — below the RPC message limit. Records that do not fit in a
+/// batch by themselves are returned separately: the caller journals each one
+/// through the loss path, so a single giant record can neither fail nor block
+/// the records that arrived with it.
+fn split_records<M: Message>(records: Vec<M>, budget: usize) -> (Vec<Vec<M>>, Vec<M>) {
+    let mut batches = Vec::new();
+    let mut current: Vec<M> = Vec::new();
+    let mut used = 0usize;
+    let mut oversize = Vec::new();
+    for record in records {
+        let cost = record_cost(&record);
+        if cost > budget {
+            oversize.push(record);
+            continue;
+        }
+        if used + cost > budget && !current.is_empty() {
+            batches.push(std::mem::take(&mut current));
+            used = 0;
+        }
+        used += cost;
+        current.push(record);
+    }
+    if !current.is_empty() {
+        batches.push(current);
+    }
+    (batches, oversize)
+}
+
+/// Journal the loss of one record that cannot fit in any batch.
+///
+/// The journal entry and the gap marker that reports it are durable, so an
+/// oversized record is neither an empty batch nor a bare error: it is a loss
+/// with a reason and a size, counted on the lane that produced it.
+async fn journal_oversize(kind: &str, encoded_bytes: usize) -> anyhow::Result<()> {
+    let spool = queue(kind)?;
+    let kind = kind.to_owned();
+    tokio::task::spawn_blocking(move || spool.journal_oversize(&kind, encoded_bytes)).await??;
+    Ok(())
+}
+
 pub async fn access_logs(mut rx: tokio::sync::mpsc::Receiver<pb::HttpAccessLog>) {
     let mut buffer = Vec::new();
     let mut tick = tokio::time::interval(Duration::from_secs(1));
@@ -964,15 +1876,23 @@ pub async fn access_logs(mut rx: tokio::sync::mpsc::Receiver<pb::HttpAccessLog>)
     }
 }
 async fn persist_access(buffer: &mut Vec<pb::HttpAccessLog>) {
-    let request = pb::CreateHttpAccessLogsRequest {
-        http_access_logs: std::mem::take(buffer),
-    };
-    if let Err(e) = enqueue("access_log", &request, 0, false).await {
-        record_gap(
-            "access_log",
-            crate::utils::time::now_timestamp(),
-            &e.to_string(),
-        );
+    let (batches, oversize) = split_records(std::mem::take(buffer), payload_budget("access_log"));
+    for log in &oversize {
+        // A record too large for any batch is a loss; journal it durably rather
+        // than failing the batch around it or emitting an empty one.
+        if let Err(e) = journal_oversize("access_log", record_cost(log)).await {
+            error!(error=%e, "telemetry oversize loss journal write failed");
+        }
+    }
+    for http_access_logs in batches {
+        let request = pb::CreateHttpAccessLogsRequest { http_access_logs };
+        if let Err(e) = enqueue("access_log", &request, 0, false).await {
+            record_gap(
+                "access_log",
+                crate::utils::time::now_timestamp(),
+                &e.to_string(),
+            );
+        }
     }
 }
 pub async fn node_logs(mut rx: tokio::sync::mpsc::Receiver<pb::NodeLog>) {
@@ -998,15 +1918,23 @@ pub async fn node_logs(mut rx: tokio::sync::mpsc::Receiver<pb::NodeLog>) {
     }
 }
 async fn persist_node_logs(buffer: &mut Vec<pb::NodeLog>) {
-    let request = pb::CreateNodeLogsRequest {
-        node_logs: std::mem::take(buffer),
-    };
-    if let Err(e) = enqueue("node_log", &request, 0, false).await {
-        record_gap(
-            "node_log",
-            crate::utils::time::now_timestamp(),
-            &e.to_string(),
-        );
+    let (batches, oversize) = split_records(std::mem::take(buffer), payload_budget("node_log"));
+    for log in &oversize {
+        // A record too large for any batch is a loss; journal it durably rather
+        // than failing the batch around it or emitting an empty one.
+        if let Err(e) = journal_oversize("node_log", record_cost(log)).await {
+            error!(error=%e, "telemetry oversize loss journal write failed");
+        }
+    }
+    for node_logs in batches {
+        let request = pb::CreateNodeLogsRequest { node_logs };
+        if let Err(e) = enqueue("node_log", &request, 0, false).await {
+            record_gap(
+                "node_log",
+                crate::utils::time::now_timestamp(),
+                &e.to_string(),
+            );
+        }
     }
 }
 
@@ -1111,13 +2039,781 @@ mod tests {
             })),
             (second.batch_id, second.sequence, tokio::spawn(async { Ok(good) })),
         ];
-        let (confirmed, failure) = settle_uploads(spool.clone(), uploads).await;
-        assert_eq!(confirmed, 1);
-        assert!(failure.unwrap().to_string().contains("assignment unavailable"));
+        let outcome = upload_window(spool.clone(), uploads).await;
+        assert_eq!(outcome.confirmed, 1);
+        assert!(outcome.quarantined.is_none());
+        assert!(
+            outcome
+                .failure
+                .as_ref()
+                .unwrap()
+                .1
+                .to_string()
+                .contains("assignment unavailable")
+        );
         assert_eq!(spool.front().unwrap().unwrap().batch_id, first.batch_id);
         assert_eq!(spool.snapshot()["pendingBatches"], 1);
         drop(spool);
         std::fs::remove_dir_all(path).unwrap();
+    }
+
+    /// Build a status the way the API sends one: a gRPC category plus the
+    /// stable `zelvik-error` / `zelvik-retryable` trailers.
+    fn status_with(
+        code: tonic::Code,
+        message: &str,
+        trailers: &[(&'static str, &str)],
+    ) -> tonic::Status {
+        let mut metadata = tonic::metadata::MetadataMap::new();
+        for (key, value) in trailers {
+            metadata.insert(*key, value.parse().unwrap());
+        }
+        tonic::Status::with_metadata(code, message, metadata)
+    }
+
+    /// P0-2: transport and server faults keep their payload.
+    #[test]
+    fn transient_statuses_are_retryable() {
+        use tonic::Code;
+        for code in [
+            Code::Unavailable,
+            Code::DeadlineExceeded,
+            Code::Internal,
+            Code::Unknown,
+            Code::Aborted,
+            Code::Cancelled,
+        ] {
+            assert_eq!(
+                classify_status(&status_with(code, "", &[])),
+                UploadClass::Retryable,
+                "{code:?} is a transient failure and must be retried"
+            );
+        }
+        // A server fault the API calls permanent is still permanent.
+        assert_eq!(
+            classify_status(&status_with(
+                Code::Internal,
+                "poisoned batch",
+                &[(TRAILER_RETRYABLE, "false")]
+            )),
+            UploadClass::Terminal(TerminalReason::ServerRejected)
+        );
+    }
+
+    /// P0-2: the one permanent `FailedPrecondition` is the one the API marks
+    /// with its stable code. The same category without it means "not ready yet",
+    /// and destroying a queue over that would lose deliverable data.
+    #[test]
+    fn assignment_before_first_is_terminal_only_with_its_stable_code() {
+        use tonic::Code;
+        let marked = status_with(
+            Code::FailedPrecondition,
+            "batch older than the node's first telemetry assignment",
+            &[
+                (TRAILER_ERROR, ERROR_ASSIGNMENT_BEFORE_FIRST),
+                (TRAILER_RETRYABLE, "false"),
+            ],
+        );
+        assert_eq!(
+            classify_status(&marked),
+            UploadClass::Terminal(TerminalReason::PreAssignment)
+        );
+        assert_eq!(
+            TerminalReason::PreAssignment.gap_reason(),
+            "unattributed_pre_assignment"
+        );
+        assert_eq!(
+            classify_status(&status_with(
+                Code::FailedPrecondition,
+                "assignment not loaded yet",
+                &[]
+            )),
+            UploadClass::Retryable
+        );
+        assert_eq!(
+            classify_status(&status_with(
+                Code::FailedPrecondition,
+                "assignment not loaded yet",
+                &[(TRAILER_RETRYABLE, "true")]
+            )),
+            UploadClass::Retryable
+        );
+    }
+
+    /// P0-2: an authorization decision is revocable, so it never costs the
+    /// queue — not even when the server marks it non-retryable.
+    #[test]
+    fn authorization_failures_keep_the_queue() {
+        use tonic::Code;
+        for code in [
+            ControlCode::CredentialMissing,
+            ControlCode::CredentialInvalid,
+            ControlCode::CredentialExpired,
+            ControlCode::InstanceUnknown,
+            ControlCode::InstanceSuspended,
+            ControlCode::InstanceRevoked,
+        ] {
+            let status = status_with(
+                code.grpc_code(),
+                code.template(),
+                &[(TRAILER_ERROR, code.as_str()), (TRAILER_RETRYABLE, "false")],
+            );
+            assert_eq!(
+                classify_status(&status),
+                UploadClass::Retryable,
+                "{code:?} must not destroy the queue: the credential can rotate"
+            );
+        }
+        // The transport credential, and the API's own assignment/route checks
+        // (which carry no stable code), are revocable too.
+        assert_eq!(
+            classify_status(&status_with(Code::Unauthenticated, "credential missing", &[])),
+            UploadClass::Retryable
+        );
+        assert_eq!(
+            classify_status(&status_with(
+                Code::PermissionDenied,
+                "invalid telemetry assignment",
+                &[]
+            )),
+            UploadClass::Retryable
+        );
+    }
+
+    /// P0-2: `ResourceExhausted` is two different failures. A size refusal is
+    /// permanent for these bytes; a rate limit is not.
+    #[test]
+    fn size_refusals_are_terminal_and_rate_limits_are_not() {
+        use tonic::Code;
+        let too_large = status_with(
+            Code::ResourceExhausted,
+            "batch exceeds 6291456 bytes",
+            &[
+                (TRAILER_ERROR, ControlCode::BatchTooLarge.as_str()),
+                (TRAILER_RETRYABLE, "true"),
+            ],
+        );
+        assert_eq!(
+            classify_status(&too_large),
+            UploadClass::Terminal(TerminalReason::ResourceExhausted),
+            "resending the same bytes cannot shrink them"
+        );
+        let limited = status_with(
+            Code::ResourceExhausted,
+            "instance rate limit exceeded",
+            &[
+                (TRAILER_ERROR, ControlCode::RateLimited.as_str()),
+                (TRAILER_RETRYABLE, "true"),
+            ],
+        );
+        assert_eq!(classify_status(&limited), UploadClass::Retryable);
+        // Without a code, a message that names a size is still a size refusal...
+        assert_eq!(
+            classify_status(&status_with(
+                Code::ResourceExhausted,
+                "message size exceeds the limit",
+                &[]
+            )),
+            UploadClass::Terminal(TerminalReason::ResourceExhausted)
+        );
+        // ...while a plain resource shortage is the server's problem.
+        assert_eq!(
+            classify_status(&status_with(Code::ResourceExhausted, "backend overloaded", &[])),
+            UploadClass::Retryable
+        );
+    }
+
+    /// P0-2: payload refusals with no stable code are terminal, because
+    /// resending the same bytes repeats them.
+    #[test]
+    fn payload_refusals_are_terminal() {
+        use tonic::Code;
+        for (code, reason) in [
+            (Code::InvalidArgument, TerminalReason::InvalidArgument),
+            (Code::AlreadyExists, TerminalReason::AlreadyExists),
+            (Code::OutOfRange, TerminalReason::OutOfRange),
+            (Code::Unimplemented, TerminalReason::Unimplemented),
+        ] {
+            assert_eq!(
+                classify_status(&status_with(code, "refused", &[])),
+                UploadClass::Terminal(reason),
+                "{code:?} is a permanent rejection and must be quarantined"
+            );
+        }
+        // Errors that are not a status at all never drop data.
+        assert_eq!(
+            classify_upload_failure(&anyhow::anyhow!("telemetry spool: not found")),
+            UploadClass::Retryable
+        );
+    }
+
+    /// P0-2: the 30 s client timeout is not a rejection, so it stays retryable.
+    #[tokio::test]
+    async fn client_timeout_is_retryable_not_terminal() {
+        let elapsed = tokio::time::timeout(Duration::from_millis(1), std::future::pending::<()>())
+            .await
+            .expect_err("the deadline must fire");
+        let err = anyhow::Error::from(elapsed);
+        assert!(
+            err.downcast_ref::<tonic::Status>().is_none(),
+            "a client timeout carries no gRPC status"
+        );
+        assert_eq!(classify_upload_failure(&err), UploadClass::Retryable);
+    }
+
+    /// P0-3: a permanently rejected head is quarantined with a durable audit,
+    /// and the healthy batches behind it still upload in the same pass.
+    #[tokio::test]
+    async fn terminal_head_is_quarantined_and_later_batches_still_upload() {
+        let (spool, path) = spool_with_disk(false, MIB, GIB, GIB);
+        let spool = Arc::new(spool);
+        for at in [100, 200, 300, 400] {
+            spool
+                .append("access_log", vec![at as u8], 0, false, at)
+                .unwrap();
+        }
+        let batches: Vec<pb::TelemetryBatch> =
+            (0..4).map(|i| spool.at(i).unwrap().unwrap()).collect();
+        let mut uploads = Vec::new();
+        for (index, batch) in batches.iter().enumerate() {
+            let handle = if index == 0 {
+                let status = status_with(
+                    tonic::Code::FailedPrecondition,
+                    "batch older than the node's first telemetry assignment",
+                    &[
+                        (TRAILER_ERROR, ERROR_ASSIGNMENT_BEFORE_FIRST),
+                        (TRAILER_RETRYABLE, "false"),
+                    ],
+                );
+                tokio::spawn(async move { Err(anyhow::Error::from(status)) })
+            } else {
+                let receipt = receipt_for(batch);
+                tokio::spawn(async move { Ok(receipt) })
+            };
+            uploads.push((batch.batch_id.clone(), batch.sequence, handle));
+        }
+        let outcome = upload_window(spool.clone(), uploads).await;
+        assert_eq!(
+            outcome.confirmed, 3,
+            "the three healthy batches behind the rejected head must upload"
+        );
+        assert_eq!(outcome.quarantined, Some(batches[0].sequence));
+        assert_eq!(outcome.action(), WindowAction::Continue);
+        // The quarantined batch is gone and the head moved past it; the three
+        // healthy batches were acknowledged ahead of the new head (they were
+        // uploaded while the rejected batch was still the head), and the gap
+        // marker reporting the loss is queued behind them.
+        let snapshot = spool.snapshot();
+        assert_eq!(snapshot["head"], batches[0].sequence + 1);
+        assert_eq!(snapshot["tail"], batches[0].sequence + 5);
+        assert_eq!(snapshot["ackedAhead"], 3);
+        assert_eq!(snapshot["pendingBatches"], 1);
+        // The loss is auditable: counted, reasoned, and journaled in full.
+        assert_eq!(snapshot["quarantinedBatches"], 1);
+        assert_eq!(
+            snapshot["lastQuarantineReason"],
+            "unattributed_pre_assignment"
+        );
+        assert_eq!(snapshot["terminalFailures"], 1);
+        assert_eq!(snapshot["retryableFailures"], 0);
+        assert_eq!(snapshot["journaledLosses"], 1);
+        let loss = spool.loss_record(0).unwrap().expect("the loss is journaled");
+        assert_eq!(loss.batch_id, batches[0].batch_id);
+        assert_eq!(loss.sequence, batches[0].sequence);
+        assert_eq!(loss.lane, "detail");
+        assert_eq!(loss.kind, "access_log");
+        assert_eq!(loss.event_time, 100);
+        assert_eq!(loss.reason, "unattributed_pre_assignment");
+        assert!(loss.error.contains("first telemetry assignment"));
+        assert!(loss.metadata.starts_with("retainedBytes="));
+        assert!(!loss.delivery_failed);
+        // The marker that carries it is a real queued batch of this lane.
+        let marker = spool.at(0).unwrap().expect("the gap marker is queued");
+        assert_eq!(marker.sequence, loss.gap_sequence);
+        assert_eq!(marker.kind, "gap");
+        assert!(marker.has_gap);
+        assert_eq!(marker.gap_kind, "access_log");
+        assert_eq!(marker.gap_reason, "unattributed_pre_assignment");
+        // Only a real receipt marks the audit delivered.
+        assert!(spool.loss_record(0).unwrap().is_some());
+        spool.acknowledge(&receipt_for(&marker)).unwrap();
+        assert!(
+            spool.loss_record(0).unwrap().is_none(),
+            "a durable receipt marks the loss delivered"
+        );
+        assert_eq!(spool.collapse_confirmed(256).unwrap(), 4);
+        assert_eq!(spool.snapshot()["head"], batches[0].sequence + 5);
+        assert_eq!(spool.snapshot()["ackedAhead"], 0);
+        assert_eq!(spool.snapshot()["retainedBytes"], 0);
+        assert_eq!(spool.budget.counter.used(), 0);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    /// P0-3: the payload removal, the head advance, the counters, the gap
+    /// bounds, the loss record and the marker that reports it are one commit.
+    /// A crash after that commit leaves a queue with no payload and a complete
+    /// audit, and a reopen restores both.
+    #[test]
+    fn quarantine_is_atomic_and_survives_reopen() {
+        let (spool, path) = spool_with_disk(false, MIB, GIB, GIB);
+        for at in [100, 200] {
+            spool.append("access_log", vec![at as u8], 0, false, at).unwrap();
+        }
+        let head = spool.at(0).unwrap().unwrap();
+        assert!(
+            spool
+                .quarantine_head(
+                    head.sequence,
+                    TerminalReason::InvalidArgument.gap_reason(),
+                    "invalid telemetry envelope"
+                )
+                .unwrap()
+        );
+        // Everything the transaction wrote is visible at once: the head moved,
+        // the payload is gone, and the audit exists.
+        let snapshot = spool.snapshot();
+        assert_eq!(snapshot["head"], head.sequence + 1);
+        assert_eq!(snapshot["tail"], head.sequence + 3);
+        assert_eq!(snapshot["pendingBatches"], 2);
+        assert_eq!(snapshot["quarantinedBatches"], 1);
+        assert_eq!(snapshot["lastQuarantineReason"], "terminal_invalid_argument");
+        assert_eq!(snapshot["journaledLosses"], 1);
+        assert_eq!(spool.gap_bounds(), (100, 100, false));
+        let loss = spool.loss_record(0).unwrap().expect("the loss is journaled");
+        assert_eq!(loss.batch_id, head.batch_id);
+        assert_eq!(loss.sequence, head.sequence);
+        assert_eq!(loss.lane, "detail");
+        assert_eq!(loss.kind, "access_log");
+        assert_eq!(loss.event_time, 100);
+        assert_eq!(loss.reason, "terminal_invalid_argument");
+        assert_eq!(loss.error, "invalid telemetry envelope");
+        assert_eq!(loss.gap_sequence, head.sequence + 2);
+        let used = spool.budget.counter.used();
+        drop(spool);
+
+        // A restart restores the counters, the reason, the bounds, the audit and
+        // the marker: nothing is re-emitted and nothing is forgotten.
+        let spool = Spool::open(&path, false, MIB).unwrap();
+        assert_eq!(spool.snapshot()["head"], head.sequence + 1);
+        assert_eq!(spool.snapshot()["tail"], head.sequence + 3);
+        assert_eq!(spool.snapshot()["quarantinedBatches"], 1);
+        assert_eq!(spool.snapshot()["lastQuarantineReason"], "terminal_invalid_argument");
+        assert_eq!(spool.snapshot()["journaledLosses"], 1);
+        assert_eq!(spool.gap_bounds(), (100, 100, false));
+        assert_eq!(spool.budget.counter.used(), used);
+        let loss = spool.loss_record(0).unwrap().expect("the audit survives the restart");
+        assert_eq!(loss.gap_sequence, head.sequence + 2);
+        assert!(!loss.delivery_failed);
+        // The marker is reachable through the replay path and is the only gap.
+        let (window, _) = spool.replay_window(0).unwrap();
+        let marker = window.iter().find(|batch| batch.has_gap).expect("marker");
+        assert_eq!(marker.sequence, loss.gap_sequence);
+        assert_eq!(
+            window.iter().filter(|batch| batch.has_gap).count(),
+            1,
+            "a restart must not duplicate the marker"
+        );
+        // Only a real receipt marks it delivered.
+        assert!(spool.loss_record(0).unwrap().is_some());
+        let surviving = window
+            .iter()
+            .find(|batch| !batch.has_gap)
+            .expect("the batch behind the loss survives the restart");
+        spool.acknowledge(&receipt_for(surviving)).unwrap();
+        assert!(
+            spool.loss_record(0).unwrap().is_some(),
+            "a receipt for another batch must not mark the loss delivered"
+        );
+        spool.acknowledge(&receipt_for(marker)).unwrap();
+        assert!(spool.loss_record(0).unwrap().is_none());
+        // Both receipts advanced the head in order, so the lane is empty and the
+        // pool holds nothing — not the lost payload, not the marker either.
+        let snapshot = spool.snapshot();
+        assert_eq!(snapshot["head"], snapshot["tail"]);
+        assert_eq!(snapshot["ackedAhead"], 0);
+        assert_eq!(snapshot["pendingBatches"], 0);
+        assert_eq!(snapshot["retainedBytes"], 0);
+        assert_eq!(spool.collapse_confirmed(256).unwrap(), 0);
+        assert_eq!(spool.budget.counter.used(), 0);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    /// P0-3: quarantining anything but the head is a no-op — no payload leaves,
+    /// no audit is written, and the caller is told so.
+    #[test]
+    fn quarantine_of_a_non_head_batch_changes_nothing() {
+        let (spool, path) = spool_with_disk(false, MIB, GIB, GIB);
+        for at in [100, 200] {
+            spool.append("access_log", vec![at as u8], 0, false, at).unwrap();
+        }
+        let before = spool.snapshot();
+        assert!(
+            !spool
+                .quarantine_head(2, TerminalReason::InvalidArgument.gap_reason(), "nope")
+                .unwrap()
+        );
+        assert_eq!(spool.snapshot(), before);
+        assert!(spool.loss_record(0).unwrap().is_none());
+        assert!(spool.front().unwrap().is_some());
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    /// P0-3: a gap marker the API refuses must not generate another marker for
+    /// itself — the audit it carried is marked as a failed delivery instead.
+    #[test]
+    fn refused_gap_marker_does_not_recurse() {
+        let (spool, path) = spool_with_disk(false, MIB, GIB, GIB);
+        spool.append("access_log", vec![1], 0, false, 100).unwrap();
+        let head = spool.at(0).unwrap().unwrap();
+        assert!(
+            spool
+                .quarantine_head(
+                    head.sequence,
+                    TerminalReason::InvalidArgument.gap_reason(),
+                    "invalid telemetry envelope"
+                )
+                .unwrap()
+        );
+        let marker = spool.at(0).unwrap().expect("the marker is queued");
+        assert!(marker.has_gap);
+        let tail_before = spool.snapshot()["tail"].clone();
+        // The API permanently refuses the marker itself.
+        assert!(
+            spool
+                .quarantine_head(
+                    marker.sequence,
+                    TerminalReason::Unimplemented.gap_reason(),
+                    "kind not served"
+                )
+                .unwrap()
+        );
+        assert_eq!(
+            spool.snapshot()["tail"],
+            tail_before,
+            "a refused marker must not spawn another"
+        );
+        assert_eq!(spool.snapshot()["quarantinedBatches"], 2);
+        let carried = spool.loss_record(0).unwrap().expect("the original audit stays");
+        assert!(carried.delivery_failed, "the undeliverable audit is marked");
+        assert_eq!(carried.reason, "terminal_invalid_argument");
+        // The refusal itself is journaled, but without a marker of its own.
+        let refusal = spool.loss_record(1).unwrap().unwrap();
+        assert_eq!(refusal.gap_sequence, 0);
+        assert_eq!(refusal.reason, "terminal_unimplemented");
+        assert!(spool.at(0).unwrap().is_none());
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    /// P0-2: a retryable failure keeps the batch and still backs off.
+    #[tokio::test]
+    async fn retryable_head_failure_backs_off_and_retains_the_batch() {
+        let (spool, path) = spool_with_disk(false, MIB, GIB, GIB);
+        let spool = Arc::new(spool);
+        spool.append("access_log", vec![1], 0, false, 100).unwrap();
+        let head = spool.at(0).unwrap().unwrap();
+        let uploads = vec![(
+            head.batch_id.clone(),
+            head.sequence,
+            tokio::spawn(async {
+                Err(anyhow::Error::from(tonic::Status::unavailable(
+                    "assignment unavailable",
+                )))
+            }),
+        )];
+        let outcome = upload_window(spool.clone(), uploads).await;
+        assert_eq!(outcome.confirmed, 0);
+        assert!(outcome.quarantined.is_none(), "nothing may be dropped");
+        assert_eq!(
+            outcome.failure.as_ref().map(|(class, _)| *class),
+            Some(UploadClass::Retryable)
+        );
+        assert_eq!(outcome.action(), WindowAction::Backoff);
+        // The payload is still there, and the lane still counts it as pending.
+        assert_eq!(spool.front().unwrap().unwrap().batch_id, head.batch_id);
+        let snapshot = spool.snapshot();
+        assert_eq!(snapshot["pendingBatches"], 1);
+        assert_eq!(snapshot["quarantinedBatches"], 0);
+        assert_eq!(snapshot["lastQuarantineReason"], "");
+        assert_eq!(snapshot["retryableFailures"], 1);
+        assert_eq!(snapshot["terminalFailures"], 0);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    /// P0-4: the byte cap splits a batch the count caps would have let through,
+    /// and the cap counts the *serialized* batch, envelope included.
+    #[test]
+    fn byte_cap_splits_batches_under_the_wire_limit() {
+        const {
+            assert!(MAX_BATCH_ENCODED_BYTES < RPC_NODE_STREAM_MESSAGE_BYTES);
+            assert!(
+                RPC_NODE_STREAM_MESSAGE_BYTES - MAX_BATCH_ENCODED_BYTES >= MIB as usize,
+                "the cap must leave a real margin under the RPC message limit"
+            );
+        }
+        let record = |len: usize| pb::NodeLog {
+            description: "x".repeat(len),
+            ..Default::default()
+        };
+        let budget = payload_budget("node_log");
+        assert!(budget < MAX_BATCH_ENCODED_BYTES, "the envelope costs something");
+        let cost = record_cost(&record(MIB as usize));
+        assert!((MIB as usize..2 * MIB as usize).contains(&cost));
+        let per_batch = budget / cost;
+        assert!(per_batch > 1, "the case needs more than one record per batch");
+
+        // More records than one batch may hold: the buffer must come out as
+        // several batches, and each finished batch must fit the wire.
+        let records = vec![record(MIB as usize); per_batch + 2];
+        let (batches, oversize) = split_records(records, budget);
+        assert!(oversize.is_empty());
+        assert_eq!(batches.len(), 2);
+        assert_eq!(batches.iter().map(Vec::len).sum::<usize>(), per_batch + 2);
+        for node_logs in &batches {
+            let request = pb::CreateNodeLogsRequest {
+                node_logs: node_logs.clone(),
+            };
+            let batch = pb::TelemetryBatch {
+                schema_version: 1,
+                batch_id: format!("{}:{:020}", "0".repeat(36), u64::MAX),
+                boot_id: "0".repeat(36),
+                sequence: u64::MAX,
+                kind: "node_log".into(),
+                payload: request.encode_to_vec(),
+                occurred_at: i64::MIN,
+                window_start: i64::MIN,
+                source_boot_id: "0".repeat(36),
+                ..Default::default()
+            };
+            assert!(
+                batch.encoded_len() <= MAX_BATCH_ENCODED_BYTES,
+                "a produced batch must fit the wire: {}",
+                batch.encoded_len()
+            );
+        }
+
+        // One record larger than a whole batch: returned on its own for
+        // journaling, while the records around it still form a batch.
+        let (batches, oversize) = split_records(
+            vec![
+                record(MIB as usize),
+                record(budget + 1),
+                record(MIB as usize),
+            ],
+            budget,
+        );
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].len(), 2);
+        assert_eq!(oversize.len(), 1);
+        assert!(record_cost(&oversize[0]) > budget);
+    }
+
+    /// P0-4: a record too large for any batch is journaled durably, with its own
+    /// gap marker, instead of producing an empty batch or a silent error.
+    #[test]
+    fn oversize_record_is_journaled_not_silently_dropped() {
+        let (spool, path) = spool_with_disk(false, MIB, GIB, GIB);
+        let budget = payload_budget("node_log");
+        let (batches, oversize) = split_records(
+            vec![
+                pb::NodeLog {
+                    description: "x".repeat(MIB as usize),
+                    ..Default::default()
+                },
+                pb::NodeLog {
+                    description: "x".repeat(budget + 1),
+                    ..Default::default()
+                },
+            ],
+            budget,
+        );
+        assert_eq!(batches.len(), 1, "the records that fit still form a batch");
+        assert_eq!(oversize.len(), 1);
+        assert_eq!(spool.snapshot()["oversizeDropped"], 0);
+        spool.journal_oversize("node_log", record_cost(&oversize[0])).unwrap();
+        assert_eq!(spool.snapshot()["oversizeDropped"], 1);
+        assert_eq!(spool.snapshot()["journaledLosses"], 1);
+        let loss = spool.loss_record(0).unwrap().expect("the loss is journaled");
+        assert_eq!(loss.batch_id, "", "an oversize record never had a batch");
+        assert_eq!(loss.kind, "node_log");
+        assert_eq!(loss.lane, "detail");
+        assert!(loss.reason.starts_with(OVERSIZE_REASON), "{}", loss.reason);
+        assert!(loss.metadata.contains("encodedBytes="));
+        assert!(loss.event_time > 0);
+        // The journal produced a gap marker, not an empty data batch.
+        let marker = spool.at(0).unwrap().expect("the gap marker is queued");
+        assert_eq!(marker.kind, "gap");
+        assert!(marker.has_gap);
+        assert_eq!(marker.gap_kind, "node_log");
+        assert_eq!(marker.sequence, loss.gap_sequence);
+        assert_eq!(spool.snapshot()["pendingBatches"], 1);
+        drop(spool);
+        // Reopening keeps the audit and its counter.
+        let spool = Spool::open(&path, false, MIB).unwrap();
+        assert_eq!(spool.snapshot()["oversizeDropped"], 1);
+        assert!(spool.loss_record(0).unwrap().is_some());
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    /// P0-4: the cap is enforced on the finished message, envelope included, for
+    /// every kind — a producer that cannot split gets a typed refusal instead of
+    /// a batch the RPC layer would reject, and nothing half-written.
+    #[test]
+    fn append_prepared_refuses_a_batch_over_the_wire_cap() {
+        let (spool, path) = spool_with_disk(false, 4 * GIB, GIB, GIB);
+        // A payload that just fits the observation budget still lands...
+        let budget = payload_budget("probe_observation");
+        let payload = pb::ProbeObservationBatch {
+            observations: vec![pb::ProbeObservation {
+                error: "e".repeat(budget - 1024),
+                ..Default::default()
+            }],
+        }
+        .encode_to_vec();
+        assert!(payload.len() <= budget);
+        spool.append("probe_observation", payload, 0, false, 1).unwrap();
+        // ...and a payload the envelope can no longer absorb is refused by name,
+        // for a kind no splitter knows about.
+        let err = spool
+            .append("node_metric", vec![0u8; MAX_BATCH_ENCODED_BYTES], 0, false, 2)
+            .expect_err("a batch over the message budget must be refused");
+        assert!(is_batch_too_large(err.as_ref()), "{err}");
+        assert!(err.to_string().contains("reason=batch_too_large"), "{err}");
+        assert!(!is_capacity_exhausted(err.as_ref()));
+        // Nothing was written: the queue still holds only the fitting batch.
+        assert_eq!(spool.snapshot()["tail"], 2);
+        assert_eq!(spool.snapshot()["pendingBatches"], 1);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    /// P0-4: a probe observation batch is split to the wire cap before it reaches
+    /// the spool, and an observation too large for any batch is returned for
+    /// journaling rather than shipped as an empty batch.
+    #[test]
+    fn observation_payloads_are_split_under_the_wire_cap() {
+        let budget = payload_budget("probe_observation");
+        let fat = |len: usize| pb::ProbeObservation {
+            error: "e".repeat(len),
+            ..Default::default()
+        };
+        let cost = record_cost(&fat(MIB as usize));
+        assert!((MIB as usize..2 * MIB as usize).contains(&cost));
+        let per_batch = budget / cost;
+        assert!(per_batch >= 2, "the case needs more than one per batch");
+
+        let payload = pb::ProbeObservationBatch {
+            observations: (0..per_batch + 1).map(|_| fat(MIB as usize)).collect(),
+        }
+        .encode_to_vec();
+        let (batches, oversize) = split_observation_payload(&payload);
+        assert!(oversize.is_empty());
+        assert_eq!(batches.len(), 2, "the count cap alone would have shipped one");
+        for payload in &batches {
+            let batch = pb::TelemetryBatch {
+                schema_version: 1,
+                kind: "probe_observation".into(),
+                payload: payload.clone(),
+                occurred_at: 1,
+                ..Default::default()
+            };
+            assert!(
+                batch.encoded_len() <= MAX_BATCH_ENCODED_BYTES,
+                "a produced batch must fit the wire: {}",
+                batch.encoded_len()
+            );
+        }
+        // Every observation is carried exactly once.
+        let carried: usize = batches
+            .iter()
+            .map(|payload| {
+                <pb::ProbeObservationBatch as Message>::decode(payload.as_slice())
+                    .unwrap()
+                    .observations
+                    .len()
+            })
+            .sum();
+        assert_eq!(carried, per_batch + 1);
+
+        // One observation over the whole cap: returned for journaling, never
+        // padded into an empty batch.
+        let payload = pb::ProbeObservationBatch {
+            observations: vec![fat(budget + 1)],
+        }
+        .encode_to_vec();
+        let (batches, oversize) = split_observation_payload(&payload);
+        assert!(
+            batches.is_empty(),
+            "an oversize observation must not become an empty batch"
+        );
+        assert_eq!(oversize.len(), 1);
+        assert!(oversize[0] > budget);
+    }
+
+    /// P1-2: the node status exposes the lanes' queue position, the quarantine
+    /// and per-class counters, and the reason of the last gap — while the
+    /// fields the API already reads stay in place.
+    #[test]
+    fn status_snapshot_exposes_head_tail_quarantine_and_gap_counters() {
+        let (core, core_path) = spool_with_disk(true, MIB, GIB, GIB);
+        let (detail, detail_path) = spool_with_disk(false, MIB, GIB, GIB);
+        for _ in 0..3 {
+            detail.append("access_log", vec![1], 0, false, 100).unwrap();
+        }
+        detail
+            .quarantine_head(
+                1,
+                TerminalReason::PreAssignment.gap_reason(),
+                "assignment missing",
+            )
+            .unwrap();
+
+        let status = snapshot_of(&core, &detail);
+        assert_eq!(status["detail"]["head"], 2);
+        assert_eq!(status["detail"]["tail"], 5);
+        assert_eq!(status["detail"]["pendingBatches"], 3);
+        assert_eq!(status["detail"]["quarantinedBatches"], 1);
+        assert_eq!(
+            status["detail"]["lastQuarantineReason"],
+            "unattributed_pre_assignment"
+        );
+        assert_eq!(status["detail"]["journaledLosses"], 1);
+        assert_eq!(status["detail"]["retryableFailures"], 0);
+        assert_eq!(status["detail"]["terminalFailures"], 0);
+        assert_eq!(status["core"]["head"], 1);
+        assert_eq!(status["core"]["tail"], 1);
+        assert_eq!(status["core"]["quarantinedBatches"], 0);
+        assert_eq!(status["core"]["journaledLosses"], 0);
+        assert!(status.get("lastGapReason").is_some());
+        assert!(status.get("oversizeDroppedObservations").is_some());
+        // The pre-existing fields must not move or disappear.
+        for field in ["gapStart", "gapEnd", "gapHasCore"] {
+            assert!(status.get(field).is_some(), "{field} must stay reported");
+        }
+        for field in [
+            "pendingBatches",
+            "pendingBytes",
+            "retainedBytes",
+            "remainingBytes",
+            "capacityLevel",
+            "oldestAt",
+            "exhaustEtaSecs",
+            "lastFailureAt",
+        ] {
+            assert!(
+                status["detail"].get(field).is_some(),
+                "{field} must stay reported"
+            );
+        }
+        drop(core);
+        drop(detail);
+        std::fs::remove_dir_all(core_path).unwrap();
+        std::fs::remove_dir_all(detail_path).unwrap();
     }
 
     #[test]
