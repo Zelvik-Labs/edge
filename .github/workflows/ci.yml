@@ -149,7 +149,11 @@ jobs:
         run: cargo check --all-targets
 
       - name: cargo check (vendored pingora crates)
-        run: cargo check --manifest-path pingora-main/Cargo.toml -p pingora-core -p pingora-http -p pingora-cache -p pingora-proxy --all-targets
+        # --locked: this workspace now commits pingora-main/Cargo.lock so the
+        # vendored checks run against the dependency graph the edge binary
+        # ships. A stale lock is a build change and must fail here instead of
+        # silently re-resolving crates.io that day.
+        run: cargo check --locked --manifest-path pingora-main/Cargo.toml -p pingora-core -p pingora-http -p pingora-cache -p pingora-proxy --all-targets
 
       - name: cargo clippy
         # Deny high-signal lint groups; pre-existing style warnings stay advisory.
@@ -294,4 +298,6 @@ jobs:
         run: cargo test --no-fail-fast --test '*'
 
       - name: cargo test (vendored pingora)
-        run: cargo test --manifest-path pingora-main/Cargo.toml -p pingora-core -p pingora-http -p pingora-cache --lib
+        # --locked: see the vendored check step; without it cargo re-resolves
+        # the whole workspace and tests tokio versions the product never ships.
+        run: cargo test --locked --manifest-path pingora-main/Cargo.toml -p pingora-core -p pingora-http -p pingora-cache --lib

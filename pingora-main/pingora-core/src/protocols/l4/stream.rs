@@ -369,17 +369,6 @@ pub const DEFAULT_L4_READ_BUFFER_SIZE: usize = 64 * 1024;
 /// similar to Nagle's algorithm, but user space can control when to flush.
 pub const DEFAULT_L4_WRITE_BUFFER_SIZE: usize = 1460;
 
-/// Smallest capacity a [`tokio::io::BufStream`] accepts.
-///
-/// `Some(0)` means "no buffering", but tokio rejects a zero-capacity reader
-/// (`BufReader::with_capacity` panics as of tokio 1.54). One byte is the
-/// smallest accepted capacity and still behaves as pass-through: `BufReader`
-/// bypasses its internal buffer whenever the caller's buffer is at least as
-/// large as it, and `BufWriter` writes through directly once the pending write
-/// reaches its capacity. Both conditions hold for every non-empty operation,
-/// so no byte is ever staged in the buffer.
-const MIN_BUFSTREAM_CAPACITY: usize = 1;
-
 /// L4 [`BufStream`] buffer sizing.
 ///
 /// Leaving either side as `None` preserves Pingora's default for that side.
@@ -427,18 +416,6 @@ impl L4BufferSettings {
     /// Resolved write buffer size after applying defaults.
     pub fn write_capacity(&self) -> usize {
         self.write.unwrap_or(DEFAULT_L4_WRITE_BUFFER_SIZE)
-    }
-
-    /// Read capacity to hand to [`BufStream`], mapping `Some(0)` to the
-    /// smallest capacity tokio accepts (see [`MIN_BUFSTREAM_CAPACITY`]).
-    fn bufstream_read_capacity(&self) -> usize {
-        self.read_capacity().max(MIN_BUFSTREAM_CAPACITY)
-    }
-
-    /// Write capacity to hand to [`BufStream`]; see
-    /// [`Self::bufstream_read_capacity`].
-    fn bufstream_write_capacity(&self) -> usize {
-        self.write_capacity().max(MIN_BUFSTREAM_CAPACITY)
     }
 }
 
@@ -557,8 +534,8 @@ impl Stream {
         let stream = mem::take(&mut self.stream);
         let stream = stream.map(|s| {
             BufStream::with_capacity(
-                buffer.bufstream_read_capacity(),
-                buffer.bufstream_write_capacity(),
+                buffer.read_capacity(),
+                buffer.write_capacity(),
                 s.into_inner(),
             )
         });
@@ -644,11 +621,9 @@ impl Stream {
 impl From<TcpStream> for Stream {
     fn from(s: TcpStream) -> Self {
         Stream {
-            // Unbuffered until `set_buffer` runs; one byte is the smallest
-            // pass-through capacity tokio accepts.
             stream: Some(BufStream::with_capacity(
-                MIN_BUFSTREAM_CAPACITY,
-                MIN_BUFSTREAM_CAPACITY,
+                0,
+                0,
                 RawStreamWrapper::new(RawStream::Tcp(s)),
             )),
             rewind_read_buf: Vec::new(),
@@ -669,11 +644,9 @@ impl From<TcpStream> for Stream {
 impl From<virt::VirtualSocketStream> for Stream {
     fn from(s: virt::VirtualSocketStream) -> Self {
         Stream {
-            // Unbuffered until `set_buffer` runs; one byte is the smallest
-            // pass-through capacity tokio accepts.
             stream: Some(BufStream::with_capacity(
-                MIN_BUFSTREAM_CAPACITY,
-                MIN_BUFSTREAM_CAPACITY,
+                0,
+                0,
                 RawStreamWrapper::new(RawStream::Virtual(s)),
             )),
             rewind_read_buf: Vec::new(),
@@ -695,11 +668,9 @@ impl From<virt::VirtualSocketStream> for Stream {
 impl From<UnixStream> for Stream {
     fn from(s: UnixStream) -> Self {
         Stream {
-            // Unbuffered until `set_buffer` runs; one byte is the smallest
-            // pass-through capacity tokio accepts.
             stream: Some(BufStream::with_capacity(
-                MIN_BUFSTREAM_CAPACITY,
-                MIN_BUFSTREAM_CAPACITY,
+                0,
+                0,
                 RawStreamWrapper::new(RawStream::Unix(s)),
             )),
             rewind_read_buf: Vec::new(),
@@ -1169,33 +1140,5 @@ mod tests {
             let _ = std::fs::remove_file(&path);
             assert!(!unix_stream.accepts_sendfile());
         }
-    }
-
-    /// `L4BufferSettings::unbuffered()` (`Some(0)` both directions) means
-    /// pass-through: the conversion built stream and an explicit `set_buffer`
-    /// must both carry data instead of handing tokio a zero-capacity reader,
-    /// which it rejects.
-    #[tokio::test]
-    async fn test_unbuffered_stream_roundtrip() {
-        const MESSAGE: &[u8] = b"unbuffered copy";
-
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        tokio::spawn(async move {
-            let (mut stream, _) = listener.accept().await.unwrap();
-            let mut buf = vec![0u8; MESSAGE.len()];
-            stream.read_exact(&mut buf).await.unwrap();
-            assert_eq!(buf, MESSAGE);
-            stream.write_all(&buf).await.unwrap();
-        });
-
-        let mut stream: Stream = TcpStream::connect(addr).await.unwrap().into();
-        stream.set_buffer(L4BufferSettings::unbuffered());
-        stream.write_all(MESSAGE).await.unwrap();
-        stream.flush().await.unwrap();
-
-        let mut buf = vec![0u8; MESSAGE.len()];
-        stream.read_exact(&mut buf).await.unwrap();
-        assert_eq!(buf, MESSAGE);
     }
 }
