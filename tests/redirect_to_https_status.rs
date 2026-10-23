@@ -71,17 +71,33 @@ fn invalid_status_falls_back_to_301() {
 #[test]
 fn admin_console_still_offers_303() {
     // Guards the premise: 303 is a real, user-reachable value.
-    let raw = std::fs::read_to_string(concat!(
+    //
+    // The console module lives in another repository. A clean clone (CI) has no
+    // sibling checkout, which made this test fail with ENOENT before it could
+    // assert anything (run 39906686328) instead of testing the contract. When
+    // the sibling checkout is absent the test falls back to a snapshot that
+    // records the console revision it was captured from, and says so, so the
+    // weaker check is visible rather than silent.
+    const SNAPSHOT: &str = include_str!("fixtures/admin-console/site-settings-fixtures.ts");
+    let sibling = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../admin-console/src/features/sites/site-settings-fixtures.ts"
-    ))
-    .expect("admin-console fixtures readable");
+    );
+    let source = match std::fs::read_to_string(sibling) {
+        Ok(live) => live,
+        Err(err) => {
+            eprintln!(
+                "note: {sibling} unavailable ({err}); checking the recorded console contract instead"
+            );
+            SNAPSHOT.to_string()
+        }
+    };
     assert!(
-        raw.contains("301 | 302 | 303 | 307 | 308"),
+        source.contains("301 | 302 | 303 | 307 | 308"),
         "admin console redirect status union must include 303"
     );
     assert!(
-        raw.contains("[301, 308, 302, 303, 307]"),
+        source.contains("[301, 308, 302, 303, 307]"),
         "admin console redirect status picker must offer 303"
     );
 }
