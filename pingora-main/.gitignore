@@ -1,4 +1,7 @@
-Cargo.lock
+# Cargo.lock is committed on purpose: this workspace has its own resolution
+# (the CI vendored check/test jobs use it), and an unpinned lock silently
+# tested whatever crates.io resolved that day instead of the dependency graph
+# the edge binary ships.
 /target
 **/*.rs.bk
 dhat-heap.json

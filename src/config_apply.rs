@@ -14,7 +14,9 @@
 use crate::config::ConfigStore;
 use crate::config_models::{GlobalHTTPAllConfig, ParentNodeConfig, ServerConfig};
 use crate::health_manager::GlobalHealthManager;
-use crate::memory_governor::{AdmissionClass, MEMORY_GOVERNOR, MemoryPressureLevel};
+use crate::memory_governor::{
+    AdmissionClass, AdmissionPermit, MEMORY_GOVERNOR, MemoryGovernor, MemoryPressureLevel,
+};
 use crate::memory_reclaim::request_reclaim;
 use std::collections::HashMap;
 use std::io::Read;
@@ -240,20 +242,29 @@ pub fn hash_waf_snapshot(
     )
 }
 
-async fn admit_config_sync() -> (Option<crate::memory_governor::StaticAdmissionPermit>, u32) {
+/// How long an apply may wait for a `BackgroundWork` permit before giving up
+/// and keeping the installed generation.
+const CONFIG_SYNC_ADMISSION_BUDGET: Duration = Duration::from_secs(2);
+
+// Permit holders may be waiting on timers or I/O. Yielding alone can exhaust
+// all retries before they finish, so give them a bounded interval to release.
+async fn admit_config_sync(governor: &MemoryGovernor) -> (Option<AdmissionPermit<'_>>, u32) {
+    let deadline = Instant::now() + CONFIG_SYNC_ADMISSION_BUDGET;
     let mut retries = 0u32;
-    for attempt in 0..CONFIG_SYNC_RETRY_LIMIT {
-        if let Some(permit) = MEMORY_GOVERNOR.try_admit(AdmissionClass::BackgroundWork) {
+    loop {
+        if let Some(permit) = governor.try_admit(AdmissionClass::BackgroundWork) {
             return (Some(permit), retries);
         }
-        retries = attempt + 1;
-        let pressure = MEMORY_GOVERNOR.current_memory_pressure_level();
+        let pressure = governor.current_memory_pressure_level();
         if pressure >= MemoryPressureLevel::Elevated {
             let _ = request_reclaim(pressure);
         }
-        tokio::task::yield_now().await;
+        if retries >= CONFIG_SYNC_RETRY_LIMIT || Instant::now() >= deadline {
+            return (None, retries);
+        }
+        retries += 1;
+        tokio::time::sleep(Duration::from_millis(1u64 << retries.min(6))).await;
     }
-    (None, retries)
 }
 
 fn maybe_reclaim(
@@ -314,7 +325,7 @@ pub async fn materialize_runtime_servers(
     } = args;
     let started = Instant::now();
     let servers_in = servers.len();
-    let (permit, admission_retries) = admit_config_sync().await;
+    let (permit, admission_retries) = admit_config_sync(&MEMORY_GOVERNOR).await;
     if permit.is_none() {
         // Never trade a memory-death build for a config refresh: keep the
         // installed generation and let the next sync retry after reclaim.
@@ -326,7 +337,14 @@ pub async fn materialize_runtime_servers(
             available_bytes = limits.available_bytes,
             "config apply not admitted after retries; keeping previous generation"
         );
-        let _ = request_reclaim(MemoryPressureLevel::Critical);
+        // Admission is refused by the class/account limit, not necessarily by
+        // memory: forcing a Critical reclaim here tore down the whole L1 cache
+        // and bloom on nodes that were at Normal pressure. Reclaim at the live
+        // level (which is itself a no-op below Elevated) instead.
+        let live = MEMORY_GOVERNOR.current_memory_pressure_level();
+        if live >= MemoryPressureLevel::Elevated {
+            let _ = request_reclaim(live);
+        }
         return RuntimeServerMaps {
             stats: ConfigApplyStats {
                 servers_in,
@@ -512,6 +530,36 @@ mod tests {
             }
         }))
         .expect("server fixture")
+    }
+
+    #[tokio::test]
+    async fn config_sync_admission_waits_for_permits_instead_of_spinning() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(
+            2 * 1024 * 1024 * 1024,
+            1024 * 1024 * 1024,
+            1_048_576,
+            128,
+            crate::utils::time::system_timestamp_millis() as u64,
+        );
+        let mut held = Vec::new();
+        while let Some(permit) = governor.try_admit(AdmissionClass::BackgroundWork) {
+            held.push(permit);
+        }
+        assert!(!held.is_empty());
+
+        let (_, (permit, retries)) = tokio::join!(
+            async {
+                tokio::time::sleep(Duration::from_millis(40)).await;
+                drop(held);
+            },
+            admit_config_sync(&governor),
+        );
+        assert!(
+            permit.is_some(),
+            "must admit once the timed holder finishes"
+        );
+        assert!(retries > 0);
     }
 
     #[tokio::test]

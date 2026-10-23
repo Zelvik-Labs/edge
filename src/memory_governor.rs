@@ -2635,16 +2635,30 @@ impl MemoryGovernor {
         }
         if new_bytes > old_bytes {
             let delta = new_bytes - old_bytes;
-            let budget = match category {
+            let snapshot = self.memory_snapshot();
+            let used = |category: ResidentCategory| {
+                self.resident.used[category.index()].load(Ordering::Acquire)
+            };
+            // Compare each category against its own group budget. Comparing the
+            // cross-category total against a per-group budget let cache
+            // metadata — whose budget is five times the bloom group's — lock
+            // out the negative cache and the bloom ledger entirely.
+            let (group_used, budget) = match category {
                 ResidentCategory::CacheMetadata
                 | ResidentCategory::CacheAccessLog
-                | ResidentCategory::SurrogateIndex => self.memory_snapshot().cache_budget_bytes,
-                ResidentCategory::BloomFilter | ResidentCategory::NegativeCache => {
-                    self.memory_snapshot().bloom_budget_bytes
-                }
+                | ResidentCategory::SurrogateIndex => (
+                    used(ResidentCategory::CacheMetadata)
+                        .saturating_add(used(ResidentCategory::CacheAccessLog))
+                        .saturating_add(used(ResidentCategory::SurrogateIndex)),
+                    snapshot.cache_budget_bytes,
+                ),
+                ResidentCategory::BloomFilter | ResidentCategory::NegativeCache => (
+                    used(ResidentCategory::BloomFilter)
+                        .saturating_add(used(ResidentCategory::NegativeCache)),
+                    snapshot.bloom_budget_bytes,
+                ),
             };
-            let current = total.load(Ordering::Acquire);
-            if current.saturating_add(delta) > budget.max(1) {
+            if group_used.saturating_add(delta) > budget.max(1) {
                 return false;
             }
             total.fetch_add(delta, Ordering::AcqRel);
@@ -6325,6 +6339,50 @@ mod resident_memory_tests {
         assert!(governor.resident_memory_replace_owned(category, "a", 0));
         assert!(governor.resident_memory_replace_owned(category, "a", 0));
         assert_eq!(governor.resident_memory_snapshot().total_used_bytes, 0);
+    }
+
+    /// Each category is charged against its own group budget. The bloom group's
+    /// budget is a fraction of the cache group's, so comparing the
+    /// cross-category total against it silently rejected every negative-cache
+    /// and bloom charge once the cache held a normal number of objects.
+    #[test]
+    fn resident_budget_is_per_group_not_cross_category_total() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(
+            2 * 1024 * 1024 * 1024,
+            1024 * 1024 * 1024,
+            1_048_576,
+            128,
+            crate::utils::time::system_timestamp_millis() as u64,
+        );
+        let snapshot = governor.snapshot(1);
+        let cache_budget = snapshot.cache_budget_bytes;
+        assert!(
+            cache_budget > snapshot.bloom_budget_bytes,
+            "cache group must be budgeted above the bloom group for this regression to bite"
+        );
+
+        // Fill the cache group to its own budget.
+        assert!(governor.resident_memory_replace(ResidentCategory::CacheMetadata, 0, cache_budget));
+        // The bloom group is still empty and has its own budget, so its charge
+        // must be admitted even though the global total now exceeds it.
+        assert!(
+            governor.resident_memory_replace(ResidentCategory::NegativeCache, 0, 4096),
+            "bloom-group charge must not be rejected by cache-group usage"
+        );
+        assert_eq!(
+            governor
+                .resident_memory_snapshot()
+                .negative_cache_used_bytes,
+            4096
+        );
+
+        // Overrunning the bloom group's own budget is still refused.
+        assert!(!governor.resident_memory_replace(
+            ResidentCategory::NegativeCache,
+            4096,
+            snapshot.bloom_budget_bytes.saturating_add(4096)
+        ));
     }
 
     #[test]

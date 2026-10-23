@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -26,6 +28,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Checkout geo runtime dependency
+        uses: actions/checkout@v5
+        with:
+          repository: Zelvik-Labs/dns
+          ref: e357bf64bad28b3dc519d317e396af71fe2a884e
+          ssh-key: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
+          persist-credentials: false
+          path: .ci/dns
+
+      - name: Link sibling geo runtime path
+        run: ln -s "$GITHUB_WORKSPACE/.ci/dns" "$GITHUB_WORKSPACE/../dns"
 
       # Cargo.toml 经 https git 依赖私有仓 protocol（zelvik-suite）。凭据是**只读 deploy key**
       # （仓库 secret PROTOCOL_DEPLOY_KEY），只对 protocol 有效；不用个人长期 token，
@@ -135,7 +149,11 @@ jobs:
         run: cargo check --all-targets
 
       - name: cargo check (vendored pingora crates)
-        run: cargo check --manifest-path pingora-main/Cargo.toml -p pingora-core -p pingora-http -p pingora-cache -p pingora-proxy --all-targets
+        # --locked: this workspace now commits pingora-main/Cargo.lock so the
+        # vendored checks run against the dependency graph the edge binary
+        # ships. A stale lock is a build change and must fail here instead of
+        # silently re-resolving crates.io that day.
+        run: cargo check --locked --manifest-path pingora-main/Cargo.toml -p pingora-core -p pingora-http -p pingora-cache -p pingora-proxy --all-targets
 
       - name: cargo clippy
         # Deny high-signal lint groups; pre-existing style warnings stay advisory.
@@ -163,6 +181,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Checkout geo runtime dependency
+        uses: actions/checkout@v5
+        with:
+          repository: Zelvik-Labs/dns
+          ref: e357bf64bad28b3dc519d317e396af71fe2a884e
+          ssh-key: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
+          persist-credentials: false
+          path: .ci/dns
+
+      - name: Link sibling geo runtime path
+        run: ln -s "$GITHUB_WORKSPACE/.ci/dns" "$GITHUB_WORKSPACE/../dns"
 
       # Cargo.toml 经 https git 依赖私有仓 protocol（zelvik-suite）。凭据是**只读 deploy key**
       # （仓库 secret PROTOCOL_DEPLOY_KEY），只对 protocol 有效；不用个人长期 token，
@@ -268,4 +298,6 @@ jobs:
         run: cargo test --no-fail-fast --test '*'
 
       - name: cargo test (vendored pingora)
-        run: cargo test --manifest-path pingora-main/Cargo.toml -p pingora-core -p pingora-http -p pingora-cache --lib
+        # --locked: see the vendored check step; without it cargo re-resolves
+        # the whole workspace and tests tokio versions the product never ships.
+        run: cargo test --locked --manifest-path pingora-main/Cargo.toml -p pingora-core -p pingora-http -p pingora-cache --lib
