@@ -350,9 +350,7 @@ fn record_desired_listener(
         }
         Entry::Occupied(mut entry) => {
             let existing = entry.get_mut();
-            if existing.is_tls != config.is_tls
-                || existing.enable_proxy_protocol != config.enable_proxy_protocol
-            {
+            if existing.is_tls != config.is_tls {
                 warn!(
                     "HTTP/HTTPS Proxy Manager: ignoring conflicting listener config on {} for server {} (existing TLS={}, proxy_protocol={}; requested TLS={}, proxy_protocol={})",
                     bind_addr,
@@ -364,6 +362,9 @@ fn record_desired_listener(
                 );
                 return;
             }
+            // Optional PROXY parsing preserves direct ClientHello traffic too.
+            // Any service requiring it must enable it regardless of config order.
+            existing.enable_proxy_protocol |= config.enable_proxy_protocol;
             if existing.tls_policy != config.tls_policy {
                 // One rustls::ServerConfig cannot vary ALPN/versions per SNI, so
                 // servers sharing a port must share one policy. Take the union
@@ -482,6 +483,33 @@ impl HttpProxyManager {
                         "HTTP Proxy Manager: Server {} has NO HTTP config",
                         server.numeric_id()
                     );
+                }
+                // SNI streams declare TCP listeners, but require ClientHello
+                // dispatch on the shared HTTPS accept path.
+                if server.is_sni_passthrough()
+                    && let Some(tcp) = server.tcp.as_ref().filter(|tcp| tcp.is_on)
+                {
+                    for addr in &tcp.listen {
+                        for port in addr
+                            .port_range
+                            .as_deref()
+                            .into_iter()
+                            .flat_map(crate::config_models::ports_in_range)
+                        {
+                            for bind_addr in dual_stack_bind_addrs(port) {
+                                record_desired_listener(
+                                    &mut desired_ports,
+                                    bind_addr,
+                                    ListenerConfig {
+                                        is_tls: true,
+                                        enable_proxy_protocol: enable_pp,
+                                        tls_policy: TlsPolicy::default(),
+                                    },
+                                    server.numeric_id(),
+                                );
+                            }
+                        }
+                    }
                 }
                 // 2. Handle HTTPS Ports
                 if let Some(https_cfg) = &server.https {
@@ -1291,6 +1319,18 @@ impl HttpProxyManager {
                     })
             }) {
                 matched.get_or_insert(AfXdpHttpPortKind::Http);
+            }
+            if server.is_sni_passthrough()
+                && server.tcp.as_ref().is_some_and(|tcp| {
+                    tcp.is_on
+                        && tcp.listen.iter().any(|addr| {
+                            addr.port_range.as_deref().is_some_and(|range| {
+                                crate::config_models::port_range_contains(range, port)
+                            })
+                        })
+                })
+            {
+                return Some(AfXdpHttpPortKind::Https);
             }
             if server.https.as_ref().is_some_and(|https| {
                 https.is_on
@@ -3227,6 +3267,27 @@ mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+    #[test]
+    fn shared_sni_listener_merges_optional_proxy_protocol_in_both_orders() {
+        let addr = "127.0.0.1:443".parse().unwrap();
+        for flags in [[false, true], [true, false]] {
+            let mut desired = HashMap::new();
+            for enabled in flags {
+                record_desired_listener(
+                    &mut desired,
+                    addr,
+                    ListenerConfig {
+                        is_tls: true,
+                        enable_proxy_protocol: enabled,
+                        tls_policy: TlsPolicy::default(),
+                    },
+                    1,
+                );
+            }
+            assert!(desired[&addr].enable_proxy_protocol);
+        }
+    }
+
     /// A least-connections pool over the given origin ids, built through the
     /// production `build_lb` path so the shared in-flight counters are wired in.
     fn least_conn_test_lb(ids: &[i64]) -> Arc<crate::lb_factory::AnyLoadBalancer> {
@@ -3385,6 +3446,137 @@ mod tests {
         drop(second);
         assert_eq!(counters.inflight(ORIGIN_A), 0);
         assert_eq!(counters.inflight(ORIGIN_B), 0);
+    }
+
+    #[tokio::test]
+    async fn sni_tcp_listener_dispatches_each_connection_by_name() {
+        let port = {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.local_addr().unwrap().port()
+        };
+        let store = ConfigStore::new();
+        let mut servers = Vec::new();
+        let mut lbs = HashMap::new();
+        let mut backend_tasks = Vec::new();
+        for (id, name, marker) in [(98_801, "one.example", b'1'), (98_802, "two.example", b'2')] {
+            let backend = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = backend.local_addr().unwrap();
+            backend_tasks.push(tokio::spawn(async move {
+                loop {
+                    let (mut stream, _) = backend.accept().await.unwrap();
+                    tokio::spawn(async move {
+                        let mut buf = [0u8; 1024];
+                        let _ = stream.read(&mut buf).await.unwrap();
+                        stream.write_all(&[marker]).await.unwrap();
+                    });
+                }
+            }));
+            let server: ServerConfig = serde_json::from_value(serde_json::json!({
+                "id": id, "isOn": true,
+                "serverNames": [{"name": format!("{name}@sni_passthrough")}],
+                "tcp": {"isOn": true, "listen": [{"portRange": port.to_string()}]},
+                "reverseProxy": {"isOn": true, "primaryOrigins": [
+                    {"id": id, "addr": addr.to_string(), "isOn": true, "weight": 1}
+                ]}
+            }))
+            .unwrap();
+            let (lb, _) = crate::lb_factory::build_lb(
+                id,
+                server.reverse_proxy.as_ref().unwrap(),
+                2,
+                &HashMap::new(),
+                false,
+                true,
+            );
+            lbs.insert(id, lb);
+            servers.push(Arc::new(server));
+        }
+        store
+            .replace_all_servers(servers, HashMap::new(), HashMap::new(), lbs)
+            .await;
+        let certs = Arc::new(DynamicCertSelector::new());
+        crate::ssl::sync_certs(
+            &certs,
+            &[crate::config_models::SSLCertConfig {
+                id: 98_800,
+                is_on: true,
+                cert_data_json: Some(serde_json::json!(include_str!(
+                    "../pingora-main/pingora-core/examples/keys/server/cert.pem"
+                ))),
+                key_data_json: Some(serde_json::json!(include_str!(
+                    "../pingora-main/pingora-core/examples/keys/server/key.pem"
+                ))),
+                ocsp: false,
+                is_default: true,
+                dns_names: vec!["openrusty.org".to_string()],
+            }],
+        )
+        .await;
+        let http = HttpProxyManager::new(
+            store.clone(),
+            certs.clone(),
+            test_edge_proxy(),
+            Arc::new(ServerConf::default()),
+        );
+        let tcp = crate::tcp_proxy::TcpProxyManager::new(
+            store.clone(),
+            certs,
+            Arc::new(crate::firewall::state::WafStateManager::new()),
+            7,
+        );
+        assert!(
+            tcp.find_tcp_server_by_port_sync(port).is_none(),
+            "SNI must never resolve as raw TCP"
+        );
+        assert_eq!(
+            http.af_xdp_http_port_kind_sync(port),
+            Some(AfXdpHttpPortKind::Https)
+        );
+        let http_task = tokio::spawn(http.clone().start_listeners());
+        let tcp_task = tokio::spawn(tcp.clone().start_listeners());
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if tokio::net::TcpStream::connect(("127.0.0.1", port))
+                    .await
+                    .is_ok()
+                {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .unwrap();
+        let result = tokio::time::timeout(Duration::from_secs(10), async {
+            for _ in 0..16 {
+                for (name, marker) in [("one.example", b'1'), ("two.example", b'2')] {
+                    let mut client = tokio::net::TcpStream::connect(("127.0.0.1", port))
+                        .await
+                        .unwrap();
+                    client.write_all(&client_hello(Some(name))).await.unwrap();
+                    let mut reply = [0u8; 1];
+                    client.read_exact(&mut reply).await.unwrap();
+                    assert_eq!(reply[0], marker, "wrong backend for {name}");
+                }
+            }
+        })
+        .await;
+        store
+            .replace_all_servers(Vec::new(), HashMap::new(), HashMap::new(), HashMap::new())
+            .await;
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while !http.handled_ports.is_empty() {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .unwrap();
+        http_task.abort();
+        tcp_task.abort();
+        for task in backend_tasks {
+            task.abort();
+        }
+        result.expect("all SNI relays must complete");
     }
 
     fn tls_record(payload: &[u8]) -> Vec<u8> {

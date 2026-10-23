@@ -1985,7 +1985,7 @@ impl ConfigStore {
                 }
             }
             if server.is_sni_passthrough() {
-                let ports = Self::server_https_ports(server);
+                let ports = Self::server_sni_passthrough_ports(server);
                 Self::index_passthrough_server(
                     &mut lock.sni_passthrough_exact,
                     &mut lock.sni_passthrough_wildcard,
@@ -2033,6 +2033,21 @@ impl ConfigStore {
                 .or_insert_with(|| Some(server.clone()));
         }
         unique
+    }
+
+    fn server_sni_passthrough_ports(server: &Arc<ServerConfig>) -> Vec<u16> {
+        let mut ports = Self::server_https_ports(server);
+        if let Some(tcp) = server.tcp.as_ref().filter(|tcp| tcp.is_on) {
+            ports.extend(
+                tcp.listen
+                    .iter()
+                    .filter_map(|addr| addr.port_range.as_deref())
+                    .flat_map(crate::config_models::ports_in_range),
+            );
+        }
+        ports.sort_unstable();
+        ports.dedup();
+        ports
     }
 
     fn server_https_ports(server: &Arc<ServerConfig>) -> Vec<u16> {
@@ -2172,6 +2187,21 @@ mod tests {
         TLSExhaustionAttackConfig, UDPConfig,
     };
     use serde_json::json;
+
+    #[test]
+    fn sni_tcp_ports_do_not_expand_quic_listener_ports() {
+        let server = Arc::new(serde_json::from_value::<ServerConfig>(json!({
+            "id": 98112,
+            "serverNames": [{"name": "one.example@sni_passthrough"}, {"name": "one.example@quic"}],
+            "tcp": {"isOn": true, "listen": [{"portRange": "8443"}]},
+            "udp": {"isOn": true, "listen": [{"portRange": "443"}]}
+        })).unwrap());
+        assert!(ConfigStore::server_sni_passthrough_ports(&server).contains(&8443));
+        assert_eq!(
+            ConfigStore::server_quic_passthrough_ports(&server),
+            vec![443]
+        );
+    }
 
     /// 套餐实例限速解析优先级：实例有效值 > 套餐 trafficLimit.downlinkMbps > 不限。
     /// 实例值是控制面按订阅实例下发的唯一权威来源，因此必须覆盖套餐本体。

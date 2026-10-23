@@ -261,6 +261,9 @@ impl TcpProxyManager {
             .find_map(|server| {
                 let tcp_cfg = server.tcp.as_ref()?;
                 if tcp_cfg.is_on && listen_matches_port(&tcp_cfg.listen, port) {
+                    if server.is_sni_passthrough() {
+                        return None;
+                    }
                     return Some((server.clone(), false));
                 }
                 if tcp_cfg.tls.as_ref().is_some_and(|tls_cfg| {
@@ -653,8 +656,10 @@ impl TcpProxyManager {
             resize_client_cert_cache_for_servers(&servers);
             let mut desired_ports = std::collections::HashMap::new();
             for server in servers {
-                // Handle TCP
-                if let Some(tcp_cfg) = &server.tcp {
+                // Shared SNI ports belong to the HTTPS dispatcher. A raw TCP
+                // SO_REUSEPORT listener would bypass SNI and pin an arbitrary backend.
+                if let Some(tcp_cfg) = server.tcp.as_ref().filter(|_| !server.is_sni_passthrough())
+                {
                     if tcp_cfg.is_on {
                         if tcp_cfg.listen.is_empty() {
                             warn!(
@@ -3916,6 +3921,29 @@ mod tests {
         assert!(tls_mode);
 
         assert!(manager.find_tcp_server_by_port_sync(30445).is_none());
+    }
+
+    #[tokio::test]
+    async fn sni_service_keeps_independent_tcp_tls_port() {
+        let store = ConfigStore::new();
+        let server: ServerConfig = serde_json::from_value(serde_json::json!({
+            "id": 98111,
+            "serverNames": [{"name": "one.example@sni_passthrough"}],
+            "tcp": {"isOn": true, "listen": [{"portRange": "443"}],
+                "tls": {"isOn": true, "listen": [{"portRange": "8443"}]}}
+        }))
+        .unwrap();
+        install_test_servers(&store, vec![Arc::new(server)]).await;
+        let manager = TcpProxyManager::new(
+            store,
+            Arc::new(DynamicCertSelector::new()),
+            Arc::new(WafStateManager::new()),
+            7,
+        );
+        assert!(manager.find_tcp_server_by_port_sync(443).is_none());
+        let (server, tls) = manager.find_tcp_server_by_port_sync(8443).unwrap();
+        assert_eq!(server.numeric_id(), 98111);
+        assert!(tls);
     }
 
     async fn configure_tls_exhaustion(store: &ConfigStore) {
