@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -26,6 +28,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Checkout geo runtime dependency
+        uses: actions/checkout@v5
+        with:
+          repository: Zelvik-Labs/dns
+          ref: e357bf64bad28b3dc519d317e396af71fe2a884e
+          ssh-key: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
+          persist-credentials: false
+          path: .ci/dns
+
+      - name: Link sibling geo runtime path
+        run: ln -s "$GITHUB_WORKSPACE/.ci/dns" "$GITHUB_WORKSPACE/../dns"
 
       # Cargo.toml 经 https git 依赖私有仓 protocol（zelvik-suite）。凭据是**只读 deploy key**
       # （仓库 secret PROTOCOL_DEPLOY_KEY），只对 protocol 有效；不用个人长期 token，
@@ -163,6 +177,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Checkout geo runtime dependency
+        uses: actions/checkout@v5
+        with:
+          repository: Zelvik-Labs/dns
+          ref: e357bf64bad28b3dc519d317e396af71fe2a884e
+          ssh-key: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
+          persist-credentials: false
+          path: .ci/dns
+
+      - name: Link sibling geo runtime path
+        run: ln -s "$GITHUB_WORKSPACE/.ci/dns" "$GITHUB_WORKSPACE/../dns"
 
       # Cargo.toml 经 https git 依赖私有仓 protocol（zelvik-suite）。凭据是**只读 deploy key**
       # （仓库 secret PROTOCOL_DEPLOY_KEY），只对 protocol 有效；不用个人长期 token，
