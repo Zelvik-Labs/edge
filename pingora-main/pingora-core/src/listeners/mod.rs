@@ -570,6 +570,46 @@ mod test {
         TcpStream::connect(addrs[1]).await.unwrap();
     }
 
+    /// An unbuffered listener must complete accept + handshake and carry data:
+    /// `handshake` applies `L4BufferSettings::unbuffered()` through
+    /// `set_buffer`, whose `Some(0)` capacities must not reach tokio as a
+    /// zero-capacity reader.
+    #[tokio::test]
+    async fn test_listen_tcp_unbuffered_l4_buffer() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        const MESSAGE: &[u8] = b"unbuffered accept";
+
+        let mut listeners = Listeners::new();
+        listeners.add_listener(
+            ListenerConfig::tcp("127.0.0.1:0").l4_buffer(L4BufferSettings::unbuffered()),
+        );
+        let listener = listeners
+            .build(
+                #[cfg(unix)]
+                None,
+            )
+            .await
+            .unwrap()
+            .pop()
+            .unwrap();
+        let addr = listener.l4.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            let mut stream = listener.accept().await.unwrap().handshake().await.unwrap();
+            let mut buf = vec![0u8; MESSAGE.len()];
+            stream.read_exact(&mut buf).await.unwrap();
+            assert_eq!(buf, MESSAGE);
+            stream.write_all(&buf).await.unwrap();
+        });
+
+        let mut client = TcpStream::connect(addr).await.unwrap();
+        client.write_all(MESSAGE).await.unwrap();
+        let mut buf = vec![0u8; MESSAGE.len()];
+        client.read_exact(&mut buf).await.unwrap();
+        assert_eq!(buf, MESSAGE);
+    }
+
     #[test]
     fn test_add_listener_config_tcp_l4_buffer() {
         let mut listeners = Listeners::new();
