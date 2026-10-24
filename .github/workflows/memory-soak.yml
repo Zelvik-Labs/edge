@@ -119,8 +119,8 @@ jobs:
           # Required tests must actually run on Linux; a skipped live test is
           # not a pass.
           grep -qE '^OK$' "$RUNNER_TEMP/python-tests.log"
-          grep -F "test_live_proc_and_cgroup_stats_are_strict_and_present ... ok" "$RUNNER_TEMP/python-tests.log" >/dev/null
-          grep -F "test_pid_reuse_is_detected ... ok" "$RUNNER_TEMP/python-tests.log" >/dev/null
+          grep -Eq '^test_live_proc_and_cgroup_stats_are_strict_and_present \([^)]*\) \.\.\. ok$' "$RUNNER_TEMP/python-tests.log"
+          grep -Eq '^test_pid_reuse_is_detected \([^)]*\) \.\.\. ok$' "$RUNNER_TEMP/python-tests.log"
 
       - name: Checkout pinned geo runtime dependency
         uses: actions/checkout@v5
