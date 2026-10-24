@@ -407,6 +407,11 @@ jobs:
           # 90 s warm-up + 150 s minimum slope span + one early pressure cycle
           # (6 s start, 15 s hold, 10 s recovery probe, 30 s settle) fit inside
           # the 300 s window. 64 MiB/h is a fast-screen budget, never closure.
+          # --pressure-bytes is an upper bound: pressure.py caps each cycle at
+          # memory.high + 16 MiB with 256 MiB reserve below memory.max, so a
+          # 1.5 GiB request cannot livelock above high=1.5 GiB. Resident proof
+          # is bounded at 120 s independent of hold and logs a cgroup snapshot
+          # (current/peak/high/max/events) if it stalls.
           OUT="$RUNNER_TEMP/issue34-short"
           mkdir -p "$OUT"
           python3 -I scripts/memory/certs.py --out-dir "$OUT/certs" > "$OUT/certs.json"
@@ -852,7 +857,13 @@ jobs:
           # 900 s of soak, excluding image/Rust/eBPF build time. 120 s warm-up,
           # 300 s minimum slope span, two early pressure cycles (18 s start,
           # 15 s hold, 10 s recovery probe, 30 s settle). 8 MiB/h is a fast
-          # screen, never the 0.5 MiB/h long-lane closure.
+          # screen, never the 0.5 MiB/h long-lane closure. Allocator pages are
+          # MAP_PRIVATE|MAP_ANONYMOUS, so with swap=0 they cannot be reclaimed
+          # and readiness is a real resident proof. --pressure-bytes is an upper
+          # bound: pressure.py caps each cycle at memory.high + 16 MiB with
+          # 256 MiB reserve below memory.max, so a 1.5 GiB request cannot
+          # livelock above high=1.5 GiB (CI run 40089866696). Resident proof is
+          # bounded at 120 s independent of hold and logs cgroup snapshots.
           OUT="$RUNNER_TEMP/issue34-full-edge-nightly"
           mkdir -p "$OUT"
           sudo systemd-run --scope \

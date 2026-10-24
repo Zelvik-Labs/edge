@@ -68,35 +68,26 @@ fn collect_mimalloc(force: bool) {
 struct ProcessInfo {
     commit_current: usize,
     peak_commit: usize,
-    rss_current: usize,
-    peak_rss: usize,
-    page_faults: usize,
 }
 
 fn process_info() -> ProcessInfo {
     let mut commit: usize = 0;
     let mut peak_commit: usize = 0;
-    let mut rss: usize = 0;
-    let mut peak_rss: usize = 0;
-    let mut faults: usize = 0;
     unsafe {
         libmimalloc_sys::mi_process_info(
             std::ptr::null_mut(),
             std::ptr::null_mut(),
             std::ptr::null_mut(),
-            &mut rss,
-            &mut peak_rss,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
             &mut commit,
             &mut peak_commit,
-            &mut faults,
+            std::ptr::null_mut(),
         );
     }
     ProcessInfo {
         commit_current: commit,
         peak_commit,
-        rss_current: rss,
-        peak_rss,
-        page_faults: faults,
     }
 }
 
@@ -131,8 +122,6 @@ struct StatusStats {
 #[derive(Clone, Copy, Debug)]
 struct RollupStats {
     pss: u64,
-    pss_anon: u64,
-    anon_huge: u64,
 }
 
 fn required_text(path: &str) -> String {
@@ -190,11 +179,7 @@ fn parse_rollup(text: &str, source: &str) -> Result<RollupStats, String> {
             .ok_or_else(|| format!("{source}: missing required field {key}"))?;
         values.insert(key, parse_kib(raw, key, source)?);
     }
-    Ok(RollupStats {
-        pss: values["Pss"],
-        pss_anon: values["Pss_Anon"],
-        anon_huge: values["AnonHugePages"],
-    })
+    Ok(RollupStats { pss: values["Pss"] })
 }
 
 fn parse_starttime(text: &str, source: &str) -> Result<u64, String> {
@@ -310,14 +295,10 @@ fn maps_summary(pid: u32) -> (u64, u64) {
 
 #[derive(Clone, Debug)]
 struct Sample {
-    t_seconds: f64,
     commit_current: usize,
-    peak_commit: usize,
-    peak_rss: usize,
     rss: u64,
     anon: u64,
     pss: u64,
-    anon_huge: u64,
     swap: u64,
     threads: u64,
     fds: usize,
@@ -330,19 +311,13 @@ struct Sample {
 struct StatsAgent {
     pid: u32,
     starttime: u64,
-    started: Instant,
 }
 
 impl StatsAgent {
     fn new(pid: u32) -> Self {
         let source = format!("/proc/{pid}/stat");
-        let starttime =
-            parse_starttime(&required_text(&source), &source).expect("parse starttime");
-        Self {
-            pid,
-            starttime,
-            started: Instant::now(),
-        }
+        let starttime = parse_starttime(&required_text(&source), &source).expect("parse starttime");
+        Self { pid, starttime }
     }
 
     fn verify_identity(&self) -> u64 {
@@ -376,14 +351,10 @@ impl StatsAgent {
         let (maps_count, maps_bytes) = maps_summary(self.pid);
         let info = process_info();
         Sample {
-            t_seconds: self.started.elapsed().as_secs_f64(),
             commit_current: info.commit_current,
-            peak_commit: info.peak_commit,
-            peak_rss: info.peak_rss,
             rss: status.rss,
             anon: status.anon,
             pss: rollup.pss,
-            anon_huge: rollup.anon_huge,
             swap: status.swap,
             threads: status.threads,
             fds: fd_count(self.pid),
@@ -650,14 +621,27 @@ fn stopped_workers_release_abandoned_pages_while_idle_workers_retain() {
     const GROUPS: usize = 4;
     const BLOCKS: usize = 32;
     const BLOCK_BYTES: usize = 1024 * 1024;
-    let barrier = Arc::new(Barrier::new(GROUPS * 2 + 1));
+    // Each stopped group allocates and touches 32 MiB, so the four stopped
+    // workers hold 4 * 32 MiB = 128 MiB of resident anonymous pages. Require
+    // at least 3/4 of that group (96 MiB) to be returned; the remaining 32 MiB
+    // is bounded slack for allocator metadata and sampling noise.
+    const STOPPED_GROUP_BYTES: u64 = (GROUPS * BLOCKS) as u64 * BLOCK_BYTES as u64;
+    const MIN_RELEASED: u64 = STOPPED_GROUP_BYTES * 3 / 4;
+
+    // Phase 1: every worker allocates and touches its pages, then waits.
+    let all_allocated = Arc::new(Barrier::new(GROUPS * 2 + 1));
+    // Phase 2: stopped workers free only after the main thread has sampled
+    // `all_live`, so their release can never race the "all groups resident"
+    // contract.
+    let may_stop = Arc::new(Barrier::new(GROUPS + 1));
     let mut stopped_handles = Vec::new();
     let mut idle_handles = Vec::new();
     let mut idle_releases = Vec::new();
 
     for group in 0..(GROUPS * 2) {
-        let barrier = Arc::clone(&barrier);
+        let all_allocated = Arc::clone(&all_allocated);
         if group < GROUPS {
+            let may_stop = Arc::clone(&may_stop);
             stopped_handles.push(thread::spawn(move || {
                 let blocks: Vec<Vec<u8>> = (0..BLOCKS)
                     .map(|index| vec![(group + index) as u8; BLOCK_BYTES])
@@ -668,9 +652,12 @@ fn stopped_workers_release_abandoned_pages_while_idle_workers_retain() {
                         std::hint::black_box(block[offset]);
                     }
                 }
-                barrier.wait();
+                all_allocated.wait();
+                may_stop.wait();
                 drop(blocks);
-                // Thread exits here; mimalloc retires the heap as abandoned.
+                // The thread exits here. The blocks were freed by their owner,
+                // so their pages are queued for arena purge; joining the
+                // thread makes the abandoned heap reclaimable as well.
             }));
         } else {
             let (release_sender, release_receiver) = mpsc::sync_channel::<()>(1);
@@ -684,7 +671,7 @@ fn stopped_workers_release_abandoned_pages_while_idle_workers_retain() {
                         std::hint::black_box(block[offset]);
                     }
                 }
-                barrier.wait();
+                all_allocated.wait();
                 // Stay alive and keep the allocations resident: this is the
                 // "idle but not stopped" control group. Dropping here would
                 // make the comparison against stopped workers meaningless.
@@ -694,7 +681,7 @@ fn stopped_workers_release_abandoned_pages_while_idle_workers_retain() {
         }
     }
 
-    barrier.wait();
+    all_allocated.wait();
     let all_live = agent.capture();
     assert!(
         all_live.commit_current > baseline.commit_current + 64 * 1024 * 1024,
@@ -702,26 +689,54 @@ fn stopped_workers_release_abandoned_pages_while_idle_workers_retain() {
         baseline.commit_current,
         all_live.commit_current
     );
+    assert!(
+        all_live.anon > baseline.anon + 64 * MIB,
+        "expected the live buffers to be resident: baseline_anon={} live_anon={}",
+        baseline.anon,
+        all_live.anon
+    );
+    may_stop.wait();
 
     for handle in stopped_handles {
         handle.join().expect("stopped worker");
     }
 
-    // Bounded retry: abandoned segments are purged by the allocator.
+    // Pages freed by the stopped workers become decommitted. On Linux the
+    // decommit uses MADV_DONTNEED and `_mi_prim_decommit` sets
+    // needs_recommit=false (mimalloc v3 src/prim/unix/prim.c:500-504), so
+    // mi_os_decommit_ex does not decrement the `committed` statistic
+    // (src/os.c:585-592). Release must therefore be observed through resident
+    // anonymous memory, not through mi_process_info's commit counter.
     let mut after_stop = agent.capture();
     let deadline = Instant::now() + Duration::from_secs(10);
-    while after_stop.commit_current > all_live.commit_current.saturating_sub(8 * 1024 * 1024)
-        && Instant::now() < deadline
+    while all_live.anon.saturating_sub(after_stop.anon) < MIN_RELEASED && Instant::now() < deadline
     {
         collect_mimalloc(true);
         thread::sleep(Duration::from_millis(50));
         after_stop = agent.capture();
     }
+    let stopped_released = all_live.anon.saturating_sub(after_stop.anon);
     assert!(
-        after_stop.commit_current + 8 * 1024 * 1024 <= all_live.commit_current,
-        "stopped workers did not release abandoned pages: live={} after_stop={}",
+        stopped_released >= MIN_RELEASED,
+        "stopped workers released only {stopped_released} of their {} resident bytes \
+         (require >= {MIN_RELEASED}): live_anon={} after_stop_anon={} \
+         (live_commit={} after_stop_commit={})",
+        STOPPED_GROUP_BYTES,
+        all_live.anon,
+        after_stop.anon,
         all_live.commit_current,
         after_stop.commit_current
+    );
+
+    // Control: the idle workers are still alive and must still hold at least
+    // 3/4 of their 128 MiB group resident.
+    let while_idle = agent.capture();
+    assert!(
+        while_idle.anon >= baseline.anon.saturating_add(MIN_RELEASED),
+        "idle workers did not retain their resident pages: baseline_anon={} idle_anon={} \
+         (require >= baseline + {MIN_RELEASED})",
+        baseline.anon,
+        while_idle.anon
     );
 
     for release in idle_releases {
@@ -731,12 +746,24 @@ fn stopped_workers_release_abandoned_pages_while_idle_workers_retain() {
         handle.join().expect("idle worker");
     }
     collect_mimalloc(true);
-    let after_idle = agent.capture();
+    let mut after_idle = agent.capture();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while while_idle.anon.saturating_sub(after_idle.anon) < MIN_RELEASED
+        && Instant::now() < deadline
+    {
+        collect_mimalloc(true);
+        thread::sleep(Duration::from_millis(50));
+        after_idle = agent.capture();
+    }
+    let idle_released = while_idle.anon.saturating_sub(after_idle.anon);
     assert!(
-        after_idle.commit_current <= all_live.commit_current,
-        "idle workers retained more than the live peak: live={} after_idle={}",
-        all_live.commit_current,
-        after_idle.commit_current
+        idle_released >= MIN_RELEASED,
+        "idle workers' resident pages were not released after they stopped: \
+         released {idle_released} of {} (require >= {MIN_RELEASED}): \
+         while_idle_anon={} after_idle_anon={}",
+        STOPPED_GROUP_BYTES,
+        while_idle.anon,
+        after_idle.anon
     );
     assert_eq!(after_idle.swap, 0);
 }
@@ -811,7 +838,14 @@ fn mimalloc_json_exposes_process_and_allocator_cache_metrics() {
         .get("process")
         .and_then(serde_json::Value::as_object)
         .expect("process object");
-    for key in ["commit_current", "peak_commit", "rss_current", "page_faults"] {
+    // mimalloc v3 emits `process.commit_peak` (src/stats.c:762); the v2 name
+    // `peak_commit` is not part of the JSON document.
+    for key in [
+        "commit_current",
+        "commit_peak",
+        "rss_current",
+        "page_faults",
+    ] {
         let field = process
             .get(key)
             .and_then(serde_json::Value::as_u64)

@@ -8,10 +8,15 @@ starttime). This module:
   ``systemd-run -p MemoryMax=2G -p MemorySwapMax=0 -p MemoryHigh=...``);
 * optionally creates a cgroup itself when running as root on a dedicated host;
 * allocates anonymous memory in cycles, touching every page so cgroup
-  accounting (``memory.current`` and ``memory.events``) reflects real pressure;
+  accounting (``memory.current`` and ``memory.events``) reflects real pressure.
+  The requested ``pressure_bytes`` is an upper bound, not a literal allocation:
+  each cycle targets a bounded margin above ``memory.high`` with reserve below
+  ``memory.max``. A fixed allocation larger than the headroom above
+  ``memory.high`` makes the kernel throttle every fault and the allocator
+  livelocks instead of becoming resident;
 * emits ``ISSUE34_PRESSURE {json}`` progress lines (also optionally to a file)
-  with phases ``cycle_start``, ``high_or_max_entered``, ``release`` and
-  ``recovered``.
+  with phases ``cycle_start``, ``high_or_max_entered``, ``release``,
+  ``recovered`` and ``resident_timeout`` (with the last cgroup evidence);
 
 Missing cgroup files or counters are hard errors, never zero. A run whose
 cycles produced no ``high``/``max`` events fails: the target was not actually
@@ -24,6 +29,7 @@ import json
 import mmap
 import os
 import select
+import signal
 import sys
 import time
 from dataclasses import dataclass
@@ -33,6 +39,20 @@ from . import procfs
 GIB = 1024**3
 MIB = 1024**2
 PAGE = 4096
+# A fixed 1.5 GiB allocation on top of a ~384 MiB baseline exceeds
+# memory.high=1.5 GiB by ~384 MiB. Above memory.high the kernel throttles every
+# fault and reclaims; with no swap the anonymous pages are unreclaimable, so the
+# child stops making progress and the cycle times out. Touch the bulk below high
+# and cross it by only a small bounded margin: high + at most 16 MiB, with at
+# least 256 MiB below max for the Edge, page cache and fault-in headroom.
+PRESSURE_OVER_HIGH_BYTES = 16 * MIB
+PRESSURE_RESERVE_BYTES = 256 * MIB
+MIN_PRESSURE_BYTES = 64 * MIB
+# Resident proof is bounded independently of the hold time. Waiting longer does
+# not help an allocation the kernel is throttling; it only delays the failure
+# report and keeps ~1 GiB charged to the cgroup.
+RESIDENT_TIMEOUT_SECONDS = 120.0
+RESIDENT_POLL_SECONDS = 1.0
 PROGRESS_PREFIX = "ISSUE34_PRESSURE "
 
 
@@ -236,13 +256,80 @@ def _touch_pages(mapping: mmap.mmap, size: int) -> None:
         view.release()
 
 
-def _spawn_allocator(size: int) -> tuple[int, int, int]:
-    """Fork a child that touches ``size`` anonymous bytes and holds them.
+def _cycle_pressure_size(
+    *,
+    current_bytes: int,
+    high_bytes: int | None,
+    max_bytes: int | None,
+    requested_bytes: int,
+) -> tuple[int, int]:
+    """Return ``(alloc_bytes, target_total_bytes)`` for one pressure cycle.
 
-    Returns ``(pid, ready_fd, release_fd)``. The child writes one byte on
+    ``requested_bytes`` is the operator's upper bound. Allocating it literally
+    can be impossible: with ``memory.high`` below ``current + requested``, the
+    kernel throttles every fault above high and the child livelocks (observed in
+    CI with max=2 GiB, high=1.5 GiB, current=384 MiB, requested=1.5 GiB).
+    Instead, target ``high + bounded_overage`` and keep a reserve below
+    ``memory.max`` so the Edge, page cache and fault-in path have headroom.
+    """
+    if requested_bytes < MIN_PRESSURE_BYTES:
+        raise PressureError(
+            f"pressure_bytes must be at least {MIN_PRESSURE_BYTES // MIB} MiB, "
+            f"got {requested_bytes}"
+        )
+    if max_bytes is None:
+        return requested_bytes, current_bytes + requested_bytes
+    if max_bytes <= 0:
+        raise PressureError(f"memory.max must be positive, got {max_bytes}")
+    if high_bytes is None:
+        raise PressureError(
+            "memory.high is 'max'; a high/max event cannot be generated"
+        )
+    high = min(high_bytes, max_bytes)
+    gap = max(0, max_bytes - high)
+    reserve = min(PRESSURE_RESERVE_BYTES, max(MIN_PRESSURE_BYTES, gap // 2))
+    ceiling = max_bytes - reserve
+    if ceiling < high:
+        raise PressureError(
+            "memory.high is too close to memory.max for a genuine pressure "
+            f"cycle: high={high} max={max_bytes} reserve={reserve}; leave at "
+            f"least {MIN_PRESSURE_BYTES} bytes between them"
+        )
+    over_high = min(
+        PRESSURE_OVER_HIGH_BYTES,
+        max(PRESSURE_OVER_HIGH_BYTES // 2, gap // 8),
+    )
+    target = min(
+        ceiling,
+        max(high + over_high, current_bytes + MIN_PRESSURE_BYTES),
+    )
+    required = max(MIN_PRESSURE_BYTES, target - current_bytes)
+    if requested_bytes < required:
+        raise PressureError(
+            f"requested pressure {requested_bytes} is below the {required} bytes "
+            f"needed to reach the pressure target {target} from current="
+            f"{current_bytes} (high={high}); increase --pressure-bytes"
+        )
+    alloc = min(requested_bytes, target - current_bytes)
+    if alloc < MIN_PRESSURE_BYTES:
+        raise PressureError(
+            "cgroup headroom is too small for a genuine pressure cycle: "
+            f"current={current_bytes} high={high} max={max_bytes} "
+            f"target={target} alloc={alloc}; need at least "
+            f"{MIN_PRESSURE_BYTES} bytes below max"
+        )
+    return alloc, target
+
+
+def _spawn_allocator(size: int) -> tuple[int, int, int]:
+    """Fork a child that faults ``size`` private anonymous bytes and holds them.
+
+    Returns ``(pid, ready_fd, release_fd)``. Explicit
+    ``MAP_PRIVATE|MAP_ANONYMOUS`` matters: ``mmap.mmap(-1, size)`` defaults to
+    ``MAP_SHARED`` (shmem), which the kernel can reclaim without swap, so it
+    does not prove resident anonymous memory. The child writes one byte on
     ``ready_fd`` once every page is resident, then blocks until the parent
-    closes ``release_fd`` (EOF), unmaps and exits. The mapping is private
-    anonymous memory, so cgroup accounting sees real resident pages.
+    closes ``release_fd`` (EOF), unmaps and exits.
     """
     ready_r, ready_w = os.pipe()
     release_r, release_w = os.pipe()
@@ -251,7 +338,15 @@ def _spawn_allocator(size: int) -> tuple[int, int, int]:
         try:
             os.close(ready_r)
             os.close(release_w)
-            mapping = mmap.mmap(-1, size)
+            anonymous = getattr(mmap, "MAP_ANONYMOUS", None) or getattr(
+                mmap, "MAP_ANON"
+            )
+            mapping = mmap.mmap(
+                -1,
+                size,
+                flags=mmap.MAP_PRIVATE | anonymous,
+                prot=mmap.PROT_READ | mmap.PROT_WRITE,
+            )
             _touch_pages(mapping, size)
             os.write(ready_w, b"A")
             os.close(ready_w)
@@ -267,26 +362,108 @@ def _spawn_allocator(size: int) -> tuple[int, int, int]:
     return pid, ready_r, release_w
 
 
-def _wait_ready(read_fd: int, timeout: float) -> None:
-    ready, _, _ = select.select([read_fd], [], [], timeout)
-    if not ready:
-        raise PressureError("pressure allocator did not make its pages resident in time")
-    data = os.read(read_fd, 1)
-    if data != b"A":
-        raise PressureError("pressure allocator failed before signalling readiness")
+def _wait_ready(
+    read_fd: int,
+    timeout: float,
+    *,
+    sampler: procfs.Sampler | None = None,
+    cycle: int | None = None,
+    allocated_bytes: int | None = None,
+    target_bytes: int | None = None,
+    progress: Progress | None = None,
+    poll_interval: float = RESIDENT_POLL_SECONDS,
+) -> None:
+    """Wait for the allocator's resident proof, bounded independently of hold.
+
+    The wait is not extended by ``hold_seconds``: if the kernel is throttling
+    faults above ``memory.high``, more time does not make the pages resident.
+    We sample the cgroup while waiting and report the last current/peak/high/
+    max/swap/events as evidence on timeout instead of only an opaque error.
+    """
+    if sampler is None or target_bytes is None:
+        ready, _, _ = select.select([read_fd], [], [], timeout)
+        if not ready:
+            raise PressureError(
+                "pressure allocator did not make its pages resident in time"
+            )
+        data = os.read(read_fd, 1)
+        if data != b"A":
+            raise PressureError("pressure allocator failed before signalling readiness")
+        return
+
+    started = time.monotonic()
+    last = None
+    peak = None
+    while True:
+        now = time.monotonic()
+        remaining = timeout - (now - started)
+        if remaining <= 0:
+            detail = ""
+            if last is not None:
+                evidence = {
+                    "elapsed_seconds": round(now - started, 1),
+                    "allocated_bytes": allocated_bytes,
+                    "target_bytes": target_bytes,
+                    "memory_current": last.cgroup_current_bytes,
+                    "peak_current": peak,
+                    "memory_high": last.cgroup_high_bytes,
+                    "memory_max": last.cgroup_max_bytes,
+                    "swap_current": last.cgroup_swap_current_bytes,
+                    "events": last.cgroup_events,
+                }
+                if progress is not None:
+                    progress.emit("resident_timeout", cycle=cycle, **evidence)
+                detail = (
+                    f"; current={evidence['memory_current']} "
+                    f"peak={evidence['peak_current']} target={target_bytes} "
+                    f"high={evidence['memory_high']} max={evidence['memory_max']} "
+                    f"swap={evidence['swap_current']} events={evidence['events']}"
+                )
+            raise PressureError(
+                "pressure allocator did not make its pages resident within "
+                f"{timeout:g}s{detail}"
+            )
+        ready, _, _ = select.select([read_fd], [], [], min(poll_interval, remaining))
+        if ready:
+            data = os.read(read_fd, 1)
+            if data != b"A":
+                raise PressureError(
+                    "pressure allocator failed before signalling readiness"
+                )
+            return
+        last = sampler.capture()
+        peak = max(peak or 0, last.cgroup_current_bytes)
 
 
-def _release_and_reap(pid: int, release_fd: int, timeout: float = 60.0) -> None:
+def _release_and_reap(
+    pid: int,
+    release_fd: int,
+    timeout: float = 60.0,
+    *,
+    kill_first: bool = False,
+) -> None:
+    """Release the allocator, or kill it immediately on a failed cycle.
+
+    ``kill_first`` is used when the cycle already failed (for example the
+    resident timeout): a child stuck in cgroup reclaim may never observe the
+    pipe EOF, and waiting the normal timeout would keep the allocation charged
+    and hide the original error behind a cleanup error.
+    """
     try:
         os.close(release_fd)
     except OSError:
         pass
+    if kill_first:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
     deadline = time.monotonic() + timeout
     while True:
         waited, status = os.waitpid(pid, os.WNOHANG)
         if waited == pid:
             code = os.waitstatus_to_exitcode(status)
-            if code != 0:
+            if code != 0 and not kill_first:
                 raise PressureError(f"pressure allocator exited with status {code}")
             return
         if time.monotonic() >= deadline:
@@ -373,8 +550,10 @@ def run_cycles(
     """Run deterministic pressure cycles and verify same-PID recovery."""
     if cycles <= 0:
         raise PressureError("cycles must be positive")
-    if pressure_bytes < 64 * MIB:
-        raise PressureError("pressure_bytes must be at least 64 MiB")
+    if pressure_bytes < MIN_PRESSURE_BYTES:
+        raise PressureError(
+            f"pressure_bytes must be at least {MIN_PRESSURE_BYTES // MIB} MiB"
+        )
     if long_recovery:
         # A 5 s / one-shot cycle proves the code path, not recovery. Long runs
         # must hold real pressure for a minute and verify recovery afterwards.
@@ -405,6 +584,12 @@ def run_cycles(
         # pressure was accounted.
         cycle_events = dict(before.cgroup_events)
         sampler.verify_identity()
+        allocated_bytes, target_bytes = _cycle_pressure_size(
+            current_bytes=before.cgroup_current_bytes,
+            high_bytes=before.cgroup_high_bytes,
+            max_bytes=before.cgroup_max_bytes,
+            requested_bytes=pressure_bytes,
+        )
         progress.emit(
             "cycle_start",
             cycle=index,
@@ -417,22 +602,38 @@ def run_cycles(
             swap_current=before.cgroup_swap_current_bytes,
             events=before.cgroup_events,
             pressure_bytes=pressure_bytes,
+            allocated_bytes=allocated_bytes,
+            target_bytes=target_bytes,
         )
-        pid, ready_fd, release_fd = _spawn_allocator(pressure_bytes)
+        pid, ready_fd, release_fd = _spawn_allocator(allocated_bytes)
         entered_sample = None
+        last_candidate = None
+        cycle_error = None
         try:
-            _wait_ready(ready_fd, timeout=max(120.0, hold_seconds))
+            _wait_ready(
+                ready_fd,
+                timeout=RESIDENT_TIMEOUT_SECONDS,
+                sampler=sampler,
+                cycle=index,
+                allocated_bytes=allocated_bytes,
+                target_bytes=target_bytes,
+                progress=progress,
+            )
             deadline = time.monotonic() + max(30.0, hold_seconds)
             while time.monotonic() < deadline:
                 candidate = sampler.capture()
+                last_candidate = candidate
                 if _pressure_entered(cycle_events, candidate):
                     entered_sample = candidate
                     break
                 time.sleep(poll_interval)
             if entered_sample is None:
+                seen = last_candidate or before
                 raise PressureError(
-                    f"cycle {index}: cgroup never reached memory.high or emitted a "
-                    "high/max event; the pressure allocation was not accounted"
+                    f"cycle {index}: cgroup never reached memory.high or emitted "
+                    f"a high/max event; current={seen.cgroup_current_bytes} "
+                    f"before={before.cgroup_current_bytes} target={target_bytes} "
+                    f"high={seen.cgroup_high_bytes} events={seen.cgroup_events}"
                 )
             progress.emit(
                 "high_or_max_entered",
@@ -445,12 +646,25 @@ def run_cycles(
                 events=entered_sample.cgroup_events,
             )
             time.sleep(hold_seconds)
+        except BaseException as exc:
+            cycle_error = exc
+            raise
         finally:
             try:
                 os.close(ready_fd)
             except OSError:
                 pass
-            _release_and_reap(pid, release_fd)
+            try:
+                _release_and_reap(
+                    pid,
+                    release_fd,
+                    timeout=10.0 if cycle_error is not None else 60.0,
+                    kill_first=cycle_error is not None,
+                )
+            except PressureError:
+                # A cleanup failure must not mask the primary pressure error.
+                if cycle_error is None:
+                    raise
 
         progress.emit(
             "release",
@@ -501,6 +715,9 @@ def run_cycles(
         records.append(
             {
                 "cycle": index,
+                "requested_bytes": pressure_bytes,
+                "allocated_bytes": allocated_bytes,
+                "target_bytes": target_bytes,
                 "before": before.to_dict(),
                 "entered": entered_sample.to_dict(),
                 "recovered": recovered.to_dict(),
@@ -527,6 +744,8 @@ def run_cycles(
     return {
         "cycles": cycles,
         "pressure_bytes": pressure_bytes,
+        "allocated_bytes": [record["allocated_bytes"] for record in records],
+        "target_bytes": [record["target_bytes"] for record in records],
         "hold_seconds": hold_seconds,
         "settle_timeout_seconds": settle_timeout_seconds,
         "recovery_probe_seconds": recovery_probe_seconds,
