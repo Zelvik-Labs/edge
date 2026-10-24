@@ -141,7 +141,21 @@ class AnalyzeTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertTrue(result["rss"]["ok"], result["rss"])
         self.assertFalse(result["anon"]["ok"], result["anon"])
+        self.assertEqual(result["rss"]["label"], "RSS")
+        self.assertEqual(result["anon"]["label"], "Anon")
+        # The Anon failure must report the Anon series, not the RSS label or
+        # values. These series differ on purpose.
+        self.assertIn("Anon slope", result["anon"]["error"])
+        self.assertNotIn("RSS", result["anon"]["error"])
         self.assertIn("0.500 MiB/h", result["anon"]["error"])
+        self.assertNotEqual(
+            result["rss"]["upper95_mib_per_hour"],
+            result["anon"]["upper95_mib_per_hour"],
+        )
+        self.assertNotEqual(
+            result["rss"]["theil_sen_mib_per_hour"],
+            result["anon"]["theil_sen_mib_per_hour"],
+        )
 
     def test_flat_rss_and_anon_pass(self):
         points = [(float(i * 10), 100 * MIB) for i in range(400)]
@@ -167,6 +181,148 @@ class AnalyzeTests(unittest.TestCase):
             pressure_settle_seconds=0,
         )
         self.assertFalse(result["ok"])
+
+
+class MeasurementWindowTests(unittest.TestCase):
+    def test_pressure_must_end_before_measurement_starts(self):
+        with self.assertRaises(soak.SoakError) as caught:
+            soak._measurement_start(
+                started=0.0,
+                warmup_seconds=90.0,
+                pressure_end=95.0,
+                handshake_end=90.0,
+            )
+        self.assertIn("pressure block ended after", str(caught.exception))
+
+        # Fast lane: the handshake is later than the warm-up floor.
+        self.assertEqual(
+            soak._measurement_start(0.0, 90.0, 90.0, 125.0), 125.0
+        )
+        # Long lane: the configured warm-up still wins when pressure/handshake
+        # finish early inside it.
+        self.assertEqual(
+            soak._measurement_start(0.0, 1800.0, 1500.0, 1600.0), 1800.0
+        )
+
+    def test_analysis_uses_only_the_measurement_window(self):
+        # 100 s of growth, then flat. Measurement starts at 100 s, so the
+        # pre-measurement ramp must not contaminate the gate.
+        samples = [(float(i), 100 * MIB + i * 10 * MIB) for i in range(100)]
+        samples += [(float(i), 1100 * MIB) for i in range(100, 200)]
+        result = soak.analyze(
+            samples,
+            warmup_seconds=0,
+            budget_mib_per_hour=4,
+            min_span_seconds=60,
+            last_pressure_end=None,
+            pressure_settle_seconds=0,
+            measurement_start=100.0,
+        )
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["label"], "RSS")
+        self.assertEqual(result["effective_warmup_seconds"], 100.0)
+        self.assertEqual(result["samples"], 100)
+        self.assertLess(result["upper95_mib_per_hour"], 4)
+
+    def test_measurement_window_can_still_fail_anon_independently(self):
+        rss = [(float(i), 100 * MIB) for i in range(200)]
+        anon = [
+            (float(i), 50 * MIB + i * 10 * 4.5 * MIB / 3600.0)
+            for i in range(200)
+        ]
+        result = soak.analyze_pair(
+            rss,
+            anon,
+            warmup_seconds=0,
+            budget_mib_per_hour=0.5,
+            anon_budget_mib_per_hour=0.5,
+            min_span_seconds=60,
+            last_pressure_end=None,
+            pressure_settle_seconds=0,
+            measurement_start=10.0,
+        )
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["rss"]["ok"], result["rss"])
+        self.assertFalse(result["anon"]["ok"], result["anon"])
+        self.assertIn("Anon slope", result["anon"]["error"])
+
+
+class CleanLoadHandshakeTests(unittest.TestCase):
+    class Clock:
+        def __init__(self):
+            self.now = 0.0
+
+        def monotonic(self):
+            return self.now
+
+        def sleep(self, seconds):
+            self.now += seconds
+
+    class Runner:
+        """Counter snapshot source with an injectable error burst."""
+
+        def __init__(self, *, error_calls=(), requests_per_call=8):
+            self.calls = 0
+            self.errors = 0
+            self.requests_ok = 0
+            self.error_calls = set(error_calls)
+            self.requests_per_call = requests_per_call
+
+        def summary(self):
+            self.calls += 1
+            self.requests_ok += self.requests_per_call
+            if self.calls in self.error_calls:
+                self.errors += 1
+            return {
+                "requests_ok": self.requests_ok,
+                "errors": self.errors,
+            }
+
+    def run_handshake(self, runner, *, min_clean=10.0, timeout=60.0):
+        clock = self.Clock()
+        return (
+            soak._wait_clean_load(
+                runner,
+                min_clean_seconds=min_clean,
+                timeout_seconds=timeout,
+                poll_interval=0.5,
+                clock=clock.monotonic,
+                sleep=clock.sleep,
+            ),
+            clock,
+        )
+
+    def test_requires_a_full_clean_window(self):
+        result, clock = self.run_handshake(self.Runner())
+        self.assertGreaterEqual(result["seconds"], 10.0)
+        self.assertEqual(result["errors"], 0)
+        self.assertGreater(result["requests_ok"], 0)
+        self.assertEqual(clock.now, 10.0)
+
+    def test_an_error_restarts_the_clean_window(self):
+        # Error on the 10th poll (~5 s); the handshake must not return until a
+        # full 10 s after it.
+        result, clock = self.run_handshake(self.Runner(error_calls={11}))
+        self.assertEqual(result["errors"], 1)
+        self.assertGreaterEqual(result["seconds"], 10.0)
+        self.assertEqual(clock.now, 15.0)
+
+    def test_never_clean_traffic_is_a_bounded_failure(self):
+        with self.assertRaises(soak.SoakError) as caught:
+            self.run_handshake(
+                self.Runner(error_calls=set(range(1, 200))),
+                timeout=20.0,
+            )
+        self.assertIn("clean 2xx for 10s within 20s", str(caught.exception))
+
+    def test_clean_window_below_ten_seconds_is_rejected(self):
+        with self.assertRaises(soak.SoakError) as caught:
+            soak._wait_clean_load(
+                self.Runner(),
+                min_clean_seconds=9.0,
+                timeout_seconds=60.0,
+            )
+        self.assertIn("at least 10s", str(caught.exception))
 
 
 def synthetic_series(
@@ -239,6 +395,29 @@ class NightlyWindowContractTests(unittest.TestCase):
         # sample count equals the loop sample count; 5000 is satisfiable even
         # in this worst-case pressure window.
         self.assertGreaterEqual(samples, 5000)
+
+    def test_long_lane_measurement_window_excludes_pressure_and_warmup(self):
+        # The new correctness path: the pressure block and the configured
+        # warm-up are outside the selected measurement window; no post-hoc
+        # last_pressure_end exclusion is needed.
+        pressure = (72.0, 972.0)
+        rss = synthetic_series(pressure_window=pressure)
+        anon = synthetic_series(pressure_window=pressure, base_mib=100.0)
+        result = soak.analyze_pair(
+            rss,
+            anon,
+            warmup_seconds=0,
+            budget_mib_per_hour=0.5,
+            anon_budget_mib_per_hour=0.5,
+            min_span_seconds=10800,
+            last_pressure_end=None,
+            pressure_settle_seconds=0,
+            measurement_start=1800.0,
+        )
+        self.assertTrue(result["ok"], result)
+        self.assertGreaterEqual(result["rss"]["effective_warmup_seconds"], 1800)
+        self.assertGreaterEqual(result["rss"]["span_seconds"], 10800)
+        self.assertEqual(result["rss"]["measurement_start"], 1800.0)
 
     def test_4_5_mib_per_hour_still_fails_the_same_contract(self):
         result, _, _ = self.analyze(rss_growth=4.5)
@@ -323,6 +502,16 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(args.target_kind, "bench-defense")
         self.assertEqual(args.duration_seconds, 600.0)
         self.assertEqual(args.stats_ready_timeout_seconds, 30.0)
+        self.assertEqual(args.measurement_clean_seconds, 10.0)
+        self.assertEqual(args.measurement_handshake_timeout_seconds, 60.0)
+
+    def test_measurement_clean_window_below_ten_is_rejected(self):
+        args = soak.build_parser().parse_args(
+            self.base_args() + ["--measurement-clean-seconds", "9"]
+        )
+        with self.assertRaises(soak.SoakError) as caught:
+            soak.run(args)
+        self.assertIn("--measurement-clean-seconds", str(caught.exception))
 
     def test_negative_stats_readiness_timeout_is_rejected(self):
         args = soak.build_parser().parse_args(

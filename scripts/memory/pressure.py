@@ -575,10 +575,21 @@ def run_cycles(
             )
     baseline = sampler.capture()
     baseline_events = dict(baseline.cgroup_events)
+    # Recovery is judged against a stable pressure-block baseline, not the
+    # transient current immediately after the previous cycle. In CI run
+    # 40094513096 the second cycle's pre-pressure current was ~15 MiB below the
+    # first cycle's steady state, so its per-cycle ceiling was too low and the
+    # 10 s probe failed by 528,384 bytes while the process was recovering
+    # normally. The baseline may rise if a later pre-cycle sample is higher,
+    # but the slack stays exactly the configured 64 MiB.
+    recovery_baseline_bytes = baseline.cgroup_current_bytes
     records = []
     probe_samples_total = 0
     for index in range(1, cycles + 1):
         before = sampler.capture()
+        recovery_baseline_bytes = max(
+            recovery_baseline_bytes, before.cgroup_current_bytes
+        )
         # Per-cycle baseline: the run-level counters already moved in earlier
         # cycles, so using them would let later cycles "pass" before any new
         # pressure was accounted.
@@ -674,7 +685,7 @@ def run_cycles(
         )
         recovered = None
         deadline = time.monotonic() + settle_timeout_seconds
-        target_ceiling = before.cgroup_current_bytes + recovery_slack_bytes
+        target_ceiling = recovery_baseline_bytes + recovery_slack_bytes
         while time.monotonic() < deadline:
             candidate = sampler.capture()
             if candidate.cgroup_current_bytes <= target_ceiling:
@@ -721,6 +732,9 @@ def run_cycles(
                 "before": before.to_dict(),
                 "entered": entered_sample.to_dict(),
                 "recovered": recovered.to_dict(),
+                "recovery_baseline_bytes": recovery_baseline_bytes,
+                "recovery_ceiling_bytes": target_ceiling,
+                "recovery_slack_bytes": recovery_slack_bytes,
                 "recovery_probe_samples": probe_samples,
             }
         )
@@ -750,6 +764,9 @@ def run_cycles(
         "settle_timeout_seconds": settle_timeout_seconds,
         "recovery_probe_seconds": recovery_probe_seconds,
         "recovery_probe_samples": probe_samples_total,
+        "initial_baseline_current_bytes": baseline.cgroup_current_bytes,
+        "recovery_baseline_current_bytes": recovery_baseline_bytes,
+        "recovery_slack_bytes": recovery_slack_bytes,
         "long_recovery": long_recovery,
         "event_deltas": delta,
         "same_pid": final.starttime == sampler.starttime,

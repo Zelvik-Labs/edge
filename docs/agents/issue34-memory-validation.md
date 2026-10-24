@@ -182,7 +182,7 @@ sudo systemd-run --scope \
      --duration 300 --warmup-seconds 90 --min-span-seconds 150 \
      --budget-mib-per-hour 64 --anon-budget-mib-per-hour 64 \
      --screen-only --max-rss-mib 1024 \
-     --pressure-cycles 1 --pressure-start-fraction 0.2 \
+     --pressure-cycles 1 --pressure-start-fraction 0.3 --measurement-clean-seconds 10 \
      --pressure-hold-seconds 15 --pressure-settle-seconds 30 \
      --pressure-recovery-probe-seconds 10 \
      --stats-source /tmp/issue34/alloc-stats.json \

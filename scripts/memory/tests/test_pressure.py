@@ -528,5 +528,131 @@ class ResidentProofTests(unittest.TestCase):
         )
 
 
+class BlockBaselineRecoveryTests(unittest.TestCase):
+    """Exact CI run 40094513096: cycle 2 failed by 528,384 bytes."""
+
+    MIB = pressure.MIB
+    BLOCK_BASELINE = 660_627_456
+    CYCLE2_BEFORE = 644_853_760
+    FAILING_CURRENT = 712_491_008
+    OLD_CEILING = CYCLE2_BEFORE + 64 * MIB
+    NEW_CEILING = BLOCK_BASELINE + 64 * MIB
+
+    def test_exact_ci_numbers_straddle_the_old_and_block_ceilings(self):
+        self.assertEqual(self.OLD_CEILING, 711_962_624)
+        self.assertEqual(self.NEW_CEILING, 727_736_320)
+        self.assertGreater(self.FAILING_CURRENT, self.OLD_CEILING)
+        self.assertLess(self.FAILING_CURRENT, self.NEW_CEILING)
+
+    def test_second_cycle_probes_against_the_block_baseline(self):
+        high = 1536 * self.MIB
+        max_bytes = 2048 * self.MIB
+        samples = [
+            # baseline captured before cycle 1
+            FakeSample(self.BLOCK_BASELINE, high, max_bytes),
+            # cycle 1 before
+            FakeSample(self.BLOCK_BASELINE, high, max_bytes),
+            # cycle 1 entered high (current >= memory.high)
+            FakeSample(1552 * self.MIB, high, max_bytes),
+            # cycle 1 recovered, then cycle 2 before is a transient low
+            FakeSample(self.FAILING_CURRENT, high, max_bytes, high_events=1),
+            FakeSample(self.CYCLE2_BEFORE, high, max_bytes, high_events=1),
+            # cycle 2 entered high
+            FakeSample(1552 * self.MIB, high, max_bytes, high_events=1),
+            # cycle 2 recovered at the exact current that the old per-cycle
+            # ceiling rejected; the 10 s probe is covered separately below
+            FakeSample(self.FAILING_CURRENT, high, max_bytes, high_events=2),
+            # final snapshot for the block-level event delta
+            FakeSample(self.FAILING_CURRENT, high, max_bytes, high_events=2),
+        ]
+        sampler = FakeSampler(samples)
+        created = []
+
+        def spawn(size):
+            ready_r, ready_w = os.pipe()
+            release_r, release_w = os.pipe()
+            created.append((ready_r, ready_w, release_r, release_w))
+            return 4242, ready_r, release_w
+
+        def release(pid, fd, **kwargs):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+        try:
+            with (
+                mock.patch.object(pressure, "_spawn_allocator", side_effect=spawn),
+                mock.patch.object(pressure, "_wait_ready"),
+                mock.patch.object(
+                    pressure, "_release_and_reap", side_effect=release
+                ),
+                mock.patch.object(pressure.time, "sleep"),
+            ):
+                result = pressure.run_cycles(
+                    sampler,
+                    cycles=2,
+                    pressure_bytes=1536 * self.MIB,
+                    hold_seconds=0,
+                    settle_timeout_seconds=1,
+                    progress=pressure.Progress(stream=io.StringIO()),
+                    recovery_probe_seconds=0,
+                )
+        finally:
+            for ready_r, ready_w, release_r, release_w in created:
+                for fd in (ready_r, ready_w, release_r, release_w):
+                    try:
+                        os.close(fd)
+                    except OSError:
+                        pass
+
+        records = result["records"]
+        self.assertEqual(len(records), 2)
+        self.assertEqual(
+            result["recovery_baseline_current_bytes"], self.BLOCK_BASELINE
+        )
+        self.assertEqual(
+            records[1]["before"]["cgroup_current_bytes"], self.CYCLE2_BEFORE
+        )
+        self.assertEqual(records[1]["recovery_baseline_bytes"], self.BLOCK_BASELINE)
+        self.assertEqual(records[1]["recovery_ceiling_bytes"], self.NEW_CEILING)
+        self.assertEqual(records[1]["recovery_slack_bytes"], 64 * self.MIB)
+
+    def test_probe_accepts_528k_above_the_old_per_cycle_ceiling(self):
+        clock = SustainedRecoveryProbeTests.Clock()
+        samples = [
+            SustainedRecoveryProbeTests.Sample(self.FAILING_CURRENT)
+        ] * 10
+        with (
+            mock.patch.object(pressure.time, "monotonic", clock.monotonic),
+            mock.patch.object(pressure.time, "sleep", clock.sleep),
+        ):
+            accepted = pressure._probe_sustained_recovery(
+                SustainedRecoveryProbeTests.Sampler(samples),
+                ceiling_bytes=self.NEW_CEILING,
+                seconds=1.0,
+                poll_interval=0.2,
+                progress=pressure.Progress(stream=io.StringIO()),
+                cycle=2,
+            )
+            self.assertGreaterEqual(accepted, 1)
+
+        clock = SustainedRecoveryProbeTests.Clock()
+        with (
+            mock.patch.object(pressure.time, "monotonic", clock.monotonic),
+            mock.patch.object(pressure.time, "sleep", clock.sleep),
+        ):
+            with self.assertRaises(pressure.PressureError) as caught:
+                pressure._probe_sustained_recovery(
+                    SustainedRecoveryProbeTests.Sampler(samples),
+                    ceiling_bytes=self.OLD_CEILING,
+                    seconds=1.0,
+                    poll_interval=0.2,
+                    progress=pressure.Progress(stream=io.StringIO()),
+                    cycle=2,
+                )
+        self.assertIn("not sustained", str(caught.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

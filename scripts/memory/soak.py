@@ -32,6 +32,10 @@ GIB = 1024 * MIB
 DEFAULT_TLS_HOST = "localhost"
 MAX_VERIFY_RESULTS = 64
 MAX_VIOLATION_MESSAGES = 32
+# The measurement window starts only after the load generator has produced a
+# continuous clean 2xx interval. Errors under memory.high are expected pressure
+# admission rejections and are accounted to the pressure window instead.
+MIN_CLEAN_LOAD_SECONDS = 10.0
 
 
 class SoakError(RuntimeError):
@@ -224,6 +228,91 @@ def _wait_stats_ready(
         time.sleep(min(0.2, max(0.0, deadline - time.monotonic())))
 
 
+def _wait_clean_load(
+    runner,
+    *,
+    min_clean_seconds: float,
+    timeout_seconds: float,
+    poll_interval: float = 0.5,
+    clock=None,
+    sleep=None,
+) -> dict:
+    """Wait for a continuous clean-2xx interval after the pressure block.
+
+    Errors are expected while the cgroup is above ``memory.high`` (503
+    admission rejections). The measurement window must not begin until the
+    generator has recovered, otherwise the post-pressure tail is misreported as
+    a measurement-window failure. Any error resets the clean window. The total
+    wait is bounded; a target that never recovers is a hard failure.
+    """
+    clock = clock or time.monotonic
+    sleep = sleep or time.sleep
+    if min_clean_seconds < MIN_CLEAN_LOAD_SECONDS:
+        raise SoakError(
+            f"clean-load window must be at least {MIN_CLEAN_LOAD_SECONDS:g}s, "
+            f"got {min_clean_seconds:g}s"
+        )
+    if timeout_seconds <= 0:
+        raise SoakError("clean-load handshake timeout must be positive")
+
+    deadline = clock() + timeout_seconds
+    initial = runner.summary()
+    last_errors = initial["errors"]
+    window_start = clock()
+    window_ok_start = initial["requests_ok"]
+    while True:
+        sleep(poll_interval)
+        now = clock()
+        current = runner.summary()
+        if current["errors"] > last_errors:
+            last_errors = current["errors"]
+            window_start = now
+            window_ok_start = current["requests_ok"]
+        if (
+            now - window_start >= min_clean_seconds
+            and current["requests_ok"] > window_ok_start
+        ):
+            return {
+                "seconds": now - window_start,
+                "end": now,
+                "errors": current["errors"] - initial["errors"],
+                "requests_ok": current["requests_ok"] - initial["requests_ok"],
+            }
+        if now >= deadline:
+            raise SoakError(
+                "load generator did not produce clean 2xx for "
+                f"{min_clean_seconds:g}s within {timeout_seconds:g}s "
+                f"(errors={current['errors'] - initial['errors']}, "
+                f"requests_ok={current['requests_ok'] - initial['requests_ok']})"
+            )
+
+
+def _measurement_start(
+    started: float,
+    warmup_seconds: float,
+    pressure_end: float | None,
+    handshake_end: float | None,
+) -> float:
+    """Resolve the measurement start and prove pressure finished before it.
+
+    The warm-up floor still applies to long lanes (their pressure block starts
+    early inside the warm-up), while the fast lanes start measuring only after
+    the post-pressure clean-load handshake. There is no fallback that silently
+    includes pressure/recovery samples in the measured window.
+    """
+    candidates = [started + warmup_seconds]
+    if handshake_end is not None:
+        candidates.append(handshake_end)
+    measurement_start = max(candidates)
+    if pressure_end is not None and pressure_end >= measurement_start:
+        raise SoakError(
+            "pressure block ended after the measurement window started: "
+            f"pressure_end={pressure_end - started:.3f}s, "
+            f"measurement_start={measurement_start - started:.3f}s"
+        )
+    return measurement_start
+
+
 def _effective_warmup(
     samples: list[tuple[float, int]],
     warmup_seconds: float,
@@ -238,6 +327,68 @@ def _effective_warmup(
     return effective
 
 
+def _measurement_points(
+    samples: list[tuple[float, int]], measurement_start: float | None
+) -> tuple[list[tuple[float, int]], float | None]:
+    """Select the measured samples and report the start offset.
+
+    When ``measurement_start`` is given, the slope is computed on exactly that
+    window with no second warm-up. This is what removes the old correctness
+    dependency on ``last_pressure_end``: pressure and the recovery handshake
+    are simply outside the selected points.
+    """
+    if measurement_start is None:
+        return samples, None
+    selected = [(t, value) for t, value in samples if t >= measurement_start]
+    effective = max(0.0, measurement_start - samples[0][0]) if samples else 0.0
+    return selected, effective
+
+
+def _relabel_error(message: str, label: str) -> str:
+    """Keep RSS/Anon gate diagnostics independent without duplicating slope.py."""
+    if label == "RSS":
+        return message
+    return message.replace("RSS", label)
+
+
+_SLOPE_METRIC_KEYS = (
+    "samples",
+    "warmup_seconds",
+    "span_seconds",
+    "slope_bytes_per_second",
+    "upper95_bytes_per_second",
+    "slope_mib_per_hour",
+    "upper95_mib_per_hour",
+    "theil_sen_mib_per_hour",
+    "r_squared",
+    "t_critical",
+)
+
+
+def _diagnostic_slope(
+    points,
+    *,
+    warmup_seconds: float,
+    min_span_seconds: float,
+) -> dict | None:
+    """Recompute point/robust/upper values after a budget failure.
+
+    ``slope.estimate_slope`` raises on a budget violation without returning
+    the metrics, which previously left the failing gate with only the message.
+    Re-running with an infinite budget recovers the independent RSS/Anon
+    point, robust and upper values for the report; the gate itself still fails.
+    """
+    try:
+        return slope.estimate_slope(
+            points,
+            warmup_seconds=warmup_seconds,
+            budget_mib_per_hour=float("inf"),
+            min_span_seconds=min_span_seconds,
+        ).to_dict()
+    except slope.ThresholdError:
+        return None
+
+
 def analyze(
     samples: list[tuple[float, int]],
     *,
@@ -246,27 +397,53 @@ def analyze(
     min_span_seconds: float,
     last_pressure_end: float | None,
     pressure_settle_seconds: float,
+    measurement_start: float | None = None,
+    label: str = "RSS",
 ) -> dict:
     """Compute the gate slope. Returns ``{"ok": bool, ...}`` and never raises."""
     if not samples:
-        return {"ok": False, "error": "no samples"}
-    effective = _effective_warmup(
-        samples, warmup_seconds, last_pressure_end, pressure_settle_seconds
-    )
+        return {"ok": False, "error": "no samples", "label": label}
+    if measurement_start is not None:
+        points, effective = _measurement_points(samples, measurement_start)
+        slope_warmup = 0.0
+    else:
+        points = samples
+        effective = _effective_warmup(
+            samples, warmup_seconds, last_pressure_end, pressure_settle_seconds
+        )
+        slope_warmup = effective
     try:
         result = slope.estimate_slope(
-            samples,
-            warmup_seconds=effective,
+            points,
+            warmup_seconds=slope_warmup,
             budget_mib_per_hour=budget_mib_per_hour,
             min_span_seconds=min_span_seconds,
         )
     except slope.ThresholdError as exc:
-        return {
+        payload = {
             "ok": False,
-            "error": str(exc),
+            "error": _relabel_error(str(exc), label),
             "effective_warmup_seconds": effective,
+            "measurement_start": measurement_start,
+            "label": label,
         }
-    return {"ok": True, "effective_warmup_seconds": effective, **result.to_dict()}
+        diagnostics = _diagnostic_slope(
+            points,
+            warmup_seconds=slope_warmup,
+            min_span_seconds=min_span_seconds,
+        )
+        if diagnostics is not None:
+            for key in _SLOPE_METRIC_KEYS:
+                payload[key] = diagnostics[key]
+            payload["budget_mib_per_hour"] = budget_mib_per_hour
+        return payload
+    return {
+        "ok": True,
+        **result.to_dict(),
+        "effective_warmup_seconds": effective,
+        "measurement_start": measurement_start,
+        "label": label,
+    }
 
 
 def analyze_split(
@@ -278,17 +455,25 @@ def analyze_split(
     last_pressure_end: float | None,
     pressure_settle_seconds: float,
     split_fraction: float = 0.5,
+    measurement_start: float | None = None,
+    label: str = "RSS",
 ) -> dict:
     """Second-half re-gate plus step baseline for long dedicated runs."""
     if not samples:
-        return {"ok": False, "error": "no samples"}
-    effective = _effective_warmup(
-        samples, warmup_seconds, last_pressure_end, pressure_settle_seconds
-    )
+        return {"ok": False, "error": "no samples", "label": label}
+    if measurement_start is not None:
+        points, effective = _measurement_points(samples, measurement_start)
+        slope_warmup = 0.0
+    else:
+        points = samples
+        effective = _effective_warmup(
+            samples, warmup_seconds, last_pressure_end, pressure_settle_seconds
+        )
+        slope_warmup = effective
     try:
         result = slope.estimate_split_slope(
-            samples,
-            warmup_seconds=effective,
+            points,
+            warmup_seconds=slope_warmup,
             budget_mib_per_hour=budget_mib_per_hour,
             min_span_seconds=min_span_seconds,
             split_fraction=split_fraction,
@@ -296,10 +481,18 @@ def analyze_split(
     except slope.ThresholdError as exc:
         return {
             "ok": False,
-            "error": str(exc),
+            "error": _relabel_error(str(exc), label),
             "effective_warmup_seconds": effective,
+            "measurement_start": measurement_start,
+            "label": label,
         }
-    return {"ok": True, "effective_warmup_seconds": effective, **result.to_dict()}
+    return {
+        "ok": True,
+        **result.to_dict(),
+        "effective_warmup_seconds": effective,
+        "measurement_start": measurement_start,
+        "label": label,
+    }
 
 
 def analyze_pair(
@@ -312,12 +505,14 @@ def analyze_pair(
     min_span_seconds: float,
     last_pressure_end: float | None,
     pressure_settle_seconds: float,
+    measurement_start: float | None = None,
 ) -> dict:
     """Gate RSS and anonymous RSS independently.
 
     A flat total RSS can hide anonymous-memory growth offset by file-page
     reclaim; the Issue 34 gate therefore requires *both* series to stay under
-    the budget. There is no combined/lenient fallback.
+    the budget. There is no combined/lenient fallback. The two label/values are
+    kept independent so an Anon failure never prints the RSS series.
     """
     rss = analyze(
         rss_samples,
@@ -326,6 +521,8 @@ def analyze_pair(
         min_span_seconds=min_span_seconds,
         last_pressure_end=last_pressure_end,
         pressure_settle_seconds=pressure_settle_seconds,
+        measurement_start=measurement_start,
+        label="RSS",
     )
     anon = analyze(
         anon_samples,
@@ -334,6 +531,8 @@ def analyze_pair(
         min_span_seconds=min_span_seconds,
         last_pressure_end=last_pressure_end,
         pressure_settle_seconds=pressure_settle_seconds,
+        measurement_start=measurement_start,
+        label="Anon",
     )
     return {
         "ok": bool(rss.get("ok")) and bool(anon.get("ok")),
@@ -357,6 +556,21 @@ def run(args) -> int:
         raise SoakError("--require-stats-samples must be >= 0")
     if args.stats_ready_timeout_seconds < 0:
         raise SoakError("--stats-ready-timeout-seconds must be >= 0")
+    if args.warmup_seconds < 0:
+        raise SoakError("--warmup-seconds must be >= 0")
+    if args.measurement_clean_seconds < MIN_CLEAN_LOAD_SECONDS:
+        raise SoakError(
+            "--measurement-clean-seconds must be at least "
+            f"{MIN_CLEAN_LOAD_SECONDS:g}"
+        )
+    if (
+        args.measurement_handshake_timeout_seconds
+        < args.measurement_clean_seconds
+    ):
+        raise SoakError(
+            "--measurement-handshake-timeout-seconds must be >= "
+            "--measurement-clean-seconds"
+        )
     if args.require_status_samples < 0:
         raise SoakError("--require-status-samples must be >= 0")
     if args.stats_source and args.require_allocator_stats:
@@ -418,6 +632,14 @@ def run(args) -> int:
     verifier_thread = None
     verify_results: list[dict] = []
     verify_errors: list[str] = []
+    # Periodic TLS verification must not overlap the pressure block: 503
+    # admission rejections are expected there, while the TLS contract itself
+    # (CA, SNI, ALPN h2, payload echo) is still checked strictly outside it.
+    # The lock serializes a check that is already running with the pause, so a
+    # check cannot slip into the pressure window at the boundary.
+    verifier_pause = threading.Event()
+    verify_lock = threading.Lock()
+    paused_verifications = 0
 
     def verify_once(phase: str) -> None:
         try:
@@ -438,8 +660,13 @@ def run(args) -> int:
             verify_results.append({"phase": phase, "monotonic_s": time.monotonic(), **result.to_dict()})
 
     def verifier_loop() -> None:
+        nonlocal paused_verifications
         while not verifier_stop.wait(args.tls_verify_interval):
-            verify_once("periodic")
+            with verify_lock:
+                if verifier_pause.is_set():
+                    paused_verifications += 1
+                    continue
+                verify_once("periodic")
 
     loadgen_payload = (args.load_payload or "issue34-load-payload\n").encode() * 256
     if not loadgen_payload or len(loadgen_payload) > MIB:
@@ -525,6 +752,16 @@ def run(args) -> int:
         last_pressure_end = None
         pressure_summary = None
         pressure_blocked_seconds = 0.0
+        pressure_load_baseline = 0
+        pressure_load_errors = 0
+        measurement_handshake = None
+        measurement_start = None
+        measurement_target = (
+            None
+            if args.pressure_cycles > 0
+            else started + args.warmup_seconds
+        )
+        measurement_load_baseline = None
         cycle_done = False
         cycle_at = args.duration_seconds * args.pressure_start_fraction
         jsonl = open(args.samples_jsonl, "w", encoding="utf-8") if args.samples_jsonl else None
@@ -614,16 +851,27 @@ def run(args) -> int:
                     poll_status()
                     next_status_at = elapsed + args.status_interval
                 if (
+                    measurement_target is not None
+                    and measurement_start is None
+                    and time.monotonic() >= measurement_target
+                ):
+                    measurement_start = measurement_target
+                    measurement_load_baseline = runner.summary()
+                if (
                     args.pressure_cycles > 0
                     and not cycle_done
                     and elapsed >= cycle_at
                 ):
                     # Pressure cycles are synchronous: the fork-based
                     # allocator must not fork a multi-threaded process, so the
-                    # sampling loop is blocked while they run. The blocked
-                    # window is tracked and excluded from the expected sample
-                    # count below instead of pretending the run kept sampling.
+                    # sampling loop is blocked while they run. They are
+                    # scheduled at the warm-up boundary and finish before the
+                    # measured window; the report proves the ordering instead
+                    # of relying on a post-hoc sample exclusion.
+                    with verify_lock:
+                        verifier_pause.set()
                     pressure_started = time.monotonic()
+                    pressure_load_baseline = runner.summary()["errors"]
                     cycles = pressure.run_cycles(
                         sampler,
                         cycles=args.pressure_cycles,
@@ -637,6 +885,9 @@ def run(args) -> int:
                     )
                     pressure_blocked_seconds += time.monotonic() - pressure_started
                     last_pressure_end = time.monotonic()
+                    pressure_load_errors = (
+                        runner.summary()["errors"] - pressure_load_baseline
+                    )
                     cycle_done = True
                     pressure_summary = {
                         key: cycles[key]
@@ -650,10 +901,39 @@ def run(args) -> int:
                             "long_recovery",
                             "event_deltas",
                             "same_pid",
+                            "initial_baseline_current_bytes",
+                            "recovery_baseline_current_bytes",
+                            "recovery_slack_bytes",
                         )
                     }
+                    # Do not start measuring on the 503 tail. The load
+                    # generator must show a continuous clean-2xx window after
+                    # pressure; any error restarts that window.
+                    measurement_handshake = _wait_clean_load(
+                        runner,
+                        min_clean_seconds=args.measurement_clean_seconds,
+                        timeout_seconds=args.measurement_handshake_timeout_seconds,
+                    )
+                    measurement_target = _measurement_start(
+                        started,
+                        args.warmup_seconds,
+                        last_pressure_end,
+                        measurement_handshake["end"],
+                    )
+                    if measurement_target <= time.monotonic():
+                        measurement_start = measurement_target
+                        measurement_load_baseline = runner.summary()
                     if jsonl is not None:
                         _write_jsonl(jsonl, {"kind": "pressure", **cycles})
+                        _write_jsonl(
+                            jsonl,
+                            {
+                                "kind": "measurement_handshake",
+                                **measurement_handshake,
+                            },
+                        )
+                    with verify_lock:
+                        verifier_pause.clear()
                 time.sleep(args.sample_interval)
         finally:
             if jsonl is not None:
@@ -669,17 +949,61 @@ def run(args) -> int:
         if args.pressure_cycles > 0 and not cycle_done:
             violate("pressure cycles were requested but never ran")
 
+        # If the loop ended before the scheduled measurement boundary (for
+        # example a run shorter than its warm-up), keep the report explicit.
+        # The slope gate will still fail for the missing/empty window.
+        if measurement_start is None:
+            measurement_start = (
+                measurement_target
+                if measurement_target is not None
+                else started + args.warmup_seconds
+            )
+            measurement_load_baseline = runner.summary() if runner else {}
+
         load_summary = runner.summary() if runner else {}
+        if measurement_load_baseline is None:
+            measurement_load_baseline = load_summary
+        pre_measurement_load_errors = measurement_load_baseline.get("errors", 0)
+        measurement_load_errors = max(
+            0, load_summary.get("errors", 0) - pre_measurement_load_errors
+        )
+        measurement_requests_ok = max(
+            0,
+            load_summary.get("requests_ok", 0)
+            - measurement_load_baseline.get("requests_ok", 0),
+        )
+        pressure_end_offset = (
+            None if last_pressure_end is None else last_pressure_end - started
+        )
+        measurement_start_offset = measurement_start - started
+        pressure_before_measurement = (
+            last_pressure_end is None
+            or (
+                measurement_start is not None
+                and last_pressure_end < measurement_start
+            )
+        )
+        if last_pressure_end is not None and not pressure_before_measurement:
+            violate(
+                "pressure block ended after the measurement window started: "
+                f"pressure_end={pressure_end_offset:.3f}s, "
+                f"measurement_start={measurement_start_offset:.3f}s"
+            )
         if load_summary.get("requests_ok", 0) < args.min_requests:
             violate(
                 f"only {load_summary.get('requests_ok', 0)} successful requests, "
                 f"need {args.min_requests}"
             )
-        if load_summary.get("errors", 0) and args.max_load_errors is not None:
-            if load_summary["errors"] > args.max_load_errors:
+        # Only measurement-window errors are budgeted. 503 admission
+        # rejections while the cgroup is above memory.high are expected and are
+        # reported as pressure_load_errors with no maximum.
+        if measurement_load_errors and args.max_load_errors is not None:
+            if measurement_load_errors > args.max_load_errors:
                 violate(
-                    f"{load_summary['errors']} load errors exceed "
-                    f"{args.max_load_errors}: {load_summary.get('error_samples', [])[:3]}"
+                    f"{measurement_load_errors} measurement-window load errors "
+                    f"exceed {args.max_load_errors} "
+                    f"(pressure-window errors are separate: "
+                    f"{pressure_load_errors})"
                 )
         if required_keys and stats_samples < args.require_stats_samples:
             violate(
@@ -703,15 +1027,22 @@ def run(args) -> int:
         pair_result = analyze_pair(
             samples,
             anon_samples,
-            warmup_seconds=args.warmup_seconds,
+            warmup_seconds=0.0,
             budget_mib_per_hour=args.budget_mib_per_hour,
             anon_budget_mib_per_hour=anon_budget,
             min_span_seconds=args.min_span_seconds,
-            last_pressure_end=last_pressure_end,
-            pressure_settle_seconds=args.pressure_settle_seconds,
+            last_pressure_end=None,
+            pressure_settle_seconds=0.0,
+            measurement_start=measurement_start,
         )
         slope_result = pair_result["rss"]
         anon_result = pair_result["anon"]
+        # Report the warm-up from the run clock, not from the first sampled
+        # instant (which is a fraction of a second later). This keeps the
+        # long-lane >=1800 s contract exact while the slope itself is computed
+        # on the selected measurement points with no second warm-up.
+        for result in (slope_result, anon_result):
+            result["effective_warmup_seconds"] = measurement_start_offset
         if not slope_result.get("ok"):
             violate(f"RSS slope gate failed: {slope_result.get('error')}")
         if not anon_result.get("ok"):
@@ -722,22 +1053,27 @@ def run(args) -> int:
             split_result = {
                 "rss": analyze_split(
                     samples,
-                    warmup_seconds=args.warmup_seconds,
+                    warmup_seconds=0.0,
                     budget_mib_per_hour=args.budget_mib_per_hour,
                     min_span_seconds=args.min_span_seconds,
-                    last_pressure_end=last_pressure_end,
-                    pressure_settle_seconds=args.pressure_settle_seconds,
+                    last_pressure_end=None,
+                    pressure_settle_seconds=0.0,
+                    measurement_start=measurement_start,
+                    label="RSS",
                 ),
                 "anon": analyze_split(
                     anon_samples,
-                    warmup_seconds=args.warmup_seconds,
+                    warmup_seconds=0.0,
                     budget_mib_per_hour=anon_budget,
                     min_span_seconds=args.min_span_seconds,
-                    last_pressure_end=last_pressure_end,
-                    pressure_settle_seconds=args.pressure_settle_seconds,
+                    last_pressure_end=None,
+                    pressure_settle_seconds=0.0,
+                    measurement_start=measurement_start,
+                    label="Anon",
                 ),
             }
             for name, split in split_result.items():
+                split["effective_warmup_seconds"] = measurement_start_offset
                 if not split.get("ok"):
                     violate(
                         f"{name} second-half/step baseline failed: "
@@ -747,10 +1083,28 @@ def run(args) -> int:
         sampling_span_seconds = (
             samples[-1][0] - samples[0][0] if len(samples) >= 2 else 0.0
         )
-        active_sampling_seconds = max(
-            0.0, sampling_span_seconds - pressure_blocked_seconds
+        measurement_rss_samples = [
+            point for point in samples if point[0] >= measurement_start
+        ]
+        measurement_span_seconds = (
+            measurement_rss_samples[-1][0] - measurement_rss_samples[0][0]
+            if len(measurement_rss_samples) >= 2
+            else 0.0
         )
-        expected_samples = int(active_sampling_seconds / args.sample_interval) + 1
+        # The measured window is contiguous: pressure and the clean-load
+        # handshake are both before measurement_start, so no sample gap needs
+        # to be subtracted from this window.
+        active_sampling_seconds = measurement_span_seconds
+        expected_samples = (
+            int(measurement_span_seconds / args.sample_interval) + 1
+            if measurement_rss_samples
+            else 0
+        )
+        measurement_handshake_seconds = (
+            measurement_handshake["seconds"]
+            if measurement_handshake is not None
+            else 0.0
+        )
 
         final = sampler.capture()
         if final.cgroup_events["oom_kill"] > initial.cgroup_events["oom_kill"]:
@@ -771,10 +1125,17 @@ def run(args) -> int:
             "cgroup": cgroup_ctx.to_dict() if cgroup_ctx else None,
             "duration_seconds": time.monotonic() - started,
             "samples": len(samples),
+            "measurement_samples": len(measurement_rss_samples),
             "sampling_span_seconds": sampling_span_seconds,
+            "measurement_span_seconds": measurement_span_seconds,
             "pressure_blocked_seconds": pressure_blocked_seconds,
+            "measurement_handshake_seconds": measurement_handshake_seconds,
             "active_sampling_seconds": active_sampling_seconds,
             "expected_samples": expected_samples,
+            "measurement_start_offset_seconds": measurement_start_offset,
+            "pressure_end_offset_seconds": pressure_end_offset,
+            "pressure_before_measurement": pressure_before_measurement,
+            "pre_measurement_load_errors": pre_measurement_load_errors,
             "peak_rss_mib": peak_rss / MIB,
             "max_rss_mib": args.max_rss_mib,
             "screen_only": bool(args.screen_only),
@@ -797,13 +1158,37 @@ def run(args) -> int:
             "tls_verification": {
                 "initial": verify_results[0] if verify_results else None,
                 "periodic_count": max(0, len(verify_results) - 1),
+                "paused_during_pressure": paused_verifications,
                 "errors": verify_errors,
                 "contract": "CA verified, ALPN h2, SNI sent, payload echoed",
             },
-            "load": load_summary,
+            "measurement": {
+                "start_offset_seconds": measurement_start_offset,
+                "span_seconds": measurement_span_seconds,
+                "samples": len(measurement_rss_samples),
+                "expected_samples": expected_samples,
+                "load_errors": measurement_load_errors,
+                "requests_ok": measurement_requests_ok,
+                "pre_measurement_load_errors": pre_measurement_load_errors,
+                "handshake_seconds": measurement_handshake_seconds,
+                "handshake_load_errors": (
+                    measurement_handshake["errors"]
+                    if measurement_handshake is not None
+                    else 0
+                ),
+                "max_load_errors": args.max_load_errors,
+            },
+            "load": {
+                **load_summary,
+                "measurement_errors": measurement_load_errors,
+                "pressure_load_errors": pressure_load_errors,
+            },
             "pressure": {
                 "cycles": args.pressure_cycles,
                 "last_pressure_end": last_pressure_end,
+                "end_offset_seconds": pressure_end_offset,
+                "before_measurement": pressure_before_measurement,
+                "pressure_load_errors": pressure_load_errors,
                 "result": pressure_summary,
             },
             "allocator_stats": {
@@ -849,6 +1234,7 @@ def run(args) -> int:
         return 2
     finally:
         verifier_stop.set()
+        verifier_pause.clear()
         if runner is not None:
             runner.stop()
             runner.join(timeout=10)
@@ -906,6 +1292,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-span-seconds", type=float, default=300.0)
     parser.add_argument("--sample-interval", type=float, default=1.0)
     parser.add_argument("--max-samples", type=int, default=1_000_000)
+    parser.add_argument(
+        "--measurement-clean-seconds",
+        type=float,
+        default=MIN_CLEAN_LOAD_SECONDS,
+        dest="measurement_clean_seconds",
+        help=(
+            "required continuous clean-2xx window after pressure before the "
+            f"measurement clock starts (minimum {MIN_CLEAN_LOAD_SECONDS:g}s)"
+        ),
+    )
+    parser.add_argument(
+        "--measurement-handshake-timeout-seconds",
+        type=float,
+        default=60.0,
+        dest="measurement_handshake_timeout_seconds",
+        help="bounded total wait for the post-pressure clean-load handshake",
+    )
     parser.add_argument(
         "--budget-mib-per-hour",
         type=float,

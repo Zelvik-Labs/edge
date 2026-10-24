@@ -207,6 +207,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
+          import re
           import yaml
 
           path = ".github/workflows/memory-soak.yml"
@@ -244,8 +245,23 @@ jobs:
           need(runs["short"], "--pressure-cycles 1", "short pressure cycle")
           need(
               runs["short"],
-              "--pressure-start-fraction 0.2",
-              "short pressure start at 60 s, after bench steady state",
+              "--pressure-start-fraction 0.3",
+              "short pressure starts at the 90 s warm-up boundary",
+          )
+          need(
+              runs["short"],
+              "--measurement-clean-seconds 10",
+              "short post-pressure clean-load handshake",
+          )
+          need(
+              runs["short"],
+              'report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"]',
+              "short pressure-before-measurement report assertion",
+          )
+          need(
+              runs["short"],
+              'report["measurement"]["load_errors"]',
+              "short measurement-window load-error assertion",
           )
           need(runs["short"], "--stats-ready-timeout-seconds 30", "short stats readiness")
           need(runs["short"], "--pressure-hold-seconds 15", "short pressure hold")
@@ -290,11 +306,80 @@ jobs:
               "--soak-arg=--pressure-start-fraction --soak-arg=0.13333333333333333",
               "full-edge pressure start at 120 s, after warm-up",
           )
+          need(
+              runs["full-edge"],
+              "--soak-arg=--measurement-clean-seconds --soak-arg=10",
+              "full-edge post-pressure clean-load handshake",
+          )
+          need(
+              runs["full-edge"],
+              'report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"]',
+              "full-edge pressure-before-measurement report assertion",
+          )
+          need(
+              runs["full-edge"],
+              'report["measurement"]["load_errors"]',
+              "full-edge measurement-window load-error assertion",
+          )
           need(runs["full-edge"], "--recovery-seconds 60", "full-edge recovery window")
           need(runs["full-edge"], "--telemetry-mode unavailable", "full-edge retryable telemetry")
           need(runs["full-edge"], "full_edge.py smoke", "full-edge startup smoke")
           need(runs["full-edge"], "full_edge.py soak", "full-edge soak")
           need(runs["full-edge"], "--require-node-status", "full-edge node status")
+
+          # Static schedule guard: pressure starts at the warm-up boundary and
+          # the planned block (hold + probe + clean-load handshake) leaves the
+          # required measured span. The runtime report assertion proves the
+          # actual pressure_end < measurement_start ordering.
+          def soak_arg(text, name):
+              match = re.search(
+                  rf"--soak-arg=--{re.escape(name)}\s+--soak-arg=(\S+)", text
+              )
+              if match is None:
+                  match = re.search(
+                      rf"(?<![\w=-])--{re.escape(name)}\s+(\S+)", text
+                  )
+              if match is None:
+                  raise SystemExit(f"missing --{name}")
+              return float(match.group(1))
+
+          for lane, expected_start, expected_cycles in (
+              ("short", 90.0, 1),
+              ("full-edge", 120.0, 2),
+          ):
+              text = runs[lane]
+              duration = soak_arg(text, "duration")
+              warmup = soak_arg(text, "warmup-seconds")
+              fraction = soak_arg(text, "pressure-start-fraction")
+              cycles = int(soak_arg(text, "pressure-cycles"))
+              hold = soak_arg(text, "pressure-hold-seconds")
+              probe = soak_arg(text, "pressure-recovery-probe-seconds")
+              clean = soak_arg(text, "measurement-clean-seconds")
+              min_span = soak_arg(text, "min-span-seconds")
+              start = duration * fraction
+              if abs(start - expected_start) > 1.0:
+                  raise SystemExit(
+                      f"{lane} pressure starts at {start:g}s, want {expected_start:g}s"
+                  )
+              if start < warmup:
+                  raise SystemExit(
+                      f"{lane} pressure starts before its {warmup:g}s warm-up"
+                  )
+              if cycles != expected_cycles:
+                  raise SystemExit(
+                      f"{lane} has {cycles} pressure cycles, want {expected_cycles}"
+                  )
+              planned_measurement = start + cycles * (hold + probe) + clean
+              if planned_measurement + min_span > duration:
+                  raise SystemExit(
+                      f"{lane} planned measurement start {planned_measurement:g}s "
+                      f"plus {min_span:g}s span exceeds {duration:g}s"
+                  )
+              if lane == "full-edge" and planned_measurement > 200.0:
+                  raise SystemExit(
+                      f"full-edge pressure block runs to {planned_measurement:g}s, "
+                      "outside the 120-200 s window"
+                  )
           if "--pressure-long-recovery" in runs["full-edge"]:
               raise SystemExit(
                   "full-edge fast screen must not claim the long recovery contract"
@@ -417,13 +502,15 @@ jobs:
           # Load window: 300 s of soak, excluding image build/Rust cold build.
           # The target writes alloc-stats.json from its own 1 s loop, so the soak
           # waits for the first complete document before starting its clock.
-          # Pressure starts at 60 s (bench-defense steady state), then 15 s hold,
-          # 10 s probe, 30 s settle: effective warm-up ~118 s, leaving >180 s of
-          # slope span (>= 150 s) inside the 300 s window. 64 MiB/h is a screen
-          # budget, never closure. --pressure-bytes is an upper bound:
-          # memory.high + 16 MiB with 256 MiB reserve below memory.max, so a
-          # 1.5 GiB request cannot livelock above high=1.5 GiB. Resident proof
-          # is bounded at 120 s independent of hold and logs a cgroup snapshot
+          # Pressure starts at the 90 s warm-up boundary and completes inside
+          # the warm-up phase (15 s hold + 10 s probe). A >=10 s clean-2xx
+          # handshake follows, so the measurement window starts at ~125 s with
+          # no pressure or recovery samples in it; the remaining >=150 s is the
+          # slope span. 64 MiB/h is a screen budget, never closure.
+          # --pressure-bytes is an upper bound: memory.high + 16 MiB with
+          # 256 MiB reserve below memory.max, so a 1.5 GiB request cannot
+          # livelock above high=1.5 GiB. Resident proof is bounded at 120 s
+          # independent of hold and logs a cgroup snapshot
           # (current/peak/high/max/events) if it stalls.
           OUT="$RUNNER_TEMP/issue34-short"
           mkdir -p "$OUT"
@@ -454,7 +541,8 @@ jobs:
               --screen-only \
               --max-rss-mib 1024 \
               --pressure-cycles 1 \
-              --pressure-start-fraction 0.2 \
+              --pressure-start-fraction 0.3 \
+              --measurement-clean-seconds 10 \
               --pressure-bytes 1610612736 \
               --pressure-hold-seconds 15 \
               --pressure-settle-seconds 30 \
@@ -478,9 +566,16 @@ jobs:
           assert report["scope"]["full_edge"] is False, report["scope"]
           assert report["scope"]["production_startup"] is False, report["scope"]
           assert report["duration_seconds"] >= 290, report["duration_seconds"]
+          # Pressure and the clean-load handshake are inside the warm-up phase;
+          # the measured window contains neither. Pressure-window 503s are
+          # reported separately and are not charged to the load-error budget.
+          assert report["pressure_before_measurement"] is True, report["pressure"]
+          assert report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"], report["pressure"]
+          assert report["measurement"]["handshake_seconds"] >= 10, report["measurement"]
+          assert report["measurement"]["load_errors"] <= 10, report["measurement"]
           assert report["expected_samples"] > 0, report
-          assert report["samples"] >= report["expected_samples"] * 0.9, (
-              report["samples"], report["expected_samples"])
+          assert report["measurement_samples"] >= report["expected_samples"] * 0.9, (
+              report["measurement_samples"], report["expected_samples"])
           assert report["target"]["same_pid"] is True
           assert report["tls_verification"]["periodic_count"] >= 1
           assert report["tls_verification"]["errors"] == [], report["tls_verification"]
@@ -675,8 +770,11 @@ jobs:
           # expected count is derived from the tracked active sampling window,
           # not from total uptime.
           assert report["expected_samples"] > 0, report
-          assert report["samples"] >= report["expected_samples"] * 0.9, (
-              report["samples"], report["expected_samples"])
+          assert report["pressure_before_measurement"] is True, report["pressure"]
+          assert report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"], report["pressure"]
+          assert report["measurement"]["load_errors"] <= 10, report["measurement"]
+          assert report["measurement_samples"] >= report["expected_samples"] * 0.9, (
+              report["measurement_samples"], report["expected_samples"])
           assert report["target"]["same_pid"] is True
           # Strict Issue 34 budget: 0.5 MiB/h => 24 MiB over 48 h. The gate is
           # the upper 95% bound and the robust slope, separately for total RSS
@@ -870,9 +968,10 @@ jobs:
           set -euo pipefail
           # 900 s of soak, excluding image/Rust/eBPF build time. 120 s warm-up;
           # pressure starts at 120 s (steady-state baseline, not 18 s during
-          # Edge startup), two cycles of 15 s hold + 10 s recovery probe + 30 s
-          # settle. The pressure+settle window is excluded from the slope
-          # (effective warm-up ~200 s), leaving ~700 s >= the 300 s minimum.
+          # Edge startup) and two cycles of 15 s hold + 10 s recovery probe
+          # finish by ~200 s. A >=10 s clean-2xx handshake follows, so the
+          # measurement window starts at ~210 s with no pressure, settle or
+          # 503 tail in it; the remaining ~690 s is the slope span (>=300 s).
           # 8 MiB/h is a fast screen, never the 0.5 MiB/h long-lane closure.
           # Allocator pages are MAP_PRIVATE|MAP_ANONYMOUS, so with swap=0 they
           # cannot be reclaimed and readiness is a real resident proof.
@@ -909,6 +1008,7 @@ jobs:
               --soak-arg=--max-rss-mib --soak-arg=1536 \
               --soak-arg=--pressure-cycles --soak-arg=2 \
               --soak-arg=--pressure-start-fraction --soak-arg=0.13333333333333333 \
+              --soak-arg=--measurement-clean-seconds --soak-arg=10 \
               --soak-arg=--pressure-bytes --soak-arg=1610612736 \
               --soak-arg=--pressure-hold-seconds --soak-arg=15 \
               --soak-arg=--pressure-settle-seconds --soak-arg=30 \
@@ -945,12 +1045,18 @@ jobs:
           assert report["screen_only"] is True
           assert "SCREEN ONLY" in report["screen_note"]
           assert report["duration_seconds"] >= 880, report["duration_seconds"]
-          # Pressure cycles block the synchronous sampling loop, so the
-          # expected count is derived from the tracked active sampling window,
-          # not from total uptime.
+          # Pressure and the clean-load handshake are before measurement_start.
+          # Expected samples are therefore the contiguous measured-window
+          # count, not total uptime minus a guessed blocked interval.
+          assert report["pressure_before_measurement"] is True, report["pressure"]
+          assert report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"], report["pressure"]
+          assert report["pressure_end_offset_seconds"] <= 200, report["pressure"]
+          assert report["measurement"]["handshake_seconds"] >= 10, report["measurement"]
+          assert report["measurement"]["load_errors"] <= 10, report["measurement"]
+          assert report["pressure"]["pressure_load_errors"] >= 0, report["pressure"]
           assert report["expected_samples"] > 0, report
-          assert report["samples"] >= report["expected_samples"] * 0.9, (
-              report["samples"], report["expected_samples"])
+          assert report["measurement_samples"] >= report["expected_samples"] * 0.9, (
+              report["measurement_samples"], report["expected_samples"])
           assert report["target"]["same_pid"] is True
           # Real TLS/HTTP2 startup was asserted by the smoke above; the soak
           # also re-verifies CA/SNI/ALPN/payload on a periodic cadence.
@@ -993,7 +1099,6 @@ jobs:
           assert probe["hold_seconds"] >= 15
           assert probe["recovery_probe_seconds"] >= 10
           assert probe["recovery_probe_samples"] >= 5, probe
-          assert report["load"]["errors"] <= 10, report["load"]
           print(json.dumps({"status": summary["status"], "scope": scope,
                             "slope": report["slope"], "anon_slope": report["anon_slope"],
                             "edge_pid": report["target"]["pid"]}, indent=2))
@@ -1197,8 +1302,11 @@ jobs:
           # Expected samples come from the tracked active sampling window, not
           # from requested wall clock; pressure cycles block the loop.
           assert report["expected_samples"] > 0, report
-          assert report["samples"] >= report["expected_samples"] * 0.9, (
-              report["samples"], report["expected_samples"])
+          assert report["pressure_before_measurement"] is True, report["pressure"]
+          assert report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"], report["pressure"]
+          assert report["measurement"]["load_errors"] <= 10, report["measurement"]
+          assert report["measurement_samples"] >= report["expected_samples"] * 0.9, (
+              report["measurement_samples"], report["expected_samples"])
           assert report["target"]["same_pid"] is True
           assert report["node_status"]["required"] is True
           last = report["node_status"]["last"]
