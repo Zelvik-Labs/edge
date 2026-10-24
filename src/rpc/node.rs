@@ -1438,7 +1438,47 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
         // The json! macro hits the recursion limit past ~50 fields; merge a
         // second object for the slower-changing observability fields.
         let shed = crate::memory_shed::shed_stats();
+        let values_cache = crate::rpc::stats::metric_values_cache_stats();
+        let worker_reclaim = crate::worker_reclaim::snapshot();
+        let janitor = crate::cache_hybrid::cache_janitor_activity();
         let resource_governor_extra = serde_json::json!({
+            "metricValuesCache": {
+                "entries": values_cache.entries,
+                "estimatedBytes": values_cache.estimated_bytes,
+                "maxEntries": values_cache.max_entries,
+                "maxEstimatedBytes": values_cache.max_estimated_bytes,
+                "evictedEntries": values_cache.evicted_entries,
+                "pendingPayloads": values_cache.pending_payloads,
+                "pendingBytes": values_cache.pending_bytes,
+                "dedupMaxEstimatedBytes": values_cache.dedup_max_estimated_bytes,
+                "maxPendingBytes": values_cache.max_pending_bytes,
+                "backpressured": values_cache.backpressured,
+                "quarantinedBytes": values_cache.quarantined_bytes,
+                "quarantinedOversizeRecords": values_cache.terminal_oversize_records,
+                "retainedUploadFailures": values_cache.terminal_failed_uploads
+            },
+            "workerReclaim": {
+                "generation": worker_reclaim.collect_generation,
+                "requests": worker_reclaim.collect_requests,
+                "started": worker_reclaim.worker_threads_started,
+                "live": worker_reclaim.worker_threads_live,
+                "stopped": worker_reclaim.worker_threads_stopped,
+                "parkCollects": worker_reclaim.park_collects,
+                "rateLimited": worker_reclaim.park_collects_rate_limited,
+                "stopCollects": worker_reclaim.stop_collects,
+                "unhookedPingoraWorkers": worker_reclaim.unhooked_pingora_workers,
+                "coversAllWorkers": worker_reclaim.covers_all_workers()
+            },
+            "cacheJanitor": {
+                "cycles": janitor.cycles,
+                "maintenanceCycles": janitor.maintenance_cycles,
+                "admissionSkips": janitor.admission_skips,
+                "budgetPublishes": janitor.budget_publishes,
+                "rebuildsDeferred": janitor.rebuilds_deferred,
+                "rebuildsApplied": janitor.rebuilds_applied,
+                "negativeEntriesRemoved": janitor.negative_entries_removed,
+                "workerCollectRequests": janitor.worker_collect_requests
+            },
             "metricsAggregatorBytes": governor_snapshot.metrics_aggregator_bytes,
             "unaccountedRssBytes": governor_snapshot.unaccounted_rss_bytes,
             "unaccountedAnonRssBytes": governor_snapshot.unaccounted_anon_rss_bytes,

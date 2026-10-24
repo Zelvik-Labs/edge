@@ -42,40 +42,96 @@ impl ReclaimStats {
 static LAST_OBSERVED_PRESSURE: AtomicU8 = AtomicU8::new(MemoryPressureLevel::Normal as u8);
 static LAST_RECLAIM_AT_MS: AtomicU64 = AtomicU64::new(0);
 
-/// mimalloc v2 option: purge a thread's delayed purges when the thread
-/// terminates. `libmimalloc-sys` extended only exports option constants up to
-/// `mi_option_max_segment_reclaim` (21); this is enum slot 12 in
-/// `mimalloc.h` (`mi_option_abandoned_page_purge`, default 0).
-const MI_OPTION_ABANDONED_PAGE_PURGE: libmimalloc_sys::mi_option_t = 12;
-/// Enum slot 26: allow a `free()` on a live thread to reclaim the abandoned
-/// segment the block belongs to, instead of leaving the segment's committed
-/// pages stranded on a dead heap. This is the dominant residency pattern in
-/// this node — objects allocated on one runtime are routinely dropped on
-/// another thread.
-const MI_OPTION_ABANDONED_RECLAIM_ON_FREE: libmimalloc_sys::mi_option_t = 26;
-/// Enum slot 21: abandoned-segment reclaim cap per try, percent (=10). A
-/// 10% drain rate leaves dead-heap segments resident across many collect
-/// cycles; 50 drains the same plateau in a handful of tries without
-/// touching the allocation fast path.
-const MI_OPTION_MAX_SEGMENT_RECLAIM: libmimalloc_sys::mi_option_t = 21;
-/// Enum slot 24: arena purge delay as a multiple of `purge_delay` (=10).
-/// Arenas are the multi-MiB extents mimalloc retains for reuse; 2 keeps a
-/// 20ms reuse window instead of a 100ms tail after traffic bursts.
-const MI_OPTION_ARENA_PURGE_MULT: libmimalloc_sys::mi_option_t = 24;
+/// `MI_MALLOC_VERSION` of the libmimalloc-sys 0.1.49 v3 build pinned in
+/// `Cargo.toml` (major 3, minor 03, patch 02).
+const EXPECTED_MIMALLOC_VERSION: i32 = 30302;
 
-/// Must run before worker threads spawn. Without these options, pages freed
-/// on a dying thread's heap keep their delayed purges unexecuted and stay
-/// committed until another thread slowly reclaims the abandoned segments
-/// (capped at ~10% per attempt), which shows up as multi-ten-MiB RSS plateaus
-/// after short-lived runtimes exit. `purge_delay` itself stays at the 10ms
-/// default — immediate purging would pay decommit syscalls on the hot path.
-pub fn configure_allocator() {
-    unsafe {
-        libmimalloc_sys::mi_option_set(MI_OPTION_ABANDONED_PAGE_PURGE, 1);
-        libmimalloc_sys::mi_option_set(MI_OPTION_ABANDONED_RECLAIM_ON_FREE, 1);
-        libmimalloc_sys::mi_option_set(MI_OPTION_MAX_SEGMENT_RECLAIM, 50);
-        libmimalloc_sys::mi_option_set(MI_OPTION_ARENA_PURGE_MULT, 2);
+/// Typed bridge over mimalloc's C option API (`src/allocator_options.c`).
+///
+/// The `libmimalloc-sys` `extended` bindings still carry v2 enum slots while
+/// the crate compiles mimalloc v3. Never address options by integer here: the
+/// C bridge resolves the names from the header that built the single linked
+/// allocator.
+mod allocator_options {
+    use std::ffi::{c_int, c_long};
+
+    unsafe extern "C" {
+        fn zelvik_allocator_header_version() -> c_int;
+        fn zelvik_allocator_runtime_version() -> c_int;
+        fn zelvik_allocator_page_reclaim_on_free_option() -> c_int;
+        fn zelvik_allocator_disallow_arena_alloc_option() -> c_int;
+        fn zelvik_allocator_option_get(option: c_int) -> c_long;
+        fn zelvik_allocator_option_set(option: c_int, value: c_long);
     }
+
+    pub(super) fn header_version() -> i32 {
+        unsafe { zelvik_allocator_header_version() }
+    }
+
+    pub(super) fn runtime_version() -> i32 {
+        unsafe { zelvik_allocator_runtime_version() }
+    }
+
+    pub(super) fn page_reclaim_on_free_option() -> i32 {
+        unsafe { zelvik_allocator_page_reclaim_on_free_option() }
+    }
+
+    pub(super) fn disallow_arena_alloc_option() -> i32 {
+        unsafe { zelvik_allocator_disallow_arena_alloc_option() }
+    }
+
+    pub(super) fn get(option: i32) -> i64 {
+        i64::from(unsafe { zelvik_allocator_option_get(option) })
+    }
+
+    pub(super) fn set(option: i32, value: i32) {
+        unsafe { zelvik_allocator_option_set(option, c_long::from(value)) }
+    }
+}
+
+/// Must run before worker threads spawn.
+///
+/// Only two v3 options are touched:
+/// * `mi_option_page_reclaim_on_free = 1` (v3 slot 35): let a `free()` reclaim
+///   abandoned pages owned by another thread's heap. Objects allocated on one
+///   runtime and dropped on another are the dominant residency pattern here.
+/// * `mi_option_disallow_arena_alloc = 0` (the v3 default): the pre-fix code
+///   wrote numeric slot 26, which in v3 is this option, silently disabling
+///   arena allocation. Restore the default explicitly.
+///
+/// The v2-only knobs (`abandoned_page_purge`, `max_segment_reclaim`) are
+/// retired in v3 and deliberately not set. `purge_delay` and
+/// `arena_purge_mult` stay at their upstream defaults because no measurement
+/// here justifies overriding them.
+pub fn configure_allocator() {
+    let header = allocator_options::header_version();
+    let runtime = allocator_options::runtime_version();
+    assert_eq!(
+        header, runtime,
+        "mimalloc header/runtime version mismatch ({header} vs {runtime}): \
+         the option bridge and the linked allocator came from different builds"
+    );
+    assert_eq!(
+        header, EXPECTED_MIMALLOC_VERSION,
+        "mimalloc {header} is not the pinned {EXPECTED_MIMALLOC_VERSION}; \
+         re-check the v3 option names in src/allocator_options.c"
+    );
+
+    let page_reclaim = allocator_options::page_reclaim_on_free_option();
+    let disallow_arena = allocator_options::disallow_arena_alloc_option();
+    allocator_options::set(page_reclaim, 1);
+    allocator_options::set(disallow_arena, 0);
+
+    assert_eq!(
+        allocator_options::get(page_reclaim),
+        1,
+        "mimalloc rejected mi_option_page_reclaim_on_free=1"
+    );
+    assert_eq!(
+        allocator_options::get(disallow_arena),
+        0,
+        "mimalloc rejected mi_option_disallow_arena_alloc=0"
+    );
 }
 static RECLAIM_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 static RECLAIM_CLOCK_START: OnceLock<Instant> = OnceLock::new();
@@ -989,21 +1045,73 @@ mod pressure_events {
 mod tests {
     use super::*;
 
+    /// mimalloc options are process-global and `mi_option_set` is documented
+    /// as not thread safe, so allocator tests must not overlap.
+    static ALLOCATOR_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn lock_allocator_options() -> std::sync::MutexGuard<'static, ()> {
+        ALLOCATOR_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Invariant the allocator setup must hold: reclaim-on-free enabled and
+    /// arena allocation left at its v3 default.
+    fn allocator_invariant() -> Result<(), String> {
+        let page_reclaim = allocator_options::get(allocator_options::page_reclaim_on_free_option());
+        if page_reclaim != 1 {
+            return Err(format!("page_reclaim_on_free={page_reclaim}, want 1"));
+        }
+        let disallow_arena =
+            allocator_options::get(allocator_options::disallow_arena_alloc_option());
+        if disallow_arena != 0 {
+            return Err(format!("disallow_arena_alloc={disallow_arena}, want 0"));
+        }
+        Ok(())
+    }
+
     #[test]
-    fn configure_allocator_enables_abandoned_page_purge() {
+    fn configure_allocator_sets_v3_options_and_reads_them_back() {
+        let _guard = lock_allocator_options();
         configure_allocator();
-        let value = unsafe { libmimalloc_sys::mi_option_get(MI_OPTION_ABANDONED_PAGE_PURGE) };
-        assert_eq!(value, 1, "abandoned page purge option must be enabled");
-        let reclaim =
-            unsafe { libmimalloc_sys::mi_option_get(MI_OPTION_ABANDONED_RECLAIM_ON_FREE) };
-        assert_eq!(reclaim, 1, "abandoned reclaim-on-free must be enabled");
-        let seg_reclaim = unsafe { libmimalloc_sys::mi_option_get(MI_OPTION_MAX_SEGMENT_RECLAIM) };
-        assert_eq!(
-            seg_reclaim, 50,
-            "abandoned-segment drain rate must be raised"
+        allocator_invariant().unwrap();
+    }
+
+    /// Negative control: the pre-fix code wrote numeric slot 26 for
+    /// "abandoned reclaim on free". In mimalloc v3 slot 26 is
+    /// `mi_option_disallow_arena_alloc`, so replaying that write must make
+    /// the invariant red. If it does not, the test above is vacuous.
+    #[test]
+    fn retired_v2_slot_26_makes_the_allocator_invariant_red() {
+        let _guard = lock_allocator_options();
+        configure_allocator();
+
+        const V2_RECLAIM_SLOT: i32 = 26;
+        assert_ne!(
+            allocator_options::page_reclaim_on_free_option(),
+            V2_RECLAIM_SLOT,
+            "the bridge must resolve page reclaim by name, not by the v2 slot"
         );
-        let arena_mult = unsafe { libmimalloc_sys::mi_option_get(MI_OPTION_ARENA_PURGE_MULT) };
-        assert_eq!(arena_mult, 2, "arena purge window must be tightened");
+
+        allocator_options::set(V2_RECLAIM_SLOT, 1);
+        let result = allocator_invariant();
+        allocator_options::set(V2_RECLAIM_SLOT, 0);
+        assert!(result.is_err(), "old numeric slot must be red: {result:?}");
+    }
+
+    #[test]
+    fn allocator_bridge_and_linked_library_agree_on_v3_version() {
+        let header = allocator_options::header_version();
+        let runtime = allocator_options::runtime_version();
+        assert_eq!(
+            header, runtime,
+            "C bridge header and linked mi_version describe different builds"
+        );
+        assert_eq!(header, EXPECTED_MIMALLOC_VERSION);
+        // MI_MALLOC_VERSION encodes major * 10000 + minor * 100 + patch.
+        assert_eq!(header / 10000, 3, "major version must be v3");
+        assert_eq!((header / 100) % 100, 3, "minor version");
+        assert_eq!(header % 100, 2, "patch version");
     }
 
     #[test]

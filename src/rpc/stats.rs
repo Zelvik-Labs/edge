@@ -3,7 +3,11 @@ use crate::config::ConfigStore;
 use crate::metrics::ServerStatusSnapshot;
 use crate::pb;
 use crate::rpc::client::SharedRpcClient;
-use chrono::{Datelike, Duration as ChronoDuration, Timelike};
+use crate::rpc::metric_stat_cache::{
+    MetricScope, MetricStatReporterState, MetricValuesCache, MetricValuesCacheStats,
+    PendingMetricUpload,
+};
+use chrono::{DateTime, Datelike, Duration as ChronoDuration, FixedOffset, Timelike};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -881,8 +885,10 @@ pub async fn start_daily_stat_reporter(config_store: ConfigStore) {
     }
 }
 
-fn get_period_time(period: i32, unit: &str) -> String {
-    let now = crate::utils::time::now_local();
+/// Window key for a metric item. The caller injects the clock so every helper
+/// in one tick — scope pruning, request building and cache commits — agrees on
+/// the same instant, and tests can move it backwards deterministically.
+fn get_period_time_at(period: i32, unit: &str, now: &DateTime<FixedOffset>) -> String {
     match unit.to_lowercase().as_str() {
         "month" => now.format("%Y%m").to_string(),
         "week" => {
@@ -945,7 +951,7 @@ fn build_metric_uploads_for_item(
         crate::metrics::aggregator::AggregationKey,
         crate::metrics::aggregator::AggregatedValue,
     )],
-    values_cache: &mut HashMap<String, f32>,
+    values_cache: &mut MetricValuesCache,
 ) -> Vec<pb::UploadMetricStatsRequest> {
     let item_category = metric_item_category(item);
     let mut grouped: HashMap<(i64, Vec<String>), (i64, f32)> = HashMap::new();
@@ -1016,15 +1022,15 @@ fn build_metric_uploads_for_item(
             );
             let hash = crate::utils::fnv_hash64(&hash_raw).to_string();
 
-            let cache_key = format!("{}_{}", item.id, hash);
-            if let Some(&old_val) = values_cache.get(&cache_key)
+            // The cache is read-only here: a value is committed only after its
+            // payload is durable in the spool. A miss (new, evicted, expired or
+            // wrong-version) sends the full row again — never a dropped sample.
+            if let Some(old_val) = values_cache.lookup(item.id, item.version, time_key, &hash)
                 && (value - old_val).abs() < 0.001
             {
                 keep_keys.push(hash);
                 continue;
             }
-
-            values_cache.insert(cache_key, value);
 
             metric_stats.push(pb::UploadingMetricStat {
                 id: 0,
@@ -1049,53 +1055,492 @@ fn build_metric_uploads_for_item(
     requests
 }
 
-pub async fn start_metric_stat_reporter(config_store: Arc<crate::config::ConfigStore>) {
-    let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
-    let mut values_cache: HashMap<String, f32> = HashMap::new();
+type MetricStatSample = (
+    crate::metrics::aggregator::AggregationKey,
+    crate::metrics::aggregator::AggregatedValue,
+);
 
-    loop {
-        interval.tick().await;
-        let metric_items = config_store.get_metric_items().await;
-        if metric_items.is_empty() {
+/// Enqueue seam. The reporter and its tests both drive the same split/retry
+/// logic; only the durable sink differs.
+trait MetricUploadSink {
+    fn send(
+        &mut self,
+        request: &pb::UploadMetricStatsRequest,
+    ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
+}
+
+struct TelemetryMetricUploadSink;
+
+impl MetricUploadSink for TelemetryMetricUploadSink {
+    fn send(
+        &mut self,
+        request: &pb::UploadMetricStatsRequest,
+    ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send {
+        async move { crate::telemetry::enqueue("metric_stat", request, 0, false).await }
+    }
+}
+
+/// Wire budget for the serialized `UploadMetricStatsRequest` payload.
+///
+/// Telemetry caps the finished `TelemetryBatch` at its private
+/// `MAX_BATCH_ENCODED_BYTES` (3/4 of `RPC_NODE_STREAM_MESSAGE_BYTES`). Until
+/// telemetry exposes its per-kind budget, this mirrors both the cap and the
+/// worst-case envelope measurement (`encoded_len`, no encoding) so a chunk that
+/// fits here also fits the spool's check.
+fn metric_stat_payload_budget() -> usize {
+    const MAX_BATCH_ENCODED_BYTES: usize =
+        crate::rpc::client::RPC_NODE_STREAM_MESSAGE_BYTES / 4 * 3;
+    // The payload field's own tag plus a length varint (at most five bytes).
+    const PAYLOAD_FIELD_OVERHEAD: usize = 1 + 5;
+
+    let binding = crate::telemetry::binding();
+    let envelope = pb::TelemetryBatch {
+        schema_version: 1,
+        batch_id: format!("{}:{:020}", "0".repeat(36), u64::MAX),
+        boot_id: "0".repeat(36),
+        sequence: u64::MAX,
+        kind: "metric_stat".into(),
+        occurred_at: i64::MIN,
+        window_start: i64::MIN,
+        source_boot_id: "0".repeat(36),
+        assignment_version: binding.assignment_version,
+        route_version: binding.route_version,
+        ..Default::default()
+    };
+    MAX_BATCH_ENCODED_BYTES
+        .saturating_sub(prost::Message::encoded_len(&envelope))
+        .saturating_sub(PAYLOAD_FIELD_OVERHEAD)
+}
+
+struct MetricRequestSplit {
+    chunks: Vec<pb::UploadMetricStatsRequest>,
+    /// Requests carrying exactly one record that cannot fit the wire even
+    /// alone. They are handed to the durable local quarantine, never dropped.
+    quarantine: Vec<pb::UploadMetricStatsRequest>,
+}
+
+/// Split one per-item/per-server request into chunks whose serialized payload
+/// stays inside `budget`.
+///
+/// `count` and `total` are request-level aggregates: every row in the original
+/// request carried the same pair, so every chunk keeps the original pair. Rows
+/// are moved, never copied or dropped; a row that cannot fit even alone keeps
+/// its full record inside a single-record request in `quarantine`.
+fn split_metric_stat_request(
+    request: pb::UploadMetricStatsRequest,
+    budget: usize,
+) -> MetricRequestSplit {
+    let pb::UploadMetricStatsRequest {
+        server_id,
+        time,
+        count,
+        total,
+        version,
+        item_id,
+        metric_stats,
+        keep_keys,
+    } = request;
+
+    let header = || pb::UploadMetricStatsRequest {
+        server_id,
+        time: time.clone(),
+        count,
+        total,
+        version,
+        item_id,
+        metric_stats: Vec::new(),
+        keep_keys: Vec::new(),
+    };
+    let header_cost = prost::Message::encoded_len(&header());
+
+    let mut chunks = Vec::new();
+    let mut quarantine = Vec::new();
+    let mut current = header();
+    let mut used = header_cost;
+    let mut current_has_records = false;
+
+    for stat in metric_stats {
+        let cost = prost::encoding::message::encoded_len(7, &stat);
+        if header_cost.saturating_add(cost) > budget {
+            let mut single = header();
+            single.metric_stats.push(stat);
+            quarantine.push(single);
             continue;
         }
+        if used.saturating_add(cost) > budget && current_has_records {
+            chunks.push(std::mem::replace(&mut current, header()));
+            used = header_cost;
+        }
+        used = used.saturating_add(cost);
+        current.metric_stats.push(stat);
+        current_has_records = true;
+    }
 
-        let samples = crate::metrics::aggregator::METRIC_STAT_AGGREGATOR.flush();
-        if samples.is_empty() {
-            // Even if no new samples, we might still want to report if we have cached keys
-            // But usually we skip
+    for hash in keep_keys {
+        let cost = prost::encoding::string::encoded_len(8, &hash);
+        if header_cost.saturating_add(cost) > budget {
+            // A keep key is a generated FNV hash in practice and cannot reach
+            // this branch; if a future producer changes that, preserve it in
+            // quarantine rather than dropping the marker.
+            let mut single = header();
+            single.keep_keys.push(hash);
+            quarantine.push(single);
             continue;
         }
+        if used.saturating_add(cost) > budget && current_has_records {
+            chunks.push(std::mem::replace(&mut current, header()));
+            used = header_cost;
+        }
+        used = used.saturating_add(cost);
+        current.keep_keys.push(hash);
+        current_has_records = true;
+    }
 
-        let mut upload_succeeded = true;
-        for item in metric_items {
-            if !item.is_on {
+    if current_has_records {
+        chunks.push(current);
+    }
+    MetricRequestSplit { chunks, quarantine }
+}
+
+/// Only enabled items are live. Disabling or deleting an item, bumping its
+/// version or moving into a new window therefore makes its old cache entries
+/// stale, and the next tick prunes them.
+fn metric_values_scope(
+    metric_items: &[crate::config_models::MetricItemConfig],
+    now: &DateTime<FixedOffset>,
+) -> MetricScope {
+    MetricScope::from_windows(metric_items.iter().filter(|item| item.is_on).map(|item| {
+        (
+            item.id,
+            item.version,
+            get_period_time_at(item.period, &item.period_unit, now),
+        )
+    }))
+}
+
+/// A value becomes deduplicatable only after its exact payload is durable.
+/// Commits for a window/version that is no longer live are ignored.
+fn commit_metric_upload(
+    cache: &mut MetricValuesCache,
+    scope: &MetricScope,
+    request: &pb::UploadMetricStatsRequest,
+) {
+    for stat in &request.metric_stats {
+        cache.commit(
+            scope,
+            request.item_id,
+            request.version,
+            &request.time,
+            &stat.hash,
+            stat.value,
+        );
+    }
+}
+
+#[derive(Default)]
+struct MetricStatTickOutcome {
+    pruned: usize,
+    enqueued: usize,
+    deferred: usize,
+}
+
+/// Re-offer retained payloads oldest first, per item.
+///
+/// Items are independent: a failure on one item's head stops only that item's
+/// queue, so every other item keeps uploading. There is no retry cap and no
+/// drop branch — a payload leaves these queues only after a durable spool
+/// append or a durable local quarantine write.
+async fn retry_pending_metric_uploads<S: MetricUploadSink>(
+    state: &mut MetricStatReporterState,
+    scope: &MetricScope,
+    now: &DateTime<FixedOffset>,
+    sink: &mut S,
+) -> (usize, usize) {
+    let mut enqueued = 0;
+    let mut quarantined = 0;
+    for item_id in state.pending_item_ids() {
+        while let Some(pending) = state.pop_pending(item_id) {
+            if pending.quarantine_only {
+                match state.store_quarantine(&pending.request).await {
+                    Ok(bytes) => {
+                        // The gap is best-effort upstream; the payload itself is
+                        // already fsynced locally before this point.
+                        crate::telemetry::record_gap(
+                            "metric_stat",
+                            now.timestamp(),
+                            "metric_stat_record_over_batch_cap",
+                        );
+                        info!(
+                            item_id,
+                            server_id = pending.request.server_id,
+                            bytes,
+                            dir = %state.quarantine_dir().display(),
+                            "metric stat record durably quarantined locally"
+                        );
+                        state.discard_pending_file(&pending);
+                        quarantined += 1;
+                    }
+                    Err(e) => {
+                        state.record_retry_refusal();
+                        warn!(
+                            item_id,
+                            server_id = pending.request.server_id,
+                            bytes = pending.encoded_bytes,
+                            "local metric stat quarantine refused the record; payload retained: {e}"
+                        );
+                        state.return_pending_front(item_id, pending);
+                        break;
+                    }
+                }
                 continue;
             }
-            let item_category = metric_item_category(&item);
 
-            let time_key = get_period_time(item.period, &item.period_unit);
-            if !samples
-                .iter()
-                .any(|sample| sample_matches_metric_category(sample, &item_category))
-            {
-                continue;
-            }
-
-            for req in build_metric_uploads_for_item(&item, &time_key, &samples, &mut values_cache)
-            {
-                let server_id = req.server_id;
-                if let Err(e) = crate::telemetry::enqueue("metric_stat", &req, 0, false).await {
+            match sink.send(&pending.request).await {
+                Ok(()) => {
+                    commit_metric_upload(state.cache_mut(), scope, &pending.request);
+                    state.discard_pending_file(&pending);
+                    enqueued += 1;
+                }
+                Err(e) if crate::telemetry::is_batch_too_large(e.as_ref()) => {
+                    // The split budget should make this unreachable. If the
+                    // seam ever drifts, keep every byte and move the exact
+                    // request to the durable quarantine path instead of
+                    // retrying the wire forever or dropping it.
                     warn!(
-                        "Failed to persist metric stats for server {} item {}: {}",
-                        server_id, item.id, e
+                        item_id,
+                        server_id = pending.request.server_id,
+                        "metric stats payload exceeded the wire at the spool; retaining for durable quarantine: {e}"
                     );
-                    upload_succeeded = false;
+                    let pending = PendingMetricUpload {
+                        quarantine_only: true,
+                        ..pending
+                    };
+                    state.return_pending_front(item_id, pending);
+                    break;
+                }
+                Err(e) => {
+                    if !crate::telemetry::is_capacity_exhausted(e.as_ref()) {
+                        state.record_retry_refusal();
+                    }
+                    warn!(
+                        item_id,
+                        server_id = pending.request.server_id,
+                        bytes = pending.encoded_bytes,
+                        "metric stats upload failed; exact payload retained at its item head: {e}"
+                    );
+                    state.return_pending_front(item_id, pending);
+                    break;
                 }
             }
         }
-        if !upload_succeeded {
-            crate::metrics::aggregator::METRIC_STAT_AGGREGATOR.restore(samples);
+    }
+    (enqueued, quarantined)
+}
+
+/// Build, split and retain one tick's uploads.
+///
+/// Every request is split before it reaches the spool so no chunk can be
+/// rejected as a whole. A chunk is committed only after its own enqueue is
+/// durable. A failed chunk and every later chunk of the same item are appended
+/// to that item's queue in order; other items are not blocked. Nothing is
+/// restored into the aggregator on partial success, so already-enqueued chunks
+/// cannot be re-aggregated and duplicated by the next batch.
+async fn dispatch_metric_uploads<S: MetricUploadSink>(
+    state: &mut MetricStatReporterState,
+    scope: &MetricScope,
+    metric_items: &[crate::config_models::MetricItemConfig],
+    samples: &[MetricStatSample],
+    now: &DateTime<FixedOffset>,
+    sink: &mut S,
+) -> (usize, usize) {
+    let budget = metric_stat_payload_budget();
+    let mut enqueued = 0;
+    let mut deferred = 0;
+    for item in metric_items.iter().filter(|item| item.is_on) {
+        let item_category = metric_item_category(item);
+        if !samples
+            .iter()
+            .any(|sample| sample_matches_metric_category(sample, &item_category))
+        {
+            continue;
+        }
+
+        let time_key = get_period_time_at(item.period, &item.period_unit, now);
+        let requests = build_metric_uploads_for_item(item, &time_key, samples, state.cache_mut());
+        for request in requests {
+            let split = split_metric_stat_request(request, budget);
+            for request in split.quarantine {
+                let pending = state
+                    .persist_pending(PendingMetricUpload::for_quarantine(request))
+                    .await;
+                debug!(
+                    item_id = item.id,
+                    bytes = pending.encoded_bytes,
+                    "metric stat record retained for the durable local quarantine"
+                );
+                state.push_pending(item.id, pending);
+                deferred += 1;
+            }
+            for chunk in split.chunks {
+                if state.has_pending(item.id) {
+                    let pending = state
+                        .persist_pending(PendingMetricUpload::for_spool(chunk))
+                        .await;
+                    state.push_pending(item.id, pending);
+                    deferred += 1;
+                    continue;
+                }
+                match sink.send(&chunk).await {
+                    Ok(()) => {
+                        commit_metric_upload(state.cache_mut(), scope, &chunk);
+                        enqueued += 1;
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to persist metric stats for server {} item {}: {} (exact payload retained at its item head)",
+                            chunk.server_id, chunk.item_id, e
+                        );
+                        let pending = state
+                            .persist_pending(PendingMetricUpload::for_spool(chunk))
+                            .await;
+                        state.push_pending(item.id, pending);
+                        deferred += 1;
+                    }
+                }
+            }
+        }
+    }
+    (enqueued, deferred)
+}
+
+async fn run_metric_stat_tick<Flush, S>(
+    state: &mut MetricStatReporterState,
+    metric_items: &[crate::config_models::MetricItemConfig],
+    flush_samples: Flush,
+    now: &DateTime<FixedOffset>,
+    sink: &mut S,
+) -> MetricStatTickOutcome
+where
+    Flush: FnOnce() -> Option<Vec<MetricStatSample>>,
+    S: MetricUploadSink,
+{
+    let scope = metric_values_scope(metric_items, now);
+    // Prune before any early return: idle nodes and nodes with no samples must
+    // still forget historical windows.
+    let pruned = state.prune(&scope);
+    let (enqueued, _quarantined) = retry_pending_metric_uploads(state, &scope, now, sink).await;
+    let mut outcome = MetricStatTickOutcome {
+        pruned,
+        enqueued,
+        deferred: 0,
+    };
+
+    // Backpressure is observable and lossless: while retained payloads reached
+    // the ceiling, this tick's samples stay in the aggregator and are
+    // dispatched by a later tick. Retry above already ran, so a drain in this
+    // tick immediately lifts the gate.
+    let backpressured = state.pending_bytes() >= state.max_pending_bytes();
+    state.set_backpressured(backpressured);
+    if backpressured {
+        warn!(
+            pending_bytes = state.pending_bytes(),
+            max_pending_bytes = state.max_pending_bytes(),
+            pending_payloads = state.pending_len(),
+            "metric stat backpressure: samples retained in the aggregator, nothing dropped"
+        );
+    } else if let Some(samples) = flush_samples()
+        && !samples.is_empty()
+    {
+        let (enqueued, deferred) =
+            dispatch_metric_uploads(state, &scope, metric_items, &samples, now, sink).await;
+        outcome.enqueued += enqueued;
+        outcome.deferred = deferred;
+    }
+
+    state.publish_stats();
+    outcome
+}
+
+/// Current size of the metric dedup cache. Exposed for memory governance and
+/// node observability; values are the reporter's own counters.
+pub fn metric_values_cache_stats() -> MetricValuesCacheStats {
+    crate::rpc::metric_stat_cache::metric_values_cache_stats()
+}
+
+pub async fn start_metric_stat_reporter(config_store: Arc<crate::config::ConfigStore>) {
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+    let mut state = MetricStatReporterState::with_quarantine_dir(
+        crate::paths::NodePaths::current()
+            .data_dir()
+            .join("metric_stat_quarantine"),
+    );
+    let mut sink = TelemetryMetricUploadSink;
+    let recovered = state.recover_pending();
+    if recovered > 0 {
+        info!(
+            recovered,
+            pending = state.pending_len(),
+            dir = %state.pending_dir().display(),
+            "recovered metric stat pending payloads after restart"
+        );
+    }
+
+    loop {
+        interval.tick().await;
+        let now = crate::utils::time::now_local();
+        let metric_items = config_store.get_metric_items().await;
+
+        let pending_before = state.pending_bytes();
+        let max_pending = state.max_pending_bytes();
+        let outcome = run_metric_stat_tick(
+            &mut state,
+            &metric_items,
+            || {
+                // Preserve the previous sample lifecycle: an empty item list
+                // leaves samples in the aggregator, while a non-empty list
+                // flushes them even if every item is disabled.
+                if metric_items.is_empty() {
+                    return None;
+                }
+                // When a retry queue already exists, do not pull an aggregation
+                // larger than the remaining pending budget out of the
+                // aggregator: leave it there and try again once the queue
+                // drains. This bounds a failure tick to roughly the budget,
+                // and is a pause, never a drop.
+                if pending_before > 0 {
+                    let aggregator_bytes =
+                        crate::metrics::aggregator::METRIC_STAT_AGGREGATOR.approximate_bytes();
+                    if pending_before.saturating_add(aggregator_bytes) > max_pending {
+                        debug!(
+                            pending_before,
+                            aggregator_bytes,
+                            max_pending,
+                            "metric stat flush deferred: aggregation exceeds remaining pending budget"
+                        );
+                        return None;
+                    }
+                }
+                let samples = crate::metrics::aggregator::METRIC_STAT_AGGREGATOR.flush();
+                (!samples.is_empty()).then_some(samples)
+            },
+            &now,
+            &mut sink,
+        )
+        .await;
+
+        if outcome.pruned > 0 {
+            debug!(
+                pruned = outcome.pruned,
+                entries = state.stats().entries,
+                "metric values cache pruned stale windows"
+            );
+        }
+        if outcome.deferred > 0 {
+            warn!(
+                deferred = outcome.deferred,
+                pending = state.pending_len(),
+                "metric stat upload could not reach the durable spool; exact payload retained"
+            );
         }
     }
 }
@@ -1463,7 +1908,7 @@ mod tests {
         assert_eq!(samples.len(), 1);
 
         let item = metric_item(10, vec!["${remoteAddr}"], "${countRequest}");
-        let mut cache = HashMap::new();
+        let mut cache = MetricValuesCache::default();
         let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples, &mut cache);
 
         assert_eq!(uploads.len(), 1);
@@ -1491,7 +1936,7 @@ mod tests {
 
         let samples = aggregator.flush();
         let item = metric_item(11, vec!["${requestPath}"], "${countTrafficOut}");
-        let mut cache = HashMap::new();
+        let mut cache = MetricValuesCache::default();
         let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples, &mut cache);
 
         assert_eq!(uploads.len(), 1);
@@ -1517,7 +1962,7 @@ mod tests {
             vec!["${requestMethod}", "${method}", "${request.method}"],
             "${countRequest}",
         );
-        let mut cache = HashMap::new();
+        let mut cache = MetricValuesCache::default();
         let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples, &mut cache);
 
         assert_eq!(uploads.len(), 1);
@@ -1731,5 +2176,974 @@ mod tests {
         drop(entry);
         ORIGIN_HEALTH_MAP.remove(&id_a);
         ORIGIN_HEALTH_MAP.remove(&id_c);
+    }
+
+    fn test_now(minute: u32) -> DateTime<FixedOffset> {
+        DateTime::parse_from_rfc3339(&format!("2026-10-24T12:{minute:02}:00+08:00"))
+            .expect("fixed test clock")
+    }
+
+    fn http_sample(server_id: i64, count: i64) -> Vec<MetricStatSample> {
+        let mut key = metric_key_with_attrs(std::collections::BTreeMap::new());
+        key.server_id = server_id;
+        vec![(
+            key,
+            crate::metrics::aggregator::AggregatedValue {
+                count,
+                bytes_sent: count.saturating_mul(10),
+                ..Default::default()
+            },
+        )]
+    }
+
+    fn time_key_for(
+        item: &crate::config_models::MetricItemConfig,
+        now: &DateTime<FixedOffset>,
+    ) -> String {
+        get_period_time_at(item.period, &item.period_unit, now)
+    }
+
+    struct RecordingMetricSink<F> {
+        attempts: Arc<parking_lot::Mutex<Vec<pb::UploadMetricStatsRequest>>>,
+        succeeds: F,
+    }
+
+    impl<F> MetricUploadSink for RecordingMetricSink<F>
+    where
+        F: FnMut(&pb::UploadMetricStatsRequest) -> bool,
+    {
+        fn send(
+            &mut self,
+            request: &pb::UploadMetricStatsRequest,
+        ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send {
+            let ok = (self.succeeds)(request);
+            self.attempts.lock().push(request.clone());
+            std::future::ready(if ok {
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("spool full"))
+            })
+        }
+    }
+
+    fn recording_sink<F>(
+        attempts: Arc<parking_lot::Mutex<Vec<pb::UploadMetricStatsRequest>>>,
+        succeeds: F,
+    ) -> RecordingMetricSink<F>
+    where
+        F: FnMut(&pb::UploadMetricStatsRequest) -> bool,
+    {
+        RecordingMetricSink { attempts, succeeds }
+    }
+
+    #[tokio::test]
+    async fn metric_values_cache_commits_after_enqueue_and_preserves_keep_keys() {
+        let item = metric_item(701, vec!["${country}"], "${countRequest}");
+        let items = vec![item];
+        let now = test_now(0);
+        let samples = http_sample(1, 2);
+        let attempts = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let mut sink = recording_sink(attempts.clone(), |_| true);
+        let mut state = MetricStatReporterState::default();
+
+        let first = run_metric_stat_tick(
+            &mut state,
+            &items,
+            || Some(samples.clone()),
+            &now,
+            &mut sink,
+        )
+        .await;
+        assert_eq!(first.enqueued, 1);
+        assert_eq!(state.stats().entries, 1);
+        let first_hash = {
+            let sent = attempts.lock();
+            assert_eq!(sent.len(), 1);
+            assert_eq!(sent[0].metric_stats.len(), 1);
+            assert!(sent[0].keep_keys.is_empty());
+            sent[0].metric_stats[0].hash.clone()
+        };
+
+        // Same value in the same window: only keep_keys, and the cache already
+        // holds the committed value.
+        let second = run_metric_stat_tick(
+            &mut state,
+            &items,
+            || Some(samples.clone()),
+            &now,
+            &mut sink,
+        )
+        .await;
+        assert_eq!(second.enqueued, 1);
+        let sent = attempts.lock();
+        assert_eq!(sent.len(), 2);
+        assert!(sent[1].metric_stats.is_empty());
+        assert_eq!(sent[1].keep_keys, vec![first_hash]);
+    }
+
+    #[test]
+    fn metric_values_cache_evicted_entry_resends_full_stats_instead_of_keep_keys() {
+        let item = metric_item(702, vec!["${country}"], "${countRequest}");
+        let now = test_now(0);
+        let time_key = time_key_for(&item, &now);
+        let scope = metric_values_scope(std::slice::from_ref(&item), &now);
+        let samples = http_sample(1, 2);
+        // One entry is enough to evict the previous one on the next commit.
+        let mut cache = MetricValuesCache::new(1, 1_000_000);
+
+        let first = build_metric_uploads_for_item(&item, &time_key, &samples, &mut cache);
+        assert_eq!(first.len(), 1);
+        commit_metric_upload(&mut cache, &scope, &first[0]);
+        assert_eq!(cache.len(), 1);
+
+        let deduped = build_metric_uploads_for_item(&item, &time_key, &samples, &mut cache);
+        assert!(deduped[0].metric_stats.is_empty());
+        assert_eq!(deduped[0].keep_keys.len(), 1);
+
+        assert!(cache.commit(&scope, item.id, item.version, &time_key, "unrelated", 1.0));
+        assert!(
+            cache
+                .lookup(item.id, item.version, &time_key, &deduped[0].keep_keys[0])
+                .is_none()
+        );
+        let resent = build_metric_uploads_for_item(&item, &time_key, &samples, &mut cache);
+        assert_eq!(resent[0].metric_stats.len(), 1);
+        assert!(resent[0].keep_keys.is_empty());
+    }
+
+    #[test]
+    fn metric_values_cache_is_bounded_by_entries_and_estimated_bytes() {
+        let mut entries_capped = MetricValuesCache::new(8, 64 * 1024 * 1024);
+        let scope = MetricScope::from_windows([(1, 1, "w")]);
+        for index in 0..100 {
+            assert!(entries_capped.commit(&scope, 1, 1, "w", &format!("h{index}"), index as f32));
+        }
+        assert!(entries_capped.len() <= 8);
+        assert_eq!(entries_capped.stats().evicted_entries, 92);
+        assert!(entries_capped.lookup(1, 1, "w", "h0").is_none());
+        assert!(entries_capped.lookup(1, 1, "w", "h99").is_some());
+
+        let mut bytes_capped = MetricValuesCache::new(1_000, 256);
+        for index in 0..100 {
+            bytes_capped.commit(&scope, 1, 1, "w", &format!("h{index}"), index as f32);
+        }
+        let stats = bytes_capped.stats();
+        assert!(stats.estimated_bytes <= 256);
+        assert!(stats.entries < 100);
+        assert!(stats.evicted_entries > 0);
+    }
+
+    #[test]
+    fn metric_values_cache_keeps_thousands_of_windows_bounded_and_prunes_them() {
+        let mut cache = MetricValuesCache::new(10_000, 64 * 1024 * 1024);
+        for window in 0..5_000 {
+            let time_key = format!("w{window:05}");
+            let scope = MetricScope::from_windows([(1, 1, time_key.clone())]);
+            assert!(cache.commit(
+                &scope,
+                1,
+                1,
+                &time_key,
+                &format!("h{window}"),
+                window as f32
+            ));
+            assert!(cache.len() <= 10_000);
+        }
+        assert_eq!(cache.len(), 5_000);
+
+        let live = MetricScope::from_windows([(1, 1, "w04999")]);
+        assert_eq!(cache.prune(&live), 4_999);
+        assert_eq!(cache.len(), 1);
+        assert_eq!(cache.stats().estimated_bytes, cache.estimated_bytes());
+        assert!(cache.lookup(1, 1, "w04999", "h4999").is_some());
+    }
+
+    #[test]
+    fn metric_values_cache_prune_drops_disabled_deleted_and_version_bumped_items() {
+        let window = "w";
+        let mut cache = MetricValuesCache::default();
+        let commit_all =
+            MetricScope::from_windows([(1, 1, window), (2, 1, window), (3, 1, window)]);
+        assert!(cache.commit(&commit_all, 1, 1, window, "h1", 1.0));
+        assert!(cache.commit(&commit_all, 2, 1, window, "h2", 2.0));
+        assert!(cache.commit(&commit_all, 3, 1, window, "h3", 3.0));
+        // A version bump is a different configuration generation: seed a v2
+        // entry as well.
+        let commit_v2 = MetricScope::from_windows([(1, 2, window)]);
+        assert!(cache.commit(&commit_v2, 1, 2, window, "h1-v2", 4.0));
+
+        // Item 2 disabled, item 3 deleted, item 1 bumped to v2.
+        let live = MetricScope::from_windows([(1, 2, window)]);
+        assert_eq!(cache.prune(&live), 3);
+        assert_eq!(cache.len(), 1);
+        assert!(cache.lookup(1, 2, window, "h1-v2").is_some());
+        assert!(cache.lookup(2, 1, window, "h2").is_none());
+        assert!(cache.lookup(3, 1, window, "h3").is_none());
+    }
+
+    #[test]
+    fn metric_values_cache_clock_rollback_forgets_later_window() {
+        let mut cache = MetricValuesCache::default();
+        let later = MetricScope::from_windows([(1, 1, "202610241205")]);
+        assert!(cache.commit(&later, 1, 1, "202610241205", "h", 7.0));
+
+        let earlier = MetricScope::from_windows([(1, 1, "202610241200")]);
+        assert_eq!(cache.prune(&earlier), 1);
+        assert_eq!(cache.len(), 0);
+        assert!(cache.lookup(1, 1, "202610241200", "h").is_none());
+    }
+
+    #[tokio::test]
+    async fn metric_stat_prune_runs_without_samples_or_items() {
+        let item = metric_item(711, vec!["${country}"], "${countRequest}");
+        let now = test_now(0);
+        let scope = metric_values_scope(std::slice::from_ref(&item), &now);
+        let window = time_key_for(&item, &now);
+        let mut state = MetricStatReporterState::default();
+        for index in 0..5 {
+            assert!(state.cache_mut().commit(
+                &scope,
+                item.id,
+                item.version,
+                &window,
+                &format!("h{index}"),
+                index as f32
+            ));
+        }
+        let attempts = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let mut sink = recording_sink(attempts.clone(), |_| true);
+
+        // No samples in the same window: the cache is still current.
+        let same_window =
+            run_metric_stat_tick(&mut state, &[item.clone()], || None, &now, &mut sink).await;
+        assert_eq!(same_window.pruned, 0);
+        assert_eq!(state.stats().entries, 5);
+
+        // No samples after the window moves: historical entries still go away.
+        let next_window =
+            run_metric_stat_tick(&mut state, &[item], || None, &test_now(1), &mut sink).await;
+        assert_eq!(next_window.pruned, 5);
+        assert_eq!(state.stats().entries, 0);
+        assert_eq!(state.stats().estimated_bytes, 0);
+        assert!(attempts.lock().is_empty());
+    }
+
+    #[tokio::test]
+    async fn metric_stat_prune_runs_when_item_list_is_empty() {
+        let now = test_now(0);
+        let scope = MetricScope::from_windows([(1, 1, "w")]);
+        let mut state = MetricStatReporterState::default();
+        assert!(state.cache_mut().commit(&scope, 1, 1, "w", "h", 1.0));
+        let attempts = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let mut sink = recording_sink(attempts.clone(), |_| true);
+
+        let outcome = run_metric_stat_tick(&mut state, &[], || None, &now, &mut sink).await;
+        assert_eq!(outcome.pruned, 1);
+        assert_eq!(state.stats().entries, 0);
+        assert!(attempts.lock().is_empty());
+    }
+
+    #[tokio::test]
+    async fn metric_stat_disabled_item_clears_cache_and_sends_nothing() {
+        let mut item = metric_item(721, vec!["${country}"], "${countRequest}");
+        let now = test_now(0);
+        let scope = metric_values_scope(std::slice::from_ref(&item), &now);
+        let window = time_key_for(&item, &now);
+        let samples = http_sample(1, 2);
+        let mut state = MetricStatReporterState::default();
+        assert!(
+            state
+                .cache_mut()
+                .commit(&scope, item.id, item.version, &window, "h", 2.0)
+        );
+        item.is_on = false;
+
+        let attempts = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let mut sink = recording_sink(attempts.clone(), |_| true);
+        let outcome = run_metric_stat_tick(
+            &mut state,
+            &[item],
+            || Some(samples.clone()),
+            &now,
+            &mut sink,
+        )
+        .await;
+
+        assert_eq!(outcome.pruned, 1);
+        assert_eq!(outcome.enqueued, 0);
+        assert_eq!(state.stats().entries, 0);
+        assert!(attempts.lock().is_empty());
+    }
+
+    #[tokio::test]
+    async fn metric_stat_spool_failure_retries_exact_payload_without_committing() {
+        let items = vec![metric_item(731, vec!["${country}"], "${countRequest}")];
+        let now = test_now(0);
+        let samples = http_sample(1, 2);
+        let healthy = Arc::new(AtomicBool::new(false));
+        let attempts = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let healthy_flag = healthy.clone();
+        let mut sink = recording_sink(attempts.clone(), move |_| {
+            healthy_flag.load(Ordering::Relaxed)
+        });
+        let mut state = MetricStatReporterState::default();
+
+        let failed = run_metric_stat_tick(
+            &mut state,
+            &items,
+            || Some(samples.clone()),
+            &now,
+            &mut sink,
+        )
+        .await;
+        assert_eq!(failed.enqueued, 0);
+        assert_eq!(failed.deferred, 1);
+        assert_eq!(state.pending_len(), 1);
+        assert_eq!(
+            state.stats().entries,
+            0,
+            "a failed enqueue must not seed the dedup cache"
+        );
+        let original = {
+            let sent = attempts.lock();
+            assert_eq!(sent.len(), 1);
+            prost::Message::encode_to_vec(&sent[0])
+        };
+
+        healthy.store(true, Ordering::Relaxed);
+        let retried = run_metric_stat_tick(&mut state, &items, || None, &now, &mut sink).await;
+        assert_eq!(retried.enqueued, 1);
+        assert_eq!(state.pending_len(), 0);
+        assert_eq!(state.stats().entries, 1);
+
+        let sent = attempts.lock();
+        assert_eq!(sent.len(), 2);
+        assert_eq!(
+            prost::Message::encode_to_vec(&sent[1]),
+            original,
+            "retry must carry the exact retained payload"
+        );
+    }
+
+    #[tokio::test]
+    async fn metric_stat_retained_payload_preserves_item_order_without_blocking_flush() {
+        let items = vec![metric_item(751, vec!["${country}"], "${countRequest}")];
+        let now = test_now(0);
+        let healthy = Arc::new(AtomicBool::new(false));
+        let attempts = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let healthy_flag = healthy.clone();
+        let mut sink = recording_sink(attempts.clone(), move |_| {
+            healthy_flag.load(Ordering::Relaxed)
+        });
+        let mut state = MetricStatReporterState::default();
+
+        let first = run_metric_stat_tick(
+            &mut state,
+            &items,
+            || Some(http_sample(1, 2)),
+            &now,
+            &mut sink,
+        )
+        .await;
+        assert_eq!(first.deferred, 1);
+        assert_eq!(state.pending_len(), 1);
+
+        // The spool is still down, but this tick still flushes. The newer
+        // request is appended behind the retained one: it neither overtakes it
+        // nor is it dropped.
+        let flushed = Arc::new(AtomicBool::new(false));
+        let flushed_flag = flushed.clone();
+        let blocked = run_metric_stat_tick(
+            &mut state,
+            &items,
+            || {
+                flushed_flag.store(true, Ordering::Relaxed);
+                Some(http_sample(1, 3))
+            },
+            &now,
+            &mut sink,
+        )
+        .await;
+        assert!(flushed.load(Ordering::Relaxed));
+        assert_eq!(blocked.enqueued, 0);
+        assert_eq!(state.pending_len(), 2);
+
+        // Recovery delivers the retained payloads in order, then dedups the
+        // value that is already durable.
+        healthy.store(true, Ordering::Relaxed);
+        let recovered = run_metric_stat_tick(
+            &mut state,
+            &items,
+            || Some(http_sample(1, 3)),
+            &now,
+            &mut sink,
+        )
+        .await;
+        assert_eq!(recovered.enqueued, 3);
+        assert_eq!(state.pending_len(), 0);
+
+        let sent = attempts.lock();
+        assert_eq!(sent.len(), 5);
+        assert_eq!(sent[2].metric_stats[0].value, 2.0);
+        assert_eq!(sent[3].metric_stats[0].value, 3.0);
+        assert_eq!(sent[4].keep_keys.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn metric_stat_partial_success_does_not_reupload_successful_item() {
+        let items = vec![
+            metric_item(741, vec!["${country}"], "${countRequest}"),
+            metric_item(742, vec!["${country}"], "${countRequest}"),
+        ];
+        let now = test_now(0);
+        let samples = http_sample(1, 2);
+        let fail_second = Arc::new(AtomicBool::new(true));
+        let attempts = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let fail_flag = fail_second.clone();
+        let mut sink = recording_sink(attempts.clone(), move |request| {
+            !(fail_flag.load(Ordering::Relaxed) && request.item_id == 742)
+        });
+        let mut state = MetricStatReporterState::default();
+
+        let partial = run_metric_stat_tick(
+            &mut state,
+            &items,
+            || Some(samples.clone()),
+            &now,
+            &mut sink,
+        )
+        .await;
+        assert_eq!(partial.enqueued, 1);
+        assert_eq!(partial.deferred, 1);
+        assert_eq!(state.pending_len(), 1);
+        assert_eq!(state.stats().entries, 1);
+        fail_second.store(false, Ordering::Relaxed);
+        {
+            let sent = attempts.lock();
+            assert_eq!(
+                sent.iter().map(|r| r.item_id).collect::<Vec<_>>(),
+                vec![741, 742]
+            );
+            assert!(!sent[0].metric_stats.is_empty());
+        }
+
+        let retried = run_metric_stat_tick(&mut state, &items, || None, &now, &mut sink).await;
+        assert_eq!(retried.enqueued, 1);
+        assert_eq!(state.pending_len(), 0);
+        assert_eq!(state.stats().entries, 2);
+
+        let same_batch = run_metric_stat_tick(
+            &mut state,
+            &items,
+            || Some(samples.clone()),
+            &now,
+            &mut sink,
+        )
+        .await;
+        assert_eq!(same_batch.enqueued, 2);
+
+        let sent = attempts.lock();
+        let successful: Vec<_> = sent.iter().filter(|r| r.item_id == 741).collect();
+        assert_eq!(successful.len(), 2);
+        assert_eq!(
+            successful
+                .iter()
+                .filter(|r| !r.metric_stats.is_empty())
+                .count(),
+            1,
+            "the succeeded item must not be re-uploaded as a new data row"
+        );
+        assert!(
+            successful[1].metric_stats.is_empty(),
+            "the next batch may only dedup the unchanged value"
+        );
+        let failed: Vec<_> = sent.iter().filter(|r| r.item_id == 742).collect();
+        assert_eq!(failed.len(), 3);
+        assert!(failed[2].metric_stats.is_empty());
+    }
+
+    const MIB: usize = 1024 * 1024;
+
+    #[test]
+    fn metric_stat_request_over_wire_budget_is_split_without_losing_records() {
+        let budget = metric_stat_payload_budget();
+        assert!(
+            budget < 6 * MIB,
+            "the envelope must leave headroom below 6 MiB"
+        );
+        assert!(budget > 5 * MIB, "the budget should not collapse");
+
+        let rows: Vec<_> = (0..60_000)
+            .map(|index| pb::UploadingMetricStat {
+                id: index,
+                hash: format!("h{index:05}{}", "x".repeat(120)),
+                keys: Vec::new(),
+                value: index as f32,
+            })
+            .collect();
+        let request = pb::UploadMetricStatsRequest {
+            server_id: 9,
+            time: "202610241200".into(),
+            count: 7,
+            total: 1.5,
+            version: 3,
+            item_id: 55,
+            metric_stats: rows,
+            keep_keys: Vec::new(),
+        };
+        assert!(prost::Message::encoded_len(&request) > 7 * MIB);
+
+        let split = split_metric_stat_request(request, budget);
+        assert!(split.quarantine.is_empty());
+        assert!(
+            split.chunks.len() >= 2,
+            "a 7 MiB payload needs several chunks"
+        );
+
+        let mut rows = 0;
+        for chunk in &split.chunks {
+            assert!(
+                prost::Message::encoded_len(chunk) <= budget,
+                "every chunk must fit the encoded wire budget"
+            );
+            assert_eq!(chunk.server_id, 9);
+            assert_eq!(chunk.item_id, 55);
+            assert_eq!(chunk.version, 3);
+            assert_eq!(chunk.time, "202610241200");
+            // Request-level aggregates are copied to every chunk so each row
+            // keeps exactly the values it carried in the unsplit request.
+            assert_eq!(chunk.count, 7);
+            assert_eq!(chunk.total, 1.5);
+            rows += chunk.metric_stats.len();
+        }
+        assert_eq!(rows, 60_000, "splitting must not drop a row");
+    }
+
+    #[test]
+    fn metric_stat_split_quarantines_only_the_oversized_record() {
+        let budget = metric_stat_payload_budget();
+        let giant = pb::UploadingMetricStat {
+            id: 1,
+            hash: "g".repeat(budget + 1_024),
+            keys: vec!["k".repeat(budget)],
+            value: 1.0,
+        };
+        let normal = pb::UploadingMetricStat {
+            id: 2,
+            hash: "ok".into(),
+            keys: Vec::new(),
+            value: 2.0,
+        };
+        let request = pb::UploadMetricStatsRequest {
+            server_id: 11,
+            time: "w".into(),
+            count: 1,
+            total: 2.0,
+            version: 1,
+            item_id: 66,
+            metric_stats: vec![giant, normal],
+            keep_keys: vec!["k".repeat(budget + 1)],
+        };
+
+        let split = split_metric_stat_request(request, budget);
+        assert_eq!(split.chunks.len(), 1);
+        assert_eq!(split.chunks[0].metric_stats.len(), 1);
+        assert_eq!(split.chunks[0].metric_stats[0].hash, "ok");
+        assert!(split.chunks[0].keep_keys.is_empty());
+        // The oversized row and keep key keep their complete payload, each in
+        // its own single-record request, for the durable quarantine.
+        assert_eq!(split.quarantine.len(), 2);
+        assert_eq!(split.quarantine[0].metric_stats.len(), 1);
+        assert_eq!(split.quarantine[0].metric_stats[0].id, 1);
+        assert_eq!(split.quarantine[0].metric_stats[0].keys.len(), 1);
+        assert!(split.quarantine[0].keep_keys.is_empty());
+        assert!(split.quarantine[1].metric_stats.is_empty());
+        assert_eq!(split.quarantine[1].keep_keys.len(), 1);
+    }
+
+    /// Fails identically on every send. `refusal` picks the error class the
+    /// retry policy is supposed to distinguish.
+    struct RefusingMetricSink {
+        attempts: Arc<parking_lot::Mutex<Vec<pb::UploadMetricStatsRequest>>>,
+        refusal: Refusal,
+    }
+
+    #[derive(Clone, Copy)]
+    enum Refusal {
+        Capacity,
+        BatchTooLarge,
+    }
+
+    impl MetricUploadSink for RefusingMetricSink {
+        fn send(
+            &mut self,
+            request: &pb::UploadMetricStatsRequest,
+        ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send {
+            self.attempts.lock().push(request.clone());
+            let error = match self.refusal {
+                Refusal::Capacity => anyhow::Error::new(crate::telemetry::SpoolError::Capacity {
+                    required: 1,
+                    available: 0,
+                    core: true,
+                }),
+                Refusal::BatchTooLarge => {
+                    anyhow::Error::new(crate::telemetry::SpoolError::BatchTooLarge {
+                        bytes: 7 * MIB,
+                        limit: 6 * MIB,
+                    })
+                }
+            };
+            std::future::ready(Err(error))
+        }
+    }
+
+    fn temp_quarantine_dir(label: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!(
+            "zelvik-metric-quarantine-test-{label}-{}",
+            uuid::Uuid::new_v4()
+        ))
+    }
+
+    fn read_quarantine(dir: &std::path::Path) -> Vec<pb::UploadMetricStatsRequest> {
+        let Ok(entries) = std::fs::read_dir(dir.join("quarantine")) else {
+            return Vec::new();
+        };
+        let mut requests = Vec::new();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("pb") {
+                continue;
+            }
+            let bytes = std::fs::read(&path).expect("read quarantined payload");
+            let request =
+                <pb::UploadMetricStatsRequest as prost::Message>::decode(bytes.as_slice())
+                    .expect("decode quarantined payload");
+            requests.push(request);
+        }
+        requests
+    }
+
+    fn seeded_request(item_id: i64, value: f32) -> pb::UploadMetricStatsRequest {
+        pb::UploadMetricStatsRequest {
+            server_id: 1,
+            time: "w".into(),
+            count: 1,
+            total: value,
+            version: 1,
+            item_id,
+            metric_stats: vec![pb::UploadingMetricStat {
+                id: item_id,
+                hash: "h".into(),
+                keys: vec!["dim".into()],
+                value,
+            }],
+            keep_keys: Vec::new(),
+        }
+    }
+
+    fn seed_spool_pending(state: &mut MetricStatReporterState, item_id: i64) {
+        state.push_pending(
+            item_id,
+            PendingMetricUpload::for_spool(seeded_request(item_id, 1.0)),
+        );
+    }
+
+    fn seed_quarantine_pending(state: &mut MetricStatReporterState, item_id: i64) {
+        state.push_pending(
+            item_id,
+            PendingMetricUpload::for_quarantine(seeded_request(item_id, 1.0)),
+        );
+    }
+
+    #[tokio::test]
+    async fn metric_stat_capacity_refusal_is_retried_without_bound_or_loss() {
+        let attempts = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let mut sink = RefusingMetricSink {
+            attempts: attempts.clone(),
+            refusal: Refusal::Capacity,
+        };
+        let mut state = MetricStatReporterState::default();
+        seed_spool_pending(&mut state, 771);
+
+        for _ in 0..20 {
+            let outcome =
+                run_metric_stat_tick(&mut state, &[], || None, &test_now(0), &mut sink).await;
+            assert_eq!(outcome.enqueued, 0);
+            assert_eq!(state.pending_len(), 1);
+            assert_eq!(state.pending_bytes(), state.stats().pending_bytes);
+        }
+        assert_eq!(state.stats().terminal_failed_uploads, 0);
+        assert_eq!(state.stats().terminal_oversize_records, 0);
+        assert_eq!(
+            attempts.lock().len(),
+            20,
+            "capacity keeps the exact payload"
+        );
+    }
+
+    #[tokio::test]
+    async fn metric_stat_wire_refusal_moves_full_payload_to_durable_quarantine() {
+        let dir = temp_quarantine_dir("wire-refusal");
+        let attempts = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let mut sink = RefusingMetricSink {
+            attempts: attempts.clone(),
+            refusal: Refusal::BatchTooLarge,
+        };
+        let mut state = MetricStatReporterState::with_quarantine_dir(dir.clone());
+        seed_spool_pending(&mut state, 772);
+
+        // The spool refuses the bytes: the exact request is reclassified and
+        // stays pending, not dropped.
+        run_metric_stat_tick(&mut state, &[], || None, &test_now(0), &mut sink).await;
+        assert_eq!(state.pending_len(), 1);
+        assert_eq!(state.stats().terminal_oversize_records, 0);
+
+        // The next tick stores the complete request durably.
+        let stored = run_metric_stat_tick(&mut state, &[], || None, &test_now(0), &mut sink).await;
+        assert_eq!(stored.enqueued, 0);
+        assert_eq!(state.pending_len(), 0);
+        assert_eq!(state.stats().terminal_oversize_records, 1);
+        assert!(state.stats().quarantined_bytes > 0);
+        let quarantined = read_quarantine(&dir);
+        assert_eq!(quarantined.len(), 1);
+        assert_eq!(quarantined[0], seeded_request(772, 1.0));
+
+        run_metric_stat_tick(&mut state, &[], || None, &test_now(0), &mut sink).await;
+        assert_eq!(
+            attempts.lock().len(),
+            1,
+            "it is never offered to the wire again"
+        );
+        assert_eq!(read_quarantine(&dir).len(), 1);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn metric_stat_quarantine_store_failure_retains_payload_until_it_fits() {
+        let dir = temp_quarantine_dir("quota");
+        let mut state = MetricStatReporterState::with_quarantine_dir(dir.clone());
+        state.set_quarantine_max_bytes(1);
+        seed_quarantine_pending(&mut state, 773);
+        let attempts = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let mut sink = RefusingMetricSink {
+            attempts,
+            refusal: Refusal::Capacity,
+        };
+
+        let refused = run_metric_stat_tick(&mut state, &[], || None, &test_now(0), &mut sink).await;
+        assert_eq!(refused.enqueued, 0);
+        assert_eq!(
+            state.pending_len(),
+            1,
+            "a full quarantine never drops the payload"
+        );
+        assert_eq!(state.stats().terminal_oversize_records, 0);
+        assert!(read_quarantine(&dir).is_empty());
+
+        state.set_quarantine_max_bytes(1 << 20);
+        run_metric_stat_tick(&mut state, &[], || None, &test_now(0), &mut sink).await;
+        assert_eq!(state.pending_len(), 0);
+        assert_eq!(state.stats().terminal_oversize_records, 1);
+        let quarantined = read_quarantine(&dir);
+        assert_eq!(quarantined.len(), 1);
+        assert_eq!(quarantined[0], seeded_request(773, 1.0));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn metric_stat_pending_payloads_survive_restart() {
+        let dir = temp_quarantine_dir("restart");
+        let now = test_now(0);
+        let item = metric_item(795, vec!["${country}"], "${countRequest}");
+        let attempts = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let mut failing = recording_sink(attempts.clone(), |_| false);
+        let mut first = MetricStatReporterState::with_quarantine_dir(dir.clone());
+
+        let first_tick = run_metric_stat_tick(
+            &mut first,
+            &[item],
+            || Some(http_sample(1, 2)),
+            &now,
+            &mut failing,
+        )
+        .await;
+        assert_eq!(first_tick.deferred, 1);
+        assert_eq!(first.pending_len(), 1);
+        assert_eq!(
+            std::fs::read_dir(dir.join("pending"))
+                .expect("pending dir")
+                .count(),
+            1,
+            "a payload that left the aggregator must be durable before restart"
+        );
+        drop(first);
+
+        // A fresh process recovers the exact request from the pending dir.
+        let mut recovered = MetricStatReporterState::with_quarantine_dir(dir.clone());
+        assert_eq!(recovered.recover_pending(), 1);
+        assert_eq!(recovered.pending_len(), 1);
+        let mut healthy = recording_sink(attempts.clone(), |_| true);
+        let resumed = run_metric_stat_tick(&mut recovered, &[], || None, &now, &mut healthy).await;
+        assert_eq!(resumed.enqueued, 1);
+        assert_eq!(recovered.pending_len(), 0);
+        assert_eq!(
+            std::fs::read_dir(dir.join("pending"))
+                .expect("pending dir")
+                .count(),
+            0,
+            "the durable copy is removed only after the spool accepted it"
+        );
+        let sent = attempts.lock();
+        let recovered_request = sent.last().expect("recovered send");
+        assert_eq!(recovered_request.item_id, 795);
+        assert_eq!(recovered_request.metric_stats[0].value, 2.0);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn metric_stat_permanent_failure_blocks_only_its_item_and_never_drops() {
+        let failing = metric_item(781, vec!["${country}"], "${countRequest}");
+        let healthy = metric_item(782, vec!["${country}"], "${countRequest}");
+        let now = test_now(0);
+        let attempts = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let fail_failing = Arc::new(AtomicBool::new(true));
+        let flag = fail_failing.clone();
+        let mut sink = recording_sink(attempts.clone(), move |request| {
+            !(flag.load(Ordering::Relaxed) && request.item_id == 781)
+        });
+        let mut state = MetricStatReporterState::default();
+
+        let first = run_metric_stat_tick(
+            &mut state,
+            &[failing.clone(), healthy.clone()],
+            || Some(http_sample(1, 2)),
+            &now,
+            &mut sink,
+        )
+        .await;
+        assert_eq!(first.enqueued, 1, "the healthy item must not be blocked");
+        assert_eq!(first.deferred, 1);
+        assert_eq!(state.pending_len(), 1);
+        assert_eq!(state.stats().entries, 1);
+
+        // The failing item is permanently refused. It keeps every payload, and
+        // the healthy item keeps uploading on every tick; the failing queue is
+        // partitioned and never gates the healthy one.
+        for offset in 0..5i64 {
+            let outcome = run_metric_stat_tick(
+                &mut state,
+                &[failing.clone(), healthy.clone()],
+                || Some(http_sample(1, 3 + offset)),
+                &now,
+                &mut sink,
+            )
+            .await;
+            assert_eq!(outcome.enqueued, 1, "the healthy item still uploads");
+            assert_eq!(state.pending_len() as i64, 2 + offset);
+            assert_eq!(state.stats().entries, 1);
+        }
+        let queued = state.pending_len();
+        assert_eq!(queued, 6);
+
+        // Disabling/deleting the failing item must not turn its retained data
+        // into a drop, and must not poison the healthy item.
+        for _ in 0..3 {
+            let outcome = run_metric_stat_tick(
+                &mut state,
+                &[healthy.clone()],
+                || Some(http_sample(1, 2)),
+                &now,
+                &mut sink,
+            )
+            .await;
+            assert_eq!(outcome.enqueued, 1);
+            assert_eq!(state.pending_len(), queued, "no queued payload is dropped");
+        }
+        assert!(state.stats().pending_bytes > 0);
+        assert_eq!(state.stats().backpressured, false);
+
+        // Recovery delivers every retained payload, oldest first.
+        fail_failing.store(false, Ordering::Relaxed);
+        let recovered = run_metric_stat_tick(
+            &mut state,
+            &[healthy.clone()],
+            || Some(http_sample(1, 2)),
+            &now,
+            &mut sink,
+        )
+        .await;
+        assert_eq!(recovered.enqueued, queued + 1);
+        assert_eq!(state.pending_len(), 0);
+        assert_eq!(state.pending_bytes(), 0);
+
+        let sent = attempts.lock();
+        let failing_rows: Vec<_> = sent.iter().filter(|r| r.item_id == 781).collect();
+        let delivered: Vec<_> = failing_rows
+            .iter()
+            .filter(|r| !r.metric_stats.is_empty())
+            .map(|r| r.metric_stats[0].value)
+            .collect();
+        assert_eq!(
+            &delivered[delivered.len() - 6..],
+            &[2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+            "the recovery tick must deliver every retained payload in order"
+        );
+    }
+
+    #[tokio::test]
+    async fn metric_stat_backpressure_retains_samples_in_aggregator_without_dropping() {
+        let dir = temp_quarantine_dir("backpressure");
+        let healthy = Arc::new(AtomicBool::new(false));
+        let attempts = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let flag = healthy.clone();
+        let mut sink = recording_sink(attempts.clone(), move |_| flag.load(Ordering::Relaxed));
+        let mut state = MetricStatReporterState::with_quarantine(100, 1 << 20, 1, dir.clone());
+        seed_spool_pending(&mut state, 791);
+
+        let flushed = Arc::new(AtomicBool::new(false));
+        let flushed_flag = flushed.clone();
+        let first = run_metric_stat_tick(
+            &mut state,
+            &[metric_item(792, vec!["${country}"], "${countRequest}")],
+            || {
+                flushed_flag.store(true, Ordering::Relaxed);
+                Some(http_sample(1, 2))
+            },
+            &test_now(0),
+            &mut sink,
+        )
+        .await;
+        assert_eq!(first.enqueued, 0);
+        assert!(
+            !flushed.load(Ordering::Relaxed),
+            "backpressure must not flush"
+        );
+        assert_eq!(state.pending_len(), 1);
+        assert!(state.stats().backpressured);
+        assert!(state.stats().pending_bytes > 1);
+
+        // The spool recovers: the retained payload drains, then the samples
+        // still held in the aggregator are flushed normally.
+        healthy.store(true, Ordering::Relaxed);
+        let resumed = run_metric_stat_tick(
+            &mut state,
+            &[metric_item(792, vec!["${country}"], "${countRequest}")],
+            || {
+                flushed_flag.store(true, Ordering::Relaxed);
+                Some(http_sample(1, 2))
+            },
+            &test_now(0),
+            &mut sink,
+        )
+        .await;
+        assert_eq!(resumed.enqueued, 2);
+        assert!(flushed.load(Ordering::Relaxed));
+        assert!(!state.stats().backpressured);
+        assert_eq!(state.pending_len(), 0);
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

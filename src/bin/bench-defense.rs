@@ -32,8 +32,84 @@ use serde_json::{Value, json};
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
+// Issue 34 memory soak: the bench target must exercise the same allocator
+// contract as the production binary. This bin is test-only; production's
+// global allocator lives in src/main.rs.
+#[global_allocator]
+static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 const CLUSTER_ID: i64 = 1;
 const DEFENSE_POLICY_ID: i64 = 9001;
+
+/// Write the allocator view of the process for the Issue 34 soak.
+///
+/// ``mi_process_info`` is deliberately reported alongside the raw
+/// ``mi_stats_get_json`` document, but the soak's RSS slope gate reads kernel
+/// ``/proc`` numbers; this file never substitutes for them. The write is
+/// atomic (tmp + rename) because the sampler polls it while the target runs.
+fn write_alloc_stats(path: &str, buffer: &mut [u8]) -> anyhow::Result<()> {
+    use std::io::Write as _;
+
+    let mut current_rss = 0usize;
+    let mut peak_rss = 0usize;
+    let mut current_commit = 0usize;
+    let mut peak_commit = 0usize;
+    let mut page_faults = 0usize;
+    unsafe {
+        libmimalloc_sys::mi_process_info(
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut current_rss,
+            &mut peak_rss,
+            &mut current_commit,
+            &mut peak_commit,
+            &mut page_faults,
+        );
+    }
+
+    // Same bound as tests/issue34_memory.rs; a larger document means the
+    // stats surface changed and the soak must be told instead of truncating.
+    // The caller owns the buffer so a 1 s cadence does not churn 512 KiB/s
+    // through the allocator under test.
+    let pointer = unsafe {
+        libmimalloc_sys::mi_stats_get_json(
+            buffer.len(),
+            buffer.as_mut_ptr().cast::<std::ffi::c_char>(),
+        )
+    };
+    anyhow::ensure!(
+        !pointer.is_null(),
+        "mi_stats_get_json returned null (buffer too small or stats unavailable)"
+    );
+    let raw = unsafe { std::ffi::CStr::from_ptr(pointer) }.to_string_lossy();
+    let mimalloc: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|error| anyhow::anyhow!("mi_stats_get_json is not JSON: {error}"))?;
+    let mi_version = unsafe { libmimalloc_sys::mi_version() };
+
+    let document = json!({
+        "schema": "issue34-allocator-stats/v1",
+        "source": "bench-defense",
+        "mi_version": mi_version,
+        "process": {
+            "rss_current": current_rss,
+            "peak_rss": peak_rss,
+            "commit_current": current_commit,
+            "peak_commit": peak_commit,
+            "page_faults": page_faults,
+        },
+        "mimalloc": mimalloc,
+    });
+
+    let temporary = format!("{path}.tmp.{}", std::process::id());
+    {
+        let mut file = std::fs::File::create(&temporary)?;
+        file.write_all(&serde_json::to_vec(&document)?)?;
+        file.sync_all()?;
+    }
+    std::fs::rename(&temporary, path)?;
+    Ok(())
+}
 
 fn env_u16(name: &str, default: u16) -> u16 {
     std::env::var(name)
@@ -58,6 +134,10 @@ fn env_str(name: &str, default: &str) -> String {
 }
 
 fn main() -> anyhow::Result<()> {
+    // Must happen before any worker thread (or allocation-heavy init) runs so
+    // the soak exercises the same page-reclaim contract as production.
+    zelvik_edge::memory_reclaim::configure_allocator();
+
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -84,6 +164,8 @@ fn main() -> anyhow::Result<()> {
     // Kernel offload dataplane selection: auto (production behavior),
     // xdp / nftables / iptables to force a specific backend, off to disable.
     let kernel_filter_mode = env_str("BENCH_KERNEL_FILTER", "auto");
+    // Issue 34 soak: optional allocator stats file (see write_alloc_stats).
+    let alloc_stats_path = std::env::var("BENCH_ALLOC_STATS_PATH").ok();
 
     zelvik_edge::utils::time::init_local_timezone();
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -343,6 +425,7 @@ fn main() -> anyhow::Result<()> {
 
     // Periodic defense-metrics dump: parsed by run_defense_matrix.sh.
     runtime.spawn(async move {
+        let mut alloc_stats_buffer = vec![0u8; 512 * 1024];
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;
             let l4 = zelvik_edge::l4_defense::metrics_snapshot();
@@ -398,6 +481,11 @@ fn main() -> anyhow::Result<()> {
                     },
                 })
             );
+            if let Some(path) = &alloc_stats_path {
+                if let Err(error) = write_alloc_stats(path, &mut alloc_stats_buffer) {
+                    eprintln!("ALLOCSTATS error: {error:#}");
+                }
+            }
         }
     });
 

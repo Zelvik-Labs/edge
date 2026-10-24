@@ -1417,7 +1417,8 @@ pub async fn start_persistence_flusher() {
             )
             .saturating_add(crate::metrics::top_ip::TOP_IP_TRACKER.approximate_bytes())
             .saturating_add(crate::metrics::daily::DAILY_DOMAIN_TRACKER.approximate_bytes())
-            .saturating_add(crate::metrics::daily::UNIQUE_IP_TRACKER.approximate_bytes());
+            .saturating_add(crate::metrics::daily::UNIQUE_IP_TRACKER.approximate_bytes())
+            .saturating_add(crate::rpc::stats::metric_values_cache_stats().estimated_bytes);
         crate::memory_governor::MEMORY_GOVERNOR.set_metrics_aggregator_bytes(metrics_state_bytes);
         // Observability-only guard: the metrics maps are unbounded by design
         // today, so surface a rate-limited warning when their estimated

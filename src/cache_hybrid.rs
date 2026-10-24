@@ -13,7 +13,7 @@ use std::cell::Cell;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock as Lazy;
-use std::sync::{Arc, RwLock as StdRwLock};
+use std::sync::{Arc, Mutex as StdMutex, RwLock as StdRwLock};
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncSeek, BufReader};
 use tokio::sync::{Mutex, OwnedMutexGuard};
@@ -2820,6 +2820,37 @@ pub(crate) struct TinyUfoL1 {
     auto_budget: AtomicBool,
     max_bytes: AtomicU64,
     current_weight: AtomicU64,
+    /// Budget resolved by the janitor's bounded maintenance pass but not yet
+    /// applied to the TinyUFO capacity. Applying it rebuilds the cache, which
+    /// allocates proportionally to the cache, so that step waits for a
+    /// `BackgroundWork` permit instead of running unconditionally.
+    pending_auto_rebuild: AtomicU64,
+    /// Epoch of the policy that produced `pending_auto_rebuild`. A permit
+    /// holder that observed an older epoch must not apply a stale target over
+    /// a manual capacity switch that landed in between.
+    pending_auto_epoch: AtomicU64,
+    /// Serializes manual capacity switches against deferred auto-budget
+    /// publication/application. The epoch alone cannot close the window
+    /// between checking the pending target and starting the rebuild.
+    budget_transition: StdMutex<()>,
+    /// Policy epoch: bumped by every manual switch and every resolved-budget
+    /// change. Stale in-flight rebuild attempts compare against this.
+    budget_epoch: AtomicU64,
+    /// Last budget a rebuild was actually applied for. Test-only: lets the
+    /// bounded-publication tests prove that no rebuild ran without a permit
+    /// without relying on allocator address reuse.
+    #[cfg(test)]
+    last_rebuild_bytes: AtomicU64,
+}
+
+/// Outcome of the janitor's bounded auto-budget publication.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct AutoBudgetRefresh {
+    /// The resolved limit differed from the published one.
+    published: bool,
+    /// A cache rebuild is required and is waiting for a `BackgroundWork`
+    /// permit.
+    pending_rebuild: bool,
 }
 
 impl TinyUfoL1 {
@@ -2837,6 +2868,12 @@ impl TinyUfoL1 {
             auto_budget: AtomicBool::new(auto_budget),
             max_bytes: AtomicU64::new(resolved_max_bytes),
             current_weight: AtomicU64::new(0),
+            pending_auto_rebuild: AtomicU64::new(0),
+            pending_auto_epoch: AtomicU64::new(0),
+            budget_transition: StdMutex::new(()),
+            budget_epoch: AtomicU64::new(0),
+            #[cfg(test)]
+            last_rebuild_bytes: AtomicU64::new(0),
         }
     }
 
@@ -2988,8 +3025,22 @@ impl TinyUfoL1 {
     }
 
     fn set_max_bytes(&self, bytes: u64) {
+        // Hold the transition lock so a janitor rebuild that captured the
+        // previous auto target cannot complete after this policy switch. The
+        // epoch bump invalidates any permit holder that read the old policy
+        // but has not yet entered this critical section.
+        let _transition = self
+            .budget_transition
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let auto_budget = bytes == 0;
         self.auto_budget.store(auto_budget, Ordering::Relaxed);
+        // A manual capacity (or a switch back to auto) supersedes any
+        // deferred auto target: otherwise a later janitor pass would apply
+        // the stale auto value over the configured policy.
+        self.pending_auto_rebuild.store(0, Ordering::Release);
+        self.pending_auto_epoch.store(0, Ordering::Release);
+        self.budget_epoch.fetch_add(1, Ordering::AcqRel);
         let resolved = if auto_budget {
             crate::memory_governor::MEMORY_GOVERNOR.cache_budget_bytes()
         } else {
@@ -3004,15 +3055,99 @@ impl TinyUfoL1 {
         self.force_rebuild_with_limit(resolved);
     }
 
-    fn refresh_auto_budget(&self) {
+    /// Bounded half of the janitor's budget refresh: publish the freshly
+    /// resolved limit so admission and eviction decisions see current memory
+    /// without rebuilding the cache. The rebuild allocates proportionally to
+    /// the number of cached keys, so it is deferred to
+    /// [`Self::apply_pending_auto_budget_rebuild`], which the janitor only
+    /// calls while holding a `BackgroundWork` permit.
+    fn publish_auto_budget_bounded(&self) -> AutoBudgetRefresh {
         if !self.auto_budget.load(Ordering::Relaxed) {
-            return;
+            return AutoBudgetRefresh {
+                published: false,
+                pending_rebuild: self.pending_auto_rebuild.load(Ordering::Acquire) != 0,
+            };
         }
-        self.set_max_bytes(0);
+        self.publish_resolved_budget(crate::memory_governor::MEMORY_GOVERNOR.cache_budget_bytes())
+    }
+
+    fn publish_resolved_budget(&self, resolved: u64) -> AutoBudgetRefresh {
+        let _transition = self
+            .budget_transition
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        // Re-check the policy under the lock: a manual switch that landed
+        // after the caller resolved this value must win.
+        if !self.auto_budget.load(Ordering::Relaxed) {
+            self.pending_auto_rebuild.store(0, Ordering::Release);
+            self.pending_auto_epoch.store(0, Ordering::Release);
+            return AutoBudgetRefresh::default();
+        }
+        let old = self.max_bytes.swap(resolved, Ordering::Relaxed);
+        if old != resolved {
+            // A new resolved value retargets any rebuild that is still
+            // waiting for a permit. Keeping a pending value matters because
+            // the physical TinyUFO capacity may still be the pre-deferral
+            // size even when this particular delta no longer crosses the
+            // rebuild threshold on its own.
+            let already_pending = self.pending_auto_rebuild.load(Ordering::Acquire) != 0;
+            let pending =
+                if already_pending || Self::should_rebuild_for_budget_change(old, resolved) {
+                    resolved
+                } else {
+                    0
+                };
+            let epoch = self
+                .budget_epoch
+                .fetch_add(1, Ordering::AcqRel)
+                .saturating_add(1);
+            self.pending_auto_rebuild.store(pending, Ordering::Release);
+            self.pending_auto_epoch
+                .store(if pending == 0 { 0 } else { epoch }, Ordering::Release);
+        }
+        AutoBudgetRefresh {
+            published: old != resolved,
+            pending_rebuild: self.pending_auto_rebuild.load(Ordering::Acquire) != 0,
+        }
+    }
+
+    /// Apply the budget rebuild deferred by bounded maintenance. Returns true
+    /// only when a rebuild actually ran; callers must hold a `BackgroundWork`
+    /// permit because the rebuild allocates a new cache and a key snapshot.
+    fn apply_pending_auto_budget_rebuild(&self) -> bool {
+        let observed_epoch = self.budget_epoch.load(Ordering::Acquire);
+        self.apply_pending_auto_budget_rebuild_at_epoch(observed_epoch)
+    }
+
+    /// Apply a deferred rebuild only if `observed_epoch` is still current.
+    ///
+    /// A permit holder may wait before rebuilding; a manual capacity switch
+    /// in that window bumps the epoch and clears the auto target. Rejecting
+    /// the stale attempt is what keeps the manual policy from being
+    /// overwritten by an older 8 MiB auto target.
+    fn apply_pending_auto_budget_rebuild_at_epoch(&self, observed_epoch: u64) -> bool {
+        let _transition = self
+            .budget_transition
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if !self.auto_budget.load(Ordering::Relaxed)
+            || self.budget_epoch.load(Ordering::Acquire) != observed_epoch
+        {
+            return false;
+        }
+        let pending = self.pending_auto_rebuild.swap(0, Ordering::AcqRel);
+        let pending_epoch = self.pending_auto_epoch.swap(0, Ordering::AcqRel);
+        if pending == 0 || pending_epoch != observed_epoch {
+            return false;
+        }
+        self.force_rebuild_with_limit(pending);
+        true
     }
 
     fn force_rebuild_with_limit(&self, bytes: u64) {
         let resolved = bytes.max(1024);
+        #[cfg(test)]
+        self.last_rebuild_bytes.store(resolved, Ordering::Relaxed);
         let target_weight = Self::weight_limit_for_bytes(resolved);
         let now = crate::utils::time::now_timestamp();
         // Salvage live entries newest-first until the smaller budget is
@@ -3545,6 +3680,10 @@ fn warm_bloom_from_cache_meta() {
 /// Negative cache: tracks keys confirmed to not exist in the local cache set.
 /// This mainly absorbs stale Bloom positives after purge/expiry.
 static NEGATIVE_CACHE: Lazy<DashMap<String, i64>> = Lazy::new(DashMap::new);
+/// Rotating start position (entry index) for the janitor's bounded negative
+/// sweep. DashMap always iterates from shard 0, so without a cursor a capped
+/// pass would examine the same prefix forever and never reach later shards.
+static NEGATIVE_CACHE_SWEEP_CURSOR: AtomicU64 = AtomicU64::new(0);
 const NEGATIVE_CACHE_TTL_SECS: i64 = 60;
 const NEGATIVE_CACHE_MIN_ENTRIES: usize = 1_000_000;
 const NEGATIVE_CACHE_MAX_ENTRIES: usize = 16_000_000;
@@ -3628,6 +3767,99 @@ fn negative_cache_remove(key: &str) {
 
 fn negative_cache_stats() -> (usize, usize) {
     (NEGATIVE_CACHE.len(), negative_cache_capacity_limit())
+}
+
+/// How many entries one janitor maintenance pass may examine for expiry.
+/// Removal is capped by the same number. This bounds both the CPU spent
+/// checking expiry and the temporary key buffer.
+const NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP: usize = 256;
+
+/// Wall-clock ceiling for one bounded sweep, including the cursor seek. The
+/// cap alone is not enough: seeking to a late cursor position still walks the
+/// map prefix, so a fresh full scan is also bounded in time.
+const NEGATIVE_CACHE_MAINTENANCE_TIME_BUDGET: std::time::Duration =
+    std::time::Duration::from_millis(1);
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct NegativeCacheCleanupStats {
+    /// Entries whose expiry was checked this pass (excluding cursor seek).
+    examined: usize,
+    /// Expired entries actually removed and refunded this pass.
+    removed: usize,
+}
+
+/// Bounded variant of [`negative_cache_cleanup`] for the janitor's
+/// unconditional maintenance pass.
+///
+/// The sweep examines at most [`NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP`]
+/// entries and spends at most [`NEGATIVE_CACHE_MAINTENANCE_TIME_BUDGET`],
+/// including the cursor seek. A persistent rotating cursor makes the next
+/// pass continue past the entries this one examined, so every region is
+/// reached eventually even when the map contains millions of live (not yet
+/// expired) keys. Progress is guaranteed: when the time budget expires before
+/// any entry is examined, the cursor still advances by one position.
+fn negative_cache_cleanup_bounded(now: i64) -> NegativeCacheCleanupStats {
+    let total = NEGATIVE_CACHE.len();
+    if total == 0 {
+        NEGATIVE_CACHE_SWEEP_CURSOR.store(0, Ordering::Relaxed);
+        return NegativeCacheCleanupStats::default();
+    }
+    let started = std::time::Instant::now();
+    let start = (NEGATIVE_CACHE_SWEEP_CURSOR.load(Ordering::Relaxed) as usize) % total;
+    let mut skipped = 0usize;
+    let mut examined = 0usize;
+    let mut expired: Vec<String> = Vec::with_capacity(NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP);
+    {
+        // Collect keys, then drop the iterator before mutating: removing
+        // while a DashMap iterator guard is alive can deadlock another shard.
+        let mut iter = NEGATIVE_CACHE.iter();
+        while skipped < start {
+            if started.elapsed() >= NEGATIVE_CACHE_MAINTENANCE_TIME_BUDGET || iter.next().is_none()
+            {
+                break;
+            }
+            skipped += 1;
+        }
+        while examined < NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP {
+            if started.elapsed() >= NEGATIVE_CACHE_MAINTENANCE_TIME_BUDGET {
+                break;
+            }
+            let Some(entry) = iter.next() else {
+                break;
+            };
+            examined += 1;
+            if *entry.value() <= now {
+                expired.push(entry.key().clone());
+            }
+        }
+    }
+    let progressed = skipped.saturating_add(examined);
+    let next = if progressed >= total {
+        0
+    } else if progressed == 0 {
+        // Time ran out during the seek. Advance anyway so repeated passes
+        // cannot pin the cursor and starve the rest of the map.
+        start.saturating_add(1) % total
+    } else {
+        start.saturating_add(progressed) % total
+    };
+    NEGATIVE_CACHE_SWEEP_CURSOR.store(next as u64, Ordering::Relaxed);
+
+    let mut removed = 0;
+    for key in expired {
+        if NEGATIVE_CACHE
+            .remove_if(&key, |_, expiry| *expiry <= now)
+            .is_some()
+        {
+            let _ = crate::memory_governor::MEMORY_GOVERNOR.resident_memory_replace_owned(
+                crate::memory_governor::ResidentCategory::NegativeCache,
+                &key,
+                0,
+            );
+            removed += 1;
+        }
+    }
+    NegativeCacheCleanupStats { examined, removed }
 }
 
 fn negative_cache_cleanup(now: i64) {
@@ -5338,39 +5570,199 @@ pub fn start_cache_profiler() {
     });
 }
 
+/// Janitor cadence. Maintenance is bounded (see
+/// [`run_cache_janitor_cycle`]), so a missed permit delays only the expensive
+/// rebuild, never the freeing work.
+const CACHE_JANITOR_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+
+static JANITOR_CYCLES: AtomicU64 = AtomicU64::new(0);
+static JANITOR_MAINTENANCE_CYCLES: AtomicU64 = AtomicU64::new(0);
+static JANITOR_ADMISSION_SKIPS: AtomicU64 = AtomicU64::new(0);
+static JANITOR_BUDGET_PUBLISHES: AtomicU64 = AtomicU64::new(0);
+static JANITOR_REBUILDS_DEFERRED: AtomicU64 = AtomicU64::new(0);
+static JANITOR_REBUILDS_APPLIED: AtomicU64 = AtomicU64::new(0);
+static JANITOR_NEGATIVE_EXAMINED: AtomicU64 = AtomicU64::new(0);
+static JANITOR_NEGATIVE_REMOVED: AtomicU64 = AtomicU64::new(0);
+static JANITOR_WORKER_COLLECT_REQUESTS: AtomicU64 = AtomicU64::new(0);
+
+/// Observable janitor progress. `maintenance_cycles` must keep advancing
+/// while `admission_skips` advances; a stalled `maintenance_cycles` under
+/// memory pressure is the admission-gap regression this instrumentation
+/// exists to catch.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CacheJanitorActivity {
+    pub cycles: u64,
+    pub maintenance_cycles: u64,
+    pub admission_skips: u64,
+    pub budget_publishes: u64,
+    pub rebuilds_deferred: u64,
+    pub rebuilds_applied: u64,
+    pub negative_entries_examined: u64,
+    pub negative_entries_removed: u64,
+    pub worker_collect_requests: u64,
+}
+
+pub fn cache_janitor_activity() -> CacheJanitorActivity {
+    CacheJanitorActivity {
+        cycles: JANITOR_CYCLES.load(Ordering::Relaxed),
+        maintenance_cycles: JANITOR_MAINTENANCE_CYCLES.load(Ordering::Relaxed),
+        admission_skips: JANITOR_ADMISSION_SKIPS.load(Ordering::Relaxed),
+        budget_publishes: JANITOR_BUDGET_PUBLISHES.load(Ordering::Relaxed),
+        rebuilds_deferred: JANITOR_REBUILDS_DEFERRED.load(Ordering::Relaxed),
+        rebuilds_applied: JANITOR_REBUILDS_APPLIED.load(Ordering::Relaxed),
+        negative_entries_examined: JANITOR_NEGATIVE_EXAMINED.load(Ordering::Relaxed),
+        negative_entries_removed: JANITOR_NEGATIVE_REMOVED.load(Ordering::Relaxed),
+        worker_collect_requests: JANITOR_WORKER_COLLECT_REQUESTS.load(Ordering::Relaxed),
+    }
+}
+
+/// One janitor pass, split by cost.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CacheJanitorCycleOutcome {
+    pub disk_refreshed: bool,
+    pub budget_published: bool,
+    pub budget_rebuild_pending: bool,
+    pub budget_rebuild_applied: bool,
+    pub negative_entries_examined: usize,
+    pub negative_entries_removed: usize,
+    /// The reclaim monitor was signalled; this maintenance pass never runs
+    /// the reclaim coordinator itself.
+    pub reclaim_signaled: bool,
+    pub worker_collect_requested: bool,
+    pub admission_skipped: bool,
+}
+
+/// Run one janitor pass.
+///
+/// The maintenance half is bounded and runs unconditionally, even when
+/// `BackgroundWork` admission is exhausted:
+///
+/// * refresh cached disk availability (one sysinfo snapshot);
+/// * publish the resolved auto budget without rebuilding the cache;
+/// * signal the existing reclaim monitor via `notify_pressure_async` (an
+///   allocation-free atomic + unpark) instead of running the coordinator —
+///   reclaim itself may clone a whole negative-cache vec, so it must not run
+///   on this maintenance path;
+/// * examine at most [`NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP`] negative
+///   entries under a time budget and remove the expired ones, refunding their
+///   resident charges;
+/// * request a worker-generation collect (the actual `mi_collect` runs on
+///   parked worker threads under their own rate limit).
+///
+/// Only the budget rebuild — the step that allocates a new cache and a key
+/// snapshot — requires the permit. Skipping it cannot lose freeing work: the
+/// resolved limit is already published, so admission and eviction see the
+/// pressure-reduced budget, and the rebuild stays pending for the next pass
+/// that gets a permit. This is deliberately not an admission bypass: no
+/// expensive, unbounded work runs without a permit.
+fn run_cache_janitor_cycle(
+    now: i64,
+    disk_root: &Path,
+    permit: Option<StaticAdmissionPermit>,
+) -> CacheJanitorCycleOutcome {
+    JANITOR_CYCLES.fetch_add(1, Ordering::Relaxed);
+    let admission_skipped = permit.is_none();
+    if admission_skipped {
+        JANITOR_ADMISSION_SKIPS.fetch_add(1, Ordering::Relaxed);
+    }
+
+    // Bounded maintenance: these steps free or republish state and never
+    // allocate proportionally to the cache or the negative-cache backlog.
+    let disks = sysinfo::Disks::new_with_refreshed_list();
+    let available = disks
+        .iter()
+        .find(|d| disk_root.starts_with(d.mount_point()))
+        .map(|d| d.available_space())
+        .unwrap_or(u64::MAX);
+    CACHED_DISK_AVAILABLE.store(available, Ordering::Relaxed);
+
+    let budget = crate::cache_manager::CACHE
+        .storage
+        .l1
+        .publish_auto_budget_bounded();
+    if budget.published {
+        JANITOR_BUDGET_PUBLISHES.fetch_add(1, Ordering::Relaxed);
+    }
+
+    // Signal-only: the reclaim monitor owns the (potentially large) reclaim
+    // pass. This path must stay allocation-free under zero admission.
+    crate::memory_reclaim::notify_pressure_async(
+        crate::memory_governor::MEMORY_GOVERNOR.current_memory_pressure_level(),
+    );
+
+    let negative = negative_cache_cleanup_bounded(now);
+    JANITOR_NEGATIVE_EXAMINED.fetch_add(negative.examined as u64, Ordering::Relaxed);
+    JANITOR_NEGATIVE_REMOVED.fetch_add(negative.removed as u64, Ordering::Relaxed);
+
+    // The request is a generation bump, not collection work: each worker
+    // collects its own heap at its next park under its TLS rate limit.
+    crate::worker_reclaim::request_worker_collect();
+    JANITOR_WORKER_COLLECT_REQUESTS.fetch_add(1, Ordering::Relaxed);
+    JANITOR_MAINTENANCE_CYCLES.fetch_add(1, Ordering::Relaxed);
+
+    // Expensive, admissible half: only a cache rebuild waits for a permit.
+    let budget_rebuild_applied = if permit.is_some() {
+        let applied = crate::cache_manager::CACHE
+            .storage
+            .l1
+            .apply_pending_auto_budget_rebuild();
+        if applied {
+            JANITOR_REBUILDS_APPLIED.fetch_add(1, Ordering::Relaxed);
+        }
+        applied
+    } else {
+        if budget.pending_rebuild {
+            JANITOR_REBUILDS_DEFERRED.fetch_add(1, Ordering::Relaxed);
+        }
+        false
+    };
+
+    CacheJanitorCycleOutcome {
+        disk_refreshed: true,
+        budget_published: budget.published,
+        budget_rebuild_pending: budget.pending_rebuild && !budget_rebuild_applied,
+        budget_rebuild_applied,
+        negative_entries_examined: negative.examined,
+        negative_entries_removed: negative.removed,
+        reclaim_signaled: true,
+        worker_collect_requested: true,
+        admission_skipped,
+    }
+}
+
 /// Periodically refresh disk space and memory budget.
 /// TinyUFO handles eviction internally via S3-FIFO.
 pub fn start_cache_janitor() {
     tokio::spawn(async {
         let disk_root = crate::paths::NodePaths::current().cache_dir();
         loop {
-            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-            let Some(_permit) = crate::memory_governor::MEMORY_GOVERNOR
-                .try_admit(crate::memory_governor::AdmissionClass::BackgroundWork)
-            else {
-                tracing::warn!(
-                    "CACHE_JANITOR: skipping cycle because background memory admission is full"
-                );
-                continue;
-            };
-
-            // Refresh cached disk available space
-            let disks = sysinfo::Disks::new_with_refreshed_list();
-            let available = disks
-                .iter()
-                .find(|d| disk_root.starts_with(d.mount_point()))
-                .map(|d| d.available_space())
-                .unwrap_or(u64::MAX);
-            CACHED_DISK_AVAILABLE.store(available, Ordering::Relaxed);
-
-            crate::cache_manager::CACHE.storage.l1.refresh_auto_budget();
-            crate::memory_reclaim::periodic_reclaim_check();
-
-            // Clean expired negative cache entries — must go through the
-            // refunding cleanup, not a bare retain, or the resident ledger
-            // keeps charges for entries that no longer exist.
+            tokio::time::sleep(CACHE_JANITOR_INTERVAL).await;
             let now = crate::utils::time::now_timestamp();
-            negative_cache_cleanup(now);
+            // Admission is an accounting gate for the expensive half, not a
+            // precondition for maintenance: the previous implementation
+            // `continue`d here, so pressure (exactly when the budget refresh,
+            // reclaim check, and negative-cache cleanup matter most) stopped
+            // all of it.
+            let permit = crate::memory_governor::MEMORY_GOVERNOR
+                .try_admit(crate::memory_governor::AdmissionClass::BackgroundWork);
+            if permit.is_none() {
+                tracing::warn!(
+                    "CACHE_JANITOR: background memory admission unavailable; bounded maintenance continues, expensive rebuild deferred"
+                );
+            }
+            let outcome = run_cache_janitor_cycle(now, &disk_root, permit);
+            if outcome.budget_rebuild_pending {
+                tracing::debug!(
+                    negative_removed = outcome.negative_entries_removed,
+                    "CACHE_JANITOR: maintenance pass defers the auto-budget rebuild"
+                );
+            } else {
+                tracing::debug!(
+                    negative_removed = outcome.negative_entries_removed,
+                    rebuild_applied = outcome.budget_rebuild_applied,
+                    "CACHE_JANITOR: maintenance pass completed"
+                );
+            }
         }
     });
 }
@@ -7016,6 +7408,288 @@ mod tests {
                 "reclaim drain must refund the resident charge for {key}"
             );
         }
+        NEGATIVE_CACHE.retain(|key, _| !key.starts_with(&unique));
+    }
+
+    #[test]
+    fn negative_cache_cleanup_bounded_limits_each_pass_and_drains() {
+        let _state_guard = CACHE_GLOBAL_STATE_LOCK.blocking_lock();
+        let now = crate::utils::time::now_timestamp();
+        let unique = unique_test_suffix("neg-bounded");
+        let expired: Vec<String> = (0..400).map(|i| format!("{unique}-expired-{i}")).collect();
+        let live: Vec<String> = (0..3).map(|i| format!("{unique}-live-{i}")).collect();
+        for key in &expired {
+            NEGATIVE_CACHE.insert(key.clone(), now - 1);
+        }
+        for key in &live {
+            NEGATIVE_CACHE.insert(key.clone(), now + NEGATIVE_CACHE_TTL_SECS);
+        }
+
+        let remaining = |keys: &[String]| {
+            keys.iter()
+                .filter(|key| NEGATIVE_CACHE.contains_key(*key))
+                .count()
+        };
+        // Each pass examines at most the cap, so a large map (all live, or a
+        // big expired backlog) cannot turn maintenance into a full scan or an
+        // unbounded temporary allocation. The rotating cursor must still
+        // reach every entry, so repeated passes drain the backlog.
+        assert_eq!(remaining(&expired), 400);
+        let mut passes = 0;
+        loop {
+            let stats = negative_cache_cleanup_bounded(now);
+            assert!(
+                stats.examined <= NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP,
+                "one pass examined {} entries, above the cap {}",
+                stats.examined,
+                NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP
+            );
+            assert!(
+                stats.removed <= stats.examined,
+                "cannot remove more entries than were examined"
+            );
+            passes += 1;
+            if remaining(&expired) == 0 {
+                break;
+            }
+            assert!(
+                passes < 5_000,
+                "rotating bounded sweep must eventually reach the backlog"
+            );
+        }
+        assert_eq!(
+            remaining(&live),
+            3,
+            "bounded cleanup must not remove unexpired entries"
+        );
+
+        NEGATIVE_CACHE.retain(|key, _| !key.starts_with(&unique));
+    }
+
+    #[test]
+    fn negative_cache_bounded_sweep_caps_examined_without_expired_entries() {
+        let _state_guard = CACHE_GLOBAL_STATE_LOCK.blocking_lock();
+        let now = crate::utils::time::now_timestamp();
+        let unique = unique_test_suffix("neg-no-expired");
+        for i in 0..1_000 {
+            NEGATIVE_CACHE.insert(format!("{unique}-live-{i}"), now + NEGATIVE_CACHE_TTL_SECS);
+        }
+
+        let cursor_before = NEGATIVE_CACHE_SWEEP_CURSOR.load(Ordering::Relaxed);
+        let stats = negative_cache_cleanup_bounded(now);
+        assert!(
+            stats.examined <= NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP,
+            "a map with no expired entries must not be scanned in full"
+        );
+        let cursor_after = NEGATIVE_CACHE_SWEEP_CURSOR.load(Ordering::Relaxed);
+        assert_ne!(
+            cursor_before, cursor_after,
+            "the sweep cursor must advance even when nothing was expired"
+        );
+
+        NEGATIVE_CACHE.retain(|key, _| !key.starts_with(&unique));
+    }
+
+    fn auto_budget_l1_for_test(max_bytes: u64) -> TinyUfoL1 {
+        TinyUfoL1 {
+            inner: StdRwLock::new(Arc::new(TinyUfoL1::build_cache(max_bytes))),
+            keys: DashSet::new(),
+            auto_budget: AtomicBool::new(true),
+            max_bytes: AtomicU64::new(max_bytes),
+            current_weight: AtomicU64::new(0),
+            pending_auto_rebuild: AtomicU64::new(0),
+            pending_auto_epoch: AtomicU64::new(0),
+            budget_transition: StdMutex::new(()),
+            budget_epoch: AtomicU64::new(0),
+            last_rebuild_bytes: AtomicU64::new(0),
+        }
+    }
+
+    #[test]
+    fn budget_publication_is_bounded_and_rebuild_waits_for_admission() {
+        let l1 = auto_budget_l1_for_test(64 * 1024 * 1024);
+
+        let refresh = l1.publish_resolved_budget(8 * 1024 * 1024);
+        assert!(refresh.published, "the resolved limit must be published");
+        assert!(
+            refresh.pending_rebuild,
+            "a shrink past the rebuild threshold must be deferred"
+        );
+        assert_eq!(l1.max_bytes(), 8 * 1024 * 1024);
+        assert_eq!(
+            l1.last_rebuild_bytes.load(Ordering::Relaxed),
+            0,
+            "bounded publication must not allocate a replacement cache"
+        );
+        assert_eq!(
+            l1.pending_auto_rebuild.load(Ordering::Acquire),
+            8 * 1024 * 1024,
+            "the pending rebuild must still be waiting"
+        );
+
+        assert!(
+            l1.apply_pending_auto_budget_rebuild(),
+            "the admissible half applies the deferred rebuild"
+        );
+        assert_eq!(
+            l1.last_rebuild_bytes.load(Ordering::Relaxed),
+            8 * 1024 * 1024,
+            "applying the deferred rebuild replaces the cache"
+        );
+        assert!(
+            !l1.apply_pending_auto_budget_rebuild(),
+            "the pending target is consumed exactly once"
+        );
+    }
+
+    #[test]
+    fn manual_capacity_switch_invalidates_deferred_auto_rebuild() {
+        let l1 = auto_budget_l1_for_test(64 * 1024 * 1024);
+        assert!(l1.publish_resolved_budget(8 * 1024 * 1024).pending_rebuild);
+        let in_flight_epoch = l1.budget_epoch.load(Ordering::Acquire);
+        assert_eq!(
+            l1.pending_auto_rebuild.load(Ordering::Acquire),
+            8 * 1024 * 1024
+        );
+
+        // A manual policy lands while a janitor permit holder is still
+        // waiting to apply the 8 MiB auto target.
+        l1.set_max_bytes(32 * 1024 * 1024);
+        assert!(!l1.auto_budget.load(Ordering::Relaxed));
+        assert_eq!(l1.max_bytes(), 32 * 1024 * 1024);
+        assert_eq!(
+            l1.pending_auto_rebuild.load(Ordering::Acquire),
+            0,
+            "manual capacity must clear the deferred auto target"
+        );
+        assert_eq!(l1.pending_auto_epoch.load(Ordering::Acquire), 0);
+        assert!(
+            !l1.apply_pending_auto_budget_rebuild_at_epoch(in_flight_epoch),
+            "a stale in-flight auto rebuild must not overwrite the manual policy"
+        );
+        assert!(!l1.apply_pending_auto_budget_rebuild());
+
+        // The next janitor pass must not resurrect the old auto target.
+        let later = l1.publish_auto_budget_bounded();
+        assert!(!later.published);
+        assert!(!later.pending_rebuild);
+        assert!(!l1.apply_pending_auto_budget_rebuild());
+        assert_eq!(
+            l1.max_bytes(),
+            32 * 1024 * 1024,
+            "the manual capacity must remain in force"
+        );
+    }
+
+    #[test]
+    fn janitor_maintenance_progresses_when_background_admission_is_zero() {
+        let _state_guard = CACHE_GLOBAL_STATE_LOCK.blocking_lock();
+        let now = crate::utils::time::now_timestamp();
+        let unique = unique_test_suffix("janitor-zero-admission");
+        let expired: Vec<String> = (0..4).map(|i| format!("{unique}-{i}")).collect();
+        for key in &expired {
+            NEGATIVE_CACHE.insert(key.clone(), now - 1);
+        }
+        let before = cache_janitor_activity();
+        let disk_root = crate::paths::NodePaths::current().cache_dir();
+
+        // `None` is exactly what `try_admit(BackgroundWork)` returns when the
+        // class account is at capacity. Maintenance must keep freeing state
+        // across passes; the bounded sweep deliberately examines only a slice
+        // per pass, so drive passes until the rotating cursor reaches all of
+        // the expired keys.
+        let mut cycles = 0u64;
+        loop {
+            let outcome = run_cache_janitor_cycle(now, &disk_root, None);
+            assert!(outcome.admission_skipped);
+            assert!(outcome.disk_refreshed);
+            assert!(outcome.reclaim_signaled);
+            assert!(outcome.worker_collect_requested);
+            assert!(outcome.negative_entries_examined <= NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP);
+            assert!(
+                !outcome.budget_rebuild_applied,
+                "the expensive rebuild must never run without a permit"
+            );
+            cycles += 1;
+            if expired.iter().all(|key| !NEGATIVE_CACHE.contains_key(key)) {
+                break;
+            }
+            assert!(
+                cycles < 500,
+                "zero-admission maintenance must keep draining expired entries"
+            );
+        }
+
+        let after = cache_janitor_activity();
+        assert_eq!(after.cycles, before.cycles + cycles);
+        assert_eq!(after.maintenance_cycles, before.maintenance_cycles + cycles);
+        assert_eq!(after.admission_skips, before.admission_skips + cycles);
+        assert_eq!(
+            after.worker_collect_requests,
+            before.worker_collect_requests + cycles
+        );
+
+        NEGATIVE_CACHE.retain(|key, _| !key.starts_with(&unique));
+    }
+
+    #[test]
+    fn pressure_release_same_process_applies_deferred_rebuild() {
+        let _state_guard = CACHE_GLOBAL_STATE_LOCK.blocking_lock();
+        let unique = unique_test_suffix("janitor-recover");
+        let now = crate::utils::time::now_timestamp();
+        let first: Vec<String> = (0..2).map(|i| format!("{unique}-a-{i}")).collect();
+        for key in &first {
+            NEGATIVE_CACHE.insert(key.clone(), now - 1);
+        }
+        let disk_root = crate::paths::NodePaths::current().cache_dir();
+        let mut skipped_cycles = 0u32;
+        loop {
+            let skipped = run_cache_janitor_cycle(now, &disk_root, None);
+            assert!(skipped.admission_skipped);
+            skipped_cycles += 1;
+            if first.iter().all(|key| !NEGATIVE_CACHE.contains_key(key)) {
+                break;
+            }
+            assert!(
+                skipped_cycles < 500,
+                "the skipped passes must still make cleanup progress"
+            );
+        }
+
+        // Release: the same process performs work again without restarting
+        // the janitor. The bounded budget target survived the skipped passes.
+        let l1 = auto_budget_l1_for_test(64 * 1024 * 1024);
+        let refresh = l1.publish_resolved_budget(8 * 1024 * 1024);
+        assert!(refresh.pending_rebuild);
+        assert_ne!(
+            l1.pending_auto_rebuild.load(Ordering::Acquire),
+            0,
+            "still deferred before release"
+        );
+
+        let second: Vec<String> = (0..2).map(|i| format!("{unique}-b-{i}")).collect();
+        for key in &second {
+            NEGATIVE_CACHE.insert(key.clone(), now - 1);
+        }
+        let mut recovered_cycles = 0u32;
+        loop {
+            let recovered = run_cache_janitor_cycle(now, &disk_root, None);
+            assert!(recovered.admission_skipped);
+            recovered_cycles += 1;
+            if second.iter().all(|key| !NEGATIVE_CACHE.contains_key(key)) {
+                break;
+            }
+            assert!(
+                recovered_cycles < 500,
+                "maintenance keeps progressing in the same process"
+            );
+        }
+        assert!(
+            l1.apply_pending_auto_budget_rebuild(),
+            "the admissible half applies the budget rebuild once pressure is released"
+        );
+        assert!(!l1.apply_pending_auto_budget_rebuild());
+
         NEGATIVE_CACHE.retain(|key, _| !key.starts_with(&unique));
     }
 

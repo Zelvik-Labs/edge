@@ -217,6 +217,9 @@ harness = false
 
 [build-dependencies]
 tonic-prost-build = "0.14.6"
+# Compiles src/allocator_options.c against DEP_MIMALLOC_INCLUDE_DIR. Only the
+# bridge is built here; the mimalloc archive itself comes from libmimalloc-sys.
+cc = "1.4.3"
 
 # crates/zelvik-edge-xdp-ebpf stays outside: it pins a dated nightly via its
 # own rust-toolchain.toml and builds for the bpfeb target — it must not join
