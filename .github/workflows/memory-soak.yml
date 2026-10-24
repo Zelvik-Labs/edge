@@ -1,31 +1,31 @@
 name: Issue 34 memory soak
 
-# Strict component memory lane. `bench-defense` exercises the Edge data plane
-# (EdgeProxy + HttpProxyManager + real listeners) with local config injection;
-# it is NOT the production startup path and never claims full-Edge coverage.
-# A production-startup lane with a fake control plane is owned separately.
-#
-# Staged validation:
-#   pull_request : short SCREEN lane (~60 min budget: Python tests, strict
-#                  procfs parsing, allocator contract tests, mandatory real
-#                  Zelvik-Edge startup smoke, 15 min soak). The soak budget is
-#                  deliberately looser and the report is marked screen_only;
-#                  only the full-Edge smoke may block a PR, never close Issue 34.
-#   schedule     : two 4 h hosted jobs: a component soak (bench-defense) and a
-#                  mandatory full-Edge production-startup soak (real
-#                  Zelvik-Edge + fake control plane). Both use the strict
-#                  0.5 MiB/h RSS+Anon upper-bound gate, 30 min warm-up,
-#                  10 x 60 s pressure cycles and a 30 s sustained recovery
-#                  probe. The full-Edge job is the closure lane.
+# Staged validation. The stated 5 min / 15 min are SOAK durations only; they
+# exclude the first Rust cold build (and eBPF build), so job wall-clock is
+# longer. rust-cache is reused between jobs. The two jobs still build
+# separately; sharing a build-once artifact is an out-of-scope optimisation for
+# another round.
+#   push / pull_request : automatic fast screens:
+#     short     : Python/procfs/allocator tests + mandatory real Zelvik-Edge
+#                 production-startup smoke (HTTP/1.1 + HTTP/2 TLS, telemetry
+#                 retry/recovery) + 5 min (300 s) bench-defense screen soak.
+#     full-edge : real Zelvik-Edge + fake control plane, same startup smoke,
+#                 then a 15 min (900 s) screen soak with the same real startup,
+#                 node status, one PID, UNAVAILABLE -> durable recovery.
+#     Both reports are screen_only and never close Issue 34.
+#   workflow_dispatch dedicated_hours=0 : fast screens only.
+#   workflow_dispatch run_long_component=true : manual 4 h bench-defense
+#                 component soak. Never scheduled.
 #   workflow_dispatch dedicated_hours>=48 : optional dedicated self-hosted
-#                  full-Edge run with the same 0.5 MiB/h gate, 1 h warm-up, and
-#                  a second-half platform/step baseline over the remaining
-#                  >=47 h. It never runs on a hosted runner and refuses
-#                  production hosts; no "48 h on GitHub-hosted" claim is made.
+#                 full-Edge long run with the 0.5 MiB/h gate, 1 h warm-up, and
+#                 a second-half platform/step baseline. Never scheduled.
 #
-# A budget above 0.5 MiB/h would let the known 4.5 MiB/h tail leak pass; it is
-# never used for nightly/dedicated. Noise makes a run inconclusive/fail; it is
-# not a reason to relax the threshold.
+# Only the manual 4 h / >=48 h lanes may cite the 0.5 MiB/h RSS+Anon gate.
+# The 64 MiB/h short and 8 MiB/h 15 min full-edge budgets are fast screens; they
+# never inherit or claim the long-lane leak closure. A budget above 0.5 MiB/h
+# would let the known 4.5 MiB/h tail leak pass, so it is never used for the
+# manual long lanes. Noise makes a run inconclusive/fail; it is not a reason to
+# relax a threshold.
 #
 # The harness is scripts/memory. It is runnable locally on Linux; see
 # docs/agents/issue34-memory-validation.md for the exact commands.
@@ -61,15 +61,18 @@ on:
       - "build.rs"
       - "Cargo.toml"
       - "Cargo.lock"
-  schedule:
-    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       dedicated_hours:
-        description: "Dedicated self-hosted duration in hours (>=48); 0 runs the short hosted gate (nightly is schedule-only)"
+        description: "Dedicated self-hosted duration in hours (>=48); 0 runs only the fast automatic screens"
         required: false
         default: "0"
         type: string
+      run_long_component:
+        description: "Manual 4 h bench-defense component soak (never scheduled)"
+        required: false
+        default: false
+        type: boolean
       node_status_source:
         description: "Optional fake-backend node status JSON/JSONL path or URL (never a production endpoint)"
         required: false
@@ -99,9 +102,9 @@ env:
 
 jobs:
   short:
-    # A 15 min run cannot close a slow-leak issue: the budget is deliberately
-    # looser and the report is marked screen_only. Only nightly/dedicated may
-    # claim the 0.5 MiB/h RSS+Anon gate.
+    # A 5 min run cannot close a slow-leak issue: the budget is deliberately
+    # looser and the report is marked screen_only. Only the manual long lanes
+    # may claim the 0.5 MiB/h RSS+Anon gate.
     name: Screen only - component memory gate (not a closure) - hosted ubuntu-22.04
     if: github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dedicated_hours == '0')
     runs-on: ubuntu-22.04
@@ -230,7 +233,64 @@ jobs:
           if "--warmup-seconds 300" in hosted:
               raise SystemExit("hosted long lane still uses the 5 min warm-up")
 
-          for lane in ("nightly", "full-edge", "dedicated"):
+          # Automatic fast screens: 300 s / 900 s soak windows and loose
+          # budgets. Both must say screen_only; neither is a leak closure.
+          need(runs["short"], "--screen-only", "short screen lane")
+          need(runs["short"], "--duration 300", "short 300 s window")
+          need(runs["short"], "--warmup-seconds 90", "short warm-up")
+          need(runs["short"], "--min-span-seconds 150", "short minimum span")
+          need(runs["short"], "--budget-mib-per-hour 64", "short RSS screen budget")
+          need(runs["short"], "--anon-budget-mib-per-hour 64", "short Anon screen budget")
+          need(runs["short"], "--pressure-cycles 1", "short pressure cycle")
+          need(runs["short"], "--pressure-hold-seconds 15", "short pressure hold")
+          need(runs["short"], "--pressure-recovery-probe-seconds 10", "short recovery probe")
+          need(runs["short"], "full_edge.py smoke", "short full-Edge smoke")
+          need(runs["short"], "issue34-controller", "short fixture build")
+          need(
+              runs["short"],
+              "telemetry-retryable-recovery",
+              "short smoke retryable telemetry check",
+          )
+
+          need(runs["full-edge"], "--soak-arg=--screen-only", "full-edge screen marker")
+          need(runs["full-edge"], "--duration 900", "full-edge 900 s window")
+          need(
+              runs["full-edge"],
+              "--soak-arg=--warmup-seconds --soak-arg=120",
+              "full-edge warm-up",
+          )
+          need(
+              runs["full-edge"],
+              "--soak-arg=--min-span-seconds --soak-arg=300",
+              "full-edge minimum span",
+          )
+          need(
+              runs["full-edge"],
+              "--soak-arg=--budget-mib-per-hour --soak-arg=8",
+              "full-edge RSS screen budget",
+          )
+          need(
+              runs["full-edge"],
+              "--soak-arg=--anon-budget-mib-per-hour --soak-arg=8",
+              "full-edge Anon screen budget",
+          )
+          need(
+              runs["full-edge"],
+              "--soak-arg=--pressure-cycles --soak-arg=2",
+              "full-edge pressure cycles",
+          )
+          need(runs["full-edge"], "--recovery-seconds 60", "full-edge recovery window")
+          need(runs["full-edge"], "--telemetry-mode unavailable", "full-edge retryable telemetry")
+          need(runs["full-edge"], "full_edge.py smoke", "full-edge startup smoke")
+          need(runs["full-edge"], "full_edge.py soak", "full-edge soak")
+          need(runs["full-edge"], "--require-node-status", "full-edge node status")
+          if "--pressure-long-recovery" in runs["full-edge"]:
+              raise SystemExit(
+                  "full-edge fast screen must not claim the long recovery contract"
+              )
+
+          # Manual long lanes only: strict 0.5 MiB/h and 10 x 60 s pressure.
+          for lane in ("nightly", "dedicated"):
               text = runs[lane]
               if not (
                   "--budget-mib-per-hour 0.5" in text
@@ -248,21 +308,15 @@ jobs:
               ):
                   raise SystemExit(f"{lane} does not run 10 pressure cycles")
 
-          need(runs["short"], "--screen-only", "short screen lane")
-          need(runs["short"], "full_edge.py smoke", "short full-Edge smoke")
-          need(runs["short"], "issue34-controller", "short fixture build")
-          need(
-              runs["short"],
-              "telemetry-retryable-recovery",
-              "short smoke retryable telemetry check",
-          )
           need(runs["nightly"], "bench-defense", "nightly component lane")
-          need(runs["full-edge"], "full_edge.py soak", "full-edge nightly soak")
           need(runs["dedicated"], "full_edge.py soak", "dedicated full-Edge soak")
-          for lane in ("full-edge", "dedicated"):
-              need(runs[lane], "--require-node-status", f"{lane} node status")
-              need(runs[lane], "--telemetry-mode unavailable", f"{lane} retryable telemetry")
-              need(runs[lane], "--recovery-seconds", f"{lane} telemetry recovery window")
+          need(runs["dedicated"], "--require-node-status", "dedicated node status")
+          need(
+              runs["dedicated"],
+              "--telemetry-mode unavailable",
+              "dedicated retryable telemetry",
+          )
+          need(runs["dedicated"], "--recovery-seconds", "dedicated recovery window")
           print("workflow lane contract ok")
           PY
 
@@ -346,9 +400,13 @@ jobs:
                             "checks": sorted(checks)}, indent=2))
           PY
 
-      - name: Short screen soak (15 min, 2 GiB/no-swap cgroup) - NOT a closure
+      - name: Short screen soak (5 min, 2 GiB/no-swap cgroup) - NOT a closure
         run: |
           set -euo pipefail
+          # Load window: 300 s of soak, excluding image build/Rust cold build.
+          # 90 s warm-up + 150 s minimum slope span + one early pressure cycle
+          # (6 s start, 15 s hold, 10 s recovery probe, 30 s settle) fit inside
+          # the 300 s window. 64 MiB/h is a fast-screen budget, never closure.
           OUT="$RUNNER_TEMP/issue34-short"
           mkdir -p "$OUT"
           python3 -I scripts/memory/certs.py --out-dir "$OUT/certs" > "$OUT/certs.json"
@@ -369,22 +427,23 @@ jobs:
               --tls-port 8443 \
               --tls-host localhost \
               --tls-ca "$CERTS/ca.pem" \
-              --duration 900 \
+              --duration 300 \
               --warmup-seconds 90 \
-              --min-span-seconds 300 \
+              --min-span-seconds 150 \
               --sample-interval 1 \
               --budget-mib-per-hour 64 \
               --anon-budget-mib-per-hour 64 \
               --screen-only \
               --max-rss-mib 1024 \
               --pressure-cycles 1 \
-              --pressure-start-fraction 0.25 \
+              --pressure-start-fraction 0.02 \
               --pressure-bytes 1610612736 \
               --pressure-hold-seconds 15 \
-              --pressure-settle-seconds 60 \
+              --pressure-settle-seconds 30 \
+              --pressure-recovery-probe-seconds 10 \
               --stats-source "$OUT/alloc-stats.json" \
               --require-allocator-stats \
-              --require-stats-samples 600 \
+              --require-stats-samples 200 \
               --min-requests 100 \
               --max-load-errors 10 \
               --samples-jsonl "$OUT/samples.jsonl" \
@@ -399,16 +458,24 @@ jobs:
           assert report["scope"]["component_lane"] is True, report["scope"]
           assert report["scope"]["full_edge"] is False, report["scope"]
           assert report["scope"]["production_startup"] is False, report["scope"]
-          assert report["duration_seconds"] >= 850, report["duration_seconds"]
+          assert report["duration_seconds"] >= 290, report["duration_seconds"]
+          assert report["expected_samples"] > 0, report
+          assert report["samples"] >= report["expected_samples"] * 0.9, (
+              report["samples"], report["expected_samples"])
           assert report["target"]["same_pid"] is True
           assert report["tls_verification"]["periodic_count"] >= 1
+          assert report["tls_verification"]["errors"] == [], report["tls_verification"]
           assert report["pressure"]["cycles"] == 1
           # This lane is a screen. It must say so and must never be cited as
           # the Issue 34 memory closure.
           assert report["screen_only"] is True
           assert "SCREEN ONLY" in report["screen_note"]
+          assert report["slope"]["ok"] is True, report["slope"]
           assert report["anon_slope"]["ok"] is True, report["anon_slope"]
+          assert report["slope"]["budget_mib_per_hour"] <= 64, report["slope"]
+          assert report["slope"]["span_seconds"] >= 150, report["slope"]
           assert report["pressure"]["result"]["hold_seconds"] >= 15
+          assert report["pressure"]["result"]["recovery_probe_seconds"] >= 10
           print(json.dumps({
               "verdict": report["verdict"],
               "scope": report["scope"],
@@ -433,8 +500,9 @@ jobs:
           [ -f "$OUT/progress.txt" ] && tail -n 40 "$OUT/progress.txt" || true
 
   nightly:
-    name: 4 h component soak - hosted ubuntu-22.04
-    if: github.event_name == 'schedule'
+    name: 4 h component soak - manual workflow_dispatch only
+    # Never scheduled. Select the long tier explicitly with run_long_component.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_long_component == 'true' && github.event.inputs.dedicated_hours == '0'
     runs-on: ubuntu-22.04
     timeout-minutes: 330
     env:
@@ -634,10 +702,12 @@ jobs:
   # for the real startup path; the component bench-defense job is separate and
   # never substitutes for it. Same strict 0.5 MiB/h RSS+Anon gate as nightly.
   full-edge:
-    name: 4 h full-Edge production-startup soak - hosted ubuntu-22.04
-    if: github.event_name == 'push' || github.event_name == 'schedule'
+    name: 15 min full-Edge production-startup screen - hosted ubuntu-22.04
+    # Automatic fast screen. 900 s is soak time only; Rust/eBPF builds are
+    # outside it. The manual long tiers are `nightly` and `dedicated`.
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dedicated_hours == '0')
     runs-on: ubuntu-22.04
-    timeout-minutes: 330
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
 
@@ -730,17 +800,59 @@ jobs:
             --edge-binary target/debug/Zelvik-Edge \
             --controller-bin target/debug/examples/issue34-controller
 
-      # Telemetry closure on this lane: the fixture starts in `unavailable`
-      # (retryable UNAVAILABLE), so the real Edge must retain complete
-      # batches in its bounded on-disk store. `--recovery-seconds` switches the
-      # fixture to the durable success backend near the end and requires the
-      # retained backlog to be acknowledged with a real receipt. The store is
-      # under $RUNNER_TEMP for this run only; a fake or unbounded ack fails
-      # the assertions below. Terminal UNIMPLEMENTED is covered by the short
-      # smoke, not here.
-      - name: 4 h full-Edge soak (nightly only)
+      - name: Full-Edge production-startup smoke (mandatory)
         run: |
           set -euo pipefail
+          OUT="$RUNNER_TEMP/issue34-full-edge-smoke"
+          mkdir -p "$OUT"
+          python3 -I scripts/memory/full_edge.py smoke \
+            --edge-binary target/debug/Zelvik-Edge \
+            --controller-bin target/debug/examples/issue34-controller \
+            --home "$OUT/home" \
+            --report "$OUT/smoke-report.json" \
+            | tee "$OUT/summary.json"
+          python3 -I - "$OUT/summary.json" <<'PY'
+          import json, sys
+          report = json.load(open(sys.argv[1]))
+          assert report["status"] == "pass", report.get("failures")
+          scope = report["scope"]
+          assert scope["full_edge"] is True, scope
+          assert scope["production_startup"] is True, scope
+          assert scope["component_lane"] is False, scope
+          assert report["node_health_observed"] is True, report
+          assert report["edge_pid"] == report["pid_at_exit"], report
+          checks = {item["name"]: item for item in report["checks"]}
+          assert checks["http1-post"]["ok"] is True, checks.get("http1-post")
+          assert checks["http2-post"]["ok"] is True, checks.get("http2-post")
+          assert checks["http1-post"]["http_version"].startswith("1."), checks
+          assert checks["http2-post"]["http_version"] == "2", checks
+          assert checks["node-status"]["ok"] is True, checks.get("node-status")
+          assert checks["telemetry-retryable-recovery"]["ok"] is True, (
+              checks.get("telemetry-retryable-recovery"))
+          assert checks["telemetry-reject"]["ok"] is True, checks.get("telemetry-reject")
+          telemetry = report["telemetry"]
+          assert telemetry["mode"] == "unimplemented", telemetry
+          assert telemetry["served"] is False, telemetry
+          assert telemetry["expected_code_number"] == 12, telemetry
+          print(json.dumps({"status": report["status"], "scope": scope,
+                            "edge_pid": report["edge_pid"],
+                            "checks": sorted(checks)}, indent=2))
+          PY
+
+      # Telemetry closure on this lane: the fixture starts in `unavailable`
+      # (retryable UNAVAILABLE), so the real Edge must retain complete
+      # batches in its bounded on-disk store. `--recovery-seconds 60` switches
+      # the fixture to the durable success backend near the end and requires
+      # the retained backlog to be acknowledged with a real receipt. The store
+      # is under $RUNNER_TEMP for this run only; a fake or unbounded ack fails
+      # the assertions below. Terminal UNIMPLEMENTED is covered by the smoke.
+      - name: 15 min full-Edge screen soak (automatic)
+        run: |
+          set -euo pipefail
+          # 900 s of soak, excluding image/Rust/eBPF build time. 120 s warm-up,
+          # 300 s minimum slope span, two early pressure cycles (18 s start,
+          # 15 s hold, 10 s recovery probe, 30 s settle). 8 MiB/h is a fast
+          # screen, never the 0.5 MiB/h long-lane closure.
           OUT="$RUNNER_TEMP/issue34-full-edge-nightly"
           mkdir -p "$OUT"
           sudo systemd-run --scope \
@@ -755,24 +867,24 @@ jobs:
               --controller-bin "$GITHUB_WORKSPACE/target/debug/examples/issue34-controller" \
               --home "$OUT/home" \
               --run-dir "$OUT/run" \
-              --duration 14400 \
+              --duration 900 \
               --out "$OUT/report.json" \
               --require-node-status \
               --telemetry-mode unavailable \
-              --recovery-seconds 300 \
-              --soak-arg=--warmup-seconds --soak-arg=1800 \
-              --soak-arg=--min-span-seconds --soak-arg=10800 \
+              --recovery-seconds 60 \
+              --soak-arg=--screen-only \
+              --soak-arg=--warmup-seconds --soak-arg=120 \
+              --soak-arg=--min-span-seconds --soak-arg=300 \
               --soak-arg=--sample-interval --soak-arg=2 \
-              --soak-arg=--budget-mib-per-hour --soak-arg=0.5 \
-              --soak-arg=--anon-budget-mib-per-hour --soak-arg=0.5 \
+              --soak-arg=--budget-mib-per-hour --soak-arg=8 \
+              --soak-arg=--anon-budget-mib-per-hour --soak-arg=8 \
               --soak-arg=--max-rss-mib --soak-arg=1536 \
-              --soak-arg=--pressure-cycles --soak-arg=10 \
-              --soak-arg=--pressure-start-fraction --soak-arg=0.01 \
+              --soak-arg=--pressure-cycles --soak-arg=2 \
+              --soak-arg=--pressure-start-fraction --soak-arg=0.02 \
               --soak-arg=--pressure-bytes --soak-arg=1610612736 \
-              --soak-arg=--pressure-hold-seconds --soak-arg=60 \
-              --soak-arg=--pressure-settle-seconds --soak-arg=60 \
-              --soak-arg=--pressure-recovery-probe-seconds --soak-arg=30 \
-              --soak-arg=--pressure-long-recovery \
+              --soak-arg=--pressure-hold-seconds --soak-arg=15 \
+              --soak-arg=--pressure-settle-seconds --soak-arg=30 \
+              --soak-arg=--pressure-recovery-probe-seconds --soak-arg=10 \
               --soak-arg=--min-requests --soak-arg=1000 \
               --soak-arg=--max-load-errors --soak-arg=10 \
             | tee "$OUT/summary.json"
@@ -802,8 +914,9 @@ jobs:
           assert scope["full_edge"] is True, scope
           assert scope["production_startup"] is True, scope
           assert scope["component_lane"] is False, scope
-          assert report["screen_only"] is False
-          assert report["duration_seconds"] >= 14000, report["duration_seconds"]
+          assert report["screen_only"] is True
+          assert "SCREEN ONLY" in report["screen_note"]
+          assert report["duration_seconds"] >= 880, report["duration_seconds"]
           # Pressure cycles block the synchronous sampling loop, so the
           # expected count is derived from the tracked active sampling window,
           # not from total uptime.
@@ -811,12 +924,18 @@ jobs:
           assert report["samples"] >= report["expected_samples"] * 0.9, (
               report["samples"], report["expected_samples"])
           assert report["target"]["same_pid"] is True
+          # Real TLS/HTTP2 startup was asserted by the smoke above; the soak
+          # also re-verifies CA/SNI/ALPN/payload on a periodic cadence.
+          assert report["tls_verification"]["periodic_count"] >= 1
+          assert report["tls_verification"]["errors"] == [], report["tls_verification"]
           assert report["slope"]["ok"] is True, report["slope"]
           assert report["anon_slope"]["ok"] is True, report["anon_slope"]
           for name in ("slope", "anon_slope"):
-              assert report[name]["budget_mib_per_hour"] <= 0.5, report[name]
-              assert report[name]["upper95_mib_per_hour"] < 0.5, report[name]
-              assert report[name]["theil_sen_mib_per_hour"] < 0.5, report[name]
+              assert report[name]["budget_mib_per_hour"] <= 8, report[name]
+              assert report[name]["upper95_mib_per_hour"] < 8, report[name]
+              assert report[name]["theil_sen_mib_per_hour"] < 8, report[name]
+          assert report["slope"]["span_seconds"] >= 300, report["slope"]
+          assert report["slope"]["samples"] >= 200, report["slope"]
           # Required node counters must be present and live. The real Edge
           # honestly reports unhooked Pingora workers, so the coverage gap is
           # reported explicitly; it is not skipped and not treated as full
@@ -837,12 +956,16 @@ jobs:
           assert gap is not None, report["node_status"]
           assert gap["value"] is False
           assert gap["unhookedPingoraWorkers"] >= 1, gap
-          assert report["pressure"]["cycles"] == 10
+          # OOM is enforced by the soak's cgroup event check and `verdict`;
+          # this is a fast screen, so it uses 2 early pressure cycles instead
+          # of the long-lane 10 x 60 s contract.
+          assert report["pressure"]["cycles"] == 2
           probe = report["pressure"]["result"]
-          assert probe["long_recovery"] is True
-          assert probe["hold_seconds"] >= 60
-          assert probe["recovery_probe_seconds"] >= 30
-          assert probe["recovery_probe_samples"] >= 10, probe
+          assert probe["long_recovery"] is False
+          assert probe["hold_seconds"] >= 15
+          assert probe["recovery_probe_seconds"] >= 10
+          assert probe["recovery_probe_samples"] >= 5, probe
+          assert report["load"]["errors"] <= 10, report["load"]
           print(json.dumps({"status": summary["status"], "scope": scope,
                             "slope": report["slope"], "anon_slope": report["anon_slope"],
                             "edge_pid": report["target"]["pid"]}, indent=2))

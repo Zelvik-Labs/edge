@@ -9,10 +9,15 @@ tests.
 
 | Lane | Target | Status |
 | --- | --- | --- |
-| Screen | `target/debug/bench-defense` | PR screen only. Looser 64 MiB/h budget, report marked `screen_only`; can never close Issue 34. |
-| Component | `target/debug/bench-defense` | 4 h nightly component soak with the strict 0.5 MiB/h RSS+Anon gate. **Not full-Edge coverage.** |
-| Full production startup | real `Zelvik-Edge` + fake control plane (`examples/issue34-controller.rs`) | Mandatory PR smoke + 4 h nightly soak + optional `>=48 h` dedicated soak. This is the closure lane. |
-| Dedicated duration | full-Edge on `issue34-dedicated` | Optional `workflow_dispatch` only; real `>=48 h` wall clock, never GitHub-hosted. |
+| Screen (short) | `target/debug/bench-defense` | Automatic 5 min (300 s) screen. Looser 64 MiB/h budget, report marked `screen_only`; can never close Issue 34. |
+| Screen (full-Edge) | real `Zelvik-Edge` + fake control plane | Automatic 15 min (900 s) screen with real production startup, HTTP/1.1 + HTTP/2 TLS, node status and UNAVAILABLE recovery. 8 MiB/h budget, `screen_only`; not a leak closure. |
+| Component long | `target/debug/bench-defense` | Manual `workflow_dispatch` (`run_long_component=true`) 4 h component soak with the strict 0.5 MiB/h RSS+Anon gate. Never scheduled. **Not full-Edge coverage.** |
+| Full-Edge long | real `Zelvik-Edge` + fake control plane | Manual `>=48 h` dedicated self-hosted soak only; 0.5 MiB/h gate and split baseline. This is the closure lane. |
+
+The stated 5 min / 15 min are soak durations. They exclude the first Rust
+cold build and eBPF build, so job wall-clock is longer. `rust-cache` is reused
+between jobs; the two jobs still build separately, and sharing a build-once
+artifact is an out-of-scope optimisation for another round.
 
 `bench-defense` constructs `EdgeProxy` + `HttpProxyManager` with real
 HTTP/TLS/TCP/UDP listeners and local config injection. It exercises the same
@@ -26,14 +31,16 @@ a green component or screen run as full-Edge evidence.
 
 The full lane uses `examples/issue34-controller.rs`: a fake ControlChannel +
 NodeControl backend that serves a real HMAC-signed snapshot and node status to
-the real `Zelvik-Edge` binary started from a throwaway `ZELVIK_EDGE_HOME`. The
-PR job runs a mandatory `full_edge.py smoke` (real startup, HTTP/1.1 and HTTP/2
-over TLS with CA/SNI verification, NodeControl health, full `resourceGovernor`,
-telemetry retry/recovery and terminal rejection). The nightly and dedicated
-jobs run the same process for 4 h / `>=48 h`, including the retryable
+the real `Zelvik-Edge` binary started from a throwaway `ZELVIK_EDGE_HOME`. Both
+the `short` job and the automatic 15 min `full-edge` job run a mandatory
+`full_edge.py smoke` (real startup, HTTP/1.1 and HTTP/2 over TLS with CA/SNI
+verification, NodeControl health, full `resourceGovernor`, telemetry
+retry/recovery and terminal rejection). The 15 min full-Edge screen and the
+manual `>=48 h` dedicated job run the same process, including the retryable
 UNAVAILABLE -> durable-recover cycle. The fixture never falsifies
 `workerReclaim.coversAllWorkers` (the real Edge honestly reports unhooked
-Pingora workers). The long jobs **do** pass `--require-node-status`: every
+Pingora workers). The full-Edge screen and long jobs **do** pass
+`--require-node-status`: every
 polled sample must contain the full `resourceGovernor` field set, missing
 fields and read errors are hard violations, and generation/cycles must not
 decrease. `coversAllWorkers=false` is not conflated with full worker coverage:
@@ -52,7 +59,7 @@ batches in its bounded on-disk store while the backend is down; the store is a
 single sparse file under `$RUNNER_TEMP` for the test run, never a production
 path.
 
-The mandatory short smoke now asserts **both**:
+The mandatory `short` and `full-edge` startup smokes assert **both**:
 
 * `telemetry-retryable-recovery`: real TLS requests produce batches, the Edge
   retries them against `UNAVAILABLE`, and after the backend returns it
@@ -64,14 +71,16 @@ The mandatory short smoke now asserts **both**:
   backlog; and
 * `telemetry-reject`: terminal `UNIMPLEMENTED` (12), `served=false`.
 
-The 4 h full-Edge nightly and the `>=48 h` dedicated runs pass
-`--telemetry-mode unavailable` plus `--recovery-seconds 300` / `600`
-respectively, and assert `telemetry_recovery.status=pass`, mode
-`unavailable->success`, `pending_before >= 1`, `pending_after=0`,
+The automatic 15 min `full-edge` screen passes
+`--telemetry-mode unavailable --recovery-seconds 60`, and the manual
+`>=48 h` dedicated job passes its own recovery window. Both assert
+`telemetry_recovery.status=pass`, mode `unavailable->success`,
+`pending_before >= 1`, `pending_after=0`,
 `acked_sequence >= max_sequence`, bounded batch bytes, bounded scalar status,
 and `telemetry_store` under `$RUNNER_TEMP`. A synthetic/fake ack or an
-unbounded backlog fails these assertions. The existing memory gates are
-unchanged by the telemetry phase.
+unbounded backlog fails these assertions. The telemetry phase does not change
+the memory gates: 64 MiB/h for the 5 min short screen, 8 MiB/h for the 15 min
+full-Edge screen, and 0.5 MiB/h only for the manual long lanes.
 
 ## Allocator contract
 
@@ -104,16 +113,20 @@ allocator's own RSS estimate.
   `-alpn h2`, `-verify_return_error`, `-verify_hostname`);
 * gates **total RSS and anonymous RSS separately**: an OLS slope on the
   post-warm-up series with a one-sided 95% Student-t upper bound, plus a
-  Theil-Sen robust slope, must each stay below the budget. The strict budget is
-  **0.5 MiB/h** (24 MiB over 48 h). A 4.5 MiB/h tail leak is a unit-tested
-  negative case; it cannot pass. The `max-rss-mib` ceiling is an additional
-  guard, never the gate;
+  Theil-Sen robust slope, must each stay below the budget. The strict long-lane
+  budget is **0.5 MiB/h** (24 MiB over 48 h). A 4.5 MiB/h tail leak is a
+  unit-tested negative case for that gate. Fast screens use their own explicit
+  budgets: **64 MiB/h** for the 5 min under-`bench-defense` screen and
+  **8 MiB/h** for the 15 min full-Edge screen. Those values are screen
+  thresholds only; they never inherit or claim the 0.5 MiB/h long-lane
+  closure. The `max-rss-mib` ceiling is an additional guard, never the gate;
 * for the `>=48 h` dedicated lane, also re-gates the **second half** on its own
   and checks the half-to-half median **step baseline** against
   `budget * half_hours`, so a slow leak cannot be diluted over tens of hours;
 * runs `N` fork-based anonymous-memory pressure cycles inside the ambient
   cgroup, requiring a `high`/`max` event per cycle, swap `0`, no `oom_kill`,
-  and the same PID/starttime after recovery. Long lanes require at least 10
+  and the same PID/starttime after recovery. Fast screens use 1-2 early cycles
+  with a 15 s hold and a 10 s probe; the manual long lanes require at least 10
   cycles, a 60 s hold, and a 30 s **sustained recovery probe** (a single dip
   below the ceiling does not count);
 * reads the controller-reported `resourceGovernor` snapshot from the fake
@@ -154,7 +167,7 @@ python3 -I scripts/memory/full_edge.py smoke \
   --controller-bin target/debug/examples/issue34-controller \
   --report /tmp/issue34/full-edge-smoke.json
 
-# Short SCREEN soak, 2 GiB / no-swap ambient cgroup. This is NOT closure:
+# Short SCREEN soak (5 min), 2 GiB / no-swap ambient cgroup. NOT closure:
 sudo systemd-run --scope \
   -p MemoryMax=2G -p MemoryHigh=1536M -p MemorySwapMax=0 \
   --working-directory="$PWD" \
@@ -166,17 +179,18 @@ sudo systemd-run --scope \
      --target-env BENCH_ALLOC_STATS_PATH=/tmp/issue34/alloc-stats.json \
      --tls-port 8443 --tls-host localhost \
      --tls-ca /tmp/issue34/certs/ca.pem \
-     --duration 900 --warmup-seconds 90 --min-span-seconds 300 \
+     --duration 300 --warmup-seconds 90 --min-span-seconds 150 \
      --budget-mib-per-hour 64 --anon-budget-mib-per-hour 64 \
      --screen-only --max-rss-mib 1024 \
-     --pressure-cycles 1 --pressure-start-fraction 0.25 \
-     --pressure-hold-seconds 15 \
+     --pressure-cycles 1 --pressure-start-fraction 0.02 \
+     --pressure-hold-seconds 15 --pressure-settle-seconds 30 \
+     --pressure-recovery-probe-seconds 10 \
      --stats-source /tmp/issue34/alloc-stats.json \
-     --require-allocator-stats --require-stats-samples 600 \
+     --require-allocator-stats --require-stats-samples 200 \
      --out /tmp/issue34/report.json
 
-# Strict closure profile (same flags as the nightly job): 0.5 MiB/h RSS+Anon,
-# 1800 s warm-up, >= 10 x 60 s pressure cycles, 30 s sustained recovery probe.
+# Long closure profile (manual only): 0.5 MiB/h RSS+Anon, 1800 s warm-up,
+# >= 10 x 60 s pressure cycles, 30 s sustained recovery probe.
 ```
 
 The package-qualified `python3 -m scripts.memory.soak` form fails under
@@ -186,35 +200,47 @@ The package-qualified `python3 -m scripts.memory.soak` form fails under
 
 ## What the workflows run
 
-Trigger semantics: a `workflow_dispatch` with `dedicated_hours=0` runs the
-short hosted gate; the 4-hour jobs are `schedule`-only. The PR path filter
-includes the allocator, memory governor/plan, worker reclaim, cache janitor,
-metrics, RPC node/stats/cache files, `src/main.rs`, `src/lib.rs`, `build.rs`,
-`tests/issue34_full_edge.rs`, `examples/issue34-controller.rs`, the control
-plane fixtures, and this workflow, so the Issue 34 core changes cannot land
-without the gate.
+Trigger semantics: `push` and `pull_request` run the two automatic fast
+screens (`short` and `full-edge`). A `workflow_dispatch` with
+`dedicated_hours=0` runs those same fast screens; `run_long_component=true`
+additionally selects the manual 4 h component soak; `dedicated_hours>=48`
+selects only the self-hosted long full-Edge run. There is no `schedule`
+trigger. The PR path filter includes the allocator, memory governor/plan,
+worker reclaim, cache janitor, metrics, RPC node/stats/cache files,
+`src/main.rs`, `src/lib.rs`, `build.rs`, `tests/issue34_full_edge.rs`,
+`examples/issue34-controller.rs`, the control plane fixtures, and this
+workflow, so the Issue 34 core changes cannot land without the gate. Only the
+Issue 34 memory tests plus the real full-Edge startup/smoke are retained in
+these jobs; the eBPF build is required and is not bypassed by disabling
+features.
 
-Short PR gate (`ubuntu-22.04`, 60 min job timeout): Python tests with live
-`/proc` required run **first** (raw threshold/missing-stat negatives before any
-Linux build), workflow YAML parse, `cargo test --test issue34_memory` with
-`CARGO_BUILD_JOBS=2` and `--test-threads=2` (exact seven test names and
-`7 passed; 0 failed` asserted), `cargo build --bin bench-defense`, a **mandatory
-full-Edge production-startup smoke** (`cargo build --bin Zelvik-Edge --example
-issue34-controller` then `full_edge.py preflight` + `full_edge.py smoke`), and
-finally a 15-minute bench-defense **screen** soak. The screen report must say
-`screen_only=true` and can never be reported as closure.
+Short automatic gate (`ubuntu-22.04`, 60 min job timeout): Python tests with
+live `/proc` required run **first** (raw threshold/missing-stat negatives
+before any Linux build), workflow YAML parse, `cargo test --test issue34_memory`
+with `CARGO_BUILD_JOBS=2` and `--test-threads=2` (exact seven test names and
+`7 passed; 0 failed` asserted), `cargo build --bin bench-defense`, a
+**mandatory full-Edge production-startup smoke** (`cargo build --bin
+Zelvik-Edge --example issue34-controller` then `full_edge.py preflight` +
+`full_edge.py smoke`), and finally a 5 min (300 s) bench-defense **screen**
+soak. The screen report must say `screen_only=true` and can never be reported
+as closure.
 
-Nightly (`17 3 * * *`, two parallel 330 min jobs):
+Automatic full-Edge screen (`ubuntu-22.04`, 90 min job timeout): real
+`Zelvik-Edge` + fake control plane. It runs the same mandatory startup smoke
+(HTTP/1.1 and HTTP/2 over TLS, CA/SNI/ALPN, NodeControl health, telemetry
+retry/recovery and terminal rejection), then a 15 min (900 s) soak with
+`--screen-only`, `--warmup-seconds 120`, `--min-span-seconds 300`, 8 MiB/h
+RSS+Anon, two early pressure cycles (15 s hold, 10 s probe, 30 s settle), one
+fixed PID, OOM/swap checks, strict `resourceGovernor` fields, and
+`--recovery-seconds 60`. Its report must say `screen_only=true`; it is a fast
+screen, not the 0.5 MiB/h closure.
 
-* `nightly` - 4 h component `bench-defense` soak with
-  `--warmup-seconds 1800`, `--min-span-seconds 10800` (3 h guaranteed steady
-  window after the 30 min warm-up and the pressure-blocked window), 0.5 MiB/h
-  RSS+Anon, 10 x 60 s pressure cycles and a 30 s sustained recovery probe.
-  The analysis requires `slope.samples >= 5000`; the reported
-  `expected_samples` comes from the active sampling window.
-* `full-edge` - 4 h real `Zelvik-Edge` production-startup soak with the same
-  0.5 MiB/h gate, warm-up and pressure contract, plus strict NodeControl status
-  fields. This is the closure lane for the real startup path.
+Manual component long tier (`workflow_dispatch`, `run_long_component=true`,
+4 h hosted job): `bench-defense` with `--warmup-seconds 1800`,
+`--min-span-seconds 10800`, 0.5 MiB/h RSS+Anon, 10 x 60 s pressure cycles and a
+30 s sustained recovery probe. The analysis requires `slope.samples >= 5000`;
+the reported `expected_samples` comes from the active sampling window. This is
+never scheduled.
 
 Optional dedicated (`workflow_dispatch`, `dedicated_hours >= 48`, label
 `issue34-dedicated`): preflight requires `RUNNER_ENVIRONMENT=self-hosted`, the
@@ -225,9 +251,10 @@ cycles. The report assertions require wall clock `>= 95%` of the requested
 hours and at least 90% of the expected samples, so a short integration run
 cannot be presented as a 48-hour result.
 
-A budget above 0.5 MiB/h is never used for nightly/full-edge/dedicated: it
-would let the known 4.5 MiB/h tail leak pass. CI noise makes a run
-inconclusive/fail; it is not a reason to relax the threshold.
+The 0.5 MiB/h budget is used only by the manual 4 h component and `>=48 h`
+dedicated lanes. The 64 MiB/h and 8 MiB/h automatic screens cannot cite it, and
+a budget above 0.5 MiB/h would let the known 4.5 MiB/h tail leak pass. CI noise
+makes a long run inconclusive/fail; it is not a reason to relax the threshold.
 
 No workflow uploads artifacts, writes to external services, or prints secrets.
 Reports and logs stay under `$RUNNER_TEMP`.
@@ -236,7 +263,7 @@ Reports and logs stay under `$RUNNER_TEMP`.
 
 On macOS (development host), with the released build slot:
 
-* `python3 -I scripts/memory/tests/run_tests.py`: 122 tests, `OK` with two
+* `python3 -I scripts/memory/tests/run_tests.py`: 123 tests, `OK` with two
   Linux-only skips.
 * `ISSUE34_REQUIRE_LINUX=1 python3 -I scripts/memory/tests/run_tests.py`:
   exits 1 with two `AssertionError` failures, proving the required tests cannot
@@ -265,32 +292,33 @@ On macOS (development host), with the released build slot:
   inspected for duplicate or malformed steps.
 * The actual `Validate workflow YAML and lane contract` shell step was extracted
   from the YAML and executed with `bash -euo pipefail`: `workflow lane contract
-  ok`. A mutated copy with a 64 MiB/h long-lane budget fails with
-  `full-edge does not use the strict RSS budget`, and removing
-  `--telemetry-mode unavailable` fails with
+  ok`. A mutated long lane with a 64 MiB/h budget fails with
+  `does not use the strict RSS budget`, and removing
+  `--telemetry-mode unavailable` from full-edge fails with
   `full-edge retryable telemetry is missing ...`. The old self-matching
   `grep` guards are gone; the check inspects the parsed job `run` strings and
   skips its own step.
-* The current nightly/full-edge/dedicated assertion blocks were re-extracted
-  and executed against the synthetic reports plus telemetry-recovery summary
-  fields: exit 0. They exit 1 for `pending_before=0`, an
-  `acked_sequence < max_sequence`, an 8 MiB+ batch, or a telemetry store
-  outside `$RUNNER_TEMP`. The short-smoke block fails when the
-  `telemetry-retryable-recovery` check is absent.
+* The **actual** 300 s short and 900 s full-edge assertion blocks were
+  extracted from the workflow and run against reports whose slopes came from
+  the real `scripts.memory.soak.analyze_pair`:
+  - 900 s / 2 s, 120 s warm-up, 300 s minimum span, 8 MiB/h, two early pressure
+    cycles: exit 0 (`expected_samples=421`, `samples=451`, slope `samples=391`,
+    slope `span_seconds=780`).
+  - 300 s / 1 s, 90 s warm-up, 150 s minimum span, 64 MiB/h, one early cycle:
+    exit 0 (`expected_samples=276`, `samples=301`, slope `samples=191`, slope
+    `span_seconds=190`).
+  - The full-edge block exits 1 for `pending_before=0`, a short ack, an 8 MiB+
+    batch, or a telemetry store outside `$RUNNER_TEMP`. The short block exits 1
+    when the `telemetry-retryable-recovery` check is absent.
+* The manual long-lane blocks keep the 4 h synthetic window tests and the
+  4.5 MiB/h RSS/Anon negative case; those lanes remain the only ones that
+  claim the 0.5 MiB/h gate.
 * `expected_samples` is derived from the tracked active sampling window
   (`sampling_span_seconds - pressure_blocked_seconds`), not requested uptime.
   Pressure cycles stay synchronous so the fork-based allocator never forks a
   multi-threaded process; the blocked window is reported instead of pretending
-  the loop kept sampling. The nightly/full-edge/dedicated assertions require
+  the loop kept sampling. All lane assertions require
   `samples >= expected_samples * 0.9`.
-* Synthetic 4 h / 2 s timestamps with a 900 s pressure-blocked gap pass the
-  **real** `analyze_pair` and the **actual extracted workflow assertion
-  blocks** for nightly, full-edge and dedicated (exit 0). The same reports
-  with a 4.5 MiB/h RSS (or Anon) series exit 1 with
-  `upper 95% RSS slope 4.500 MiB/h >= budget 0.500 MiB/h`. The worst-case
-  ~45 min pressure block still leaves a 3 h+ steady window and 5000+ samples,
-  matching the `--min-span-seconds 10800` / `slope.samples >= 5000` /
-  `--require-stats-samples 5000` contract.
 
 Not verified locally: actual Linux execution of the Rust tests, the HTTP/2
 soak, the cgroup pressure cycle, or any GitHub Actions run. Those require the
@@ -307,13 +335,17 @@ Linux runner started by main after push.
    from this branch. The short workflow cannot run until the branch is on
    GitHub and the `ZELVIK_DNS_DEPLOY_KEY` / `PROTOCOL_DEPLOY_KEY` secrets are
    available.
-3. The full-Edge smoke is mandatory in the PR job; the 4 h full-Edge soak is
-   mandatory in the nightly. The optional `node_status_source` dispatch input
+3. The full-Edge smoke and 15 min full-Edge screen are mandatory automatic
+   jobs. The 4 h component soak (`run_long_component=true`) and the `>=48 h`
+   dedicated soak are manual `workflow_dispatch` tiers only; there is no
+   schedule. The optional `node_status_source` dispatch input
    is only for the component lane; the full-Edge fixture supplies its own
    status endpoint. Never point either at production.
 4. Do not present the short screen or the component lane as full-Edge
-   coverage. Only `full-edge` (smoke/nightly/dedicated) reports
-   `scope.full_edge=true`; the workflows assert that distinction.
+   coverage. Only `full-edge` (startup smoke or 15 min screen) and the
+   dedicated long lane report `scope.full_edge=true`; the workflows assert
+   that distinction, and the automatic full-edge report is still
+   `screen_only=true`.
 5. **Dependency-lock boundary (Geo WIP).** The pinned DNS runtime
    `e357bf64bad28b3dc519d317e396af71fe2a884e` predates
    `GeoRecord.subdivision_ids` / `has_city` / `has_country`. The memory patch
