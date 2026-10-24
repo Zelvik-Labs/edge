@@ -325,6 +325,164 @@ class CleanLoadHandshakeTests(unittest.TestCase):
         self.assertIn("at least 10s", str(caught.exception))
 
 
+class StabilizationTests(unittest.TestCase):
+    """The post-pressure RSS refill ramp must flatten before measurement."""
+
+    class Clock:
+        def __init__(self):
+            self.now = 0.0
+
+        def monotonic(self):
+            return self.now
+
+        def sleep(self, seconds):
+            self.now += seconds
+
+    class Sample:
+        def __init__(self, rss_bytes):
+            self.rss_bytes = rss_bytes
+
+    def run_wait(self, rss_at, *, timeout=180.0, max_rate=8.0, window=30.0):
+        clock = self.Clock()
+        captured = []
+
+        def capture():
+            return self.Sample(rss_at(clock.now))
+
+        result = soak._wait_stabilization(
+            capture,
+            window_seconds=window,
+            max_rate_mib_per_min=max_rate,
+            required_windows=2,
+            timeout_seconds=timeout,
+            poll_interval=1.0,
+            clock=clock.monotonic,
+            sleep=clock.sleep,
+            on_sample=captured.append,
+        )
+        return result, clock, captured
+
+    def test_refill_ramp_then_flat_plateaus_and_excludes_the_ramp(self):
+        base = 300
+
+        def rss_at(now):
+            # 120 MiB/min for 20 s (40 MiB refill), then flat.
+            ramp = min(now, 20.0) * 120.0 * MIB / 60.0
+            return int(base * MIB + ramp)
+
+        result, clock, captured = self.run_wait(rss_at)
+        self.assertTrue(result["plateaued"])
+        # The criterion is the trailing rate, so the shallow tail of the ramp
+        # already qualifies (the last ~2 MiB of a 40 MiB refill is below
+        # 8 MiB/min over 30 s). Two consecutive windows are still required.
+        self.assertGreaterEqual(result["seconds"], 45.0)
+        self.assertLess(result["seconds"], 60.0)
+        self.assertLessEqual(abs(result["plateau_rate_mib_per_min"]), 8.0)
+        self.assertEqual(len(captured), result["samples"])
+        self.assertEqual(result["windows"], 2)
+        self.assertEqual(clock.now, result["end"])
+
+    def test_continuous_slow_drift_still_plateaus(self):
+        base = 300
+        drift = 1.0  # MiB/min, below the 8 MiB/min plateau limit
+        result, _, _ = self.run_wait(
+            lambda now: int(base * MIB + now * drift * MIB / 60.0)
+        )
+        self.assertTrue(result["plateaued"])
+        self.assertLessEqual(result["plateau_rate_mib_per_min"], 8.0)
+
+    def test_ramp_that_never_flattens_is_a_bounded_violation(self):
+        base = 300
+        growth = 60.0  # MiB/min, far above the plateau limit
+
+        def rss_at(now):
+            return int(base * MIB + now * growth * MIB / 60.0)
+
+        result, clock, _ = self.run_wait(rss_at, timeout=180.0)
+        self.assertFalse(result["plateaued"])
+        self.assertEqual(result["seconds"], 180.0)
+        self.assertEqual(clock.now, 180.0)
+        self.assertGreater(result["plateau_rate_mib_per_min"], 8.0)
+
+    def test_growth_resets_the_consecutive_window_count(self):
+        # A qualifying window at t=30 is followed immediately by a jump that
+        # makes the next window fail. Without the reset the second evaluation
+        # would wrongly be counted as a plateau and return at 31 s.
+        base = 300
+        jump_at = 30.5
+        jump = 20.0 * MIB
+
+        def rss_at(now):
+            return int(base * MIB + (jump if now >= jump_at else 0.0))
+
+        result, _, _ = self.run_wait(rss_at)
+        self.assertTrue(result["plateaued"])
+        # The jump only leaves the trailing 30 s window at ~61 s.
+        self.assertGreaterEqual(result["seconds"], 60.0)
+        self.assertLess(result["seconds"], 65.0)
+
+    def test_stabilization_moves_measurement_start_and_keeps_ordering(self):
+        self.assertEqual(
+            soak._measurement_start(0.0, 90.0, 120.0, 135.0, 200.0), 200.0
+        )
+        # The long-lane warm-up floor still wins over an early plateau.
+        self.assertEqual(
+            soak._measurement_start(0.0, 1800.0, 120.0, 135.0, 200.0), 1800.0
+        )
+        with self.assertRaises(soak.SoakError):
+            soak._measurement_start(0.0, 0.0, 250.0, 135.0, 200.0)
+
+
+class StatusReadinessTests(unittest.TestCase):
+    class Clock:
+        def __init__(self):
+            self.now = 0.0
+
+        def monotonic(self):
+            return self.now
+
+        def sleep(self, seconds):
+            self.now += seconds
+
+    def run_wait(self, load, timeout=60.0):
+        clock = self.Clock()
+        with mock.patch.object(soak.status, "load", side_effect=load):
+            result = soak._wait_status_ready(
+                "status.json",
+                ("workerReclaim.generation",),
+                timeout,
+                poll_interval=0.5,
+                clock=clock.monotonic,
+                sleep=clock.sleep,
+            )
+        return result, clock
+
+    def test_startup_absence_is_retried_until_the_governor_appears(self):
+        calls = []
+
+        def load(source, required):
+            calls.append((source, required))
+            if len(calls) < 3:
+                raise status.StatusError(
+                    "node status has no resourceGovernor object"
+                )
+            return {"workerReclaim.generation": 0}
+
+        result, clock = self.run_wait(load)
+        self.assertEqual(result["workerReclaim.generation"], 0)
+        self.assertEqual(len(calls), 3)
+        self.assertLessEqual(clock.now, 1.0)
+
+    def test_permanent_absence_fails_within_the_bound(self):
+        def load(source, required):
+            raise status.StatusError("node status has no resourceGovernor object")
+
+        with self.assertRaises(status.StatusError) as caught:
+            self.run_wait(load, timeout=2.0)
+        self.assertIn("did not become available within 2s", str(caught.exception))
+        self.assertIn("no resourceGovernor object", str(caught.exception))
+
+
 def synthetic_series(
     *,
     growth_mib_per_hour: float = 0.0,
@@ -504,6 +662,24 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(args.stats_ready_timeout_seconds, 30.0)
         self.assertEqual(args.measurement_clean_seconds, 10.0)
         self.assertEqual(args.measurement_handshake_timeout_seconds, 60.0)
+        self.assertEqual(args.measurement_stabilize_timeout_seconds, 180.0)
+        self.assertEqual(args.status_ready_timeout_seconds, 60.0)
+
+    def test_negative_stabilization_timeout_is_rejected(self):
+        args = soak.build_parser().parse_args(
+            self.base_args() + ["--measurement-stabilize-timeout-seconds", "-1"]
+        )
+        with self.assertRaises(soak.SoakError) as caught:
+            soak.run(args)
+        self.assertIn("--measurement-stabilize-timeout-seconds", str(caught.exception))
+
+    def test_negative_status_readiness_timeout_is_rejected(self):
+        args = soak.build_parser().parse_args(
+            self.base_args() + ["--status-ready-timeout-seconds", "-1"]
+        )
+        with self.assertRaises(soak.SoakError) as caught:
+            soak.run(args)
+        self.assertIn("--status-ready-timeout-seconds", str(caught.exception))
 
     def test_measurement_clean_window_below_ten_is_rejected(self):
         args = soak.build_parser().parse_args(

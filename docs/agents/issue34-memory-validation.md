@@ -183,6 +183,7 @@ sudo systemd-run --scope \
      --budget-mib-per-hour 64 --anon-budget-mib-per-hour 64 \
      --screen-only --max-rss-mib 1024 \
      --pressure-cycles 1 --pressure-start-fraction 0.3 --measurement-clean-seconds 10 \
+     --measurement-stabilize-timeout-seconds 180 --status-ready-timeout-seconds 60 \
      --pressure-hold-seconds 15 --pressure-settle-seconds 30 \
      --pressure-recovery-probe-seconds 10 \
      --stats-source /tmp/issue34/alloc-stats.json \

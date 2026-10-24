@@ -263,6 +263,16 @@ jobs:
               'report["measurement"]["load_errors"]',
               "short measurement-window load-error assertion",
           )
+          need(
+              runs["short"],
+              'report["measurement_stabilization_end_offset_seconds"] <= report["measurement_start_offset_seconds"]',
+              "short stabilization-before-measurement report assertion",
+          )
+          need(
+              runs["short"],
+              'report["measurement"]["stabilization_plateaued"] is True',
+              "short stabilization-plateau report assertion",
+          )
           need(runs["short"], "--stats-ready-timeout-seconds 30", "short stats readiness")
           need(runs["short"], "--pressure-hold-seconds 15", "short pressure hold")
           need(runs["short"], "--pressure-recovery-probe-seconds 10", "short recovery probe")
@@ -321,6 +331,20 @@ jobs:
               'report["measurement"]["load_errors"]',
               "full-edge measurement-window load-error assertion",
           )
+          need(
+              runs["full-edge"],
+              'report["measurement_stabilization_end_offset_seconds"] <= report["measurement_start_offset_seconds"]',
+              "full-edge stabilization-before-measurement report assertion",
+          )
+          need(
+              runs["full-edge"],
+              'report["measurement"]["stabilization_plateaued"] is True',
+              "full-edge stabilization-plateau report assertion",
+          )
+          if "measurement-stabilize-timeout-seconds" in "\n".join(runs.values()):
+              raise SystemExit(
+                  "lanes must use the default 180 s post-pressure stabilization bound"
+              )
           need(runs["full-edge"], "--recovery-seconds 60", "full-edge recovery window")
           need(runs["full-edge"], "--telemetry-mode unavailable", "full-edge retryable telemetry")
           need(runs["full-edge"], "full_edge.py smoke", "full-edge startup smoke")
@@ -504,9 +528,11 @@ jobs:
           # waits for the first complete document before starting its clock.
           # Pressure starts at the 90 s warm-up boundary and completes inside
           # the warm-up phase (15 s hold + 10 s probe). A >=10 s clean-2xx
-          # handshake follows, so the measurement window starts at ~125 s with
-          # no pressure or recovery samples in it; the remaining >=150 s is the
-          # slope span. 64 MiB/h is a screen budget, never closure.
+          # handshake follows, then a bounded wait (<=180 s) for the released
+          # cgroup's RSS refill ramp to flatten (trailing 30 s rate <=8 MiB/min
+          # for two windows), so the measured window contains neither pressure
+          # nor the refill ramp; the remaining >=150 s is the slope span.
+          # 64 MiB/h is a screen budget, never closure.
           # --pressure-bytes is an upper bound: memory.high + 16 MiB with
           # 256 MiB reserve below memory.max, so a 1.5 GiB request cannot
           # livelock above high=1.5 GiB. Resident proof is bounded at 120 s
@@ -572,6 +598,11 @@ jobs:
           assert report["pressure_before_measurement"] is True, report["pressure"]
           assert report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"], report["pressure"]
           assert report["measurement"]["handshake_seconds"] >= 10, report["measurement"]
+          # The RSS refill ramp after pressure is excluded: stabilization must
+          # reach the plateau before the measured window starts.
+          assert report["measurement_stabilization_end_offset_seconds"] <= report["measurement_start_offset_seconds"], report["measurement"]
+          assert report["measurement"]["stabilization_plateaued"] is True, report["measurement"]
+          assert report["measurement"]["plateau_rate_mib_per_min"] <= report["measurement"]["stabilization_max_rate_mib_per_min"], report["measurement"]
           assert report["measurement"]["load_errors"] <= 10, report["measurement"]
           assert report["expected_samples"] > 0, report
           assert report["measurement_samples"] >= report["expected_samples"] * 0.9, (
@@ -772,6 +803,8 @@ jobs:
           assert report["expected_samples"] > 0, report
           assert report["pressure_before_measurement"] is True, report["pressure"]
           assert report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"], report["pressure"]
+          assert report["measurement_stabilization_end_offset_seconds"] <= report["measurement_start_offset_seconds"], report["measurement"]
+          assert report["measurement"]["stabilization_plateaued"] is True, report["measurement"]
           assert report["measurement"]["load_errors"] <= 10, report["measurement"]
           assert report["measurement_samples"] >= report["expected_samples"] * 0.9, (
               report["measurement_samples"], report["expected_samples"])
@@ -969,9 +1002,11 @@ jobs:
           # 900 s of soak, excluding image/Rust/eBPF build time. 120 s warm-up;
           # pressure starts at 120 s (steady-state baseline, not 18 s during
           # Edge startup) and two cycles of 15 s hold + 10 s recovery probe
-          # finish by ~200 s. A >=10 s clean-2xx handshake follows, so the
-          # measurement window starts at ~210 s with no pressure, settle or
-          # 503 tail in it; the remaining ~690 s is the slope span (>=300 s).
+          # finish by ~200 s. A >=10 s clean-2xx handshake follows, then a
+          # bounded wait (<=180 s) for the released cgroup's RSS refill ramp to
+          # flatten (trailing 30 s rate <=8 MiB/min for two windows). The
+          # measurement window therefore contains no pressure, settle, 503 tail
+          # or refill ramp; the remaining span is >=300 s.
           # 8 MiB/h is a fast screen, never the 0.5 MiB/h long-lane closure.
           # Allocator pages are MAP_PRIVATE|MAP_ANONYMOUS, so with swap=0 they
           # cannot be reclaimed and readiness is a real resident proof.
@@ -1052,6 +1087,10 @@ jobs:
           assert report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"], report["pressure"]
           assert report["pressure_end_offset_seconds"] <= 200, report["pressure"]
           assert report["measurement"]["handshake_seconds"] >= 10, report["measurement"]
+          # Pressure's RSS refill ramp must have flattened before measurement.
+          assert report["measurement_stabilization_end_offset_seconds"] <= report["measurement_start_offset_seconds"], report["measurement"]
+          assert report["measurement"]["stabilization_plateaued"] is True, report["measurement"]
+          assert report["measurement"]["plateau_rate_mib_per_min"] <= report["measurement"]["stabilization_max_rate_mib_per_min"], report["measurement"]
           assert report["measurement"]["load_errors"] <= 10, report["measurement"]
           assert report["pressure"]["pressure_load_errors"] >= 0, report["pressure"]
           assert report["expected_samples"] > 0, report
@@ -1304,6 +1343,8 @@ jobs:
           assert report["expected_samples"] > 0, report
           assert report["pressure_before_measurement"] is True, report["pressure"]
           assert report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"], report["pressure"]
+          assert report["measurement_stabilization_end_offset_seconds"] <= report["measurement_start_offset_seconds"], report["measurement"]
+          assert report["measurement"]["stabilization_plateaued"] is True, report["measurement"]
           assert report["measurement"]["load_errors"] <= 10, report["measurement"]
           assert report["measurement_samples"] >= report["expected_samples"] * 0.9, (
               report["measurement_samples"], report["expected_samples"])

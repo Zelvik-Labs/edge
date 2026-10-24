@@ -36,6 +36,18 @@ MAX_VIOLATION_MESSAGES = 32
 # continuous clean 2xx interval. Errors under memory.high are expected pressure
 # admission rejections and are accounted to the pressure window instead.
 MIN_CLEAN_LOAD_SECONDS = 10.0
+# Pressure without swap reclaims part of the target's working set. When the
+# cgroup is released, the resident set refills to its steady state; that ramp
+# is not the slow leak the MiB/h budget describes, so the measured window waits
+# for the trailing RSS rate to flatten first. Bounded so a target that never
+# plateaus is a reported violation rather than an indefinitely delayed run.
+STABILIZATION_WINDOW_SECONDS = 30.0
+STABILIZATION_MAX_RATE_MIB_PER_MIN = 8.0
+STABILIZATION_REQUIRED_WINDOWS = 2
+STABILIZATION_TIMEOUT_SECONDS = 180.0
+# The controller proxies resourceGovernor from its first health snapshot, so
+# the object can be briefly absent at startup even though the node is healthy.
+STATUS_READY_TIMEOUT_SECONDS = 60.0
 
 
 class SoakError(RuntimeError):
@@ -228,6 +240,41 @@ def _wait_stats_ready(
         time.sleep(min(0.2, max(0.0, deadline - time.monotonic())))
 
 
+def _wait_status_ready(
+    source: str,
+    required_fields,
+    timeout_seconds: float,
+    poll_interval: float = 0.5,
+    clock=None,
+    sleep=None,
+) -> dict:
+    """Wait for the first complete ``resourceGovernor`` snapshot at startup.
+
+    The controller populates the governor object from its first health
+    snapshot, so a single missing object right after the target starts is a
+    startup race, not a contract failure. Retry within a fixed bound; after
+    the bound the absence is surfaced as a violation by the caller. Later
+    polls are strict again.
+    """
+    clock = clock or time.monotonic
+    sleep = sleep or time.sleep
+    if timeout_seconds < 0:
+        raise SoakError("status readiness timeout must be >= 0")
+    deadline = clock() + timeout_seconds
+    last_error = None
+    while True:
+        try:
+            return status.load(source, required_fields)
+        except status.StatusError as exc:
+            last_error = exc
+        if clock() >= deadline:
+            raise status.StatusError(
+                "resourceGovernor did not become available within "
+                f"{timeout_seconds:g}s: {last_error}"
+            )
+        sleep(poll_interval)
+
+
 def _wait_clean_load(
     runner,
     *,
@@ -287,22 +334,120 @@ def _wait_clean_load(
             )
 
 
+def _wait_stabilization(
+    capture,
+    *,
+    window_seconds: float = STABILIZATION_WINDOW_SECONDS,
+    max_rate_mib_per_min: float = STABILIZATION_MAX_RATE_MIB_PER_MIN,
+    required_windows: int = STABILIZATION_REQUIRED_WINDOWS,
+    timeout_seconds: float = STABILIZATION_TIMEOUT_SECONDS,
+    poll_interval: float = 1.0,
+    clock=None,
+    sleep=None,
+    on_sample=None,
+) -> dict:
+    """Wait for RSS to plateau after pressure before starting the measurement.
+
+    Pressure under ``memory.high`` without swap evicts/reclaims part of the
+    target's working set. After release the resident set ramps back to steady
+    state, and a window that starts immediately would measure that refill as a
+    fake leak. Stabilization is reached when the trailing ``window_seconds``
+    RSS delta rate is at or below ``max_rate_mib_per_min`` for
+    ``required_windows`` consecutive evaluations. The wait is bounded; the
+    caller turns a non-plateau into an explicit violation, never a skip.
+
+    ``on_sample`` receives every captured sample so the caller can keep one
+    continuous sample series (these points are still before
+    ``measurement_start`` and therefore excluded from the slope).
+    """
+    clock = clock or time.monotonic
+    sleep = sleep or time.sleep
+    if window_seconds <= 0:
+        raise SoakError("stabilization window must be positive")
+    if required_windows < 1:
+        raise SoakError("stabilization requires at least one window")
+    if max_rate_mib_per_min < 0:
+        raise SoakError("stabilization rate limit must be >= 0")
+    if timeout_seconds < 0:
+        raise SoakError("stabilization timeout must be >= 0")
+
+    points: list[tuple[float, int]] = []
+
+    def take() -> None:
+        sample = capture()
+        points.append((clock(), sample.rss_bytes))
+        if on_sample is not None:
+            on_sample(sample)
+
+    started_at = clock()
+    deadline = started_at + timeout_seconds
+    take()
+    consecutive = 0
+    last_rate = None
+    while True:
+        sleep(poll_interval)
+        now = clock()
+        take()
+        newest_t, newest = points[-1]
+        window_start = None
+        for t, value in points:
+            if newest_t - t >= window_seconds:
+                window_start = (t, value)
+            else:
+                break
+        if window_start is not None:
+            elapsed = newest_t - window_start[0]
+            last_rate = (newest - window_start[1]) / elapsed * 60.0 / MIB
+            if last_rate <= max_rate_mib_per_min:
+                consecutive += 1
+            else:
+                consecutive = 0
+            if consecutive >= required_windows:
+                return {
+                    "seconds": now - started_at,
+                    "end": now,
+                    "plateaued": True,
+                    "plateau_rate_mib_per_min": last_rate,
+                    "windows": consecutive,
+                    "samples": len(points),
+                    "window_seconds": window_seconds,
+                    "max_rate_mib_per_min": max_rate_mib_per_min,
+                    "timeout_seconds": timeout_seconds,
+                }
+        if now >= deadline:
+            return {
+                "seconds": now - started_at,
+                "end": now,
+                "plateaued": False,
+                "plateau_rate_mib_per_min": last_rate,
+                "windows": consecutive,
+                "samples": len(points),
+                "window_seconds": window_seconds,
+                "max_rate_mib_per_min": max_rate_mib_per_min,
+                "timeout_seconds": timeout_seconds,
+            }
+
+
 def _measurement_start(
     started: float,
     warmup_seconds: float,
     pressure_end: float | None,
     handshake_end: float | None,
+    stabilization_end: float | None = None,
 ) -> float:
     """Resolve the measurement start and prove pressure finished before it.
 
     The warm-up floor still applies to long lanes (their pressure block starts
     early inside the warm-up), while the fast lanes start measuring only after
-    the post-pressure clean-load handshake. There is no fallback that silently
-    includes pressure/recovery samples in the measured window.
+    the post-pressure clean-load handshake and the RSS stabilization plateau.
+    There is no fallback that silently includes pressure/recovery samples in
+    the measured window.
     """
     candidates = [started + warmup_seconds]
     if handshake_end is not None:
         candidates.append(handshake_end)
+    if stabilization_end is not None:
+        candidates.append(stabilization_end)
     measurement_start = max(candidates)
     if pressure_end is not None and pressure_end >= measurement_start:
         raise SoakError(
@@ -573,6 +718,10 @@ def run(args) -> int:
         )
     if args.require_status_samples < 0:
         raise SoakError("--require-status-samples must be >= 0")
+    if args.status_ready_timeout_seconds < 0:
+        raise SoakError("--status-ready-timeout-seconds must be >= 0")
+    if args.measurement_stabilize_timeout_seconds < 0:
+        raise SoakError("--measurement-stabilize-timeout-seconds must be >= 0")
     if args.stats_source and args.require_allocator_stats:
         required_keys = (
             stats.parse_required_keys(args.require_stats_keys)
@@ -755,6 +904,7 @@ def run(args) -> int:
         pressure_load_baseline = 0
         pressure_load_errors = 0
         measurement_handshake = None
+        measurement_stabilization = None
         measurement_start = None
         measurement_target = (
             None
@@ -766,6 +916,33 @@ def run(args) -> int:
         cycle_at = args.duration_seconds * args.pressure_start_fraction
         jsonl = open(args.samples_jsonl, "w", encoding="utf-8") if args.samples_jsonl else None
 
+        def record_sample(sample) -> None:
+            """Append one RSS/Anon point and enforce the per-sample bounds.
+
+            Used by the main loop and by the post-pressure stabilization wait,
+            so the sample series stays continuous across both.
+            """
+            nonlocal peak_rss
+            samples.append((sample.monotonic_s, sample.rss_bytes))
+            anon_samples.append((sample.monotonic_s, sample.anon_bytes))
+            if len(samples) > args.max_samples:
+                raise SoakError(
+                    f"sample array reached the {args.max_samples} bound; "
+                    "increase --sample-interval or --max-samples"
+                )
+            peak_rss = max(peak_rss, sample.rss_bytes)
+            if sample.cgroup_swap_current_bytes != 0:
+                violate(
+                    f"swap in use during run: {sample.cgroup_swap_current_bytes} bytes"
+                )
+            if sample.rss_bytes > args.max_rss_mib * MIB:
+                violate(
+                    f"RSS {sample.rss_bytes / MIB:.1f} MiB exceeds "
+                    f"{args.max_rss_mib:.0f} MiB"
+                )
+            if jsonl is not None:
+                _write_jsonl(jsonl, {"kind": "sample", **sample.to_dict()})
+
         status_first = None
         status_last = None
         status_samples = 0
@@ -773,10 +950,17 @@ def run(args) -> int:
         previous_status = None
         next_status_at = 0.0
 
-        def poll_status() -> None:
+        def poll_status(ready_wait: bool = False) -> None:
             nonlocal status_first, status_last, status_samples, previous_status
             try:
-                values = status.load(args.status_source, status_fields)
+                if ready_wait and args.status_ready_timeout_seconds > 0:
+                    values = _wait_status_ready(
+                        args.status_source,
+                        status_fields,
+                        args.status_ready_timeout_seconds,
+                    )
+                else:
+                    values = status.load(args.status_source, status_fields)
             except status.StatusError as exc:
                 message = f"node status: {exc}"
                 if len(status_errors) < MAX_VIOLATION_MESSAGES:
@@ -803,7 +987,9 @@ def run(args) -> int:
                 )
 
         if args.status_source:
-            poll_status()
+            # Bounded startup readiness: the controller proxies
+            # resourceGovernor from its first health snapshot.
+            poll_status(ready_wait=True)
             next_status_at = args.status_interval
 
         try:
@@ -816,25 +1002,7 @@ def run(args) -> int:
                         f"target exited early with status {target.returncode}"
                     )
                 sample = sampler.capture()
-                samples.append((sample.monotonic_s, sample.rss_bytes))
-                anon_samples.append((sample.monotonic_s, sample.anon_bytes))
-                if len(samples) > args.max_samples:
-                    raise SoakError(
-                        f"sample array reached the {args.max_samples} bound; "
-                        "increase --sample-interval or --max-samples"
-                    )
-                peak_rss = max(peak_rss, sample.rss_bytes)
-                if sample.cgroup_swap_current_bytes != 0:
-                    violate(
-                        f"swap in use during run: {sample.cgroup_swap_current_bytes} bytes"
-                    )
-                if sample.rss_bytes > args.max_rss_mib * MIB:
-                    violate(
-                        f"RSS {sample.rss_bytes / MIB:.1f} MiB exceeds "
-                        f"{args.max_rss_mib:.0f} MiB"
-                    )
-                if jsonl is not None:
-                    _write_jsonl(jsonl, {"kind": "sample", **sample.to_dict()})
+                record_sample(sample)
                 if required_keys:
                     stats_last = _stats_sample(args.stats_source, required_keys)
                     stats_samples += 1
@@ -914,11 +1082,39 @@ def run(args) -> int:
                         min_clean_seconds=args.measurement_clean_seconds,
                         timeout_seconds=args.measurement_handshake_timeout_seconds,
                     )
+                    # Releasing the cgroup lets the target refill the working
+                    # set that pressure reclaimed. That ramp is not leak
+                    # growth, so the measured window starts only once the
+                    # trailing RSS rate has flattened (bounded).
+                    measurement_stabilization = _wait_stabilization(
+                        sampler.capture,
+                        timeout_seconds=args.measurement_stabilize_timeout_seconds,
+                        on_sample=record_sample,
+                    )
+                    if not measurement_stabilization["plateaued"]:
+                        rate = measurement_stabilization["plateau_rate_mib_per_min"]
+                        rate_text = (
+                            "no complete "
+                            f"{measurement_stabilization['window_seconds']:g}s "
+                            "window"
+                            if rate is None
+                            else f"{rate:.2f} MiB/min"
+                        )
+                        violate(
+                            "rss did not stabilize after pressure within "
+                            f"{measurement_stabilization['timeout_seconds']:g}s "
+                            f"(trailing "
+                            f"{measurement_stabilization['window_seconds']:g}s "
+                            f"rate {rate_text}, limit "
+                            f"{measurement_stabilization['max_rate_mib_per_min']:g} "
+                            "MiB/min)"
+                        )
                     measurement_target = _measurement_start(
                         started,
                         args.warmup_seconds,
                         last_pressure_end,
                         measurement_handshake["end"],
+                        measurement_stabilization["end"],
                     )
                     if measurement_target <= time.monotonic():
                         measurement_start = measurement_target
@@ -930,6 +1126,13 @@ def run(args) -> int:
                             {
                                 "kind": "measurement_handshake",
                                 **measurement_handshake,
+                            },
+                        )
+                        _write_jsonl(
+                            jsonl,
+                            {
+                                "kind": "measurement_stabilization",
+                                **measurement_stabilization,
                             },
                         )
                     with verify_lock:
@@ -976,6 +1179,49 @@ def run(args) -> int:
             None if last_pressure_end is None else last_pressure_end - started
         )
         measurement_start_offset = measurement_start - started
+        measurement_handshake_end_offset = (
+            None
+            if measurement_handshake is None
+            else measurement_handshake["end"] - started
+        )
+        measurement_stabilization_end_offset = (
+            None
+            if measurement_stabilization is None
+            else measurement_stabilization["end"] - started
+        )
+        measurement_stabilization_seconds = (
+            measurement_stabilization["seconds"]
+            if measurement_stabilization is not None
+            else 0.0
+        )
+        measurement_plateau_rate = (
+            measurement_stabilization["plateau_rate_mib_per_min"]
+            if measurement_stabilization is not None
+            else None
+        )
+        measurement_plateaued = (
+            measurement_stabilization["plateaued"]
+            if measurement_stabilization is not None
+            else None
+        )
+        if (
+            measurement_handshake_end_offset is not None
+            and measurement_handshake_end_offset > measurement_start_offset
+        ):
+            violate(
+                "clean-load handshake ended after the measurement window "
+                f"started: handshake_end={measurement_handshake_end_offset:.3f}s, "
+                f"measurement_start={measurement_start_offset:.3f}s"
+            )
+        if (
+            measurement_stabilization_end_offset is not None
+            and measurement_stabilization_end_offset > measurement_start_offset
+        ):
+            violate(
+                "rss stabilization ended after the measurement window started: "
+                f"stabilization_end={measurement_stabilization_end_offset:.3f}s, "
+                f"measurement_start={measurement_start_offset:.3f}s"
+            )
         pressure_before_measurement = (
             last_pressure_end is None
             or (
@@ -1130,6 +1376,16 @@ def run(args) -> int:
             "measurement_span_seconds": measurement_span_seconds,
             "pressure_blocked_seconds": pressure_blocked_seconds,
             "measurement_handshake_seconds": measurement_handshake_seconds,
+            "measurement_handshake_end_offset_seconds": (
+                measurement_handshake_end_offset
+            ),
+            "measurement_stabilization": measurement_stabilization,
+            "measurement_stabilization_seconds": measurement_stabilization_seconds,
+            "measurement_stabilization_end_offset_seconds": (
+                measurement_stabilization_end_offset
+            ),
+            "measurement_plateau_rate_mib_per_min": measurement_plateau_rate,
+            "measurement_stabilization_plateaued": measurement_plateaued,
             "active_sampling_seconds": active_sampling_seconds,
             "expected_samples": expected_samples,
             "measurement_start_offset_seconds": measurement_start_offset,
@@ -1171,6 +1427,23 @@ def run(args) -> int:
                 "requests_ok": measurement_requests_ok,
                 "pre_measurement_load_errors": pre_measurement_load_errors,
                 "handshake_seconds": measurement_handshake_seconds,
+                "handshake_end_offset_seconds": measurement_handshake_end_offset,
+                "stabilization_seconds": measurement_stabilization_seconds,
+                "stabilization_end_offset_seconds": (
+                    measurement_stabilization_end_offset
+                ),
+                "stabilization_plateaued": measurement_plateaued,
+                "plateau_rate_mib_per_min": measurement_plateau_rate,
+                "stabilization_window_seconds": (
+                    measurement_stabilization["window_seconds"]
+                    if measurement_stabilization is not None
+                    else STABILIZATION_WINDOW_SECONDS
+                ),
+                "stabilization_max_rate_mib_per_min": (
+                    measurement_stabilization["max_rate_mib_per_min"]
+                    if measurement_stabilization is not None
+                    else STABILIZATION_MAX_RATE_MIB_PER_MIN
+                ),
                 "handshake_load_errors": (
                     measurement_handshake["errors"]
                     if measurement_handshake is not None
@@ -1310,6 +1583,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="bounded total wait for the post-pressure clean-load handshake",
     )
     parser.add_argument(
+        "--measurement-stabilize-timeout-seconds",
+        type=float,
+        default=STABILIZATION_TIMEOUT_SECONDS,
+        dest="measurement_stabilize_timeout_seconds",
+        help=(
+            "bounded wait after pressure for the trailing RSS rate to flatten "
+            f"(<= {STABILIZATION_MAX_RATE_MIB_PER_MIN:g} MiB/min for "
+            f"{STABILIZATION_REQUIRED_WINDOWS} consecutive "
+            f"{STABILIZATION_WINDOW_SECONDS:g}s windows)"
+        ),
+    )
+    parser.add_argument(
         "--budget-mib-per-hour",
         type=float,
         default=0.5,
@@ -1359,6 +1644,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-status-fields", default=None)
     parser.add_argument("--require-status-samples", type=int, default=1)
     parser.add_argument("--status-interval", type=float, default=5.0)
+    parser.add_argument(
+        "--status-ready-timeout-seconds",
+        type=float,
+        default=STATUS_READY_TIMEOUT_SECONDS,
+        dest="status_ready_timeout_seconds",
+        help=(
+            "bounded startup wait for the controller to proxy the first "
+            "complete resourceGovernor snapshot"
+        ),
+    )
 
     parser.add_argument("--pressure-cycles", type=int, default=0)
     parser.add_argument("--pressure-start-fraction", type=float, default=0.25)
