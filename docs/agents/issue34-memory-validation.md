@@ -182,11 +182,11 @@ sudo systemd-run --scope \
      --duration 300 --warmup-seconds 90 --min-span-seconds 150 \
      --budget-mib-per-hour 64 --anon-budget-mib-per-hour 64 \
      --screen-only --max-rss-mib 1024 \
-     --pressure-cycles 1 --pressure-start-fraction 0.02 \
+     --pressure-cycles 1 --pressure-start-fraction 0.2 \
      --pressure-hold-seconds 15 --pressure-settle-seconds 30 \
      --pressure-recovery-probe-seconds 10 \
      --stats-source /tmp/issue34/alloc-stats.json \
-     --require-allocator-stats --require-stats-samples 200 \
+     --require-allocator-stats --stats-ready-timeout-seconds 30 --require-stats-samples 200 \
      --out /tmp/issue34/report.json
 
 # Long closure profile (manual only): 0.5 MiB/h RSS+Anon, 1800 s warm-up,

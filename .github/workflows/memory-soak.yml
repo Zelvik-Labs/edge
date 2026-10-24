@@ -242,6 +242,12 @@ jobs:
           need(runs["short"], "--budget-mib-per-hour 64", "short RSS screen budget")
           need(runs["short"], "--anon-budget-mib-per-hour 64", "short Anon screen budget")
           need(runs["short"], "--pressure-cycles 1", "short pressure cycle")
+          need(
+              runs["short"],
+              "--pressure-start-fraction 0.2",
+              "short pressure start at 60 s, after bench steady state",
+          )
+          need(runs["short"], "--stats-ready-timeout-seconds 30", "short stats readiness")
           need(runs["short"], "--pressure-hold-seconds 15", "short pressure hold")
           need(runs["short"], "--pressure-recovery-probe-seconds 10", "short recovery probe")
           need(runs["short"], "full_edge.py smoke", "short full-Edge smoke")
@@ -278,6 +284,11 @@ jobs:
               runs["full-edge"],
               "--soak-arg=--pressure-cycles --soak-arg=2",
               "full-edge pressure cycles",
+          )
+          need(
+              runs["full-edge"],
+              "--soak-arg=--pressure-start-fraction --soak-arg=0.13333333333333333",
+              "full-edge pressure start at 120 s, after warm-up",
           )
           need(runs["full-edge"], "--recovery-seconds 60", "full-edge recovery window")
           need(runs["full-edge"], "--telemetry-mode unavailable", "full-edge retryable telemetry")
@@ -404,10 +415,12 @@ jobs:
         run: |
           set -euo pipefail
           # Load window: 300 s of soak, excluding image build/Rust cold build.
-          # 90 s warm-up + 150 s minimum slope span + one early pressure cycle
-          # (6 s start, 15 s hold, 10 s recovery probe, 30 s settle) fit inside
-          # the 300 s window. 64 MiB/h is a fast-screen budget, never closure.
-          # --pressure-bytes is an upper bound: pressure.py caps each cycle at
+          # The target writes alloc-stats.json from its own 1 s loop, so the soak
+          # waits for the first complete document before starting its clock.
+          # Pressure starts at 60 s (bench-defense steady state), then 15 s hold,
+          # 10 s probe, 30 s settle: effective warm-up ~118 s, leaving >180 s of
+          # slope span (>= 150 s) inside the 300 s window. 64 MiB/h is a screen
+          # budget, never closure. --pressure-bytes is an upper bound:
           # memory.high + 16 MiB with 256 MiB reserve below memory.max, so a
           # 1.5 GiB request cannot livelock above high=1.5 GiB. Resident proof
           # is bounded at 120 s independent of hold and logs a cgroup snapshot
@@ -441,13 +454,14 @@ jobs:
               --screen-only \
               --max-rss-mib 1024 \
               --pressure-cycles 1 \
-              --pressure-start-fraction 0.02 \
+              --pressure-start-fraction 0.2 \
               --pressure-bytes 1610612736 \
               --pressure-hold-seconds 15 \
               --pressure-settle-seconds 30 \
               --pressure-recovery-probe-seconds 10 \
               --stats-source "$OUT/alloc-stats.json" \
               --require-allocator-stats \
+              --stats-ready-timeout-seconds 30 \
               --require-stats-samples 200 \
               --min-requests 100 \
               --max-load-errors 10 \
@@ -854,16 +868,19 @@ jobs:
       - name: 15 min full-Edge screen soak (automatic)
         run: |
           set -euo pipefail
-          # 900 s of soak, excluding image/Rust/eBPF build time. 120 s warm-up,
-          # 300 s minimum slope span, two early pressure cycles (18 s start,
-          # 15 s hold, 10 s recovery probe, 30 s settle). 8 MiB/h is a fast
-          # screen, never the 0.5 MiB/h long-lane closure. Allocator pages are
-          # MAP_PRIVATE|MAP_ANONYMOUS, so with swap=0 they cannot be reclaimed
-          # and readiness is a real resident proof. --pressure-bytes is an upper
-          # bound: pressure.py caps each cycle at memory.high + 16 MiB with
-          # 256 MiB reserve below memory.max, so a 1.5 GiB request cannot
-          # livelock above high=1.5 GiB (CI run 40089866696). Resident proof is
-          # bounded at 120 s independent of hold and logs cgroup snapshots.
+          # 900 s of soak, excluding image/Rust/eBPF build time. 120 s warm-up;
+          # pressure starts at 120 s (steady-state baseline, not 18 s during
+          # Edge startup), two cycles of 15 s hold + 10 s recovery probe + 30 s
+          # settle. The pressure+settle window is excluded from the slope
+          # (effective warm-up ~200 s), leaving ~700 s >= the 300 s minimum.
+          # 8 MiB/h is a fast screen, never the 0.5 MiB/h long-lane closure.
+          # Allocator pages are MAP_PRIVATE|MAP_ANONYMOUS, so with swap=0 they
+          # cannot be reclaimed and readiness is a real resident proof.
+          # --pressure-bytes is an upper bound: pressure.py caps each cycle at
+          # memory.high + 16 MiB with 256 MiB reserve below memory.max, so a
+          # 1.5 GiB request cannot livelock above high=1.5 GiB (CI run
+          # 40089866696). Resident proof is bounded at 120 s independent of hold
+          # and logs cgroup snapshots.
           OUT="$RUNNER_TEMP/issue34-full-edge-nightly"
           mkdir -p "$OUT"
           sudo systemd-run --scope \
@@ -891,7 +908,7 @@ jobs:
               --soak-arg=--anon-budget-mib-per-hour --soak-arg=8 \
               --soak-arg=--max-rss-mib --soak-arg=1536 \
               --soak-arg=--pressure-cycles --soak-arg=2 \
-              --soak-arg=--pressure-start-fraction --soak-arg=0.02 \
+              --soak-arg=--pressure-start-fraction --soak-arg=0.13333333333333333 \
               --soak-arg=--pressure-bytes --soak-arg=1610612736 \
               --soak-arg=--pressure-hold-seconds --soak-arg=15 \
               --soak-arg=--pressure-settle-seconds --soak-arg=30 \

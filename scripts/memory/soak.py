@@ -196,6 +196,34 @@ def _stats_sample(source: str | None, required_keys) -> dict | None:
     return stats.read(source, required_keys)
 
 
+def _wait_stats_ready(
+    source: str,
+    required_keys,
+    timeout_seconds: float,
+) -> dict:
+    """Wait for the target's allocator stats surface before measuring.
+
+    The target writes ``alloc-stats.json`` from its own periodic loop, so the
+    file is not present at the instant the soak starts. A bounded readiness
+    handshake replaces a synchronous first read: missing/partial/incomplete
+    stats are retried, but a target that never publishes them fails within a
+    fixed window instead of after the whole soak.
+    """
+    deadline = time.monotonic() + timeout_seconds
+    last_error = None
+    while True:
+        try:
+            return stats.read(source, required_keys)
+        except stats.StatsError as exc:
+            last_error = exc
+        if time.monotonic() >= deadline:
+            raise SoakError(
+                "allocator stats did not become ready within "
+                f"{timeout_seconds:g}s: {last_error}"
+            )
+        time.sleep(min(0.2, max(0.0, deadline - time.monotonic())))
+
+
 def _effective_warmup(
     samples: list[tuple[float, int]],
     warmup_seconds: float,
@@ -327,6 +355,8 @@ def run(args) -> int:
         raise SoakError("--max-samples must be at least 100")
     if args.require_stats_samples < 0:
         raise SoakError("--require-stats-samples must be >= 0")
+    if args.stats_ready_timeout_seconds < 0:
+        raise SoakError("--stats-ready-timeout-seconds must be >= 0")
     if args.require_status_samples < 0:
         raise SoakError("--require-status-samples must be >= 0")
     if args.stats_source and args.require_allocator_stats:
@@ -415,7 +445,6 @@ def run(args) -> int:
     if not loadgen_payload or len(loadgen_payload) > MIB:
         raise SoakError("load payload must be between 1 byte and 1 MiB")
 
-    started = time.monotonic()
     try:
         if args.origin == "auto":
             origin_server = origin.OriginServer(
@@ -456,6 +485,18 @@ def run(args) -> int:
                 f"initial RSS {initial.rss_bytes / MIB:.1f} MiB exceeds "
                 f"{args.max_rss_mib:.0f} MiB"
             )
+        stats_samples = 0
+        stats_last = None
+        if required_keys:
+            # The target publishes stats from its own 1 s loop; wait for the
+            # first complete document before starting the measurement clock.
+            stats_last = _wait_stats_ready(
+                args.stats_source,
+                required_keys,
+                args.stats_ready_timeout_seconds,
+            )
+            stats_samples = 1
+        started = time.monotonic()
 
         if args.tls_verify_interval > 0:
             verifier_thread = threading.Thread(
@@ -481,8 +522,6 @@ def run(args) -> int:
         samples: list[tuple[float, int]] = []
         anon_samples: list[tuple[float, int]] = []
         peak_rss = initial.rss_bytes
-        stats_samples = 0
-        stats_last = None
         last_pressure_end = None
         pressure_summary = None
         pressure_blocked_seconds = 0.0
@@ -895,6 +934,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-allocator-stats", action="store_true")
     parser.add_argument("--require-stats-keys", default=None)
     parser.add_argument("--require-stats-samples", type=int, default=0)
+    parser.add_argument(
+        "--stats-ready-timeout-seconds",
+        type=float,
+        default=30.0,
+        dest="stats_ready_timeout_seconds",
+        help="bounded wait for the target's first allocator stats document",
+    )
 
     parser.add_argument("--status-source", default=None,
                         help="node status JSON/JSONL file or URL captured from a fake backend")

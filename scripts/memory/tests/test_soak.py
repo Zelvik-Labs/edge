@@ -1,6 +1,10 @@
+import json
+import os
+import tempfile
 import unittest
+from unittest import mock
 
-from scripts.memory import soak, status
+from scripts.memory import soak, stats, status
 
 MIB = 1024 * 1024
 
@@ -29,6 +33,50 @@ class ScopeTests(unittest.TestCase):
         self.assertTrue(scope["full_edge"])
         self.assertTrue(scope["production_startup"])
         self.assertFalse(scope["component_lane"])
+
+
+class StatsReadinessTests(unittest.TestCase):
+    KEYS = stats.DEFAULT_REQUIRED_KEYS
+
+    def write(self, path):
+        document = {
+            "process": {
+                "commit_current": 1,
+                "peak_commit": 1,
+                "rss_current": 1,
+                "page_faults": 1,
+            }
+        }
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(document, handle)
+
+    def test_complete_document_is_ready_immediately(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "alloc-stats.json")
+            self.write(path)
+            ready = soak._wait_stats_ready(path, self.KEYS, 0)
+        self.assertEqual(ready["process.rss_current"], 1.0)
+
+    def test_missing_source_fails_within_the_bound(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "alloc-stats.json")
+            with self.assertRaises(soak.SoakError) as caught:
+                soak._wait_stats_ready(path, self.KEYS, 0)
+        self.assertIn("did not become ready within 0s", str(caught.exception))
+        self.assertIn("does not exist", str(caught.exception))
+
+    def test_incomplete_document_is_retried_until_ready(self):
+        with (
+            mock.patch.object(
+                soak.stats,
+                "read",
+                side_effect=[stats.StatsError("empty"), {"process.rss_current": 1.0}],
+            ) as read,
+            mock.patch.object(soak.time, "sleep"),
+        ):
+            ready = soak._wait_stats_ready("alloc-stats.json", self.KEYS, 1)
+        self.assertEqual(ready["process.rss_current"], 1.0)
+        self.assertEqual(read.call_count, 2)
 
 
 class AnalyzeTests(unittest.TestCase):
@@ -274,6 +322,15 @@ class ParserTests(unittest.TestCase):
         args = soak.build_parser().parse_args(self.base_args())
         self.assertEqual(args.target_kind, "bench-defense")
         self.assertEqual(args.duration_seconds, 600.0)
+        self.assertEqual(args.stats_ready_timeout_seconds, 30.0)
+
+    def test_negative_stats_readiness_timeout_is_rejected(self):
+        args = soak.build_parser().parse_args(
+            self.base_args() + ["--stats-ready-timeout-seconds", "-1"]
+        )
+        with self.assertRaises(soak.SoakError) as caught:
+            soak.run(args)
+        self.assertIn("--stats-ready-timeout-seconds", str(caught.exception))
 
     def test_parser_requires_target_and_out(self):
         parser = soak.build_parser()
