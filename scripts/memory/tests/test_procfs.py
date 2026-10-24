@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from unittest import mock
 
 from scripts.memory import procfs
 
@@ -131,6 +132,27 @@ class CgroupParserTests(unittest.TestCase):
     def test_pressure_missing_total_is_an_error(self):
         with self.assertRaises(procfs.StatError):
             procfs.parse_pressure("some avg10=1 avg60=2 avg300=3\n")
+
+
+class SampleContractTests(unittest.TestCase):
+    def test_cgroup_reader_fields_match_the_sample_constructor(self):
+        contents = {
+            "/test/memory.current": "100",
+            "/test/memory.max": "max",
+            "/test/memory.high": "max",
+            "/test/memory.swap.current": "0",
+            "/test/memory.swap.max": "0",
+            "/test/memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\n",
+            "/test/memory.stat": "anon 1\nfile 2\nkernel 3\nshmem 4\n",
+            "/test/memory.pressure": "some avg10=0 avg60=0 avg300=0 total=0\n",
+        }
+        with mock.patch.object(procfs, "_cgroup2_dir", return_value="/test"), mock.patch.object(
+            procfs, "_read_text", side_effect=contents.__getitem__
+        ):
+            fields = procfs.read_cgroup(123)
+        accepted = set(procfs.Sample.__dataclass_fields__)
+        self.assertFalse(set(fields) - accepted, "cgroup fields cannot construct a sample")
+        self.assertEqual(fields["cgroup_events"]["low"], 0)
 
 
 class LiveLinuxTests(unittest.TestCase):

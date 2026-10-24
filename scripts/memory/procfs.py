@@ -316,9 +316,6 @@ def read_cgroup(pid: int) -> dict:
         "cgroup_stat": parse_cgroup_stat(_read_text(stat_path), stat_path),
         "cgroup_pressure": parse_pressure(_read_text(pressure_path), pressure_path),
     }
-    # Flatten the event counters used by verdicts so their presence is obvious.
-    for key, value in result["cgroup_events"].items():
-        result[f"cgroup_event_{key}"] = value
     return result
 
 
