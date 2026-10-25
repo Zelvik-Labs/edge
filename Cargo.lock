@@ -5380,6 +5380,7 @@ dependencies = [
  "ipnet",
  "ipnetwork",
  "maxminddb",
+ "memmap2",
  "parking_lot",
  "serde",
  "serde_json",
@@ -5391,7 +5392,7 @@ dependencies = [
 [[package]]
 name = "zelvik-suite"
 version = "26.10.2"
-source = "git+https://github.com/Zelvik-Labs/protocol?tag=rust%2Fv0.0.1#62afb60e07ef777f9f9124005344e323e5679c3b"
+source = "git+https://github.com/Zelvik-Labs/protocol?tag=rust%2Fv0.0.2#f2cac932f4c635fbaf4c376002dcb918d252983b"
 dependencies = [
  "base64 0.23.1",
  "hmac",

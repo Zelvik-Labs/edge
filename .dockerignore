@@ -1,0 +1,6 @@
+# Build caches and VCS data are not build inputs. Excluding them keeps the
+# image context small; the multi-gigabyte `target/` cache stays on the host and
+# is never uploaded or invalidated by Docker.
+target
+.git
+release

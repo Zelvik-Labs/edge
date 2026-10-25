@@ -20,7 +20,7 @@
 - [Agent 工程背景](agents/project-profile.md)：给 AI agent 的模块地图、依赖信号、仓库特定优先级和检索模式；入口约束见根目录 [AGENTS.md](../AGENTS.md)。
 - [禁止未经审批的功能降级](agents/no-unapproved-degradation.md)：强制工程约束，定义什么算降级、审批必须绑定什么、fail-closed 的例外边界。
 - [提交与 PR 规范](agents/commit-and-pr-conventions.md)：署名禁令、提交信息格式、scope 词表、本地钩子与 CI 门禁及其已知缺口。
-- [警告与 lint 策略](agents/warning-and-lint-policy.md)：警告必须消除根因、禁止屏蔽手段、存量 78 处债务清单、审批例外与豁免范围。- [RKE2 部署文档](rke2-deployment.md)：RKE2 集群上的部署方式。
+- [警告与 lint 策略](agents/warning-and-lint-policy.md)：警告必须消除根因、禁止屏蔽手段、存量屏蔽债务清单（数量以实测为准）、审批例外与豁免范围。- [RKE2 部署文档](rke2-deployment.md)：RKE2 集群上的部署方式。
 - [NodeControl 对照（E-01）](node-control-mapping.md)：规划 NodeControl 契约与现有 gcloud RPC 的逐条对照。
 - [版本号规划](versioning.md)：组件/协议/来源的版本模型与兼容矩阵入口。
 - [控制面集成计划](zelvik-control-plane-plan.md)：控制面接入的分阶段计划。

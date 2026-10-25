@@ -357,23 +357,21 @@ impl<T: AssetTransport> GeoAgent<T> {
 
 /// Publish the store to the query path and account its bytes.
 fn install_store(store: &std::sync::Arc<GeoStore>) {
-    let (city_bytes, asn_bytes, asn_loaded) = store
+    // The unified MMDB is the only location file; it already contains City,
+    // Country and ASN. Count its bytes once rather than pretending a separate
+    // ASN database exists.
+    let (unified_bytes, asn_loaded) = store
         .current()
         .map(|snapshot| {
-            let city = snapshot
+            let unified = snapshot
                 .manifest()
-                .component(ComponentKind::City)
+                .component(ComponentKind::UnifiedGeo)
                 .map(|c| c.size)
                 .unwrap_or(0);
-            let asn = snapshot
-                .manifest()
-                .component(ComponentKind::Asn)
-                .map(|c| c.size)
-                .unwrap_or(0);
-            (city, asn, snapshot.has_asn())
+            (unified, snapshot.has_asn())
         })
-        .unwrap_or((0, 0, false));
-    crate::metrics::analyzer::install_geo_store(store.clone(), city_bytes, asn_bytes, asn_loaded);
+        .unwrap_or((0, false));
+    crate::metrics::analyzer::install_geo_store(store.clone(), unified_bytes, 0, asn_loaded);
 }
 
 fn components_of(manifest: &BundleManifest) -> Vec<AssetComponent> {
@@ -392,18 +390,14 @@ fn components_of(manifest: &BundleManifest) -> Vec<AssetComponent> {
 /// The wire vocabulary of a component kind (matches the proto enum names).
 pub fn component_kind_str(kind: ComponentKind) -> &'static str {
     match kind {
-        ComponentKind::City => "city",
-        ComponentKind::Asn => "asn",
-        ComponentKind::Country => "country",
+        ComponentKind::UnifiedGeo => "unified_geo",
         ComponentKind::CidrSets => "cidr_sets",
     }
 }
 
 fn asset_kind_wire(kind: &str) -> Result<i32> {
     Ok(match kind {
-        "city" => AssetKind::City as i32,
-        "asn" => AssetKind::Asn as i32,
-        "country" => AssetKind::Country as i32,
+        "unified_geo" => AssetKind::UnifiedGeo as i32,
         "cidr_sets" => AssetKind::CidrSets as i32,
         other => bail!("unknown asset kind {other}"),
     })
@@ -633,8 +627,27 @@ mod tests {
 
     #[test]
     fn asset_kind_wire_is_closed() {
-        assert_eq!(component_kind_str(ComponentKind::City), "city");
+        assert_eq!(component_kind_str(ComponentKind::UnifiedGeo), "unified_geo");
         assert_eq!(component_kind_str(ComponentKind::CidrSets), "cidr_sets");
+        assert_eq!(
+            asset_kind_wire("unified_geo").expect("unified"),
+            AssetKind::UnifiedGeo as i32
+        );
+        assert_eq!(
+            AssetKind::UnifiedGeo as i32,
+            5,
+            "the published proto value must stay stable"
+        );
+        assert_eq!(
+            asset_kind_wire("cidr_sets").expect("cidr"),
+            AssetKind::CidrSets as i32
+        );
+        assert!(
+            asset_kind_wire("city").is_err(),
+            "retired kinds are not aliases"
+        );
+        assert!(asset_kind_wire("asn").is_err());
+        assert!(asset_kind_wire("country").is_err());
         assert!(asset_kind_wire("provider").is_err());
     }
 }

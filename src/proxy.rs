@@ -6445,7 +6445,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
             return Ok(false);
         }
 
-        let key = match crate::rpc::acme::find_acme_key(&self.api_config, token).await {
+        let key = match crate::rpc::acme::find_acme_key(&self.api_config, token, &ctx.host).await {
             crate::rpc::acme::AcmeKeyLookup::Found(key) => key,
             crate::rpc::acme::AcmeKeyLookup::Missing => return Ok(false),
             crate::rpc::acme::AcmeKeyLookup::RpcError(err) => {

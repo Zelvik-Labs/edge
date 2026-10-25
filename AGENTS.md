@@ -1,8 +1,10 @@
 # AGENTS.md
 
 Constraints for AI agents (Claude Code, Codex, Cursor, …) working in this repository.
-Only repository-level rules live here — personal machine or tooling habits (local disk
-headroom, whether a full local build is acceptable, editor and shell config) do not.
+Only repository-level rules live here — personal editor and shell config does not. The
+workspace build-cache policy (a 2026-10-17 user directive, also in the workspace
+`AGENTS.md`) is restated under Build and verification because it constrains this repo's
+commands.
 Rationale, history, and procedures live in [docs/agents/](docs/agents/), and engineering
 background (module map, dependencies, priorities, search patterns) in
 [project-profile.md](docs/agents/project-profile.md).
@@ -59,7 +61,7 @@ cause; for platform or feature conditionals put `#[cfg(...)]` on the item, not o
 `#[expect(lint, reason = "…")]` is the sanctioned form — it errors once the lint stops
 firing. Otherwise record an approved exception in the commit message:
 `Warning-Suppression-Approved: <why the root cause cannot be eliminated>`.
-78 pre-existing sites are not retroactively rewritten, but clear them when you touch a file.
+Pre-existing suppression sites are not retroactively rewritten, but clear them when you touch a file.
 → [warning-and-lint-policy.md](docs/agents/warning-and-lint-policy.md)
 
 ### 6. Commits are attributed to the owner only

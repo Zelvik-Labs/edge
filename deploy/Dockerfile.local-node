@@ -7,6 +7,10 @@
 # Build from repo root:  docker build -f deploy/Dockerfile.edge -t zelvik-edge:2026.1.08.0 .
 FROM rust:1.99-bookworm AS builder
 WORKDIR /build
+# One Rust build slot on the development host: two codegen jobs by default,
+# overridable for a release-style build. The BuildKit target cache below is
+# what keeps rebuilds incremental; job count must not be raised implicitly.
+ARG CARGO_BUILD_JOBS=2
 # Build-script dependencies of the vendored C libraries, each one found by an
 # actual failed build rather than guessed:
 #   cmake   libz-ng-sys configures the bundled zlib-ng through the cmake crate
@@ -57,7 +61,9 @@ COPY benches ./benches
 COPY tests ./tests
 # 本机镜像：私有 git 依赖 patch 成本地 protocol 检出；zelvik-geo-runtime 是
 # ../dns 的相对路径依赖，故把 dns 仓作为额外构建上下文放进 /dns。
-COPY --from=protocol . /protocol
+COPY --from=protocol proto /protocol/proto
+COPY --from=protocol suite/rust/Cargo.toml suite/rust/build.rs /protocol/suite/rust/
+COPY --from=protocol suite/rust/src /protocol/suite/rust/src
 COPY --from=dns crates/zelvik-geo-runtime /dns/crates/zelvik-geo-runtime
 RUN printf '%s\n' \
     '[patch."https://github.com/Zelvik-Labs/protocol"]' \
@@ -69,7 +75,7 @@ RUN printf '%s\n' \
 # not part of the layer.
 RUN --mount=type=cache,target=/build/target,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-    CARGO_BUILD_JOBS=3 cargo build --release \
+    CARGO_BUILD_JOBS="$CARGO_BUILD_JOBS" cargo build --release \
     && cp target/release/Zelvik-Edge /build/Zelvik-Edge
 
 FROM debian:bookworm-slim AS runtime

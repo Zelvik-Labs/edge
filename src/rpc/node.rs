@@ -1536,6 +1536,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
                    "runtimeDir": crate::paths::NodePaths::current().runtime_root(),
                    "buildVersionCode": build_version_code(),
                    "configVersion": config_store.get_config_version().await,
+                   "certificateBindings": crate::ssl::loaded_certificate_bindings(),
                    "os": std::env::consts::OS,
                    "arch": std::env::consts::ARCH,
                    "hostname": hostname,

@@ -29,8 +29,8 @@
 （6 个 `#[allow(clippy::too_many_arguments)]`、1 个 `#[allow(unused_mut)]`、
 以及 `vendor/libinjectionrs` 的 crate 级屏蔽）。警告消失了，问题没有。
 
-存量屏蔽一共 **78 处**：`#[allow(...)]` 43、`cfg_attr(..., allow(...))` 33、
-`#![allow(...)]` 2。其中一部分确实掩盖了真问题：
+存量屏蔽以实测为准（2026-10-25 统计 `src/` + `crates/`、不含 vendored：`#[allow(...)]` 29、
+`cfg_attr(..., allow(...))` 4、`#![allow(...)]` 2）。其中一部分确实掩盖了真问题：
 
 - **`src/proxy.rs:355` `proxy_protocol_ip`** —— `#[allow(dead_code)]` 挂在它上面，
   注释写着"Set by `maybe_consume_proxy_protocol_header` when wired through"。
@@ -58,7 +58,7 @@
 
 ## 存量债务
 
-存量 78 处**不追溯**，同署名禁令的处理方式：已合入的代码不为了合规而重写。
+存量屏蔽**不追溯**，同署名禁令的处理方式：已合入的代码不为了合规而重写。
 但它们是一份待清偿的清单——触碰某个文件时顺手清掉该文件的屏蔽是受欢迎的，
 专门开一个清偿提交更好。
 
@@ -93,9 +93,9 @@ Warning-Suppression-Approved: <理由，说明为什么无法消除根因>
 | 层 | 位置 |
 | --- | --- |
 | 脚本 | `scripts/git-hooks/check-suppression.sh` |
-| CI | `.github/workflows/commit-hygiene.yml` 的 `no-new-suppression` job |
+| CI（手动） | `.github/workflows/commit-hygiene.yml` 的 `no-new-suppression` job——该流水线只接受 `workflow_dispatch`，不随 push/PR 自动运行 |
 
-只检查 diff 里**新增**的行，所以存量 78 处不会让 CI 变红。
+只检查 diff 里**新增**的行，所以存量屏蔽不会让 CI 变红。
 手工复核：
 
 ```bash
