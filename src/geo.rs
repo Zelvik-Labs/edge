@@ -192,9 +192,6 @@ impl<T: AssetTransport> GeoAgent<T> {
 
     /// One reconciliation pass.
     pub async fn run_once(&mut self) -> Result<GeoReconcileReport> {
-        if self.trust.is_empty() {
-            bail!("no distribution key is pinned; refusing to trust any geo bundle");
-        }
         let response = self
             .transport
             .get_asset_manifest(self.store.generation())
@@ -207,7 +204,31 @@ impl<T: AssetTransport> GeoAgent<T> {
                 ..Default::default()
             });
         }
-        let manifest = self.verify_manifest(&response)?;
+        let manifest = match self.verify_manifest(&response) {
+            Ok(manifest) => manifest,
+            Err(err) => {
+                // The response identifies the target even when its manifest is
+                // untrusted. A failed ACK reports no component or activation facts.
+                if let Err(ack_err) = self
+                    .ack(AssetAck {
+                        bundle_id: response.bundle_id.clone(),
+                        generation: response.generation,
+                        components: Vec::new(),
+                        state: AssetAckState::Failed,
+                        error: err.to_string(),
+                    })
+                    .await
+                {
+                    warn!(
+                        bundle_id = %response.bundle_id,
+                        generation = response.generation,
+                        error = %ack_err,
+                        "failed asset acknowledgement could not be delivered"
+                    );
+                }
+                return Err(err);
+            }
+        };
         let components = components_of(&manifest);
 
         // A previous pass may have activated the bundle but failed to deliver
@@ -287,6 +308,12 @@ impl<T: AssetTransport> GeoAgent<T> {
     }
 
     fn verify_manifest(&self, response: &AssetManifestResponse) -> Result<BundleManifest> {
+        if self.trust.is_empty() {
+            bail!("geo.trust_keys_missing");
+        }
+        if !self.trust.keys.contains_key(&response.signing_key_id) {
+            bail!("geo.signing_key_untrusted");
+        }
         if response.manifest_json.is_empty() {
             bail!("asset manifest is empty");
         }
@@ -302,10 +329,7 @@ impl<T: AssetTransport> GeoAgent<T> {
             .trust
             .verify(&response.signing_key_id, &canonical, &response.signature)
         {
-            bail!(
-                "bundle manifest signature did not verify for signing key {}",
-                response.signing_key_id
-            );
+            bail!("geo.signature_invalid");
         }
         if !manifest.verify_digest() {
             bail!("bundle manifest digest mismatch");

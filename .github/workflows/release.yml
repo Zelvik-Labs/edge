@@ -1,115 +1,114 @@
+# Tag-driven Edge release.
+#
+# A v* tag publishes one immutable release: the GitHub Release carries the five
+# verified CPU-variant packages (not just the TOA source archives), GHCR carries
+# a linux/amd64+x86-64-v2 and linux/arm64-generic image assembled from those
+# same binaries, and release-manifest.json joins all of it to the tag commit for
+# the license backend to pull. There is no license-portal prepare/upload/promote
+# step and no portal admin credential.
+#
+# All jobs use GitHub-hosted Ubuntu runners. The private dns dependency is
+# checked out at one pinned commit (never main) and protocol is authenticated by
+# PROTOCOL_DEPLOY_KEY or PROTOCOL_APP_TOKEN; a missing secret fails loudly
+# before any build.
 name: Release
 
-# Stable tags publish automatically. A manual dispatch may rebuild an immutable
-# tag from the fixed workflow on main (source_ref) and publish only when the
-# publish input is true. Beta/rc tags are rejected before any portal write.
-
 on:
-  workflow_dispatch:
-    inputs:
-      source_ref:
-        description: "Immutable tag to build, e.g. v26.10.3.1 (empty = dispatched commit; publishing requires a tag)"
-        required: false
-        default: ""
-      publish:
-        description: "Upload packages to license.zelvik.net and promote the stable channel"
-        required: true
-        default: false
-        type: boolean
   push:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
 concurrency:
-  group: release-${{ inputs.source_ref || github.ref_name }}
+  group: release-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  # Resolve the one source commit this run may publish. The workflow/scripts
-  # come from the dispatched revision (main for a retry); the product source
-  # comes from the immutable tag. A tag is never moved and a branch commit is
-  # never presented as a release commit.
   prepare:
-    name: Resolve immutable source
+    name: Resolve tag and credentials
     runs-on: ubuntu-22.04
     timeout-minutes: 15
-    permissions:
-      contents: read
     outputs:
-      publish: ${{ steps.resolve.outputs.publish }}
+      tag: ${{ steps.resolve.outputs.tag }}
       version: ${{ steps.resolve.outputs.version }}
+      suite_version: ${{ steps.resolve.outputs.suite_version }}
       source_commit: ${{ steps.resolve.outputs.source_commit }}
-      release_tag: ${{ steps.resolve.outputs.release_tag }}
-      release_id: ${{ steps.resolve.outputs.release_id }}
-    env:
-      PORTAL_URL: ${{ vars.ZELVIK_PORTAL_URL || 'https://license.zelvik.net' }}
-      PORTAL_ADMIN_USER: ${{ secrets.ZELVIK_PORTAL_ADMIN_USER }}
-      PORTAL_ADMIN_PASSWORD: ${{ secrets.ZELVIK_PORTAL_ADMIN_PASSWORD }}
     steps:
-      - name: Checkout pipeline
+      - name: Checkout source tag
         uses: actions/checkout@v5
         with:
-          path: pipeline
-          fetch-depth: 1
-
-      - name: Checkout source ref
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.source_ref || github.sha }}
-          path: source
+          ref: ${{ github.ref }}
           fetch-depth: 0
+
+      # Fail before any build with the exact missing secret. Protocol accepts
+      # either the existing read-only deploy key or an App token; the private
+      # dns dependency always needs its own deploy key.
+      - name: Require private dependency credentials
+        shell: bash
+        env:
+          ZELVIK_DNS_DEPLOY_KEY: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
+          PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
+          PROTOCOL_APP_TOKEN: ${{ secrets.PROTOCOL_APP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ZELVIK_DNS_DEPLOY_KEY:-}" ]; then
+            echo "::error::ZELVIK_DNS_DEPLOY_KEY is not configured; the pinned private dns dependency cannot be checked out." >&2
+            exit 1
+          fi
+          if [ -z "${PROTOCOL_DEPLOY_KEY:-}" ] && [ -z "${PROTOCOL_APP_TOKEN:-}" ]; then
+            echo "::error::Neither PROTOCOL_DEPLOY_KEY nor PROTOCOL_APP_TOKEN is configured; github.com/Zelvik-Labs/protocol cannot be fetched." >&2
+            exit 1
+          fi
+
+      - name: Test release tooling
+        shell: bash
+        run: python3 scripts/test-release-manifest.py
 
       - name: Resolve tag, version and source commit
         id: resolve
         shell: bash
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          DISPATCH_PUBLISH: ${{ inputs.publish }}
-          DISPATCH_SOURCE_REF: ${{ inputs.source_ref }}
-          PUSH_TAG: ${{ github.ref_name }}
+          TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          cd source
-          PUBLISH=false
-          RELEASE_ID=""
-          TAG=""
+          case "${TAG}" in
+            v*) ;;
+            *) echo "::error::${TAG} is not a v* release tag" >&2; exit 1 ;;
+          esac
           COMMIT="$(git rev-parse HEAD)"
-          if [ "${EVENT_NAME}" = "push" ]; then
-            TAG="${PUSH_TAG}"
-            PUBLISH=true
-          else
-            if [ "${DISPATCH_PUBLISH:-false}" = "true" ]; then
-              PUBLISH=true
-            fi
-            if [ -n "${DISPATCH_SOURCE_REF}" ]; then
-              TAG="${DISPATCH_SOURCE_REF#refs/tags/}"
-            fi
+          TAG_COMMIT="$(git rev-parse --verify "refs/tags/${TAG}^{commit}")" || {
+            echo "::error::${TAG} is not a tag in this checkout" >&2; exit 1;
+          }
+          [ "${TAG_COMMIT}" = "${COMMIT}" ] || {
+            echo "::error::tag ${TAG} points at ${TAG_COMMIT}, but checkout is ${COMMIT}" >&2
+            exit 1
+          }
+
+          # The product version is the tag, not a workflow literal. Cargo keeps
+          # its three-segment package version; the optional fourth CalVer patch
+          # segment exists only in the tag/product version.
+          VERSION="${TAG#v}"
+          CARGO_VERSION="$(bash scripts/release-version.sh --cargo-version)"
+          if ! printf '%s' "${CARGO_VERSION}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Cargo.toml version ${CARGO_VERSION} must stay exactly three numeric segments" >&2
+            exit 1
           fi
-          if [ "${PUBLISH}" = "true" ]; then
-            [ -n "${TAG}" ] || { echo "::error::publish=true requires source_ref to be an immutable tag" >&2; exit 1; }
-            case "${TAG}" in
-              v*) ;;
-              *) echo "::error::source_ref ${TAG} is not a v* release tag" >&2; exit 1 ;;
-            esac
-            TAG_COMMIT="$(git rev-parse --verify "refs/tags/${TAG}^{commit}")" || {
-              echo "::error::source_ref ${TAG} is not a tag in the source checkout" >&2; exit 1;
-            }
-            [ "${TAG_COMMIT}" = "${COMMIT}" ] || {
-              echo "::error::tag ${TAG} points at ${TAG_COMMIT}, but checkout is ${COMMIT}" >&2; exit 1;
-            }
-            VERSION="$(bash scripts/release-version.sh --print)"
-            python3 "${GITHUB_WORKSPACE}/pipeline/scripts/portal-publish.py" prepare               --tag "${TAG}" --source-commit "${COMMIT}" --version "${VERSION}"
-            RELEASE_ID="$(sed -n 's/^release_id=//p' "${GITHUB_OUTPUT}" | tail -1)"
-          else
-            VERSION="$(bash scripts/release-version.sh --print)"
-            echo "::notice::validation-only dispatch: no portal upload or promotion"
-          fi
-          echo "publish=${PUBLISH}" >> "${GITHUB_OUTPUT}"
-          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
-          echo "source_commit=${COMMIT}" >> "${GITHUB_OUTPUT}"
-          echo "release_tag=${TAG}" >> "${GITHUB_OUTPUT}"
-          echo "release_id=${RELEASE_ID}" >> "${GITHUB_OUTPUT}"
-          echo "source=${COMMIT} tag=${TAG} version=${VERSION} publish=${PUBLISH}"
+          MANIFEST_VERSION="$(bash scripts/release-version.sh --print)"
+          [ "${MANIFEST_VERSION}" = "${VERSION}" ] || {
+            echo "::error::tag version ${VERSION} != VERSION-MANIFEST.toml product_version ${MANIFEST_VERSION}; update the manifest before tagging" >&2
+            exit 1
+          }
+          SUITE_VERSION="$(printf '%s' "${VERSION}" | cut -d. -f1-2)"
+
+          {
+            echo "tag=${TAG}"
+            echo "version=${VERSION}"
+            echo "suite_version=${SUITE_VERSION}"
+            echo "source_commit=${COMMIT}"
+          } >> "${GITHUB_OUTPUT}"
+          echo "source=${COMMIT} tag=${TAG} version=${VERSION} suite=${SUITE_VERSION}"
 
   # One eBPF build for the whole release. Every leg downloads the exact bytes
   # whose SHA256 was verified here, so build.rs embeds the packaged object and
@@ -120,10 +119,10 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     outputs:
-      publish: ${{ needs.prepare.outputs.publish }}
+      tag: ${{ needs.prepare.outputs.tag }}
       version: ${{ needs.prepare.outputs.version }}
+      suite_version: ${{ needs.prepare.outputs.suite_version }}
       source_commit: ${{ needs.prepare.outputs.source_commit }}
-      release_tag: ${{ needs.prepare.outputs.release_tag }}
     steps:
       - name: Checkout source commit
         uses: actions/checkout@v5
@@ -132,7 +131,7 @@ jobs:
           fetch-depth: 1
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.99.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Build XDP eBPF Object
         shell: bash
@@ -180,21 +179,16 @@ jobs:
     # same directory under set -u; a step-local env would be unbound later.
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target/${{ matrix.name }}
-      PIPELINE_DIR: ${{ github.workspace }}/.ci-pipeline
       # Fetch private git dependencies through the git CLI. cargo's libgit2
-      # backend ignores the ~/.ssh/config host aliases that pin one deploy key
-      # per repository, which is why the protocol dependency authenticated as the
-      # wrong key and failed with "Repository not found"; the CLI honours them.
+      # backend ignores the URL rewrites installed by the credential steps.
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Five independent legs, one runner each. Asset names are the正式
+          # Five independent legs, one runner each. Asset names are the official
           # release names the bootstrap and license site already expect; a
-          # patch release must not rename them. The version travels in the
-          # release directory, the package metadata, the packaged VERSION file
-          # and the binary itself.
+          # patch release must not rename them.
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-22.04
             cpu: x86-64-v2
@@ -259,39 +253,29 @@ jobs:
           ref: ${{ needs.ebpf.outputs.source_commit }}
           fetch-depth: 1
 
-      # The publishing tool belongs to the workflow revision (main for a retry),
-      # not to the immutable product tag: that is how a fixed publish path can
-      # retry the same tag without moving it or rebuilding a different commit.
-      - name: Checkout pipeline scripts
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.sha }}
-          path: .ci-pipeline
-          fetch-depth: 1
-
-      # The product version is never written in this workflow: it is resolved
-      # from VERSION-MANIFEST.toml and exported to every later step, so the CLI
-      # --version, the registration report, install.sh and the package name all
-      # come from one value.
+      # Product version comes from the tag, already validated against
+      # VERSION-MANIFEST.toml by the prepare job. The existing consistency and
+      # packaging tests still run before the expensive build.
       - name: Resolve and check product version
         shell: bash
+        env:
+          VERSION: ${{ needs.ebpf.outputs.version }}
         run: |
           set -euo pipefail
           bash scripts/check-version-consistency.sh
           bash scripts/test-release-packaging.sh
-          VERSION="$(bash scripts/release-version.sh --print)"
-          echo "ZELVIK_RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "product version: $VERSION"
+          echo "ZELVIK_RELEASE_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "product version: ${VERSION}"
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.99.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           targets: ${{ matrix.target }}
 
       - name: Normalize Rust Toolchains
         shell: bash
         env:
-          RELEASE_RUST_VERSION: "1.99.0"
+          RELEASE_RUST_VERSION: "1.99.1"
         run: |
           set -euo pipefail
 
@@ -315,7 +299,7 @@ jobs:
 
           rustup toolchain list --quiet
 
-      - name: Install dependencies & Cross-Linkers
+      - name: Install dependencies
         timeout-minutes: 15
         shell: bash
         run: |
@@ -394,62 +378,61 @@ jobs:
           echo "shared eBPF sha256: $(cat ebpf-out/sha256.txt)"
 
       # zelvik-geo-runtime lives in the private dns repo and is referenced as
-      # ../dns/crates/zelvik-geo-runtime; zelvik-suite is a private cargo git
-      # dependency. An open-source repo must still build from a clean checkout,
-      # so CI materialises the sibling path and authenticates the git
-      # dependency; without the secrets the step fails loudly instead of
-      # producing a package that cannot be reproduced.
-      #
-      # One key per repository, pinned by an SSH host alias (IdentitiesOnly) plus
-      # a URL rewrite. A shared ssh-agent is the wrong shape here: GitHub accepts
-      # whichever valid deploy key it is offered first, and a key registered for
-      # another repository then authenticates without access to this one —
-      # run 39603222428 failed exactly that way ("Repository not found" with both
-      # keys in one agent), so cargo must never be able to offer the dns key for
-      # the protocol repository.
-      - name: Checkout private dependencies (dns, protocol)
+      # ../dns/crates/zelvik-geo-runtime. It is pinned to the known commit
+      # below, never cloned from main: a moving dependency would make the same
+      # tag rebuild a different tree.
+      - name: Checkout pinned private dns dependency
+        uses: actions/checkout@v5
+        with:
+          repository: Zelvik-Labs/dns
+          ref: aca0f3bb61bc498682b10900b4886709a2c248b8
+          ssh-key: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
+          persist-credentials: false
+          path: .ci/dns
+
+      - name: Link sibling geo runtime path
         shell: bash
-        env:
-          DNS_DEPLOY_KEY: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
-          PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
         run: |
           set -euo pipefail
-          if [ -z "$DNS_DEPLOY_KEY" ]; then
-            echo "::error::ZELVIK_DNS_DEPLOY_KEY is not configured; zelvik-geo-runtime cannot be resolved" >&2
-            exit 1
-          fi
-          if [ -z "$PROTOCOL_DEPLOY_KEY" ]; then
-            echo "::error::PROTOCOL_DEPLOY_KEY is not configured; zelvik-suite git dependency cannot be fetched" >&2
-            exit 1
-          fi
-          install -d -m 0700 ~/.ssh
-          printf "%s\n" "$DNS_DEPLOY_KEY" > ~/.ssh/id_ed25519_dns
-          printf "%s\n" "$PROTOCOL_DEPLOY_KEY" > ~/.ssh/id_ed25519_protocol
-          chmod 0600 ~/.ssh/id_ed25519_dns ~/.ssh/id_ed25519_protocol
-          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-          cat > ~/.ssh/config <<'SSH_CONFIG'
-          Host zelvik-dns
-            HostName github.com
-            User git
-            IdentityFile ~/.ssh/id_ed25519_dns
-            IdentitiesOnly yes
-
-          Host zelvik-protocol
-            HostName github.com
-            User git
-            IdentityFile ~/.ssh/id_ed25519_protocol
-            IdentitiesOnly yes
-          SSH_CONFIG
-          chmod 0600 ~/.ssh/config
-          # Cargo resolves zelvik-suite from https://github.com/Zelvik-Labs/protocol;
-          # rewrite that URL to the alias whose only identity is the protocol key.
-          git config --global --add url."git@zelvik-protocol:Zelvik-Labs/protocol".insteadOf "https://github.com/Zelvik-Labs/protocol"
-          git config --global --add url."git@zelvik-protocol:Zelvik-Labs/protocol".insteadOf "git@github.com:Zelvik-Labs/protocol"
-          # Both keys must reach their own repository before a build depends on them.
-          git ls-remote git@zelvik-dns:Zelvik-Labs/dns.git HEAD > /dev/null
-          git ls-remote git@zelvik-protocol:Zelvik-Labs/protocol.git HEAD > /dev/null
           rm -rf "$GITHUB_WORKSPACE/../dns"
-          git clone --depth 1 git@zelvik-dns:Zelvik-Labs/dns.git "$GITHUB_WORKSPACE/../dns"
+          ln -s "$GITHUB_WORKSPACE/.ci/dns" "$GITHUB_WORKSPACE/../dns"
+          test -d "$GITHUB_WORKSPACE/../dns/crates/zelvik-geo-runtime"
+
+      # The private protocol dependency is authenticated by exactly one of the
+      # existing read-only deploy key or an App token. No personal token and no
+      # "best effort" fallback is allowed: without either, this fails red.
+      - name: Configure private protocol credentials
+        shell: bash
+        env:
+          PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
+          PROTOCOL_APP_TOKEN: ${{ secrets.PROTOCOL_APP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${PROTOCOL_DEPLOY_KEY:-}" ]; then
+            key="$RUNNER_TEMP/protocol_deploy_key"
+            install -m 600 /dev/null "$key"
+            printf '%s\n' "$PROTOCOL_DEPLOY_KEY" > "$key"
+            curl -fsSL https://api.github.com/meta \
+              | grep -oE '"ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+"' \
+              | tr -d '"' | sed 's/^/github.com /' > "$RUNNER_TEMP/known_hosts"
+            {
+              echo "GIT_SSH_COMMAND=ssh -i $key -o IdentitiesOnly=yes -o BatchMode=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+              echo "GIT_CONFIG_COUNT=1"
+              echo "GIT_CONFIG_KEY_0=url.git@github.com:Zelvik-Labs/protocol.insteadOf"
+              echo "GIT_CONFIG_VALUE_0=https://github.com/Zelvik-Labs/protocol"
+            } >> "$GITHUB_ENV"
+          elif [ -n "${PROTOCOL_APP_TOKEN:-}" ]; then
+            git config --global \
+              url."https://x-access-token:${PROTOCOL_APP_TOKEN}@github.com/Zelvik-Labs/protocol".insteadOf \
+              "https://github.com/Zelvik-Labs/protocol"
+            git config --global \
+              url."https://x-access-token:${PROTOCOL_APP_TOKEN}@github.com/Zelvik-Labs/protocol".insteadOf \
+              "git@github.com:Zelvik-Labs/protocol"
+            echo "GIT_TERMINAL_PROMPT=0" >> "$GITHUB_ENV"
+          else
+            echo "::error::Neither PROTOCOL_DEPLOY_KEY nor PROTOCOL_APP_TOKEN is configured; protocol cannot be fetched." >&2
+            exit 1
+          fi
 
       - name: Cargo dependency source cache
         uses: actions/cache@v4
@@ -469,11 +452,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: target/${{ matrix.name }}
-          key: release-target-v1-${{ matrix.cache_key }}-${{ matrix.target }}-rust1.99.0-${{ hashFiles('Cargo.lock') }}
+          key: release-target-v1-${{ matrix.cache_key }}-${{ matrix.target }}-rust1.99.1-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            release-target-v1-${{ matrix.cache_key }}-${{ matrix.target }}-rust1.99.0-
-
-
+            release-target-v1-${{ matrix.cache_key }}-${{ matrix.target }}-rust1.99.1-
 
       - name: Build
         shell: bash
@@ -482,10 +463,10 @@ jobs:
           CXXFLAGS: ${{ matrix.cxxflags }}
           CFLAGS: ${{ matrix.cxxflags }}
           ZELVIK_EDGE_XDP_EBPF_SOURCE: ebpf-out/zelvik-edge-xdp-ebpf.o
-          ZELVIK_RELEASE_VERSION: ${{ env.ZELVIK_RELEASE_VERSION }}
         run: |
           set -euo pipefail
-          export ZELVIK_EDGE_XDP_EBPF_SHA256="$(cat ebpf-out/sha256.txt)"
+          ZELVIK_EDGE_XDP_EBPF_SHA256="$(cat ebpf-out/sha256.txt)"
+          export ZELVIK_EDGE_XDP_EBPF_SHA256
           # Use native tools on the arm64 runners. The prefixed cross compiler
           # is installed only when building ARM on an x86_64 host.
           if [ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]; then
@@ -631,125 +612,160 @@ jobs:
           # machine; this script must not pretend otherwise.
           bash scripts/verify-release-package.sh "${PACKAGE_NAME}.tar.gz" --expect-version "$VERSION"
 
-      # Binary packages go straight to the authenticated license portal. The
-      # matrix never uploads the package itself as an Actions artifact; only the
-      # small receipt is shared with the publish job.
-      - name: Upload package to license portal
-        if: needs.ebpf.outputs.publish == 'true'
-        shell: bash
-        env:
-          PORTAL_URL: ${{ vars.ZELVIK_PORTAL_URL || 'https://license.zelvik.net' }}
-          PORTAL_ADMIN_USER: ${{ secrets.ZELVIK_PORTAL_ADMIN_USER }}
-          PORTAL_ADMIN_PASSWORD: ${{ secrets.ZELVIK_PORTAL_ADMIN_PASSWORD }}
-        run: |
-          set -euo pipefail
-          VERSION="${ZELVIK_RELEASE_VERSION:?product version must be resolved before upload}"
-          python3 "${PIPELINE_DIR}/scripts/portal-publish.py" upload \
-            --package "Zelvik-Edge-${{ matrix.name }}.tar.gz" \
-            --version "${VERSION}" \
-            --source-commit "${{ needs.ebpf.outputs.source_commit }}" \
-            --receipt-dir receipts
-
-      - name: Upload release receipt
-        if: needs.ebpf.outputs.publish == 'true'
+      - name: Upload release package
         uses: actions/upload-artifact@v4
         with:
-          name: receipt-${{ matrix.name }}
-          path: receipts
+          name: package-${{ matrix.name }}
+          path: Zelvik-Edge-${{ matrix.name }}.tar.gz
           if-no-files-found: error
           retention-days: 3
 
   release:
-    name: Create Release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs:
-      - build
+    name: Publish GitHub Release, image and manifest
+    needs: [prepare, build]
     runs-on: ubuntu-22.04
+    timeout-minutes: 60
     permissions:
       contents: write
+      packages: write
     steps:
-      - name: Checkout code
+      - name: Checkout source commit
         uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.source_commit }}
+          fetch-depth: 1
 
-      - name: Download All Artifacts
+      - name: Download all release packages
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          pattern: package-*
+          path: release
+          merge-multiple: true
 
-      - name: Prepare Release Notes
+      - name: Verify package set and versions
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          for name in linux-x64-v2-sse4.2 linux-x64-v3-avx2 linux-x64-v4-avx512 linux-arm64-generic linux-arm64-neoverse-n1; do
+            pkg="release/Zelvik-Edge-${name}.tar.gz"
+            test -s "$pkg" || { echo "::error::missing ${pkg}" >&2; exit 1; }
+            packaged_version="$(tar -xOzf "$pkg" VERSION)"
+            [ "$packaged_version" = "$VERSION" ] || {
+              echo "::error::${pkg} reports version ${packaged_version}, expected ${VERSION}" >&2
+              exit 1
+            }
+          done
+
+      # The image reuses the exact binaries from the verified packages. Only
+      # the x64-v2 and arm64-generic legs are the documented defaults; the
+      # other three variants remain archive-only.
+      - name: Assemble image context from verified packages
         shell: bash
         run: |
-          mkdir -p .github/release-body
-          RELEASE_NOTE="release-notes/${GITHUB_REF_NAME}.md"
-          if [ ! -f "$RELEASE_NOTE" ] && [[ "$GITHUB_REF_NAME" == v* ]]; then
-            RELEASE_NOTE="release-notes/${GITHUB_REF_NAME#v}.md"
-          fi
-          if [ -f "$RELEASE_NOTE" ]; then
-            cp "$RELEASE_NOTE" .github/release-body/body.md
+          set -euo pipefail
+          mkdir -p docker-context/amd64 docker-context/arm64
+          tar -xOzf release/Zelvik-Edge-linux-x64-v2-sse4.2.tar.gz zelvik-edge > docker-context/amd64/zelvik-edge
+          tar -xOzf release/Zelvik-Edge-linux-arm64-generic.tar.gz zelvik-edge > docker-context/arm64/zelvik-edge
+          chmod 0755 docker-context/amd64/zelvik-edge docker-context/arm64/zelvik-edge
+          test "$(sha256sum docker-context/amd64/zelvik-edge | awk '{print $1}')" = \
+            "$(tar -xOzf release/Zelvik-Edge-linux-x64-v2-sse4.2.tar.gz BUILD-METADATA.txt | sed -n 's/^binary_sha256=//p')"
+          test "$(sha256sum docker-context/arm64/zelvik-edge | awk '{print $1}')" = \
+            "$(tar -xOzf release/Zelvik-Edge-linux-arm64-generic.tar.gz BUILD-METADATA.txt | sed -n 's/^binary_sha256=//p')"
+          cp docker/Dockerfile.zelvik-edge docker-context/Dockerfile
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # No Rust toolchain here: the Dockerfile copies the packaged binaries.
+      # The multi-arch index is the default image; x64-v2 is the fleet floor and
+      # arm64 generic avoids a SIGILL on older ARM hosts.
+      - name: Build and push image
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ github.workspace }}/docker-context
+          file: ${{ github.workspace }}/docker-context/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/zelvik-labs/zelvik-edge:${{ needs.prepare.outputs.version }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.source_commit }}
+
+      - name: Write release manifest
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "${IMAGE_DIGEST:?build-push-action returned no image digest}"
+          python3 scripts/release_manifest.py \
+            --repository "${{ github.repository }}" \
+            --tag "${{ needs.prepare.outputs.tag }}" \
+            --version "${VERSION}" \
+            --source-commit "${{ needs.prepare.outputs.source_commit }}" \
+            --component Zelvik-Edge \
+            --assets release/Zelvik-Edge-*.tar.gz \
+            --image "Zelvik-Edge=ghcr.io/zelvik-labs/zelvik-edge:${VERSION}@${IMAGE_DIGEST}" \
+            --output release/release-manifest.json
+
+      - name: Prepare release notes
+        shell: bash
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          IMAGE: ghcr.io/zelvik-labs/zelvik-edge:${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          note="release-notes/${TAG}.md"
+          if [ -f "$note" ]; then
+            cp "$note" release-body.md
           else
             {
-              echo "# ${GITHUB_REF_NAME}"
+              echo "# ${TAG}"
               echo
-              echo "未找到对应的发布说明文件：release-notes/${GITHUB_REF_NAME}.md 或 release-notes/${GITHUB_REF_NAME#v}.md"
-            } > .github/release-body/body.md
+              echo "Zelvik-Edge ${VERSION}"
+              echo
+              echo "Container image: \`${IMAGE}\`"
+              echo
+              echo "See \`release-manifest.json\` for package hashes and the image digest."
+            } > release-body.md
           fi
 
-      - name: Package TOA Sources
+      # The TOA trees stay attached, but the release is no longer source-only:
+      # the five binary packages and the manifest are the primary assets.
+      - name: Package TOA sources
         shell: bash
         run: |
-          tar -czf zelvik-edge-toa-main-source.tar.gz toa-main
-          tar -czf zelvik-edge-toa-sender-source.tar.gz toa-sender
+          set -euo pipefail
+          tar -czf release/zelvik-edge-toa-main-source.tar.gz toa-main
+          tar -czf release/zelvik-edge-toa-sender-source.tar.gz toa-sender
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          body_path: .github/release-body/body.md
-          # Stable only. prepare rejects rc/beta/alpha tags before this job runs;
-          # this flag must never turn a release into a prerelease.
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: ${{ needs.prepare.outputs.tag }}
+          body_path: release-body.md
           prerelease: false
-          # Only source archives are attached. Binary packages are distributed
-          # exclusively by license.zelvik.net and must never bypass its auth.
           files: |
-            zelvik-edge-toa-main-source.tar.gz
-            zelvik-edge-toa-sender-source.tar.gz
+            release/Zelvik-Edge-*.tar.gz
+            release/zelvik-edge-toa-main-source.tar.gz
+            release/zelvik-edge-toa-sender-source.tar.gz
+            release/release-manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Promotion is a separate job from the upload: it must see exactly the five
-  # receipts, re-check the portal metadata AND the bytes actually downloaded
-  # over authenticated HTTP, and only then move the stable channel. A missing
-  # receipt, a duplicate, a 0-file release or a digest mismatch fails red and
-  # never calls set-latest.
-  publish:
-    name: Verify receipts and promote stable
-    if: needs.prepare.outputs.publish == 'true'
-    needs: [prepare, build]
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
-    env:
-      PORTAL_URL: ${{ vars.ZELVIK_PORTAL_URL || 'https://license.zelvik.net' }}
-      PORTAL_ADMIN_USER: ${{ secrets.ZELVIK_PORTAL_ADMIN_USER }}
-      PORTAL_ADMIN_PASSWORD: ${{ secrets.ZELVIK_PORTAL_ADMIN_PASSWORD }}
-      PORTAL_UPDATE_KEY: ${{ secrets.ZELVIK_PORTAL_UPDATE_KEY }}
-    steps:
-      - name: Checkout pipeline scripts
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 1
-
-      - name: Download release receipts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: receipt-*
-          path: receipts
-          merge-multiple: true
-
-      - name: Promote stable only after five verified downloads
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/portal-publish.py promote \
-            --receipts receipts \
-            --version "${{ needs.prepare.outputs.version }}" \
-            --source-commit "${{ needs.prepare.outputs.source_commit }}"

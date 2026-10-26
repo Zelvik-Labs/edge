@@ -80,7 +80,7 @@ async fn shared_certificate_ocsp_is_per_site_and_toggle_keeps_staple() {
         "id":17,"isOn":true,"isDefault":true,"ocsp":true,
         "certData":include_str!("../pingora-main/pingora-core/examples/keys/server/cert.pem"),
         "keyData":include_str!("../pingora-main/pingora-core/examples/keys/server/key.pem"),
-        "dnsNames":["a.example","b.example"]
+        "dnsNames":["a.openrusty.org","b.openrusty.org"]
     }))
     .unwrap();
     let make_server = |host: &str, enabled: bool| {
@@ -94,8 +94,8 @@ async fn shared_certificate_ocsp_is_per_site_and_toggle_keeps_staple() {
         &selector,
         std::slice::from_ref(&cert),
         &[
-            make_server("a.example", true),
-            make_server("b.example", false),
+            make_server("a.openrusty.org", true),
+            make_server("b.openrusty.org", false),
         ],
     )
     .await;
@@ -105,31 +105,31 @@ async fn shared_certificate_ocsp_is_per_site_and_toggle_keeps_staple() {
         .unwrap();
     assert_eq!(
         selector
-            .resolve_certified_key_for_host("a.example")
+            .resolve_certified_key_for_host("a.openrusty.org")
             .unwrap()
             .ocsp,
         Some(vec![1, 2, 3])
     );
     assert!(
         selector
-            .resolve_certified_key_for_host("b.example")
+            .resolve_certified_key_for_host("b.openrusty.org")
             .unwrap()
             .ocsp
             .is_none()
     );
     assert!(
         selector
-            .export_pair_pem_for_host("b.example")
+            .export_pair_pem_for_host("b.openrusty.org")
             .unwrap()
             .2
             .is_empty()
     );
     let mut disabled = cert.clone();
     disabled.ocsp = false;
-    sync_certs_for_servers(&selector, &[disabled], &[make_server("a.example", false)]).await;
+    sync_certs_for_servers(&selector, &[disabled], &[make_server("a.openrusty.org", false)]).await;
     assert!(
         selector
-            .resolve_certified_key_for_host("a.example")
+            .resolve_certified_key_for_host("a.openrusty.org")
             .unwrap()
             .ocsp
             .is_none()
@@ -137,7 +137,7 @@ async fn shared_certificate_ocsp_is_per_site_and_toggle_keeps_staple() {
     sync_certs_for_servers(&selector, &[cert], &[]).await;
     assert_eq!(
         selector
-            .resolve_certified_key_for_host("a.example")
+            .resolve_certified_key_for_host("a.openrusty.org")
             .unwrap()
             .ocsp,
         Some(vec![1, 2, 3])
@@ -250,14 +250,14 @@ async fn inline_certificate_site_policy_matches_material_after_synthetic_id_assi
         "id":-1,"isOn":true,"isDefault":true,"ocsp":true,
         "certData":include_str!("../pingora-main/pingora-core/examples/keys/server/cert.pem"),
         "keyData":include_str!("../pingora-main/pingora-core/examples/keys/server/key.pem"),
-        "dnsNames":["inline.example"]
+        "dnsNames":["inline.openrusty.org"]
     }))
     .unwrap();
     let mut original = cert.clone();
     original.id = 0;
     let server = Arc::new(
         serde_json::from_value::<ServerConfig>(serde_json::json!({
-            "id":20,"isOn":true,"serverNames":[{"name":"inline.example"}],
+            "id":20,"isOn":true,"serverNames":[{"name":"inline.openrusty.org"}],
             "https":{"isOn":true,"sslPolicy":{"id":20,"isOn":true,"ocsp":false,"certs":[original]}}
         }))
         .unwrap(),
@@ -270,7 +270,7 @@ async fn inline_certificate_site_policy_matches_material_after_synthetic_id_assi
     sync_certs_for_servers(&selector, &[cert], &[server]).await;
     assert!(
         selector
-            .resolve_certified_key_for_host("inline.example")
+            .resolve_certified_key_for_host("inline.openrusty.org")
             .unwrap()
             .ocsp
             .is_none()
