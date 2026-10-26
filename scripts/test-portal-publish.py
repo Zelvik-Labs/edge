@@ -540,25 +540,21 @@ class PortalPublishTests(unittest.TestCase):
 
 
 class WorkflowValidationTests(unittest.TestCase):
-    def test_yaml_jobs_matrix_and_artifact_contract(self) -> None:
+    def test_tag_push_github_release_and_ghcr_contract(self) -> None:
         try:
             import yaml
         except ImportError as exc:  # pragma: no cover - local pyyaml is present
             self.skipTest(f"PyYAML unavailable: {exc}")
         document = yaml.safe_load(WORKFLOW.read_text())
         on = document.get("on", document.get(True))
-        self.assertIn("workflow_dispatch", on)
-        self.assertIn("source_ref", on["workflow_dispatch"]["inputs"])
-        self.assertEqual(on["workflow_dispatch"]["inputs"]["publish"]["type"], "boolean")
-        self.assertIn("v*", on["push"]["tags"])
+        # Publishing is tag-driven only: there is no manual dispatch input that
+        # could publish a different commit.
+        self.assertEqual(on, {"push": {"tags": ["v*"]}})
         jobs = document["jobs"]
-        for job in ("prepare", "ebpf", "build", "release", "publish"):
-            self.assertIn(job, jobs)
+        self.assertEqual(set(jobs), {"prepare", "ebpf", "build", "release"})
         self.assertEqual(jobs["ebpf"]["needs"], "prepare")
         self.assertEqual(jobs["build"]["needs"], "ebpf")
-        self.assertIn("prepare", jobs["publish"]["needs"])
-        self.assertIn("build", jobs["publish"]["needs"])
-        self.assertIn("outputs.publish", jobs["publish"]["if"])
+        self.assertEqual(sorted(jobs["release"]["needs"]), ["build", "prepare"])
         matrix = jobs["build"]["strategy"]["matrix"]["include"]
         self.assertEqual(len(matrix), 5)
         self.assertEqual(
@@ -571,12 +567,32 @@ class WorkflowValidationTests(unittest.TestCase):
                 "linux-arm64-neoverse-n1",
             },
         )
-        uploads = []
+        self.assertEqual(
+            {
+                item["runner"]
+                for item in matrix
+                if item["target"] == "x86_64-unknown-linux-gnu"
+            },
+            {"ubuntu-22.04"},
+        )
+        self.assertEqual(
+            {
+                item["runner"]
+                for item in matrix
+                if item["target"] == "aarch64-unknown-linux-gnu"
+            },
+            {"ubuntu-24.04-arm"},
+        )
+        uploads: list[dict] = []
+        downloads: list[dict] = []
 
         def walk(node: object) -> None:
             if isinstance(node, dict):
-                if str(node.get("uses", "")).startswith("actions/upload-artifact@"):
+                uses = str(node.get("uses", ""))
+                if uses.startswith("actions/upload-artifact@"):
                     uploads.append(node)
+                elif uses.startswith("actions/download-artifact@"):
+                    downloads.append(node)
                 for value in node.values():
                     walk(value)
             elif isinstance(node, list):
@@ -584,37 +600,51 @@ class WorkflowValidationTests(unittest.TestCase):
                     walk(value)
 
         walk(jobs)
-        names = [item["with"]["name"] for item in uploads]
-        self.assertEqual(len(names), len(set(names)), names)
-        # Statically there are two upload steps: the shared eBPF object and the
-        # per-leg receipt template. The template expands to five unique artifact
-        # names because the matrix has five legs.
-        self.assertEqual(sorted(names), ["ebpf-object", "receipt-${{ matrix.name }}"])
-        self.assertEqual(len(matrix), 5)
-        self.assertEqual(len({item["name"] for item in matrix}), 5)
+        # One shared eBPF object plus one verified package per matrix leg.
+        self.assertEqual(
+            sorted(item["with"]["name"] for item in uploads),
+            ["ebpf-object", "package-${{ matrix.name }}"],
+        )
         self.assertTrue(all(item["with"]["if-no-files-found"] == "error" for item in uploads))
-        for item in uploads:
-            path = str(item["with"]["path"])
-            self.assertNotIn("dist", path)
-            self.assertNotIn(".tar.gz", path)
-        release_files = jobs["release"]["steps"][-1]["with"]["files"]
-        self.assertNotIn("Zelvik-Edge-", release_files)
-        self.assertIn("toa-main-source", release_files)
-        self.assertIs(jobs["release"]["steps"][-1]["with"]["prerelease"], False)
-        all_steps = json.dumps(jobs)
-        self.assertIn("portal-publish.py", all_steps)
-        self.assertIn("prepare", jobs["prepare"]["steps"][-1].get("run", ""))
-        build_run = "\n".join(step.get("run", "") for step in jobs["build"]["steps"])
-        self.assertIn("portal-publish.py", build_run)
-        self.assertIn("upload", build_run)
-        self.assertIn("--receipt-dir receipts", build_run)
-        publish_run = "\n".join(step.get("run", "") for step in jobs["publish"]["steps"])
-        self.assertIn("portal-publish.py promote", publish_run)
-        # Only the small receipt JSON is uploaded by the matrix.
-        for step in jobs["build"]["steps"]:
-            if step.get("uses", "").startswith("actions/upload-artifact@"):
-                self.assertIn("receipts", str(step["with"]["path"]))
-                self.assertNotIn("dist", str(step["with"]["path"]))
+        self.assertIn(
+            "package-*",
+            [str(item["with"].get("pattern", "")) for item in downloads],
+        )
+        release = jobs["release"]
+        self.assertEqual(release["permissions"], {"contents": "write", "packages": "write"})
+        steps = {step.get("name"): step for step in release["steps"]}
+        login = steps["Log in to GHCR"]
+        self.assertEqual(login["with"]["registry"], "ghcr.io")
+        self.assertEqual(login["with"]["username"], "${{ github.actor }}")
+        self.assertIn("${{ secrets.GITHUB_TOKEN }}", login["with"]["password"])
+        image = steps["Build and push image"]
+        self.assertIn("docker/build-push-action@", image["uses"])
+        self.assertIs(image["with"]["push"], True)
+        self.assertEqual(image["with"]["platforms"], "linux/amd64,linux/arm64")
+        self.assertEqual(
+            image["with"]["tags"],
+            "ghcr.io/zelvik-labs/zelvik-edge:${{ needs.prepare.outputs.version }}",
+        )
+        manifest = steps["Write release manifest"]["run"]
+        self.assertIn("scripts/release_manifest.py", manifest)
+        self.assertIn("--component Zelvik-Edge", manifest)
+        self.assertIn("ghcr.io/zelvik-labs/zelvik-edge", manifest)
+        self.assertIn("release/release-manifest.json", manifest)
+        github_release = steps["Create GitHub Release"]
+        self.assertIn("softprops/action-gh-release@", github_release["uses"])
+        self.assertIs(github_release["with"]["prerelease"], False)
+        files = github_release["with"]["files"]
+        for expected in (
+            "release/Zelvik-Edge-*.tar.gz",
+            "release/zelvik-edge-toa-main-source.tar.gz",
+            "release/zelvik-edge-toa-sender-source.tar.gz",
+            "release/release-manifest.json",
+        ):
+            self.assertIn(expected, files)
+        # The tagged release never contacts the license portal.
+        parsed = json.dumps(jobs)
+        for banned in ("portal-publish.py", "set-latest", "PORTAL_UPDATE_KEY", "promote"):
+            self.assertNotIn(banned, parsed)
 
     def test_portal_client_keeps_tls_verification_enabled(self) -> None:
         script = (ROOT / "scripts" / "portal-publish.py").read_text()

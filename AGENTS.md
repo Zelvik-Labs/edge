@@ -79,7 +79,8 @@ four-part results report is mandatory. Local hook:
 
 ## Build and verification
 
-Toolchain pinned to **1.99.0** by `rust-toolchain.toml`, edition 2024.
+Toolchain pinned to **1.99.1** by `rust-toolchain.toml`, edition 2024.
+Local Rust check/test/clippy/build must run through mbx (explicit `mbx check`, etc., or the verified Cargo shim), with jobs=2, test threads=2 and one compilation slot. The cache stays on the internal disk at `~/Library/Caches/mbx` under the workspace storage budget. OrbStack is optional; Linux-only integration checks can run in the isolated RKE dev environment.
 `configs/`, `data/`, `api_node.yaml`, `runtime/` are not version-controlled — do not assume
 they exist.
 

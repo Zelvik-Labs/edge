@@ -33,7 +33,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: Zelvik-Labs/dns
-          ref: e357bf64bad28b3dc519d317e396af71fe2a884e
+          ref: aca0f3bb61bc498682b10900b4886709a2c248b8
           ssh-key: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
           persist-credentials: false
           path: .ci/dns
@@ -73,7 +73,7 @@ jobs:
           PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.99.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: clippy
 
@@ -186,7 +186,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: Zelvik-Labs/dns
-          ref: e357bf64bad28b3dc519d317e396af71fe2a884e
+          ref: aca0f3bb61bc498682b10900b4886709a2c248b8
           ssh-key: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
           persist-credentials: false
           path: .ci/dns
@@ -226,7 +226,7 @@ jobs:
           PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.99.0
+        uses: dtolnay/rust-toolchain@1.99.1
 
       - name: Install dependencies
         timeout-minutes: 15

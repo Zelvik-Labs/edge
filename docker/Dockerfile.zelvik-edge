@@ -1,0 +1,27 @@
+# Runtime image for a prebuilt Zelvik-Edge release binary.
+#
+# This image never compiles Rust. The release workflow extracts the verified
+# x64-v2 (amd64) and arm64-generic binaries from the release packages into the
+# build context (`amd64/zelvik-edge`, `arm64/zelvik-edge`) and BuildKit selects
+# the matching one through TARGETARCH. Building the image therefore reuses the
+# exact bytes that were smoke-tested and packaged, instead of producing a sixth
+# unverified binary.
+FROM debian:bookworm-slim
+
+ARG TARGETARCH
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates curl tzdata iproute2 kmod libcap2-bin \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY ${TARGETARCH}/zelvik-edge /usr/local/bin/zelvik-edge
+RUN chmod 0755 /usr/local/bin/zelvik-edge \
+    && mkdir -p /etc/zelvik/edge /var/lib/zelvik/edge
+
+WORKDIR /var/lib/zelvik/edge
+
+# HTTP/HTTPS plus the local management/metrics listener.
+EXPOSE 80 443 443/udp 19090
+
+ENTRYPOINT ["/usr/local/bin/zelvik-edge"]

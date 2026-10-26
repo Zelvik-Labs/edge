@@ -211,15 +211,21 @@ fn signed_response(
 }
 
 fn harness(tag: &str) -> Harness {
+    harness_with_trust(tag, true)
+}
+
+fn harness_with_trust(tag: &str, pin_key: bool) -> Harness {
     let rng = aws_lc_rs::rand::SystemRandom::new();
     let pkcs8 = Ed25519KeyPair::generate_pkcs8(&rng).expect("generate key");
     let pair = Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).expect("parse key");
     let public = pair.public_key().as_ref().to_vec();
     let key_id = TrustStore::key_id(&public);
     let mut trust = TrustStore::new();
-    trust
-        .pin_hex(&hex::encode(&public))
-        .expect("pin distribution key");
+    if pin_key {
+        trust
+            .pin_hex(&hex::encode(&public))
+            .expect("pin distribution key");
+    }
 
     let initial = manifest_for("gb_one", 5, b"placeholder");
     let response = signed_response(&pair, &key_id, &initial);
@@ -263,6 +269,86 @@ async fn activate_unified(h: &mut Harness, unified_geo: &[u8]) {
 fn active_store(root: &Path) -> (u64, String) {
     let store = GeoStore::open_readonly(root).expect("open installed bundle");
     (store.generation(), store.active_bundle_id())
+}
+
+#[tokio::test]
+async fn missing_trust_keys_report_the_target_without_downloading() {
+    let mut h = harness_with_trust("no-trust", false);
+    let err = h.agent.run_once().await.expect_err("missing trust");
+    assert_eq!(err.to_string(), "geo.trust_keys_missing");
+    assert_eq!(h.agent.active_generation(), 0);
+    let rec = h.record.lock().unwrap();
+    assert!(rec.download_kinds.is_empty());
+    assert_eq!(rec.acks.len(), 1);
+    let ack = &rec.acks[0];
+    assert_eq!(ack.state, AssetAckState::Failed);
+    assert_eq!((ack.bundle_id.as_str(), ack.generation), ("gb_one", 5));
+    assert!(ack.components.is_empty());
+    assert_eq!(ack.error, "geo.trust_keys_missing");
+}
+
+#[tokio::test]
+async fn no_publication_needs_no_trust_key_or_acknowledgement() {
+    let mut h = harness_with_trust("no-publication", false);
+    h.agent.transport_mut().response.bundle_id.clear();
+    h.agent.transport_mut().response.generation = 0;
+    let report = h.agent.run_once().await.expect("no publication");
+    assert!(report.unchanged);
+    assert_eq!(report.generation, 0);
+    let rec = h.record.lock().unwrap();
+    assert!(rec.acks.is_empty());
+    assert!(rec.download_kinds.is_empty());
+}
+
+#[tokio::test]
+async fn unknown_signing_key_reports_failure_and_preserves_the_active_generation() {
+    let unified_geo = unified_geo_bytes();
+    let mut h = harness("unknown-key");
+    activate_unified(&mut h, &unified_geo).await;
+    sign_manifest(&mut h, &manifest_for("gb_two", 6, &unified_geo));
+    h.agent.transport_mut().response.signing_key_id = "unknown".to_string();
+    let err = h.agent.run_once().await.expect_err("unknown key");
+    assert_eq!(err.to_string(), "geo.signing_key_untrusted");
+    assert_eq!(active_store(h.root.path()), (5, "gb_one".to_string()));
+    let rec = h.record.lock().unwrap();
+    assert_eq!(rec.download_kinds.len(), 1);
+    assert_eq!(rec.acks.len(), 2);
+    let ack = &rec.acks[1];
+    assert_eq!(ack.state, AssetAckState::Failed);
+    assert_eq!((ack.bundle_id.as_str(), ack.generation), ("gb_two", 6));
+    assert!(ack.components.is_empty());
+    assert_eq!(ack.error, "geo.signing_key_untrusted");
+}
+
+#[tokio::test]
+async fn invalid_signature_reports_failure_and_preserves_the_active_generation() {
+    let unified_geo = unified_geo_bytes();
+    let mut h = harness("bad-signature");
+    activate_unified(&mut h, &unified_geo).await;
+    sign_manifest(&mut h, &manifest_for("gb_two", 6, &unified_geo));
+    h.agent.transport_mut().response.signature[0] ^= 0xff;
+    let err = h.agent.run_once().await.expect_err("bad signature");
+    assert_eq!(err.to_string(), "geo.signature_invalid");
+    assert_eq!(active_store(h.root.path()), (5, "gb_one".to_string()));
+    let rec = h.record.lock().unwrap();
+    assert_eq!(rec.download_kinds.len(), 1);
+    assert_eq!(rec.acks.len(), 2);
+    let ack = &rec.acks[1];
+    assert_eq!(ack.state, AssetAckState::Failed);
+    assert_eq!((ack.bundle_id.as_str(), ack.generation), ("gb_two", 6));
+    assert!(ack.components.is_empty());
+    assert_eq!(ack.error, "geo.signature_invalid");
+}
+
+#[tokio::test]
+async fn missing_trust_keeps_the_original_error_when_failure_ack_cannot_be_delivered() {
+    let mut h = harness_with_trust("no-trust-ack-failure", false);
+    h.record.lock().unwrap().fail_failed_ack = true;
+    let err = h.agent.run_once().await.expect_err("missing trust");
+    assert_eq!(err.to_string(), "geo.trust_keys_missing");
+    let rec = h.record.lock().unwrap();
+    assert_eq!(rec.acks.len(), 1);
+    assert!(rec.download_kinds.is_empty());
 }
 
 #[tokio::test]
