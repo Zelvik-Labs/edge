@@ -3585,13 +3585,8 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         rpc::start_ip_list_syncer(ac_i, cs_i, il_i).await;
     });
 
-    let mut geo_trust = zelvik_edge::geo::TrustStore::new();
-    for key in &api_config.trust_keys {
-        geo_trust.pin_hex(key)?;
-    }
     let geo_agent = zelvik_edge::geo::open_agent(
         api_config.clone(),
-        geo_trust,
         zelvik_edge::paths::NodePaths::current().geo_root(),
     )?;
     spawn_staggered(&rt, Duration::from_secs(6), async move {

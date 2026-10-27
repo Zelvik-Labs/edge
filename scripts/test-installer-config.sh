@@ -147,6 +147,7 @@ owner "backups 归 root" "$HOME_DIR/backups" 'root:700'
 owner "api_node.yaml 0640 root:root" "$CFG" 'root:640'
 
 # 3) 首装写出安装器拥有的键，且 xdp 默认关闭。
+absent "首装不写 Geo 验签公钥" "$CFG" 'trustKeys:'
 for k in 'rpc.endpoints:' 'instanceId: "nd_test"' 'secret: "abc123"' 'commMode: "tls"' 'enabled: false'; do
     expect "首装含 $k" "$CFG" "$k"
 done
@@ -231,7 +232,7 @@ done
 
 # 4) 运维改动后重跑：拥有的键更新，运维的键原样保留。
 sed -i 's/^xdp:$/xdp:\n  enabled: true/' "$CFG"
-{ printf 'kernelTuning:\n  rmemMax: 16777216\n'; printf 'gcloudNodeId: "1001"\n'; } >> "$CFG"
+{ printf 'kernelTuning:\n  rmemMax: 16777216\n'; printf 'gcloudNodeId: "1001"\n'; printf 'trustKeys:\n  - "legacy-key"\n'; } >> "$CFG"
 
 bash "$W/install.sh" \
     --endpoint 'https://cp4.example.com,https://cp5.example.com' \
@@ -249,6 +250,8 @@ absent "重跑不保留旧 secret"    "$CFG" 'secret: "abc123"'
 expect "运维的 xdp 保留"        "$CFG" 'enabled: true'
 expect "运维的 kernelTuning 保留" "$CFG" 'rmemMax: 16777216'
 expect "运维的 gcloudNodeId 保留" "$CFG" 'gcloudNodeId: "1001"'
+expect "旧 Geo 公钥字段按未知字段保留" "$CFG" '  - "legacy-key"'
+if [ "$(grep -c '^trustKeys:' "$CFG")" -eq 1 ]; then echo "OK   旧 Geo 公钥字段只出现一次"; else echo "FAIL 旧 Geo 公钥字段丢失或重复"; fail=1; fi
 if [ "$(grep -c '^xdp:' "$CFG")" -eq 1 ]; then echo "OK   xdp 只出现一次"; else echo "FAIL xdp 重复"; fail=1; fi
 if [ "$(grep -c '^# Rendered by deploy/install.sh' "$CFG")" -eq 1 ]; then echo "OK   表头只出现一次"; else echo "FAIL 表头堆叠"; fail=1; fi
 

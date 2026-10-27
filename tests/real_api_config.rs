@@ -49,7 +49,6 @@ fn real_api_config_from_env() -> anyhow::Result<Option<ApiConfig>> {
         instance_id,
         secret,
         comm_mode,
-        trust_keys: Vec::new(),
         gcloud_node_id,
         access_log_pipeline: Default::default(),
         relay: Default::default(),

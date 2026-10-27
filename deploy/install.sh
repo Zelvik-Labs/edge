@@ -21,7 +21,7 @@ set -eu
 # build-release.sh may overwrite this from the release argument; the package's
 # VERSION file (read below) wins so the installer cannot claim a version the
 # binary does not report.
-VERSION="26.10.4.6"
+VERSION="26.10.4.7"
 BIN_NAME="zelvik-edge"
 SERVICE_NAME="zelvik-edge"
 SERVICE_USER="root"
@@ -36,7 +36,6 @@ ENDPOINT=""
 NODE_ID=""
 NODE_SECRET=""
 COMM_MODE="tls"
-TRUST_KEYS=""
 TLS_CA_FILE=""
 TLS_CA_SHA256=""
 TLS_CERT_FILE=""
@@ -88,7 +87,6 @@ Usage: install.sh [OPTIONS]
   --node-id <id>                    Node identity  (alias: --instance-id)
   --secret <hex>                    One-time registration secret
   --comm-mode <plaintext|tls|mtls>  Communication mode (default: tls)
-  --trust-keys <hex[,hex...]>       Pinned Ed25519 geo distribution public keys
   --tls-ca-file <path>              Control-plane CA (X.509); copied to <home>/pki/cp-ca.pem
   --tls-ca-sha256 <hex>             SHA-256 of the DER encoding of that certificate
                                     (openssl x509 -outform DER | sha256sum)
@@ -113,7 +111,6 @@ Environment variable fallbacks:
   ZELVIK_ENDPOINT or API_ENDPOINTS
   ZELVIK_NODE_ID  or ZELVIK_INSTANCE_ID
   ZELVIK_NODE_SECRET or ZELVIK_INSTANCE_SECRET
-  ZELVIK_EDGE_TRUST_KEYS or --trust-keys
 EOF
     exit 1
 }
@@ -134,8 +131,6 @@ parse_args() {
             --secret)       [ "$#" -ge 2 ] || die "--secret requires a value"; NODE_SECRET="$2"; shift 2 ;;
             --comm-mode=*)  COMM_MODE=$(printf '%s' "$1" | cut -d= -f2-); shift ;;
             --comm-mode)    [ "$#" -ge 2 ] || die "--comm-mode requires a value"; COMM_MODE="$2"; shift 2 ;;
-            --trust-keys=*) TRUST_KEYS=$(printf '%s' "$1" | cut -d= -f2-); shift ;;
-            --trust-keys)   [ "$#" -ge 2 ] || die "--trust-keys requires a value"; TRUST_KEYS="$2"; shift 2 ;;
             --tls-ca-file=*) TLS_CA_FILE=$(printf '%s' "$1" | cut -d= -f2-); shift ;;
             --tls-ca-file)   [ "$#" -ge 2 ] || die "--tls-ca-file requires a value"; TLS_CA_FILE="$2"; shift 2 ;;
             --tls-ca-sha256=*) TLS_CA_SHA256=$(printf '%s' "$1" | cut -d= -f2-); shift ;;
@@ -174,13 +169,6 @@ if [ -z "$NODE_ID" ]; then NODE_ID=${ZELVIK_NODE_ID:-}; fi
 if [ -z "$NODE_ID" ]; then NODE_ID=${ZELVIK_INSTANCE_ID:-}; fi
 if [ -z "$NODE_SECRET" ]; then NODE_SECRET=${ZELVIK_NODE_SECRET:-}; fi
 if [ -z "$NODE_SECRET" ]; then NODE_SECRET=${ZELVIK_INSTANCE_SECRET:-}; fi
-if [ -z "$TRUST_KEYS" ]; then TRUST_KEYS=${ZELVIK_EDGE_TRUST_KEYS:-}; fi
-if [ -n "$TRUST_KEYS" ]; then
-    printf '%s\n' "$TRUST_KEYS" | tr ',' '\n' | while IFS= read -r _key; do
-        [ "$(printf '%s' "$_key" | wc -c | tr -d ' ')" -eq 64 ] || die "each --trust-keys entry must be 32 bytes in hex"
-        case "$_key" in *[!0-9a-fA-F]*) die "--trust-keys is not hex" ;; esac
-    done || exit 1
-fi
 
 [ -n "$ENDPOINT" ]    || die "--endpoint (or ZELVIK_ENDPOINT / API_ENDPOINTS) is required"
 [ -n "$NODE_ID" ]     || die "--node-id (or ZELVIK_NODE_ID / ZELVIK_INSTANCE_ID) is required"
@@ -677,9 +665,6 @@ fi
 
 # Render api_node.yaml through a same-directory temp, preserving operator keys.
 _INSTALLER_KEYS='^(rpc[.]endpoints|rpc[.]tls|instanceId|secret|commMode):'
-if [ -n "$TRUST_KEYS" ]; then
-    _INSTALLER_KEYS='^(rpc[.]endpoints|rpc[.]tls|instanceId|secret|commMode|trustKeys):'
-fi
 _preserved=""
 if [ -f "$API_CONFIG_FILE" ]; then
     _preserved=$(awk -v owned="$_INSTALLER_KEYS" '
@@ -699,12 +684,6 @@ _cfg_tmp="$CONFIG_DIR/.api_node.yaml.$$"
     printf 'instanceId: "%s"\n' "$NODE_ID"
     printf 'secret: "%s"\n' "$NODE_SECRET"
     printf 'commMode: "%s"\n' "$COMM_MODE"
-    if [ -n "$TRUST_KEYS" ]; then
-        printf 'trustKeys:\n'
-        printf '%s\n' "$TRUST_KEYS" | tr ',' '\n' | while IFS= read -r _key; do
-            printf '  - "%s"\n' "$_key"
-        done
-    fi
     if [ -n "$CA_CONFIG_PATH" ] || [ -n "$CLIENT_CERT_PATH" ] || [ -n "$TLS_SERVER_NAME" ]; then
         printf 'rpc.tls:\n'
         if [ -n "$CA_CONFIG_PATH" ]; then printf '  caFile: "%s"\n' "$CA_CONFIG_PATH"; fi

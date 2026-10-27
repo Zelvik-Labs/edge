@@ -1,12 +1,6 @@
-//! Geo asset consumption: pull one signed bundle generation from AssetControl,
-//! verify the manifest and every component, activate it atomically, and make
-//! the active generation the only source for query-path lookups.
-//!
-//! Trust is pinned by the node, never by the downloaded bundle: the manifest
-//! signature is verified against a key selected by `signing_key_id`, where the
-//! id is the lowercase hex SHA-256 of the pinned public key (the same id the
-//! control plane derives with `signing.DistributionKeyID`). A missing key or an
-//! unknown key id is a failure, never a skip.
+//! Geo asset consumption: pull one bundle generation over the authenticated
+//! AssetControl channel, check its manifest and component digests, activate it
+//! atomically, and use it as the query-path source. Nodes need no separate Geo key.
 //!
 //! Activation order is load-bearing: components are digest-checked in memory,
 //! written and fsynced to the staging area by [`GeoStore`], opened from the
@@ -46,8 +40,6 @@ pub struct AssetManifestResponse {
     pub bundle_id: String,
     pub generation: u64,
     pub manifest_json: Vec<u8>,
-    pub signature: Vec<u8>,
-    pub signing_key_id: String,
     pub update_required: bool,
     pub rollback_generation: u64,
 }
@@ -101,59 +93,9 @@ pub struct GeoReconcileReport {
     pub unchanged: bool,
 }
 
-/// Pinned distribution keys, selected by `signing_key_id`.
-///
-/// The id is the lowercase hex SHA-256 of the raw public key. Pinning by
-/// content, not by a mutable label, means the control plane cannot swap a key
-/// by renaming it.
-#[derive(Clone, Default)]
-pub struct TrustStore {
-    keys: BTreeMap<String, [u8; 32]>,
-}
-
-impl TrustStore {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// The id of a raw public key, as the control plane derives it.
-    pub fn key_id(public: &[u8]) -> String {
-        hex::encode(Sha256::digest(public))
-    }
-
-    /// Pins a raw Ed25519 public key (hex-encoded, 32 bytes).
-    pub fn pin_hex(&mut self, public_hex: &str) -> Result<String> {
-        let raw = hex::decode(public_hex.trim()).context("distribution key is not hex")?;
-        let bytes: [u8; 32] = raw
-            .as_slice()
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("distribution key must be 32 bytes"))?;
-        let id = Self::key_id(&bytes);
-        self.keys.insert(id.clone(), bytes);
-        Ok(id)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.keys.is_empty()
-    }
-
-    /// Verifies a signature over `message` with the key named by `key_id`.
-    /// An unknown key id is a failure, never a skip.
-    pub fn verify(&self, key_id: &str, message: &[u8], signature: &[u8]) -> bool {
-        use aws_lc_rs::signature::{ED25519, UnparsedPublicKey};
-        let Some(key) = self.keys.get(key_id) else {
-            return false;
-        };
-        UnparsedPublicKey::new(&ED25519, key)
-            .verify(message, signature)
-            .is_ok()
-    }
-}
-
 /// The geo agent. `run_once` is the whole reconciliation.
 pub struct GeoAgent<T: AssetTransport> {
     transport: T,
-    trust: TrustStore,
     store: std::sync::Arc<GeoStore>,
 }
 
@@ -163,7 +105,6 @@ impl<T: AssetTransport> GeoAgent<T> {
     /// bundle is a startup error, not silently treated as "no geo data".
     pub fn open(
         transport: T,
-        trust: TrustStore,
         geo_root: impl Into<std::path::PathBuf>,
     ) -> Result<Self> {
         let store = std::sync::Arc::new(
@@ -172,7 +113,6 @@ impl<T: AssetTransport> GeoAgent<T> {
         install_store(&store);
         Ok(Self {
             transport,
-            trust,
             store,
         })
     }
@@ -208,7 +148,7 @@ impl<T: AssetTransport> GeoAgent<T> {
             Ok(manifest) => manifest,
             Err(err) => {
                 // The response identifies the target even when its manifest is
-                // untrusted. A failed ACK reports no component or activation facts.
+                // invalid. A failed ACK reports no component or activation facts.
                 if let Err(ack_err) = self
                     .ack(AssetAck {
                         bundle_id: response.bundle_id.clone(),
@@ -308,28 +248,13 @@ impl<T: AssetTransport> GeoAgent<T> {
     }
 
     fn verify_manifest(&self, response: &AssetManifestResponse) -> Result<BundleManifest> {
-        if self.trust.is_empty() {
-            bail!("geo.trust_keys_missing");
-        }
-        if !self.trust.keys.contains_key(&response.signing_key_id) {
-            bail!("geo.signing_key_untrusted");
-        }
         if response.manifest_json.is_empty() {
             bail!("asset manifest is empty");
         }
         let manifest: BundleManifest =
             serde_json::from_slice(&response.manifest_json).context("parse bundle manifest")?;
         if manifest.bundle_id != response.bundle_id || manifest.generation != response.generation {
-            bail!("signed manifest identity disagrees with the response");
-        }
-        // The signature covers the canonical JSON, which both languages derive
-        // identically; a transmitted non-canonical document still verifies.
-        let canonical = manifest.canonical_json().context("canonical manifest")?;
-        if !self
-            .trust
-            .verify(&response.signing_key_id, &canonical, &response.signature)
-        {
-            bail!("geo.signature_invalid");
+            bail!("manifest identity disagrees with the response");
         }
         if !manifest.verify_digest() {
             bail!("bundle manifest digest mismatch");
@@ -489,8 +414,6 @@ impl AssetTransport for GrpcAssetTransport {
                 bundle_id: String::new(),
                 generation: 0,
                 manifest_json: Vec::new(),
-                signature: Vec::new(),
-                signing_key_id: String::new(),
                 update_required: response.update_required,
                 rollback_generation: response.rollback_generation,
             });
@@ -499,8 +422,6 @@ impl AssetTransport for GrpcAssetTransport {
             bundle_id: bundle.bundle_id,
             generation: bundle.generation,
             manifest_json: bundle.manifest_json,
-            signature: bundle.signature,
-            signing_key_id: bundle.signing_key_id,
             update_required: response.update_required,
             rollback_generation: response.rollback_generation,
         })
@@ -620,35 +541,13 @@ pub async fn run_loop<T: AssetTransport + 'static>(
 
 /// Opens the node's geo agent for the binary. `geo_root` defaults to
 /// `<home>/data/geo`; a configured root must be the same path serve uses.
-pub fn open_agent(api_config: ApiConfig, trust: TrustStore, geo_root: std::path::PathBuf) -> Result<GeoAgent<GrpcAssetTransport>> {
-    GeoAgent::open(GrpcAssetTransport::new(api_config), trust, geo_root)
+pub fn open_agent(api_config: ApiConfig, geo_root: std::path::PathBuf) -> Result<GeoAgent<GrpcAssetTransport>> {
+    GeoAgent::open(GrpcAssetTransport::new(api_config), geo_root)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aws_lc_rs::signature::{Ed25519KeyPair, KeyPair};
-
-    #[test]
-    fn trust_store_selects_the_pinned_key_by_derived_id_and_rejects_others() {
-        let pair = Ed25519KeyPair::from_pkcs8(
-            Ed25519KeyPair::generate_pkcs8(&aws_lc_rs::rand::SystemRandom::new())
-                .expect("generate")
-                .as_ref(),
-        )
-        .expect("key pair");
-        let public = pair.public_key().as_ref().to_vec();
-        let mut trust = TrustStore::new();
-        let id = trust.pin_hex(&hex::encode(&public)).expect("pin");
-        assert_eq!(id, TrustStore::key_id(&public));
-
-        let message = b"canonical manifest";
-        let signature = pair.sign(message).as_ref().to_vec();
-        assert!(trust.verify(&id, message, &signature));
-        assert!(!trust.verify(&id, b"other", &signature));
-        assert!(!trust.verify("unknown", message, &signature));
-    }
-
     #[test]
     fn asset_kind_wire_is_closed() {
         assert_eq!(component_kind_str(ComponentKind::UnifiedGeo), "unified_geo");
