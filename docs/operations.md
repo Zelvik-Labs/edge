@@ -181,7 +181,6 @@ bootstrap 脚本从控制面的 `/v1/edge/packages/meta` 接口取包元数据�
 | `--node-id <id>` | 节点身份（也接受 `--instance-id`） |
 | `--secret <hex>` | 注册时下发的一次性凭据 |
 | `--comm-mode <plaintext\|tls\|mtls>` | 通信模式，默认 `tls` |
-| `--trust-keys <hex[,hex...]>` | Ed25519 Geo 分发公钥，写入 `trustKeys`；按公钥 SHA-256 选键验签，缺少钉扎时拒绝下载新代次 |
 | `--tls-ca-file <path>` | 控制面 CA（X.509）。安装器复制到 `<home>/pki/cp-ca.pem`（0644 root）并写入 `rpc.tls.caFile`，**不引用临时路径** |
 | `--tls-ca-sha256 <hex>` | 上述证书 DER 编码的 SHA-256（`openssl x509 -outform DER \| sha256sum`）；提供时安装前校验，不匹配立即失败 |
 | `--tls-cert-file` / `--tls-key-file` | `--comm-mode mtls` 时的客户端证书材料路径 |
@@ -193,7 +192,9 @@ bootstrap 脚本从控制面的 `/v1/edge/packages/meta` 接口取包元数据�
 
 `--dir` 已删除：它表示“文件系统 staging 前缀（伪根）”，与组件 home 语义冲突。传入会直接报错并提示使用 `--install-dir`，不保留别名。
 
-环境变量兜底：`ZELVIK_ENDPOINT`/`API_ENDPOINTS`、`ZELVIK_NODE_ID`/`ZELVIK_INSTANCE_ID`、`ZELVIK_NODE_SECRET`/`ZELVIK_INSTANCE_SECRET`、`ZELVIK_EDGE_TRUST_KEYS`。
+环境变量兜底：`ZELVIK_ENDPOINT`/`API_ENDPOINTS`、`ZELVIK_NODE_ID`/`ZELVIK_INSTANCE_ID`、`ZELVIK_NODE_SECRET`/`ZELVIK_INSTANCE_SECRET`。
+
+Edge `26.10.4.7` 起移除 Geo 公钥参数。通过控制面安装前先升级 API 至 `26.10.4.17`；旧 API 的 bootstrap 会传递已删除的 `--trust-keys` 并导致安装失败。
 
 ### 安装布局
 
@@ -291,8 +292,8 @@ systemctl daemon-reload
 本版本重新整理 systemd 生命周期管理：新安装的服务使用 `Type=simple` 直接托管前台进程；`stop` 会等待真实退出并在必要时强制结束；`restart` 不再固定等待 1 秒，而是确认旧进程退出后再启动。
 
 GeoIP 不再由安装包或节点本地文件提供。节点通过 `zelvik.asset.v1.AssetControl`
-拉取控制面发布的整代签名 bundle，原子安装到 `data/geo/`；`trustKeys` 钉扎
-Ed25519 公钥，按公钥 SHA-256 选键验签。City 是必需组件，ASN/Country 可选；
+拉取控制面发布的整代 bundle，核对 manifest 身份、SHA-256 和制品大小后
+原子安装到 `data/geo/`，节点无需额外的 Geo 验签公钥。City 是必需组件，ASN/Country 可选；
 旧版 `data/GeoLite2-*.mmdb` 与 `geoip/` 目录不再读取。
 
 恢复时脚本会停止当前服务，恢复 `go-original` 二进制、`/usr/bin/zelvik-edge` 和 systemd unit，并将当前 Rust 文件备份到 `restore-current-*` 目录。手动回滚也可以停止服务后恢复备份目录中的文件，再执行 `systemctl daemon-reload` 与 `systemctl start zelvik-edge`。
@@ -306,7 +307,7 @@ Ed25519 公钥，按公钥 SHA-256 选键验签。City 是必需组件，ASN/Cou
 - 运行目录权限正确。
 - `data` 和 `logs` 可写。
 - 缓存目录可写且容量充足。
-- `trustKeys` 至少钉扎一个与 CP 发布签名 key 对应的公钥；`data/geo` 可写。
+- `data/geo` 可写，Geo 资产控制通道可达。
 - 监听端口没有被其它进程占用。
 - systemd `LimitNOFILE` 足够大。
 

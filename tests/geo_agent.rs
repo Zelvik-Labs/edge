@@ -4,7 +4,7 @@
 //! control plane verifies: one MMDB carrying the City, Country and ASN source
 //! records. These tests cover the node-facing half of that pipeline: the node
 //! only ever talks to the authenticated `AssetControl` surface, installs the
-//! unified database from one signed generation, and leaves the previous
+//! unified database from one authenticated generation, and leaves the previous
 //! generation serving when a new generation is partial, corrupt, or reuses an
 //! installed identity with different bytes.
 
@@ -12,10 +12,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use aws_lc_rs::signature::{Ed25519KeyPair, KeyPair};
 use sha2::{Digest, Sha256};
 use zelvik_edge::geo::{
-    AssetAck, AssetAckState, AssetManifestResponse, AssetTransport, GeoAgent, TrustStore,
+    AssetAck, AssetAckState, AssetManifestResponse, AssetTransport, GeoAgent,
     component_kind_str,
 };
 use zelvik_geo_runtime::{BundleManifest, ComponentKind, ComponentManifest, GeoStore};
@@ -36,7 +35,7 @@ fn unified_geo_bytes() -> Vec<u8> {
 
 /// Opt-in production-scale artifact. `ZELVIK_TEST_UNIFIED_GEO_MMDB` points at
 /// the exact bytes the control plane published, so the same node-facing path
-/// (signature, download, staging, container parse, lookup, ACK) runs against a
+/// (download, staging, container parse, lookup, ACK) runs against a
 /// real generation instead of only the small committed fixture.
 fn published_artifact() -> Option<Vec<u8>> {
     let path = std::env::var_os("ZELVIK_TEST_UNIFIED_GEO_MMDB")?;
@@ -189,65 +188,29 @@ struct Harness {
     agent: GeoAgent<FakeTransport>,
     record: Arc<Mutex<Recording>>,
     root: TempDir,
-    pair: Ed25519KeyPair,
-    key_id: String,
 }
 
-fn signed_response(
-    pair: &Ed25519KeyPair,
-    key_id: &str,
-    manifest: &BundleManifest,
-) -> AssetManifestResponse {
-    let canonical = manifest.canonical_json().expect("canonical json");
+fn response(manifest: &BundleManifest) -> AssetManifestResponse {
     AssetManifestResponse {
         bundle_id: manifest.bundle_id.clone(),
         generation: manifest.generation,
         manifest_json: serde_json::to_vec(manifest).expect("manifest json"),
-        signature: pair.sign(&canonical).as_ref().to_vec(),
-        signing_key_id: key_id.to_string(),
         update_required: true,
         rollback_generation: 0,
     }
 }
 
 fn harness(tag: &str) -> Harness {
-    harness_with_trust(tag, true)
-}
-
-fn harness_with_trust(tag: &str, pin_key: bool) -> Harness {
-    let rng = aws_lc_rs::rand::SystemRandom::new();
-    let pkcs8 = Ed25519KeyPair::generate_pkcs8(&rng).expect("generate key");
-    let pair = Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).expect("parse key");
-    let public = pair.public_key().as_ref().to_vec();
-    let key_id = TrustStore::key_id(&public);
-    let mut trust = TrustStore::new();
-    if pin_key {
-        trust
-            .pin_hex(&hex::encode(&public))
-            .expect("pin distribution key");
-    }
-
     let initial = manifest_for("gb_one", 5, b"placeholder");
-    let response = signed_response(&pair, &key_id, &initial);
     let record = Arc::new(Mutex::new(Recording::default()));
     let transport = FakeTransport {
-        response,
+        response: response(&initial),
         assets: BTreeMap::from([("unified_geo".to_string(), b"placeholder".to_vec())]),
         record: record.clone(),
     };
     let root = TempDir::new(tag);
-    let agent = GeoAgent::open(transport, trust, root.path()).expect("open geo agent");
-    Harness {
-        agent,
-        record,
-        root,
-        pair,
-        key_id,
-    }
-}
-
-fn sign_manifest(h: &mut Harness, manifest: &BundleManifest) {
-    h.agent.transport_mut().response = signed_response(&h.pair, &h.key_id, manifest);
+    let agent = GeoAgent::open(transport, root.path()).expect("open geo agent");
+    Harness { agent, record, root }
 }
 
 fn set_generation_assets(h: &mut Harness, unified_geo: &[u8], cidr_sets: &[u8]) {
@@ -260,7 +223,7 @@ async fn activate_unified(h: &mut Harness, unified_geo: &[u8]) {
     h.agent
         .transport_mut()
         .set_asset("unified_geo", unified_geo.to_vec());
-    sign_manifest(h, &manifest_for("gb_one", 5, unified_geo));
+    h.agent.transport_mut().response = response(&manifest_for("gb_one", 5, unified_geo));
     let report = h.agent.run_once().await.expect("activate unified bundle");
     assert!(report.activated);
     assert_eq!(h.agent.active_generation(), 5);
@@ -272,24 +235,8 @@ fn active_store(root: &Path) -> (u64, String) {
 }
 
 #[tokio::test]
-async fn missing_trust_keys_report_the_target_without_downloading() {
-    let mut h = harness_with_trust("no-trust", false);
-    let err = h.agent.run_once().await.expect_err("missing trust");
-    assert_eq!(err.to_string(), "geo.trust_keys_missing");
-    assert_eq!(h.agent.active_generation(), 0);
-    let rec = h.record.lock().unwrap();
-    assert!(rec.download_kinds.is_empty());
-    assert_eq!(rec.acks.len(), 1);
-    let ack = &rec.acks[0];
-    assert_eq!(ack.state, AssetAckState::Failed);
-    assert_eq!((ack.bundle_id.as_str(), ack.generation), ("gb_one", 5));
-    assert!(ack.components.is_empty());
-    assert_eq!(ack.error, "geo.trust_keys_missing");
-}
-
-#[tokio::test]
 async fn no_publication_needs_no_trust_key_or_acknowledgement() {
-    let mut h = harness_with_trust("no-publication", false);
+    let mut h = harness("no-publication");
     h.agent.transport_mut().response.bundle_id.clear();
     h.agent.transport_mut().response.generation = 0;
     let report = h.agent.run_once().await.expect("no publication");
@@ -297,57 +244,6 @@ async fn no_publication_needs_no_trust_key_or_acknowledgement() {
     assert_eq!(report.generation, 0);
     let rec = h.record.lock().unwrap();
     assert!(rec.acks.is_empty());
-    assert!(rec.download_kinds.is_empty());
-}
-
-#[tokio::test]
-async fn unknown_signing_key_reports_failure_and_preserves_the_active_generation() {
-    let unified_geo = unified_geo_bytes();
-    let mut h = harness("unknown-key");
-    activate_unified(&mut h, &unified_geo).await;
-    sign_manifest(&mut h, &manifest_for("gb_two", 6, &unified_geo));
-    h.agent.transport_mut().response.signing_key_id = "unknown".to_string();
-    let err = h.agent.run_once().await.expect_err("unknown key");
-    assert_eq!(err.to_string(), "geo.signing_key_untrusted");
-    assert_eq!(active_store(h.root.path()), (5, "gb_one".to_string()));
-    let rec = h.record.lock().unwrap();
-    assert_eq!(rec.download_kinds.len(), 1);
-    assert_eq!(rec.acks.len(), 2);
-    let ack = &rec.acks[1];
-    assert_eq!(ack.state, AssetAckState::Failed);
-    assert_eq!((ack.bundle_id.as_str(), ack.generation), ("gb_two", 6));
-    assert!(ack.components.is_empty());
-    assert_eq!(ack.error, "geo.signing_key_untrusted");
-}
-
-#[tokio::test]
-async fn invalid_signature_reports_failure_and_preserves_the_active_generation() {
-    let unified_geo = unified_geo_bytes();
-    let mut h = harness("bad-signature");
-    activate_unified(&mut h, &unified_geo).await;
-    sign_manifest(&mut h, &manifest_for("gb_two", 6, &unified_geo));
-    h.agent.transport_mut().response.signature[0] ^= 0xff;
-    let err = h.agent.run_once().await.expect_err("bad signature");
-    assert_eq!(err.to_string(), "geo.signature_invalid");
-    assert_eq!(active_store(h.root.path()), (5, "gb_one".to_string()));
-    let rec = h.record.lock().unwrap();
-    assert_eq!(rec.download_kinds.len(), 1);
-    assert_eq!(rec.acks.len(), 2);
-    let ack = &rec.acks[1];
-    assert_eq!(ack.state, AssetAckState::Failed);
-    assert_eq!((ack.bundle_id.as_str(), ack.generation), ("gb_two", 6));
-    assert!(ack.components.is_empty());
-    assert_eq!(ack.error, "geo.signature_invalid");
-}
-
-#[tokio::test]
-async fn missing_trust_keeps_the_original_error_when_failure_ack_cannot_be_delivered() {
-    let mut h = harness_with_trust("no-trust-ack-failure", false);
-    h.record.lock().unwrap().fail_failed_ack = true;
-    let err = h.agent.run_once().await.expect_err("missing trust");
-    assert_eq!(err.to_string(), "geo.trust_keys_missing");
-    let rec = h.record.lock().unwrap();
-    assert_eq!(rec.acks.len(), 1);
     assert!(rec.download_kinds.is_empty());
 }
 
@@ -455,14 +351,11 @@ async fn a_missing_cidr_set_keeps_the_previous_generation_active() {
     let mut h = harness("partial");
     activate_unified(&mut h, &unified_geo).await;
 
-    sign_manifest(
-        &mut h,
-        &manifest_with(
-            "gb_two",
-            6,
-            components_with_cidr(&unified_geo, b"cidr-placeholder"),
-        ),
-    );
+    h.agent.transport_mut().response = response(&manifest_with(
+        "gb_two",
+        6,
+        components_with_cidr(&unified_geo, b"cidr-placeholder"),
+    ));
     set_generation_assets(&mut h, &unified_geo, b"cidr-placeholder");
     h.agent.transport_mut().remove_asset("cidr_sets");
     let err = h.agent.run_once().await.expect_err("missing component");
@@ -516,14 +409,11 @@ async fn a_bad_component_digest_keeps_the_previous_generation_active() {
 
     // The unified database downloads first; the CIDR digest fails afterwards.
     // The whole generation must still be discarded.
-    sign_manifest(
-        &mut h,
-        &manifest_with(
-            "gb_two",
-            6,
-            components_with_cidr(&unified_geo, b"cidr-placeholder"),
-        ),
-    );
+    h.agent.transport_mut().response = response(&manifest_with(
+        "gb_two",
+        6,
+        components_with_cidr(&unified_geo, b"cidr-placeholder"),
+    ));
     set_generation_assets(&mut h, &unified_geo, b"cidr-placeholder");
     h.agent.transport_mut().tamper_asset("cidr_sets");
     let err = h.agent.run_once().await.expect_err("digest mismatch");
@@ -559,7 +449,7 @@ async fn a_bad_component_digest_keeps_the_previous_generation_active() {
 }
 
 /// Retired component kinds are not aliases. A manifest that still names them
-/// must fail deserialization before any signature or download work.
+/// must fail deserialization before any download work.
 #[tokio::test]
 async fn a_retired_component_kind_is_refused_not_aliased() {
     let mut h = harness("retired-kind");
@@ -574,7 +464,7 @@ async fn a_retired_component_kind_is_refused_not_aliased() {
     assert!(h.record.lock().unwrap().download_kinds.is_empty());
 }
 
-/// A reused `(bundle_id, generation)` with different signed contents must be
+/// A reused `(bundle_id, generation)` with different contents must be
 /// refused. Replacing the active generation would make the control plane's
 /// "unchanged generation" path silently serve different bytes.
 #[tokio::test]
@@ -599,7 +489,7 @@ async fn reusing_an_installed_identity_with_a_different_manifest_is_refused() {
         vec![component(ComponentKind::UnifiedGeo, "geo-1", &changed)],
     );
     assert_ne!(reused.manifest_sha256, original.manifest_sha256);
-    sign_manifest(&mut h, &reused);
+    h.agent.transport_mut().response = response(&reused);
     let err = h.agent.run_once().await.expect_err("identity reuse");
     assert!(
         err.to_string()

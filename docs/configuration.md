@@ -151,7 +151,7 @@ xdp:
 - `configs/api_node.yaml`：唯一的本地配置文件——API 节点连接信息和 `xdp` 段都在这里。
 - `data/geo/`：整代地理 bundle 根目录（`active.json`、`bundles/<bundle_id>/`、
   `staging/`）。City 必需，ASN/Country 可选；由 AssetControl 发布并原子切换。
-- `configs/api_node.yaml` 的 `trustKeys`：钉扎的 Ed25519 Geo 分发公钥。
+- Geo 下发不再需要节点配置验签公钥；仍校验 manifest 身份、SHA-256 和制品大小后原子激活。
 - `data/cache`：默认磁盘缓存目录。
 - `data/state.json`、`data/metrics.mace`：运行状态、封禁和统计数据。
 - `logs/run.log`：节点运行日志；systemd 和内置后台模式都会追加写入。

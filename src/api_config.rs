@@ -47,10 +47,6 @@ pub struct ApiConfig {
     /// tier server-side; the node never asserts its own tier.
     #[serde(rename = "commMode", default)]
     pub comm_mode: String,
-    /// Pinned Ed25519 public keys for signed geo manifests. The key id is
-    /// derived from the public key (SHA-256), never supplied by the bundle.
-    #[serde(rename = "trustKeys", default)]
-    pub trust_keys: Vec<String>,
     /// The upstream gcloud face's numeric node id. It is **not** an
     /// authentication identity any more: it only travels in the vendored gcloud
     /// request payloads and the L1->L2 parent relay header (05 §9).
@@ -475,14 +471,6 @@ impl ApiConfig {
         // Fail closed on the identity material: a typo must stop the node at
         // startup, never silently fall back to a legacy identity.
         config.channel_config()?;
-        for key in &config.trust_keys {
-            let raw = hex::decode(key.trim()).map_err(|_| {
-                anyhow::anyhow!("trustKeys entries must be hex in {:?}", path.as_ref())
-            })?;
-            if raw.len() != 32 {
-                anyhow::bail!("trustKeys entries must be 32 bytes in {:?}", path.as_ref());
-            }
-        }
         if config.gcloud_node_id.is_empty() {
             tracing::warn!(
                 "'gcloudNodeId' is empty: the upstream gcloud payloads will carry node id 0"
