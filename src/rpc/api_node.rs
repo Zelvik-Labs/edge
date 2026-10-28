@@ -127,6 +127,7 @@ pub async fn sync_updating_server_list_once(
                             tiered_origin_bypass,
                             allow_lan,
                             global_http,
+                            resp.servers_json.len() as u64,
                         )
                         .await;
                         let added = maps

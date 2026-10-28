@@ -346,10 +346,12 @@ RPC stream commands, plus one configuration materialization. `ConfigApply` has
 its own admission class and one slot, so cache background saturation cannot fill
 the shared `BackgroundWork` class and block configuration. Expiry cleanup and
 disk purging keep ordinary `BackgroundWork` admission because cleanup must still
-progress under pressure. Configuration decode happens before that materialization
-permit, and the materialized generation's real peak is not yet charged through
-`SharedGrantPurpose::ConfigPublish`; the reserve protects the admission path, not
-the whole configuration working set.
+progress under pressure. Configuration decode is bounded by the decode budget
+and runs before the materialization permit; the materialization build window is
+charged through `SharedGrantPurpose::ConfigPublish` at the decoded JSON length —
+the cheapest measured lower bound of the maps being built, while the previous
+generation is still installed. A refused charge keeps the previous generation.
+The installed generation's steady-state residency is still not charged.
 
 New connection establishment and established traffic no longer share one
 undifferentiated budget. HTTP/TCP/H3 connection and UDP session admissions stop
@@ -370,8 +372,8 @@ current `lowPriorityBorrowableBytes`,
 `establishedTrafficAccountReserveEnforced=true`, `establishedTrafficReserveBytes`
 and `configApplyActive`; `priorityReserveEnforced=true` because the
 connection-establishment, established-traffic and control-plane admission
-reserves are all enforced. Remaining gaps stay explicit: configuration
-decode/materialization peaks are not charged through `ConfigPublish`, and
+reserves are all enforced. Remaining gaps stay explicit: the installed
+configuration generation's steady-state residency is not charged, and
 L1/analytics global revocation remains separate lifecycle work. Logical refunds
 never increase observed physical headroom, and estimated bytes are not RSS.
 

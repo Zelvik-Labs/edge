@@ -889,6 +889,7 @@ where
                             tiered_origin_bypass,
                             allow_lan: allow_lan_ip,
                             global_http: global_http_arc,
+                            payload_bytes: decoded_bytes,
                             limits: apply_limits,
                         },
                     )

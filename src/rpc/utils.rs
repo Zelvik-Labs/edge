@@ -38,6 +38,10 @@ fn server_has_subdomain_oss_origin(server: &ServerConfig) -> bool {
         })
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "forwards runtime-context fields into MaterializeRuntimeServersArgs; grouping again would duplicate that struct"
+)]
 pub async fn build_runtime_maps(
     servers: Vec<ServerConfig>,
     health_manager: &GlobalHealthManager,
@@ -46,6 +50,7 @@ pub async fn build_runtime_maps(
     tiered_origin_bypass: bool,
     allow_lan: bool,
     global_http: Option<crate::config_models::GlobalHTTPAllConfig>,
+    payload_bytes: u64,
 ) -> crate::config_apply::RuntimeServerMaps {
     crate::config_apply::materialize_runtime_servers(
         crate::config_apply::MaterializeRuntimeServersArgs {
@@ -56,6 +61,7 @@ pub async fn build_runtime_maps(
             tiered_origin_bypass,
             allow_lan,
             global_http: global_http.map(Arc::new),
+            payload_bytes,
             limits: crate::config_apply::ConfigApplyLimits::from_governor(),
         },
     )

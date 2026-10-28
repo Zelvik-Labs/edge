@@ -6,7 +6,7 @@
 //! alive, and without rebuilding every derived index when only a few sites change.
 //!
 //! Under memory pressure the apply path:
-//! - admits as `BackgroundWork` (backpressure, not a silent drop)
+//! - admits as `ConfigApply` (backpressure, not a silent drop)
 //! - reclaims cache/resident state between chunks
 //! - yields so request workers can run
 //! - keeps one `Arc<ServerConfig>` per site shared by host indexes
@@ -16,6 +16,7 @@ use crate::config_models::{GlobalHTTPAllConfig, ParentNodeConfig, ServerConfig};
 use crate::health_manager::GlobalHealthManager;
 use crate::memory_governor::{
     AdmissionClass, AdmissionPermit, MEMORY_GOVERNOR, MemoryGovernor, MemoryPressureLevel,
+    SharedGrantPurpose, SharedPermit,
 };
 use crate::memory_reclaim::request_reclaim;
 use std::collections::HashMap;
@@ -267,6 +268,18 @@ async fn admit_config_sync(governor: &MemoryGovernor) -> (Option<AdmissionPermit
     }
 }
 
+/// Charge a configuration build against the shared account. `payload_bytes`
+/// is the decoded JSON length, the cheapest measured lower bound of the maps
+/// being built: the previous generation is still installed, so both map sets
+/// are resident for the duration of the build. The returned credential is
+/// committed (the materialization is real from here on) and released when the
+/// build finishes.
+fn admit_config_publish(governor: &MemoryGovernor, payload_bytes: u64) -> Option<SharedPermit<'_>> {
+    let mut permit = governor.try_grant_shared(SharedGrantPurpose::ConfigPublish, payload_bytes)?;
+    permit.commit();
+    Some(permit)
+}
+
 fn maybe_reclaim(
     limits: ConfigApplyLimits,
     stats: &mut ConfigApplyStats,
@@ -296,6 +309,10 @@ pub struct MaterializeRuntimeServersArgs<'a> {
     pub tiered_origin_bypass: bool,
     pub allow_lan: bool,
     pub global_http: Option<Arc<GlobalHTTPAllConfig>>,
+    /// Decoded JSON length of the payload that produced `servers`, when the
+    /// caller knows it. Charged through `ConfigPublish` for the build window;
+    /// zero skips the charge (callers additionally guard the decode budget).
+    pub payload_bytes: u64,
     pub limits: ConfigApplyLimits,
 }
 
@@ -321,6 +338,7 @@ pub async fn materialize_runtime_servers(
         tiered_origin_bypass,
         allow_lan,
         global_http,
+        payload_bytes,
         limits,
     } = args;
     let started = Instant::now();
@@ -363,6 +381,36 @@ pub async fn materialize_runtime_servers(
         ..ConfigApplyStats::default()
     };
     let _permit = permit;
+    // The class permit reserves the control-plane slot, not the bytes: charge
+    // the build window so the account does not promise the same headroom to
+    // connections while the new generation is being materialized next to the
+    // installed one. Refusal keeps the previous generation, like the class
+    // admission above.
+    let publish_charge = if payload_bytes > 0 {
+        let Some(charge) = admit_config_publish(&MEMORY_GOVERNOR, payload_bytes) else {
+            tracing::warn!(
+                target: "config_apply",
+                servers_in,
+                payload_bytes,
+                admission_retries,
+                "config materialization refused by the shared account; keeping previous generation"
+            );
+            return RuntimeServerMaps {
+                stats: ConfigApplyStats {
+                    servers_in,
+                    admitted: false,
+                    admission_retries,
+                    elapsed: started.elapsed(),
+                    ..ConfigApplyStats::default()
+                },
+                ..RuntimeServerMaps::default()
+            };
+        };
+        Some(charge)
+    } else {
+        None
+    };
+    let _publish_charge = publish_charge;
     let mut last_reclaimed = MemoryPressureLevel::Normal;
     maybe_reclaim(limits, &mut stats, &mut last_reclaimed);
 
@@ -480,6 +528,7 @@ pub async fn apply_server_snapshot(
         tiered_origin_bypass,
         allow_lan,
         global_http,
+        payload_bytes: 0,
         limits,
     })
     .await;
@@ -573,6 +622,7 @@ mod tests {
             tiered_origin_bypass: false,
             allow_lan: true,
             global_http: None,
+            payload_bytes: 0,
             limits: ConfigApplyLimits::synthetic(8 * 1024 * 1024 * 1024, 4 * 1024 * 1024 * 1024),
         })
         .await;
@@ -601,6 +651,7 @@ mod tests {
             tiered_origin_bypass: false,
             allow_lan: true,
             global_http: None,
+            payload_bytes: 0,
             limits,
         })
         .await;
@@ -634,6 +685,32 @@ mod tests {
         assert!(second.stats.admitted);
         assert_eq!(store.get_all_servers_sync().len(), 1);
         assert!(store.get_server_sync("a.example.com").is_some());
+    }
+
+    #[test]
+    fn config_publish_charge_refuses_when_the_account_is_full() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(4 << 30, 2 << 30, 1 << 20, 0, i64::MAX as u64);
+        let grantable = governor.account_view().grantable_bytes;
+        assert!(grantable > 1);
+        let fill = governor
+            .try_grant_shared(SharedGrantPurpose::ConfigPublish, grantable)
+            .expect("control-priority work may use the whole account");
+        assert!(
+            admit_config_publish(&governor, 1).is_none(),
+            "a full account must defer the materialization instead of overcommitting"
+        );
+        drop(fill);
+        let charge =
+            admit_config_publish(&governor, 4096).expect("refunded capacity admits the build");
+        assert_eq!(
+            charge.bytes(),
+            4096,
+            "the full decoded payload length is charged, not a token amount"
+        );
+        assert_eq!(governor.account_view().committed_live_bytes, 4096);
+        drop(charge);
+        assert_eq!(governor.account_view().committed_live_bytes, 0);
     }
 
     #[test]

@@ -120,6 +120,7 @@ pub async fn sync_single_server_config(
                         tiered_origin_bypass,
                         allow_lan,
                         global_http,
+                        payload.server_config_json.len() as u64,
                     )
                     .await;
                     if !maps.stats.admitted {
@@ -293,6 +294,7 @@ pub async fn sync_user_servers_state(
                         tiered_origin_bypass,
                         allow_lan,
                         global_http,
+                        payload.servers_config_json.len() as u64,
                     )
                     .await;
                     if !maps.stats.admitted {
