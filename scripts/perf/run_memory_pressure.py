@@ -35,18 +35,29 @@ def run(args):
         for limit in [512, 256]:
             for repeat in range(args.rounds):
                 extra = ["--continuation-only"] if args.mode == "continuation" else []
-                tasks.append(("candidate", pathlib.Path(args.candidate).resolve(), f"{args.mode}-{limit}-{repeat}", limit, extra))
+                tasks.append(("candidate", pathlib.Path(args.candidate).resolve(), f"{args.mode}-{limit}-{repeat}", limit, extra, None))
     if args.mode in ["all", "abuse"]:
-        tasks.append(("candidate", pathlib.Path(args.candidate).resolve(), "abuse", 512, ["--abuse"]))
+        tasks.append(("candidate", pathlib.Path(args.candidate).resolve(), "abuse", 512, ["--abuse"], None))
+    if args.mode == "acceptance":
+        # Distinguish the pressure source: production reclaimable L1 cache,
+        # touched anonymous ballast, and both together. Only cache-bearing
+        # sources enable the fixture's production cache configuration.
+        for limit in [512, 256]:
+            for source in ["cache", "ballast", "mixed"]:
+                for repeat in range(args.rounds):
+                    env = {"PRESSURE_ACCEPTANCE": "1"}
+                    if source in ("cache", "mixed"):
+                        env["PRESSURE_CACHE"] = "1"
+                    tasks.append(("candidate", pathlib.Path(args.candidate).resolve(), f"acceptance-{source}-{limit}-{repeat}", limit, ["--acceptance-source", source], env))
     if args.baseline and args.mode in ["all", "benchmark"]:
         # Alternate AB / BA order; start a fresh process and cgroup each round.
         for repeat in range(args.rounds):
             for label, binary in (variants if repeat % 2 == 0 else list(reversed(variants))):
-                tasks.append((label, binary, f"bench-{repeat}-{label}", 1024, ["--benchmark", "--requests", str(args.requests)]))
+                tasks.append((label, binary, f"bench-{repeat}-{label}", 1024, ["--benchmark", "--requests", str(args.requests)], None))
         for repeat in range(3):
             for label, binary in (variants if repeat % 2 == 0 else list(reversed(variants))):
-                tasks.append((label, binary, f"alloc-{repeat}-{label}", 1024, ["--benchmark", "--count", "--requests", "1000"]))
-    for label, binary, name, limit, extra in tasks:
+                tasks.append((label, binary, f"alloc-{repeat}-{label}", 1024, ["--benchmark", "--count", "--requests", "1000"], None))
+    for label, binary, name, limit, extra, env in tasks:
         # The governor currently reads host PSI. Let its avg10 recover between
         # isolated cgroups, otherwise the previous run contaminates the next.
         recovery_start = time.monotonic()
@@ -68,7 +79,10 @@ def run(args):
                    "-p", f"MemoryMax={limit}M", "-p", f"MemoryHigh={int(limit*.90)}M",
                    "-p", "MemorySwapMax=0", "-p", "CPUQuota=200%", "-p", "AllowedCPUs=0,1",
                    "-p", "TasksMax=128", "-p", "LimitNOFILE=65536", "-p", f"StandardOutput=append:{log}", "-p", f"StandardError=append:{log}",
-                   "--setenv", f"ZELVIK_EDGE_HOME={node_home}", "--setenv", f"PRESSURE_TLS_DIR={tls}", str(binary)]
+                   "--setenv", f"ZELVIK_EDGE_HOME={node_home}", "--setenv", f"PRESSURE_TLS_DIR={tls}"]
+        for key, value in (env or {}).items():
+            command += ["--setenv", f"{key}={value}"]
+        command.append(str(binary))
         subprocess.run(command, check=True)
         profiler = None
         state = None
@@ -118,5 +132,5 @@ if __name__ == "__main__":
     p.add_argument("--output", required=True)
     p.add_argument("--rounds", type=int, default=3)
     p.add_argument("--requests", type=int, default=4000)
-    p.add_argument("--mode", choices=["all", "pressure", "continuation", "abuse", "benchmark"], default="all")
+    p.add_argument("--mode", choices=["all", "pressure", "continuation", "abuse", "benchmark", "acceptance"], default="all")
     run(p.parse_args())

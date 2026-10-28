@@ -162,65 +162,93 @@ silently disable the whole subsystem:
   `panic = "abort"`, where containment is moot; these guards protect debug
   builds and tests.
 
-### Preemptive in-flight shed (`memory_shed`)
+### Bounded emergency shed (`memory_shed`)
 
 Cooperative reclaim cannot touch work already in flight — a long download or
 lingering keepalive connection holds its buffers until it finishes, which can
 lose the race against the OOM killer at `Critical`. `observe_pressure` is
-called from `on_memory_pressure_observed` on every pressure sample and
-escalates through two tiers:
+called from `on_memory_pressure_observed` on every pressure sample:
 
 - `High` → keepalive suppression: `early_request_filter` writes responses
   with `set_keepalive(None)`, so idle connections drain at the next request
   boundary instead of holding buffers open. Cost when inactive: one relaxed
   atomic load per request.
-- `Critical` → keepalive suppression plus a drain pass over
-  `L4_CONNECTION_REGISTRY`: connections older than an age threshold are
-  cancelled with `ConnectionCancelReason::MemoryPressureShed` through the
-  existing watch-channel machinery (the same path L4 defense drains use).
-  Each consecutive Critical observation steps down an age ladder
-  (300s → 120s → 60s → 30s → all), so a sustained critical period sheds
-  progressively younger connections. De-escalation below `High` lifts the
-  flag and resets the ladder.
+- `Critical` → keepalive suppression plus a **final-resort** drain, only when
+  all of these hold: Critical has been observed continuously for at least 10s
+  with samples at least 5s apart; the latest real reclaim pass ran within 30s
+  and lowered measured RSS by less than 4 MiB (or freed no entries/estimated
+  bytes when RSS is unavailable); and a freshly read governor snapshot reports
+  `account_headroom_bytes` as `Some` and strictly below
+  `connectionAdmissionUsedBytes + requestWorkspaceUsedBytes`. The snapshot must
+  also confirm Critical — PSI-only or stale Critical evidence cannot kill.
+  Unknown headroom never kills. A pass cancels at most 32 oldest L4
+  connections and 32 oldest H3 connections, skips records already being
+  cancelled, consumes the ineffective-reclaim evidence, and is limited to one
+  pass per 30s. Any sample below Critical ends the sustained episode; any
+  effective reclaim, `High` sample, or stable recovery clears the evidence.
+- Sub-`High` levels only maintain the 30s recovery window; suppression lifts
+  after the observed level stays below `High` for that window.
 
 New-connection refusal is deliberately not added: admission already
 collapses toward its critical floor via `pressure_adjusted_min_limit`, and a
-hard-refused connection produces no response at all — shed connections at
-least finish their in-flight response or get a clean close. Shed activity is
-exported on the node-status `resourceGovernor.shed` object
-(`drainedConnectionsTotal`, `keepaliveMarkedTotal`, `criticalStreak`,
-`lastDrainAgeMs`, `keepaliveShedActive`).
+hard-refused connection produces no response at all. Shed activity is exported
+on the node-status `resourceGovernor.shed` object (`drainedConnectionsTotal`,
+`keepaliveMarkedTotal`, `criticalSamples`, `reclaimExhausted`,
+`finalResortPassesTotal`, `lastFinalResortAtMs`, `keepaliveShedActive`,
+`h3DrainedConnectionsTotal`).
+
+### Protocol-level refusal semantics
+
+Resource shortage for a new HTTP/2 stream resets only that stream with
+`REFUSED_STREAM` and keeps the accept loop polling the connection, so accepted
+sibling streams continue. The former behavior exited the connection on a
+per-connection or global stream admission failure; that turned ordinary memory
+shortage into loss of already accepted work. Sustained creation abuse still
+triggers the existing 200-stream/30s defense, but it now sends GOAWAY through
+`graceful_shutdown` and keeps the connection polled until accepted responses
+finish. H3 request admission failure resolves the request through the public h3
+API and rejects both stream halves with `H3_REQUEST_REJECTED`; dropping a bare
+resolver was not used because it skips h3's request-completion bookkeeping and
+leaks the request id. Neither protocol's new-work refusal closes the connection.
 
 ### Per-connection admission tickets (`memory_ticket`)
 
-Request-scoped classes (`RequestBodyWaf`, `ResponseBodyWaf`,
-`ResponseTransform`, `Http2Stream`) previously ran a global padded-counter
-RMW per admission — ~4 shared-line ops per request. Each registered L4
-connection now owns a `TicketBucket` (indexed by peer socket address in
+Request-scoped byte classes (`RequestBodyWaf`, `ResponseBodyWaf`,
+`ResponseTransform`) previously ran a global padded-counter RMW per
+admission — ~4 shared-line ops per request. Each registered L4 connection
+now owns a `TicketBucket` (indexed by peer socket address in
 `L4ConnectionRegistry::by_addr`, looked up once per request in
-`early_request_filter` and once per connection in the H2 stream loop). A
-bucket refills from the `request_workspace` ledger in `need + 256KiB`
-chunks; spends are an uncontended CAS on a connection-private line.
+`early_request_filter`). QUIC has no stable peer-address key, so each
+accepted H3 connection creates one bucket and scopes it to every request task;
+address indexing is never used for QUIC. A bucket refills from the
+`request_workspace` ledger in `need + 256KiB` chunks; spends are an
+uncontended CAS on a connection-private line.
 
 - Ledger bound: `available/4` normally, `available/16` under High+
-  pressure, floored at one transform charge — intentionally below the sum
-  of the old per-class implied bounds. Classes on one connection share the
-  pool. Audit reproductions now demonstrate that a bucket has no in-flight
-  ceiling: one connection can exhaust the global workspace ledger and deny
-  another connection's stream or body-buffer allocation. The earlier claim of
-  cross-connection isolation was incorrect. Pooled H2 stream spends also bypass
-  the direct path's global class counter and shared connection estimate; the
-  global workspace byte bound still applies. See `audit_known_gap_*` tests in
-  `memory_ticket.rs`.
+  pressure, floored at one transform charge. Classes on one connection share
+  the pool.
+- Owner bound: one bucket may hold at most `max(workspace/4, 16MiB)`,
+  capped at the whole workspace. The 16 MiB floor lets one legitimate
+  transform fit; pools below 4×16 MiB can still be consumed by that single
+  transform, so the guarantee is proportional rather than absolute. Refills
+  reserve owner bytes with an atomic before touching the global ledger, so
+  concurrent refills cannot each observe the same unused allowance. A victim
+  owner can still obtain a 16 KiB charge while another owner is capped.
+- H2 stream slots are **not** drawn from this byte pool. Pooled and
+  unregistered H2 paths both hold an ordinary `Http2Stream` class permit for
+  exactly the stream lifetime, so the global stream count and shared
+  connection estimate cannot be bypassed. No second workspace byte charge is
+  taken for a stream slot.
 - `release` returns bytes to the bucket and refunds the global ledger once
   the idle balance exceeds `1MiB`, so a 16MiB transform charge is not held
   for the connection's lifetime; bucket drop (connection close) refunds the
   rest. Spend failure returns `None` and bumps the class reject counter —
   identical fail-closed contract to `try_admit`.
-- Unregistered transports (e.g. H3, non-registry paths) take the
-  `WorkspacePermit::Direct` fallback — `try_admit` semantics unchanged.
+- Unregistered non-H2 paths take the `WorkspacePermit::Direct` fallback —
+  `try_admit` semantics unchanged.
 - Microbench (debug, 8×2M, same mixed-class rotation): pooled 3.99M ops/s
-  vs direct 2.83M ops/s (+41%).
+  vs direct 2.83M ops/s (+41%). This predates the owner bound and counted
+  H2 slots as byte spends; it is not a measurement of the current stream path.
 - `requestWorkspaceUsedBytes` is exported on node status and folded into
   the `unaccountedRssBytes` tracked set like the other estimate ledgers.
 
@@ -360,38 +388,38 @@ The installed generation's steady-state residency is still not charged.
 
 New connection establishment and established traffic no longer share one
 undifferentiated budget. HTTP/TCP/H3 connection and UDP session admissions stop
-at `shared connection budget − established reserve`, while H2 streams, H3
-requests and origin connects may use the whole budget. The reserve is the
-Normal-pressure floors: 1,024 H2 streams × 16 KiB, 1,024 H3 requests × 24 KiB
-and 512 origin connects × 32 KiB (56 MiB), capped at half the connection budget
-when the budget is below twice that. The same reserve is deducted from the
-shared account for connection-establishment admissions, so new connections
-cannot themselves consume that remainder. Other Ordinary work can still
-consume it, and the shared workspace ledger can independently reject streams
-on already-admitted connections.
-SNI relay and response transforms are excluded: SNI relay is a legacy
-passthrough with its own half-budget limit, and a 16 MiB transform estimate
-would make its floor a memory plan by itself.
+at `shared connection budget − established reserve`. Only work that belongs to
+an already accepted request may draw the reserve: origin connects and the
+relay/session queue bytes (`TcpQueue`, `UdpQueue`, `ZeroCopyRelay`). New H2
+streams, new H3 requests, request-body/response-body WAF workspaces and response
+transforms use Ordinary account priority and stop at the same boundary, so new
+work cannot squeeze the bytes an accepted response needs to keep forwarding.
+The reserve is the Normal-pressure floors: 1,024 H2 streams × 16 KiB, 1,024 H3
+requests × 24 KiB and 512 origin connects × 32 KiB (56 MiB), capped at half the
+connection budget when the budget is below twice that. The same reserve is
+deducted from the shared account for connection-establishment and Ordinary
+admissions; only the Established continuation priority keeps just the
+control-plane reserve. SNI relay and response transforms are excluded: SNI relay
+is a legacy passthrough with its own half-budget limit, and a 16 MiB transform
+estimate would make its floor a memory plan by itself.
 
 `resourceGovernor.sharedAccount` reports `lowPriorityBorrowingEnforced=true`,
 current `lowPriorityBorrowableBytes`,
 `controlPlaneAccountReserveEnforced=true`, `controlPlaneReserveBytes`,
 `establishedTrafficAccountReserveEnforced=true`, `establishedTrafficReserveBytes`
-and `configApplyActive`. `priorityReserveEnforced=true` currently describes
-only the new-connection gate and control-plane gate. It does not guarantee
-continuation priority over new streams on existing connections: both still use
-Ordinary account priority, and pooled H2 uses the shared workspace ledger.
-The 56 MiB is unavailable to new connections but can be consumed by other
-Ordinary work; it is neither a per-connection entitlement nor a protected
-continuation lane. Remaining gaps stay explicit: the installed
-configuration generation's steady-state residency is not charged, and the
-client-agent verified-IP table has no bounded index yet. Pressure reclaim
-already revokes the reclaimable L1/analytics caches — L1 is halved at High and
-drained at Critical, with negative cache, Bloom, surrogate, geo/UA,
-TLS-connector and regex caches trimmed alongside — while metric aggregation
-samples are billing state and are never revoked (only new keys are
-cap-rejected). Logical refunds never increase observed physical headroom, and
-estimated bytes are not RSS.
+and `configApplyActive`. `priorityReserveEnforced=true` now means the
+continuation reserve is reachable only through Established priority — origin
+connects and relay/session queues — while new connections, streams, H3 requests
+and large request workspaces stop before it. The 56 MiB remains a shared pool,
+not a per-connection entitlement; a connection that has no accepted request
+cannot borrow it. Remaining gaps stay explicit: the installed configuration
+generation's steady-state residency is not charged, and the client-agent
+verified-IP table has no bounded index yet. Pressure reclaim already revokes the
+reclaimable L1/analytics caches — L1 is halved at High and drained at Critical,
+with negative cache, Bloom, surrogate, geo/UA, TLS-connector and regex caches
+trimmed alongside — while metric aggregation samples are billing state and are
+never revoked (only new keys are cap-rejected). Logical refunds never increase
+observed physical headroom, and estimated bytes are not RSS.
 
 Per-server metric state now has a concrete deletion lifecycle. A configuration
 snapshot that drops a server id moves its metric instance to a retired set; the
