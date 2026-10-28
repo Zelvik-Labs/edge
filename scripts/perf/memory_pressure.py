@@ -597,7 +597,7 @@ async def probe_bursts(count):
         ("h3", lambda: H3().open()),
     ):
         try:
-            clients[proto] = await opener()
+            clients[proto] = await asyncio.wait_for(opener(), 10)
         except Exception as error:
             rows[proto] = {
                 "requests": count,
