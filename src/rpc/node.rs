@@ -1315,7 +1315,9 @@ fn shared_account_status(snapshot: &crate::memory_governor::GovernorSnapshot) ->
         "committedUnconfirmedBytes": snapshot.account_committed_unconfirmed_bytes,
         "committedLiveBytes": snapshot.account_committed_live_bytes,
         "observationAgeMs": snapshot.observation_age_ms,
-        "priorityReserveEnforced": false
+        "priorityReserveEnforced": false,
+        "lowPriorityBorrowingEnforced": true,
+        "lowPriorityBorrowableBytes": snapshot.low_priority_borrowable_bytes
     })
 }
 
@@ -1358,6 +1360,14 @@ mod shared_account_status_tests {
             Some(snapshot.observation_age_ms)
         );
         assert_eq!(status["priorityReserveEnforced"].as_bool(), Some(false));
+        assert_eq!(
+            status["lowPriorityBorrowingEnforced"].as_bool(),
+            Some(true)
+        );
+        assert_eq!(
+            status["lowPriorityBorrowableBytes"].as_u64(),
+            Some(snapshot.low_priority_borrowable_bytes)
+        );
     }
 }
 

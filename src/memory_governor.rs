@@ -322,6 +322,10 @@ pub struct GovernorSnapshot {
     pub account_pending_bytes: u64,
     /// Committed bytes not yet inside a published observation.
     pub account_committed_unconfirmed_bytes: u64,
+    /// Headroom cache/analytics work may borrow after the connection-budget
+    /// reserve; 0 outside Normal pressure. Enforcement is in the shared
+    /// account charge path, not just this advisory value.
+    pub low_priority_borrowable_bytes: u64,
     /// Managed stock under promise: committed credentials still held.
     pub account_committed_live_bytes: u64,
     pub account_grants_total: u64,
@@ -840,6 +844,7 @@ struct GovernorLimits {
     generation: u64,
     /// `limit_for` output per class, indexed by `class_index`.
     class_limit: [u64; N_ADMISSION_CLASSES],
+    connection_budget_bytes: u64,
     shared_connection_budget_bytes: u64,
     cache_read_memory_budget_bytes: u64,
     cache_read_memory_object_limit_bytes: u64,
@@ -1200,6 +1205,10 @@ pub struct SharedPermit<'a> {
     purpose: SharedGrantPurpose,
     bytes: u64,
     committed: bool,
+    /// Cache/analytics work may only borrow headroom left after the
+    /// connection-budget reserve. The flag follows the credential through
+    /// growth so a later `grow` cannot bypass the original gate.
+    low_priority: bool,
 }
 
 pub type StaticSharedPermit = SharedPermit<'static>;
@@ -1210,6 +1219,7 @@ impl std::fmt::Debug for SharedPermit<'_> {
             .field("purpose", &self.purpose)
             .field("bytes", &self.bytes)
             .field("committed", &self.committed)
+            .field("low_priority", &self.low_priority)
             .finish()
     }
 }
@@ -1260,10 +1270,12 @@ impl SharedPermit<'_> {
         if delta == 0 {
             return true;
         }
-        if self
-            .governor
-            .try_charge_account(delta, self.committed, self.purpose)
-        {
+        if self.governor.try_charge_account_with_priority(
+            delta,
+            self.committed,
+            self.purpose,
+            self.low_priority,
+        ) {
             self.bytes = self.bytes.saturating_add(delta);
             true
         } else {
@@ -1432,6 +1444,7 @@ impl MemoryGovernor {
             cached_limits: arc_swap::ArcSwap::from_pointee(GovernorLimits {
                 generation: 0,
                 class_limit: [0; N_ADMISSION_CLASSES],
+                connection_budget_bytes: 0,
                 shared_connection_budget_bytes: 0,
                 cache_read_memory_budget_bytes: 0,
                 cache_read_memory_object_limit_bytes: 0,
@@ -1553,13 +1566,38 @@ impl MemoryGovernor {
             .saturating_sub(outstanding)
     }
 
+    /// Bytes cache/analytics work may borrow right now, after the full
+    /// connection-budget reserve and every outstanding commitment. Returns
+    /// zero outside Normal pressure. This is the same gate enforced by
+    /// `try_admit_with_charges`, exposed for status and tests.
+    pub fn low_priority_borrowable_bytes(&self) -> u64 {
+        let limits = self.limits();
+        if limits.memory_pressure_level != MemoryPressureLevel::Normal
+            || self.cached_account_headroom_bytes.load(Ordering::Relaxed) == u64::MAX
+        {
+            return 0;
+        }
+        self.account_grantable_bytes()
+            .saturating_sub(limits.connection_budget_bytes)
+    }
+
     /// Charge `bytes` against the account. `committed` selects which
     /// counter the charge lands in; callers use `false` for fresh
     /// grants and `true` only for growing an already-committed permit.
     /// Committed charges also land in the live/purpose attribution
     /// immediately — the covered allocation is already real.
     fn try_charge_account(&self, bytes: u64, committed: bool, purpose: SharedGrantPurpose) -> bool {
-        self.try_charge_account_before_cas(bytes, committed, purpose, || {})
+        self.try_charge_account_with_priority(bytes, committed, purpose, false)
+    }
+
+    fn try_charge_account_with_priority(
+        &self,
+        bytes: u64,
+        committed: bool,
+        purpose: SharedGrantPurpose,
+        low_priority: bool,
+    ) -> bool {
+        self.try_charge_account_before_cas(bytes, committed, purpose, low_priority, || {})
     }
 
     fn try_charge_account_before_cas(
@@ -1567,6 +1605,7 @@ impl MemoryGovernor {
         bytes: u64,
         committed: bool,
         purpose: SharedGrantPurpose,
+        low_priority: bool,
         before_cas: impl FnOnce(),
     ) -> bool {
         let mut before_cas = Some(before_cas);
@@ -1575,9 +1614,28 @@ impl MemoryGovernor {
         } else {
             &self.account_pending_bytes
         };
+        // Low-priority work may use only what remains after reserving the
+        // whole connection budget (which already covers established
+        // protocol queues and relay slices), and only while pressure is
+        // Normal. A non-Normal observation closes the borrowing gate even
+        // if the arithmetic would still leave headroom.
+        let low_priority_reserve = if low_priority {
+            let limits = self.limits();
+            if limits.memory_pressure_level == MemoryPressureLevel::Normal
+                && self.cached_account_headroom_bytes.load(Ordering::Relaxed) != u64::MAX
+            {
+                limits.connection_budget_bytes
+            } else {
+                u64::MAX
+            }
+        } else {
+            0
+        };
         let mut current = self.account_outstanding_bytes.load(Ordering::Acquire);
         loop {
-            let capacity = self.account_grantable_from_outstanding();
+            let capacity = self
+                .account_grantable_from_outstanding()
+                .saturating_sub(low_priority_reserve);
             if bytes > capacity.saturating_sub(current) {
                 self.account_rejects_total.fetch_add(1, Ordering::Relaxed);
                 return false;
@@ -1643,8 +1701,21 @@ impl MemoryGovernor {
         purpose: SharedGrantPurpose,
         bytes: u64,
     ) -> Option<SharedPermit<'_>> {
+        self.try_grant_shared_with_priority(
+            purpose,
+            bytes,
+            purpose == SharedGrantPurpose::CacheReadMemory,
+        )
+    }
+
+    fn try_grant_shared_with_priority(
+        &self,
+        purpose: SharedGrantPurpose,
+        bytes: u64,
+        low_priority: bool,
+    ) -> Option<SharedPermit<'_>> {
         let bytes = bytes.max(1);
-        if !self.try_charge_account(bytes, false, purpose) {
+        if !self.try_charge_account_with_priority(bytes, false, purpose, low_priority) {
             return None;
         }
         Some(SharedPermit {
@@ -1652,6 +1723,7 @@ impl MemoryGovernor {
             purpose,
             bytes,
             committed: false,
+            low_priority,
         })
     }
 
@@ -1942,8 +2014,12 @@ impl MemoryGovernor {
         // attributable.
         let account_charge =
             class_estimated_bytes(class).saturating_add(cache_read_memory_charge_bytes);
-        let Some(mut shared) = self.try_grant_shared(SharedGrantPurpose::Admission, account_charge)
-        else {
+        let low_priority = class.resource_domain() == Some(ResourceDomain::CacheAndAnalytics);
+        let Some(mut shared) = self.try_grant_shared_with_priority(
+            SharedGrantPurpose::Admission,
+            account_charge,
+            low_priority,
+        ) else {
             if cache_read_memory_charge_bytes > 0 {
                 self.cache_read_memory_bytes
                     .fetch_sub(cache_read_memory_charge_bytes, Ordering::AcqRel);
@@ -3100,6 +3176,7 @@ impl MemoryGovernor {
             account_committed_unconfirmed_bytes: self
                 .account_committed_unconfirmed_bytes
                 .load(Ordering::Relaxed),
+            low_priority_borrowable_bytes: self.low_priority_borrowable_bytes(),
             account_committed_live_bytes: self.account_committed_live_bytes.load(Ordering::Relaxed),
             account_grants_total: self.account_grants_total.load(Ordering::Relaxed),
             account_rejects_total: self.account_rejects_total.load(Ordering::Relaxed),
@@ -3174,6 +3251,7 @@ impl MemoryGovernor {
             .store(std::sync::Arc::new(GovernorLimits {
                 generation,
                 class_limit,
+                connection_budget_bytes: snapshot.connection_budget_bytes,
                 // A landed-but-blind observation (availability Unknown and
                 // no headroom reading at all) collapses the derived byte
                 // budget toward ~1B and would refuse every charged admission
@@ -3598,15 +3676,10 @@ fn read_memory_snapshot() -> MemorySnapshot {
     sys.refresh_memory();
 
     #[cfg(target_os = "linux")]
-    let mut total_bytes = effective_total_bytes(
-        sys.total_memory().max(MIN_MEMORY_TOTAL_BYTES),
-        None,
-    );
+    let mut total_bytes =
+        effective_total_bytes(sys.total_memory().max(MIN_MEMORY_TOTAL_BYTES), None);
     #[cfg(not(target_os = "linux"))]
-    let total_bytes = effective_total_bytes(
-        sys.total_memory().max(MIN_MEMORY_TOTAL_BYTES),
-        None,
-    );
+    let total_bytes = effective_total_bytes(sys.total_memory().max(MIN_MEMORY_TOTAL_BYTES), None);
     #[cfg(target_os = "linux")]
     let mut used_bytes = sys.used_memory().min(total_bytes);
     #[cfg(not(target_os = "linux"))]
@@ -3657,11 +3730,8 @@ fn read_memory_snapshot() -> MemorySnapshot {
                     total_bytes = effective_total_bytes(total_bytes, Some(max));
                     if cgroup.current_known {
                         used_bytes = cgroup.current_bytes.min(total_bytes);
-                        available_before_reserve = effective_available_bytes(
-                            total_bytes,
-                            used_bytes,
-                            host_available,
-                        );
+                        available_before_reserve =
+                            effective_available_bytes(total_bytes, used_bytes, host_available);
                         used_bytes = total_bytes.saturating_sub(available_before_reserve);
                         raw_available_bytes = Some(available_before_reserve);
                         availability = MemoryAvailability::Known;
@@ -5594,6 +5664,9 @@ mod tests {
     #[test]
     fn high_cost_admission_classes_have_limits_and_release() {
         let governor = MemoryGovernor::new();
+        // Cache classes now borrow only after the connection reserve; seed a
+        // normal large host so this test exercises counters, not host luck.
+        seed_governor_memory(&governor, 64 << 30, 60 << 30, 1 << 20, 0);
         for class in [
             AdmissionClass::UdpSession,
             AdmissionClass::RequestBodyWaf,
@@ -5615,6 +5688,9 @@ mod tests {
     #[test]
     fn cache_read_memory_admission_tracks_bytes_and_object_limit() {
         let governor = MemoryGovernor::new();
+        // The shared account gates cache work after the connection reserve;
+        // use a deterministic normal host instead of the CI host's headroom.
+        seed_governor_memory(&governor, 64 << 30, 60 << 30, 1 << 20, 0);
         let object_limit = governor.cache_read_memory_object_limit_bytes();
         assert!(
             governor
@@ -6699,7 +6775,8 @@ mod resident_memory_tests {
 mod en16_pool_tests {
     use super::{
         AdmissionClass, BudgetedMemorySnapshot, DiskLedgerClass, MemoryGovernor,
-        SharedGrantPurpose, pinned_alloc_headroom_bytes, pinned_alloc_reserve_bytes,
+        MemoryPressureLevel, SharedGrantPurpose, pinned_alloc_headroom_bytes,
+        pinned_alloc_reserve_bytes,
     };
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -7058,6 +7135,101 @@ mod en16_pool_tests {
     }
 
     #[test]
+    fn cache_admissions_stop_at_the_connection_budget_reserve() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 4 << 30, 2 << 30, 1 << 20, 0);
+        let snapshot = governor.snapshot(1);
+        assert_eq!(snapshot.memory_pressure_level, MemoryPressureLevel::Normal);
+        let headroom = snapshot.account_headroom_bytes.expect("seeded headroom");
+        let reserve = snapshot.connection_budget_bytes;
+        let borrowable = governor.low_priority_borrowable_bytes();
+        assert_eq!(
+            borrowable,
+            headroom
+                .saturating_sub(snapshot.account_safety_margin_bytes)
+                .saturating_sub(reserve)
+        );
+        assert!(borrowable > 1);
+        assert_eq!(snapshot.low_priority_borrowable_bytes, borrowable);
+
+        // Leave exactly one byte of low-priority window.
+        let fill = borrowable - 1;
+        let fill_permit = governor
+            .try_grant_shared(SharedGrantPurpose::ConfigPublish, fill)
+            .expect("high-priority grant may use the full account");
+        assert_eq!(governor.low_priority_borrowable_bytes(), 1);
+        assert!(
+            governor.try_admit_cache_read(2).is_none(),
+            "cache work must not borrow into the connection-budget reserve"
+        );
+        assert!(
+            governor
+                .try_grant_shared(SharedGrantPurpose::CacheReadMemory, 2)
+                .is_none(),
+            "a direct cache-read grant must use the same gate"
+        );
+        // The connection reserve itself is still available.
+        assert!(governor.try_admit(AdmissionClass::HttpConnection).is_some());
+        drop(fill_permit);
+    }
+
+    #[test]
+    fn cache_admissions_are_closed_outside_normal_pressure() {
+        let governor = MemoryGovernor::new();
+        // 15% available is Elevated: cache work stops growing even though
+        // the raw arithmetic would still show headroom beyond the reserve.
+        seed_governor_memory(&governor, 10 << 30, 3 << 29, 1 << 20, 0);
+        let snapshot = governor.snapshot(1);
+        assert_eq!(
+            snapshot.memory_pressure_level,
+            MemoryPressureLevel::Elevated
+        );
+        assert_eq!(governor.low_priority_borrowable_bytes(), 0);
+        assert!(governor.try_admit_cache_read(1).is_none());
+        assert!(
+            governor.try_admit(AdmissionClass::HttpConnection).is_some(),
+            "connection admission keeps its own reserve"
+        );
+    }
+
+    #[test]
+    fn cache_borrowing_requires_observed_physical_headroom() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(64 << 30, 60 << 30, 1 << 20, 0, i64::MAX as u64);
+        governor
+            .cached_account_headroom_bytes
+            .store(u64::MAX, Ordering::Release);
+        assert_eq!(governor.low_priority_borrowable_bytes(), 0);
+        assert!(governor.try_admit_cache_read(1).is_none());
+        assert!(
+            governor
+                .try_grant_shared(SharedGrantPurpose::CacheReadMemory, 1)
+                .is_none()
+        );
+        assert!(governor.try_admit(AdmissionClass::HttpConnection).is_some());
+    }
+
+    #[test]
+    fn shared_grant_growth_keeps_the_low_priority_gate() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 4 << 30, 2 << 30, 1 << 20, 0);
+        let borrowable = governor.low_priority_borrowable_bytes();
+        assert!(borrowable > 1);
+        let mut permit = governor
+            .try_grant_shared_with_priority(SharedGrantPurpose::Admission, 1, true)
+            .expect("one byte fits the low-priority window");
+        let fill = borrowable - 1;
+        let _fill_permit = governor
+            .try_grant_shared(SharedGrantPurpose::ConfigPublish, fill)
+            .expect("high-priority fill fits");
+        assert_eq!(governor.low_priority_borrowable_bytes(), 0);
+        assert!(
+            !permit.grow(10),
+            "growth of a cache credential must not bypass its gate"
+        );
+    }
+
+    #[test]
     fn shared_account_pending_and_committed_charges_use_one_gate() {
         let governor = MemoryGovernor::new();
         seed_governor_memory(&governor, 2 << 30, 1 << 30, 1 << 20, 0);
@@ -7068,6 +7240,7 @@ mod en16_pool_tests {
             half,
             true,
             SharedGrantPurpose::RequestWorkspace,
+            false,
             || {
                 pending = governor.try_grant_shared(SharedGrantPurpose::Admission, half);
                 assert!(pending.is_some());

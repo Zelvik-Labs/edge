@@ -21,7 +21,7 @@
 
 所有本机 Rust 测试通过工作区 `scripts/local-rust.sh`、mbx、单编译槽运行。未清缓存。未发布、部署或修改 tag。
 
-全量库测试：macOS debug `cargo test --lib` 1059 通过 / 2 手动 UDP 用例忽略；`cargo clippy --lib -D clippy::correctness -D clippy::suspicious` 通过（仅保留既有 `items_after_test_module` 警告）。`tests/memory_governance.rs` 10 通过、`tests/oom_audit.rs` 11 通过。Linux/cgroup/RSS/Long-run 验证仍未运行：本机没有可用 Linux 测试环境，103 宿主仅剩约 16 GiB 磁盘、低于 Rust 门禁的 22 GiB 前置，未在 CI 宿主上启动冷构建。
+验证环境已增加专用 Ubuntu 24 主机 `zelvik-dev-43`（8 核 / 15 GiB），源码位于 `/root/zelvik-dev/edge`，复用 debug 缓存。当前低优先级准入工作树：Linux 全量库测试 **1137 通过 / 2 手动 UDP 用例忽略**；macOS 受影响 cache 47、governor 76 通过，`clippy --lib -D clippy::correctness -D clippy::suspicious` 通过。Linux `memory_governance` 10、`oom_audit` 11、`memory_reclaim` 4、`config_sync_memory` 3 在新准入切片上重新通过。没有构建 release 或部署生产。
 
 ## 共享账本原子性（实施中）
 
@@ -35,4 +35,12 @@
 - daily：已由 `bf82d3b` 改为按 wire cap 分块并只回填未持久化行；pending 有行数与字节上限，截断时保留较旧行并写 gap。核心 server 行与 domain 行分别限额，但 spool 完全拒绝写入时两者都会受控丢弃。
 - metric：已由 `bf82d3b` 取消失败后 restore 全部聚合样本；未持久化请求进入 4,096 项 / 16 MiB pending 队列，按原始时段、item、version 重试。接收端忽略 `keepKeys`、ClickHouse 替换表不求和已核实；尚未引入远端 ACK baseline。
 - aggregator：已由 `208be7f` 增加 per-aggregator 字节预算，entry、动态属性与 request sample 在分配前计费；flush 退款、restore 重新计费。top_ip 与 daily tracker 仍只有条目上限。
-- Linux 验证尚未运行。本机测试不证明 Linux RSS、cgroup 压力、吞吐或长连接生存。
+- Linux debug 库与 RSS/配置集成验证已运行。新增 `tests/memory_audit.rs` 使用生产同款 mimalloc：512/256 MiB cgroup（无 swap、CPU 200%）各 16 轮 × 30,000 输入通过；聚合计费每轮约 16 MiB、flush 后归零。回收后 RSS 首/末轮分别约 33.5→44.2 MiB、28.6→32.6 MiB；短测有预热增长；256 MiB 的 **512 轮 × 30,000（1,536 万输入）复核通过，224.95 秒**，回收后 RSS 28.6→36.9 MiB，末尾三轮均为 38,699,008 bytes。持有的是 16 个连接准入凭证，不是网络连接；这些结果不证明协议吞吐或长连接生存。
+
+## 低优先级借用准入（工作树）
+
+`CacheWrite` / `CacheRevalidate` / `CacheReadMemory` 与直接 `CacheReadMemory` shared grant 在统一 outstanding CAS 门槛扣除完整 connection budget 后才能分配；Elevated/High/Critical 或未知 physical headroom 关闭新借用，permit grow 沿用原优先级。逻辑取消与 committed 生命周期保持原语义。node status 显示 `lowPriorityBorrowingEnforced=true` 和当前可借字节；`priorityReserveEnforced=false` 仍明确表示尚未完成所有分配者的独立硬保留。
+
+去掉 CAS 门槛中的 reserve 扣除，两个准入回归确定性失败（侵入 connection reserve、Elevated 仍允许缓存）；恢复后两个用例通过。cache 生命周期测试使用每个 storage 的私有 synthetic governor，避免依赖宿主内存或修改全局 refresher。新增额度耗尽测试验证正常/压缩磁盘正文仍可流式返回，压缩损坏仍在 body read 返回错误并清理，连接准入保留 headroom。
+
+此切片尚不覆盖 `BackgroundWork` 共享调用者、resident cache 或 aggregator 的全局借用撤销，也没有把完整 control-plane reserve / 协议 drain / registry reclaim 实现声明为完成。

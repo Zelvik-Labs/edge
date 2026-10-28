@@ -107,10 +107,6 @@ fn cache_memory_hit_limit_bytes() -> u64 {
         .min(MEMORY_SERVE_MAX)
 }
 
-fn try_admit_cache_memory_hit(bytes: u64) -> Option<StaticAdmissionPermit> {
-    MEMORY_GOVERNOR.try_admit_cache_read(bytes)
-}
-
 pub(crate) fn cache_write_lock_for_key(key: &str) -> Arc<Mutex<()>> {
     // Full objects and all partial-range selectors represent the same
     // resource. Canonicalizing here makes lookup, fill, purge, and cluster
@@ -253,6 +249,8 @@ pub struct FileStorage {
     pub inner: ArcSwap<FileStorageInner>,
     enable_sendfile: AtomicBool,
     enable_file_cache: AtomicBool,
+    #[cfg(test)]
+    test_governor: Option<&'static crate::memory_governor::MemoryGovernor>,
 }
 
 pub struct FileStorageInner {
@@ -291,7 +289,17 @@ impl FileStorage {
             inner: ArcSwap::from_pointee(FileStorageInner::single(main_root, Vec::new())),
             enable_sendfile: AtomicBool::new(true),
             enable_file_cache: AtomicBool::new(true),
+            #[cfg(test)]
+            test_governor: None,
         }
+    }
+
+    fn admission_governor(&self) -> &'static crate::memory_governor::MemoryGovernor {
+        #[cfg(test)]
+        if let Some(governor) = self.test_governor {
+            return governor;
+        }
+        &MEMORY_GOVERNOR
     }
 
     pub fn update_config(
@@ -887,7 +895,7 @@ impl Storage for FileStorage {
                 && meta.size <= memory_hit_limit
                 && file_size <= memory_hit_limit
             {
-                try_admit_cache_memory_hit(file_size)
+                self.admission_governor().try_admit_cache_read(file_size)
             } else {
                 None
             };
@@ -989,7 +997,8 @@ impl Storage for FileStorage {
             && meta.size <= DISK_HIT_CHUNK_BYTES as u64
             && file_size <= disk_hit_chunk_bytes as u64
         {
-            try_admit_cache_memory_hit(compressed_memory_charge)
+            self.admission_governor()
+                .try_admit_cache_read(compressed_memory_charge)
         } else {
             None
         };
@@ -1136,7 +1145,9 @@ impl Storage for FileStorage {
                 max_size: None,
             };
             let location = self.partial_location_for_key_str(k_str);
-            let Some(cache_write_permit) = MEMORY_GOVERNOR.try_admit(AdmissionClass::CacheWrite)
+            let Some(cache_write_permit) = self
+                .admission_governor()
+                .try_admit(AdmissionClass::CacheWrite)
             else {
                 return Ok(Box::new(NoopMissHandler));
             };
@@ -1171,7 +1182,10 @@ impl Storage for FileStorage {
             }));
         }
 
-        let Some(cache_write_permit) = MEMORY_GOVERNOR.try_admit(AdmissionClass::CacheWrite) else {
+        let Some(cache_write_permit) = self
+            .admission_governor()
+            .try_admit(AdmissionClass::CacheWrite)
+        else {
             return Ok(Box::new(NoopMissHandler));
         };
 
@@ -3850,6 +3864,10 @@ impl HybridStorage {
         }
     }
 
+    fn admission_governor(&self) -> &'static crate::memory_governor::MemoryGovernor {
+        self.l2.admission_governor()
+    }
+
     pub fn partial_location_for_key_str(&self, key: &str) -> PartialStorageLocation {
         self.l2.partial_location_for_key_str(key)
     }
@@ -3897,7 +3915,10 @@ impl HybridStorage {
             return Ok(Box::new(NoopMissHandler));
         }
 
-        let Some(cache_write_permit) = MEMORY_GOVERNOR.try_admit(AdmissionClass::CacheWrite) else {
+        let Some(cache_write_permit) = self
+            .admission_governor()
+            .try_admit(AdmissionClass::CacheWrite)
+        else {
             return Ok(Box::new(NoopMissHandler));
         };
         let hash = format!("{:x}", md5_legacy::compute(key_str.as_bytes()));
@@ -5396,6 +5417,30 @@ mod tests {
         format!("{prefix}-{}-{seq}", std::process::id())
     }
 
+    fn cache_test_governor() -> &'static crate::memory_governor::MemoryGovernor {
+        let governor = Box::leak(Box::new(crate::memory_governor::MemoryGovernor::new()));
+        // Freeze this private fixture's observation clock. Tests exercise cache
+        // lifecycle, independent of host load and the global refresher thread.
+        governor.seed_cached_for_test(64 << 30, 60 << 30, 1 << 20, 0, i64::MAX as u64);
+        governor
+    }
+
+    fn file_storage_for_test(root: impl Into<PathBuf>) -> FileStorage {
+        let mut storage = FileStorage::new(root);
+        storage.test_governor = Some(cache_test_governor());
+        storage
+    }
+
+    fn hybrid_storage_for_test(max_mem_bytes: usize, root: impl Into<PathBuf>) -> HybridStorage {
+        HybridStorage {
+            l1: Arc::new(TinyUfoL1::new(max_mem_bytes as u64)),
+            l2: Box::leak(Box::new(file_storage_for_test(root))),
+            max_disk_bytes: AtomicU64::new(10 * 1024 * 1024 * 1024),
+            min_free_bytes: AtomicU64::new(2 * 1024 * 1024 * 1024),
+            policy_type: AtomicU8::new(POLICY_FILE),
+        }
+    }
+
     async fn memory_miss_handler_for_test(
         storage: &HybridStorage,
         key: String,
@@ -5406,7 +5451,7 @@ mod tests {
             .insert_header("content-length", expected_body_len.to_string())
             .expect("content length");
         let now = crate::utils::time::now_timestamp();
-        let permit = MEMORY_GOVERNOR
+        let permit = cache_test_governor()
             .try_admit(AdmissionClass::CacheWrite)
             .expect("cache write permit should be available");
         Box::new(MemoryMissHandler {
@@ -5447,7 +5492,7 @@ mod tests {
             .await
             .expect("temp file");
         let now = crate::utils::time::now_timestamp();
-        let permit = MEMORY_GOVERNOR
+        let permit = cache_test_governor()
             .try_admit(AdmissionClass::CacheWrite)
             .expect("cache write permit should be available");
         let handler = Box::new(FileMissHandler {
@@ -5542,7 +5587,7 @@ mod tests {
         let unique = unique_test_suffix("purge-encoding-variants");
         let base = format!("https://cache.example.test/{unique}");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
+        let storage = Box::leak(Box::new(hybrid_storage_for_test(0, &root)));
 
         let mut seeded = Vec::new();
         let mut add = |key: String, encoding: Option<&str>| {
@@ -5618,7 +5663,7 @@ mod tests {
         let unique = unique_test_suffix("local-purge-variants");
         let base = format!("https://cache.example.test/{unique}");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
+        let storage = Box::leak(Box::new(hybrid_storage_for_test(0, &root)));
         let br = current_encoding_variant(&base, "", "br");
         let head_webp_gzip = current_encoding_variant(&base, "@method:HEAD@webp", "gzip");
         let entries = [
@@ -5663,7 +5708,7 @@ mod tests {
         let unique = unique_test_suffix("partial-write-shard-order");
         let root_a = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}-a"));
         let root_b = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}-b"));
-        let storage = FileStorage::new(root_a.clone());
+        let storage = file_storage_for_test(root_a.clone());
         storage.update_shards(
             vec![
                 CacheShard {
@@ -5750,7 +5795,7 @@ mod tests {
         let unique = unique_test_suffix("small-l2-hit");
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
@@ -5799,7 +5844,7 @@ mod tests {
         let unique = unique_test_suffix("stream-l2-hit");
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
@@ -5854,7 +5899,7 @@ mod tests {
         let unique = unique_test_suffix("file-cache-off");
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         storage.update_config(root.clone(), Vec::new(), true, false);
         let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
@@ -5904,7 +5949,7 @@ mod tests {
         let unique = unique_test_suffix("small-meta-large-file");
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path_by_hash(&hash);
@@ -5944,7 +5989,7 @@ mod tests {
     async fn file_update_meta_rejects_content_length_mismatch() {
         let unique = unique_test_suffix("update-meta-length-mismatch");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(unique.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
@@ -6031,7 +6076,7 @@ mod tests {
         let unique = unique_test_suffix("invalid-status-l2-hit");
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
@@ -6069,7 +6114,7 @@ mod tests {
     async fn l2_hit_with_legacy_error_status_is_treated_as_miss() {
         let unique = unique_test_suffix("legacy-error-status-l2-hit");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(unique.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
@@ -6110,7 +6155,7 @@ mod tests {
     async fn corrupted_compressed_l2_entry_is_removed_before_origin_retry() {
         let unique = unique_test_suffix("corrupt-compressed-l2");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(unique.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
@@ -6146,6 +6191,85 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn l2_streaming_preserves_body_and_corruption_checks_when_borrowing_is_full() {
+        for compressed in [false, true] {
+            for corrupt in [false, true] {
+                let unique = unique_test_suffix("borrow-full-l2");
+                let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
+                let storage = Box::leak(Box::new(file_storage_for_test(&root)));
+                let governor = storage.admission_governor();
+                let _borrow = governor
+                    .try_grant_shared(
+                        crate::memory_governor::SharedGrantPurpose::CacheReadMemory,
+                        governor.low_priority_borrowable_bytes(),
+                    )
+                    .expect("fill the cache borrowing window");
+                assert!(governor.try_admit(AdmissionClass::CacheWrite).is_none());
+                let _connection = governor
+                    .try_admit(AdmissionClass::HttpConnection)
+                    .expect("connections retain headroom");
+
+                let key = CacheKey::new(unique.as_str(), "");
+                let hash = storage.get_hash(&key);
+                let path = storage.get_path(&key);
+                tokio::fs::create_dir_all(path.parent().expect("cache parent"))
+                    .await
+                    .expect("cache directory");
+                let body = b"cached response body";
+                let on_disk = if corrupt {
+                    b"bad".to_vec()
+                } else if compressed {
+                    zstd::encode_all(body.as_slice(), 0).expect("compress")
+                } else {
+                    body.to_vec()
+                };
+                tokio::fs::write(&path, on_disk).await.expect("cache body");
+                crate::metrics::storage::insert_cache_meta_for_test(
+                    hash.clone(),
+                    crate::metrics::storage::CacheMetaEntry {
+                        cache_key: unique,
+                        size: body.len() as u64,
+                        expires: crate::utils::time::now_timestamp() + 60,
+                        access_time: crate::utils::time::now_timestamp(),
+                        access_count: 1,
+                        status: 200,
+                        compressed,
+                        ..Default::default()
+                    },
+                );
+                let trace = pingora_cache::trace::Span::inactive().handle();
+                let hit = storage.lookup(&key, &trace).await.expect("lookup");
+                if !compressed && corrupt {
+                    // Plain file length is validated before a handler is returned.
+                    assert!(hit.is_none());
+                } else {
+                    let (_, mut handler) = hit.expect("streaming hit");
+                    assert!(handler.as_any().is::<FileHitHandler>());
+                    if corrupt {
+                        assert!(handler.read_body().await.is_err());
+                    } else {
+                        let mut received = Vec::new();
+                        while let Some(chunk) = handler.read_body().await.expect("read body") {
+                            received.extend_from_slice(&chunk);
+                        }
+                        assert_eq!(received, body);
+                    }
+                }
+                if corrupt {
+                    if compressed {
+                        assert!(!path.exists());
+                    }
+                    assert!(crate::metrics::storage::get_cache_meta_memory(&hash).is_none());
+                }
+                crate::metrics::storage::delete_cache_meta_for_test(&hash);
+                tokio::fs::remove_dir_all(root)
+                    .await
+                    .expect("remove cache directory");
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn partial_miss_handler_holds_purge_fences_before_first_body_chunk() {
         let unique = unique_test_suffix("partial-miss-purge-race");
         let base = format!("https://cache.example.test/{unique}");
@@ -6155,7 +6279,7 @@ mod tests {
         tokio::fs::create_dir_all(&root)
             .await
             .expect("create cache root");
-        let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
+        let storage = Box::leak(Box::new(hybrid_storage_for_test(0, &root)));
         let location = storage.partial_location_for_key_str(&key);
         let capture = crate::cache::partial::PartialCapture {
             start: 0,
@@ -6172,7 +6296,7 @@ mod tests {
             min_size: None,
             max_size: None,
         };
-        let permit = MEMORY_GOVERNOR
+        let permit = cache_test_governor()
             .try_admit(AdmissionClass::CacheWrite)
             .expect("cache write permit should be available");
         let mut handler = Box::new(PartialMissHandler {
@@ -6300,7 +6424,7 @@ mod tests {
         let unique = unique_test_suffix("small-compressed-l2-hit");
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
@@ -6357,7 +6481,7 @@ mod tests {
     async fn metadata_less_l1_is_rejected_by_a_shared_exact_purge_fence() {
         let unique = unique_test_suffix("metadata-less-l1-fence");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
+        let storage = Box::leak(Box::new(hybrid_storage_for_test(0, &root)));
         let key = CacheKey::new(unique.as_str(), "");
         let hash = format!("{:x}", md5_legacy::compute(unique.as_bytes()));
         let state_version = crate::metrics::storage::next_cache_meta_event_version();
@@ -6414,7 +6538,7 @@ mod tests {
             .find(|key| !bloom_may_exist(key))
             .expect("find a Bloom false-negative candidate");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
+        let storage = Box::leak(Box::new(hybrid_storage_for_test(0, &root)));
         let key = CacheKey::new(unique.as_str(), "");
         let hash = storage.l2.get_hash(&key);
         let path = storage.l2.get_path_by_hash(&hash);
@@ -6470,7 +6594,7 @@ mod tests {
         let unique = unique_test_suffix("runtime-stats-l1");
         let key = format!("https://cache.example.com/{unique}");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-stats-test-{unique}"));
-        let storage = HybridStorage::new(0, &root);
+        let storage = hybrid_storage_for_test(0, &root);
         let before = storage.runtime_stats().await;
         assert!(before.file_cache_enabled);
         assert!(before.sendfile_enabled);
@@ -6627,7 +6751,7 @@ mod tests {
             .open(&temp_path)
             .await
             .unwrap();
-        let permit = MEMORY_GOVERNOR
+        let permit = cache_test_governor()
             .try_admit(AdmissionClass::CacheWrite)
             .expect("cache write permit should be available");
         let write_guard = cache_write_lock_for_key(&unique).lock_owned().await;
@@ -6679,7 +6803,7 @@ mod tests {
         let final_path = root.join("object");
         tokio::fs::create_dir_all(&final_path).await.unwrap();
         let file = tokio::fs::File::create(&temp_path).await.unwrap();
-        let permit = MEMORY_GOVERNOR
+        let permit = cache_test_governor()
             .try_admit(AdmissionClass::CacheWrite)
             .expect("cache write permit should be available");
         let write_guard = cache_write_lock_for_key(&unique).lock_owned().await;
@@ -6753,7 +6877,7 @@ mod tests {
     async fn memory_miss_handler_rejects_body_shorter_than_content_length() {
         let unique = unique_test_suffix("memory-short-body");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = HybridStorage::new(1024 * 1024, &root);
+        let storage = hybrid_storage_for_test(1024 * 1024, &root);
         let mut handler = memory_miss_handler_for_test(&storage, unique.clone(), 4).await;
 
         handler
@@ -6772,7 +6896,7 @@ mod tests {
     async fn memory_miss_handler_rejects_body_longer_than_content_length() {
         let unique = unique_test_suffix("memory-long-body");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = HybridStorage::new(1024 * 1024, &root);
+        let storage = hybrid_storage_for_test(1024 * 1024, &root);
         let mut handler = memory_miss_handler_for_test(&storage, unique.clone(), 4).await;
 
         handler
@@ -6792,7 +6916,7 @@ mod tests {
         let unique = unique_test_suffix("memory-double-check");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
         let storage: &'static HybridStorage =
-            Box::leak(Box::new(HybridStorage::new(1024 * 1024, &root)));
+            Box::leak(Box::new(hybrid_storage_for_test(1024 * 1024, &root)));
         storage.policy_type.store(POLICY_MEMORY, Ordering::Release);
 
         let make_meta = || {
