@@ -12,6 +12,7 @@
 | `ab6a8a6` | shared account 使用单一 outstanding 原子作为 pending/committed 共同门槛，分类迁移不释放额度 | governor 48 + lifecycle 20 通过；恢复旧双计数器后 commit 窗口与交错申请两个用例确定性失败 | 保留预算仍未接入实际分配 |
 | `f262790` | 删除按时间键无界增长的 metric `values_cache`，每次从当前样本构建完整行 | metric stat 4 用例通过；接收端忽略 `keepKeys`、ClickHouse 替换表不求和已核实 | 单条 flush 失败仍整批回填；超大指标拆分未做 |
 | `e33e58a` | probe outbox 同时约束排队与 in-flight；失败只回填未持久化记录；flusher 独立于计划；丢弃计数与状态 | probe 22、telemetry 31、status 1 通过；三项负向对照分别失败（忽略 in-flight、丢弃剩余批、清除计划中止 flusher） | 旧/新观测溢出策略为保留较旧项；daily pending 与 aggregator 未处理 |
+| `bf82d3b` | metric/daily 按 wire cap 分块并只回填未持久化行；metric 以有界 pending 队列按原时段重试，不再 restore 全部样本；daily pending 按行数与字节截断并写 gap | telemetry 33、stats 10 通过；metric/daily 精确尾部、metric 队列上限、daily 截断均有新增用例；丢弃剩余批与跳过截断两项负向对照失败 | metric 失败请求队列 4,096 项 / 16 MiB；daily 65,536 行 / 65,536 域行 / 64 MiB；截断时保留较旧行 |
 
 所有本机 Rust 测试通过工作区 `scripts/local-rust.sh`、mbx、单编译槽运行。未清缓存。未发布、部署或修改 tag。
 
@@ -24,7 +25,7 @@
 ## 已确认的后续约束
 
 - probe：已由 `e33e58a` 修复「多批部分成功后整批回填」与「计划切换 abort flusher」；上限同时覆盖排队与 in-flight，追加任务丢失计入受控丢弃，状态见 `probeOutbox`。溢出时保留较旧观测、拒绝新观测。
-- daily：累积 pending 可能超过单包上限后永久重试；核心 server 统计与可丢弃 domain 详情必须分别处理。
-- metric：`keepKeys` 在当前接收端未使用；enqueue 前更新 values_cache 会抑制失败样本。当前发送 flush 增量，但同周期 hash 相同，ClickHouse 替换表不提供增量求和、生产顺序版本或跨节点隔离。先证明实际语义，再落实持久 baseline；不能把 delayed ACK 当成值存在的证据。
+- daily：已由 `bf82d3b` 改为按 wire cap 分块并只回填未持久化行；pending 有行数与字节上限，截断时保留较旧行并写 gap。核心 server 行与 domain 行分别限额，但 spool 完全拒绝写入时两者都会受控丢弃。
+- metric：已由 `bf82d3b` 取消失败后 restore 全部聚合样本；未持久化请求进入 4,096 项 / 16 MiB pending 队列，按原始时段、item、version 重试。接收端忽略 `keepKeys`、ClickHouse 替换表不求和已核实；尚未引入远端 ACK baseline。
 - aggregator：动态属性在入队前和 worker 中已有分配；flush 移交而非释放内存。预算必须由属性/容器/批次持有，不能 flush 就退款，也不能 restore 时重新申请导致丢弃已有数据。
 - Linux 验证尚未运行。本机测试不证明 Linux RSS、cgroup 压力、吞吐或长连接生存。
