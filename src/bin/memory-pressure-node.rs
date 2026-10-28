@@ -240,6 +240,12 @@ fn main() -> Result<()> {
     rt.block_on(zelvik_edge::ssl::sync_certs(&cert, &certificates));
     let acceptance_enabled = matches!(std::env::var("PRESSURE_ACCEPTANCE").as_deref(), Ok("1"));
     let cache_enabled = matches!(std::env::var("PRESSURE_CACHE").as_deref(), Ok("1"));
+    if cache_enabled {
+        // Cache fills are discarded without the metadata writer: it owns the
+        // Mace publish and in-memory index that make an object a real L1
+        // entry. Start the same production task the node starts.
+        zelvik_edge::metrics::storage::start_cache_access_flusher();
+    }
     // Acceptance source "cache" fills the real production TinyUFO L1 through
     // ordinary GET responses. Benchmark and ballast-only runs keep the
     // historical fixture configuration byte-for-byte.
