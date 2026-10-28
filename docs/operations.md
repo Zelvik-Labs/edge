@@ -194,7 +194,7 @@ bootstrap 脚本从控制面的 `/v1/edge/packages/meta` 接口取包元数据�
 
 环境变量兜底：`ZELVIK_ENDPOINT`/`API_ENDPOINTS`、`ZELVIK_NODE_ID`/`ZELVIK_INSTANCE_ID`、`ZELVIK_NODE_SECRET`/`ZELVIK_INSTANCE_SECRET`。
 
-Edge `26.10.4.7` 起移除 Geo 公钥参数。通过控制面安装前先升级 API 至 `26.10.4.17`；旧 API 的 bootstrap 会传递已删除的 `--trust-keys` 并导致安装失败。
+Edge `26.10.4.7` 起移除 Geo 公钥参数。通过控制面安装前先升级 API 至 `26.10.4.19` 或更高版本；旧 API 的 bootstrap 会传递已删除的 `--trust-keys` 并导致安装失败。
 
 ### 安装布局
 
