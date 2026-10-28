@@ -11,8 +11,6 @@ use std::sync::LazyLock as Lazy;
 use std::sync::atomic::{AtomicI64, AtomicU8, Ordering};
 use tracing::{debug, info, warn};
 
-#[allow(dead_code)]
-const ORIGIN_HEALTH_STATUS_UNKNOWN: u8 = 0;
 const ORIGIN_HEALTH_STATUS_HEALTHY: u8 = 1;
 const ORIGIN_HEALTH_STATUS_DOWN: u8 = 2;
 
@@ -945,7 +943,6 @@ fn build_metric_uploads_for_item(
         crate::metrics::aggregator::AggregationKey,
         crate::metrics::aggregator::AggregatedValue,
     )],
-    values_cache: &mut HashMap<String, f32>,
 ) -> Vec<pb::UploadMetricStatsRequest> {
     let item_category = metric_item_category(item);
     let mut grouped: HashMap<(i64, Vec<String>), (i64, f32)> = HashMap::new();
@@ -1000,7 +997,6 @@ fn build_metric_uploads_for_item(
         rows.sort_by(|a, b| a.0.cmp(&b.0));
 
         let mut metric_stats = Vec::with_capacity(rows.len());
-        let mut keep_keys = Vec::new();
         let mut count = 0i64;
         let mut total = 0f32;
 
@@ -1015,16 +1011,6 @@ fn build_metric_uploads_for_item(
                 server_id, keys_data, time_key, item.version, item.id
             );
             let hash = crate::utils::fnv_hash64(&hash_raw).to_string();
-
-            let cache_key = format!("{}_{}", item.id, hash);
-            if let Some(&old_val) = values_cache.get(&cache_key)
-                && (value - old_val).abs() < 0.001
-            {
-                keep_keys.push(hash);
-                continue;
-            }
-
-            values_cache.insert(cache_key, value);
 
             metric_stats.push(pb::UploadingMetricStat {
                 id: 0,
@@ -1042,7 +1028,7 @@ fn build_metric_uploads_for_item(
             version: item.version,
             item_id: item.id,
             metric_stats,
-            keep_keys,
+            keep_keys: Vec::new(),
         });
     }
 
@@ -1051,7 +1037,6 @@ fn build_metric_uploads_for_item(
 
 pub async fn start_metric_stat_reporter(config_store: Arc<crate::config::ConfigStore>) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
-    let mut values_cache: HashMap<String, f32> = HashMap::new();
 
     loop {
         interval.tick().await;
@@ -1082,8 +1067,7 @@ pub async fn start_metric_stat_reporter(config_store: Arc<crate::config::ConfigS
                 continue;
             }
 
-            for req in build_metric_uploads_for_item(&item, &time_key, &samples, &mut values_cache)
-            {
+            for req in build_metric_uploads_for_item(&item, &time_key, &samples) {
                 let server_id = req.server_id;
                 if let Err(e) = crate::telemetry::enqueue("metric_stat", &req, 0, false).await {
                     warn!(
@@ -1463,8 +1447,7 @@ mod tests {
         assert_eq!(samples.len(), 1);
 
         let item = metric_item(10, vec!["${remoteAddr}"], "${countRequest}");
-        let mut cache = HashMap::new();
-        let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples, &mut cache);
+        let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples);
 
         assert_eq!(uploads.len(), 1);
         assert_eq!(uploads[0].count, 2);
@@ -1472,6 +1455,7 @@ mod tests {
         assert_eq!(uploads[0].metric_stats.len(), 1);
         assert_eq!(uploads[0].metric_stats[0].keys, vec!["203.0.113.9"]);
         assert_eq!(uploads[0].metric_stats[0].value, 2.0);
+        assert!(uploads[0].keep_keys.is_empty());
     }
 
     #[test]
@@ -1491,8 +1475,7 @@ mod tests {
 
         let samples = aggregator.flush();
         let item = metric_item(11, vec!["${requestPath}"], "${countTrafficOut}");
-        let mut cache = HashMap::new();
-        let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples, &mut cache);
+        let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples);
 
         assert_eq!(uploads.len(), 1);
         assert_eq!(uploads[0].count, 2);
@@ -1517,8 +1500,7 @@ mod tests {
             vec!["${requestMethod}", "${method}", "${request.method}"],
             "${countRequest}",
         );
-        let mut cache = HashMap::new();
-        let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples, &mut cache);
+        let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples);
 
         assert_eq!(uploads.len(), 1);
         assert_eq!(
