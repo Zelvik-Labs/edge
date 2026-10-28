@@ -2,8 +2,8 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use std::sync::LazyLock as Lazy;
 use std::time::Duration;
-use tonic::transport::Channel;
 use tonic::Request;
+use tonic::transport::Channel;
 use tracing::{debug, info, warn};
 
 use crate::api_config::ApiConfig;
@@ -571,9 +571,7 @@ where
                     // typed server list — a later runtime.xdp section without
                     // explicit proxy.ports must not strip the active set.
                     let derived_xdp_proxy_ports =
-                        crate::xdp_auto_config::xdp_proxy_ports_from_server_refs(
-                            &payload_servers,
-                        );
+                        crate::xdp_auto_config::xdp_proxy_ports_from_server_refs(&payload_servers);
 
                     debug!(
                         "Successfully parsed NodeConfigPayload. Numeric ID: {}, Server count: {}",
@@ -1524,6 +1522,9 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             "cacheL1BudgetBytes": cache_stats.memory_budget_bytes,
             "distinctIpTrackerEntries": distinct_ip_entries,
             "distinctIpBudgetEntries": distinct_ip_budget_entries,
+            "retiredServerMetricInstances": crate::metrics::METRICS.retired_server_metrics_count(),
+            "metricRetirementBacklog": config_store.metric_retirement_backlog_len(),
+            "metricRetirementDeferredTotal": crate::metrics::METRICS.retirement_deferred_total(),
             "sharedAccount": shared_account_status(&governor_snapshot),
             "unaccountedRssBytes": governor_snapshot.unaccounted_rss_bytes,
             "unaccountedAnonRssBytes": governor_snapshot.unaccounted_anon_rss_bytes,

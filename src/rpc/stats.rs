@@ -1,14 +1,14 @@
 use crate::api_config::ApiConfig;
 use crate::config::ConfigStore;
-use crate::metrics::ServerStatusSnapshot;
+use crate::metrics::{MetricConsumer, ServerMetrics, ServerStatusSnapshot};
 use crate::pb;
 use crate::rpc::client::SharedRpcClient;
 use chrono::{Datelike, Duration as ChronoDuration, Timelike};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::LazyLock as Lazy;
 use std::sync::atomic::{AtomicI64, AtomicU8, Ordering};
+use std::sync::{Arc, Weak};
 use tracing::{debug, info, warn};
 
 const ORIGIN_HEALTH_STATUS_HEALTHY: u8 = 1;
@@ -585,6 +585,25 @@ async fn flush_stale_window(
     *current_window = String::new();
 }
 
+struct ReportingBaseline {
+    metrics: Weak<ServerMetrics>,
+    snapshot: ServerStatusSnapshot,
+}
+
+fn reporting_prior(
+    last: &HashMap<u64, ReportingBaseline>,
+    metrics: &Arc<ServerMetrics>,
+    instance_id: u64,
+) -> Option<ServerStatusSnapshot> {
+    last.get(&instance_id).and_then(|baseline| {
+        baseline
+            .metrics
+            .upgrade()
+            .filter(|previous| Arc::ptr_eq(previous, metrics))
+            .map(|_| baseline.snapshot.clone())
+    })
+}
+
 fn snapshot_delta(
     current: &ServerStatusSnapshot,
     last: Option<&ServerStatusSnapshot>,
@@ -596,6 +615,7 @@ fn snapshot_delta(
     };
 
     ServerStatusSnapshot {
+        instance_id: current.instance_id,
         server_id: current.server_id,
         count_errors: delta(|s| s.count_errors),
         user_id: current.user_id,
@@ -620,7 +640,7 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(
         BANDWIDTH_SAMPLE_INTERVAL_SECS,
     ));
-    let mut last_snapshots: HashMap<i64, ServerStatusSnapshot> = HashMap::new();
+    let mut last_snapshots: HashMap<u64, ReportingBaseline> = HashMap::new();
     let (
         mut current_window,
         mut window_stats,
@@ -639,7 +659,7 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
 
     loop {
         interval.tick().await;
-        let snapshots = crate::metrics::METRICS.take_snapshots();
+        let snapshots = crate::metrics::METRICS.take_reporting_snapshots();
 
         let now = crate::utils::time::now_local();
         let day = now.format("%Y%m%d").to_string();
@@ -691,15 +711,38 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
             .await;
         }
 
-        for snap_tuple in snapshots {
-            let snap = &snap_tuple.1;
-            let prior = last_snapshots.insert(snap.server_id, snap.clone());
-            // Skip first sample for a server — without a baseline the delta
-            // would be the cumulative total, producing a phantom bandwidth spike.
-            if prior.is_none() {
+        for sample in snapshots {
+            let crate::metrics::ReportingSnapshot {
+                metrics,
+                snapshot: snap,
+                retired,
+            } = sample;
+            let instance_id = snap.instance_id;
+            let fingerprint = snap.fingerprint();
+            let prior = reporting_prior(&last_snapshots, &metrics, instance_id);
+            last_snapshots.insert(
+                instance_id,
+                ReportingBaseline {
+                    metrics: Arc::downgrade(&metrics),
+                    snapshot: snap.clone(),
+                },
+            );
+            drop(metrics);
+            // A live server's first sample has no baseline; skipping it avoids
+            // counting the process-cumulative total as one sample. A retired
+            // instance gets no later sample, so its full remaining counters are
+            // the final delta instead of being discarded.
+            if prior.is_none() && !retired {
                 continue;
             }
-            let delta = snapshot_delta(snap, prior.as_ref());
+            let delta = snapshot_delta(&snap, prior.as_ref());
+            if retired {
+                crate::metrics::METRICS.acknowledge_retired(
+                    MetricConsumer::Bandwidth,
+                    instance_id,
+                    fingerprint,
+                );
+            }
             if delta.server_id <= 0 {
                 continue;
             }
@@ -734,6 +777,7 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
             stat.origin_avg_bits = (stat.origin_total_bytes * 8) / BANDWIDTH_REPORT_INTERVAL_SECS;
             stat.count_ips = stat.count_ips.max(delta.count_ips);
         }
+        last_snapshots.retain(|_, baseline| baseline.metrics.strong_count() > 0);
         persist_bandwidth_state(
             &current_window,
             &window_stats,
@@ -807,7 +851,7 @@ pub async fn start_daily_stat_reporter(config_store: ConfigStore) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(
         BANDWIDTH_SAMPLE_INTERVAL_SECS,
     ));
-    let mut last_snapshots: HashMap<i64, ServerStatusSnapshot> = HashMap::new();
+    let mut last_snapshots: HashMap<u64, ReportingBaseline> = HashMap::new();
     let mut current_window = String::new();
     let mut window_stats: HashMap<i64, pb::ServerDailyStat> = HashMap::new();
     let mut pending_stats: Vec<pb::ServerDailyStat> = Vec::new();
@@ -816,7 +860,7 @@ pub async fn start_daily_stat_reporter(config_store: ConfigStore) {
 
     loop {
         interval.tick().await;
-        let snapshots = crate::metrics::METRICS.take_snapshots();
+        let snapshots = crate::metrics::METRICS.take_reporting_snapshots();
 
         let now = crate::utils::time::now_local();
         let day = now.format("%Y%m%d").to_string();
@@ -909,15 +953,30 @@ pub async fn start_daily_stat_reporter(config_store: ConfigStore) {
             current_window = window_key.clone();
         }
 
-        for snap_tuple in snapshots {
-            let snap = &snap_tuple.1;
-            let prior = last_snapshots.insert(snap.server_id, snap.clone());
-            // Skip first sample for a server — without a baseline the delta
-            // would be the cumulative total, producing phantom traffic.
-            if prior.is_none() {
+        for sample in snapshots {
+            let crate::metrics::ReportingSnapshot {
+                metrics,
+                snapshot: snap,
+                retired,
+            } = sample;
+            let instance_id = snap.instance_id;
+            let fingerprint = snap.fingerprint();
+            let prior = reporting_prior(&last_snapshots, &metrics, instance_id);
+            last_snapshots.insert(
+                instance_id,
+                ReportingBaseline {
+                    metrics: Arc::downgrade(&metrics),
+                    snapshot: snap.clone(),
+                },
+            );
+            drop(metrics);
+            // Skip the first live sample for the same reason as the bandwidth
+            // reporter; a retired instance has no later sample, so its full
+            // remaining counters are consumed before acknowledgement.
+            if prior.is_none() && !retired {
                 continue;
             }
-            let delta = snapshot_delta(snap, prior.as_ref());
+            let delta = snapshot_delta(&snap, prior.as_ref());
             if delta.server_id <= 0 {
                 continue;
             }
@@ -950,7 +1009,15 @@ pub async fn start_daily_stat_reporter(config_store: ConfigStore) {
             stat.count_cached_requests += delta.count_cached_requests as i64;
             stat.count_attack_requests += delta.count_attack_requests as i64;
             stat.attack_bytes += delta.attack_bytes as i64;
+            if retired {
+                crate::metrics::METRICS.acknowledge_retired(
+                    MetricConsumer::Daily,
+                    instance_id,
+                    fingerprint,
+                );
+            }
         }
+        last_snapshots.retain(|_, baseline| baseline.metrics.strong_count() > 0);
     }
 }
 
@@ -1565,6 +1632,29 @@ pub async fn start_top_ip_stat_reporter() {
             warn!("Failed to persist top IP stats: {}", e);
             crate::metrics::top_ip::TOP_IP_TRACKER.restore(&rows);
         }
+    }
+}
+
+#[cfg(test)]
+mod reporting_baseline_tests {
+    use super::*;
+
+    #[test]
+    fn baseline_identity_is_the_metric_instance_not_the_server_id() {
+        let first = Arc::new(ServerMetrics::new());
+        let second = Arc::new(ServerMetrics::new());
+        let snapshot = first.snapshot();
+        let mut baselines = HashMap::new();
+        baselines.insert(
+            first.instance_id,
+            ReportingBaseline {
+                metrics: Arc::downgrade(&first),
+                snapshot,
+            },
+        );
+        assert!(reporting_prior(&baselines, &first, first.instance_id).is_some());
+        assert!(reporting_prior(&baselines, &second, second.instance_id).is_none());
+        assert_ne!(first.instance_id, second.instance_id);
     }
 }
 

@@ -356,8 +356,18 @@ current `lowPriorityBorrowableBytes`,
 traffic, connection working sets, configuration peaks and all resident
 cache/analytics owners are not yet covered by independent, enforced reserves.
 Logical refunds never increase observed physical headroom, and estimated bytes
-are not RSS. L1/analytics global revocation and retirement of per-server metrics
-without losing unflushed billing data remain separate lifecycle work.
+are not RSS. L1/analytics global revocation remains separate lifecycle work.
+
+Per-server metric state now has a concrete deletion lifecycle. A configuration
+snapshot that drops a server id moves its metric instance to a retired set; the
+persistence, bandwidth and daily delta consumers each acknowledge the final
+fingerprinted snapshot, and the entry is released only when all three have done
+so and no request still holds the metrics Arc. Entries are keyed by a
+process-local instance id so re-adding the same server id cannot mix baselines.
+The retired set is capped at 4,096 instances; over-cap ids remain live and are
+retried on a later configuration snapshot rather than dropping billing data.
+Daily acknowledgement means the final delta entered the in-memory daily window;
+remote/durable delivery keeps its existing window and spool semantics.
 
 Tracker cardinality is additionally hard-bounded: each tracker
 (`MetricAggregator` x2 incl. nested `request_samples`, `TopIpTracker`,

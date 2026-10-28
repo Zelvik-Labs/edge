@@ -1,9 +1,9 @@
 use chrono::Timelike;
 use dashmap::DashMap;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::OnceLock as OnceCell;
-use std::sync::atomic::{AtomicI64, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, LazyLock};
+use std::sync::atomic::{AtomicI64, AtomicU64, AtomicU8, AtomicUsize, Ordering};
+use std::sync::{Arc, LazyLock, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 
@@ -645,8 +645,14 @@ impl Drop for RuntimeDistinctIpTracker {
     }
 }
 
+static NEXT_SERVER_METRIC_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
+
 /// Metrics for a specific server (site)
 pub struct ServerMetrics {
+    /// Monotonic process-local identity. A removed site that is re-added gets
+    /// a new instance even though its server id is unchanged, so consumer
+    /// baselines cannot subtract one lifecycle's counters from another's.
+    pub instance_id: u64,
     pub count_errors: AtomicU64,
     pub user_id: AtomicI64,
     pub user_plan_id: AtomicI64,
@@ -714,6 +720,7 @@ impl ServerMetrics {
 
     fn with_distinct_ip_tracker(distinct_ips: RuntimeDistinctIpTracker) -> Self {
         Self {
+            instance_id: NEXT_SERVER_METRIC_INSTANCE_ID.fetch_add(1, Ordering::Relaxed),
             count_errors: AtomicU64::new(0),
             user_id: AtomicI64::new(0),
             user_plan_id: AtomicI64::new(0),
@@ -735,6 +742,7 @@ impl ServerMetrics {
 
     pub fn snapshot(&self) -> ServerStatusSnapshot {
         ServerStatusSnapshot {
+            instance_id: self.instance_id,
             server_id: 0, // set by caller
             count_errors: self.count_errors.load(Ordering::Relaxed),
             user_id: self.user_id.load(Ordering::Relaxed),
@@ -770,6 +778,8 @@ fn decrement_active_connections(counter: &AtomicI64) {
 
 #[derive(Clone)]
 pub struct ServerStatusSnapshot {
+    /// Process-local metric-instance identity; see `ServerMetrics::instance_id`.
+    pub instance_id: u64,
     pub server_id: i64,
     pub count_errors: u64,
     pub user_id: i64,
@@ -793,12 +803,99 @@ impl ServerStatusSnapshot {
     pub fn total_bytes(&self) -> u64 {
         self.bytes_sent + self.bytes_received
     }
+
+    /// Content identity of one sampled state. Retirement waits until all
+    /// delta consumers have acknowledged the same fingerprinted state and no
+    /// request still holds the metrics Arc, so late in-flight updates cannot
+    /// be discarded after an earlier acknowledgement.
+    pub fn fingerprint(&self) -> u64 {
+        let mut hash = 0xcbf29ce484222325u64;
+        let values = [
+            self.instance_id,
+            self.server_id as u64,
+            self.count_errors,
+            self.user_id as u64,
+            self.user_plan_id as u64,
+            self.plan_id as u64,
+            self.total_requests,
+            self.bytes_sent,
+            self.bytes_received,
+            self.cached_bytes,
+            self.count_cached_requests,
+            self.count_attack_requests,
+            self.attack_bytes,
+            self.origin_bytes_sent,
+            self.origin_bytes_received,
+            self.active_connections as u64,
+            self.count_websocket_connections,
+            self.count_ips,
+        ];
+        for value in values {
+            hash ^= value;
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        hash
+    }
+}
+
+/// The three consumers that report per-server counter deltas. Node and
+/// performance snapshots read live state only and are not retirement barriers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MetricConsumer {
+    Persistence,
+    Bandwidth,
+    Daily,
+}
+
+impl MetricConsumer {
+    fn bit(self) -> u8 {
+        1 << match self {
+            Self::Persistence => 0,
+            Self::Bandwidth => 1,
+            Self::Daily => 2,
+        }
+    }
+}
+
+const METRIC_CONSUMER_COUNT: usize = 3;
+const METRIC_ACK_ALL: u8 = (1 << METRIC_CONSUMER_COUNT) - 1;
+const MAX_RETIRED_SERVER_METRICS: usize = 4_096;
+
+/// One sample returned to a delta consumer. `metrics` is the exact Arc the
+/// sample came from; consumers keep its Weak as the baseline identity and
+/// drop the Arc before acknowledging so quiescence is observable.
+pub struct ReportingSnapshot {
+    pub metrics: Arc<ServerMetrics>,
+    pub snapshot: ServerStatusSnapshot,
+    pub retired: bool,
+}
+
+struct RetiredServerMetrics {
+    server_id: i64,
+    metrics: Arc<ServerMetrics>,
+    acknowledged_mask: AtomicU8,
+    acknowledged_fingerprints: [AtomicU64; METRIC_CONSUMER_COUNT],
+}
+
+impl RetiredServerMetrics {
+    fn new(server_id: i64, metrics: Arc<ServerMetrics>) -> Self {
+        Self {
+            server_id,
+            metrics,
+            acknowledged_mask: AtomicU8::new(0),
+            acknowledged_fingerprints: std::array::from_fn(|_| AtomicU64::new(0)),
+        }
+    }
 }
 
 pub struct NodeMetrics {
     pub total_bytes_sent: AtomicU64,
     pub total_bytes_received: AtomicU64,
     pub servers: DashMap<i64, Arc<ServerMetrics>>,
+    /// Entries removed from the live id map but not yet fully consumed by the
+    /// persistence, bandwidth and daily delta reporters.
+    retired_servers: DashMap<u64, RetiredServerMetrics>,
+    retirement_deferred_total: AtomicU64,
     pub rpc: RpcMetrics,
     pub waf: WafRuntimeMetrics,
 }
@@ -923,6 +1020,24 @@ pub struct RpcStatusSnapshot {
 }
 
 impl NodeMetrics {
+    pub fn new() -> Self {
+        Self {
+            total_bytes_sent: AtomicU64::new(0),
+            total_bytes_received: AtomicU64::new(0),
+            servers: DashMap::with_shard_amount(32),
+            retired_servers: DashMap::with_shard_amount(8),
+            retirement_deferred_total: AtomicU64::new(0),
+            rpc: RpcMetrics {
+                total_requests: AtomicU64::new(0),
+                total_errors: AtomicU64::new(0),
+                total_cost_ms: AtomicU64::new(0),
+            },
+            waf: WafRuntimeMetrics::new(),
+        }
+    }
+
+    /// Live snapshots for node/perf status. Retired entries stay out of these
+    /// views while they drain through the delta consumers.
     pub fn take_snapshots(&self) -> Vec<(i64, ServerStatusSnapshot)> {
         self.servers
             .iter()
@@ -934,11 +1049,150 @@ impl NodeMetrics {
             .collect()
     }
 
+    /// Live plus retired samples for the three delta-reporting consumers.
+    pub fn take_reporting_snapshots(&self) -> Vec<ReportingSnapshot> {
+        let mut snapshots = Vec::with_capacity(self.servers.len() + self.retired_servers.len());
+        let mut seen = HashSet::with_capacity(snapshots.capacity());
+        for entry in self.servers.iter() {
+            let instance_id = entry.value().instance_id;
+            if !seen.insert(instance_id) {
+                continue;
+            }
+            let mut snapshot = entry.value().snapshot();
+            snapshot.server_id = *entry.key();
+            snapshots.push(ReportingSnapshot {
+                metrics: Arc::clone(entry.value()),
+                snapshot,
+                retired: false,
+            });
+        }
+        for entry in self.retired_servers.iter() {
+            let instance_id = entry.value().metrics.instance_id;
+            if !seen.insert(instance_id) {
+                continue;
+            }
+            let mut snapshot = entry.value().metrics.snapshot();
+            snapshot.server_id = entry.value().server_id;
+            snapshots.push(ReportingSnapshot {
+                metrics: Arc::clone(&entry.value().metrics),
+                snapshot,
+                retired: true,
+            });
+        }
+        snapshots
+    }
+
+    /// Move metric instances for removed server ids out of the live map.
+    /// Candidates are ids that were present in an earlier configuration
+    /// snapshot, not every id absent from the new one, so an unrelated test or
+    /// pre-config request cannot be retired by a partial snapshot.
+    ///
+    /// Returns candidates that could not be retired because the bounded
+    /// retirement set is full. The caller keeps and retries them on later
+    /// configuration snapshots; data is retained rather than silently dropped.
+    pub fn retire_servers_absent_from(
+        &self,
+        candidates: &HashSet<i64>,
+        live_server_ids: &HashSet<i64>,
+    ) -> HashSet<i64> {
+        let mut deferred = HashSet::new();
+        for &server_id in candidates {
+            if server_id <= 0 || live_server_ids.contains(&server_id) {
+                continue;
+            }
+            let Some(instance_id) = self.servers.get(&server_id).map(|entry| entry.instance_id)
+            else {
+                // No metric state exists for this id; nothing to retire.
+                continue;
+            };
+            if self.retired_servers.len() >= MAX_RETIRED_SERVER_METRICS {
+                deferred.insert(server_id);
+                continue;
+            }
+            let Some((_, metrics)) = self
+                .servers
+                .remove_if(&server_id, |_, entry| entry.instance_id == instance_id)
+            else {
+                // A concurrent creation replaced it; the next snapshot retries.
+                deferred.insert(server_id);
+                continue;
+            };
+            self.retired_servers
+                .insert(instance_id, RetiredServerMetrics::new(server_id, metrics));
+        }
+        if !deferred.is_empty() {
+            self.retirement_deferred_total
+                .fetch_add(deferred.len() as u64, Ordering::Relaxed);
+        }
+        deferred
+    }
+
+    /// Record that one consumer has processed `fingerprint` from this retired
+    /// instance. The entry is released only when all three consumers have
+    /// acknowledged the current fingerprint and no request holds the Arc.
+    pub fn acknowledge_retired(
+        &self,
+        consumer: MetricConsumer,
+        instance_id: u64,
+        fingerprint: u64,
+    ) {
+        let Some(entry) = self.retired_servers.get(&instance_id) else {
+            return;
+        };
+        if Arc::strong_count(&entry.metrics) > 1 {
+            // An in-flight request (or this consumer's own sample Arc) still
+            // owns the metrics; late counter updates must still be sampled.
+            return;
+        }
+        let bit = consumer.bit();
+        entry.acknowledged_fingerprints[bit.trailing_zeros() as usize]
+            .store(fingerprint, Ordering::Release);
+        let previous = entry.acknowledged_mask.fetch_or(bit, Ordering::AcqRel);
+        if previous | bit != METRIC_ACK_ALL {
+            return;
+        }
+        let mut current_snapshot = entry.metrics.snapshot();
+        current_snapshot.server_id = entry.server_id;
+        let current = current_snapshot.fingerprint();
+        if entry
+            .acknowledged_fingerprints
+            .iter()
+            .any(|value| value.load(Ordering::Acquire) != current)
+        {
+            return;
+        }
+        drop(entry);
+        self.retired_servers.remove_if(&instance_id, |_, entry| {
+            Arc::strong_count(&entry.metrics) == 1
+                && entry.acknowledged_mask.load(Ordering::Acquire) == METRIC_ACK_ALL
+                && entry
+                    .acknowledged_fingerprints
+                    .iter()
+                    .all(|value| value.load(Ordering::Acquire) == current)
+        });
+    }
+
+    pub fn retired_server_metrics_count(&self) -> usize {
+        self.retired_servers.len()
+    }
+
+    pub fn retirement_deferred_total(&self) -> u64 {
+        self.retirement_deferred_total.load(Ordering::Relaxed)
+    }
+
     pub fn get_node_totals(&self) -> (u64, u64, i64) {
         let mut total_conns = 0;
         for entry in self.servers.iter() {
             total_conns += entry
                 .value()
+                .active_connections
+                .load(Ordering::Relaxed)
+                .max(0);
+        }
+        for entry in self.retired_servers.iter() {
+            total_conns += entry
+                .value()
+                .metrics
                 .active_connections
                 .load(Ordering::Relaxed)
                 .max(0);
@@ -955,19 +1209,13 @@ impl NodeMetrics {
     }
 }
 
-pub static METRICS: LazyLock<Arc<NodeMetrics>> = LazyLock::new(|| {
-    Arc::new(NodeMetrics {
-        total_bytes_sent: AtomicU64::new(0),
-        total_bytes_received: AtomicU64::new(0),
-        servers: DashMap::with_shard_amount(32),
-        rpc: RpcMetrics {
-            total_requests: AtomicU64::new(0),
-            total_errors: AtomicU64::new(0),
-            total_cost_ms: AtomicU64::new(0),
-        },
-        waf: WafRuntimeMetrics::new(),
-    })
-});
+impl Default for NodeMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub static METRICS: LazyLock<Arc<NodeMetrics>> = LazyLock::new(|| Arc::new(NodeMetrics::new()));
 
 use std::sync::RwLock;
 
@@ -1462,10 +1710,23 @@ pub mod record {
     }
 }
 
+struct FlusherBaseline {
+    metrics: Weak<ServerMetrics>,
+    snapshot: ServerStatusSnapshot,
+}
+
+fn flusher_delta(
+    current: &ServerStatusSnapshot,
+    last: Option<&ServerStatusSnapshot>,
+    field: fn(&ServerStatusSnapshot) -> u64,
+) -> u64 {
+    field(current).saturating_sub(last.map(field).unwrap_or(0))
+}
+
 pub async fn start_persistence_flusher() {
     use std::collections::HashMap;
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
-    let mut last_values: HashMap<i64, ServerStatusSnapshot> = HashMap::new();
+    let mut last_values: HashMap<u64, FlusherBaseline> = HashMap::new();
     let mut last_node_sent = 0u64;
     let mut last_node_recv = 0u64;
 
@@ -1506,54 +1767,52 @@ pub async fn start_persistence_flusher() {
         // Baselines are only committed after the Mace write succeeds; on a
         // failed write the next round recomputes the same deltas instead of
         // silently losing them.
-        let mut new_baselines: Vec<(i64, ServerStatusSnapshot)> = Vec::new();
+        let mut new_baselines: Vec<(u64, FlusherBaseline)> = Vec::new();
+        let mut retired_acks: Vec<(u64, u64)> = Vec::new();
         let now = crate::utils::time::now_timestamp();
         let period = (now / 300) * 300;
 
-        for entry in METRICS.servers.iter() {
-            let server_id = *entry.key();
-            let current = entry.value().snapshot();
-            let last = last_values
-                .entry(server_id)
-                .or_insert_with(|| ServerStatusSnapshot {
-                    count_errors: 0,
-                    server_id,
-                    user_id: 0,
-                    user_plan_id: 0,
-                    plan_id: 0,
-                    total_requests: 0,
-                    bytes_sent: 0,
-                    bytes_received: 0,
-                    cached_bytes: 0,
-                    count_cached_requests: 0,
-                    count_attack_requests: 0,
-                    attack_bytes: 0,
-                    origin_bytes_sent: 0,
-                    origin_bytes_received: 0,
-                    active_connections: 0,
-                    count_websocket_connections: 0,
-                    count_ips: 0,
-                });
+        for sample in METRICS.take_reporting_snapshots() {
+            let current = sample.snapshot;
+            let instance_id = current.instance_id;
+            let server_id = current.server_id;
+            let last = last_values.get(&instance_id).and_then(|baseline| {
+                baseline
+                    .metrics
+                    .upgrade()
+                    .filter(|metrics| Arc::ptr_eq(metrics, &sample.metrics))
+                    .map(|_| &baseline.snapshot)
+            });
 
             updates.push(crate::rpc::metrics::ServerMetricUpdate {
                 server_id,
                 user_id: current.user_id,
                 user_plan_id: current.user_plan_id,
                 plan_id: current.plan_id,
-                total_requests: current.total_requests - last.total_requests,
-                bytes_sent: current.bytes_sent - last.bytes_sent,
-                bytes_received: current.bytes_received - last.bytes_received,
-                cached_bytes: current.cached_bytes - last.cached_bytes,
-                count_cached_requests: current.count_cached_requests - last.count_cached_requests,
-                count_attack_requests: current.count_attack_requests - last.count_attack_requests,
-                attack_bytes: current.attack_bytes - last.attack_bytes,
+                total_requests: flusher_delta(&current, last, |s| s.total_requests),
+                bytes_sent: flusher_delta(&current, last, |s| s.bytes_sent),
+                bytes_received: flusher_delta(&current, last, |s| s.bytes_received),
+                cached_bytes: flusher_delta(&current, last, |s| s.cached_bytes),
+                count_cached_requests: flusher_delta(&current, last, |s| s.count_cached_requests),
+                count_attack_requests: flusher_delta(&current, last, |s| s.count_attack_requests),
+                attack_bytes: flusher_delta(&current, last, |s| s.attack_bytes),
                 active_connections: current.active_connections,
-                count_websocket_connections: current.count_websocket_connections
-                    - last.count_websocket_connections,
+                count_websocket_connections: flusher_delta(&current, last, |s| {
+                    s.count_websocket_connections
+                }),
                 count_ips: current.count_ips,
             });
 
-            new_baselines.push((server_id, current));
+            if sample.retired {
+                retired_acks.push((instance_id, current.fingerprint()));
+            }
+            new_baselines.push((
+                instance_id,
+                FlusherBaseline {
+                    metrics: Arc::downgrade(&sample.metrics),
+                    snapshot: current,
+                },
+            ));
         }
 
         let node_sent = METRICS.total_bytes_sent.load(Ordering::Relaxed);
@@ -1588,9 +1847,17 @@ pub async fn start_persistence_flusher() {
             .await;
             match write_result {
                 Ok(Ok(())) => {
-                    for (server_id, snapshot) in new_baselines {
-                        last_values.insert(server_id, snapshot);
+                    for (instance_id, baseline) in new_baselines {
+                        last_values.insert(instance_id, baseline);
                     }
+                    for (instance_id, fingerprint) in retired_acks {
+                        METRICS.acknowledge_retired(
+                            MetricConsumer::Persistence,
+                            instance_id,
+                            fingerprint,
+                        );
+                    }
+                    last_values.retain(|_, baseline| baseline.metrics.strong_count() > 0);
                     last_node_sent = node_sent;
                     last_node_recv = node_recv;
                 }
@@ -1602,6 +1869,122 @@ pub async fn start_persistence_flusher() {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod retirement_tests {
+    use super::*;
+    use std::sync::atomic::Ordering;
+
+    fn acknowledge_all(node: &NodeMetrics, consumer: MetricConsumer, id: u64, fingerprint: u64) {
+        node.acknowledge_retired(consumer, id, fingerprint);
+    }
+
+    #[test]
+    fn retirement_waits_for_consumers_quiescence_and_the_final_delta() {
+        let node = NodeMetrics::new();
+        let metrics = Arc::new(ServerMetrics::new());
+        let instance_id = metrics.instance_id;
+        node.servers.insert(7_710_001, Arc::clone(&metrics));
+
+        let deferred =
+            node.retire_servers_absent_from(&HashSet::from([7_710_001]), &HashSet::new());
+        assert!(deferred.is_empty());
+        assert!(!node.servers.contains_key(&7_710_001));
+        assert_eq!(node.retired_server_metrics_count(), 1);
+        drop(metrics);
+
+        let sample = node
+            .take_reporting_snapshots()
+            .pop()
+            .expect("retired instance is still reportable");
+        assert!(sample.retired);
+        let stale_fingerprint = sample.snapshot.fingerprint();
+        let in_flight = Arc::clone(&sample.metrics);
+        drop(sample);
+
+        for consumer in [
+            MetricConsumer::Persistence,
+            MetricConsumer::Bandwidth,
+            MetricConsumer::Daily,
+        ] {
+            acknowledge_all(&node, consumer, instance_id, stale_fingerprint);
+        }
+        assert_eq!(
+            node.retired_server_metrics_count(),
+            1,
+            "an in-flight Arc must keep the final counters reportable"
+        );
+
+        in_flight.bytes_sent.fetch_add(1_024, Ordering::Relaxed);
+        drop(in_flight);
+
+        let samples = node.take_reporting_snapshots();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].snapshot.bytes_sent, 1_024);
+        let final_fingerprint = samples[0].snapshot.fingerprint();
+        assert_ne!(final_fingerprint, stale_fingerprint);
+        drop(samples);
+
+        for consumer in [
+            MetricConsumer::Persistence,
+            MetricConsumer::Bandwidth,
+            MetricConsumer::Daily,
+        ] {
+            acknowledge_all(&node, consumer, instance_id, final_fingerprint);
+        }
+        assert_eq!(node.retired_server_metrics_count(), 0);
+    }
+
+    #[test]
+    fn re_added_server_id_uses_a_distinct_metric_instance() {
+        let node = NodeMetrics::new();
+        let old = Arc::new(ServerMetrics::new());
+        let old_instance = old.instance_id;
+        node.servers.insert(7_710_002, Arc::clone(&old));
+        node.retire_servers_absent_from(&HashSet::from([7_710_002]), &HashSet::new());
+
+        let new = Arc::new(ServerMetrics::new());
+        let new_instance = new.instance_id;
+        node.servers.insert(7_710_002, Arc::clone(&new));
+        let deferred = node
+            .retire_servers_absent_from(&HashSet::from([7_710_002]), &HashSet::from([7_710_002]));
+        assert!(deferred.is_empty());
+        assert!(node.servers.contains_key(&7_710_002));
+
+        let instances: HashSet<u64> = node
+            .take_reporting_snapshots()
+            .into_iter()
+            .filter(|sample| sample.snapshot.server_id == 7_710_002)
+            .map(|sample| sample.snapshot.instance_id)
+            .collect();
+        assert_eq!(instances, HashSet::from([old_instance, new_instance]));
+        assert_ne!(old_instance, new_instance);
+        assert_eq!(
+            node.take_snapshots().len(),
+            1,
+            "node/perf views only expose the live instance"
+        );
+    }
+
+    #[test]
+    fn retirement_cap_defers_instead_of_dropping_metric_state() {
+        let node = NodeMetrics::new();
+        let ids: HashSet<i64> = (0..=MAX_RETIRED_SERVER_METRICS)
+            .map(|offset| 7_720_000 + offset as i64)
+            .collect();
+        for id in &ids {
+            node.servers.insert(*id, Arc::new(ServerMetrics::new()));
+        }
+        let deferred = node.retire_servers_absent_from(&ids, &HashSet::new());
+        assert_eq!(
+            node.retired_server_metrics_count(),
+            MAX_RETIRED_SERVER_METRICS
+        );
+        assert_eq!(node.servers.len(), 1);
+        assert_eq!(deferred.len(), 1);
+        assert_eq!(node.retirement_deferred_total(), 1);
     }
 }
 

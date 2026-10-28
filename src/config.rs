@@ -333,6 +333,9 @@ pub struct ConfigStore {
     parent_pressure: Arc<DashMap<String, (f32, std::time::Instant)>>,
     parent_pressure_swept_at: Arc<AtomicU64>,
     published_fingerprints: Arc<DashMap<String, String>>,
+    /// Server ids whose per-server metric state is waiting for a bounded
+    /// retirement slot. Data stays live until all delta consumers can drain it.
+    metric_retirement_backlog: Arc<Mutex<HashSet<i64>>>,
     /// Hash of the global runtime context (global HTTP settings, node level,
     /// parent nodes, tiered bypass, LAN allow). Per-server/per-user published
     /// fingerprints embed this salt, so a global-context change forces the
@@ -446,6 +449,7 @@ impl ConfigStore {
             parent_pressure: Arc::new(DashMap::new()),
             parent_pressure_swept_at: Arc::new(AtomicU64::new(0)),
             published_fingerprints: Arc::new(DashMap::new()),
+            metric_retirement_backlog: Arc::new(Mutex::new(HashSet::new())),
             runtime_context_salt: Arc::new(Mutex::new(String::new())),
         }
     }
@@ -501,6 +505,23 @@ impl ConfigStore {
         ))
         .unwrap_or_default();
         format!("{:x}", md5_legacy::compute(context_json))
+    }
+
+    /// Hand ids removed by the latest snapshot to the metric registry. The
+    /// registry keeps their metrics live until persistence, bandwidth and
+    /// daily consumers acknowledge the final deltas; over-cap retirements stay
+    /// in this bounded-by-configuration backlog and are retried next snapshot.
+    fn retire_removed_server_metrics(&self, removed: &HashSet<i64>, live: &HashSet<i64>) {
+        let mut backlog = self.metric_retirement_backlog.lock();
+        if removed.is_empty() && backlog.is_empty() {
+            return;
+        }
+        backlog.extend(removed.iter().copied());
+        *backlog = crate::metrics::METRICS.retire_servers_absent_from(&backlog, live);
+    }
+
+    pub fn metric_retirement_backlog_len(&self) -> usize {
+        self.metric_retirement_backlog.lock().len()
     }
 
     /// Forget fingerprints whose server/user no longer exists after a full
@@ -1527,6 +1548,11 @@ impl ConfigStore {
             &all_servers,
         );
         let mut lock = self.inner.write();
+        let previous_server_ids: HashSet<i64> = lock
+            .all_servers
+            .iter()
+            .map(|server| server.numeric_id())
+            .collect();
         lock.id = id;
         lock.version = version;
         lock.node_region_id = node_region_id;
@@ -1626,6 +1652,11 @@ impl ConfigStore {
         Self::refresh_cluster_policy_indexes(&mut lock);
         crate::traffic_quota::sync_from_config(&lock);
         drop(lock);
+        let removed_server_ids: HashSet<i64> = previous_server_ids
+            .difference(&live_server_ids)
+            .copied()
+            .collect();
+        self.retire_removed_server_metrics(&removed_server_ids, &live_server_ids);
         *self.runtime_context_salt.lock() = new_salt;
         self.prune_published_fingerprints(&live_server_ids, &live_user_ids);
         self.notify_runtime_reload();
@@ -1656,6 +1687,11 @@ impl ConfigStore {
             &all_servers,
         );
         let mut lock = self.inner.write();
+        let previous_server_ids: HashSet<i64> = lock
+            .all_servers
+            .iter()
+            .map(|server| server.numeric_id())
+            .collect();
         lock.all_servers = all_servers;
         lock.servers = servers;
         lock.routes = routes;
@@ -1664,7 +1700,17 @@ impl ConfigStore {
         Self::refresh_passthrough_indexes(&mut lock);
         Self::refresh_cluster_policy_indexes(&mut lock);
         crate::traffic_quota::sync_from_config(&lock);
+        let live_server_ids: HashSet<i64> = lock
+            .all_servers
+            .iter()
+            .map(|server| server.numeric_id())
+            .collect();
         drop(lock);
+        let removed_server_ids: HashSet<i64> = previous_server_ids
+            .difference(&live_server_ids)
+            .copied()
+            .collect();
+        self.retire_removed_server_metrics(&removed_server_ids, &live_server_ids);
         drop(_update);
         self.notify_runtime_reload();
     }
@@ -1714,6 +1760,11 @@ impl ConfigStore {
             )
         };
         let mut lock = self.inner.write();
+        let previous_server_ids: HashSet<i64> = lock
+            .all_servers
+            .iter()
+            .map(|server| server.numeric_id())
+            .collect();
         if !stale_ids.is_empty() {
             lock.all_servers
                 .retain(|server| !stale_ids.contains(&server.numeric_id()));
@@ -1743,7 +1794,17 @@ impl ConfigStore {
         Self::refresh_passthrough_indexes(&mut lock);
         Self::refresh_cluster_policy_indexes(&mut lock);
         crate::traffic_quota::sync_from_config(&lock);
+        let live_server_ids: HashSet<i64> = lock
+            .all_servers
+            .iter()
+            .map(|server| server.numeric_id())
+            .collect();
         drop(lock);
+        let removed_server_ids: HashSet<i64> = previous_server_ids
+            .difference(&live_server_ids)
+            .copied()
+            .collect();
+        self.retire_removed_server_metrics(&removed_server_ids, &live_server_ids);
         drop(_update);
         self.notify_runtime_reload();
     }
@@ -2313,6 +2374,76 @@ mod tests {
         store.prune_published_fingerprints(&HashSet::from([7]), &HashSet::from([9]));
         assert_eq!(store.published_fingerprint("user:9").as_deref(), Some("v1"));
         assert_eq!(store.published_fingerprint("user:10"), None);
+    }
+
+    #[tokio::test]
+    async fn server_snapshot_retires_metrics_until_delta_consumers_ack() {
+        let store = ConfigStore::new();
+        let removed_id = 7_710_101;
+        let readded_id = 7_710_102;
+        let removed = crate::metrics::record::get_or_create(removed_id);
+        let removed_instance = removed.instance_id;
+        let readded = crate::metrics::record::get_or_create(readded_id);
+
+        store
+            .replace_all_servers(
+                vec![
+                    Arc::new(ServerConfig {
+                        id: Some(removed_id),
+                        ..Default::default()
+                    }),
+                    Arc::new(ServerConfig {
+                        id: Some(readded_id),
+                        ..Default::default()
+                    }),
+                ],
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+            )
+            .await;
+        store
+            .replace_all_servers(
+                vec![Arc::new(ServerConfig {
+                    id: Some(readded_id),
+                    ..Default::default()
+                })],
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+            )
+            .await;
+
+        assert!(!crate::metrics::METRICS.servers.contains_key(&removed_id));
+        assert!(crate::metrics::METRICS.servers.contains_key(&readded_id));
+        assert_eq!(store.metric_retirement_backlog_len(), 0);
+        drop(removed);
+
+        let sample = crate::metrics::METRICS
+            .take_reporting_snapshots()
+            .into_iter()
+            .find(|sample| sample.snapshot.instance_id == removed_instance)
+            .expect("removed metric remains reportable until consumers acknowledge");
+        assert!(sample.retired);
+        let fingerprint = sample.snapshot.fingerprint();
+        drop(sample);
+        for consumer in [
+            crate::metrics::MetricConsumer::Persistence,
+            crate::metrics::MetricConsumer::Bandwidth,
+            crate::metrics::MetricConsumer::Daily,
+        ] {
+            crate::metrics::METRICS.acknowledge_retired(consumer, removed_instance, fingerprint);
+        }
+        assert!(
+            !crate::metrics::METRICS
+                .take_reporting_snapshots()
+                .iter()
+                .any(|sample| sample.snapshot.instance_id == removed_instance),
+            "all consumers acknowledged the quiescent final state"
+        );
+
+        crate::metrics::METRICS.servers.remove(&readded_id);
+        drop(readded);
     }
 
     #[test]

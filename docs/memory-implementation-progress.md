@@ -62,4 +62,11 @@
 - 去掉普通 grant 的控制保留扣除，`ordinary_saturation_cannot_consume_the_control_plane_reserve` 以「ordinary grants must stop at the control-plane reserve」确定性失败；恢复后 governor 77 用例通过，config apply 7、status 1 通过。
 - 限制：配置 JSON decode 发生在 materialization 准入之前，materialized 代际的真实峰值也尚未通过 `SharedGrantPurpose::ConfigPublish` 计入；当前保留保护的是准入路径，不是完整配置工作集。
 
-站点 metrics 立即删除方案未采用：本地持久化、带宽、daily 三个消费者各有独立 cursor，删除会隐去最后窗口及 in-flight 流量。须在有界 retirement 生命周期下完成消费，再释放 tracker；现有约束不允许为了内存回收丢计费数据。
+## 站点 metrics 消费者确认式退休（验证中）
+
+- `ServerMetrics` 增加进程内唯一的 `instanceId`，快照携带该身份。配置删除站点后，旧实例移入独立 retirement 表；同一 server id 重新添加会产生新实例，三个消费者的基线按实例而非 server id 区分，避免旧累计值压掉新生命周期流量或产生负增量。
+- 本地持久化、带宽、daily 三个增量消费者各自在处理完最终快照后确认。确认携带快照指纹；未确认、指纹不一致或仍有请求持有旧 `Arc` 时都不释放。持久化在 Mace batch 成功后才确认，带宽/daily 在最终增量进入窗口后才确认。
+- 旧请求在退休后继续更新同一个实例，因此活跃请求结束前的最终计费增量仍会被消费者看到；确认不会被早期快照提前满足。
+- retirement 同时存在上限 4,096 个实例。达到上限时新增删除候选留在 live 表并进入 ConfigStore backlog，下一次配置快照重试；不静默丢计费状态。node status 暴露 `retiredServerMetricInstances`、`metricRetirementBacklog`、`metricRetirementDeferredTotal`。
+- 验证：retirement 3 个用例、config 45、rpc::stats 11 通过。去掉在途 `Arc`/remove_if 门槛后，`retirement_waits_for_consumers_quiescence_and_the_final_delta` 在 in-flight 断言处确定性失败；恢复后 3 个用例通过。
+- 限制：over-cap 候选只在下一次配置快照重试；daily 确认表示最终增量已进入内存窗口，远端/持久交付仍沿用既有窗口语义，不引入新的远端 ACK baseline。
