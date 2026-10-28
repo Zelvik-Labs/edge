@@ -21,7 +21,7 @@
 
 所有本机 Rust 测试通过工作区 `scripts/local-rust.sh`、mbx、单编译槽运行。未清缓存。未发布、部署或修改 tag。
 
-全量库测试：macOS debug `cargo test --lib` 1055 通过 / 2 手动 UDP 用例忽略；`cargo clippy --all-targets -D clippy::correctness -D clippy::suspicious` 通过（仅保留既有 `items_after_test_module` 警告）。Linux/cgroup/RSS/Long-run 验证仍未运行。
+全量库测试：macOS debug `cargo test --lib` 1059 通过 / 2 手动 UDP 用例忽略；`cargo clippy --lib -D clippy::correctness -D clippy::suspicious` 通过（仅保留既有 `items_after_test_module` 警告）。`tests/memory_governance.rs` 10 通过、`tests/oom_audit.rs` 11 通过。Linux/cgroup/RSS/Long-run 验证仍未运行：本机没有可用 Linux 测试环境，103 宿主仅剩约 16 GiB 磁盘、低于 Rust 门禁的 22 GiB 前置，未在 CI 宿主上启动冷构建。
 
 ## 共享账本原子性（实施中）
 
