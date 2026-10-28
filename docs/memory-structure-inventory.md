@@ -191,7 +191,7 @@
 - 状态必须区分实测队列/permit 字节、容器估算、条目数上限与 RSS 残差。估算可能重复计算共享对象，也不包括 allocator 的全部开销，不能当成 RSS。
 - 指标生成、本地持久入队和远端确认是不同状态；入队失败不能推进 baseline，quarantine 和延迟/乱序确认不能回滚后续 baseline。只有低优先级遥测与分析可按获批策略受控丢弃，并记录原因和 gap/loss。
 
-`BorrowingInputs::borrowable_bytes` 当前只提供可测试的计算模型，**尚未接入准入与回收**；`MetricAggregator::memory_estimate` 仅提供进程内按需快照，**尚未接入状态、限制扩容或跟踪已 flush 的批次**。现有周期性 gauge 仍不计动态属性。`BackgroundWork` 同时用于配置应用和缓存工作，不能不区分调用方就归到可丢弃资源。后续阶段必须把分配、借用和批次生命周期接到实际许可账本，完成验证后再更新本节。
+`BorrowingInputs::borrowable_bytes` 仍描述尚未全部强制执行的独立 established/control 模型；实际 shared account 已扣除 connection budget 与固定 control-plane reserve，但 established working set 仍未接入。`MetricAggregator` 已有字节预算与账本化 `approximate_bytes`。配置应用使用独立 `ConfigApply` 准入，缓存后台不再与它争用同一 class。后续阶段仍需把全部常驻 cache/analytics 分配和 established working set 接到实际许可账本。
 
 已落地的边界：probe outbox 以 16,384 条 / 64 MiB 同时约束排队与正在写 Mace 的批次；失败只回填未持久化的记录，追加任务丢失会计入受控丢弃；flusher 不再随探测计划切换而中止，丢弃计数经 node status 的 `probeOutbox` 暴露。溢出策略是保留队列中较旧的观测、拒绝新观测，而不是无界回填。
 
@@ -211,7 +211,7 @@ High/Critical 回收调用 origin H3 pool 的 owner sweep，仅删除已过 120 
 
 H3 接受连接后由 owner RAII 注册 Critical drain hook，与既有 age ladder 一起关闭到龄连接，guard 结束移除 Connection clone；没有假定原 L4 registry 自动覆盖 H3。UDP 继续依赖现有准入、队列和 idle 生命周期，尚未新增主动 drain hook。
 
-`METRICS.servers` 删除不能直接接 config remove：本地持久化、带宽与 daily 三个独立 delta 消费者仍须采到最后的流量，in-flight Arc 仍可能增加计费字节。立即删除会丢最后窗口，因此未采用该方案；需要有界 retirement/消费确认生命周期。client-agent IP 表也不能随意丢弃有效 crawler 豁免，仍待无热路径磁盘 I/O 的有界索引方案。
+`METRICS.servers` 现在按消费者确认退休：配置快照把删除实例移入最多 4,096 项的退休表，persistence、bandwidth、daily 三个消费者确认同一快照指纹且无请求持有旧 `Arc` 后才释放；重新添加同 id 使用新实例，避免基线串用。超出上限的候选留在 live 并进入 ConfigStore backlog，下一次配置快照重试，不丢计费状态。client-agent IP 表仍不能随意丢弃有效 crawler 豁免，也尚无无热路径磁盘 I/O 的有界索引方案。
 
 ## 7. 非代码因素
 
