@@ -536,22 +536,74 @@ pub fn init_http_dimension_worker(queue_capacity: usize) {
     });
 }
 
+/// Process-wide entry budget shared by every server's distinct-IP set.
+/// Per-server capacities were derived from the server count at creation, so
+/// each new server added another slice while old slices remained, making the
+/// aggregate capacity grow with the harmonic sum of server generations.
+struct DistinctIpBudget {
+    capacity: usize,
+    used: AtomicUsize,
+}
+
+impl DistinctIpBudget {
+    fn new(capacity: usize) -> Self {
+        Self {
+            capacity,
+            used: AtomicUsize::new(0),
+        }
+    }
+
+    fn try_charge(&self) -> bool {
+        self.used
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |used| {
+                (used < self.capacity).then_some(used + 1)
+            })
+            .is_ok()
+    }
+
+    fn refund(&self, count: usize) {
+        let _ = self
+            .used
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |used| {
+                Some(used.saturating_sub(count))
+            });
+    }
+
+    fn used(&self) -> usize {
+        self.used.load(Ordering::Acquire)
+    }
+
+    fn capacity(&self) -> usize {
+        self.capacity
+    }
+}
+
+static DISTINCT_IP_BUDGET: LazyLock<Arc<DistinctIpBudget>> = LazyLock::new(|| {
+    Arc::new(DistinctIpBudget::new(
+        crate::memory_governor::MEMORY_GOVERNOR.metrics_distinct_ip_capacity(),
+    ))
+});
+
+/// Process-wide distinct-IP budget `(used_entries, capacity_entries)` for
+/// node status. The budget is shared by every server.
+pub fn distinct_ip_budget_status() -> (usize, usize) {
+    (DISTINCT_IP_BUDGET.used(), DISTINCT_IP_BUDGET.capacity())
+}
+
 pub struct RuntimeDistinctIpTracker {
     ips: dashmap::DashSet<std::net::IpAddr>,
-    reserved: AtomicUsize,
-    capacity: usize,
+    budget: Arc<DistinctIpBudget>,
 }
 
 impl RuntimeDistinctIpTracker {
-    fn new(max_servers: u64) -> Self {
-        let budget = crate::memory_governor::MEMORY_GOVERNOR
-            .snapshot(crate::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads())
-            .cardinality_state_budget_bytes;
-        let tracker_budget = budget / max_servers.max(1);
+    fn new() -> Self {
+        Self::with_budget(DISTINCT_IP_BUDGET.clone())
+    }
+
+    fn with_budget(budget: Arc<DistinctIpBudget>) -> Self {
         Self {
             ips: dashmap::DashSet::new(),
-            reserved: AtomicUsize::new(0),
-            capacity: (tracker_budget / 64).max(1).min(usize::MAX as u64) as usize,
+            budget,
         }
     }
 
@@ -559,17 +611,16 @@ impl RuntimeDistinctIpTracker {
         if self.ips.contains(&ip) {
             return;
         }
-        if self
-            .reserved
-            .try_update(Ordering::AcqRel, Ordering::Acquire, |reserved| {
-                (reserved < self.capacity).then_some(reserved + 1)
-            })
-            .is_err()
-        {
+        if !self.budget.try_charge() {
+            crate::pipeline_metrics::note_cardinality_drop(
+                "runtime_distinct_ip_tracker",
+                self.budget.used(),
+                self.budget.capacity(),
+            );
             return;
         }
         if !self.ips.insert(ip) {
-            self.reserved.fetch_sub(1, Ordering::AcqRel);
+            self.budget.refund(1);
         }
     }
 
@@ -579,7 +630,18 @@ impl RuntimeDistinctIpTracker {
 
     #[cfg(test)]
     fn capacity(&self) -> usize {
-        self.capacity
+        self.budget.capacity()
+    }
+
+    #[cfg(test)]
+    fn with_capacity(capacity: usize) -> Self {
+        Self::with_budget(Arc::new(DistinctIpBudget::new(capacity)))
+    }
+}
+
+impl Drop for RuntimeDistinctIpTracker {
+    fn drop(&mut self) {
+        self.budget.refund(self.ips.len());
     }
 }
 
@@ -647,10 +709,10 @@ impl Default for ServerMetrics {
 
 impl ServerMetrics {
     pub fn new() -> Self {
-        Self::with_server_count(1)
+        Self::with_distinct_ip_tracker(RuntimeDistinctIpTracker::new())
     }
 
-    fn with_server_count(max_servers: u64) -> Self {
+    fn with_distinct_ip_tracker(distinct_ips: RuntimeDistinctIpTracker) -> Self {
         Self {
             count_errors: AtomicU64::new(0),
             user_id: AtomicI64::new(0),
@@ -667,7 +729,7 @@ impl ServerMetrics {
             origin_bytes_received: AtomicU64::new(0),
             active_connections: AtomicI64::new(0),
             count_websocket_connections: AtomicU64::new(0),
-            distinct_ips: RuntimeDistinctIpTracker::new(max_servers),
+            distinct_ips,
         }
     }
 
@@ -973,11 +1035,10 @@ pub mod record {
     use std::net::IpAddr;
 
     pub fn get_or_create(server_id: i64) -> Arc<ServerMetrics> {
-        let max_servers = METRICS.servers.len().saturating_add(1) as u64;
         METRICS
             .servers
             .entry(server_id)
-            .or_insert_with(|| Arc::new(ServerMetrics::with_server_count(max_servers)))
+            .or_insert_with(|| Arc::new(ServerMetrics::new()))
             .clone()
     }
 
@@ -1548,6 +1609,7 @@ pub async fn start_persistence_flusher() {
 mod tests {
     use super::MetricRequestContext;
     use std::net::IpAddr;
+    use std::sync::Arc;
 
     #[test]
     fn metric_request_context_resolves_go_style_keys() {
@@ -1617,12 +1679,8 @@ mod tests {
 
     #[test]
     fn runtime_distinct_ip_tracker_fail_closed_at_capacity() {
-        let tracker = super::RuntimeDistinctIpTracker::new(1);
+        let tracker = super::RuntimeDistinctIpTracker::with_capacity(512);
         let capacity = tracker.capacity();
-        assert!(
-            capacity > 0,
-            "distinct IP tracker must derive a positive capacity"
-        );
 
         for i in 0..capacity.saturating_add(128) {
             let ip = IpAddr::from([10, 0, (i / 256) as u8, (i % 256) as u8]);
@@ -1633,6 +1691,27 @@ mod tests {
             "distinct IP tracker must not grow beyond capacity ({capacity}), got {}",
             tracker.len()
         );
+    }
+
+    #[test]
+    fn distinct_ip_trackers_share_one_budget_and_refund_on_drop() {
+        let budget = Arc::new(super::DistinctIpBudget::new(2));
+        let first = super::RuntimeDistinctIpTracker::with_budget(budget.clone());
+        let second = super::RuntimeDistinctIpTracker::with_budget(budget.clone());
+
+        first.insert(IpAddr::from([10, 0, 0, 1]));
+        second.insert(IpAddr::from([10, 0, 0, 2]));
+        first.insert(IpAddr::from([10, 0, 0, 3]));
+        assert_eq!(budget.used(), 2);
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 1);
+        assert!(budget.used() <= budget.capacity());
+
+        drop(first);
+        assert_eq!(budget.used(), 1);
+        second.insert(IpAddr::from([10, 0, 0, 3]));
+        assert_eq!(second.len(), 2);
+        assert_eq!(budget.used(), 2);
     }
 
     #[test]

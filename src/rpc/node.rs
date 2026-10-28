@@ -1493,8 +1493,12 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
         // The json! macro hits the recursion limit past ~50 fields; merge a
         // second object for the slower-changing observability fields.
         let shed = crate::memory_shed::shed_stats();
+        let (distinct_ip_entries, distinct_ip_budget_entries) =
+            crate::metrics::distinct_ip_budget_status();
         let resource_governor_extra = serde_json::json!({
             "metricsAggregatorBytes": governor_snapshot.metrics_aggregator_bytes,
+            "distinctIpTrackerEntries": distinct_ip_entries,
+            "distinctIpBudgetEntries": distinct_ip_budget_entries,
             "sharedAccount": shared_account_status(&governor_snapshot),
             "unaccountedRssBytes": governor_snapshot.unaccounted_rss_bytes,
             "unaccountedAnonRssBytes": governor_snapshot.unaccounted_anon_rss_bytes,

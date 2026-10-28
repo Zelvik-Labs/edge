@@ -732,6 +732,10 @@ const MAX_FIREWALL_STATE_ENTRIES: usize = 8_000_000;
 const METRIC_CARDINALITY_ENTRY_ESTIMATED_BYTES: u64 = 256;
 const MIN_METRIC_CARDINALITY_ENTRIES: usize = 65_536;
 const MAX_METRIC_CARDINALITY_ENTRIES: usize = 4_000_000;
+/// One distinct-IP set entry (IpAddr + DashSet slot + shard overhead).
+const DISTINCT_IP_ENTRY_ESTIMATED_BYTES: u64 = 64;
+const MIN_DISTINCT_IP_ENTRIES: usize = 16_384;
+const MAX_DISTINCT_IP_ENTRIES: usize = 16_000_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ConfigSyncBudget {
@@ -2670,6 +2674,13 @@ impl MemoryGovernor {
         metrics_cardinality_capacity(&self.memory_snapshot())
     }
 
+    /// Entries available to the process-wide distinct-IP set budget. The
+    /// tracker is shared by every server, so this is a total cap, not a
+    /// per-server cap.
+    pub fn metrics_distinct_ip_capacity(&self) -> usize {
+        metrics_distinct_ip_capacity(&self.memory_snapshot())
+    }
+
     /// Per-aggregator key cap and aggregate byte budget from one snapshot.
     pub fn metrics_aggregator_limits(&self) -> (usize, u64) {
         let snapshot = self.memory_snapshot();
@@ -4595,6 +4606,18 @@ fn metrics_cardinality_capacity(snapshot: &BudgetedMemorySnapshot) -> usize {
     )
 }
 
+/// Process-wide distinct-IP capacity. The cardinality slice is shared by all
+/// servers rather than divided per server: per-server division would let the
+/// total capacity grow with the sum over server-creation counts.
+fn metrics_distinct_ip_capacity(snapshot: &BudgetedMemorySnapshot) -> usize {
+    connection_limit(
+        state_budget_bytes(snapshot) / 8,
+        DISTINCT_IP_ENTRY_ESTIMATED_BYTES,
+        MIN_DISTINCT_IP_ENTRIES,
+        MAX_DISTINCT_IP_ENTRIES,
+    )
+}
+
 /// Per-aggregator byte budget. The two aggregators together take a quarter of
 /// the state slice; each charge covers the live entry plus room for its
 /// flush/restore temporary copy, so a flush cannot exceed the budget silently.
@@ -5964,6 +5987,17 @@ mod tests {
             metrics_aggregator_budget_bytes(&big),
             512 * 1024 * 1024,
             "large snapshots stop at the per-aggregator ceiling"
+        );
+
+        assert_eq!(
+            metrics_distinct_ip_capacity(&tiny),
+            128 * 1024,
+            "512MiB node shares one 8MiB cardinality slice across all servers"
+        );
+        assert_eq!(
+            metrics_distinct_ip_capacity(&big),
+            MAX_DISTINCT_IP_ENTRIES,
+            "large nodes stop at the distinct-IP entry ceiling"
         );
 
         // Unknown availability keeps the per-core fallback: derived
