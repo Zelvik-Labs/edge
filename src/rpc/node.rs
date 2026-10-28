@@ -1523,6 +1523,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
                 "keepaliveShedActive": shed.keepalive_shed_active,
                 "criticalStreak": shed.critical_streak,
                 "drainedConnectionsTotal": shed.drained_connections_total,
+                "h3DrainedConnectionsTotal": crate::http3_proxy_manager::h3_shed_drained_total(),
                 "keepaliveMarkedTotal": shed.keepalive_marked_total,
                 "lastDrainAgeMs": shed.last_drain_age_ms
             }),

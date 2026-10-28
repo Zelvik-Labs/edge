@@ -3816,20 +3816,15 @@ mod tests {
                 })
             })
             .collect();
-        let cfg: crate::config_models::ReverseProxyConfig = serde_json::from_value(serde_json::json!({
-            "isOn": true,
-            "primaryOrigins": origins,
-            "scheduling": { "code": "least_conn", "options": {} },
-        }))
-        .unwrap();
-        let (lb, _hc) = crate::lb_factory::build_lb(
-            0,
-            &cfg,
-            2,
-            &std::collections::HashMap::new(),
-            false,
-            true,
-        );
+        let cfg: crate::config_models::ReverseProxyConfig =
+            serde_json::from_value(serde_json::json!({
+                "isOn": true,
+                "primaryOrigins": origins,
+                "scheduling": { "code": "least_conn", "options": {} },
+            }))
+            .unwrap();
+        let (lb, _hc) =
+            crate::lb_factory::build_lb(0, &cfg, 2, &std::collections::HashMap::new(), false, true);
         lb
     }
 
@@ -4096,6 +4091,67 @@ mod tests {
         assert!(note.contains("benign relay close"));
         assert!(note.contains("direction=ClientToBackend"));
         assert!(note.contains("phase=Write"));
+    }
+
+    #[tokio::test]
+    async fn active_relay_survives_cache_reclaim_with_exact_bytes() {
+        let (proxy_client, proxy_backend, mut client, mut backend) =
+            connected_proxy_streams().await;
+        let relay = tokio::spawn(async move {
+            stream_tcp_bidirectional_with_metrics_options(
+                91_018,
+                proxy_client,
+                proxy_backend,
+                RelayOptions::default(),
+            )
+            .await
+            .unwrap()
+        });
+        let echo = tokio::spawn(async move {
+            let (mut reader, mut writer) = backend.split();
+            tokio::io::copy(&mut reader, &mut writer).await.unwrap();
+        });
+        let payload = vec![0x5a; 16 * 1024];
+        let mut received = vec![0; payload.len()];
+        let mut latencies = Vec::new();
+        for cycle in 0..64 {
+            if cycle % 8 == 0 {
+                let level = if cycle % 16 == 0 {
+                    crate::memory_governor::MemoryPressureLevel::Critical
+                } else {
+                    crate::memory_governor::MemoryPressureLevel::High
+                };
+                tokio::task::spawn_blocking(move || {
+                    crate::memory_reclaim::reclaim_for_level(level)
+                })
+                .await
+                .unwrap();
+            }
+            let start = std::time::Instant::now();
+            tokio::time::timeout(std::time::Duration::from_secs(3), async {
+                client.write_all(&payload).await.unwrap();
+                client.read_exact(&mut received).await.unwrap();
+            })
+            .await
+            .expect("active forwarding survives reclaim");
+            assert_eq!(received, payload);
+            latencies.push(start.elapsed().as_micros());
+        }
+        client.shutdown().await.unwrap();
+        echo.await.unwrap();
+        let outcome = tokio::time::timeout(std::time::Duration::from_secs(3), relay)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(outcome.bytes_received, (payload.len() * 64) as u64);
+        assert_eq!(outcome.bytes_sent, (payload.len() * 64) as u64);
+        latencies.sort_unstable();
+        println!(
+            "RELAY_RECLAIM cycles=64 bytes_each_direction={} p50_us={} p99_us={}",
+            payload.len() * 64,
+            latencies[32],
+            latencies[63]
+        );
     }
 
     #[tokio::test]

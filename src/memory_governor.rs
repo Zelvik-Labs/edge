@@ -1028,10 +1028,32 @@ pub struct AdmissionPermit<'a> {
     shared: SharedPermit<'a>,
 }
 
-impl AdmissionPermit<'_> {
+impl<'a> AdmissionPermit<'a> {
     /// Bytes this admission holds against the shared account.
     pub fn account_bytes(&self) -> u64 {
         self.shared.bytes()
+    }
+
+    pub(crate) fn grow(&mut self, bytes: u64) -> bool {
+        self.shared.grow(bytes)
+    }
+
+    pub(crate) fn shrink(&mut self, bytes: u64) {
+        self.shared.shrink(bytes);
+    }
+
+    /// Move an existing charge to the buffer owner without refunding it.
+    /// The class slot stays with the handler; shared byte slices may outlive it.
+    pub(crate) fn take_buffer_charge(&mut self, bytes: u64) -> SharedPermit<'a> {
+        assert!(bytes <= self.shared.bytes);
+        self.shared.bytes -= bytes;
+        SharedPermit {
+            governor: self.governor,
+            purpose: self.shared.purpose,
+            bytes,
+            committed: self.shared.committed,
+            low_priority: self.shared.low_priority,
+        }
     }
 }
 
@@ -1488,6 +1510,12 @@ impl MemoryGovernor {
             0
         };
         self.try_admit_with_charges(class, cache_read_memory_charge_bytes)
+    }
+
+    /// Allocation-heavy cache background work shares the normal background
+    /// class ceiling, but must also yield its bytes to connection reserves.
+    pub fn try_admit_cache_background(&self) -> Option<AdmissionPermit<'_>> {
+        self.try_admit_with_priority(AdmissionClass::BackgroundWork, 0, true)
     }
 
     pub fn try_admit_cache_read(&self, bytes: u64) -> Option<AdmissionPermit<'_>> {
@@ -1965,6 +1993,19 @@ impl MemoryGovernor {
         class: AdmissionClass,
         cache_read_memory_charge_bytes: u64,
     ) -> Option<AdmissionPermit<'_>> {
+        self.try_admit_with_priority(
+            class,
+            cache_read_memory_charge_bytes,
+            class.resource_domain() == Some(ResourceDomain::CacheAndAnalytics),
+        )
+    }
+
+    fn try_admit_with_priority(
+        &self,
+        class: AdmissionClass,
+        cache_read_memory_charge_bytes: u64,
+        low_priority: bool,
+    ) -> Option<AdmissionPermit<'_>> {
         // Admission: add then check-then-rollback. The counter may transiently
         // read above the cap by at most the number of in-flight adders, but a
         // grant is issued only while the settled count is below the limit —
@@ -2014,7 +2055,6 @@ impl MemoryGovernor {
         // attributable.
         let account_charge =
             class_estimated_bytes(class).saturating_add(cache_read_memory_charge_bytes);
-        let low_priority = class.resource_domain() == Some(ResourceDomain::CacheAndAnalytics);
         let Some(mut shared) = self.try_grant_shared_with_priority(
             SharedGrantPurpose::Admission,
             account_charge,
@@ -7186,6 +7226,11 @@ mod en16_pool_tests {
         );
         assert_eq!(governor.low_priority_borrowable_bytes(), 0);
         assert!(governor.try_admit_cache_read(1).is_none());
+        assert!(governor.try_admit_cache_background().is_none());
+        assert!(
+            governor.try_admit(AdmissionClass::BackgroundWork).is_some(),
+            "control-plane apply and expiry cleanup retain background admission"
+        );
         assert!(
             governor.try_admit(AdmissionClass::HttpConnection).is_some(),
             "connection admission keeps its own reserve"

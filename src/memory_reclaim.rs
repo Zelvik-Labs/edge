@@ -328,6 +328,7 @@ pub fn reclaim_for_level(level: MemoryPressureLevel) -> ReclaimStats {
             trim_expired_heap_pages();
         }
         MemoryPressureLevel::High => {
+            crate::origin_h3_pool::sweep_idle();
             let cache_stats = crate::cache_hybrid::reclaim_caches_high();
             stats.l1_entries_removed = cache_stats.l1_entries_removed;
             stats.l1_bytes_freed_estimate = cache_stats.l1_bytes_freed_estimate;
@@ -346,6 +347,7 @@ pub fn reclaim_for_level(level: MemoryPressureLevel) -> ReclaimStats {
             trim_released_heap();
         }
         MemoryPressureLevel::Critical => {
+            crate::origin_h3_pool::sweep_idle();
             let cache_stats = crate::cache_hybrid::reclaim_caches_critical();
             stats.l1_entries_removed = cache_stats.l1_entries_removed;
             stats.l1_bytes_freed_estimate = cache_stats.l1_bytes_freed_estimate;
@@ -1204,6 +1206,23 @@ mod tests {
     fn trim_released_heap_calls_mimalloc_collect() {
         trim_released_heap();
         periodic_reclaim_check();
+    }
+
+    #[test]
+    fn high_and_critical_reclaim_sweep_origin_h3_pool() {
+        let before = crate::origin_h3_pool::sweep_runs();
+        reclaim_for_level(MemoryPressureLevel::High);
+        assert!(
+            crate::origin_h3_pool::sweep_runs() > before,
+            "High reclaim must run the origin H3 pool owner sweep"
+        );
+
+        let before = crate::origin_h3_pool::sweep_runs();
+        reclaim_for_level(MemoryPressureLevel::Critical);
+        assert!(
+            crate::origin_h3_pool::sweep_runs() > before,
+            "Critical reclaim must run the origin H3 pool owner sweep"
+        );
     }
 
     #[test]

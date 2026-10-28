@@ -203,7 +203,13 @@ distinct-IP tracker 原先按创建时的服务器数分配独立容量：每个
 
 `parent_pressure` 的样本在 60 秒后逻辑失效，但旧实现让条目永久驻留。现在更新路径每 60 秒至多触发一次 `retain`，删除已过期地址；清理不在请求路径，且只影响父节点压力反馈，不改变选路或连接状态。
 
-L1 正文缓存的权重估算字节现在作为 governor gauge 上报，并从 `unaccountedAnonRssBytes` 的已归因部分扣除；node status 同时给出估算字节与配置预算。该字段只做归因，不授予容量、不进入 resident ledger。L1 的初始预算已改为 `min(512MiB, governor cache budget)`，避免小节点上超过整个 cache 预算；但运行时 budget 变化不会自动 resize，也没有 Linux RSS/压力验证。
+L1 正文缓存的权重估算字节作为 governor gauge 上报，node status 同时给出估算字节与配置预算；gauge 不授予容量、不进入 resident ledger。默认预算现在随 janitor 更新为 `min(512MiB, governor cache budget)`，显式容量仍按策略，hysteresis 以实际应用的容量为比较点。内存 fill 在分配前按 Vec capacity 取得 shared charge，重分配包含新旧共存峰值；正文转入共享 Bytes 时转移凭证，最后一个切片释放才退款。L2→L1 promotion 只在 Normal 进行，Bloom 轮转/预热走 cache-background 借用；配置应用、purger 和 janitor 保持可在压力下继续清理。
+
+High/Critical 回收调用 origin H3 pool 的 owner sweep，仅删除已过 120 秒 idle 或已关闭的池条目；活跃请求 take 后不在池中。IP-list sync tick 做一次线性的 expired-only retain，无新版本或同步关闭时仍清理过期记录；WAF 自身 TTL/GC 语义保持。
+
+H3 接受连接后由 owner RAII 注册 Critical drain hook，与既有 age ladder 一起关闭到龄连接，guard 结束移除 Connection clone；没有假定原 L4 registry 自动覆盖 H3。UDP 继续依赖现有准入、队列和 idle 生命周期，尚未新增主动 drain hook。
+
+`METRICS.servers` 删除不能直接接 config remove：本地持久化、带宽与 daily 三个独立 delta 消费者仍须采到最后的流量，in-flight Arc 仍可能增加计费字节。立即删除会丢最后窗口，因此未采用该方案；需要有界 retirement/消费确认生命周期。client-agent IP 表也不能随意丢弃有效 crawler 豁免，仍待无热路径磁盘 I/O 的有界索引方案。
 
 ## 7. 非代码因素
 

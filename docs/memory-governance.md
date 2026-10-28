@@ -47,7 +47,7 @@ On Linux, cgroup v1/v2 limits take precedence over host memory. `inactive_file` 
 - UDP passthrough: session queues are capped by item count and global queued bytes.
 - QUIC UDP demux: pending route/reassembly buffers, adaptive route idle, and H3 shared UDP queue bytes are capped by the governor.
 - HTTP/3 server: request permits are acquired before stream tasks are spawned, and each connection has a per-connection stream semaphore.
-- TinyUFO L1: auto budget comes from `cache_budget_bytes`.
+- TinyUFO L1: the default follows `min(512 MiB, cache_budget_bytes)` on the janitor cycle; explicit `memoryCapacity` remains explicit. Budget hysteresis compares against the applied capacity so gradual changes eventually resize.
 - Adaptive Bloom: layer growth is bounded by `bloom_budget_bytes`.
 - Negative cache: capacity is bounded by Bloom scale and governor negative-cache budget.
 - Cache purger, janitor, warmup, and L2 promotion: use `BackgroundWork` admission and skip under pressure.
@@ -332,17 +332,24 @@ the resident ledger, which is deliberately scoped to cache categories. A
 rate-limited `METRICS_MEMORY` warning fires when the gauge exceeds max(1/8 of
 node memory, 64MiB).
 
-The `BorrowingInputs` calculation provides a testable contract for future
-priority enforcement: under a fresh Normal observation, subtract the separate
-connection, established-traffic and control-plane hard reserves, safety margin,
-pending and unconfirmed commitments, and additional established-connection
-working set from observed headroom. Unknown or stale observations and elevated
-pressure permit no borrowing. This calculation is not yet wired into admission;
-current shared account does not enforce these separate reserves. Node status
-exposes its headroom, margin, grantable, pending, unconfirmed and live bytes
-under `resourceGovernor.sharedAccount`; `priorityReserveEnforced` is false.
-Logical release does not itself increase physical headroom, and no claim is made
-that estimated bytes equal RSS.
+Cache reads, writes, revalidation and allocation-heavy cache background work
+now borrow through the shared-account CAS gate: observed headroom minus safety
+margin, outstanding commitments and the full connection budget. Borrowing closes
+outside Normal pressure and without observed physical headroom; credential growth
+keeps the same priority. Config apply, expiry cleanup and disk purging retain their
+existing background admission because cleanup must still progress under pressure.
+Memory-only fills charge buffer capacity before allocation, including the old/new
+coexistence peak during reallocation. Failed growth leaves the current buffer
+unchanged; the handler stops caching while origin forwarding continues.
+
+The separate `BorrowingInputs` model also describes independent established and
+control-plane reserves and an additional working set; those broader invariants
+are still pending. `resourceGovernor.sharedAccount` therefore reports
+`lowPriorityBorrowingEnforced=true`, current `lowPriorityBorrowableBytes`, and
+`priorityReserveEnforced=false`. Logical refunds never increase observed physical
+headroom, and estimated bytes are not RSS. L1/analytics global revocation and
+retirement of per-server metrics without losing unflushed billing data remain
+separate lifecycle work.
 
 Tracker cardinality is additionally hard-bounded: each tracker
 (`MetricAggregator` x2 incl. nested `request_samples`, `TopIpTracker`,

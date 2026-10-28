@@ -37,10 +37,21 @@
 - aggregator：已由 `208be7f` 增加 per-aggregator 字节预算，entry、动态属性与 request sample 在分配前计费；flush 退款、restore 重新计费。top_ip 与 daily tracker 仍只有条目上限。
 - Linux debug 库与 RSS/配置集成验证已运行。新增 `tests/memory_audit.rs` 使用生产同款 mimalloc：512/256 MiB cgroup（无 swap、CPU 200%）各 16 轮 × 30,000 输入通过；聚合计费每轮约 16 MiB、flush 后归零。回收后 RSS 首/末轮分别约 33.5→44.2 MiB、28.6→32.6 MiB；短测有预热增长；256 MiB 的 **512 轮 × 30,000（1,536 万输入）复核通过，224.95 秒**，回收后 RSS 28.6→36.9 MiB，末尾三轮均为 38,699,008 bytes。持有的是 16 个连接准入凭证，不是网络连接；这些结果不证明协议吞吐或长连接生存。
 
-## 低优先级借用准入（工作树）
+## 低优先级借用准入（`0e54f74`）
 
 `CacheWrite` / `CacheRevalidate` / `CacheReadMemory` 与直接 `CacheReadMemory` shared grant 在统一 outstanding CAS 门槛扣除完整 connection budget 后才能分配；Elevated/High/Critical 或未知 physical headroom 关闭新借用，permit grow 沿用原优先级。逻辑取消与 committed 生命周期保持原语义。node status 显示 `lowPriorityBorrowingEnforced=true` 和当前可借字节；`priorityReserveEnforced=false` 仍明确表示尚未完成所有分配者的独立硬保留。
 
 去掉 CAS 门槛中的 reserve 扣除，两个准入回归确定性失败（侵入 connection reserve、Elevated 仍允许缓存）；恢复后两个用例通过。cache 生命周期测试使用每个 storage 的私有 synthetic governor，避免依赖宿主内存或修改全局 refresher。新增额度耗尽测试验证正常/压缩磁盘正文仍可流式返回，压缩损坏仍在 body read 返回错误并清理，连接准入保留 headroom。
 
-此切片尚不覆盖 `BackgroundWork` 共享调用者、resident cache 或 aggregator 的全局借用撤销，也没有把完整 control-plane reserve / 协议 drain / registry reclaim 实现声明为完成。
+`0e54f74` 之后的工作树进一步区分 cache-background 与配置/清理后台任务：Bloom 轮转/预热、L1 promotion 受低优先级门槛；purger/janitor 保持压力下可清理。resident cache 或 aggregator 的全局借用撤销、完整 control-plane reserve 尚未完成。
+
+## 缓存所有权与协议清理（验证中）
+
+- 内存 fill 在 Vec 分配前计费实际容量，扩容先覆盖新旧共存峰值；正文发布时把同一 charge 移入 Bytes owner，最后一个切片释放才退款。去掉扩容计费/移交所有权，两个回归分别以 1 MiB 对 3 MiB 的错误计费失败；正常 cache 51 用例通过。
+- 默认 L1 的 512 MiB cap 现在与 governor 动态预算一起更新；显式容量保留；连续小幅调整不会重置 hysteresis 基点。禁用动态刷新时回归以 512 MiB 对 128 MiB 失败。
+- IP-list 每 tick 清理过期项，单次 O(n) retain，不逐目标重扫；WAF TTL 不变。去掉清理的回归以 removed=0 对 1 失败。
+- High/Critical 调用 origin H3 pool 的过期 owner sweep；H3 接受连接后 RAII 注册 owner drain，与原 Critical age ladder 一起关闭到龄连接。该关闭可能中止活跃 stream，不是等待所有流完成的 GOAWAY；只在现有 Critical 最后防线执行。真实 QUIC 7 用例、shed 4 通过；禁用 close 的回归失败。
+- 新增真实 TCP relay 64 轮双向通信，中间执行 High/Critical cache reclaim：各方向 1 MiB 字节精确一致，loopback p50 41,004µs / p99 42,272µs。这不是吞吐优化基准或完整协议矩阵。
+- 当前 Linux 全量库 **1147 通过 / 2 忽略**，macOS cache 50、body owner 1 通过，`clippy --lib` 通过。最新单次 sharded H3 close 扫描与上述反向对照恢复后，cache 51、H3 7、名单 4 重新通过。
+
+站点 metrics 立即删除方案未采用：本地持久化、带宽、daily 三个消费者各有独立 cursor，删除会隐去最后窗口及 in-flight 流量。须在有界 retirement 生命周期下完成消费，再释放 tracker；现有约束不允许为了内存回收丢计费数据。

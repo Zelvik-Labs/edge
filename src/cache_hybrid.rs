@@ -1577,6 +1577,25 @@ impl Storage for FileStorage {
     }
 }
 
+struct ChargedCacheBuffer {
+    data: Vec<u8>,
+    _charge: crate::memory_governor::StaticSharedPermit,
+}
+
+impl AsRef<[u8]> for ChargedCacheBuffer {
+    fn as_ref(&self) -> &[u8] {
+        &self.data
+    }
+}
+
+fn charged_cache_bytes(data: Vec<u8>, permit: &mut StaticAdmissionPermit) -> bytes::Bytes {
+    let charge = permit.take_buffer_charge(data.capacity() as u64);
+    bytes::Bytes::from_owner(ChargedCacheBuffer {
+        data,
+        _charge: charge,
+    })
+}
+
 /// In-memory hit handler that serves from a Bytes buffer in 32KB chunks.
 /// Chunked delivery is required by Pingora's HTTP framing — one-shot delivery
 /// breaks keep-alive and causes connection leaks.
@@ -2095,6 +2114,28 @@ impl HandleMiss for NoopMissHandler {
     }
 }
 
+fn reserve_cache_buffer(
+    data: &mut Vec<u8>,
+    permit: &mut StaticAdmissionPermit,
+    capacity: usize,
+) -> bool {
+    if capacity <= data.capacity() {
+        return true;
+    }
+    // Reallocation may coexist with the old buffer; reserve the full new
+    // capacity first, then refund the old allocation after the move.
+    if !permit.grow(capacity as u64) {
+        return false;
+    }
+    let old_capacity = data.capacity();
+    if data.try_reserve_exact(capacity - data.len()).is_err() {
+        permit.shrink(capacity as u64);
+        return false;
+    }
+    permit.shrink(old_capacity as u64);
+    true
+}
+
 #[async_trait]
 impl HandleMiss for MemoryMissHandler {
     async fn write_body(&mut self, data: bytes::Bytes, _eof: bool) -> Result<()> {
@@ -2127,6 +2168,18 @@ impl HandleMiss for MemoryMissHandler {
             self.data.clear();
             return Ok(());
         }
+        let capacity = if next_len > self.data.capacity() {
+            next_len
+                .max(self.data.capacity().saturating_mul(2))
+                .min(MEMORY_SERVE_MAX as usize)
+        } else {
+            self.data.capacity()
+        };
+        if !reserve_cache_buffer(&mut self.data, &mut self._cache_write_permit, capacity) {
+            self.rejected = true;
+            self.data = Vec::new();
+            return Ok(());
+        }
         self.data.extend_from_slice(&data);
         Ok(())
     }
@@ -2151,7 +2204,7 @@ impl HandleMiss for MemoryMissHandler {
             rejected,
             _purge_guard: _,
             write_guard,
-            _cache_write_permit: _,
+            _cache_write_permit: mut cache_write_permit,
         } = *self;
         let _write_guard = write_guard;
         let now = crate::utils::time::now_timestamp();
@@ -2191,7 +2244,7 @@ impl HandleMiss for MemoryMissHandler {
             &key,
             TinyUfoL1Entry {
                 cache_key: key.clone(),
-                data: bytes::Bytes::from(data),
+                data: charged_cache_bytes(data, &mut cache_write_permit),
                 response_header: Arc::new(response_header),
                 fresh_until,
                 created_at,
@@ -2832,6 +2885,7 @@ pub(crate) struct TinyUfoL1 {
     // configured item capacity.
     keys: DashSet<String>,
     auto_budget: AtomicBool,
+    auto_budget_cap: AtomicU64,
     max_bytes: AtomicU64,
     current_weight: AtomicU64,
 }
@@ -2849,6 +2903,7 @@ impl TinyUfoL1 {
             inner: StdRwLock::new(cache),
             keys: DashSet::new(),
             auto_budget: AtomicBool::new(auto_budget),
+            auto_budget_cap: AtomicU64::new(u64::MAX),
             max_bytes: AtomicU64::new(resolved_max_bytes),
             current_weight: AtomicU64::new(0),
         }
@@ -3005,24 +3060,38 @@ impl TinyUfoL1 {
         let auto_budget = bytes == 0;
         self.auto_budget.store(auto_budget, Ordering::Relaxed);
         let resolved = if auto_budget {
-            crate::memory_governor::MEMORY_GOVERNOR.cache_budget_bytes()
+            crate::memory_governor::MEMORY_GOVERNOR
+                .cache_budget_bytes()
+                .min(self.auto_budget_cap.load(Ordering::Relaxed))
         } else {
             bytes
         };
-        let old = self.max_bytes.swap(resolved, Ordering::Relaxed);
-        if !Self::should_rebuild_for_budget_change(old, resolved) {
-            return;
+        self.apply_budget(resolved);
+    }
+
+    fn apply_budget(&self, resolved: u64) {
+        let old = self.max_bytes.load(Ordering::Relaxed);
+        if Self::should_rebuild_for_budget_change(old, resolved) {
+            // Keep the old applied value until hysteresis actually resizes;
+            // otherwise small steps would never accumulate into a resize.
+            self.force_rebuild_with_limit(resolved);
         }
-        // Reuse the salvage path: a budget change should shrink the cache to
-        // what fits, not wipe it.
-        self.force_rebuild_with_limit(resolved);
+    }
+
+    pub(crate) fn use_governor_budget(&self, cap: u64) {
+        self.auto_budget_cap.store(cap, Ordering::Relaxed);
+        self.auto_budget.store(true, Ordering::Relaxed);
+        self.refresh_auto_budget();
     }
 
     fn refresh_auto_budget(&self) {
-        if !self.auto_budget.load(Ordering::Relaxed) {
-            return;
+        self.refresh_auto_budget_from(HybridStorage::compute_memory_budget());
+    }
+
+    fn refresh_auto_budget_from(&self, budget: u64) {
+        if self.auto_budget.load(Ordering::Relaxed) {
+            self.apply_budget(budget.min(self.auto_budget_cap.load(Ordering::Relaxed)));
         }
-        self.set_max_bytes(0);
     }
 
     fn force_rebuild_with_limit(&self, bytes: u64) {
@@ -3472,8 +3541,7 @@ impl DualGenerationBloom {
     }
 
     fn rotate_from_cache_meta(&self) {
-        let Some(_permit) = crate::memory_governor::MEMORY_GOVERNOR
-            .try_admit(crate::memory_governor::AdmissionClass::BackgroundWork)
+        let Some(_permit) = crate::memory_governor::MEMORY_GOVERNOR.try_admit_cache_background()
         else {
             return;
         };
@@ -3542,9 +3610,7 @@ fn bloom_generation() -> u64 {
 }
 
 fn warm_bloom_from_cache_meta() {
-    let Some(_permit) = crate::memory_governor::MEMORY_GOVERNOR
-        .try_admit(crate::memory_governor::AdmissionClass::BackgroundWork)
-    else {
+    let Some(_permit) = crate::memory_governor::MEMORY_GOVERNOR.try_admit_cache_background() else {
         tracing::warn!("CACHE_BLOOM: skipping warmup because background memory admission is full");
         return;
     };
@@ -3976,9 +4042,14 @@ impl HybridStorage {
             .unwrap_or(0)
             .min(MEMORY_SERVE_MAX as usize);
         let head_request = cache_key_is_head_variant(&key_str);
+        let mut data = Vec::new();
+        let mut cache_write_permit = cache_write_permit;
+        if !reserve_cache_buffer(&mut data, &mut cache_write_permit, capacity) {
+            return Ok(Box::new(NoopMissHandler));
+        }
         Ok(Box::new(MemoryMissHandler {
             key: key_str,
-            data: Vec::with_capacity(capacity),
+            data,
             response_header: response_header.clone(),
             fresh_until: timestamp_from_system_time(meta.fresh_until()),
             created_at: timestamp_from_system_time(meta.created()),
@@ -4839,11 +4910,12 @@ impl Storage for HybridStorage {
                                 && current.expires > now
                         })
                 });
-                let background_permit = crate::memory_governor::MEMORY_GOVERNOR
-                    .try_admit(crate::memory_governor::AdmissionClass::BackgroundWork);
+                let background_permit =
+                    crate::memory_governor::MEMORY_GOVERNOR.try_admit_cache_background();
                 if promotion_data.len() <= MEMORY_SERVE_MAX as usize
                     && background_permit.is_some()
-                    && !crate::memory_governor::MEMORY_GOVERNOR.is_memory_pressure_high()
+                    && self.admission_governor().current_memory_pressure_level()
+                        == crate::memory_governor::MemoryPressureLevel::Normal
                     && stamp_is_current
                 {
                     let current_meta = current_meta.expect("stamp validation checked metadata");
@@ -5451,12 +5523,19 @@ mod tests {
             .insert_header("content-length", expected_body_len.to_string())
             .expect("content length");
         let now = crate::utils::time::now_timestamp();
-        let permit = cache_test_governor()
+        let mut permit = storage
+            .admission_governor()
             .try_admit(AdmissionClass::CacheWrite)
             .expect("cache write permit should be available");
+        let mut data = Vec::new();
+        assert!(reserve_cache_buffer(
+            &mut data,
+            &mut permit,
+            expected_body_len as usize
+        ));
         Box::new(MemoryMissHandler {
             key: key.clone(),
-            data: Vec::with_capacity(expected_body_len as usize),
+            data,
             response_header,
             fresh_until: now + 60,
             created_at: now,
@@ -6716,6 +6795,32 @@ mod tests {
     }
 
     #[test]
+    fn default_l1_tracks_governor_budget_and_preserves_explicit_capacity() {
+        let l1 = TinyUfoL1::new(512 << 20);
+        l1.auto_budget_cap.store(512 << 20, Ordering::Relaxed);
+        l1.auto_budget.store(true, Ordering::Relaxed);
+        l1.refresh_auto_budget_from(128 << 20);
+        assert_eq!(l1.max_bytes(), 128 << 20);
+        l1.refresh_auto_budget_from(4 << 30);
+        assert_eq!(l1.max_bytes(), 512 << 20);
+        l1.set_max_bytes(64 << 20);
+        l1.refresh_auto_budget_from(16 << 20);
+        assert_eq!(l1.max_bytes(), 64 << 20, "explicit policy remains explicit");
+    }
+
+    #[test]
+    fn l1_small_budget_steps_accumulate_against_applied_capacity() {
+        let l1 = TinyUfoL1::new(512 << 20);
+        for budget in [500, 490, 480, 470, 460, 450] {
+            l1.set_max_bytes(budget << 20);
+        }
+        assert!(
+            l1.max_bytes() <= 460 << 20,
+            "hysteresis must eventually resize"
+        );
+    }
+
+    #[test]
     fn tiny_ufo_l1_resize_hysteresis_ignores_small_budget_changes() {
         let old = 512 * 1024 * 1024;
         assert!(!TinyUfoL1::should_rebuild_for_budget_change(
@@ -6871,6 +6976,65 @@ mod tests {
 
         crate::metrics::storage::delete_cache_meta_for_test(&hash);
         let _ = tokio::fs::remove_dir_all(root).await;
+    }
+
+    #[test]
+    fn cache_body_charge_follows_last_bytes_slice_after_handler_release() {
+        let governor = cache_test_governor();
+        let mut permit = governor
+            .try_admit(AdmissionClass::CacheWrite)
+            .expect("cache permit");
+        let mut data = Vec::new();
+        assert!(reserve_cache_buffer(&mut data, &mut permit, 2 << 20));
+        data.extend_from_slice(b"body");
+        let capacity = data.capacity() as u64;
+        let body = charged_cache_bytes(data, &mut permit);
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            permit.account_bytes() + capacity
+        );
+        let slice = body.slice(1..);
+        drop(body);
+        drop(permit);
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            capacity,
+            "handler release must not refund an Arc-held body"
+        );
+        assert_eq!(&slice[..], b"ody");
+        drop(slice);
+        assert_eq!(governor.account_view().committed_live_bytes, 0);
+        assert!(
+            governor.account_view().committed_unconfirmed_bytes >= capacity,
+            "physical headroom still waits for observation"
+        );
+    }
+
+    #[test]
+    fn cache_buffer_capacity_is_charged_before_allocation_and_growth() {
+        let governor = cache_test_governor();
+        let mut permit = governor
+            .try_admit(AdmissionClass::CacheWrite)
+            .expect("cache permit");
+        let base = permit.account_bytes();
+        let mut data = Vec::new();
+        assert!(reserve_cache_buffer(&mut data, &mut permit, 2 << 20));
+        assert_eq!(permit.account_bytes(), base + data.capacity() as u64);
+        data.extend_from_slice(&[1, 2, 3]);
+        assert!(reserve_cache_buffer(&mut data, &mut permit, 4 << 20));
+        assert_eq!(permit.account_bytes(), base + data.capacity() as u64);
+        assert_eq!(data, [1, 2, 3]);
+
+        let _fill = governor
+            .try_grant_shared(
+                crate::memory_governor::SharedGrantPurpose::CacheReadMemory,
+                governor.low_priority_borrowable_bytes(),
+            )
+            .expect("fill borrowing window");
+        let before = permit.account_bytes();
+        assert!(!reserve_cache_buffer(&mut data, &mut permit, 8 << 20));
+        assert_eq!(permit.account_bytes(), before);
+        assert_eq!(data, [1, 2, 3], "failed growth preserves the buffer");
     }
 
     #[tokio::test]

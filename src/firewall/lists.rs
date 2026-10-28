@@ -191,6 +191,22 @@ impl GlobalIpListManager {
         );
     }
 
+    /// Expire local list records. WAF state enforces its own expiry and GC;
+    /// recomputing every target here would scan the full list for each item.
+    pub fn cleanup_expired(&self) -> usize {
+        self.cleanup_expired_at(crate::utils::time::now_timestamp())
+    }
+
+    fn cleanup_expired_at(&self, now: i64) -> usize {
+        let mut removed = 0usize;
+        self.items.retain(|_, item| {
+            let expired = item.expiry <= now;
+            removed += usize::from(expired);
+            !expired
+        });
+        removed
+    }
+
     fn item_kind(&self, item: &pb::IpItem) -> Option<IpListKind> {
         Self::kind_from_type(&item.list_type).or_else(|| {
             self.list_metadata
@@ -419,5 +435,43 @@ mod tests {
                 v6: false,
             }))
         );
+    }
+
+    fn manager() -> GlobalIpListManager {
+        GlobalIpListManager::new(Arc::new(WafStateManager::new()))
+    }
+
+    #[test]
+    fn cleanup_expired_removes_only_expired_temporary_items() {
+        let manager = manager();
+        let now = crate::utils::time::now_timestamp();
+        let expired: IpAddr = "192.0.2.10".parse().unwrap();
+        let live: IpAddr = "192.0.2.11".parse().unwrap();
+
+        let mut expired_item = ip_item();
+        expired_item.value = expired.to_string();
+        expired_item.expired_at = now + 10;
+        assert!(manager.apply_item(expired_item));
+
+        let mut live_item = ip_item();
+        live_item.id = 2;
+        live_item.value = live.to_string();
+        live_item.expired_at = now + 120;
+        assert!(manager.apply_item(live_item));
+
+        assert!(manager.waf_state.is_blocked(expired, 0));
+        assert!(manager.waf_state.is_blocked(live, 0));
+
+        // At the exact expiry timestamp the item is no longer live, matching
+        // the WAF read path's `expiry > now` boundary.
+        assert_eq!(manager.cleanup_expired_at(now + 10), 1);
+        assert_eq!(manager.items.len(), 1, "only the expired item is dropped");
+        assert!(
+            manager.waf_state.is_blocked(live, 0),
+            "a live temporary block must survive expiry-only cleanup"
+        );
+
+        assert_eq!(manager.cleanup_expired_at(now + 121), 1);
+        assert!(manager.items.is_empty());
     }
 }

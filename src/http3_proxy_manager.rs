@@ -10,8 +10,9 @@ use pingora_proxy::http_proxy_custom;
 use quinn::Endpoint;
 use std::collections::HashSet;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, LazyLock};
+use std::time::{Duration, Instant};
 use tokio::sync::{Semaphore, watch};
 use tracing::{debug, error, info};
 
@@ -38,6 +39,80 @@ static H3_RETRY_ATTEMPTED: AtomicU64 = AtomicU64::new(0);
 static H3_RETRY_LIMITED: AtomicU64 = AtomicU64::new(0);
 static H3_IGNORED_INCOMING: AtomicU64 = AtomicU64::new(0);
 static H3_REFUSED_INCOMING: AtomicU64 = AtomicU64::new(0);
+
+/// QUIC connections accepted by an H3 listener, keyed by a monotonic id.
+/// Registration only happens after admission granted the connection
+/// permits, so the admission bound is also this map's bound — no separate
+/// cap. `H3ConnectionRegistration`'s RAII guard removes the entry when the
+/// owning handler returns or its task is aborted, so the registry's
+/// `Connection` clone never outlives the handler.
+static H3_CONNECTIONS: LazyLock<DashMap<u64, H3ConnectionEntry>> = LazyLock::new(DashMap::new);
+static H3_NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(0);
+
+/// Connections closed by an owner drain pass, cumulative.
+static H3_SHED_DRAINED: AtomicU64 = AtomicU64::new(0);
+
+struct H3ConnectionEntry {
+    connection: quinn::Connection,
+    accepted_at: Instant,
+}
+
+/// Owner-controlled drain hook, called alongside the L4 registry drain at
+/// the `Critical` safety boundary. Connections registered at least
+/// `max_age` ago are closed with H3_NO_ERROR. This releases the connection
+/// and may interrupt its active streams; it does not wait for GOAWAY. Age 0
+/// drains every registered connection. Returns the number closed.
+pub(crate) fn drain_h3_connections_older_than(max_age: Duration) -> usize {
+    let now = Instant::now();
+    let mut drained = 0usize;
+    // A single sharded pass avoids a connection-sized allocation or repeated
+    // scans at the OOM boundary. Quinn close only signals its local driver.
+    H3_CONNECTIONS.retain(|_, entry| {
+        if now.saturating_duration_since(entry.accepted_at) < max_age {
+            return true;
+        }
+        entry.connection.close(
+            quinn::VarInt::from_u32(h3::error::Code::H3_NO_ERROR.value() as u32),
+            b"memory pressure shed",
+        );
+        drained += 1;
+        false
+    });
+    if drained != 0 {
+        H3_SHED_DRAINED.fetch_add(drained as u64, Ordering::Relaxed);
+    }
+    drained
+}
+
+/// Cumulative owner-drained H3 connections (observability).
+pub(crate) fn h3_shed_drained_total() -> u64 {
+    H3_SHED_DRAINED.load(Ordering::Relaxed)
+}
+
+/// RAII registration for one accepted QUIC connection.
+struct H3ConnectionRegistration {
+    id: u64,
+}
+
+impl H3ConnectionRegistration {
+    fn register(connection: &quinn::Connection) -> Self {
+        let id = H3_NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
+        H3_CONNECTIONS.insert(
+            id,
+            H3ConnectionEntry {
+                connection: connection.clone(),
+                accepted_at: Instant::now(),
+            },
+        );
+        Self { id }
+    }
+}
+
+impl Drop for H3ConnectionRegistration {
+    fn drop(&mut self) {
+        H3_CONNECTIONS.remove(&self.id);
+    }
+}
 
 /// Default node-wide Retry responses/sec ceiling when the policy does
 /// not set `retryPps`. One aggregate bucket for the whole node — the
@@ -447,6 +522,9 @@ impl Http3ProxyManager {
     ) -> Result<()> {
         let conn = connecting.await?;
         let remote_addr = conn.remote_address();
+        // Owner-controlled drain registration (Critical memory pressure).
+        // The guard releases the registry's clone on return or task abort.
+        let _drain_registration = H3ConnectionRegistration::register(&conn);
         debug!(
             "HTTP/3 connection accepted on port {} from {}",
             listen_port, remote_addr
@@ -635,10 +713,7 @@ impl Http3ProxyManager {
         kind: L4DefenseKind,
         detail: impl Into<String>,
     ) -> crate::l4_defense::L4DefenseVerdict {
-        let node_id = self
-            .proxy_logic
-            .api_config
-            .numeric_gcloud_node_id();
+        let node_id = self.proxy_logic.api_config.numeric_gcloud_node_id();
         crate::l4_defense::record_l4_event(
             &self.config_store,
             &self.proxy_logic.waf_state,
@@ -961,9 +1036,7 @@ mod tests {
             api_config: api_config.clone(),
             challenge_key,
             cert_selector: cert_selector.clone(),
-            waf_verifier: Arc::new(crate::firewall::verifier::WafVerifier::new(
-                &challenge_key,
-            )),
+            waf_verifier: Arc::new(crate::firewall::verifier::WafVerifier::new(&challenge_key)),
             tls_downstream: false,
         };
         Http3ProxyManager::new(
@@ -1040,5 +1113,94 @@ mod tests {
         client.wait_idle().await;
         client2.wait_idle().await;
         runner.abort();
+    }
+
+    // Owner-controlled drain: registered connections are closed only once
+    // their age crosses the threshold, using H3_NO_ERROR, and the RAII
+    // guard removes registrations that end without a drain. The registry
+    // test lock keeps memory_shed's Critical ladder from draining these
+    // entries mid-assertion; it is never held across an await.
+    #[tokio::test]
+    async fn h3_owner_drain_closes_by_age_and_guard_cleans_registry() {
+        let endpoint =
+            Endpoint::server(test_server_config(), "127.0.0.1:0".parse().unwrap()).unwrap();
+        let addr = endpoint.local_addr().unwrap();
+        let client = test_client_endpoint();
+
+        let connecting = client.connect(addr, "localhost").unwrap();
+        let accept = async {
+            endpoint
+                .accept()
+                .await
+                .expect("incoming")
+                .await
+                .expect("handshake")
+        };
+        let (server_conn, client_conn) = tokio::join!(accept, connecting);
+        let client_conn = client_conn.expect("connect failed");
+
+        {
+            let _serial = crate::l4_connection_registry::REGISTRY_TEST_LOCK
+                .lock()
+                .unwrap();
+            let registration = H3ConnectionRegistration::register(&server_conn);
+            assert!(H3_CONNECTIONS.contains_key(&registration.id));
+
+            // A young connection survives a positive age threshold.
+            let drained_total = h3_shed_drained_total();
+            assert_eq!(drain_h3_connections_older_than(Duration::from_secs(600)), 0);
+            assert!(H3_CONNECTIONS.contains_key(&registration.id));
+
+            // Age 0 closes it with H3_NO_ERROR.
+            assert!(drain_h3_connections_older_than(Duration::ZERO) >= 1);
+            assert!(!H3_CONNECTIONS.contains_key(&registration.id));
+            assert!(h3_shed_drained_total() >= drained_total + 1);
+
+            // The guard is a no-op after the drain: no second close, no
+            // registry entry left behind.
+            let id = registration.id;
+            drop(registration);
+            assert!(!H3_CONNECTIONS.contains_key(&id));
+        }
+
+        // The peer observes a graceful close with the H3 no-error code,
+        // not a timeout or transport error.
+        tokio::time::timeout(Duration::from_secs(10), client_conn.closed())
+            .await
+            .expect("client did not observe the owner close");
+        match client_conn.close_reason() {
+            Some(quinn::ConnectionError::ApplicationClosed(close)) => assert_eq!(
+                close.error_code,
+                quinn::VarInt::from_u32(h3::error::Code::H3_NO_ERROR.value() as u32)
+            ),
+            other => panic!("expected an H3 no-error application close, got {other:?}"),
+        }
+
+        // Registration cleanup without a drain: when the owning handler
+        // ends, the guard releases the registry's connection clone.
+        let connecting = client.connect(addr, "localhost").unwrap();
+        let accept = async {
+            endpoint
+                .accept()
+                .await
+                .expect("incoming")
+                .await
+                .expect("handshake")
+        };
+        let (server_conn, client_conn) = tokio::join!(accept, connecting);
+        let client_conn = client_conn.expect("connect failed");
+        {
+            let _serial = crate::l4_connection_registry::REGISTRY_TEST_LOCK
+                .lock()
+                .unwrap();
+            let registration = H3ConnectionRegistration::register(&server_conn);
+            assert!(H3_CONNECTIONS.contains_key(&registration.id));
+            let id = registration.id;
+            drop(registration);
+            assert!(!H3_CONNECTIONS.contains_key(&id));
+        }
+        client_conn.close(0u32.into(), b"done");
+        client_conn.closed().await;
+        client.wait_idle().await;
     }
 }

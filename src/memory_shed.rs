@@ -154,16 +154,24 @@ fn observe_pressure_at(level: MemoryPressureLevel, now_ms: u64) {
             let rung = streak.min(DRAIN_AGE_LADDER_MS.len() as u64 - 1) as usize;
             let max_age_ms = DRAIN_AGE_LADDER_MS[rung];
             SHED_LAST_DRAIN_AGE_MS.store(max_age_ms, Ordering::Relaxed);
-            let drained = l4_connection_registry::L4_CONNECTION_REGISTRY
+            let max_age = Duration::from_millis(max_age_ms);
+            let l4_drained = l4_connection_registry::L4_CONNECTION_REGISTRY
                 .drain_matching_with_reason(
-                    |conn| conn.elapsed() >= Duration::from_millis(max_age_ms),
+                    |conn| conn.elapsed() >= max_age,
                     ConnectionCancelReason::MemoryPressureShed,
                 );
+            // The HTTP/3 module owns its QUIC connections: it closes the
+            // registered ones at the same age rung with H3_NO_ERROR rather
+            // than letting an uncoordinated drop/timeout hold buffers.
+            let h3_drained = crate::http3_proxy_manager::drain_h3_connections_older_than(max_age);
+            let drained = l4_drained + h3_drained;
             if drained > 0 {
                 SHED_DRAINED_CONNECTIONS.fetch_add(drained as u64, Ordering::Relaxed);
                 tracing::warn!(
                     target: "memory_shed",
-                    drained,
+                    l4_drained,
+                    h3_drained,
+                    h3_drained_total = crate::http3_proxy_manager::h3_shed_drained_total(),
                     max_age_ms,
                     streak = streak + 1,
                     "memory pressure critical: shed {} in-flight connection(s) older than {}ms",

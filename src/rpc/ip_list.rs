@@ -13,6 +13,13 @@ pub async fn start_ip_list_syncer(
     loop {
         interval.tick().await;
 
+        // Expiry-only cleanup: temporary items must not outlive their expiry
+        // when the cloud has no further update for them (or sync is disabled).
+        let expired = ip_list_manager.cleanup_expired();
+        if expired > 0 {
+            debug!("Removed {} expired IP list items", expired);
+        }
+
         // Check if IP list sync is enabled in global config
         if !config_store.get_node_enable_ip_lists_sync() {
             debug!("IP list sync is DISABLED in node settings. Skipping...");

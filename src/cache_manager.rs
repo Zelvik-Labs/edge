@@ -99,10 +99,14 @@ fn l1_budget_for_cache_budget(cache_budget_bytes: u64) -> u64 {
 
 /// Global cache manager singleton
 pub static CACHE: std::sync::LazyLock<CacheManager> = std::sync::LazyLock::new(|| {
-    let bytes = l1_budget_for_cache_budget(
-        crate::memory_governor::MEMORY_GOVERNOR.cache_budget_bytes(),
-    );
-    CacheManager::new(bytes.min(usize::MAX as u64) as usize)
+    let bytes =
+        l1_budget_for_cache_budget(crate::memory_governor::MEMORY_GOVERNOR.cache_budget_bytes());
+    let manager = CacheManager::new(bytes.min(usize::MAX as u64) as usize);
+    manager
+        .storage
+        .l1
+        .use_governor_budget(DEFAULT_L1_MEMORY_BYTES);
+    manager
 });
 
 /// Shared utilities for cache metadata creation
@@ -115,8 +119,8 @@ pub fn create_meta(status: u16, ttl_seconds: u64) -> CacheMeta {
 
 #[cfg(test)]
 mod tests {
-    use super::l1_budget_for_cache_budget;
     use super::DEFAULT_L1_MEMORY_BYTES;
+    use super::l1_budget_for_cache_budget;
 
     #[test]
     fn l1_budget_never_exceeds_the_smaller_cache_budget() {
