@@ -22,6 +22,10 @@ from aioquic.quic.configuration import QuicConfiguration
 from aioquic.quic.events import ConnectionTerminated, StreamReset
 
 PAYLOAD = b"p" * 16384
+# Cache-fill objects are larger so a small number of admitted L1 entries
+# covers a meaningful share of the governor cache budget. The production
+# cache still stores and promotes them through the same GET path.
+CACHE_PAYLOAD = b"c" * (1024 * 1024)
 ORIGIN_CONNECTIONS = set()
 
 
@@ -69,10 +73,12 @@ async def origin(reader, writer):
             # first chunk prove acceptance before the first pressure stage.
             slow = path.startswith(b"/stream") or path.startswith(b"/hold")
             bounded = path.startswith(b"/bounded")
+            cacheable = path.startswith(b"/cache/")
+            body = CACHE_PAYLOAD if cacheable else PAYLOAD
             count = 24000 if slow else (80 if bounded else 1)
-            writer.write(f"HTTP/1.1 200 OK\r\nContent-Length: {len(PAYLOAD)*count}\r\nContent-Type: application/octet-stream\r\n\r\n".encode())
+            writer.write(f"HTTP/1.1 200 OK\r\nContent-Length: {len(body)*count}\r\nContent-Type: application/octet-stream\r\n\r\n".encode())
             for _ in range(count):
-                writer.write(PAYLOAD)
+                writer.write(body)
                 await writer.drain()
                 if slow or bounded:
                     await asyncio.sleep(0.025)
@@ -419,16 +425,29 @@ def rejection_snapshot(state):
 
 
 async def fill_cache_batch(client, tag, first, count):
-    samples = [await client.request(f"/cache/{tag}/{index}") for index in range(first, first + count)]
-    try:
-        await asyncio.wait_for(asyncio.gather(*(sample.done.wait() for sample in samples)), 30)
-    except asyncio.TimeoutError:
-        for sample in samples:
-            sample.finish("cache-fill-timeout")
-            sample.headers.set()
-    digest = hashlib.sha256(PAYLOAD).hexdigest()
-    good = [sample for sample in samples if sample.status == 200 and not sample.error and sample.bytes == len(PAYLOAD) and sample.digest.hexdigest() == digest]
+    """Populate production L1 through ordinary GETs.
+
+    The first request for a key stores the object in the disk-backed cache;
+    the L1 memory copy is admitted when that object is served from disk, so
+    each key is requested twice. Both rounds must succeed for a key to count.
+    """
+    paths = [f"/cache/{tag}/{index}" for index in range(first, first + count)]
+
+    async def issue(paths):
+        samples = [await client.request(path) for path in paths]
+        try:
+            await asyncio.wait_for(asyncio.gather(*(sample.done.wait() for sample in samples)), 30)
+        except asyncio.TimeoutError:
+            for sample in samples:
+                sample.finish("cache-fill-timeout")
+                sample.headers.set()
+        return samples
+
+    samples = await issue(paths) + await issue(paths)
+    digest = hashlib.sha256(CACHE_PAYLOAD).hexdigest()
+    good = [sample for sample in samples if sample.status == 200 and not sample.error and sample.bytes == len(CACHE_PAYLOAD) and sample.digest.hexdigest() == digest]
     return {
+        "keys": count,
         "attempted": len(samples),
         "success": len(good),
         "errors": [sample.error or f"status:{sample.status},bytes:{sample.bytes}" for sample in samples if sample not in good][:20],
@@ -459,22 +478,23 @@ async def fill_cache(client, cg, tag, max_requests, target_current=None, target_
     """
     state = await control("stats")
     cache_bytes = state["cache"]["memoryBytes"]
-    attempted = success = 0
+    keys = attempted = success = 0
     errors = []
     stalled = 0
     index = 0
-    while attempted < max_requests:
+    while keys < max_requests:
         current = int((cg / "memory.current").read_text())
         if target_current is not None and current >= target_current:
             break
         if target_cache is not None and cache_bytes >= target_cache:
             break
-        batch = await fill_cache_batch(client, tag, index, min(32, max_requests - attempted))
-        index += batch["attempted"]
+        batch = await fill_cache_batch(client, tag, index, min(32, max_requests - keys))
+        index += batch["keys"]
+        keys += batch["keys"]
         attempted += batch["attempted"]
         success += batch["success"]
         errors.extend(batch["errors"])
-        if attempted % 128 < 32 or attempted <= 32 or attempted >= max_requests:
+        if keys % 128 < 32 or keys <= 32 or keys >= max_requests:
             state = await control("stats")
             new_cache_bytes = state["cache"]["memoryBytes"]
             if new_cache_bytes <= cache_bytes:
@@ -486,6 +506,7 @@ async def fill_cache(client, cg, tag, max_requests, target_current=None, target_
                 break
     state = await control("stats")
     return {
+        "keys": keys,
         "attempted": attempted,
         "success": success,
         "errors": errors[:20],
@@ -496,14 +517,23 @@ async def fill_cache(client, cg, tag, max_requests, target_current=None, target_
     }
 
 
+async def cache_component_target():
+    budget = int((await control("stats"))["governor"]["cache_budget_bytes"])
+    if budget <= 0:
+        return 0
+    return min(budget, max(8 << 20, budget * 3 // 4))
+
+
 async def apply_acceptance_pressure(args, source, pct, cg, fill):
     maximum = int((cg / "memory.max").read_text())
     target = maximum * pct // 100
     if source == "cache":
-        limit = min(12000, target // 12000 + 1024)
-        result = await fill_cache(fill, cg, f"acceptance-{args.label}-{pct}", limit, target_current=target)
+        target_cache = await cache_component_target()
+        limit = min(8000, target_cache // len(CACHE_PAYLOAD) + 1024)
+        result = await fill_cache(fill, cg, f"acceptance-{args.label}-{pct}", limit, target_cache=target_cache)
         result["kind"] = "cache"
         result["target_bytes"] = target
+        result["target_cache_bytes"] = target_cache
         return result
     if source == "ballast":
         state = await control(f"fill {pct}")
@@ -563,12 +593,12 @@ async def run_acceptance(args, clients, output, cg, pid):
         cache_component = None
         if source == "mixed":
             maximum = int((cg / "memory.max").read_text())
-            cache_budget = int((await control("stats"))["governor"]["cache_budget_bytes"])
             # Keep the cache component above the High-pressure reclaim target
             # (`cache_budget / 2`) so the run can observe real L1 eviction.
-            cache_component = max(maximum // 10, cache_budget * 3 // 4)
-            limit = min(12000, cache_component // 12000 + 1024)
-            output["cache_fill"] = await fill_cache(fill, cg, f"acceptance-{args.label}", limit, target_cache=cache_component)
+            cache_component = min(await cache_component_target(), maximum // 2)
+            if cache_component > 0:
+                limit = min(8000, cache_component // len(CACHE_PAYLOAD) + 1024)
+                output["cache_fill"] = await fill_cache(fill, cg, f"acceptance-{args.label}", limit, target_cache=cache_component)
         output["stages"] = stages
         for pct in [50, 70, 85, 90, 94, 97]:
             before_bytes = {proto: sample.bytes for proto, sample in held.items()}
