@@ -603,7 +603,11 @@ impl HttpProxyManager {
         );
         info!(
             "HTTP/HTTPS Proxy Manager: Initializing listener on {} (TLS={}, proxy_protocol={}, http2={}, min_version={:?})",
-            bind_addr, is_tls, enable_proxy_protocol, tls_policy.http2_enabled, tls_policy.min_version
+            bind_addr,
+            is_tls,
+            enable_proxy_protocol,
+            tls_policy.http2_enabled,
+            tls_policy.min_version
         );
 
         let manager = self.clone();
@@ -815,10 +819,7 @@ impl HttpProxyManager {
         } else {
             None
         };
-        let node_id = self
-            .proxy_logic
-            .api_config
-            .numeric_gcloud_node_id();
+        let node_id = self.proxy_logic.api_config.numeric_gcloud_node_id();
 
         let mut scale_retire = std::pin::pin!(async {
             match &scale_state {
@@ -1257,7 +1258,10 @@ impl HttpProxyManager {
     }
 
     #[cfg(any(test, target_os = "linux"))]
-    fn shared_tls_acceptor(&self, tls_policy: TlsPolicy) -> anyhow::Result<Arc<PingoraTlsAcceptor>> {
+    fn shared_tls_acceptor(
+        &self,
+        tls_policy: TlsPolicy,
+    ) -> anyhow::Result<Arc<PingoraTlsAcceptor>> {
         if let Some(acceptor) = self.tls_acceptor.read().get(&tls_policy) {
             return Ok(acceptor.clone());
         }
@@ -1359,10 +1363,7 @@ impl HttpProxyManager {
         pressure_level: crate::l4_defense::L4PressureLevel,
         detail: impl Into<String>,
     ) -> crate::l4_defense::L4DefenseVerdict {
-        let node_id = self
-            .proxy_logic
-            .api_config
-            .numeric_gcloud_node_id();
+        let node_id = self.proxy_logic.api_config.numeric_gcloud_node_id();
         crate::l4_defense::record_l4_event_with_pressure(
             &self.config_store,
             &self.proxy_logic.waf_state,
@@ -1472,10 +1473,7 @@ impl HttpProxyManager {
     }
 
     fn record_tls_handshake_failure(&self, ip: IpAddr) {
-        let node_id = self
-            .proxy_logic
-            .api_config
-            .numeric_gcloud_node_id();
+        let node_id = self.proxy_logic.api_config.numeric_gcloud_node_id();
         crate::special_defense::record_tls_handshake_failure(
             &self.config_store,
             &self.proxy_logic.waf_state,
@@ -1495,10 +1493,7 @@ impl HttpProxyManager {
         kind: L4DefenseKind,
         detail: impl Into<String>,
     ) -> crate::l4_defense::L4DefenseVerdict {
-        let node_id = self
-            .proxy_logic
-            .api_config
-            .numeric_gcloud_node_id();
+        let node_id = self.proxy_logic.api_config.numeric_gcloud_node_id();
         crate::l4_defense::record_l4_event(
             &self.config_store,
             &self.proxy_logic.waf_state,
@@ -1516,10 +1511,7 @@ impl HttpProxyManager {
         amount: u64,
         detail: impl Into<String>,
     ) -> crate::l4_defense::L4DefenseVerdict {
-        let node_id = self
-            .proxy_logic
-            .api_config
-            .numeric_gcloud_node_id();
+        let node_id = self.proxy_logic.api_config.numeric_gcloud_node_id();
         crate::l4_defense::record_l4_event_weighted_with_pressure(crate::l4_defense::L4EventArgs {
             config_store: &self.config_store,
             waf_state: &self.proxy_logic.waf_state,
@@ -1539,10 +1531,7 @@ impl HttpProxyManager {
         ip: IpAddr,
         config: crate::special_defense::SpecialDefenseConfig,
     ) {
-        let node_id = self
-            .proxy_logic
-            .api_config
-            .numeric_gcloud_node_id();
+        let node_id = self.proxy_logic.api_config.numeric_gcloud_node_id();
         crate::special_defense::record_special_defense_hit(
             &self.proxy_logic.waf_state,
             node_id,
@@ -1801,9 +1790,7 @@ impl HttpProxyManager {
             crate::l4_defense::record_tcp_connection_churn_under_pressure(
                 &self.config_store,
                 &self.proxy_logic.waf_state,
-                self.proxy_logic
-                    .api_config
-                    .numeric_gcloud_node_id(),
+                self.proxy_logic.api_config.numeric_gcloud_node_id(),
                 client_addr.ip(),
                 || {
                     format!(
@@ -2568,10 +2555,10 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                 port,
                 crate::l4_defense::current_pressure_level(),
             );
-            // Per-connection admission ticket: stream admissions draw from a
-            // local pool instead of the global counter — one registry lookup
-            // per connection instead of one global RMW per stream.
+            // Resolve the owner once; H2 slots still hold globally counted
+            // class permits rather than drawing from reusable byte float.
             let stream_ticket = crate::l4_connection_registry::ticket_for(&client_addr);
+            let mut graceful_churn = false;
             let mut malformed_streams = 0;
             loop {
                 let idle_deadline = h2_state.next_idle_deadline();
@@ -2613,7 +2600,7 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                 };
                 match accept_result {
                     Ok(Some(pingora_core::protocols::http::v2::server::H2Accept::Session(
-                        h2_session,
+                        mut h2_session,
                     ))) => {
                         h2_state.record_stream();
                         if let Some(events) = h2_state.take_pending_l4_stream_events_if_due() {
@@ -2632,6 +2619,14 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                             );
                         }
                         if h2_state.should_close_for_churn() {
+                            // GOAWAY disallows new work while the connection is
+                            // still polled to flush already accepted responses.
+                            h2_session.shutdown_with_reason(h2::Reason::REFUSED_STREAM);
+                            if graceful_churn {
+                                continue;
+                            }
+                            graceful_churn = true;
+                            h2_conn.graceful_shutdown();
                             let pending = h2_state.take_pending_l4_stream_events();
                             if pending > 0 {
                                 manager.record_l4_event_weighted(
@@ -2658,7 +2653,7 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                                     H2_CHURN_WINDOW.as_secs()
                                 ),
                             );
-                            break;
+                            continue;
                         }
                         let proxy_inner_h2 = proxy_inner.clone();
                         let shutdown_inner_h2 = shutdown_inner.clone();
@@ -2681,9 +2676,10 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                                     ),
                                 );
                                 debug!(
-                                    "H2 stream admission limit reached for connection, closing connection"
+                                    "H2 connection stream admission rejected; refusing only new stream"
                                 );
-                                break;
+                                h2_session.shutdown_with_reason(h2::Reason::REFUSED_STREAM);
+                                continue;
                             }
                         };
                         let global_stream_permit = match crate::memory_ticket::admit_pooled(
@@ -2708,9 +2704,10 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                                     ),
                                 );
                                 debug!(
-                                    "Global H2 stream admission limit reached, closing connection"
+                                    "Global H2 stream admission rejected; refusing only new stream"
                                 );
-                                break;
+                                h2_session.shutdown_with_reason(h2::Reason::REFUSED_STREAM);
+                                continue;
                             }
                         };
                         if h2_state.should_report_churn_hint() {
@@ -2807,10 +2804,7 @@ async fn process_http1_stream(args: ProcessHttp1StreamArgs) {
         } else {
             L4DefenseKind::HttpEarlyCloseOrTinyRequest
         };
-        let node_id = manager
-            .proxy_logic
-            .api_config
-            .numeric_gcloud_node_id();
+        let node_id = manager.proxy_logic.api_config.numeric_gcloud_node_id();
         crate::l4_defense::record_completed_handshake_event(
             &manager.config_store,
             &manager.proxy_logic.waf_state,
@@ -3303,20 +3297,15 @@ mod tests {
                 })
             })
             .collect();
-        let cfg: crate::config_models::ReverseProxyConfig = serde_json::from_value(serde_json::json!({
-            "isOn": true,
-            "primaryOrigins": origins,
-            "scheduling": { "code": "least_conn", "options": {} },
-        }))
-        .unwrap();
-        let (lb, _hc) = crate::lb_factory::build_lb(
-            0,
-            &cfg,
-            2,
-            &std::collections::HashMap::new(),
-            false,
-            true,
-        );
+        let cfg: crate::config_models::ReverseProxyConfig =
+            serde_json::from_value(serde_json::json!({
+                "isOn": true,
+                "primaryOrigins": origins,
+                "scheduling": { "code": "least_conn", "options": {} },
+            }))
+            .unwrap();
+        let (lb, _hc) =
+            crate::lb_factory::build_lb(0, &cfg, 2, &std::collections::HashMap::new(), false, true);
         lb
     }
 
@@ -3326,8 +3315,7 @@ mod tests {
             rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
             rpc_disable_update: true,
             instance_id: "nd_0123456789".to_string(),
-            secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
-                .to_string(),
+            secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".to_string(),
             comm_mode: String::new(),
             gcloud_node_id: "1".to_string(),
             access_log_pipeline: crate::api_config::AccessLogPipelineConfig::default(),
@@ -3841,5 +3829,107 @@ mod tests {
             }
         );
         client.await.unwrap();
+    }
+
+    /// A resource-shortage refusal resets only the refused stream. The
+    /// connection keeps accepting, so already accepted sibling streams can
+    /// finish instead of being collateral damage of admission pressure.
+    #[tokio::test]
+    async fn refusing_one_h2_stream_keeps_connection_accepting() {
+        use pingora_core::protocols::http::v2::server::{H2Accept, HttpSession};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut conn = pingora_core::protocols::http::v2::server::handshake(
+                Box::new(L4Stream::from(tcp)),
+                None,
+            )
+            .await
+            .unwrap();
+            let digest = Arc::new(pingora_core::protocols::Digest::default());
+            let mut malformed = 0;
+            match HttpSession::from_h2_conn_with_malformed_budget(
+                &mut conn,
+                digest.clone(),
+                &mut malformed,
+            )
+            .await
+            .unwrap()
+            .unwrap()
+            {
+                H2Accept::Session(mut session) => {
+                    session.shutdown_with_reason(h2::Reason::REFUSED_STREAM);
+                }
+                H2Accept::Rejected => panic!("expected first session, got a rejected stream"),
+            }
+            match HttpSession::from_h2_conn_with_malformed_budget(
+                &mut conn,
+                digest.clone(),
+                &mut malformed,
+            )
+                .await
+                .unwrap()
+                .unwrap()
+            {
+                H2Accept::Session(mut session) => {
+                    let response = pingora_http::ResponseHeader::build(200, None).unwrap();
+                    session
+                        .write_response_header(Box::new(response), true)
+                        .unwrap();
+                }
+                H2Accept::Rejected => panic!("expected sibling session, got a rejected stream"),
+            }
+            // Keep polling the codec so the queued response is flushed and
+            // the connection ends cleanly after the client drops its handle.
+            let _ = tokio::time::timeout(
+                Duration::from_secs(5),
+                HttpSession::from_h2_conn_with_malformed_budget(
+                    &mut conn,
+                    digest.clone(),
+                    &mut malformed,
+                ),
+            )
+            .await;
+        });
+
+        let tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let (sender, connection) = h2::client::handshake(tcp).await.unwrap();
+        let driver = tokio::spawn(connection);
+        let mut sender = sender.ready().await.unwrap();
+        let request = http::Request::builder()
+            .uri("http://localhost/refused")
+            .body(())
+            .unwrap();
+        let (response, _) = sender.send_request(request, true).unwrap();
+        let error = tokio::time::timeout(Duration::from_secs(5), response)
+            .await
+            .expect("first stream must be resolved")
+            .expect_err("first stream must be refused");
+        assert_eq!(
+            error.reason(),
+            Some(h2::Reason::REFUSED_STREAM),
+            "the refused stream must carry REFUSED_STREAM, not a connection error"
+        );
+
+        sender = sender.ready().await.unwrap();
+        let request = http::Request::builder()
+            .uri("http://localhost/sibling")
+            .body(())
+            .unwrap();
+        let (response, _) = sender.send_request(request, true).unwrap();
+        let status = tokio::time::timeout(Duration::from_secs(5), response)
+            .await
+            .expect("sibling stream must be resolved")
+            .unwrap()
+            .status();
+        assert_eq!(
+            status, 200,
+            "the connection must still accept a sibling stream"
+        );
+        drop(sender);
+        driver.abort();
+        server.await.unwrap();
     }
 }
