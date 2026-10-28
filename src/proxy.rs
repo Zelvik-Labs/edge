@@ -8765,14 +8765,15 @@ impl ProxyHttp for EdgeProxy {
     }
 
     async fn early_request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<()> {
-        // Resolve the connection's admission ticket once per request: the
-        // registry indexes buckets by the transport peer address, which is
-        // exactly what `client_addr()` returns.
-        ctx.ticket_bucket = session
-            .downstream_session
-            .client_addr()
-            .and_then(|addr| addr.as_inet().copied())
-            .and_then(|addr| crate::l4_connection_registry::ticket_for(&addr));
+        // QUIC hands off its stable connection owner explicitly; L4 uses the
+        // registration index. Never key a QUIC owner by a migratable address.
+        ctx.ticket_bucket = crate::memory_ticket::current_connection_ticket().or_else(|| {
+            session
+                .downstream_session
+                .client_addr()
+                .and_then(|addr| addr.as_inet().copied())
+                .and_then(|addr| crate::l4_connection_registry::ticket_for(&addr))
+        });
         let global_http = self.config.get_global_http_config_sync();
         let read_timeout = global_http
             .auto_read_timeout

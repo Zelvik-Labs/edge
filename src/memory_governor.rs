@@ -1283,7 +1283,10 @@ fn shared_purpose_index(purpose: SharedGrantPurpose) -> usize {
 /// re-promised early.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AccountPriority {
+    /// New work and large request workspaces leave the continuation reserve.
     Ordinary,
+    /// Only necessary small allocations belonging to already accepted work.
+    Established,
     /// New connection/stream-establishment work. It must leave the
     /// established-traffic reserve for streams and origin connects that
     /// already-admitted connections need.
@@ -1723,13 +1726,17 @@ impl MemoryGovernor {
         // if the arithmetic would still leave headroom.
         let reserve = match priority {
             AccountPriority::Control => 0,
-            AccountPriority::Ordinary => CONTROL_PLANE_RESERVE_BYTES,
+            AccountPriority::Established => CONTROL_PLANE_RESERVE_BYTES,
+            AccountPriority::Ordinary => {
+                CONTROL_PLANE_RESERVE_BYTES.saturating_add(self.established_reserve_for_gate())
+            }
             // A new-connection flood must leave the established floors for
             // streams and origin connects that already-admitted connections
             // need. Established-class admissions themselves keep only the
             // control reserve.
-            AccountPriority::ConnectionEstablishment => CONTROL_PLANE_RESERVE_BYTES
-                .saturating_add(self.limits().established_traffic_reserve_bytes),
+            AccountPriority::ConnectionEstablishment => {
+                CONTROL_PLANE_RESERVE_BYTES.saturating_add(self.established_reserve_for_gate())
+            }
             AccountPriority::Cache => {
                 let limits = self.limits();
                 if limits.memory_pressure_level == MemoryPressureLevel::Normal
@@ -1777,6 +1784,18 @@ impl MemoryGovernor {
         }
     }
 
+    /// Established reserve for the account gate without forcing the first
+    /// snapshot refresh from an admission path. Generation 0 means no
+    /// observation has landed; returning 0 keeps the account fail-closed
+    /// instead of opening the blind-observation fallback as a side effect.
+    fn established_reserve_for_gate(&self) -> u64 {
+        if self.cached_generation.load(Ordering::Acquire) == 0 {
+            0
+        } else {
+            self.limits().established_traffic_reserve_bytes
+        }
+    }
+
     /// Outstanding-free capacity view used inside the CAS loop above:
     /// headroom − margin, without re-adding the counters being raced on.
     fn account_grantable_from_outstanding(&self) -> u64 {
@@ -1819,6 +1838,9 @@ impl MemoryGovernor {
             match purpose {
                 SharedGrantPurpose::CacheReadMemory => AccountPriority::Cache,
                 SharedGrantPurpose::ConfigPublish => AccountPriority::Control,
+                SharedGrantPurpose::TcpQueue
+                | SharedGrantPurpose::UdpQueue
+                | SharedGrantPurpose::ZeroCopyRelay => AccountPriority::Established,
                 _ => AccountPriority::Ordinary,
             },
         )
@@ -1895,10 +1917,17 @@ impl MemoryGovernor {
         self.request_workspace_bytes.load(Ordering::Acquire)
     }
 
-    /// Pressure-scaled refill slack for a ticket bucket (bytes checked
-    /// out ahead of `need`). Reads the materialized limits table — one
-    /// ArcSwap load, never a snapshot refresh from the hot path unless
-    /// the table itself is stale.
+    /// One owner may hold at most a quarter of a large workspace pool. The
+    /// 16 MiB floor lets one transform fit whenever the pool can hold it;
+    /// pools below 4×16 MiB may be consumed by that one legitimate transform.
+    pub(crate) fn ticket_owner_limit_bytes(&self) -> u64 {
+        let budget = self.limits().request_workspace_budget_bytes;
+        (budget / 4)
+            .max(RESPONSE_TRANSFORM_ESTIMATED_BYTES)
+            .min(budget)
+    }
+
+    /// Pressure-scaled refill slack; loaded from the materialized limits table.
     pub(crate) fn ticket_float_bytes(&self) -> u64 {
         self.limits().ticket_float_bytes
     }
@@ -2085,6 +2114,7 @@ impl MemoryGovernor {
             class,
             cache_read_memory_charge_bytes,
             match class.resource_domain() {
+                _ if class == AdmissionClass::OriginConnect => AccountPriority::Established,
                 Some(ResourceDomain::CriticalConnection) => {
                     AccountPriority::ConnectionEstablishment
                 }
@@ -2122,7 +2152,7 @@ impl MemoryGovernor {
             // add above already moved the derived total by this charge.
             // Connection establishment stops at the established reserve;
             // established classes may use the whole budget.
-            let budget = if class.resource_domain() == Some(ResourceDomain::CriticalConnection) {
+            let budget = if priority != AccountPriority::Established {
                 limits
                     .shared_connection_budget_bytes
                     .saturating_sub(limits.established_traffic_reserve_bytes)
@@ -7387,11 +7417,14 @@ mod en16_pool_tests {
         );
 
         assert!(
-            governor.try_admit(AdmissionClass::Http2Stream).is_some(),
-            "streams on established connections keep their reserved bytes"
+            governor.try_admit(AdmissionClass::Http2Stream).is_none(),
+            "new streams must not use the continuation reserve"
         );
-        assert!(governor.try_admit(AdmissionClass::Http3Request).is_some());
-        assert!(governor.try_admit(AdmissionClass::OriginConnect).is_some());
+        assert!(governor.try_admit(AdmissionClass::Http3Request).is_none());
+        assert!(
+            governor.try_admit(AdmissionClass::OriginConnect).is_some(),
+            "origin connects for accepted requests keep their reserved bytes"
+        );
         drop(permits);
         assert_eq!(governor.connection_admission_used_bytes(), 0);
     }
@@ -7408,19 +7441,23 @@ mod en16_pool_tests {
         assert!(established > 0);
         let fill = governor
             .try_grant_shared(
-                SharedGrantPurpose::TcpQueue,
+                SharedGrantPurpose::Admission,
                 grantable - control - established,
             )
-            .expect("ordinary work fills everything outside both reserves");
+            .expect("new ordinary work fills everything outside both reserves");
 
         assert!(
             governor.try_admit(AdmissionClass::HttpConnection).is_none(),
             "new connections must not consume the established account reserve"
         );
         assert!(
-            governor.try_admit(AdmissionClass::Http2Stream).is_some(),
-            "established streams may draw from their reserve"
+            governor.try_admit(AdmissionClass::Http2Stream).is_none(),
+            "new streams must not consume the continuation reserve"
         );
+        let origin = governor
+            .try_admit(AdmissionClass::OriginConnect)
+            .expect("accepted requests keep origin-connect capacity");
+        drop(origin);
         drop(fill);
     }
 
@@ -7481,9 +7518,9 @@ mod en16_pool_tests {
             .try_grant_shared_with_priority(
                 SharedGrantPurpose::RequestWorkspace,
                 established,
-                AccountPriority::Ordinary,
+                AccountPriority::Established,
             )
-            .expect("established reserve was not deducted twice");
+            .expect("continuation work uses its protected reserve");
         let control_work = governor
             .try_grant_shared_with_priority(
                 SharedGrantPurpose::ConfigPublish,
@@ -7518,16 +7555,37 @@ mod en16_pool_tests {
         seed_governor_memory(&governor, 4 << 30, 2 << 30, 1 << 20, 0);
         let grantable = governor.account_view().grantable_bytes;
         let reserve = governor.limits().control_plane_reserve_bytes;
+        let established = governor.limits().established_traffic_reserve_bytes;
         assert_eq!(reserve, CONTROL_PLANE_RESERVE_BYTES);
-        assert!(grantable > reserve);
+        assert!(grantable > reserve + established);
         let fill = governor
-            .try_grant_shared(SharedGrantPurpose::TcpQueue, grantable - reserve)
-            .expect("ordinary work may use everything outside the control reserve");
+            .try_grant_shared(
+                SharedGrantPurpose::Admission,
+                grantable - reserve - established,
+            )
+            .expect("ordinary work may use everything outside both reserves");
         assert!(
             governor
-                .try_grant_shared(SharedGrantPurpose::TcpQueue, 1)
+                .try_grant_shared(SharedGrantPurpose::Admission, 1)
                 .is_none(),
-            "ordinary grants must stop at the control-plane reserve"
+            "new ordinary work must stop at the continuation reserve"
+        );
+        let continuation = governor
+            .try_grant_shared_with_priority(
+                SharedGrantPurpose::TcpQueue,
+                established,
+                AccountPriority::Established,
+            )
+            .expect("accepted traffic keeps its reserved transfer bytes");
+        assert!(
+            governor
+                .try_grant_shared_with_priority(
+                    SharedGrantPurpose::TcpQueue,
+                    1,
+                    AccountPriority::Established
+                )
+                .is_none(),
+            "continuation work stops at the control reserve"
         );
 
         let rpc = governor
@@ -7545,6 +7603,7 @@ mod en16_pool_tests {
         );
         assert_eq!(governor.admission_reject_snapshot().config_apply, 1);
 
+        drop(continuation);
         drop(apply);
         drop(internal);
         drop(rpc);
@@ -7827,11 +7886,15 @@ mod en16_pool_tests {
         let grantable = governor.account_view().grantable_bytes;
         assert!(grantable > 0 && grantable < 200 << 20);
 
-        // Exhaust ordinary capacity with a KernelBpf grant; the control
-        // reserve stays outside it.
+        // Exhaust ordinary capacity with a KernelBpf grant; the control and
+        // continuation reserves stay outside it.
         let reserve = governor.limits().control_plane_reserve_bytes;
+        let established = governor.limits().established_traffic_reserve_bytes;
         let _bulk = governor
-            .try_grant_shared(SharedGrantPurpose::KernelBpf, grantable - reserve)
+            .try_grant_shared(
+                SharedGrantPurpose::KernelBpf,
+                grantable - reserve - established,
+            )
             .expect("bulk grant within ordinary capacity");
         assert!(
             governor.try_admit(AdmissionClass::HttpConnection).is_none(),

@@ -13,27 +13,26 @@
 //! CAS on a connection-private line — uncontended, ~5ns — and only an empty
 //! bucket reaches the global ledger.
 //!
-//! # Semantics (approved isolation change)
+//! # Ownership and limits
 //!
-//! Per-class isolation is replaced by a per-connection pool: inside a
-//! connection, classes share the bucket, so heavy use of one (say request
-//! body WAF) can starve another (transform). Buckets have no in-flight byte
-//! ceiling: one connection can also exhaust the global workspace ledger and
-//! deny another connection's refill. Pooled H2 spends do not enforce the
-//! direct path's global stream counter. The audit_known_gap tests below
-//! reproduce both limitations.
-//! Failure semantics at each call site are unchanged: a spend that cannot
-//! be satisfied returns `None`, which is exactly what `try_admit` returned,
-//! and the class's own reject counter is still incremented.
+//! A bucket belongs to its registration, not intrinsically to a socket or
+//! request. The L4 registry shares it across requests of that registration.
+//! Its total held bytes (including idle float) are capped before global refill;
+//! the global workspace and physical shared account remain independent gates.
+//! Large WAF/transform work cannot consume the protected continuation reserve.
+//! H2 streams hold ordinary class permits instead of workspace float, enforcing
+//! the same global count and byte gates on pooled and unregistered paths.
 //!
 //! # Float and refund policy
 //!
 //! - Refill draws `need + float` where `float` is the governor's
 //!   pressure-scaled slack (256KiB at Normal/Elevated, shrinking under
 //!   High and zero under Critical) so a stream of small charges
-//!   (H2 streams, small WAF buffers) amortizes to one global op per
-//!   ~`float/charge` spends. If the float top-up cannot be afforded the
-//!   refill retries with the bare need, then fails closed.
+//!   (small WAF buffers, response transforms) amortizes to one global op
+//!   per ~`float/charge` spends. If the float top-up cannot be afforded the
+//!   refill retries with the bare need, then fails closed. H2 streams do
+//!   not draw float: they take an ordinary class permit and release it
+//!   when the stream ends.
 //! - `release` returns bytes to the bucket; once the balance exceeds the
 //!   governor's pressure-scaled float cap (1MiB at Normal, 256KiB at
 //!   High, 0 at Critical) the excess is refunded to the global ledger —
@@ -49,7 +48,16 @@ use crate::memory_governor::{
     AdmissionClass, MEMORY_GOVERNOR, MemoryGovernor, StaticAdmissionPermit,
 };
 
-/// Per-connection pool of pre-admitted workspace bytes.
+tokio::task_local! {
+    pub(crate) static CONNECTION_TICKET: Arc<TicketBucket>;
+}
+
+/// Explicit owner handoff for protocols (QUIC) without a stable peer-address key.
+pub(crate) fn current_connection_ticket() -> Option<Arc<TicketBucket>> {
+    CONNECTION_TICKET.try_with(Arc::clone).ok()
+}
+
+/// Per-owner pool of pre-admitted workspace bytes.
 pub struct TicketBucket {
     /// Spendable bytes currently held from the workspace ledger.
     balance: AtomicU64,
@@ -92,19 +100,28 @@ impl TicketBucket {
     /// workspace ledger into the local pool.
     fn refill(&self, need: u64) -> bool {
         let want = need.saturating_add(self.governor.ticket_float_bytes());
-        if self.governor.try_admit_workspace(want) {
-            self.held.fetch_add(want, Ordering::AcqRel);
-            self.balance.fetch_add(want, Ordering::AcqRel);
-            return true;
+        self.refill_exact(want) || (want != need && self.refill_exact(need))
+    }
+
+    fn refill_exact(&self, bytes: u64) -> bool {
+        let cap = self.governor.ticket_owner_limit_bytes();
+        // Reserve the owner's held bytes before touching the global ledger.
+        // Concurrent refills may not each observe the same unused allowance.
+        if self
+            .held
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |held| {
+                held.checked_add(bytes).filter(|next| *next <= cap)
+            })
+            .is_err()
+        {
+            return false;
         }
-        // Float unaffordable: still try the bare need so a tight ledger
-        // degrades to per-spend global accounting instead of rejecting.
-        if self.governor.try_admit_workspace(need) {
-            self.held.fetch_add(need, Ordering::AcqRel);
-            self.balance.fetch_add(need, Ordering::AcqRel);
-            return true;
+        if !self.governor.try_admit_workspace(bytes) {
+            self.held.fetch_sub(bytes, Ordering::AcqRel);
+            return false;
         }
-        false
+        self.balance.fetch_add(bytes, Ordering::AcqRel);
+        true
     }
 
     /// Spend `bytes` from the pool for `class`, refilling from the global
@@ -112,6 +129,16 @@ impl TicketBucket {
     /// records the class reject) only when the global ledger cannot cover
     /// the spend — identical fail-closed contract to `try_admit`.
     pub fn spend(self: &Arc<Self>, class: AdmissionClass, bytes: u64) -> Option<TicketPermit> {
+        // A stream slot is a node-wide concurrency limit, not reusable byte
+        // float. Hold the ordinary class permit for exactly the stream lifetime;
+        // its account bytes are already charged, so do not also refill workspace.
+        if class == AdmissionClass::Http2Stream {
+            return self.governor.try_admit(class).map(|permit| TicketPermit {
+                bucket: Arc::clone(self),
+                bytes: 0,
+                _stream: Some(permit),
+            });
+        }
         let bytes = bytes.max(1);
         // Bounded retries: a racing stream on the same connection could
         // drain a fresh refill before we get to draw from it.
@@ -120,6 +147,7 @@ impl TicketBucket {
                 return Some(TicketPermit {
                     bucket: Arc::clone(self),
                     bytes,
+                    _stream: None,
                 });
             }
             let cur = self.balance.load(Ordering::Relaxed);
@@ -176,11 +204,14 @@ impl Drop for TicketBucket {
 pub struct TicketPermit {
     bucket: Arc<TicketBucket>,
     bytes: u64,
+    _stream: Option<StaticAdmissionPermit>,
 }
 
 impl Drop for TicketPermit {
     fn drop(&mut self) {
-        self.bucket.release(self.bytes);
+        if self.bytes != 0 {
+            self.bucket.release(self.bytes);
+        }
     }
 }
 
@@ -238,7 +269,7 @@ mod tests {
         let bucket = Arc::new(TicketBucket::new(g));
 
         let p1 = bucket
-            .spend(AdmissionClass::Http2Stream, 16 * 1024)
+            .spend(AdmissionClass::RequestBodyWaf, 16 * 1024)
             .expect("first spend refills");
         let held_after = bucket.held_bytes();
         assert!(held_after >= 16 * 1024);
@@ -247,7 +278,7 @@ mod tests {
 
         // Second small spend draws locally — global ledger unchanged.
         let p2 = bucket
-            .spend(AdmissionClass::Http2Stream, 16 * 1024)
+            .spend(AdmissionClass::RequestBodyWaf, 16 * 1024)
             .expect("second spend is local");
         assert_eq!(g.request_workspace_used_bytes(), ledger_after_first);
 
@@ -286,7 +317,7 @@ mod tests {
         let g = leaked_governor(256 * 1024 * 1024);
         let bucket = Arc::new(TicketBucket::new(g));
         let p = bucket
-            .spend(AdmissionClass::Http2Stream, 16 * 1024)
+            .spend(AdmissionClass::RequestBodyWaf, 16 * 1024)
             .unwrap();
         drop(p);
         let held = bucket.held_bytes();
@@ -308,116 +339,86 @@ mod tests {
         }
     }
 
-    /// KNOWN GAP — documents current behavior; this test passes as written.
-    ///
-    /// A `TicketBucket` has no ceiling on in-flight `held` bytes (`release`
-    /// only refunds the idle balance above the float cap) and every bucket
-    /// refills from the single global `request_workspace` ledger. One
-    /// accepted connection can therefore drain that ledger and deny every
-    /// other connection's request-scoped admissions.
-    ///
-    /// Fixture: seeded available = 256 MiB, total = 1 GiB (Normal pressure),
-    /// so the workspace ledger is available/4 = 64 MiB while the Ordinary
-    /// account capacity (~122 MiB) remains larger. The victim's rejection is
-    /// therefore the workspace ledger's, not the shared account's.
     #[test]
-    fn audit_known_gap_single_bucket_exhausts_global_workspace() {
+    fn single_owner_cannot_starve_independent_workspace() {
         let g = frozen_governor(256 * 1024 * 1024);
-        let workspace_budget: u64 = 256 * 1024 * 1024 / 4;
-        assert_eq!(workspace_budget, 64 * 1024 * 1024);
-
         let attacker = Arc::new(TicketBucket::new(g));
         let mut held = Vec::new();
-
-        // 2 MiB is the RequestBodyWaf estimate and the coarsest realistic
-        // pooled charge; ~30 permits consume most of the 64 MiB ledger.
-        while let Some(permit) = attacker.spend(AdmissionClass::RequestBodyWaf, 2 * 1024 * 1024) {
+        while let Some(permit) = attacker.spend(AdmissionClass::RequestBodyWaf, 2 << 20) {
             held.push(permit);
-            assert!(held.len() < 1_000, "fixture must stay bounded");
+            assert!(held.len() < 100);
         }
-
-        // Drain the sub-2MiB remainder with the smallest pooled class. The
-        // bare-need refill fallback lets a 16 KiB spend through while at
-        // least 16 KiB remains, so keep going until even that fails.
-        while let Some(permit) = attacker.spend(AdmissionClass::Http2Stream, 16 * 1024) {
-            held.push(permit);
-            assert!(held.len() < 2_000, "fixture must stay bounded");
-        }
-
-        let used = g.request_workspace_used_bytes();
-        assert!(used <= workspace_budget, "ledger overshoot: used={used}");
-        assert!(
-            workspace_budget - used < 16 * 1024,
-            "one bucket consumed the shared ledger: used={used}"
-        );
-        // The account still has room, so the rejection below is the
-        // workspace ledger's, not the shared account's.
-        assert!(g.account_view().grantable_bytes > 0);
-
-        // KNOWN GAP: a victim connection cannot admit even one 16 KiB stream.
+        assert!(attacker.held_bytes() <= g.ticket_owner_limit_bytes());
+        assert!(attacker.held_bytes() > 0);
         let victim = Arc::new(TicketBucket::new(g));
-        assert!(
-            victim
-                .spend(AdmissionClass::Http2Stream, 16 * 1024)
-                .is_none(),
-            "current behavior: one connection's pool denies every other connection"
-        );
-
-        drop(held);
-        drop(attacker);
-        drop(victim);
-        // Releasing every permit and the bucket refunds the whole ledger.
+        let victim_permit = victim
+            .spend(AdmissionClass::RequestBodyWaf, 16 << 10)
+            .expect("one owner must leave space for independent work");
+        drop((held, victim_permit, attacker, victim));
         assert_eq!(g.request_workspace_used_bytes(), 0);
     }
 
-    /// KNOWN GAP — documents current behavior; this test passes as written.
-    ///
-    /// `admit_pooled` with a `TicketBucket` spends only from
-    /// `request_workspace` and never increments `h2_streams`, so the
-    /// materialized `h2_stream_global_limit` is enforced only on the direct
-    /// `try_admit` path. Every registered H2 connection owns a bucket
-    /// (`L4ConnectionRegistry::register`), so the H2 global count limit is
-    /// effectively unenforced and `estimated_h2_streams` stays 0.
-    ///
-    /// Fixture: seeded available = 512 MiB, total = 2 GiB. Availability is
-    /// Unknown (the seeded observation does not set it), so the materialized
-    /// H2 limit is max((connection_budget/8)/16 KiB, cpu_parallelism*4096)
-    /// and cpu_parallelism defaults to 1 here: the limit is 4096. The
-    /// workspace ledger (available/4 = 128 MiB) and the Ordinary account
-    /// capacity (~346 MiB) both cover 4097 x 16 KiB (~64 MiB of refills).
     #[test]
-    fn audit_known_gap_pooled_h2_streams_bypass_global_count_limit() {
-        let g = frozen_governor(512 * 1024 * 1024);
-        let global_limit = g.limit_for(AdmissionClass::Http2Stream);
-        assert!(
-            (1_024..=8_192).contains(&global_limit),
-            "fixture must keep the permit loop bounded, got {global_limit}"
-        );
+    fn concurrent_refills_respect_owner_cap_and_refund() {
+        let g = frozen_governor(256 << 20);
+        let bucket = Arc::new(TicketBucket::new(g));
+        let barrier = std::sync::Barrier::new(8);
+        let held = std::thread::scope(|scope| {
+            let barrier = &barrier;
+            let jobs: Vec<_> = (0..8)
+                .map(|_| {
+                    let bucket = &bucket;
+                    scope.spawn(move || {
+                        barrier.wait();
+                        let mut permits = Vec::new();
+                        while let Some(p) = bucket.spend(AdmissionClass::RequestBodyWaf, 2 << 20) {
+                            permits.push(p);
+                        }
+                        permits
+                    })
+                })
+                .collect();
+            jobs.into_iter()
+                .flat_map(|j| j.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+        assert!(bucket.held_bytes() <= g.ticket_owner_limit_bytes());
+        assert_eq!(g.request_workspace_used_bytes(), bucket.held_bytes());
+        drop((held, bucket));
+        assert_eq!(g.request_workspace_used_bytes(), 0);
+    }
 
+    #[test]
+    fn pooled_h2_streams_enforce_global_count_and_release() {
+        let g = frozen_governor(512 << 20);
+        let limit = g.limit_for(AdmissionClass::Http2Stream);
+        assert!((1_024..=8_192).contains(&limit));
         let bucket = Arc::new(TicketBucket::new(g));
         let mut held = Vec::new();
-        for _ in 0..=global_limit {
-            let permit = bucket
-                .spend(AdmissionClass::Http2Stream, 16 * 1024)
-                .expect("pooled spend ignores the global class limit");
-            held.push(permit);
+        for _ in 0..limit {
+            held.push(
+                bucket
+                    .spend(AdmissionClass::Http2Stream, 16 << 10)
+                    .expect("fixture must reach global stream count"),
+            );
         }
-
-        // KNOWN GAP: one more stream than the global limit exists, yet the
-        // class counter and the shared connection ledger are still zero.
-        assert_eq!(held.len(), global_limit + 1);
-        let snapshot = g.snapshot(1);
-        assert_eq!(
-            snapshot.estimated_h2_streams, 0,
-            "pooled spends never touch the h2_streams counter"
+        assert!(
+            bucket
+                .spend(AdmissionClass::Http2Stream, 16 << 10)
+                .is_none()
         );
+        assert_eq!(g.snapshot(1).estimated_h2_streams, limit as u64);
         assert_eq!(
-            snapshot.connection_admission_used_bytes, 0,
-            "shared connection ledger is blind to pooled streams"
+            g.connection_admission_used_bytes(),
+            limit as u64 * (16 << 10)
         );
-
-        drop(held);
-        drop(bucket);
-        assert_eq!(g.request_workspace_used_bytes(), 0);
+        assert_eq!(g.request_workspace_used_bytes(), 0, "no double byte charge");
+        held.pop();
+        let replacement = bucket
+            .spend(AdmissionClass::Http2Stream, 16 << 10)
+            .expect("drop returns the global slot");
+        drop((held, replacement, bucket));
+        assert_eq!(g.snapshot(1).estimated_h2_streams, 0);
+        assert_eq!(g.connection_admission_used_bytes(), 0);
     }
 }
