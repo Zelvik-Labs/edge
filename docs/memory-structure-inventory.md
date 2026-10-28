@@ -199,6 +199,8 @@ metric 与 daily 的按项所有权：metric 报表失败后不再 restore 整�
 
 MetricAggregator 现在同时受 cardinality cap 与 per-aggregator 字节预算约束（`state_budget/16`，16 MiB–512 MiB）。每条 entry 的收费包含其 flush/restore 临时副本；`request_samples` 在插入前按属性字节做原子 CAS 计费，flush 退款、restore 重新计费并可在预算不足时拒绝。`approximate_bytes` 改为读取该账本，不再每 30 秒遍历全部 entry 估算。
 
+distinct-IP tracker 原先按创建时的服务器数分配独立容量：每个新服务器再拿一份 `cardinality_state/8` 的切片，旧服务器切片不回收，总容量因此随服务器代数按调和级数增长。现在所有 tracker 共用一个进程级原子条目预算（`state_budget/8` 按每项 64 字节估算，16,384–16,000,000 项），插入前计费、重复项退款、tracker 释放时按实际条目退款；预算耗尽会计入既有 `metricsCardinalityDropped`。该结构仍没有 TTL，先到的高流量 server 可以占满全局预算，因此其他 server 的新 IP 会被拒绝；这是指标分析数据的受控丢弃，不改变连接、控制面或安全状态。
+
 ## 7. 非代码因素
 
 - 宿主 `transparent_hugepage=always` 会放大 RSS（10-22 实测 anon_thp 占 40–75%），并让
