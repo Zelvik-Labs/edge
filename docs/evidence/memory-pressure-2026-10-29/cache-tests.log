@@ -1,0 +1,64 @@
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.11s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-c8c3a1a23565cbce)
+
+running 54 tests
+test cache_hybrid::tests::adaptive_bloom_scales_capacity ... ok
+test cache_hybrid::tests::bloom_shrink_under_high_reclaim ... ok
+test cache_hybrid::tests::cache_body_charge_follows_last_bytes_slice_after_handler_release ... ok
+test cache_hybrid::tests::cache_buffer_capacity_is_charged_before_allocation_and_growth ... ok
+test cache_hybrid::tests::cancelled_compressed_decode_keeps_read_charge_until_blocking_work_finishes ... ok
+test cache_hybrid::tests::cache_meta_hooks_warm_bloom_and_clear_negative_cache ... ok
+test cache_hybrid::tests::cancelled_l2_lookup_keeps_decode_charge_until_blocking_work_finishes ... ok
+test cache_hybrid::tests::critical_reclaim_clears_l1_and_negative_cache ... ok
+test cache_hybrid::tests::dangerous_prefix_detection_requires_url_host_boundary ... ok
+test cache_hybrid::tests::decode_charged_cache_body_refunds_permit_on_decode_failure ... ok
+test cache_hybrid::tests::corrupted_compressed_l2_entry_is_removed_before_origin_retry ... ok
+test cache_hybrid::tests::delete_clears_metadata_less_l1_when_local_meta_is_missing ... ok
+test cache_hybrid::tests::file_cache_disabled_streams_small_l2_hits ... ok
+test cache_hybrid::tests::file_miss_handler_drop_removes_uncommitted_temp_file ... ok
+test cache_hybrid::tests::file_miss_handler_failed_publish_does_not_overwrite_existing_meta ... ok
+test cache_hybrid::tests::file_miss_handler_rejects_body_longer_than_content_length ... ok
+test cache_hybrid::tests::file_miss_handler_rejects_body_shorter_than_content_length ... ok
+test cache_hybrid::tests::file_update_meta_rejects_content_length_mismatch ... ok
+test cache_hybrid::tests::head_update_meta_allows_representation_length_for_empty_body ... ok
+test cache_hybrid::tests::l1_entry_weight_counts_headers_and_key_not_just_body ... ok
+test cache_hybrid::tests::l1_force_clear_drops_everything ... ok
+test cache_hybrid::tests::l1_rebuild_with_limit_salvages_newest_entries ... ok
+test cache_hybrid::tests::default_l1_tracks_governor_budget_and_preserves_explicit_capacity ... ok
+test cache_hybrid::tests::l2_hit_with_invalid_cached_status_is_treated_as_miss ... ok
+test cache_hybrid::tests::l2_hit_with_legacy_error_status_is_treated_as_miss ... ok
+test cache_hybrid::tests::l1_small_budget_steps_accumulate_against_applied_capacity ... ok
+test cache_hybrid::tests::l2_streaming_preserves_body_and_corruption_checks_when_borrowing_is_full ... ok
+test cache_hybrid::tests::l2_lookup_is_not_skipped_when_bloom_has_a_false_negative ... ok
+test cache_hybrid::tests::memory_hit_handler_supports_pingora_range_seek ... ok
+test cache_hybrid::tests::memory_miss_handler_rejects_body_longer_than_content_length ... ok
+test cache_hybrid::tests::memory_miss_handler_rejects_body_shorter_than_content_length ... ok
+test cache_hybrid::tests::local_storage_purge_removes_the_whole_variant_family ... ok
+test cache_hybrid::tests::negative_cache_capacity_tracks_bloom_size ... ok
+test cache_hybrid::tests::negative_cache_cleanup_and_drain_refund_resident_ledger ... ok
+test cache_hybrid::tests::negative_cache_does_not_pollute_positive_bloom ... ok
+test cache_hybrid::tests::negative_cache_expires_stale_entries ... ok
+test cache_hybrid::tests::negative_cache_refuses_insert_when_capacity_remains_full ... ok
+test cache_hybrid::tests::partial_location_prioritizes_the_current_write_shard ... ok
+test cache_hybrid::tests::metadata_less_l1_is_rejected_by_a_shared_exact_purge_fence ... ok
+test cache_hybrid::tests::partial_miss_handler_holds_purge_fences_before_first_body_chunk ... ok
+test cache_hybrid::tests::reconcile_resident_ledgers_refunds_orphaned_negative_cache_owner ... ok
+test cache_hybrid::tests::purge_by_key_removes_current_and_legacy_representation_variants ... ok
+test cache_hybrid::tests::small_compressed_l2_hit_uses_memory_handler_for_fast_l1_promotion ... ok
+test cache_hybrid::tests::small_uncompressed_l2_hit_uses_memory_handler_for_fast_l1_promotion ... ok
+test cache_hybrid::tests::surrogate_index_capacity_is_bounded ... ok
+test cache_hybrid::tests::surrogate_index_high_trim_drops_largest_first_and_refunds ... ok
+test cache_hybrid::tests::surrogate_index_reclaim_refunds_ledger ... ok
+test cache_hybrid::tests::tiny_ufo_l1_resize_hysteresis_ignores_small_budget_changes ... ok
+test cache_hybrid::tests::uncompressed_file_hit_handler_supports_pingora_range_seek ... ok
+test cache_hybrid::tests::uncompressed_l2_hit_above_memory_read_limit_streams_file ... ok
+test cache_hybrid::tests::uncompressed_l2_hit_with_size_mismatch_is_treated_as_miss ... ok
+test cache_hybrid::tests::waiting_memory_miss_does_not_overwrite_first_fill ... ok
+test cache_hybrid::tests::zstd_decompress_to_bytes_refuses_output_above_cap ... ok
+test cache_hybrid::tests::runtime_stats_include_tiny_ufo_l1_memory ... ok
+
+test result: ok. 54 passed; 0 failed; 0 ignored; 0 measured; 1038 filtered out; finished in 9.19s
+
+mbx[cache]: 2 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 23.1 GiB of outputs, one copy, several very confident checkouts.

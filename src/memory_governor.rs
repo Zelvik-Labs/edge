@@ -7424,6 +7424,78 @@ mod en16_pool_tests {
         drop(fill);
     }
 
+    #[test]
+    fn concurrent_connection_grants_preserve_exactly_one_established_reserve() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(4 << 30, 2 << 30, 1 << 20, 0, i64::MAX as u64);
+        let capacity = governor.account_view().grantable_bytes;
+        let control = governor.limits().control_plane_reserve_bytes;
+        let established = governor.limits().established_traffic_reserve_bytes;
+        let connection_capacity = capacity - control - established;
+        let barrier = std::sync::Barrier::new(8);
+        let grants = std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..8)
+                .map(|_| {
+                    let governor = &governor;
+                    let barrier = &barrier;
+                    scope.spawn(move || {
+                        barrier.wait();
+                        let mut permits = Vec::new();
+                        while let Some(permit) = governor.try_grant_shared_with_priority(
+                            SharedGrantPurpose::Admission,
+                            1 << 20,
+                            AccountPriority::ConnectionEstablishment,
+                        ) {
+                            permits.push(permit);
+                        }
+                        permits
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .flat_map(|h| h.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+        let used = governor.account_view().pending_bytes;
+        assert_eq!(used, connection_capacity / (1 << 20) * (1 << 20));
+        assert_eq!(used, grants.len() as u64 * (1 << 20));
+        let remainder = connection_capacity - used;
+        let tail = governor
+            .try_grant_shared_with_priority(
+                SharedGrantPurpose::Admission,
+                remainder,
+                AccountPriority::ConnectionEstablishment,
+            )
+            .expect("remaining connection capacity fits exactly");
+        assert!(
+            governor
+                .try_grant_shared_with_priority(
+                    SharedGrantPurpose::Admission,
+                    1,
+                    AccountPriority::ConnectionEstablishment
+                )
+                .is_none()
+        );
+        let continuation = governor
+            .try_grant_shared_with_priority(
+                SharedGrantPurpose::RequestWorkspace,
+                established,
+                AccountPriority::Ordinary,
+            )
+            .expect("established reserve was not deducted twice");
+        let control_work = governor
+            .try_grant_shared_with_priority(
+                SharedGrantPurpose::ConfigPublish,
+                control,
+                AccountPriority::Control,
+            )
+            .expect("control reserve remains independently available");
+        assert_eq!(governor.account_view().grantable_bytes, 0);
+        drop((grants, tail, continuation, control_work));
+        assert_eq!(governor.account_view().grantable_bytes, capacity);
+    }
+
     /// On a node whose connection budget is below twice the floors, the
     /// reserve is capped at half the budget instead of starving new
     /// connections outright.

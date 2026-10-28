@@ -82,7 +82,7 @@ Inbound PROXY Protocol is trusted only from loopback, private, or link-local imm
 
 ## Pingora Cache Notes
 
-`openFileCache` controls whether small L2 disk HITs may be read into memory for faster serving and L1 promotion. When it is disabled, small L2 HITs stream from the file path instead of being pulled into a `Bytes` buffer. The memory read allocates exactly the charged object length (`try_reserve_exact`, then a boxed slice so reported capacity equals the allocation), and both the shared-account charge and the cache-read ledger charge transfer to the `Bytes` owner: they are refunded when the last downstream slice is released, not when the handler drops. For compressed objects the compressed-file portion of the read charge stays with the handler, because that buffer is freed before the body is served; the decompressed body carries its own charge.
+`openFileCache` controls whether small L2 disk HITs may be read into memory for faster serving and L1 promotion. When it is disabled, small L2 HITs stream from the file path instead of being pulled into a `Bytes` buffer. The memory read requests exactly the charged object length (`try_reserve_exact`, then a boxed slice so reported capacity equals that length). This is Rust allocation capacity, not allocator usable size or RSS. Both the shared-account charge and the cache-read ledger charge transfer to the `Bytes` owner: they are refunded when the last downstream slice is released, not when the handler drops. Compressed decode moves its permit into the blocking task, including normalization and body handoff, so cancelling the lookup cannot refund a still-running decode. The compressed-file portion stays with the returned handler; the decompressed body carries its own charge. The decoder workspace and output growth transient are covered by the 4 MiB admission estimate, rather than the object-length ledger. Streaming compressed hits do not yet hold an equivalent decoder-workspace permit; that remains an accounting gap.
 
 `enableSendfile` is tracked and exposed in runtime stats. The current Pingora cache `HandleHit` interface returns `Bytes` chunks and supports seek, but it does not expose the downstream socket to storage handlers. Because of that, this node cannot safely call Linux `sendfile(2)` inside the existing storage handler. The current implementation uses larger disk HIT chunks when sendfile is requested and implements Pingora `seek` for memory HIT handlers so range responses avoid extra filtering and over-read. True kernel sendfile would require a larger Pingora serving-path extension or a custom response path that owns both the file descriptor and downstream connection.
 
@@ -204,9 +204,14 @@ chunks; spends are an uncontended CAS on a connection-private line.
 
 - Ledger bound: `available/4` normally, `available/16` under High+
   pressure, floored at one transform charge — intentionally below the sum
-  of the old per-class implied bounds (**approved isolation change**:
-  classes on one connection share the pool; a WAF-heavy request can starve
-  the same connection's transform budget, never another connection's).
+  of the old per-class implied bounds. Classes on one connection share the
+  pool. Audit reproductions now demonstrate that a bucket has no in-flight
+  ceiling: one connection can exhaust the global workspace ledger and deny
+  another connection's stream or body-buffer allocation. The earlier claim of
+  cross-connection isolation was incorrect. Pooled H2 stream spends also bypass
+  the direct path's global class counter and shared connection estimate; the
+  global workspace byte bound still applies. See `audit_known_gap_*` tests in
+  `memory_ticket.rs`.
 - `release` returns bytes to the bucket and refunds the global ledger once
   the idle balance exceeds `1MiB`, so a 16MiB transform charge is not held
   for the connection's lifetime; bucket drop (connection close) refunds the
@@ -360,8 +365,10 @@ requests and origin connects may use the whole budget. The reserve is the
 Normal-pressure floors: 1,024 H2 streams × 16 KiB, 1,024 H3 requests × 24 KiB
 and 512 origin connects × 32 KiB (56 MiB), capped at half the connection budget
 when the budget is below twice that. The same reserve is deducted from the
-shared account for connection-establishment admissions, so a connection flood
-cannot leave already-admitted connections without stream or origin capacity.
+shared account for connection-establishment admissions, so new connections
+cannot themselves consume that remainder. Other Ordinary work can still
+consume it, and the shared workspace ledger can independently reject streams
+on already-admitted connections.
 SNI relay and response transforms are excluded: SNI relay is a legacy
 passthrough with its own half-budget limit, and a 16 MiB transform estimate
 would make its floor a memory plan by itself.
@@ -370,9 +377,13 @@ would make its floor a memory plan by itself.
 current `lowPriorityBorrowableBytes`,
 `controlPlaneAccountReserveEnforced=true`, `controlPlaneReserveBytes`,
 `establishedTrafficAccountReserveEnforced=true`, `establishedTrafficReserveBytes`
-and `configApplyActive`; `priorityReserveEnforced=true` because the
-connection-establishment, established-traffic and control-plane admission
-reserves are all enforced. Remaining gaps stay explicit: the installed
+and `configApplyActive`. `priorityReserveEnforced=true` currently describes
+only the new-connection gate and control-plane gate. It does not guarantee
+continuation priority over new streams on existing connections: both still use
+Ordinary account priority, and pooled H2 uses the shared workspace ledger.
+The 56 MiB is unavailable to new connections but can be consumed by other
+Ordinary work; it is neither a per-connection entitlement nor a protected
+continuation lane. Remaining gaps stay explicit: the installed
 configuration generation's steady-state residency is not charged, and the
 client-agent verified-IP table has no bounded index yet. Pressure reclaim
 already revokes the reclaimable L1/analytics caches — L1 is halved at High and

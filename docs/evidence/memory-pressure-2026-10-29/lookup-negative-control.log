@@ -1,0 +1,30 @@
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+mbx[progress]: 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 07s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-c8c3a1a23565cbce)
+
+running 1 test
+test cache_hybrid::tests::cancelled_l2_lookup_keeps_decode_charge_until_blocking_work_finishes ... FAILED
+
+failures:
+
+---- cache_hybrid::tests::cancelled_l2_lookup_keeps_decode_charge_until_blocking_work_finishes stdout ----
+
+thread 'cache_hybrid::tests::cancelled_l2_lookup_keeps_decode_charge_until_blocking_work_finishes' (8290584) panicked at src/cache_hybrid.rs:6920:9:
+assertion `left == right` failed
+  left: 0
+ right: 105
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    cache_hybrid::tests::cancelled_l2_lookup_keeps_decode_charge_until_blocking_work_finishes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1091 filtered out; finished in 5.91s
+
+error: test failed, to rerun pass `--lib`
+mbx[cache]: 0 hits, 2 misses; 0 B downloaded, 0 B uploaded, 177.2 MiB stored locally
+mbx[savings]: 22.9 GiB on loan to every checkout simultaneously. the paperwork is an inode.

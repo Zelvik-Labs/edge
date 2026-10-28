@@ -1,0 +1,8 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.82s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-c8c3a1a23565cbce)
+
+running 1 test
+test memory_governor::en16_pool_tests::concurrent_connection_grants_preserve_exactly_one_established_reserve ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1090 filtered out; finished in 0.04s
+
