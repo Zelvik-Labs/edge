@@ -955,7 +955,8 @@ pub struct MemoryGovernor {
     resident: ResidentMemoryAccounting,
     /// Shared memory account. The ledger tracks *commitments* — bytes a
     /// credential holder has been granted — never claims about physical
-    /// pages. Two counters bound new grants:
+    /// pages. A single outstanding counter bounds new grants; the following
+    /// counters classify its lifecycle:
     ///
     /// - `account_pending_bytes`: granted but not yet committed (the
     ///   credential holder has not confirmed its allocation).
@@ -966,10 +967,12 @@ pub struct MemoryGovernor {
     ///   stay deducted too — freed memory is only re-promised after a
     ///   snapshot confirms it.
     ///
-    /// `pending + committed_unconfirmed + request <= account_capacity`
-    /// admits a grant. Confirmed commitments need no deduction — they
-    /// are already inside observed `used`, which is exactly what the
-    /// capacity formula "managed stock + genuine new headroom" means.
+    /// `outstanding + request <= account_capacity` admits a grant. In a
+    /// settled view, outstanding = pending + committed_unconfirmed; changing
+    /// classification never opens capacity. Confirmed commitments need no
+    /// deduction: they are already inside observed `used`. Category transitions
+    /// never release the outstanding commitment.
+    account_outstanding_bytes: PaddedAtomicU64,
     account_pending_bytes: PaddedAtomicU64,
     account_committed_unconfirmed_bytes: PaddedAtomicU64,
     /// Stats/attribution: committed bytes still held (excl. released),
@@ -1217,6 +1220,10 @@ impl SharedPermit<'_> {
     /// charge pending → committed-unconfirmed; it is lifted from the
     /// deduction once the next snapshot observes it inside `used`.
     pub fn commit(&mut self) {
+        self.commit_during_transfer(|| {});
+    }
+
+    fn commit_during_transfer(&mut self, during_transfer: impl FnOnce()) {
         if self.committed || self.bytes == 0 {
             return;
         }
@@ -1224,6 +1231,7 @@ impl SharedPermit<'_> {
         self.governor
             .account_pending_bytes
             .fetch_sub(self.bytes, Ordering::AcqRel);
+        during_transfer();
         self.governor
             .account_committed_unconfirmed_bytes
             .fetch_add(self.bytes, Ordering::AcqRel);
@@ -1271,6 +1279,9 @@ impl SharedPermit<'_> {
             self.governor
                 .account_pending_bytes
                 .fetch_sub(delta, Ordering::AcqRel);
+            self.governor
+                .account_outstanding_bytes
+                .fetch_sub(delta, Ordering::AcqRel);
         }
     }
 
@@ -1308,6 +1319,9 @@ impl Drop for SharedPermit<'_> {
         } else {
             self.governor
                 .account_pending_bytes
+                .fetch_sub(self.bytes, Ordering::AcqRel);
+            self.governor
+                .account_outstanding_bytes
                 .fetch_sub(self.bytes, Ordering::AcqRel);
         }
     }
@@ -1382,6 +1396,7 @@ impl MemoryGovernor {
             cached_psi_some_avg10_x100: AtomicU64::new(0),
             cached_psi_full_avg10_x100: AtomicU64::new(0),
             resident: ResidentMemoryAccounting::new(),
+            account_outstanding_bytes: PaddedAtomicU64::new(0),
             account_pending_bytes: PaddedAtomicU64::new(0),
             account_committed_unconfirmed_bytes: PaddedAtomicU64::new(0),
             account_committed_live_bytes: AtomicU64::new(0),
@@ -1516,17 +1531,11 @@ impl MemoryGovernor {
     /// 0 when no observation has ever landed — the account opens
     /// fail-closed.
     fn account_grantable_bytes(&self) -> u64 {
+        let outstanding = self.account_outstanding_bytes.load(Ordering::Acquire);
         let headroom = match self.cached_account_headroom_bytes.load(Ordering::Relaxed) {
             u64::MAX => self.unobservable_account_bound(),
             value => value,
         };
-        let outstanding = self
-            .account_pending_bytes
-            .load(Ordering::Acquire)
-            .saturating_add(
-                self.account_committed_unconfirmed_bytes
-                    .load(Ordering::Acquire),
-            );
         headroom
             .saturating_sub(self.account_safety_margin_bytes())
             .saturating_sub(outstanding)
@@ -1538,31 +1547,40 @@ impl MemoryGovernor {
     /// Committed charges also land in the live/purpose attribution
     /// immediately — the covered allocation is already real.
     fn try_charge_account(&self, bytes: u64, committed: bool, purpose: SharedGrantPurpose) -> bool {
+        self.try_charge_account_before_cas(bytes, committed, purpose, || {})
+    }
+
+    fn try_charge_account_before_cas(
+        &self,
+        bytes: u64,
+        committed: bool,
+        purpose: SharedGrantPurpose,
+        before_cas: impl FnOnce(),
+    ) -> bool {
+        let mut before_cas = Some(before_cas);
         let counter = if committed {
             &self.account_committed_unconfirmed_bytes
         } else {
             &self.account_pending_bytes
         };
-        let mut current = counter.load(Ordering::Acquire);
+        let mut current = self.account_outstanding_bytes.load(Ordering::Acquire);
         loop {
-            let other = if committed {
-                self.account_pending_bytes.load(Ordering::Acquire)
-            } else {
-                self.account_committed_unconfirmed_bytes
-                    .load(Ordering::Acquire)
-            };
-            let outstanding = current.saturating_add(other).saturating_add(bytes);
-            if outstanding > self.account_grantable_from_outstanding() {
+            let capacity = self.account_grantable_from_outstanding();
+            if bytes > capacity.saturating_sub(current) {
                 self.account_rejects_total.fetch_add(1, Ordering::Relaxed);
                 return false;
             }
-            match counter.compare_exchange_weak(
+            if let Some(before_cas) = before_cas.take() {
+                before_cas();
+            }
+            match self.account_outstanding_bytes.compare_exchange_weak(
                 current,
-                current.saturating_add(bytes),
+                current + bytes,
                 Ordering::AcqRel,
                 Ordering::Acquire,
             ) {
                 Ok(_) => {
+                    counter.fetch_add(bytes, Ordering::AcqRel);
                     self.account_grants_total.fetch_add(1, Ordering::Relaxed);
                     if committed {
                         self.account_committed_live_bytes
@@ -3340,6 +3358,8 @@ impl MemoryGovernor {
         // a committed release only stops deducting here, once an
         // observation has had the chance to see the freed bytes.
         self.account_committed_unconfirmed_bytes
+            .fetch_sub(committed_pre, Ordering::AcqRel);
+        self.account_outstanding_bytes
             .fetch_sub(committed_pre, Ordering::AcqRel);
         self.cached_process_rss_bytes
             .store(snapshot.process_rss_bytes, Ordering::Relaxed);
@@ -6921,6 +6941,59 @@ mod en16_pool_tests {
         );
     }
 
+    #[test]
+    fn shared_account_commit_transfer_never_opens_capacity() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 2 << 30, 1 << 30, 1 << 20, 0);
+        let capacity = governor.account_view().grantable_bytes;
+        let mut permit = governor
+            .try_grant_shared(SharedGrantPurpose::TcpQueue, capacity)
+            .unwrap();
+        permit.commit_during_transfer(|| {
+            assert_eq!(governor.account_view().grantable_bytes, 0);
+            assert!(
+                governor
+                    .try_grant_shared(SharedGrantPurpose::Admission, 1)
+                    .is_none()
+            );
+        });
+        assert_eq!(
+            governor.account_view().committed_unconfirmed_bytes,
+            capacity
+        );
+        assert_eq!(
+            governor.account_outstanding_bytes.load(Ordering::Acquire),
+            capacity
+        );
+        drop(permit);
+        assert_eq!(governor.account_view().grantable_bytes, 0);
+    }
+
+    #[test]
+    fn shared_account_pending_and_committed_charges_use_one_gate() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 2 << 30, 1 << 30, 1 << 20, 0);
+        let capacity = governor.account_view().grantable_bytes;
+        let half = capacity / 2 + 1;
+        let mut pending = None;
+        let charged = governor.try_charge_account_before_cas(
+            half,
+            true,
+            SharedGrantPurpose::RequestWorkspace,
+            || {
+                pending = governor.try_grant_shared(SharedGrantPurpose::Admission, half);
+                assert!(pending.is_some());
+            },
+        );
+        assert!(!charged, "the racing pending grant consumed the capacity");
+        let view = governor.account_view();
+        assert_eq!(view.pending_bytes, half);
+        assert_eq!(view.committed_unconfirmed_bytes, 0);
+        assert_eq!(view.grantable_bytes, capacity - half);
+        drop(pending);
+        assert_eq!(governor.account_view().grantable_bytes, capacity);
+    }
+
     /// Pending grants deduct capacity immediately; dropping an
     /// uncommitted credential refunds it at once (cancel path).
     #[test]
@@ -7001,11 +7074,25 @@ mod en16_pool_tests {
         let view = governor.account_view();
         assert_eq!(view.committed_unconfirmed_bytes, 0);
         assert_eq!(
+            governor.account_outstanding_bytes.load(Ordering::Acquire),
+            0
+        );
+        assert_eq!(
+            view.grantable_bytes,
+            view.headroom_bytes
+                .unwrap()
+                .saturating_sub(view.safety_margin_bytes)
+        );
+        assert_eq!(
             view.committed_live_bytes,
             1 << 30,
             "only the still-held grant remains live"
         );
         drop(held);
+        assert_eq!(
+            governor.account_outstanding_bytes.load(Ordering::Acquire),
+            0
+        );
     }
 
     /// grow() is subject to the same capacity check; shrink() and
