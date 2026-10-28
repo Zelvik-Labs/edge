@@ -244,6 +244,36 @@ fn zstd_decompress_to_bytes(data: &[u8], capacity: usize) -> Option<Vec<u8>> {
     }
 }
 
+/// Decode one compressed L2 object and, in the same blocking step, normalize
+/// its allocation and hand the charges to the returned body.
+///
+/// The caller moves the read permit into the blocking task, so dropping the
+/// `JoinHandle` (a cancelled lookup) cannot refund the charge while the decode
+/// still runs. The body and the remaining permit travel back together: both
+/// keep their charges alive until the caller uses them, or until the detached
+/// task's output is dropped after the work completes.
+fn decode_charged_cache_body<F>(
+    file_data: Vec<u8>,
+    capacity: usize,
+    expected_len: u64,
+    mut cache_read_permit: StaticAdmissionPermit,
+    decode: F,
+) -> Option<(bytes::Bytes, StaticAdmissionPermit)>
+where
+    F: FnOnce(&[u8], usize) -> Option<Vec<u8>>,
+{
+    let data = decode(&file_data, capacity)?;
+    // The compressed buffer is no longer needed; release it before the output
+    // is normalized so the peak matches the previous single-pass decode.
+    drop(file_data);
+    if data.len() as u64 != expected_len {
+        return None;
+    }
+    let data = Vec::from(data.into_boxed_slice());
+    let body = charged_cache_bytes_with_read_charge(data, &mut cache_read_permit, expected_len);
+    Some((body, cache_read_permit))
+}
+
 /// Dynamic Disk-based storage for Pingora-cache
 pub struct FileStorage {
     pub inner: ArcSwap<FileStorageInner>,
@@ -251,6 +281,8 @@ pub struct FileStorage {
     enable_file_cache: AtomicBool,
     #[cfg(test)]
     test_governor: Option<&'static crate::memory_governor::MemoryGovernor>,
+    #[cfg(test)]
+    decode_hook: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 pub struct FileStorageInner {
@@ -291,6 +323,8 @@ impl FileStorage {
             enable_file_cache: AtomicBool::new(true),
             #[cfg(test)]
             test_governor: None,
+            #[cfg(test)]
+            decode_hook: None,
         }
     }
 
@@ -1006,7 +1040,7 @@ impl Storage for FileStorage {
         } else {
             None
         };
-        if let Some(mut cache_read_permit) = compressed_memory_permit {
+        if let Some(cache_read_permit) = compressed_memory_permit {
             let file_data = match read_cache_file_exact(&path, file_size).await {
                 Ok(data) => data,
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
@@ -1020,14 +1054,31 @@ impl Storage for FileStorage {
             PROF_DISK_READ_US.fetch_add(io_start.elapsed().as_micros() as u64, Ordering::Relaxed);
             crate::metrics::storage::record_cache_access_memory(&hash);
             let capacity = meta.size.min(MEMORY_SERVE_MAX) as usize;
-            let result =
-                tokio::task::spawn_blocking(move || zstd_decompress_to_bytes(&file_data, capacity))
-                    .await;
-            let body = match result {
-                Ok(Some(data)) if data.len() as u64 == meta.size => {
-                    let data = Vec::from(data.into_boxed_slice());
-                    charged_cache_bytes_with_read_charge(data, &mut cache_read_permit, meta.size)
-                }
+            let expected_len = meta.size;
+            // Decode, normalize, and transfer the charges inside the blocking
+            // task. If this lookup is cancelled, the detached closure keeps
+            // the permit (and therefore the ledger charge) until the work
+            // finishes instead of refunding it while the allocation is live.
+            #[cfg(test)]
+            let decode_hook = self.decode_hook.clone();
+            let result = tokio::task::spawn_blocking(move || {
+                decode_charged_cache_body(
+                    file_data,
+                    capacity,
+                    expected_len,
+                    cache_read_permit,
+                    |data, capacity| {
+                        #[cfg(test)]
+                        if let Some(hook) = decode_hook {
+                            hook();
+                        }
+                        zstd_decompress_to_bytes(data, capacity)
+                    },
+                )
+            })
+            .await;
+            let (body, cache_read_permit) = match result {
+                Ok(Some(pair)) => pair,
                 _ => {
                     discard_corrupt_cache_entry_locked(CorruptCacheEntry::from_meta(
                         &hash, key_str, &path, &meta,
@@ -5549,6 +5600,23 @@ mod tests {
         storage
     }
 
+    /// Write a cache fixture with the same streaming encoder the miss path
+    /// uses (`FileMissHandler`), so the frame shape (including the window its
+    /// header advertises) matches production instead of a one-shot
+    /// `encode_all` frame.
+    async fn write_streaming_compressed_fixture(path: &Path, body: &[u8]) {
+        let file = tokio::fs::File::create(path)
+            .await
+            .expect("create compressed cache file");
+        let mut encoder = async_compression::tokio::write::ZstdEncoder::new(file);
+        tokio::io::AsyncWriteExt::write_all(&mut encoder, body)
+            .await
+            .expect("compress cache body");
+        tokio::io::AsyncWriteExt::shutdown(&mut encoder)
+            .await
+            .expect("finish compressed cache frame");
+    }
+
     fn hybrid_storage_for_test(max_mem_bytes: usize, root: impl Into<PathBuf>) -> HybridStorage {
         HybridStorage {
             l1: Arc::new(TinyUfoL1::new(max_mem_bytes as u64)),
@@ -6583,10 +6651,7 @@ mod tests {
             .await
             .expect("create cache dir");
         let body = b"small compressed text body";
-        let compressed = zstd::encode_all(body.as_slice(), 0).expect("compress body");
-        tokio::fs::write(&path, compressed)
-            .await
-            .expect("write cache file");
+        write_streaming_compressed_fixture(&path, body.as_slice()).await;
         crate::metrics::storage::insert_cache_meta_for_test(
             hash.clone(),
             crate::metrics::storage::CacheMetaEntry {
@@ -6626,9 +6691,11 @@ mod tests {
             .expect("read body")
             .expect("body chunk");
         assert_eq!(chunk.as_ref(), body);
+        let tail = chunk.slice(1..);
         drop(handler);
-        assert!(
-            governor.account_view().committed_live_bytes >= committed_before + chunk.len() as u64,
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            committed_before + body.len() as u64,
             "the decompressed Bytes owner keeps its capacity charge for downstream slices"
         );
         assert_eq!(
@@ -6639,12 +6706,239 @@ mod tests {
         drop(chunk);
         assert_eq!(
             governor.snapshot(1).cache_read_memory_used_bytes,
+            cache_read_before + body.len() as u64,
+            "an outstanding decompressed slice keeps the cache-read charge"
+        );
+        assert!(
+            governor.account_view().committed_live_bytes >= committed_before + body.len() as u64,
+            "an outstanding decompressed slice keeps the body's shared charge"
+        );
+        drop(tail);
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
             cache_read_before,
             "the last decompressed slice release refunds the cache-read ledger"
+        );
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            committed_before,
+            "the last decompressed slice release refunds the body's shared charge"
         );
 
         crate::metrics::storage::delete_cache_meta_for_test(&hash);
         let _ = tokio::fs::remove_dir_all(&root).await;
+    }
+
+    #[test]
+    fn decode_charged_cache_body_refunds_permit_on_decode_failure() {
+        let governor = cache_test_governor();
+        let baseline_read = governor.snapshot(1).cache_read_memory_used_bytes;
+        let baseline_committed = governor.account_view().committed_live_bytes;
+
+        let permit = governor
+            .try_admit_cache_read(64)
+            .expect("cache read permit");
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            baseline_read + 64
+        );
+        let out = decode_charged_cache_body(vec![1, 2, 3], 64, 32, permit, |_, _| None);
+        assert!(out.is_none(), "a decode failure must not produce a body");
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            baseline_read,
+            "a failed decode must refund the cache-read charge"
+        );
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            baseline_committed,
+            "a failed decode must refund the shared account"
+        );
+
+        let permit = governor
+            .try_admit_cache_read(64)
+            .expect("cache read permit");
+        let out =
+            decode_charged_cache_body(vec![1, 2, 3], 64, 32, permit, |_, _| Some(vec![0u8; 16]));
+        assert!(
+            out.is_none(),
+            "a decompressed length mismatch must not produce a body"
+        );
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            baseline_read,
+            "a length mismatch must refund the cache-read charge"
+        );
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            baseline_committed
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelled_compressed_decode_keeps_read_charge_until_blocking_work_finishes() {
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
+
+        // The blocking task waits for this release. Releasing on drop keeps a
+        // failed assertion from leaving the test runtime waiting forever for
+        // the detached decode to finish.
+        struct SendOnDrop(mpsc::Sender<()>);
+        impl Drop for SendOnDrop {
+            fn drop(&mut self) {
+                let _ = self.0.send(());
+            }
+        }
+
+        let governor = cache_test_governor();
+        let baseline_read = governor.snapshot(1).cache_read_memory_used_bytes;
+        let baseline_committed = governor.account_view().committed_live_bytes;
+        let permit = governor
+            .try_admit_cache_read(64)
+            .expect("cache read permit");
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            baseline_read + 64
+        );
+
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (done_tx, done_rx) = mpsc::channel();
+        let release = SendOnDrop(release_tx);
+        let handle = tokio::task::spawn_blocking(move || {
+            let out = decode_charged_cache_body(
+                vec![7u8; 8],
+                64,
+                32,
+                permit,
+                move |_data: &[u8], _capacity: usize| {
+                    started_tx.send(()).expect("signal decode start");
+                    release_rx.recv().expect("wait for test release");
+                    Some(vec![b'a'; 32])
+                },
+            );
+            let _ = done_tx.send(());
+            out
+        });
+
+        started_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("decode should start");
+        // Dropping the JoinHandle detaches the blocking task; it still owns the
+        // permit and the allocation that permit covers.
+        drop(handle);
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            baseline_read + 64,
+            "cancellation must not refund a charge owned by an in-flight decode"
+        );
+
+        drop(release);
+        done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("decode should finish");
+
+        // The detached task's output owns the body charges until the runtime
+        // drops it; wait briefly for that release.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while governor.snapshot(1).cache_read_memory_used_bytes != baseline_read {
+            assert!(
+                Instant::now() < deadline,
+                "detached decode output was not released"
+            );
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            baseline_committed,
+            "the detached decode output must refund the shared account when released"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelled_l2_lookup_keeps_decode_charge_until_blocking_work_finishes() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        struct ReleaseOnDrop(Option<mpsc::Sender<()>>);
+        impl Drop for ReleaseOnDrop {
+            fn drop(&mut self) {
+                if let Some(sender) = self.0.take() {
+                    let _ = sender.send(());
+                }
+            }
+        }
+
+        let unique = unique_test_suffix("cancelled-l2-lookup");
+        let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
+        let mut storage = file_storage_for_test(&root);
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let started = std::sync::Mutex::new(Some(started_tx));
+        let (release_tx, release_rx) = mpsc::channel();
+        let release_rx = std::sync::Mutex::new(release_rx);
+        let release = ReleaseOnDrop(Some(release_tx));
+        let (finished_tx, mut finished_rx) = tokio::sync::oneshot::channel();
+        let finished = std::sync::Mutex::new(Some(finished_tx));
+        storage.decode_hook = Some(Arc::new(move || {
+            let _ = started.lock().unwrap().take().unwrap().send(());
+            release_rx.lock().unwrap().recv().expect("release decode");
+            let _ = finished.lock().unwrap().take().unwrap().send(());
+        }));
+        let storage = Box::leak(Box::new(storage));
+        let key = CacheKey::new(unique.as_str(), "");
+        let hash = storage.get_hash(&key);
+        let path = storage.get_path(&key);
+        tokio::fs::create_dir_all(path.parent().unwrap())
+            .await
+            .unwrap();
+        let body = b"compressed body in a cancelled production lookup";
+        write_streaming_compressed_fixture(&path, body).await;
+        let file_size = tokio::fs::metadata(&path).await.unwrap().len();
+        crate::metrics::storage::insert_cache_meta_for_test(
+            hash.clone(),
+            crate::metrics::storage::CacheMetaEntry {
+                cache_key: unique,
+                size: body.len() as u64,
+                expires: crate::utils::time::now_timestamp() + 60,
+                status: 200,
+                compressed: true,
+                ..Default::default()
+            },
+        );
+        let governor = storage.admission_governor();
+        let baseline_read = governor.snapshot(1).cache_read_memory_used_bytes;
+        let baseline_live = governor.account_view().committed_live_bytes;
+        let trace = pingora_cache::trace::Span::inactive().handle();
+        let mut lookup = Box::pin(storage.lookup(&key, &trace));
+        tokio::select! {
+            result = &mut lookup => panic!("lookup completed before decode release: {}", result.is_ok()),
+            result = started_rx => result.expect("decode started"),
+            _ = tokio::time::sleep(Duration::from_secs(30)) => panic!("decode did not start"),
+        }
+        let charged_read = governor.snapshot(1).cache_read_memory_used_bytes;
+        let charged_live = governor.account_view().committed_live_bytes;
+        assert_eq!(charged_read, baseline_read + body.len() as u64 + file_size);
+        drop(lookup);
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            charged_read
+        );
+        assert_eq!(governor.account_view().committed_live_bytes, charged_live);
+        drop(release);
+        tokio::time::timeout(Duration::from_secs(5), &mut finished_rx)
+            .await
+            .unwrap()
+            .expect("blocking decode released");
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while governor.snapshot(1).cache_read_memory_used_bytes != baseline_read {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("detached output refunded");
+        assert_eq!(governor.account_view().committed_live_bytes, baseline_live);
+        crate::metrics::storage::delete_cache_meta_for_test(&hash);
+        tokio::fs::remove_dir_all(root).await.unwrap();
     }
 
     #[tokio::test]
