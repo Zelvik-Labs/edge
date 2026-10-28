@@ -574,6 +574,7 @@ async def run_acceptance(args, clients, output, cg, pid):
         "mixed": "production TinyUFO L1 plus touched anonymous ballast plus independent burst traffic",
     }[source]
     held = {}
+    held_samples = {}
     fill = H1()
     stages = []
     # H2 closes a connection after 200 streams in its churn window. New
@@ -585,6 +586,7 @@ async def run_acceptance(args, clients, output, cg, pid):
         for proto in ["h1", "h2", "h3"]:
             held[proto] = H1() if proto == "h1" else await (H2().open() if proto == "h2" else H3().open())
             sample = await held[proto].request("/stream")
+            held_samples[proto] = sample
             await asyncio.wait_for(sample.headers.wait(), 10)
             if sample.status != 200 or sample.error:
                 raise RuntimeError(f"accepted {proto} long response not admitted: status={sample.status} error={sample.error}")
@@ -601,7 +603,7 @@ async def run_acceptance(args, clients, output, cg, pid):
                 output["cache_fill"] = await fill_cache(fill, cg, f"acceptance-{args.label}", limit, target_cache=cache_component)
         output["stages"] = stages
         for pct in [50, 70, 85, 90, 94, 97]:
-            before_bytes = {proto: sample.bytes for proto, sample in held.items()}
+            before_bytes = {proto: sample.bytes for proto, sample in held_samples.items()}
             applied = await apply_acceptance_pressure(args, source, pct, cg, fill)
             maximum = int((cg / "memory.max").read_text())
             current = int((cg / "memory.current").read_text())
@@ -627,21 +629,21 @@ async def run_acceptance(args, clients, output, cg, pid):
             row["admission_rejects"] = rejection_snapshot(state)
             for proto, client in clients.items():
                 row["new_requests"][proto] = await burst(client, 32, 4)
-            row["accepted_progress"] = {proto: progress(sample, before_bytes[proto]) for proto, sample in held.items()}
+            row["accepted_progress"] = {proto: progress(sample, before_bytes[proto]) for proto, sample in held_samples.items()}
             row["isolation"] = {
                 proto: {
                     "held_alive": not sample.done.is_set(),
                     "held_progress": sample.bytes - before_bytes[proto],
                     "independent_new_requests": row["new_requests"].get(proto, {}).get("success"),
                 }
-                for proto, sample in held.items()
+                for proto, sample in held_samples.items()
             }
             stages.append(row)
             print(json.dumps(row), flush=True)
         # Extreme last resort: hold at the 98% safety ceiling long enough for
         # the sustained-Critical gate (10s, samples 5s apart), fresh
         # ineffective-reclaim evidence, and the 30s final-resort rate limit.
-        before_bytes = {proto: sample.bytes for proto, sample in held.items()}
+        before_bytes = {proto: sample.bytes for proto, sample in held_samples.items()}
         before_shed = (await control("stats")).get("shed") or {}
         before_passes = before_shed.get("final_resort_passes_total") or 0
         before_drained = before_shed.get("drained_connections_total") or 0
@@ -686,7 +688,7 @@ async def run_acceptance(args, clients, output, cg, pid):
         row["admission_rejects"] = rejection_snapshot(state)
         for proto, client in clients.items():
             row["new_requests"][proto] = await burst(client, 16, 4)
-        row["accepted_progress"] = {proto: progress(sample, before_bytes[proto]) for proto, sample in held.items()}
+        row["accepted_progress"] = {proto: progress(sample, before_bytes[proto]) for proto, sample in held_samples.items()}
         stages.append(row)
         print(json.dumps(row), flush=True)
         output["stages"] = stages
@@ -730,14 +732,14 @@ async def run_acceptance(args, clients, output, cg, pid):
                 "reclaim": state.get("reclaim"),
                 "shed": shed_snapshot(state),
                 "admission_rejects": rejection_snapshot(state),
-                "accepted_progress": {proto: progress(sample, 0) for proto, sample in held.items()},
+                "accepted_progress": {proto: progress(sample, 0) for proto, sample in held_samples.items()},
             }
             recovery["physical_summary"] = physical_summary(recovery["physical"])
             output["recovery"].append(recovery)
             print(json.dumps(recovery), flush=True)
             if state["pressure"] == "normal" and index >= 2:
                 break
-        output["held_completion"] = {proto: progress(sample, 0) for proto, sample in held.items()}
+        output["held_completion"] = {proto: progress(sample, 0) for proto, sample in held_samples.items()}
         output["normal_completion"] = await normal_completion()
         output["shed_field_support"] = {
             "available": [name for name in SHED_REQUESTED_FIELDS if name in (state.get("shed") or {})],
