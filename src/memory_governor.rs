@@ -2670,6 +2670,15 @@ impl MemoryGovernor {
         metrics_cardinality_capacity(&self.memory_snapshot())
     }
 
+    /// Per-aggregator key cap and aggregate byte budget from one snapshot.
+    pub fn metrics_aggregator_limits(&self) -> (usize, u64) {
+        let snapshot = self.memory_snapshot();
+        (
+            metrics_cardinality_capacity(&snapshot),
+            metrics_aggregator_budget_bytes(&snapshot),
+        )
+    }
+
     pub fn set_metrics_aggregator_bytes(&self, bytes: u64) {
         self.metrics_aggregator_bytes
             .store(bytes, Ordering::Relaxed);
@@ -4586,6 +4595,13 @@ fn metrics_cardinality_capacity(snapshot: &BudgetedMemorySnapshot) -> usize {
     )
 }
 
+/// Per-aggregator byte budget. The two aggregators together take a quarter of
+/// the state slice; each charge covers the live entry plus room for its
+/// flush/restore temporary copy, so a flush cannot exceed the budget silently.
+fn metrics_aggregator_budget_bytes(snapshot: &BudgetedMemorySnapshot) -> u64 {
+    (state_budget_bytes(snapshot) / 16).clamp(16 * 1024 * 1024, 512 * 1024 * 1024)
+}
+
 fn memory_pressure_high(snapshot: &BudgetedMemorySnapshot) -> bool {
     matches!(
         memory_pressure_level(snapshot),
@@ -5938,6 +5954,17 @@ mod tests {
             "256GiB box must scale beyond small defaults"
         );
         assert!(big_http <= 64 * 16_384);
+
+        assert_eq!(
+            metrics_aggregator_budget_bytes(&tiny),
+            16 * 1024 * 1024,
+            "tiny snapshots get the per-aggregator floor"
+        );
+        assert_eq!(
+            metrics_aggregator_budget_bytes(&big),
+            512 * 1024 * 1024,
+            "large snapshots stop at the per-aggregator ceiling"
+        );
 
         // Unknown availability keeps the per-core fallback: derived
         // memory caps are untrustworthy (~0) so the floor still applies.

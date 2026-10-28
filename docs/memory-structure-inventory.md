@@ -197,6 +197,8 @@
 
 metric 与 daily 的按项所有权：metric 报表失败后不再 restore 整个聚合样本，而是把未持久化的 per-server 请求放进 4,096 项 / 16 MiB 的有界 pending 队列，按原始 `time`/`item`/`version` 重试；超过上限按行计入受控丢弃并写 gap。daily 请求按 wire cap 分块，失败只保留未持久化行；pending server 行与 domain 行分别限额（各 65,536 行、合计 64 MiB），保留较旧行并写 gap。上述上限只在 spool 完全拒绝写入时触发，不是正常路径的容量计划。
 
+MetricAggregator 现在同时受 cardinality cap 与 per-aggregator 字节预算约束（`state_budget/16`，16 MiB–512 MiB）。每条 entry 的收费包含其 flush/restore 临时副本；`request_samples` 在插入前按属性字节做原子 CAS 计费，flush 退款、restore 重新计费并可在预算不足时拒绝。`approximate_bytes` 改为读取该账本，不再每 30 秒遍历全部 entry 估算。
+
 ## 7. 非代码因素
 
 - 宿主 `transparent_hugepage=always` 会放大 RSS（10-22 实测 anon_thp 占 40–75%），并让

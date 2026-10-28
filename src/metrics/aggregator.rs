@@ -1,8 +1,10 @@
 use dashmap::DashMap;
+use dashmap::mapref::entry::Entry;
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::sync::LazyLock as Lazy;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 #[derive(Debug, Clone)]
 pub struct AggregationKey {
@@ -136,6 +138,8 @@ pub struct AggregatedValue {
     pub bytes_received: i64,
     pub attack_bytes: i64,
     pub request_samples: BTreeMap<Arc<BTreeMap<String, String>>, AggregatedRequestValue>,
+    /// Bytes charged for this entry, including its flush/restore copy.
+    pub(crate) estimated_bytes: u64,
 }
 
 impl AggregatedValue {
@@ -147,31 +151,6 @@ impl AggregatedValue {
             self.count_attack += 1;
             self.attack_bytes += bytes_sent;
         }
-    }
-
-    fn add_request_sample(
-        &mut self,
-        request_attrs: Arc<BTreeMap<String, String>>,
-        bytes_sent: i64,
-        bytes_received: i64,
-        is_attack: bool,
-        capacity: usize,
-    ) {
-        if !self.request_samples.contains_key(&request_attrs)
-            && self.request_samples.len() >= capacity
-        {
-            crate::pipeline_metrics::note_cardinality_drop(
-                "metric_request_samples",
-                self.request_samples.len(),
-                capacity,
-            );
-            return;
-        }
-        self.request_samples.entry(request_attrs).or_default().add(
-            bytes_sent,
-            bytes_received,
-            is_attack,
-        );
     }
 }
 
@@ -198,6 +177,17 @@ fn estimated_attrs_bytes(attrs: &BTreeMap<String, String>) -> u64 {
             .saturating_add(key.capacity() as u64)
             .saturating_add(value.capacity() as u64)
     })
+}
+
+fn estimated_sample_bytes(
+    attrs: &Arc<BTreeMap<String, String>>,
+    key_attrs: &Arc<BTreeMap<String, String>>,
+) -> u64 {
+    let mut bytes = 128u64;
+    if !Arc::ptr_eq(attrs, key_attrs) {
+        bytes = bytes.saturating_add(estimated_attrs_bytes(attrs.as_ref()));
+    }
+    bytes
 }
 
 fn estimated_entry_bytes(key: &AggregationKey, value: &AggregatedValue) -> (u64, u64) {
@@ -236,6 +226,8 @@ fn estimated_entry_bytes(key: &AggregationKey, value: &AggregatedValue) -> (u64,
 pub struct MetricAggregator {
     pub data: DashMap<AggregationKey, AggregatedValue>,
     preserve_request_samples: bool,
+    used_bytes: AtomicU64,
+    entry_count: AtomicUsize,
 }
 
 impl Default for MetricAggregator {
@@ -253,28 +245,40 @@ impl MetricAggregator {
         Self {
             data: DashMap::with_shard_amount(64),
             preserve_request_samples,
+            used_bytes: AtomicU64::new(0),
+            entry_count: AtomicUsize::new(0),
         }
     }
 
-    fn cardinality_capacity() -> usize {
-        crate::memory_governor::MEMORY_GOVERNOR.metrics_cardinality_capacity()
+    fn try_charge(&self, bytes: u64, budget: u64) -> bool {
+        let mut used = self.used_bytes.load(Ordering::Acquire);
+        loop {
+            if used.saturating_add(bytes) > budget {
+                crate::pipeline_metrics::note_cardinality_drop(
+                    "metric_aggregator_bytes",
+                    used as usize,
+                    budget as usize,
+                );
+                return false;
+            }
+            match self.used_bytes.compare_exchange_weak(
+                used,
+                used.saturating_add(bytes),
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return true,
+                Err(current) => used = current,
+            }
+        }
     }
 
-    /// Admit a new aggregation key only below the cardinality cap — existing
-    /// keys always accumulate so tracked totals stay exact.
-    fn admit_new_key(&self, key: &AggregationKey, capacity: usize) -> bool {
-        if self.data.contains_key(key) {
-            return true;
-        }
-        if self.data.len() >= capacity {
-            crate::pipeline_metrics::note_cardinality_drop(
-                "metric_aggregator",
-                self.data.len(),
-                capacity,
-            );
-            return false;
-        }
-        true
+    fn refund(&self, bytes: u64) {
+        let _ = self
+            .used_bytes
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |used| {
+                Some(used.saturating_sub(bytes))
+            });
     }
 
     pub fn record(
@@ -284,15 +288,19 @@ impl MetricAggregator {
         bytes_received: i64,
         is_attack: bool,
     ) {
-        self.record_with_capacity(
+        let (capacity, byte_budget) =
+            crate::memory_governor::MEMORY_GOVERNOR.metrics_aggregator_limits();
+        self.record_with_limits(
             key,
             bytes_sent,
             bytes_received,
             is_attack,
-            Self::cardinality_capacity(),
+            capacity,
+            byte_budget,
         );
     }
 
+    #[cfg(test)]
     fn record_with_capacity(
         &self,
         key: AggregationKey,
@@ -301,22 +309,91 @@ impl MetricAggregator {
         is_attack: bool,
         capacity: usize,
     ) {
+        self.record_with_limits(
+            key,
+            bytes_sent,
+            bytes_received,
+            is_attack,
+            capacity,
+            u64::MAX,
+        );
+    }
+
+    fn record_with_limits(
+        &self,
+        key: AggregationKey,
+        bytes_sent: i64,
+        bytes_received: i64,
+        is_attack: bool,
+        capacity: usize,
+        byte_budget: u64,
+    ) {
         let request_attrs = self
             .preserve_request_samples
             .then(|| Arc::clone(&key.request_attrs));
-        if !self.admit_new_key(&key, capacity) {
-            return;
-        }
-        let mut entry = self.data.entry(key).or_default();
-        entry.add(bytes_sent, bytes_received, is_attack);
-        if let Some(request_attrs) = request_attrs {
-            entry.add_request_sample(
-                request_attrs,
-                bytes_sent,
-                bytes_received,
-                is_attack,
-                capacity,
-            );
+        match self.data.entry(key) {
+            Entry::Occupied(mut occupied) => {
+                let sample = request_attrs.map(|attrs| {
+                    let cost = estimated_sample_bytes(&attrs, &occupied.key().request_attrs);
+                    (attrs, cost)
+                });
+                let entry = occupied.get_mut();
+                entry.add(bytes_sent, bytes_received, is_attack);
+                if let Some((attrs, cost)) = sample {
+                    if let Some(sample) = entry.request_samples.get_mut(&attrs) {
+                        sample.add(bytes_sent, bytes_received, is_attack);
+                    } else if entry.request_samples.len() >= capacity {
+                        crate::pipeline_metrics::note_cardinality_drop(
+                            "metric_request_samples",
+                            entry.request_samples.len(),
+                            capacity,
+                        );
+                    } else if self.try_charge(cost, byte_budget) {
+                        let mut sample = AggregatedRequestValue::default();
+                        sample.add(bytes_sent, bytes_received, is_attack);
+                        entry.request_samples.insert(attrs, sample);
+                        entry.estimated_bytes = entry.estimated_bytes.saturating_add(cost);
+                    }
+                }
+            }
+            Entry::Vacant(vacant) => {
+                if self.entry_count.load(Ordering::Acquire) >= capacity {
+                    crate::pipeline_metrics::note_cardinality_drop(
+                        "metric_aggregator",
+                        self.entry_count.load(Ordering::Relaxed),
+                        capacity,
+                    );
+                    return;
+                }
+                let empty = AggregatedValue::default();
+                let (live, temporary) = estimated_entry_bytes(vacant.key(), &empty);
+                let base = live.saturating_add(temporary);
+                if !self.try_charge(base, byte_budget) {
+                    return;
+                }
+                let mut entry = AggregatedValue {
+                    estimated_bytes: base,
+                    ..Default::default()
+                };
+                entry.add(bytes_sent, bytes_received, is_attack);
+                if let Some(attrs) = request_attrs {
+                    let cost = estimated_sample_bytes(&attrs, &vacant.key().request_attrs);
+                    if entry.request_samples.len() >= capacity {
+                        crate::pipeline_metrics::note_cardinality_drop(
+                            "metric_request_samples",
+                            0,
+                            capacity,
+                        );
+                    } else if self.try_charge(cost, byte_budget) {
+                        let mut sample = AggregatedRequestValue::default();
+                        sample.add(bytes_sent, bytes_received, is_attack);
+                        entry.request_samples.insert(attrs, sample);
+                        entry.estimated_bytes = entry.estimated_bytes.saturating_add(cost);
+                    }
+                }
+                self.entry_count.fetch_add(1, Ordering::AcqRel);
+                vacant.insert(entry);
+            }
         }
     }
 
@@ -325,6 +402,8 @@ impl MetricAggregator {
         let keys: Vec<_> = self.data.iter().map(|e| e.key().clone()).collect();
         for k in keys {
             if let Some((key, val)) = self.data.remove(&k) {
+                self.entry_count.fetch_sub(1, Ordering::AcqRel);
+                self.refund(val.estimated_bytes);
                 samples.push((key, val));
             }
         }
@@ -332,41 +411,80 @@ impl MetricAggregator {
     }
 
     pub fn restore(&self, samples: Vec<(AggregationKey, AggregatedValue)>) {
-        self.restore_with_capacity(samples, Self::cardinality_capacity());
+        let (capacity, byte_budget) =
+            crate::memory_governor::MEMORY_GOVERNOR.metrics_aggregator_limits();
+        self.restore_with_limits(samples, capacity, byte_budget);
     }
 
+    #[cfg(test)]
     fn restore_with_capacity(
         &self,
         samples: Vec<(AggregationKey, AggregatedValue)>,
         capacity: usize,
     ) {
+        self.restore_with_limits(samples, capacity, u64::MAX);
+    }
+
+    fn restore_with_limits(
+        &self,
+        samples: Vec<(AggregationKey, AggregatedValue)>,
+        capacity: usize,
+        byte_budget: u64,
+    ) {
         for (key, value) in samples {
-            if !self.admit_new_key(&key, capacity) {
-                continue;
-            }
-            let mut entry = self.data.entry(key).or_default();
-            entry.count += value.count;
-            entry.count_attack += value.count_attack;
-            entry.bytes_sent += value.bytes_sent;
-            entry.bytes_received += value.bytes_received;
-            entry.attack_bytes += value.attack_bytes;
-            for (attrs, request_value) in value.request_samples {
-                if !entry.request_samples.contains_key(&attrs)
-                    && entry.request_samples.len() >= capacity
-                {
-                    crate::pipeline_metrics::note_cardinality_drop(
-                        "metric_request_samples",
-                        entry.request_samples.len(),
-                        capacity,
-                    );
-                    continue;
+            match self.data.entry(key) {
+                Entry::Occupied(mut occupied) => {
+                    let key_attrs = Arc::clone(&occupied.key().request_attrs);
+                    let entry = occupied.get_mut();
+                    entry.count += value.count;
+                    entry.count_attack += value.count_attack;
+                    entry.bytes_sent += value.bytes_sent;
+                    entry.bytes_received += value.bytes_received;
+                    entry.attack_bytes += value.attack_bytes;
+                    for (attrs, request_value) in value.request_samples {
+                        if let Some(target) = entry.request_samples.get_mut(&attrs) {
+                            target.count += request_value.count;
+                            target.count_attack += request_value.count_attack;
+                            target.bytes_sent += request_value.bytes_sent;
+                            target.bytes_received += request_value.bytes_received;
+                            target.attack_bytes += request_value.attack_bytes;
+                            continue;
+                        }
+                        if entry.request_samples.len() >= capacity {
+                            crate::pipeline_metrics::note_cardinality_drop(
+                                "metric_request_samples",
+                                entry.request_samples.len(),
+                                capacity,
+                            );
+                            continue;
+                        }
+                        let cost = estimated_sample_bytes(&attrs, &key_attrs);
+                        if !self.try_charge(cost, byte_budget) {
+                            continue;
+                        }
+                        entry.request_samples.insert(attrs, request_value);
+                        entry.estimated_bytes = entry.estimated_bytes.saturating_add(cost);
+                    }
                 }
-                let target = entry.request_samples.entry(attrs).or_default();
-                target.count += request_value.count;
-                target.count_attack += request_value.count_attack;
-                target.bytes_sent += request_value.bytes_sent;
-                target.bytes_received += request_value.bytes_received;
-                target.attack_bytes += request_value.attack_bytes;
+                Entry::Vacant(vacant) => {
+                    if self.entry_count.load(Ordering::Acquire) >= capacity {
+                        crate::pipeline_metrics::note_cardinality_drop(
+                            "metric_aggregator",
+                            self.entry_count.load(Ordering::Relaxed),
+                            capacity,
+                        );
+                        continue;
+                    }
+                    let (live, temporary) = estimated_entry_bytes(vacant.key(), &value);
+                    let cost = value.estimated_bytes.max(live.saturating_add(temporary));
+                    if !self.try_charge(cost, byte_budget) {
+                        continue;
+                    }
+                    let mut value = value;
+                    value.estimated_bytes = cost;
+                    self.entry_count.fetch_add(1, Ordering::AcqRel);
+                    vacant.insert(value);
+                }
             }
         }
     }
@@ -389,22 +507,7 @@ impl MetricAggregator {
     }
 
     pub fn approximate_bytes(&self) -> u64 {
-        self.data
-            .iter()
-            .map(|entry| {
-                let key = entry.key();
-                let value = entry.value();
-                256u64
-                    .saturating_add(key.category.len() as u64)
-                    .saturating_add(key.country.len() as u64)
-                    .saturating_add(key.province.len() as u64)
-                    .saturating_add(key.city.len() as u64)
-                    .saturating_add(key.provider.len() as u64)
-                    .saturating_add(key.browser.len() as u64)
-                    .saturating_add(key.os.len() as u64)
-                    .saturating_add((value.request_samples.len() as u64).saturating_mul(128))
-            })
-            .sum()
+        self.used_bytes.load(Ordering::Acquire)
     }
 }
 
@@ -681,6 +784,69 @@ mod tests {
         let two = aggregator.memory_estimate();
         assert_eq!(two.entries, 2);
         assert_eq!(two.flush_temporary_bytes, single.flush_temporary_bytes * 2);
+    }
+
+    #[test]
+    fn byte_budget_rejects_key_and_sample_before_allocation() {
+        let aggregator = MetricAggregator::with_request_samples(true);
+        let mut key = test_key(1, "a");
+        let attrs_a = Arc::new(BTreeMap::from([("requestId".into(), "a".into())]));
+        key.request_attrs = Arc::clone(&attrs_a);
+        let (live, temporary) =
+            super::estimated_entry_bytes(&key, &super::AggregatedValue::default());
+        let base = live + temporary;
+        let sample_a = super::estimated_sample_bytes(&attrs_a, &key.request_attrs);
+
+        aggregator.record_with_limits(key.clone(), 1, 0, false, 10, base - 1);
+        assert!(aggregator.data.is_empty());
+        assert_eq!(aggregator.approximate_bytes(), 0);
+
+        aggregator.record_with_limits(key.clone(), 1, 0, false, 10, base + sample_a);
+        assert_eq!(aggregator.data.len(), 1);
+        assert_eq!(aggregator.approximate_bytes(), base + sample_a);
+        assert_eq!(aggregator.data.get(&key).unwrap().request_samples.len(), 1);
+
+        let attrs_b = Arc::new(BTreeMap::from([("requestId".into(), "b".into())]));
+        let sample_b = super::estimated_sample_bytes(&attrs_b, &key.request_attrs);
+        let key_b = AggregationKey {
+            request_attrs: attrs_b,
+            ..key.clone()
+        };
+        let used = aggregator.approximate_bytes();
+        aggregator.record_with_limits(key_b, 1, 0, false, 10, used + sample_b - 1);
+        let entry = aggregator.data.get(&key).unwrap();
+        assert_eq!(entry.count, 2, "aggregate totals still accumulate");
+        assert_eq!(
+            entry.request_samples.len(),
+            1,
+            "a rejected sample must not be allocated"
+        );
+        drop(entry);
+        assert_eq!(aggregator.approximate_bytes(), used);
+
+        aggregator.flush();
+        assert_eq!(aggregator.approximate_bytes(), 0);
+    }
+
+    #[test]
+    fn restore_charges_the_same_budget_and_rejects_oversize_samples() {
+        let source = MetricAggregator::with_request_samples(true);
+        let mut key = test_key(1, "a");
+        let attrs = Arc::new(BTreeMap::from([("requestId".into(), "a".into())]));
+        key.request_attrs = Arc::clone(&attrs);
+        source.record_with_capacity(key.clone(), 1, 0, false, 10);
+        let samples = source.flush();
+
+        let target = MetricAggregator::with_request_samples(true);
+        target.restore_with_limits(samples.clone(), 10, 1);
+        assert!(target.data.is_empty());
+        assert_eq!(target.approximate_bytes(), 0);
+
+        target.restore_with_limits(samples, 10, u64::MAX);
+        assert_eq!(target.data.len(), 1);
+        assert!(target.approximate_bytes() > 0);
+        target.flush();
+        assert_eq!(target.approximate_bytes(), 0);
     }
 
     #[test]
