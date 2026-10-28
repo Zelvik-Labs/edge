@@ -1363,6 +1363,320 @@ async fn append_probe_chunk(
     }
 }
 
+/// Metric rows that a failed enqueue did not durably accept.
+#[derive(Debug)]
+pub struct MetricEnqueueError {
+    source: anyhow::Error,
+    unsent: pb::UploadMetricStatsRequest,
+    lost: usize,
+}
+
+impl MetricEnqueueError {
+    fn new(source: anyhow::Error, unsent: pb::UploadMetricStatsRequest, lost: usize) -> Self {
+        Self {
+            source,
+            unsent,
+            lost,
+        }
+    }
+
+    /// Rows whose append task panicked or was cancelled after ownership moved
+    /// out of the reporter; they cannot be retried and must be counted as a gap.
+    pub fn lost(&self) -> usize {
+        self.lost
+    }
+
+    pub fn into_unsent(self) -> pb::UploadMetricStatsRequest {
+        self.unsent
+    }
+}
+
+impl std::fmt::Display for MetricEnqueueError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}", self.source)
+    }
+}
+
+impl std::error::Error for MetricEnqueueError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.source.source()
+    }
+}
+
+/// Enqueue one server's metric rows in wire-sized requests. Each chunk keeps
+/// the request header so rows remain attributable to the same item/version and
+/// period. A failed append returns only the rows the spool did not persist.
+pub async fn enqueue_metric_stat(
+    request: pb::UploadMetricStatsRequest,
+) -> Result<(), MetricEnqueueError> {
+    let spool = match queue("metric_stat") {
+        Ok(spool) => spool,
+        Err(source) => return Err(MetricEnqueueError::new(source, request, 0)),
+    };
+    enqueue_metric_stat_on(spool, request).await
+}
+
+async fn enqueue_metric_stat_on(
+    spool: Arc<Spool>,
+    request: pb::UploadMetricStatsRequest,
+) -> Result<(), MetricEnqueueError> {
+    let header = MetricRequestHeader {
+        server_id: request.server_id,
+        time: request.time,
+        count: request.count,
+        total: request.total,
+        version: request.version,
+        item_id: request.item_id,
+        keep_keys: request.keep_keys,
+    };
+    // The inner request header travels inside the telemetry payload, so it
+    // must come out of the row budget; otherwise a full batch plus header
+    // could exceed the wire cap and be refused forever.
+    let budget =
+        payload_budget("metric_stat").saturating_sub(header.build(Vec::new()).encoded_len());
+    let (batches, oversize) = split_records(request.metric_stats, budget.max(1));
+    let mut oversize = oversize.into_iter();
+    while let Some(stat) = oversize.next() {
+        let cost = record_cost(&stat);
+        if let Err(source) = journal_oversize_on(Arc::clone(&spool), "metric_stat", cost).await {
+            let mut unsent = vec![stat];
+            unsent.extend(oversize);
+            for batch in batches {
+                unsent.extend(batch);
+            }
+            return Err(MetricEnqueueError::new(source, header.build(unsent), 0));
+        }
+    }
+    let mut batches = batches.into_iter();
+    while let Some(batch) = batches.next() {
+        let request = header.build(batch);
+        if let Err(mut error) = append_metric_chunk(Arc::clone(&spool), request).await {
+            for remaining in batches {
+                error.unsent.metric_stats.extend(remaining);
+            }
+            return Err(error);
+        }
+    }
+    Ok(())
+}
+
+struct MetricRequestHeader {
+    server_id: i64,
+    time: String,
+    count: i64,
+    total: f32,
+    version: i32,
+    item_id: i64,
+    keep_keys: Vec<String>,
+}
+
+impl MetricRequestHeader {
+    fn build(&self, metric_stats: Vec<pb::UploadingMetricStat>) -> pb::UploadMetricStatsRequest {
+        pb::UploadMetricStatsRequest {
+            server_id: self.server_id,
+            time: self.time.clone(),
+            count: self.count,
+            total: self.total,
+            version: self.version,
+            item_id: self.item_id,
+            metric_stats,
+            keep_keys: self.keep_keys.clone(),
+        }
+    }
+}
+
+async fn append_metric_chunk(
+    spool: Arc<Spool>,
+    request: pb::UploadMetricStatsRequest,
+) -> Result<(), MetricEnqueueError> {
+    let count = request.metric_stats.len();
+    let at = crate::utils::time::now_timestamp();
+    match tokio::task::spawn_blocking(move || {
+        let payload = request.encode_to_vec();
+        match spool.append("metric_stat", payload, 0, false, at) {
+            Ok(_) => Ok(()),
+            Err(error) => Err((error, request)),
+        }
+    })
+    .await
+    {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err((source, request))) => Err(MetricEnqueueError::new(source, request, 0)),
+        Err(join) => Err(MetricEnqueueError::new(
+            anyhow::anyhow!("metric append task failed: {join}"),
+            pb::UploadMetricStatsRequest::default(),
+            count,
+        )),
+    }
+}
+
+/// Daily rows that a failed enqueue did not durably accept.
+#[derive(Debug)]
+pub struct DailyEnqueueError {
+    source: anyhow::Error,
+    unsent: pb::UploadServerDailyStatsRequest,
+    lost: usize,
+}
+
+impl DailyEnqueueError {
+    fn new(source: anyhow::Error, unsent: pb::UploadServerDailyStatsRequest, lost: usize) -> Self {
+        Self {
+            source,
+            unsent,
+            lost,
+        }
+    }
+
+    pub fn lost(&self) -> usize {
+        self.lost
+    }
+
+    pub fn into_unsent(self) -> pb::UploadServerDailyStatsRequest {
+        self.unsent
+    }
+}
+
+impl std::fmt::Display for DailyEnqueueError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}", self.source)
+    }
+}
+
+impl std::error::Error for DailyEnqueueError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.source.source()
+    }
+}
+
+/// Enqueue daily server and domain rows in wire-sized requests. Server rows
+/// and domain rows are chunked independently; a failed append returns exactly
+/// the rows the spool did not persist, so the reporter never replays committed
+/// chunks or drops the batches behind them.
+pub async fn enqueue_daily_stats(
+    request: pb::UploadServerDailyStatsRequest,
+) -> Result<(), DailyEnqueueError> {
+    let spool = match queue("daily") {
+        Ok(spool) => spool,
+        Err(source) => return Err(DailyEnqueueError::new(source, request, 0)),
+    };
+    enqueue_daily_stats_on(spool, request).await
+}
+
+async fn enqueue_daily_stats_on(
+    spool: Arc<Spool>,
+    request: pb::UploadServerDailyStatsRequest,
+) -> Result<(), DailyEnqueueError> {
+    let budget = payload_budget("daily");
+    let (stats_batches, stats_oversize) = split_records(request.stats, budget);
+    let (domain_batches, domain_oversize) = split_records(request.domain_stats, budget);
+
+    let mut stats_oversize = stats_oversize.into_iter();
+    while let Some(stat) = stats_oversize.next() {
+        let cost = record_cost(&stat);
+        if let Err(source) = journal_oversize_on(Arc::clone(&spool), "daily", cost).await {
+            let mut stats = vec![stat];
+            stats.extend(stats_oversize);
+            for batch in stats_batches {
+                stats.extend(batch);
+            }
+            let mut domain_stats = domain_oversize;
+            for batch in domain_batches {
+                domain_stats.extend(batch);
+            }
+            return Err(DailyEnqueueError::new(
+                source,
+                daily_request(stats, domain_stats),
+                0,
+            ));
+        }
+    }
+
+    let mut domain_oversize = domain_oversize.into_iter();
+    while let Some(stat) = domain_oversize.next() {
+        let cost = record_cost(&stat);
+        if let Err(source) = journal_oversize_on(Arc::clone(&spool), "daily", cost).await {
+            let stats = stats_batches.into_iter().flatten().collect::<Vec<_>>();
+            let mut domain_stats = vec![stat];
+            domain_stats.extend(domain_oversize);
+            for batch in domain_batches {
+                domain_stats.extend(batch);
+            }
+            return Err(DailyEnqueueError::new(
+                source,
+                daily_request(stats, domain_stats),
+                0,
+            ));
+        }
+    }
+
+    let mut chunks = stats_batches
+        .into_iter()
+        .map(DailyChunk::Stats)
+        .chain(domain_batches.into_iter().map(DailyChunk::Domains));
+    while let Some(chunk) = chunks.next() {
+        let request = chunk.into_request();
+        if let Err(mut error) = append_daily_chunk(Arc::clone(&spool), request).await {
+            for remaining in chunks {
+                match remaining {
+                    DailyChunk::Stats(rows) => error.unsent.stats.extend(rows),
+                    DailyChunk::Domains(rows) => error.unsent.domain_stats.extend(rows),
+                }
+            }
+            return Err(error);
+        }
+    }
+    Ok(())
+}
+
+enum DailyChunk {
+    Stats(Vec<pb::ServerDailyStat>),
+    Domains(Vec<pb::upload_server_daily_stats_request::DomainStat>),
+}
+
+impl DailyChunk {
+    fn into_request(self) -> pb::UploadServerDailyStatsRequest {
+        match self {
+            DailyChunk::Stats(stats) => daily_request(stats, Vec::new()),
+            DailyChunk::Domains(domain_stats) => daily_request(Vec::new(), domain_stats),
+        }
+    }
+}
+
+fn daily_request(
+    stats: Vec<pb::ServerDailyStat>,
+    domain_stats: Vec<pb::upload_server_daily_stats_request::DomainStat>,
+) -> pb::UploadServerDailyStatsRequest {
+    pb::UploadServerDailyStatsRequest {
+        stats,
+        domain_stats,
+    }
+}
+
+async fn append_daily_chunk(
+    spool: Arc<Spool>,
+    request: pb::UploadServerDailyStatsRequest,
+) -> Result<(), DailyEnqueueError> {
+    let count = request.stats.len() + request.domain_stats.len();
+    let at = crate::utils::time::now_timestamp();
+    match tokio::task::spawn_blocking(move || {
+        let payload = request.encode_to_vec();
+        match spool.append("daily", payload, 0, false, at) {
+            Ok(_) => Ok(()),
+            Err(error) => Err((error, request)),
+        }
+    })
+    .await
+    {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err((source, request))) => Err(DailyEnqueueError::new(source, request, 0)),
+        Err(join) => Err(DailyEnqueueError::new(
+            anyhow::anyhow!("daily append task failed: {join}"),
+            pb::UploadServerDailyStatsRequest::default(),
+            count,
+        )),
+    }
+}
+
 pub async fn enqueue_prepared(batch: pb::TelemetryBatch) -> anyhow::Result<()> {
     let spool = queue(&batch.kind)?;
     tokio::task::spawn_blocking(move || spool.append_prepared(batch)).await??;
@@ -2866,6 +3180,116 @@ mod tests {
             );
         }
         // The committed chunk is durable; the failed one is not.
+        assert_eq!(spool.snapshot()["pendingBatches"], 1);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    /// The metric reporter must retain exactly the rows a failed chunk did not
+    /// persist; committed chunks are not replayed.
+    #[tokio::test]
+    async fn metric_enqueue_failure_returns_only_unpersisted_rows() {
+        let budget = payload_budget("metric_stat");
+        let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let noisy = |len: usize| -> String {
+            incompressible(len)
+                .into_iter()
+                .map(|byte| char::from(alphabet[(byte & 63) as usize]))
+                .collect()
+        };
+        let rows: Vec<_> = (0..60)
+            .map(|index| pb::UploadingMetricStat {
+                keys: vec![format!("k_{index}"), noisy(250_000)],
+                value: index as f32,
+                ..Default::default()
+            })
+            .collect();
+        let header = |metric_stats| pb::UploadMetricStatsRequest {
+            server_id: 7,
+            time: "202610281200".into(),
+            count: 60,
+            total: 1770.0,
+            version: 3,
+            item_id: 9,
+            metric_stats,
+            ..Default::default()
+        };
+        let row_budget = budget
+            .saturating_sub(header(Vec::new()).encoded_len())
+            .max(1);
+        let (batches, oversize) = split_records(rows.clone(), row_budget);
+        assert!(oversize.is_empty());
+        assert!(batches.len() >= 2, "the case needs a later chunk to fail");
+        let committed = batches[0].len();
+        let first = header(batches[0].clone()).encode_to_vec();
+        let first_compressed = zstd::encode_all(first.as_slice(), 3).unwrap().len() as u64;
+        let limit = first_compressed + 8 * 1024;
+
+        let path = std::env::temp_dir().join(format!("telemetry-metric-{}", uuid::Uuid::new_v4()));
+        let spool = Arc::new(Spool::open(&path, false, limit).unwrap());
+        let error = enqueue_metric_stat_on(spool.clone(), header(rows))
+            .await
+            .expect_err("the second chunk exceeds the spool budget");
+        assert_eq!(error.lost(), 0);
+        let unsent = error.into_unsent();
+        assert_eq!(unsent.server_id, 7);
+        assert_eq!(unsent.item_id, 9);
+        assert_eq!(unsent.metric_stats.len(), 60 - committed);
+        for (offset, row) in unsent.metric_stats.iter().enumerate() {
+            assert_eq!(
+                row.keys[0],
+                format!("k_{}", committed + offset),
+                "unsent rows must be the exact tail, in order"
+            );
+        }
+        assert_eq!(spool.snapshot()["pendingBatches"], 1);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    /// Daily server rows keep the same exact-ownership rule: only the chunks
+    /// after the committed one are returned for the next window.
+    #[tokio::test]
+    async fn daily_enqueue_failure_returns_only_unpersisted_rows() {
+        let budget = payload_budget("daily");
+        let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let noisy = |len: usize| -> String {
+            incompressible(len)
+                .into_iter()
+                .map(|byte| char::from(alphabet[(byte & 63) as usize]))
+                .collect()
+        };
+        let rows: Vec<_> = (0..60)
+            .map(|index| pb::ServerDailyStat {
+                server_id: index,
+                time_from: noisy(250_000),
+                ..Default::default()
+            })
+            .collect();
+        let (batches, oversize) = split_records(rows.clone(), budget);
+        assert!(oversize.is_empty());
+        assert!(batches.len() >= 2, "the case needs a later chunk to fail");
+        let committed = batches[0].len();
+        let first = daily_request(batches[0].clone(), Vec::new()).encode_to_vec();
+        let first_compressed = zstd::encode_all(first.as_slice(), 3).unwrap().len() as u64;
+        let limit = first_compressed + 8 * 1024;
+
+        let path = std::env::temp_dir().join(format!("telemetry-daily-{}", uuid::Uuid::new_v4()));
+        let spool = Arc::new(Spool::open(&path, false, limit).unwrap());
+        let error = enqueue_daily_stats_on(spool.clone(), daily_request(rows, Vec::new()))
+            .await
+            .expect_err("the second chunk exceeds the spool budget");
+        assert_eq!(error.lost(), 0);
+        let unsent = error.into_unsent();
+        assert!(unsent.domain_stats.is_empty());
+        assert_eq!(unsent.stats.len(), 60 - committed);
+        for (offset, row) in unsent.stats.iter().enumerate() {
+            assert_eq!(
+                row.server_id,
+                (committed + offset) as i64,
+                "unsent rows must be the exact tail, in order"
+            );
+        }
         assert_eq!(spool.snapshot()["pendingBatches"], 1);
         drop(spool);
         std::fs::remove_dir_all(path).unwrap();

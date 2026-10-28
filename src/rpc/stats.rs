@@ -744,6 +744,65 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
     }
 }
 
+const DAILY_PENDING_MAX_STATS: usize = 65_536;
+const DAILY_PENDING_MAX_DOMAINS: usize = 65_536;
+const DAILY_PENDING_MAX_BYTES: u64 = 64 * 1024 * 1024;
+
+fn daily_pending_row_bytes<T: prost::Message>(row: &T) -> u64 {
+    prost::Message::encoded_len(row) as u64 + std::mem::size_of::<T>() as u64
+}
+
+/// Bound the rows the daily reporter keeps after a failed persist. Server rows
+/// are billing-relevant and get the larger share; domain detail is discardable
+/// analytics. Oldest rows are kept, and the caller reports one telemetry gap
+/// for the whole truncation.
+fn cap_daily_pending(
+    stats: &mut Vec<pb::ServerDailyStat>,
+    domains: &mut Vec<pb::upload_server_daily_stats_request::DomainStat>,
+) -> u64 {
+    cap_daily_pending_with_limits(
+        stats,
+        domains,
+        DAILY_PENDING_MAX_STATS,
+        DAILY_PENDING_MAX_DOMAINS,
+        DAILY_PENDING_MAX_BYTES,
+    )
+}
+
+fn cap_daily_pending_with_limits(
+    stats: &mut Vec<pb::ServerDailyStat>,
+    domains: &mut Vec<pb::upload_server_daily_stats_request::DomainStat>,
+    max_stats: usize,
+    max_domains: usize,
+    max_bytes: u64,
+) -> u64 {
+    let mut bytes = 0u64;
+    let mut kept_stats = 0usize;
+    for stat in stats.iter() {
+        let row_bytes = daily_pending_row_bytes(stat);
+        if kept_stats >= max_stats || bytes.saturating_add(row_bytes) > max_bytes {
+            break;
+        }
+        bytes = bytes.saturating_add(row_bytes);
+        kept_stats += 1;
+    }
+    let dropped_stats = stats.len().saturating_sub(kept_stats);
+    stats.truncate(kept_stats);
+
+    let mut kept_domains = 0usize;
+    for domain in domains.iter() {
+        let row_bytes = daily_pending_row_bytes(domain);
+        if kept_domains >= max_domains || bytes.saturating_add(row_bytes) > max_bytes {
+            break;
+        }
+        bytes = bytes.saturating_add(row_bytes);
+        kept_domains += 1;
+    }
+    let dropped_domains = domains.len().saturating_sub(kept_domains);
+    domains.truncate(kept_domains);
+    (dropped_stats + dropped_domains) as u64
+}
+
 pub async fn start_daily_stat_reporter(config_store: ConfigStore) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(
         BANDWIDTH_SAMPLE_INTERVAL_SECS,
@@ -820,15 +879,31 @@ pub async fn start_daily_stat_reporter(config_store: ConfigStore) {
 
             if !stats.is_empty() || !domain_stats.is_empty() {
                 let request = pb::UploadServerDailyStatsRequest {
-                    stats: stats.clone(),
-                    domain_stats: domain_stats.clone(),
+                    stats,
+                    domain_stats,
                 };
-                // A full spool keeps the drained window in memory — pending
-                // entries are never aged out, they are re-offered next window.
-                if let Err(e) = crate::telemetry::enqueue("daily", &request, 0, false).await {
-                    warn!("Failed to persist daily stats: {}", e);
-                    pending_stats = stats;
-                    pending_domain_stats = domain_stats;
+                if let Err(error) = crate::telemetry::enqueue_daily_stats(request).await {
+                    let source = error.to_string();
+                    let lost = error.lost();
+                    let unsent = error.into_unsent();
+                    pending_stats = unsent.stats;
+                    pending_domain_stats = unsent.domain_stats;
+                    let mut dropped = lost as u64;
+                    dropped += cap_daily_pending(&mut pending_stats, &mut pending_domain_stats);
+                    warn!(
+                        lost,
+                        pending_stats = pending_stats.len(),
+                        pending_domains = pending_domain_stats.len(),
+                        error = %source,
+                        "failed to persist daily stats; unpersisted rows retained"
+                    );
+                    if dropped > 0 {
+                        crate::telemetry::record_gap(
+                            "daily",
+                            now.timestamp(),
+                            "daily_pending_capacity",
+                        );
+                    }
                 }
             }
             current_window = window_key.clone();
@@ -1035,11 +1110,102 @@ fn build_metric_uploads_for_item(
     requests
 }
 
+const METRIC_PENDING_MAX_REQUESTS: usize = 4_096;
+const METRIC_PENDING_MAX_BYTES: u64 = 16 * 1024 * 1024;
+
+/// Metric uploads that failed to persist, retained in memory until the spool
+/// accepts them. The queue is bounded: metric rows are analytics and may be
+/// dropped under sustained local storage failure, but every drop is counted and
+/// reported through the telemetry gap path.
+#[derive(Default)]
+struct MetricPendingUploads {
+    requests: Vec<pb::UploadMetricStatsRequest>,
+    bytes: u64,
+    dropped_rows: u64,
+}
+
+impl MetricPendingUploads {
+    fn estimated_bytes(request: &pb::UploadMetricStatsRequest) -> u64 {
+        prost::Message::encoded_len(request) as u64
+            + std::mem::size_of::<pb::UploadMetricStatsRequest>() as u64
+    }
+
+    fn push(&mut self, request: pb::UploadMetricStatsRequest) {
+        let bytes = Self::estimated_bytes(&request);
+        if self.requests.len() >= METRIC_PENDING_MAX_REQUESTS
+            || self.bytes.saturating_add(bytes) > METRIC_PENDING_MAX_BYTES
+        {
+            self.dropped_rows += request.metric_stats.len().max(1) as u64;
+            return;
+        }
+        self.bytes = self.bytes.saturating_add(bytes);
+        self.requests.push(request);
+    }
+
+    fn record_lost(&mut self, rows: usize) {
+        self.dropped_rows += rows as u64;
+    }
+
+    fn drain(&mut self) -> std::vec::IntoIter<pb::UploadMetricStatsRequest> {
+        self.bytes = 0;
+        std::mem::take(&mut self.requests).into_iter()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.requests.is_empty()
+    }
+}
+
 pub async fn start_metric_stat_reporter(config_store: Arc<crate::config::ConfigStore>) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+    let mut pending = MetricPendingUploads::default();
+    let mut reported_drops = 0u64;
 
     loop {
         interval.tick().await;
+        if pending.dropped_rows > reported_drops {
+            crate::telemetry::record_gap(
+                "metric_stat",
+                crate::utils::time::now_timestamp(),
+                "metric_pending_capacity",
+            );
+            reported_drops = pending.dropped_rows;
+        }
+
+        // Retry older requests first. A failure stops the retry loop and keeps
+        // the failed request plus everything behind it in the bounded queue;
+        // nothing that already reached the spool is replayed.
+        let mut retry_failed = false;
+        for request in pending.drain() {
+            if retry_failed {
+                pending.push(request);
+                continue;
+            }
+            match crate::telemetry::enqueue_metric_stat(request).await {
+                Ok(()) => {}
+                Err(error) => {
+                    let source = error.to_string();
+                    let lost = error.lost();
+                    let unsent = error.into_unsent();
+                    warn!(
+                        server_id = unsent.server_id,
+                        item_id = unsent.item_id,
+                        unsent_rows = unsent.metric_stats.len(),
+                        lost,
+                        error = %source,
+                        "failed to persist pending metric stats; retained"
+                    );
+                    if lost > 0 {
+                        pending.record_lost(lost);
+                    }
+                    if !unsent.metric_stats.is_empty() {
+                        pending.push(unsent);
+                    }
+                    retry_failed = true;
+                }
+            }
+        }
+
         let metric_items = config_store.get_metric_items().await;
         if metric_items.is_empty() {
             continue;
@@ -1047,18 +1213,15 @@ pub async fn start_metric_stat_reporter(config_store: Arc<crate::config::ConfigS
 
         let samples = crate::metrics::aggregator::METRIC_STAT_AGGREGATOR.flush();
         if samples.is_empty() {
-            // Even if no new samples, we might still want to report if we have cached keys
-            // But usually we skip
             continue;
         }
 
-        let mut upload_succeeded = true;
+        let mut uploads = Vec::new();
         for item in metric_items {
             if !item.is_on {
                 continue;
             }
             let item_category = metric_item_category(&item);
-
             let time_key = get_period_time(item.period, &item.period_unit);
             if !samples
                 .iter()
@@ -1066,20 +1229,43 @@ pub async fn start_metric_stat_reporter(config_store: Arc<crate::config::ConfigS
             {
                 continue;
             }
+            uploads.extend(build_metric_uploads_for_item(&item, &time_key, &samples));
+        }
 
-            for req in build_metric_uploads_for_item(&item, &time_key, &samples) {
-                let server_id = req.server_id;
-                if let Err(e) = crate::telemetry::enqueue("metric_stat", &req, 0, false).await {
+        if !pending.is_empty() {
+            for request in uploads {
+                pending.push(request);
+            }
+            continue;
+        }
+        let mut uploads = uploads.into_iter();
+        while let Some(request) = uploads.next() {
+            match crate::telemetry::enqueue_metric_stat(request).await {
+                Ok(()) => {}
+                Err(error) => {
+                    let source = error.to_string();
+                    let lost = error.lost();
+                    let unsent = error.into_unsent();
                     warn!(
-                        "Failed to persist metric stats for server {} item {}: {}",
-                        server_id, item.id, e
+                        server_id = unsent.server_id,
+                        item_id = unsent.item_id,
+                        unsent_rows = unsent.metric_stats.len(),
+                        lost,
+                        error = %source,
+                        "failed to persist metric stats; retained"
                     );
-                    upload_succeeded = false;
+                    if lost > 0 {
+                        pending.record_lost(lost);
+                    }
+                    if !unsent.metric_stats.is_empty() {
+                        pending.push(unsent);
+                    }
+                    for remaining in uploads {
+                        pending.push(remaining);
+                    }
+                    break;
                 }
             }
-        }
-        if !upload_succeeded {
-            crate::metrics::aggregator::METRIC_STAT_AGGREGATOR.restore(samples);
         }
     }
 }
@@ -1427,6 +1613,74 @@ mod tests {
             version: 1,
             is_on: true,
         }
+    }
+
+    #[test]
+    fn daily_pending_cap_keeps_oldest_rows_within_count_and_byte_limits() {
+        let mut stats = (0..5)
+            .map(|server_id| pb::ServerDailyStat {
+                server_id,
+                ..Default::default()
+            })
+            .collect::<Vec<_>>();
+        let mut domains = (0..5)
+            .map(
+                |server_id| pb::upload_server_daily_stats_request::DomainStat {
+                    server_id,
+                    domain: format!("d{server_id}.example"),
+                    ..Default::default()
+                },
+            )
+            .collect::<Vec<_>>();
+        let dropped = cap_daily_pending_with_limits(&mut stats, &mut domains, 3, 2, 1 << 30);
+        assert_eq!(dropped, 5);
+        assert_eq!(
+            stats.iter().map(|row| row.server_id).collect::<Vec<_>>(),
+            vec![0, 1, 2]
+        );
+        assert_eq!(
+            domains.iter().map(|row| row.server_id).collect::<Vec<_>>(),
+            vec![0, 1]
+        );
+
+        let mut stats = vec![pb::ServerDailyStat::default()];
+        let mut domains = vec![pb::upload_server_daily_stats_request::DomainStat::default()];
+        assert_eq!(
+            cap_daily_pending_with_limits(&mut stats, &mut domains, 8, 8, 0),
+            2
+        );
+        assert!(stats.is_empty());
+        assert!(domains.is_empty());
+    }
+
+    #[test]
+    fn metric_pending_uploads_are_bounded_and_drain_resets_accounting() {
+        let request = |index: usize| pb::UploadMetricStatsRequest {
+            server_id: index as i64,
+            metric_stats: vec![pb::UploadingMetricStat {
+                keys: vec![format!("k_{index}")],
+                value: 1.0,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let mut pending = MetricPendingUploads::default();
+        for index in 0..METRIC_PENDING_MAX_REQUESTS + 10 {
+            pending.push(request(index));
+        }
+        assert_eq!(pending.requests.len(), METRIC_PENDING_MAX_REQUESTS);
+        assert_eq!(pending.dropped_rows, 10);
+        assert!(pending.bytes > 0);
+
+        let drained: Vec<_> = pending.drain().collect();
+        assert_eq!(drained.len(), METRIC_PENDING_MAX_REQUESTS);
+        assert_eq!(drained[0].server_id, 0);
+        assert_eq!(
+            drained.last().unwrap().server_id as usize,
+            METRIC_PENDING_MAX_REQUESTS - 1
+        );
+        assert_eq!(pending.bytes, 0);
+        assert!(pending.is_empty());
     }
 
     #[test]

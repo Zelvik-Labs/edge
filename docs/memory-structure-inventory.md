@@ -193,7 +193,9 @@
 
 `BorrowingInputs::borrowable_bytes` 当前只提供可测试的计算模型，**尚未接入准入与回收**；`MetricAggregator::memory_estimate` 仅提供进程内按需快照，**尚未接入状态、限制扩容或跟踪已 flush 的批次**。现有周期性 gauge 仍不计动态属性。`BackgroundWork` 同时用于配置应用和缓存工作，不能不区分调用方就归到可丢弃资源。后续阶段必须把分配、借用和批次生命周期接到实际许可账本，完成验证后再更新本节。
 
-已落地的边界：probe outbox 以 16,384 条 / 64 MiB 同时约束排队与正在写 Mace 的批次；失败只回填未持久化的记录，追加任务丢失会计入受控丢弃；flusher 不再随探测计划切换而中止，丢弃计数经 node status 的 `probeOutbox` 暴露。溢出策略是保留队列中较旧的观测、拒绝新观测，而不是无界回填。daily pending 与 aggregator 仍是后续工作。
+已落地的边界：probe outbox 以 16,384 条 / 64 MiB 同时约束排队与正在写 Mace 的批次；失败只回填未持久化的记录，追加任务丢失会计入受控丢弃；flusher 不再随探测计划切换而中止，丢弃计数经 node status 的 `probeOutbox` 暴露。溢出策略是保留队列中较旧的观测、拒绝新观测，而不是无界回填。
+
+metric 与 daily 的按项所有权：metric 报表失败后不再 restore 整个聚合样本，而是把未持久化的 per-server 请求放进 4,096 项 / 16 MiB 的有界 pending 队列，按原始 `time`/`item`/`version` 重试；超过上限按行计入受控丢弃并写 gap。daily 请求按 wire cap 分块，失败只保留未持久化行；pending server 行与 domain 行分别限额（各 65,536 行、合计 64 MiB），保留较旧行并写 gap。上述上限只在 spool 完全拒绝写入时触发，不是正常路径的容量计划。
 
 ## 7. 非代码因素
 
