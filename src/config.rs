@@ -331,6 +331,7 @@ pub struct ConfigStore {
     reload_notify: Arc<Notify>,
     reload_generation: Arc<AtomicU64>,
     parent_pressure: Arc<DashMap<String, (f32, std::time::Instant)>>,
+    parent_pressure_swept_at: Arc<AtomicU64>,
     published_fingerprints: Arc<DashMap<String, String>>,
     /// Hash of the global runtime context (global HTTP settings, node level,
     /// parent nodes, tiered bypass, LAN allow). Per-server/per-user published
@@ -443,6 +444,7 @@ impl ConfigStore {
             reload_notify: Arc::new(Notify::new()),
             reload_generation: Arc::new(AtomicU64::new(0)),
             parent_pressure: Arc::new(DashMap::new()),
+            parent_pressure_swept_at: Arc::new(AtomicU64::new(0)),
             published_fingerprints: Arc::new(DashMap::new()),
             runtime_context_salt: Arc::new(Mutex::new(String::new())),
         }
@@ -1215,6 +1217,32 @@ impl ConfigStore {
     pub fn update_parent_pressure(&self, addr: &str, pressure: f32) {
         self.parent_pressure
             .insert(addr.to_string(), (pressure, std::time::Instant::now()));
+        self.sweep_parent_pressure();
+    }
+
+    /// Parent-pressure samples are logically valid for 60 seconds, but an
+    /// entry used to stay allocated forever after its last update. Sweep at
+    /// most once per interval so address churn cannot grow the map without
+    /// adding an O(entries) walk to every health update.
+    fn sweep_parent_pressure(&self) {
+        let now = crate::utils::time::now_timestamp().max(0) as u64;
+        let last = self.parent_pressure_swept_at.load(Ordering::Relaxed);
+        if now.saturating_sub(last) < 60 {
+            return;
+        }
+        if self
+            .parent_pressure_swept_at
+            .compare_exchange(last, now, Ordering::AcqRel, Ordering::Relaxed)
+            .is_err()
+        {
+            return;
+        }
+        self.prune_parent_pressure();
+    }
+
+    fn prune_parent_pressure(&self) {
+        self.parent_pressure
+            .retain(|_, (_, updated_at)| updated_at.elapsed() < std::time::Duration::from_secs(60));
     }
 
     pub fn get_parent_pressure(&self, addr: &str) -> f32 {
@@ -2285,6 +2313,25 @@ mod tests {
         store.prune_published_fingerprints(&HashSet::from([7]), &HashSet::from([9]));
         assert_eq!(store.published_fingerprint("user:9").as_deref(), Some("v1"));
         assert_eq!(store.published_fingerprint("user:10"), None);
+    }
+
+    #[test]
+    fn parent_pressure_prune_removes_only_expired_samples() {
+        let store = ConfigStore::new();
+        store.update_parent_pressure("fresh.example:443", 0.4);
+        store.parent_pressure.insert(
+            "stale.example:443".to_string(),
+            (
+                0.9,
+                std::time::Instant::now() - std::time::Duration::from_secs(120),
+            ),
+        );
+
+        store.prune_parent_pressure();
+
+        assert_eq!(store.get_parent_pressure("stale.example:443"), 0.0);
+        assert!(!store.parent_pressure.contains_key("stale.example:443"));
+        assert_eq!(store.get_parent_pressure("fresh.example:443"), 0.4);
     }
 
     #[test]
