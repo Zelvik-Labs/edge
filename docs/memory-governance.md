@@ -321,10 +321,28 @@ for that record while in-memory enforcement remains.
 
 Metrics tracker memory (metric aggregators, top-IP tracker, daily-domain and
 unique-IP trackers) is estimated every 30s and published as
-`metrics_aggregator_bytes` on the governor snapshot. It is an observational
-gauge: these maps are not charged into the resident ledger, which is
-deliberately scoped to cache categories. A rate-limited `METRICS_MEMORY`
-warning fires when the estimate exceeds max(1/8 of node memory, 64MiB).
+`metrics_aggregator_bytes` on the governor snapshot. The existing periodic gauge
+uses a coarse per-sample estimate and does not include dynamic attributes. The
+on-demand `MetricAggregator::memory_estimate` API additionally estimates
+attributes and flush vectors; it is not published on node status and may hold
+shard read locks while walking samples. Shared allocations may be counted more
+than once, and flushed batches and allocator slack are not measured. Neither
+estimate is RSS or an enforced aggregate budget. These maps are not charged into
+the resident ledger, which is deliberately scoped to cache categories. A
+rate-limited `METRICS_MEMORY` warning fires when the gauge exceeds max(1/8 of
+node memory, 64MiB).
+
+The `BorrowingInputs` calculation provides a testable contract for future
+priority enforcement: under a fresh Normal observation, subtract the separate
+connection, established-traffic and control-plane hard reserves, safety margin,
+pending and unconfirmed commitments, and additional established-connection
+working set from observed headroom. Unknown or stale observations and elevated
+pressure permit no borrowing. This calculation is not yet wired into admission;
+current shared account does not enforce these separate reserves. Node status
+exposes its headroom, margin, grantable, pending, unconfirmed and live bytes
+under `resourceGovernor.sharedAccount`; `priorityReserveEnforced` is false.
+Logical release does not itself increase physical headroom, and no claim is made
+that estimated bytes equal RSS.
 
 Tracker cardinality is additionally hard-bounded: each tracker
 (`MetricAggregator` x2 incl. nested `request_samples`, `TopIpTracker`,

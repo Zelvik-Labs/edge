@@ -1306,6 +1306,61 @@ where
     true
 }
 
+fn shared_account_status(snapshot: &crate::memory_governor::GovernorSnapshot) -> serde_json::Value {
+    serde_json::json!({
+        "headroomBytes": snapshot.account_headroom_bytes,
+        "safetyMarginBytes": snapshot.account_safety_margin_bytes,
+        "grantableBytes": snapshot.account_grantable_bytes,
+        "pendingBytes": snapshot.account_pending_bytes,
+        "committedUnconfirmedBytes": snapshot.account_committed_unconfirmed_bytes,
+        "committedLiveBytes": snapshot.account_committed_live_bytes,
+        "observationAgeMs": snapshot.observation_age_ms,
+        "priorityReserveEnforced": false
+    })
+}
+
+#[cfg(test)]
+mod shared_account_status_tests {
+    use super::shared_account_status;
+    use crate::memory_governor::MemoryGovernor;
+
+    #[test]
+    fn status_matches_snapshot_and_does_not_claim_reserve_enforcement() {
+        let governor = MemoryGovernor::new();
+        let snapshot = governor.snapshot(1);
+        let status = shared_account_status(&snapshot);
+        assert_eq!(
+            status["headroomBytes"].as_u64(),
+            snapshot.account_headroom_bytes
+        );
+        assert_eq!(
+            status["safetyMarginBytes"].as_u64(),
+            Some(snapshot.account_safety_margin_bytes)
+        );
+        assert_eq!(
+            status["grantableBytes"].as_u64(),
+            Some(snapshot.account_grantable_bytes)
+        );
+        assert_eq!(
+            status["pendingBytes"].as_u64(),
+            Some(snapshot.account_pending_bytes)
+        );
+        assert_eq!(
+            status["committedUnconfirmedBytes"].as_u64(),
+            Some(snapshot.account_committed_unconfirmed_bytes)
+        );
+        assert_eq!(
+            status["committedLiveBytes"].as_u64(),
+            Some(snapshot.account_committed_live_bytes)
+        );
+        assert_eq!(
+            status["observationAgeMs"].as_u64(),
+            Some(snapshot.observation_age_ms)
+        );
+        assert_eq!(status["priorityReserveEnforced"].as_bool(), Some(false));
+    }
+}
+
 pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: ApiConfig) {
     let mut sys = sysinfo::System::new_all();
     // Initial refresh to populate CPU baseline
@@ -1440,6 +1495,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
         let shed = crate::memory_shed::shed_stats();
         let resource_governor_extra = serde_json::json!({
             "metricsAggregatorBytes": governor_snapshot.metrics_aggregator_bytes,
+            "sharedAccount": shared_account_status(&governor_snapshot),
             "unaccountedRssBytes": governor_snapshot.unaccounted_rss_bytes,
             "unaccountedAnonRssBytes": governor_snapshot.unaccounted_anon_rss_bytes,
             "requestWorkspaceUsedBytes": governor_snapshot.request_workspace_used_bytes,

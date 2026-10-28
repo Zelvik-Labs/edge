@@ -27,6 +27,92 @@ pub enum AdmissionClass {
     SniRelay,
 }
 
+/// Resource domains describe who owns a commitment. Security state is kept
+/// separate from discardable cache and analytics data.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ResourceDomain {
+    CriticalConnection,
+    EstablishedTraffic,
+    ControlPlane,
+    DurableTelemetry,
+    CacheAndAnalytics,
+    SecurityState,
+}
+
+impl AdmissionClass {
+    /// `BackgroundWork` is shared by cache tasks and configuration apply. Its
+    /// domain must be supplied by the caller before priority can be enforced.
+    pub fn resource_domain(self) -> Option<ResourceDomain> {
+        let domain = match self {
+            Self::HttpConnection
+            | Self::TcpConnection
+            | Self::Http3Connection
+            | Self::UdpSession => ResourceDomain::CriticalConnection,
+            Self::Http2Stream
+            | Self::Http3Request
+            | Self::OriginConnect
+            | Self::SniRelay
+            | Self::ResponseTransform => ResourceDomain::EstablishedTraffic,
+            Self::ClusterInternalConnection | Self::RpcStreamCommand => {
+                ResourceDomain::ControlPlane
+            }
+            Self::RequestBodyWaf | Self::ResponseBodyWaf => ResourceDomain::SecurityState,
+            Self::CacheRevalidate | Self::CacheWrite | Self::CacheReadMemory => {
+                ResourceDomain::CacheAndAnalytics
+            }
+            Self::BackgroundWork => return None,
+        };
+        Some(domain)
+    }
+}
+
+/// Hard reserves are unavailable for borrowing, even when presently unused.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ProtectedReserves {
+    pub critical_connection_bytes: u64,
+    pub established_traffic_bytes: u64,
+    pub control_plane_bytes: u64,
+}
+
+/// Inputs for the borrowing calculation. Headroom must be an observed
+/// physical value; neither logical refunds nor reclaim targets increase it.
+/// Use the `Option` from `SharedAccountView`, not its raw atomic sentinel.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BorrowingInputs {
+    pub observed_headroom_bytes: Option<u64>,
+    pub observation_fresh: bool,
+    pub pressure: MemoryPressureLevel,
+    pub protected: ProtectedReserves,
+    pub safety_margin_bytes: u64,
+    pub pending_bytes: u64,
+    pub committed_unconfirmed_bytes: u64,
+    /// Additional future buffers required by existing connections, excluding
+    /// their already-resident bytes and the hard reserve above.
+    pub established_working_set_bytes: u64,
+}
+
+impl BorrowingInputs {
+    /// Compute an advisory ceiling. Enforcement requires every borrower to
+    /// reserve bytes atomically and hold its charge for the allocation's
+    /// lifetime; this calculation alone does not enforce that contract.
+    pub fn borrowable_bytes(self) -> u64 {
+        if !self.observation_fresh || self.pressure != MemoryPressureLevel::Normal {
+            return 0;
+        }
+        let Some(headroom) = self.observed_headroom_bytes else {
+            return 0;
+        };
+        headroom
+            .saturating_sub(self.protected.critical_connection_bytes)
+            .saturating_sub(self.protected.established_traffic_bytes)
+            .saturating_sub(self.protected.control_plane_bytes)
+            .saturating_sub(self.safety_margin_bytes)
+            .saturating_sub(self.pending_bytes)
+            .saturating_sub(self.committed_unconfirmed_bytes)
+            .saturating_sub(self.established_working_set_bytes)
+    }
+}
+
 const ADMISSION_CLASS_COUNT: usize = 17;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -4990,6 +5076,110 @@ fn read_current_fd_count() -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn borrowing_inputs() -> BorrowingInputs {
+        BorrowingInputs {
+            observed_headroom_bytes: Some(1_000),
+            observation_fresh: true,
+            pressure: MemoryPressureLevel::Normal,
+            protected: ProtectedReserves {
+                critical_connection_bytes: 100,
+                established_traffic_bytes: 150,
+                control_plane_bytes: 50,
+            },
+            safety_margin_bytes: 100,
+            pending_bytes: 50,
+            committed_unconfirmed_bytes: 75,
+            established_working_set_bytes: 125,
+        }
+    }
+
+    #[test]
+    fn borrowing_preserves_every_reserve_and_connection_working_set() {
+        let mut inputs = borrowing_inputs();
+        assert_eq!(inputs.borrowable_bytes(), 350);
+        inputs.pending_bytes += 351;
+        assert_eq!(inputs.borrowable_bytes(), 0);
+        inputs.observed_headroom_bytes = Some(u64::MAX);
+        inputs.protected.critical_connection_bytes = u64::MAX;
+        assert_eq!(inputs.borrowable_bytes(), 0);
+    }
+
+    #[test]
+    fn borrowing_refuses_unknown_stale_and_pressure_observations() {
+        let mut inputs = borrowing_inputs();
+        inputs.observed_headroom_bytes = None;
+        assert_eq!(inputs.borrowable_bytes(), 0);
+        inputs.observed_headroom_bytes = Some(1_000);
+        inputs.observation_fresh = false;
+        assert_eq!(inputs.borrowable_bytes(), 0);
+        inputs.observation_fresh = true;
+        for pressure in [
+            MemoryPressureLevel::Elevated,
+            MemoryPressureLevel::High,
+            MemoryPressureLevel::Critical,
+        ] {
+            inputs.pressure = pressure;
+            assert_eq!(inputs.borrowable_bytes(), 0);
+        }
+    }
+
+    #[test]
+    fn logical_release_does_not_create_observed_headroom() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 2 << 30, 1 << 30, 1 << 20, 0);
+        let mut permit = governor
+            .try_grant_shared(SharedGrantPurpose::TcpQueue, 8 << 20)
+            .expect("grant fits observed headroom");
+        permit.commit();
+        let inputs_from_account = || {
+            let account = governor.account_view();
+            BorrowingInputs {
+                observed_headroom_bytes: account.headroom_bytes,
+                observation_fresh: true,
+                pressure: MemoryPressureLevel::Normal,
+                protected: ProtectedReserves::default(),
+                safety_margin_bytes: account.safety_margin_bytes,
+                pending_bytes: account.pending_bytes,
+                committed_unconfirmed_bytes: account.committed_unconfirmed_bytes,
+                established_working_set_bytes: 0,
+            }
+        };
+        let inputs = inputs_from_account();
+        let before_drop = inputs.borrowable_bytes();
+        assert_eq!(inputs.committed_unconfirmed_bytes, 8 << 20);
+        assert_eq!(
+            before_drop,
+            inputs.observed_headroom_bytes.unwrap() - inputs.safety_margin_bytes - (8 << 20)
+        );
+        drop(permit);
+        assert_eq!(inputs_from_account().borrowable_bytes(), before_drop);
+    }
+
+    #[test]
+    fn security_work_is_not_classified_as_discardable_analytics() {
+        assert_eq!(
+            AdmissionClass::RequestBodyWaf.resource_domain(),
+            Some(ResourceDomain::SecurityState)
+        );
+        assert_eq!(
+            AdmissionClass::ResponseBodyWaf.resource_domain(),
+            Some(ResourceDomain::SecurityState)
+        );
+        assert_eq!(
+            AdmissionClass::Http2Stream.resource_domain(),
+            Some(ResourceDomain::EstablishedTraffic)
+        );
+        assert_eq!(
+            AdmissionClass::RpcStreamCommand.resource_domain(),
+            Some(ResourceDomain::ControlPlane)
+        );
+        assert_eq!(
+            AdmissionClass::CacheWrite.resource_domain(),
+            Some(ResourceDomain::CacheAndAnalytics)
+        );
+        assert_eq!(AdmissionClass::BackgroundWork.resource_domain(), None);
+    }
 
     #[test]
     fn effective_memory_total_uses_the_smaller_host_or_cgroup_limit() {

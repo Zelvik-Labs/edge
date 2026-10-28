@@ -175,6 +175,64 @@ impl AggregatedValue {
     }
 }
 
+/// Estimate of live aggregator allocations and additional flush vectors.
+/// Shared `Arc` allocations may be counted more than once; allocator slack and
+/// container implementation details are not observable here. This is neither
+/// RSS nor an enforced allocation budget.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct MetricAggregatorMemoryEstimate {
+    pub entries: usize,
+    pub request_samples: usize,
+    pub live_bytes: u64,
+    pub flush_temporary_bytes: u64,
+}
+
+fn estimated_attrs_bytes(attrs: &BTreeMap<String, String>) -> u64 {
+    // Include the Arc allocation, map header and a per-row allowance for
+    // B-tree nodes; String capacities account for dynamically supplied data.
+    let base =
+        (std::mem::size_of::<BTreeMap<String, String>>() + 2 * std::mem::size_of::<usize>()) as u64;
+    attrs.iter().fold(base, |total, (key, value)| {
+        total
+            .saturating_add(128)
+            .saturating_add(key.capacity() as u64)
+            .saturating_add(value.capacity() as u64)
+    })
+}
+
+fn estimated_entry_bytes(key: &AggregationKey, value: &AggregatedValue) -> (u64, u64) {
+    let dimensions = [
+        &key.category,
+        &key.country,
+        &key.province,
+        &key.city,
+        &key.provider,
+        &key.browser,
+        &key.os,
+        &key.waf_action,
+        &key.browser_version,
+        &key.os_version,
+    ];
+    // Account for the key/value, a DashMap bucket allowance, and the Arc
+    // headers and string data. Request attributes on the key are included
+    // even when request samples are not preserved.
+    let mut live = (std::mem::size_of::<(AggregationKey, AggregatedValue)>() + 32) as u64;
+    for dimension in dimensions {
+        live =
+            live.saturating_add(dimension.len() as u64 + 2 * std::mem::size_of::<usize>() as u64);
+    }
+    live = live.saturating_add(estimated_attrs_bytes(&key.request_attrs));
+    for attrs in value.request_samples.keys() {
+        live = live.saturating_add(128);
+        if !Arc::ptr_eq(attrs, &key.request_attrs) {
+            live = live.saturating_add(estimated_attrs_bytes(attrs));
+        }
+    }
+    let temporary = (std::mem::size_of::<AggregationKey>()
+        + 2 * std::mem::size_of::<(AggregationKey, AggregatedValue)>()) as u64;
+    (live, temporary)
+}
+
 pub struct MetricAggregator {
     pub data: DashMap<AggregationKey, AggregatedValue>,
     preserve_request_samples: bool,
@@ -311,6 +369,23 @@ impl MetricAggregator {
                 target.attack_bytes += request_value.attack_bytes;
             }
         }
+    }
+
+    /// Detailed on-demand estimate. Walking nested attributes holds shard read
+    /// locks; the periodic status gauge uses `approximate_bytes` instead.
+    pub fn memory_estimate(&self) -> MetricAggregatorMemoryEstimate {
+        let mut estimate = MetricAggregatorMemoryEstimate::default();
+        for entry in &self.data {
+            let (live, temporary) = estimated_entry_bytes(entry.key(), entry.value());
+            estimate.entries = estimate.entries.saturating_add(1);
+            estimate.request_samples = estimate
+                .request_samples
+                .saturating_add(entry.value().request_samples.len());
+            estimate.live_bytes = estimate.live_bytes.saturating_add(live);
+            estimate.flush_temporary_bytes =
+                estimate.flush_temporary_bytes.saturating_add(temporary);
+        }
+        estimate
     }
 
     pub fn approximate_bytes(&self) -> u64 {
@@ -544,6 +619,68 @@ mod tests {
             os_version: Arc::from(""),
             request_attrs: Arc::new(BTreeMap::new()),
         }
+    }
+
+    #[test]
+    fn memory_estimate_includes_dynamic_attributes_and_flush_buffers() {
+        let aggregator = MetricAggregator::with_request_samples(true);
+        let mut first = test_key(1, "a");
+        first.request_attrs = Arc::new(BTreeMap::from([("host".into(), "a".into())]));
+        aggregator.record_with_capacity(first.clone(), 1, 0, false, 10);
+        let baseline = aggregator.memory_estimate();
+        assert_eq!(baseline.entries, 1);
+        assert_eq!(baseline.request_samples, 1);
+        assert!(baseline.flush_temporary_bytes > 0);
+
+        let mut second = first;
+        second.request_attrs = Arc::new(BTreeMap::from([("host".into(), "x".repeat(4096))]));
+        aggregator.record_with_capacity(second, 1, 0, false, 10);
+        let after = aggregator.memory_estimate();
+        assert_eq!(after.entries, 1);
+        assert_eq!(after.request_samples, 2);
+        assert!(after.live_bytes >= baseline.live_bytes + 4096);
+        assert_eq!(after.flush_temporary_bytes, baseline.flush_temporary_bytes);
+
+        let rows = aggregator.flush();
+        assert_eq!(aggregator.memory_estimate().live_bytes, 0);
+        aggregator.restore(rows);
+        assert_eq!(aggregator.memory_estimate(), after);
+    }
+
+    #[test]
+    fn memory_estimate_deduplicates_key_and_sample_attribute_arc() {
+        let mut key = test_key(1, "a");
+        key.request_attrs = Arc::new(BTreeMap::from([("host".into(), "a".repeat(256))]));
+        let mut value = super::AggregatedValue::default();
+        value
+            .request_samples
+            .insert(Arc::clone(&key.request_attrs), Default::default());
+        let (shared, _) = super::estimated_entry_bytes(&key, &value);
+        value.request_samples.clear();
+        value
+            .request_samples
+            .insert(Arc::new((*key.request_attrs).clone()), Default::default());
+        let (separate, _) = super::estimated_entry_bytes(&key, &value);
+        assert_eq!(
+            separate - shared,
+            super::estimated_attrs_bytes(&key.request_attrs)
+        );
+    }
+
+    #[test]
+    fn memory_estimate_includes_key_attributes_without_samples() {
+        let aggregator = MetricAggregator::new();
+        let mut key = test_key(1, "a");
+        key.request_attrs = Arc::new(BTreeMap::from([("uri".into(), "x".repeat(4096))]));
+        aggregator.record_with_capacity(key, 1, 0, false, 10);
+        let single = aggregator.memory_estimate();
+        assert_eq!(single.entries, 1);
+        assert_eq!(single.request_samples, 0);
+        assert!(single.live_bytes >= 4096);
+        aggregator.record_with_capacity(test_key(2, "b"), 1, 0, false, 10);
+        let two = aggregator.memory_estimate();
+        assert_eq!(two.entries, 2);
+        assert_eq!(two.flush_temporary_bytes, single.flush_temporary_bytes * 2);
     }
 
     #[test]
