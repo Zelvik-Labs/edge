@@ -281,6 +281,10 @@ pub struct GovernorSnapshot {
     /// Estimated bytes held by metrics trackers that are not covered by the
     /// resident ledger (aggregator maps, top-IP, daily domain, unique IP).
     pub metrics_aggregator_bytes: u64,
+    /// Estimated bytes held by the L1 response-body cache. Weight-based
+    /// (KB-rounded entries), outside the resident ledger; subtracts from the
+    /// anonymous-RSS attribution gap as a known structure.
+    pub cache_l1_bytes: u64,
     /// Attribution gap: process RSS minus every tracked byte ledger
     /// (resident ledger + connection/relay/queue/cache-read ledgers +
     /// metrics gauge). Sustained growth means uninstrumented allocations or
@@ -917,6 +921,9 @@ pub struct MemoryGovernor {
     /// and letting unbudgeted metrics maps share that total would starve the
     /// cache categories it protects.
     metrics_aggregator_bytes: AtomicU64,
+    /// Observational gauge for the L1 response-body cache, which the cache
+    /// manager sizes outside the resident ledger.
+    cache_l1_bytes: AtomicU64,
     /// Reject counters get their own lines too: rejects only happen under
     /// floods, which is exactly when an unpadded array would false-share.
     admission_rejects: [PaddedAtomicU64; ADMISSION_CLASS_COUNT],
@@ -1372,6 +1379,7 @@ impl MemoryGovernor {
             cache_read_memory_bytes: PaddedAtomicU64::new(0),
             request_workspace_bytes: PaddedAtomicU64::new(0),
             metrics_aggregator_bytes: AtomicU64::new(0),
+            cache_l1_bytes: AtomicU64::new(0),
             admission_rejects: std::array::from_fn(|_| PaddedAtomicU64::new(0)),
             cached_total_bytes: AtomicU64::new(0),
             cached_used_bytes: AtomicU64::new(0),
@@ -2695,6 +2703,12 @@ impl MemoryGovernor {
             .store(bytes, Ordering::Relaxed);
     }
 
+    /// Publish the L1 cache's weight-based byte estimate for attribution.
+    /// This is a gauge only; it does not grant or enforce cache capacity.
+    pub fn set_cache_l1_bytes(&self, bytes: u64) {
+        self.cache_l1_bytes.store(bytes, Ordering::Relaxed);
+    }
+
     /// Drop the snapshot TTL so the next `memory_snapshot()` re-reads
     /// cgroup/proc counters instead of serving values up to `SNAPSHOT_TTL_MS`
     /// old. The kernel pressure watcher calls this on memory.events/PSI
@@ -2935,6 +2949,7 @@ impl MemoryGovernor {
             .saturating_add(self.cache_read_memory_bytes.load(Ordering::Relaxed))
             .saturating_add(self.request_workspace_bytes.load(Ordering::Relaxed))
             .saturating_add(self.metrics_aggregator_bytes.load(Ordering::Relaxed))
+            .saturating_add(self.cache_l1_bytes.load(Ordering::Relaxed))
     }
 
     /// RSS minus all tracked byte ledgers — the live "attribution gap"
@@ -3061,6 +3076,7 @@ impl MemoryGovernor {
             pingora_keepalive_pool_size: self.pingora_keepalive_pool_size(pingora_threads),
             resident_memory: resident,
             metrics_aggregator_bytes: self.metrics_aggregator_bytes.load(Ordering::Relaxed),
+            cache_l1_bytes: self.cache_l1_bytes.load(Ordering::Relaxed),
             unaccounted_rss_bytes,
             cgroup_managed: mem.cgroup_managed,
             cgroup_memory_max_bytes: mem.cgroup_memory_max_bytes,
@@ -6665,6 +6681,17 @@ mod resident_memory_tests {
         // The gauge is informational only: it must not enter the resident
         // ledger's enforced total.
         assert_eq!(snapshot.resident_memory.total_used_bytes, 0);
+    }
+
+    #[test]
+    fn l1_gauge_reduces_the_attribution_gap_without_touching_the_resident_ledger() {
+        let governor = MemoryGovernor::new();
+        governor.set_cache_l1_bytes(64 << 20);
+
+        assert_eq!(governor.tracked_rss_bytes(0), 64 << 20);
+        assert_eq!(governor.unaccounted_rss_bytes(100 << 20, 0), 36 << 20);
+        assert_eq!(governor.snapshot(1).cache_l1_bytes, 64 << 20);
+        assert_eq!(governor.resident_memory_snapshot().total_used_bytes, 0);
     }
 }
 

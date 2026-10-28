@@ -1443,6 +1443,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             0.0
         };
         let cache_stats = crate::cache_manager::CACHE.storage.runtime_stats().await;
+        crate::memory_governor::MEMORY_GOVERNOR.set_cache_l1_bytes(cache_stats.memory_bytes);
         let governor_snapshot = crate::memory_governor::MEMORY_GOVERNOR
             .snapshot(crate::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads());
         let mace_memory = crate::metrics::storage::mace_memory_observation();
@@ -1497,6 +1498,8 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             crate::metrics::distinct_ip_budget_status();
         let resource_governor_extra = serde_json::json!({
             "metricsAggregatorBytes": governor_snapshot.metrics_aggregator_bytes,
+            "cacheL1EstimatedBytes": governor_snapshot.cache_l1_bytes,
+            "cacheL1BudgetBytes": cache_stats.memory_budget_bytes,
             "distinctIpTrackerEntries": distinct_ip_entries,
             "distinctIpBudgetEntries": distinct_ip_budget_entries,
             "sharedAccount": shared_account_status(&governor_snapshot),
@@ -1707,6 +1710,7 @@ pub async fn report_node_online_once(
         0.0
     };
     let cache_stats = crate::cache_manager::CACHE.storage.runtime_stats().await;
+    crate::memory_governor::MEMORY_GOVERNOR.set_cache_l1_bytes(cache_stats.memory_bytes);
     let hostname = hostname::get()
         .ok()
         .and_then(|h| h.into_string().ok())
@@ -1826,6 +1830,7 @@ pub async fn start_node_value_reporter(config_store: Arc<ConfigStore>) {
             0.0
         };
         let cache_stats = crate::cache_manager::CACHE.storage.runtime_stats().await;
+        crate::memory_governor::MEMORY_GOVERNOR.set_cache_l1_bytes(cache_stats.memory_bytes);
 
         let cpu_usage = sys.global_cpu_usage() as f64 / 100.0;
         let snapshots = crate::metrics::METRICS.take_snapshots();
