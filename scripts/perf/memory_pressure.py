@@ -249,8 +249,25 @@ class H2Pool:
         return self
 
     async def request(self, path):
-        client = self.clients[self.next % len(self.clients)]
+        index = self.next % len(self.clients)
         self.next += 1
+        client = self.clients[index]
+        if client.connection_error:
+            # H2 idle timeout is 3s under Critical, so a probe pool that is
+            # quiet between stages must reconnect rather than report the
+            # previous connection's close as a fresh-request refusal.
+            try:
+                await client.close()
+            except Exception:
+                pass
+            try:
+                client = await H2().open()
+                self.clients[index] = client
+            except Exception as error:
+                sample = Sample()
+                sample.finish(str(error))
+                sample.headers.set()
+                return sample
         return await client.request(path)
 
     async def close(self):
