@@ -405,6 +405,7 @@ async fn large_server_json_and_hot_reload_under_low_memory() {
                     tiered_origin_bypass: false,
                     allow_lan: true,
                     global_http: None,
+                    payload_bytes: 0,
                     limits,
                 },
             ),
