@@ -157,19 +157,36 @@ impl OriginInflightCounters {
     /// it on drop. A non-positive `origin_id` (e.g. the `127.0.0.1:80` fallback
     /// backend) yields a no-op guard.
     pub fn begin(&self, origin_id: i64) -> OriginInflightGuard {
+        self.begin_before_increment(origin_id, || {})
+    }
+
+    fn begin_before_increment(
+        &self,
+        origin_id: i64,
+        before_increment: impl FnOnce(),
+    ) -> OriginInflightGuard {
         if origin_id <= 0 {
             return OriginInflightGuard { counter: None };
         }
-        let counter = Arc::clone(
-            self.counts
-                .entry(origin_id)
-                .or_insert_with(|| Arc::new(AtomicUsize::new(0)))
-                .value(),
-        );
-        counter.fetch_add(1, Ordering::Relaxed);
+        // Increment while holding the shard guard. Cleanup uses the same
+        // shard lock, so it cannot detach an entry between lookup and use.
+        let entry = self
+            .counts
+            .entry(origin_id)
+            .or_insert_with(|| Arc::new(AtomicUsize::new(0)));
+        before_increment();
+        entry.value().fetch_add(1, Ordering::Relaxed);
+        let counter = Arc::clone(entry.value());
         OriginInflightGuard {
             counter: Some(counter),
         }
+    }
+
+    /// Remove only idle counters. Existing request guards remain authoritative
+    /// until they decrement; a concurrent begin is serialized by the shard lock.
+    fn remove_idle(&self) {
+        self.counts
+            .retain(|_, counter| counter.load(Ordering::Relaxed) != 0);
     }
 }
 
@@ -210,8 +227,75 @@ pub fn start_origin_state_cleanup_task() {
         loop {
             ticker.tick().await;
             ORIGIN_STATE_MANAGER.recover_expired();
+            ORIGIN_STATE_MANAGER.inflight.remove_idle();
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Barrier;
+    use std::thread;
+
+    #[test]
+    fn idle_inflight_counters_are_removed_without_losing_active_guards() {
+        let counters = OriginInflightCounters::new();
+        let active = counters.begin(1);
+        for origin in 2..1_002 {
+            drop(counters.begin(origin));
+        }
+        assert_eq!(counters.counts.len(), 1_001);
+        counters.remove_idle();
+        assert_eq!(counters.counts.len(), 1);
+        assert_eq!(counters.inflight(1), 1);
+        drop(active);
+        counters.remove_idle();
+        assert!(counters.counts.is_empty());
+    }
+
+    #[test]
+    fn begin_holds_the_shard_lock_before_incrementing() {
+        let counters = OriginInflightCounters::new();
+        let guard = counters.begin_before_increment(7, || {
+            // An idle entry is visible here only if begin released its shard
+            // lock too early. Cleanup uses that same write lock.
+            assert!(matches!(
+                counters.counts.try_get_mut(&7),
+                dashmap::try_result::TryResult::Locked
+            ));
+        });
+        counters.remove_idle();
+        assert_eq!(counters.inflight(7), 1);
+        drop(guard);
+        counters.remove_idle();
+        assert!(counters.counts.is_empty());
+    }
+
+    #[test]
+    fn cleanup_and_new_request_keep_the_same_live_counter() {
+        let counters = Arc::new(OriginInflightCounters::new());
+        let barrier = Arc::new(Barrier::new(2));
+        let writer_counters = Arc::clone(&counters);
+        let writer_barrier = Arc::clone(&barrier);
+        let writer = thread::spawn(move || {
+            for _ in 0..2_000 {
+                let guard = writer_counters.begin(7);
+                writer_barrier.wait();
+                writer_barrier.wait();
+                drop(guard);
+            }
+        });
+        for _ in 0..2_000 {
+            barrier.wait();
+            counters.remove_idle();
+            assert_eq!(counters.inflight(7), 1);
+            barrier.wait();
+        }
+        writer.join().unwrap();
+        counters.remove_idle();
+        assert!(counters.counts.is_empty());
+    }
 }
 
 fn now_seconds() -> i64 {
