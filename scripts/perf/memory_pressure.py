@@ -590,11 +590,26 @@ async def probe_bursts(count):
     idle close as a new-request failure. Each probe set opens its own
     connections and releases them afterwards.
     """
-    clients = {"h1": H1(), "h2": await H2Pool().open(4), "h3": await H3().open()}
+    clients = {"h1": H1()}
+    rows = {}
+    for proto, opener in (
+        ("h2", lambda: H2Pool().open(4)),
+        ("h3", lambda: H3().open()),
+    ):
+        try:
+            clients[proto] = await opener()
+        except Exception as error:
+            rows[proto] = {
+                "requests": count,
+                "attempted": 0,
+                "success": 0,
+                "p99_ms": None,
+                "errors": [str(error)],
+            }
     try:
-        rows = {}
         for proto, client in clients.items():
-            rows[proto] = await burst(client, count, 4)
+            if proto not in rows:
+                rows[proto] = await burst(client, count, 4)
         return rows
     finally:
         for client in clients.values():
@@ -647,11 +662,13 @@ async def run_acceptance(args, clients, output, cg, pid):
     held_samples = {}
     fill = H1()
     stages = []
-    # H2 closes a connection after 200 streams in its churn window. New
-    # request probes use several independent connections, distinct from the
-    # held long-response connection.
-    await clients["h2"].close()
-    clients["h2"] = await H2Pool().open(4)
+    # Probe connections are opened per stage, so the baseline clients are
+    # closed here instead of lingering as idle connections in the registry.
+    for client in clients.values():
+        try:
+            await client.close()
+        except Exception:
+            pass
     try:
         for proto in ["h1", "h2", "h3"]:
             held[proto] = H1() if proto == "h1" else await (H2().open() if proto == "h2" else H3().open())
