@@ -203,6 +203,8 @@ distinct-IP tracker 原先按创建时的服务器数分配独立容量：每个
 
 `parent_pressure` 的样本在 60 秒后逻辑失效，但旧实现让条目永久驻留。现在更新路径每 60 秒至多触发一次 `retain`，删除已过期地址；清理不在请求路径，且只影响父节点压力反馈，不改变选路或连接状态。
 
+L1 正文缓存的权重估算字节现在作为 governor gauge 上报，并从 `unaccountedAnonRssBytes` 的已归因部分扣除；node status 同时给出估算字节与配置预算。该字段只做归因，不授予容量、不进入 resident ledger；L1 仍由缓存管理器以固定默认预算创建，尚未按 governor cache budget 自动调整。
+
 ## 7. 非代码因素
 
 - 宿主 `transparent_hugepage=always` 会放大 RSS（10-22 实测 anon_thp 占 40–75%），并让
