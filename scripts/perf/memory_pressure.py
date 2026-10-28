@@ -565,6 +565,39 @@ async def normal_completion():
     return results
 
 
+async def recovery_checkpoint(clients, held_samples, cg, pid):
+    """Release the pressure source and prove accepted streams resume.
+
+    This checkpoint runs before the extreme final-resort stage, so a kill
+    there cannot be mistaken for a recovery failure.
+    """
+    before = {proto: sample.bytes for proto, sample in held_samples.items()}
+    started = time.monotonic()
+    await control("release")
+    state = await control("stats")
+    while state["pressure"] == "critical" and time.monotonic() - started < 30:
+        await asyncio.sleep(2)
+        state = await control("stats")
+    await asyncio.sleep(3)
+    state = await control("stats")
+    row = {
+        "release_seconds": time.monotonic() - started,
+        "pressure_below_critical": state["pressure"] != "critical",
+        "state": state,
+        "physical": observation(cg, pid),
+        "new_requests": {},
+    }
+    for proto, client in clients.items():
+        row["new_requests"][proto] = await burst(client, 16, 4)
+    row["accepted_progress"] = {proto: progress(sample, before[proto]) for proto, sample in held_samples.items()}
+    row["shed"] = shed_snapshot(state)
+    row["cache"] = state.get("cache")
+    row["reclaim"] = state.get("reclaim")
+    row["admission_rejects"] = rejection_snapshot(state)
+    row["physical_summary"] = physical_summary(row["physical"])
+    return row
+
+
 async def run_acceptance(args, clients, output, cg, pid):
     source = args.acceptance_source
     output["acceptance_source"] = source
@@ -602,6 +635,9 @@ async def run_acceptance(args, clients, output, cg, pid):
                 limit = min(8000, cache_component // len(CACHE_PAYLOAD) + 1024)
                 output["cache_fill"] = await fill_cache(fill, cg, f"acceptance-{args.label}", limit, target_cache=cache_component)
         output["stages"] = stages
+        initial_shed = (await control("stats")).get("shed") or {}
+        initial_passes = initial_shed.get("final_resort_passes_total") or 0
+        initial_drained = initial_shed.get("drained_connections_total") or 0
         for pct in [50, 70, 85, 90, 94, 97]:
             before_bytes = {proto: sample.bytes for proto, sample in held_samples.items()}
             applied = await apply_acceptance_pressure(args, source, pct, cg, fill)
@@ -640,13 +676,27 @@ async def run_acceptance(args, clients, output, cg, pid):
             }
             stages.append(row)
             print(json.dumps(row), flush=True)
+            if pct in (85, 90) and "mid_recovery" not in output:
+                alive = all(not sample.done.is_set() for sample in held_samples.values())
+                passes = row["shed"].get("final_resort_passes_total") or 0
+                if alive and passes == initial_passes:
+                    output["mid_recovery"] = await recovery_checkpoint(
+                        clients, held_samples, cg, pid
+                    )
+                    print(json.dumps(output["mid_recovery"]), flush=True)
+                else:
+                    output["mid_recovery"] = {
+                        "skipped": True,
+                        "held_alive": alive,
+                        "final_resort_passes_total": passes,
+                        "reason": "accepted work already ended before the recovery checkpoint",
+                    }
         # Extreme last resort: hold at the 98% safety ceiling long enough for
         # the sustained-Critical gate (10s, samples 5s apart), fresh
         # ineffective-reclaim evidence, and the 30s final-resort rate limit.
         before_bytes = {proto: sample.bytes for proto, sample in held_samples.items()}
-        before_shed = (await control("stats")).get("shed") or {}
-        before_passes = before_shed.get("final_resort_passes_total") or 0
-        before_drained = before_shed.get("drained_connections_total") or 0
+        before_passes = initial_passes
+        before_drained = initial_drained
         applied = await apply_acceptance_pressure(args, source, 98, cg, fill)
         maximum = int((cg / "memory.max").read_text())
         current = int((cg / "memory.current").read_text())
@@ -671,12 +721,14 @@ async def run_acceptance(args, clients, output, cg, pid):
                 "reached": reached,
                 "final_resort_passes_delta": after_passes - before_passes,
                 "final_resort_passes_total": after_shed.get("final_resort_passes_total"),
-                "final_resort_seen_in_run": after_passes > 0,
+                "final_resort_seen_in_run": after_passes > before_passes,
+                "passes_before_run": before_passes,
                 "last_final_resort_at_ms": after_shed.get("last_final_resort_at_ms"),
                 "reclaim_exhausted": after_shed.get("reclaim_exhausted"),
                 "critical_samples": after_shed.get("critical_samples"),
                 "drained_connections_delta": after_drained - before_drained,
                 "drained_connections_total": after_shed.get("drained_connections_total"),
+                "drained_before_run": before_drained,
                 "drain_reason": after_shed.get("drain_reason", "MemoryPressureShed"),
                 "unavailable_fields": [name for name in SHED_REQUESTED_FIELDS if name not in after_shed],
             },
@@ -721,7 +773,7 @@ async def run_acceptance(args, clients, output, cg, pid):
             }
         await control("release")
         output["recovery"] = []
-        for index in range(10):
+        for index in range(30):
             await asyncio.sleep(3)
             state = await control("stats")
             recovery = {
@@ -747,8 +799,14 @@ async def run_acceptance(args, clients, output, cg, pid):
         }
     finally:
         for client in held.values():
-            await client.close()
-        await fill.close()
+            try:
+                await client.close()
+            except Exception:
+                pass
+        try:
+            await fill.close()
+        except Exception:
+            pass
         try:
             await control("release")
         except Exception:
@@ -841,7 +899,10 @@ async def main(args):
         output["cleanup_seconds"] = {}
         for proto, client in clients.items():
             started = time.monotonic()
-            await client.close()
+            try:
+                await client.close()
+            except Exception:
+                pass
             output["cleanup_seconds"][proto] = time.monotonic() - started
             pathlib.Path(args.output).write_text(json.dumps(output, indent=2))
         server.close()
