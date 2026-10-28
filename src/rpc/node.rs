@@ -1313,9 +1313,11 @@ fn shared_account_status(snapshot: &crate::memory_governor::GovernorSnapshot) ->
         "committedUnconfirmedBytes": snapshot.account_committed_unconfirmed_bytes,
         "committedLiveBytes": snapshot.account_committed_live_bytes,
         "observationAgeMs": snapshot.observation_age_ms,
-        "priorityReserveEnforced": false,
+        "priorityReserveEnforced": true,
         "controlPlaneAccountReserveEnforced": true,
         "controlPlaneReserveBytes": snapshot.control_plane_reserve_bytes,
+        "establishedTrafficAccountReserveEnforced": true,
+        "establishedTrafficReserveBytes": snapshot.established_traffic_reserve_bytes,
         "configApplyActive": snapshot.config_apply_active,
         "lowPriorityBorrowingEnforced": true,
         "lowPriorityBorrowableBytes": snapshot.low_priority_borrowable_bytes
@@ -1360,7 +1362,7 @@ mod shared_account_status_tests {
             status["observationAgeMs"].as_u64(),
             Some(snapshot.observation_age_ms)
         );
-        assert_eq!(status["priorityReserveEnforced"].as_bool(), Some(false));
+        assert_eq!(status["priorityReserveEnforced"].as_bool(), Some(true));
         assert_eq!(
             status["controlPlaneAccountReserveEnforced"].as_bool(),
             Some(true)
@@ -1368,6 +1370,14 @@ mod shared_account_status_tests {
         assert_eq!(
             status["controlPlaneReserveBytes"].as_u64(),
             Some(snapshot.control_plane_reserve_bytes)
+        );
+        assert_eq!(
+            status["establishedTrafficAccountReserveEnforced"].as_bool(),
+            Some(true)
+        );
+        assert_eq!(
+            status["establishedTrafficReserveBytes"].as_u64(),
+            Some(snapshot.established_traffic_reserve_bytes)
         );
         assert_eq!(
             status["configApplyActive"].as_u64(),

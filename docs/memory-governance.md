@@ -351,14 +351,29 @@ permit, and the materialized generation's real peak is not yet charged through
 `SharedGrantPurpose::ConfigPublish`; the reserve protects the admission path, not
 the whole configuration working set.
 
+New connection establishment and established traffic no longer share one
+undifferentiated budget. HTTP/TCP/H3 connection and UDP session admissions stop
+at `shared connection budget − established reserve`, while H2 streams, H3
+requests and origin connects may use the whole budget. The reserve is the
+Normal-pressure floors: 1,024 H2 streams × 16 KiB, 1,024 H3 requests × 24 KiB
+and 512 origin connects × 32 KiB (56 MiB), capped at half the connection budget
+when the budget is below twice that. The same reserve is deducted from the
+shared account for connection-establishment admissions, so a connection flood
+cannot leave already-admitted connections without stream or origin capacity.
+SNI relay and response transforms are excluded: SNI relay is a legacy
+passthrough with its own half-budget limit, and a 16 MiB transform estimate
+would make its floor a memory plan by itself.
+
 `resourceGovernor.sharedAccount` reports `lowPriorityBorrowingEnforced=true`,
 current `lowPriorityBorrowableBytes`,
-`controlPlaneAccountReserveEnforced=true`, `controlPlaneReserveBytes`, and
-`configApplyActive`; `priorityReserveEnforced` stays false because established
-traffic, connection working sets, configuration peaks and all resident
-cache/analytics owners are not yet covered by independent, enforced reserves.
-Logical refunds never increase observed physical headroom, and estimated bytes
-are not RSS. L1/analytics global revocation remains separate lifecycle work.
+`controlPlaneAccountReserveEnforced=true`, `controlPlaneReserveBytes`,
+`establishedTrafficAccountReserveEnforced=true`, `establishedTrafficReserveBytes`
+and `configApplyActive`; `priorityReserveEnforced=true` because the
+connection-establishment, established-traffic and control-plane admission
+reserves are all enforced. Remaining gaps stay explicit: configuration
+decode/materialization peaks are not charged through `ConfigPublish`, and
+L1/analytics global revocation remains separate lifecycle work. Logical refunds
+never increase observed physical headroom, and estimated bytes are not RSS.
 
 Per-server metric state now has a concrete deletion lifecycle. A configuration
 snapshot that drops a server id moves its metric instance to a retired set; the

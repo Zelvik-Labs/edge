@@ -185,6 +185,9 @@ pub struct GovernorSnapshot {
     pub cpu_parallelism: usize,
     pub connection_budget_bytes: u64,
     pub control_plane_reserve_bytes: u64,
+    /// Slice of the shared connection budget reserved for established
+    /// classes; new connection establishment cannot consume it.
+    pub established_traffic_reserve_bytes: u64,
     pub config_apply_active: u64,
     pub connection_admission_used_bytes: u64,
     pub zero_copy_relay_active: u64,
@@ -631,6 +634,15 @@ const CONTROL_PLANE_RESERVE_BYTES: u64 = MIN_CLUSTER_INTERNAL_CONNECTION_LIMIT a
     * CLUSTER_INTERNAL_CONNECTION_ESTIMATED_BYTES
     + MIN_RPC_STREAM_COMMAND_LIMIT as u64 * RPC_STREAM_COMMAND_ESTIMATED_BYTES
     + BACKGROUND_WORK_ESTIMATED_BYTES;
+// Normal-pressure floors for established-traffic work a new-connection flood
+// must not consume: H2 streams, H3 requests and origin connects. SNI relay and
+// response transforms are deliberately excluded — the former is a legacy
+// passthrough with its own half-budget limit, and one transform's 16 MiB
+// estimate makes a 32-slot floor a memory plan by itself.
+const ESTABLISHED_TRAFFIC_RESERVE_BYTES: u64 = MIN_H2_STREAM_GLOBAL_LIMIT as u64
+    * H2_STREAM_ESTIMATED_BYTES
+    + MIN_H3_REQUEST_GLOBAL_LIMIT as u64 * H3_REQUEST_ESTIMATED_BYTES
+    + MIN_ORIGIN_CONNECT_LIMIT as u64 * ORIGIN_CONNECT_ESTIMATED_BYTES;
 const KEEPALIVE_CONN_ESTIMATED_BYTES: u64 = 16 * 1024;
 const NEGATIVE_CACHE_ESTIMATED_BYTES: u64 = 160;
 const FIREWALL_IP_LIMITER_ESTIMATED_BYTES: u64 = 1024;
@@ -856,6 +868,9 @@ struct GovernorLimits {
     class_limit: [u64; N_ADMISSION_CLASSES],
     connection_budget_bytes: u64,
     control_plane_reserve_bytes: u64,
+    /// Portion of `shared_connection_budget_bytes` that only established
+    /// classes may consume.
+    established_traffic_reserve_bytes: u64,
     shared_connection_budget_bytes: u64,
     cache_read_memory_budget_bytes: u64,
     cache_read_memory_object_limit_bytes: u64,
@@ -1269,6 +1284,10 @@ fn shared_purpose_index(purpose: SharedGrantPurpose) -> usize {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AccountPriority {
     Ordinary,
+    /// New connection/stream-establishment work. It must leave the
+    /// established-traffic reserve for streams and origin connects that
+    /// already-admitted connections need.
+    ConnectionEstablishment,
     Cache,
     Control,
 }
@@ -1520,6 +1539,7 @@ impl MemoryGovernor {
                 class_limit: [0; N_ADMISSION_CLASSES],
                 connection_budget_bytes: 0,
                 control_plane_reserve_bytes: 0,
+                established_traffic_reserve_bytes: 0,
                 shared_connection_budget_bytes: 0,
                 cache_read_memory_budget_bytes: 0,
                 cache_read_memory_object_limit_bytes: 0,
@@ -1704,6 +1724,12 @@ impl MemoryGovernor {
         let reserve = match priority {
             AccountPriority::Control => 0,
             AccountPriority::Ordinary => CONTROL_PLANE_RESERVE_BYTES,
+            // A new-connection flood must leave the established floors for
+            // streams and origin connects that already-admitted connections
+            // need. Established-class admissions themselves keep only the
+            // control reserve.
+            AccountPriority::ConnectionEstablishment => CONTROL_PLANE_RESERVE_BYTES
+                .saturating_add(self.limits().established_traffic_reserve_bytes),
             AccountPriority::Cache => {
                 let limits = self.limits();
                 if limits.memory_pressure_level == MemoryPressureLevel::Normal
@@ -2059,6 +2085,9 @@ impl MemoryGovernor {
             class,
             cache_read_memory_charge_bytes,
             match class.resource_domain() {
+                Some(ResourceDomain::CriticalConnection) => {
+                    AccountPriority::ConnectionEstablishment
+                }
                 Some(ResourceDomain::CacheAndAnalytics) => AccountPriority::Cache,
                 Some(ResourceDomain::ControlPlane) => AccountPriority::Control,
                 _ => AccountPriority::Ordinary,
@@ -2091,7 +2120,16 @@ impl MemoryGovernor {
         if shared_connection_charge_bytes(class) > 0 {
             // The shared ledger is derived from the class counters: my count
             // add above already moved the derived total by this charge.
-            if self.shared_connection_used_bytes() > limits.shared_connection_budget_bytes {
+            // Connection establishment stops at the established reserve;
+            // established classes may use the whole budget.
+            let budget = if class.resource_domain() == Some(ResourceDomain::CriticalConnection) {
+                limits
+                    .shared_connection_budget_bytes
+                    .saturating_sub(limits.established_traffic_reserve_bytes)
+            } else {
+                limits.shared_connection_budget_bytes
+            };
+            if self.shared_connection_used_bytes() > budget {
                 counter.fetch_sub(1, Ordering::AcqRel);
                 self.record_reject(class);
                 return None;
@@ -3172,6 +3210,7 @@ impl MemoryGovernor {
             cpu_parallelism: mem.cpu_parallelism,
             connection_budget_bytes: mem.connection_budget_bytes,
             control_plane_reserve_bytes: self.limits().control_plane_reserve_bytes,
+            established_traffic_reserve_bytes: self.limits().established_traffic_reserve_bytes,
             config_apply_active: self.config_apply.load(Ordering::Relaxed),
             connection_admission_used_bytes: self.shared_connection_used_bytes(),
             zero_copy_relay_active: self.zero_copy_relay_active(),
@@ -3362,6 +3401,13 @@ impl MemoryGovernor {
                 class_limit,
                 connection_budget_bytes: snapshot.connection_budget_bytes,
                 control_plane_reserve_bytes: CONTROL_PLANE_RESERVE_BYTES,
+                // Half the connection budget is the ceiling on this reserve:
+                // on a node whose budget is below twice the floors, protecting
+                // the floors outright would leave new connections no room at
+                // all, so the split stays workable and still favours
+                // established traffic.
+                established_traffic_reserve_bytes: ESTABLISHED_TRAFFIC_RESERVE_BYTES
+                    .min(snapshot.connection_budget_bytes / 2),
                 // A landed-but-blind observation (availability Unknown and
                 // no headroom reading at all) collapses the derived byte
                 // budget toward ~1B and would refuse every charged admission
@@ -5936,7 +5982,11 @@ mod tests {
     fn shared_connection_admission_rolls_back_when_budget_is_full() {
         let governor = MemoryGovernor::new();
         seed_governor_memory(&governor, 64 << 30, 60 << 30, 1 << 20, 0);
-        let budget = shared_connection_admission_budget(&governor.memory_snapshot());
+        let full_budget = shared_connection_admission_budget(&governor.memory_snapshot());
+        // New-connection admission stops at the established reserve.
+        let reserve = governor.limits().established_traffic_reserve_bytes;
+        assert!(reserve > 0 && reserve < full_budget);
+        let budget = full_budget - reserve;
 
         // Fill the byte budget mostly via HTTP counts (its seeded count can
         // exceed the class limit — store bypasses admission); TCP stays small
@@ -6895,8 +6945,9 @@ mod resident_memory_tests {
 mod en16_pool_tests {
     use super::{
         AccountPriority, AdmissionClass, BudgetedMemorySnapshot, CONTROL_PLANE_RESERVE_BYTES,
-        DiskLedgerClass, MemoryGovernor, MemoryPressureLevel, SharedGrantPurpose,
-        class_estimated_bytes, pinned_alloc_headroom_bytes, pinned_alloc_reserve_bytes,
+        DiskLedgerClass, ESTABLISHED_TRAFFIC_RESERVE_BYTES, HTTP_CONN_ESTIMATED_BYTES,
+        MemoryGovernor, MemoryPressureLevel, SharedGrantPurpose, class_estimated_bytes,
+        pinned_alloc_headroom_bytes, pinned_alloc_reserve_bytes,
     };
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -7300,6 +7351,93 @@ mod en16_pool_tests {
         // The connection reserve itself is still available.
         assert!(governor.try_admit(AdmissionClass::HttpConnection).is_some());
         drop(fill_permit);
+    }
+
+    /// A new-connection flood must stop at the established reserve: streams,
+    /// H3 requests and origin connects for already-admitted connections keep
+    /// their Normal-pressure floors.
+    #[test]
+    fn connection_flood_cannot_consume_the_established_traffic_reserve() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 4 << 30, 2 << 30, 1 << 20, 0);
+        // Keep the CPU floor above the memory-derived class limit so the
+        // shared connection budget, not the class counter, stops the flood.
+        governor.cached_cpu_parallelism.store(64, Ordering::Release);
+        let limits = governor.limits();
+        assert_eq!(
+            limits.established_traffic_reserve_bytes, ESTABLISHED_TRAFFIC_RESERVE_BYTES,
+            "this seed is large enough for the unclamped floors"
+        );
+        let capacity = limits
+            .shared_connection_budget_bytes
+            .saturating_sub(limits.established_traffic_reserve_bytes);
+
+        let mut permits = Vec::new();
+        while let Some(permit) = governor.try_admit(AdmissionClass::HttpConnection) {
+            permits.push(permit);
+        }
+        let used = governor.connection_admission_used_bytes();
+        assert!(
+            used <= capacity,
+            "new connections must stop before the established reserve"
+        );
+        assert!(
+            used > capacity.saturating_sub(HTTP_CONN_ESTIMATED_BYTES),
+            "the reserve, not the class counter, must stop the flood"
+        );
+
+        assert!(
+            governor.try_admit(AdmissionClass::Http2Stream).is_some(),
+            "streams on established connections keep their reserved bytes"
+        );
+        assert!(governor.try_admit(AdmissionClass::Http3Request).is_some());
+        assert!(governor.try_admit(AdmissionClass::OriginConnect).is_some());
+        drop(permits);
+        assert_eq!(governor.connection_admission_used_bytes(), 0);
+    }
+
+    /// The same reserve is enforced against the shared account, so a flood
+    /// cannot leave established admissions without account capacity.
+    #[test]
+    fn connection_establishment_keeps_the_established_account_reserve() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 4 << 30, 2 << 30, 1 << 20, 0);
+        let grantable = governor.account_view().grantable_bytes;
+        let control = governor.limits().control_plane_reserve_bytes;
+        let established = governor.limits().established_traffic_reserve_bytes;
+        assert!(established > 0);
+        let fill = governor
+            .try_grant_shared(
+                SharedGrantPurpose::TcpQueue,
+                grantable - control - established,
+            )
+            .expect("ordinary work fills everything outside both reserves");
+
+        assert!(
+            governor.try_admit(AdmissionClass::HttpConnection).is_none(),
+            "new connections must not consume the established account reserve"
+        );
+        assert!(
+            governor.try_admit(AdmissionClass::Http2Stream).is_some(),
+            "established streams may draw from their reserve"
+        );
+        drop(fill);
+    }
+
+    /// On a node whose connection budget is below twice the floors, the
+    /// reserve is capped at half the budget instead of starving new
+    /// connections outright.
+    #[test]
+    fn established_traffic_reserve_is_clamped_on_small_budgets() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 256 << 20, 128 << 20, 1 << 20, 0);
+        let limits = governor.limits();
+        let budget = limits.shared_connection_budget_bytes;
+        assert!(
+            budget < ESTABLISHED_TRAFFIC_RESERVE_BYTES * 2,
+            "the seed must produce a budget below twice the floors"
+        );
+        assert_eq!(limits.established_traffic_reserve_bytes, budget / 2);
     }
 
     #[test]

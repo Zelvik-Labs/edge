@@ -199,7 +199,7 @@ metric 与 daily 的按项所有权：metric 报表失败后不再 restore 整�
 
 MetricAggregator 现在同时受 cardinality cap 与 per-aggregator 字节预算约束（`state_budget/16`，16 MiB–512 MiB）。每条 entry 的收费包含其 flush/restore 临时副本；`request_samples` 在插入前按属性字节做原子 CAS 计费，flush 退款、restore 重新计费并可在预算不足时拒绝。`approximate_bytes` 改为读取该账本，不再每 30 秒遍历全部 entry 估算。
 
-控制面共享额度已有独立保留门槛：普通 shared grant 不得使用 32 个集群控制连接、16 个 RPC stream 命令及一次配置 materialization 的 Normal 估算额度；配置 materialization 使用独立单槽准入，不与缓存后台争用 `BackgroundWork`。配置 decode 与 materialized 代际峰值尚未计入该保留。
+控制面共享额度已有独立保留门槛：普通 shared grant 不得使用 32 个集群控制连接、16 个 RPC stream 命令及一次配置 materialization 的 Normal 估算额度；配置 materialization 使用独立单槽准入，不与缓存后台争用 `BackgroundWork`。建连类准入（HTTP/TCP/H3 连接、UDP 会话）另有 established 保留：Normal 下限 1,024 H2 stream、1,024 H3 request、512 origin connect（约 56 MiB，连接预算不足其两倍时取预算一半），新连接洪峰不能吃掉已建立连接的 stream/origin 额度，该保留同时在共享账户侧扣除；SNI relay 与 response transform 不参与该保留。配置 decode 与 materialized 代际峰值尚未计入该保留。
 站点 metrics 注册表已有删除生命周期：配置快照删除的实例进入最多 4,096 项的退休表，三个增量消费者以快照指纹确认最终状态，最后一个消费者确认且无请求持有旧 `Arc` 后才释放；超过上限的候选保留在 live 并等待下一次配置快照重试。纯 node/perf 视图仍只看 live 实例，节点活跃连接总数在退休实例完全退场前仍计入其活跃请求。
 distinct-IP tracker 原先按创建时的服务器数分配独立容量：每个新服务器再拿一份 `cardinality_state/8` 的切片，旧服务器切片不回收，总容量因此随服务器代数按调和级数增长。现在所有 tracker 共用一个进程级原子条目预算（`state_budget/8` 按每项 64 字节估算，16,384–16,000,000 项），插入前计费、重复项退款、tracker 释放时按实际条目退款；预算耗尽会计入既有 `metricsCardinalityDropped`。该结构仍没有 TTL，先到的高流量 server 可以占满全局预算，因此其他 server 的新 IP 会被拒绝；这是指标分析数据的受控丢弃，不改变连接、控制面或安全状态。
 
