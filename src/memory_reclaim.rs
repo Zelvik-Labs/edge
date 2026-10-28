@@ -274,6 +274,30 @@ fn monotonic_elapsed_ms() -> u64 {
         .min(u64::MAX as u128) as u64
 }
 
+/// Shared monotonic clock (ms since process start). Reclaim and shed must
+/// timestamp with the same epoch so evidence ages are comparable.
+pub(crate) fn monotonic_now_ms() -> u64 {
+    monotonic_elapsed_ms()
+}
+
+/// Minimum measured RSS improvement for a reclaim pass to count as
+/// effective. Below this the pass only shuffled allocator state.
+const RECLAIM_MIN_RSS_IMPROVEMENT_BYTES: u64 = 4 * 1024 * 1024;
+
+/// A reclaim pass is ineffective when it failed to measurably lower RSS
+/// (< 4 MiB). When RSS is unknown (non-Linux, unreadable `/proc`), fall back
+/// to the absence of any cache entries or estimated bytes freed.
+fn reclaim_was_ineffective(stats: &ReclaimStats) -> bool {
+    if stats.process_rss_before_bytes > 0 && stats.process_rss_after_bytes > 0 {
+        stats
+            .process_rss_before_bytes
+            .saturating_sub(stats.process_rss_after_bytes)
+            < RECLAIM_MIN_RSS_IMPROVEMENT_BYTES
+    } else {
+        stats.total_entries_removed() == 0 && stats.freed_bytes_estimate() == 0
+    }
+}
+
 fn level_from_u8(value: u8) -> MemoryPressureLevel {
     match value {
         1 => MemoryPressureLevel::Elevated,
@@ -477,15 +501,29 @@ pub fn on_memory_pressure_observed(level: MemoryPressureLevel) {
     // consumed and lost.
     let before = *coordinator;
     let decision = coordinator.observe(level, now);
+    let mut reclaimed = None;
     if let ReclaimDecision::Trigger(trigger_level) = decision {
         match request_reclaim(trigger_level) {
-            Some(stats) => coordinator.record_result(now, stats),
+            Some(stats) => {
+                coordinator.record_result(now, stats);
+                reclaimed = Some(stats);
+            }
             None => {
                 *coordinator = before;
             }
         }
     }
     drop(coordinator);
+    // Tell the shed tier what the reclaim pass actually achieved. This runs
+    // only after a real pass and outside the coordinator lock, so the drain
+    // path never blocks on reclaim state. An effective pass clears stale
+    // exhaustion evidence; an ineffective one arms the final-resort gate.
+    if let Some(stats) = reclaimed {
+        crate::memory_shed::note_reclaim_outcome(
+            reclaim_was_ineffective(&stats),
+            monotonic_now_ms(),
+        );
+    }
     LAST_OBSERVED_PRESSURE.store(level_to_u8(level), Ordering::Relaxed);
     crate::memory_shed::observe_pressure(level);
 }
@@ -1277,6 +1315,61 @@ mod tests {
                 "RECLAIM_IN_PROGRESS must be cleared after a reclaim panic"
             );
         });
+    }
+
+    #[test]
+    fn reclaim_ineffective_requires_measurable_rss_improvement() {
+        const MIB: u64 = 1024 * 1024;
+        let stats = |before: u64, after: u64, entries: usize, freed: u64| ReclaimStats {
+            process_rss_before_bytes: before,
+            process_rss_after_bytes: after,
+            l1_entries_removed: entries,
+            l1_bytes_freed_estimate: freed,
+            ..Default::default()
+        };
+        assert!(
+            !reclaim_was_ineffective(&stats(100 * MIB, 96 * MIB, 0, 0)),
+            "exactly 4 MiB of measured improvement is effective"
+        );
+        assert!(
+            reclaim_was_ineffective(&stats(100 * MIB, 96 * MIB + 1, 0, 0)),
+            "under 4 MiB of measured improvement is ineffective"
+        );
+        assert!(
+            reclaim_was_ineffective(&stats(100 * MIB, 100 * MIB, 10_000, 64 * MIB)),
+            "known-flat RSS is ineffective even when caches were emptied"
+        );
+        assert!(
+            reclaim_was_ineffective(&stats(100 * MIB, 120 * MIB, 0, 0)),
+            "RSS growth is ineffective"
+        );
+    }
+
+    #[test]
+    fn reclaim_ineffective_falls_back_to_progress_when_rss_unknown() {
+        let base = ReclaimStats {
+            process_rss_before_bytes: 0,
+            process_rss_after_bytes: 0,
+            ..Default::default()
+        };
+        assert!(
+            reclaim_was_ineffective(&base),
+            "no RSS and no cache progress is ineffective"
+        );
+        assert!(
+            !reclaim_was_ineffective(&ReclaimStats {
+                l1_entries_removed: 1,
+                ..base
+            }),
+            "an entry removed is progress when RSS is unknown"
+        );
+        assert!(
+            !reclaim_was_ineffective(&ReclaimStats {
+                l1_bytes_freed_estimate: 4096,
+                ..base
+            }),
+            "estimated bytes freed is progress when RSS is unknown"
+        );
     }
 
     #[test]

@@ -1545,11 +1545,13 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             "ledgerReconcileBytesRefunded": crate::memory_reclaim::ledger_reconcile_bytes_refunded(),
             "shed": serde_json::json!({
                 "keepaliveShedActive": shed.keepalive_shed_active,
-                "criticalStreak": shed.critical_streak,
+                "criticalSamples": shed.critical_samples,
                 "drainedConnectionsTotal": shed.drained_connections_total,
                 "h3DrainedConnectionsTotal": crate::http3_proxy_manager::h3_shed_drained_total(),
                 "keepaliveMarkedTotal": shed.keepalive_marked_total,
-                "lastDrainAgeMs": shed.last_drain_age_ms
+                "reclaimExhausted": shed.reclaim_exhausted,
+                "finalResortPassesTotal": shed.final_resort_passes_total,
+                "lastFinalResortAtMs": shed.last_final_resort_at_ms
             }),
             "ledgerOwnerCapRejections": governor_snapshot.resident_memory.owner_cap_rejections,
             "ledgerTrackedOwners": governor_snapshot.resident_memory.tracked_owners,
