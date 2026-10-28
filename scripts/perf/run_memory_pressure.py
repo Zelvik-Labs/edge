@@ -42,8 +42,10 @@ def run(args):
         # Distinguish the pressure source: production reclaimable L1 cache,
         # touched anonymous ballast, and both together. Only cache-bearing
         # sources enable the fixture's production cache configuration.
-        for limit in [512, 256]:
-            for source in ["cache", "ballast", "mixed"]:
+        limits = [args.limit] if args.limit else [512, 256]
+        sources = [args.source] if args.source else ["cache", "ballast", "mixed"]
+        for limit in limits:
+            for source in sources:
                 for repeat in range(args.rounds):
                     env = {"PRESSURE_ACCEPTANCE": "1"}
                     if source in ("cache", "mixed"):
@@ -133,4 +135,6 @@ if __name__ == "__main__":
     p.add_argument("--rounds", type=int, default=3)
     p.add_argument("--requests", type=int, default=4000)
     p.add_argument("--mode", choices=["all", "pressure", "continuation", "abuse", "benchmark", "acceptance"], default="all")
+    p.add_argument("--source", choices=["cache", "ballast", "mixed"], help="acceptance source filter")
+    p.add_argument("--limit", type=int, help="acceptance cgroup limit in MiB")
     run(p.parse_args())
