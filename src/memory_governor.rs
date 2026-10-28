@@ -1067,6 +1067,38 @@ impl<'a> AdmissionPermit<'a> {
             priority: self.shared.priority,
         }
     }
+
+    /// Move part of the cache-read ledger charge to the buffer owner. Once
+    /// transferred, this permit no longer refunds those bytes on drop: the
+    /// returned lease refunds them when the last body slice is released, so
+    /// the read budget tracks the allocation's real lifetime.
+    pub(crate) fn take_cache_read_charge(&mut self, bytes: u64) -> CacheReadLease<'a> {
+        assert!(bytes <= self.cache_read_memory_charge_bytes);
+        self.cache_read_memory_charge_bytes -= bytes;
+        CacheReadLease {
+            governor: self.governor,
+            bytes,
+        }
+    }
+}
+
+/// RAII ownership of cache-read ledger bytes independent of the handler
+/// permit that admitted them. See `AdmissionPermit::take_cache_read_charge`.
+pub struct CacheReadLease<'a> {
+    governor: &'a MemoryGovernor,
+    bytes: u64,
+}
+
+pub type StaticCacheReadLease = CacheReadLease<'static>;
+
+impl Drop for CacheReadLease<'_> {
+    fn drop(&mut self) {
+        if self.bytes > 0 {
+            self.governor
+                .cache_read_memory_bytes
+                .fetch_sub(self.bytes, Ordering::AcqRel);
+        }
+    }
 }
 
 pub type StaticAdmissionPermit = AdmissionPermit<'static>;

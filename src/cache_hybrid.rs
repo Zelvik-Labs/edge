@@ -899,8 +899,8 @@ impl Storage for FileStorage {
             } else {
                 None
             };
-            if let Some(cache_read_permit) = memory_hit_permit {
-                let file_data = match tokio::fs::read(&path).await {
+            if let Some(mut cache_read_permit) = memory_hit_permit {
+                let file_data = match read_cache_file_exact(&path, file_size).await {
                     Ok(data) => data,
                     Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                         crate::metrics::storage::STORAGE
@@ -913,7 +913,11 @@ impl Storage for FileStorage {
                 PROF_DISK_READ_US
                     .fetch_add(io_start.elapsed().as_micros() as u64, Ordering::Relaxed);
                 crate::metrics::storage::record_cache_access_memory(&hash);
-                let body = bytes::Bytes::from(file_data);
+                let body = charged_cache_bytes_with_read_charge(
+                    file_data,
+                    &mut cache_read_permit,
+                    file_size,
+                );
                 let body_len = body.len();
                 return Ok(Some((
                     cache_meta,
@@ -1002,8 +1006,8 @@ impl Storage for FileStorage {
         } else {
             None
         };
-        if let Some(cache_read_permit) = compressed_memory_permit {
-            let file_data = match tokio::fs::read(&path).await {
+        if let Some(mut cache_read_permit) = compressed_memory_permit {
+            let file_data = match read_cache_file_exact(&path, file_size).await {
                 Ok(data) => data,
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                     crate::metrics::storage::STORAGE
@@ -1020,7 +1024,10 @@ impl Storage for FileStorage {
                 tokio::task::spawn_blocking(move || zstd_decompress_to_bytes(&file_data, capacity))
                     .await;
             let body = match result {
-                Ok(Some(data)) if data.len() as u64 == meta.size => bytes::Bytes::from(data),
+                Ok(Some(data)) if data.len() as u64 == meta.size => {
+                    let data = Vec::from(data.into_boxed_slice());
+                    charged_cache_bytes_with_read_charge(data, &mut cache_read_permit, meta.size)
+                }
                 _ => {
                     discard_corrupt_cache_entry_locked(CorruptCacheEntry::from_meta(
                         &hash, key_str, &path, &meta,
@@ -1580,6 +1587,9 @@ impl Storage for FileStorage {
 struct ChargedCacheBuffer {
     data: Vec<u8>,
     _charge: crate::memory_governor::StaticSharedPermit,
+    /// Present for L2 memory reads: keeps the cache-read ledger charged for
+    /// the allocation's lifetime rather than the handler's.
+    _cache_read_lease: Option<crate::memory_governor::StaticCacheReadLease>,
 }
 
 impl AsRef<[u8]> for ChargedCacheBuffer {
@@ -1589,11 +1599,44 @@ impl AsRef<[u8]> for ChargedCacheBuffer {
 }
 
 fn charged_cache_bytes(data: Vec<u8>, permit: &mut StaticAdmissionPermit) -> bytes::Bytes {
+    charged_cache_bytes_with_read_charge(data, permit, 0)
+}
+
+/// Hand `data` to a `Bytes` owner that keeps the shared-account charge, and
+/// the cache-read ledger charge when non-zero, alive for as long as any
+/// downstream slice exists.
+fn charged_cache_bytes_with_read_charge(
+    data: Vec<u8>,
+    permit: &mut StaticAdmissionPermit,
+    cache_read_charge_bytes: u64,
+) -> bytes::Bytes {
     let charge = permit.take_buffer_charge(data.capacity() as u64);
+    let cache_read_lease = (cache_read_charge_bytes > 0)
+        .then(|| permit.take_cache_read_charge(cache_read_charge_bytes));
     bytes::Bytes::from_owner(ChargedCacheBuffer {
         data,
         _charge: charge,
+        _cache_read_lease: cache_read_lease,
     })
+}
+
+/// Read an immutable cache object into an allocation of exactly `len` bytes.
+/// `fs::read`/`read_to_end` may grow the Vec past the charged object length, so
+/// the memory-read path uses this helper and hands the exact Vec capacity to
+/// the Bytes owner that keeps the charge alive for downstream slices.
+async fn read_cache_file_exact(path: &std::path::Path, len: u64) -> std::io::Result<Vec<u8>> {
+    let len = usize::try_from(len).map_err(|_| {
+        std::io::Error::new(std::io::ErrorKind::InvalidData, "cache object is too large")
+    })?;
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut data = Vec::new();
+    data.try_reserve_exact(len)
+        .map_err(|_| std::io::Error::other("cache read allocation failed"))?;
+    data.resize(len, 0);
+    file.read_exact(&mut data).await?;
+    // `try_reserve_exact` is a request; normalize the reported capacity by
+    // handing back a boxed slice so the charge matches the allocation.
+    Ok(Vec::from(data.into_boxed_slice()))
 }
 
 /// In-memory hit handler that serves from a Bytes buffer in 32KB chunks.
@@ -1604,6 +1647,9 @@ struct MemoryHitHandler {
     offset: usize,
     end: usize,
     _process_lock: Option<CacheProcessLockGuard>,
+    /// Handler-scoped part of the read admission: the class estimate and, for
+    /// compressed objects, the compressed-file bytes. The body's shared and
+    /// cache-read charges live in the `Bytes` owner instead.
     _cache_read_permit: Option<StaticAdmissionPermit>,
 }
 
@@ -5900,6 +5946,9 @@ mod tests {
         );
 
         let trace = pingora_cache::trace::Span::inactive().handle();
+        let governor = storage.admission_governor();
+        let committed_before = governor.account_view().committed_live_bytes;
+        let cache_read_before = governor.snapshot(1).cache_read_memory_used_bytes;
         let (meta, handler) = storage
             .lookup(&key, &trace)
             .await
@@ -5912,6 +5961,29 @@ mod tests {
                 .get("content-length")
                 .and_then(|value| value.to_str().ok()),
             Some("10")
+        );
+        let memory = handler
+            .as_any()
+            .downcast_ref::<MemoryHitHandler>()
+            .expect("memory handler");
+        assert_eq!(memory.data.as_ref(), b"small-body");
+        let body = memory.data.clone();
+        drop(handler);
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            committed_before + body.len() as u64,
+            "the body owner keeps the exact read-capacity charge after the handler drops"
+        );
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            cache_read_before + body.len() as u64,
+            "the cache-read ledger follows the body owner, not the handler"
+        );
+        drop(body);
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            cache_read_before,
+            "the last body release refunds the cache-read ledger"
         );
 
         crate::metrics::storage::delete_cache_meta_for_test(&hash);
@@ -6531,6 +6603,9 @@ mod tests {
         );
 
         let trace = pingora_cache::trace::Span::inactive().handle();
+        let governor = storage.admission_governor();
+        let committed_before = governor.account_view().committed_live_bytes;
+        let cache_read_before = governor.snapshot(1).cache_read_memory_used_bytes;
         let (meta, mut handler) = storage
             .lookup(&key, &trace)
             .await
@@ -6551,6 +6626,22 @@ mod tests {
             .expect("read body")
             .expect("body chunk");
         assert_eq!(chunk.as_ref(), body);
+        drop(handler);
+        assert!(
+            governor.account_view().committed_live_bytes >= committed_before + chunk.len() as u64,
+            "the decompressed Bytes owner keeps its capacity charge for downstream slices"
+        );
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            cache_read_before + body.len() as u64,
+            "the cache-read ledger keeps the decompressed body charged after the handler drops"
+        );
+        drop(chunk);
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            cache_read_before,
+            "the last decompressed slice release refunds the cache-read ledger"
+        );
 
         crate::metrics::storage::delete_cache_meta_for_test(&hash);
         let _ = tokio::fs::remove_dir_all(&root).await;

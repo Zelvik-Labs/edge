@@ -82,7 +82,7 @@ Inbound PROXY Protocol is trusted only from loopback, private, or link-local imm
 
 ## Pingora Cache Notes
 
-`openFileCache` controls whether small L2 disk HITs may be read into memory for faster serving and L1 promotion. When it is disabled, small L2 HITs stream from the file path instead of being pulled into a `Bytes` buffer.
+`openFileCache` controls whether small L2 disk HITs may be read into memory for faster serving and L1 promotion. When it is disabled, small L2 HITs stream from the file path instead of being pulled into a `Bytes` buffer. The memory read allocates exactly the charged object length (`try_reserve_exact`, then a boxed slice so reported capacity equals the allocation), and both the shared-account charge and the cache-read ledger charge transfer to the `Bytes` owner: they are refunded when the last downstream slice is released, not when the handler drops. For compressed objects the compressed-file portion of the read charge stays with the handler, because that buffer is freed before the body is served; the decompressed body carries its own charge.
 
 `enableSendfile` is tracked and exposed in runtime stats. The current Pingora cache `HandleHit` interface returns `Bytes` chunks and supports seek, but it does not expose the downstream socket to storage handlers. Because of that, this node cannot safely call Linux `sendfile(2)` inside the existing storage handler. The current implementation uses larger disk HIT chunks when sendfile is requested and implements Pingora `seek` for memory HIT handlers so range responses avoid extra filtering and over-read. True kernel sendfile would require a larger Pingora serving-path extension or a custom response path that owns both the file descriptor and downstream connection.
 
@@ -336,7 +336,9 @@ Cache reads, writes, revalidation and allocation-heavy cache background work
 borrow through the shared-account CAS gate: observed headroom minus safety
 margin, outstanding commitments, the full connection budget and the control-plane
 reserve. Borrowing closes outside Normal pressure and without observed physical
-headroom; credential growth keeps the same priority.
+headroom; credential growth keeps the same priority. A cache-read admission
+charges both the dedicated cache-read budget and the shared account, and a body
+that outlives its handler keeps both charges until the last slice is dropped.
 
 Ordinary shared grants cannot consume the control-plane reserve. That reserve is
 the existing Normal-pressure minimum for 32 cluster-control connections plus 16
