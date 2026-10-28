@@ -1237,12 +1237,6 @@ pub async fn enqueue<M: Message>(
     complete: bool,
 ) -> anyhow::Result<()> {
     let payload = message.encode_to_vec();
-    // The probe flusher hands its whole per-second observation batch to one
-    // call, so this is the last place those records can still be split into
-    // wire-sized batches; every other producer splits its own before enqueueing.
-    if kind == "probe_observation" {
-        return enqueue_observations(payload, window, complete).await;
-    }
     let spool = queue(kind)?;
     let kind = kind.to_owned();
     let at = crate::utils::time::now_timestamp();
@@ -1251,53 +1245,122 @@ pub async fn enqueue<M: Message>(
     Ok(())
 }
 
-/// Split a `probe_observation` payload into wire-sized batches.
-///
-/// Returns the encoded sub-payloads that fit, plus the encoded size of every
-/// observation too large for any batch, so the caller can journal those without
-/// keeping their bytes. A payload that is not a decodable observation batch is
-/// handed back whole: the spool's own cap then refuses it by name rather than a
-/// decode guess silently reshaping the data.
-fn split_observation_payload(payload: &[u8]) -> (Vec<Vec<u8>>, Vec<usize>) {
-    let Ok(batch) = <pb::ProbeObservationBatch as Message>::decode(payload) else {
-        return (vec![payload.to_vec()], Vec::new());
-    };
-    let (batches, oversize) =
-        split_records(batch.observations, payload_budget("probe_observation"));
-    (
-        batches
-            .into_iter()
-            .map(|observations| pb::ProbeObservationBatch { observations }.encode_to_vec())
-            .collect(),
-        oversize.iter().map(record_cost).collect(),
-    )
+/// Probe observations that a failed enqueue did not durably accept.
+#[derive(Debug)]
+pub struct ProbeEnqueueError {
+    source: anyhow::Error,
+    unsent: Vec<pb::ProbeObservation>,
+    lost: usize,
 }
 
-/// Enqueue a probe observation batch, splitting it to the wire cap first.
-///
-/// The flusher re-queues the whole batch when this returns an error, so a record
-/// journaled as too large must not also be reported as a failure: only a failed
-/// enqueue of the batches that fit is an error, and those are the ones worth
-/// retrying.
-async fn enqueue_observations(
-    payload: Vec<u8>,
-    window: i64,
-    complete: bool,
-) -> anyhow::Result<()> {
-    let (batches, oversize) = split_observation_payload(&payload);
-    for bytes in oversize {
-        journal_oversize("probe_observation", bytes).await?;
+impl ProbeEnqueueError {
+    fn new(source: anyhow::Error, unsent: Vec<pb::ProbeObservation>, lost: usize) -> Self {
+        Self {
+            source,
+            unsent,
+            lost,
+        }
     }
-    let spool = queue("probe_observation")?;
-    let at = crate::utils::time::now_timestamp();
-    for payload in batches {
-        let spool = spool.clone();
-        tokio::task::spawn_blocking(move || {
-            spool.append("probe_observation", payload, window, complete, at)
-        })
-        .await??;
+
+    pub fn unsent(&self) -> &[pb::ProbeObservation] {
+        &self.unsent
+    }
+
+    /// Observations whose append task panicked or was cancelled after the
+    /// records left the caller's ownership; they cannot be retried and must be
+    /// counted as a gap rather than silently forgotten.
+    pub fn lost(&self) -> usize {
+        self.lost
+    }
+
+    pub fn into_unsent(self) -> Vec<pb::ProbeObservation> {
+        self.unsent
+    }
+}
+
+impl std::fmt::Display for ProbeEnqueueError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}", self.source)
+    }
+}
+
+impl std::error::Error for ProbeEnqueueError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.source.source()
+    }
+}
+
+/// Enqueue probe observations in wire-sized chunks while retaining exact
+/// ownership: a failed append returns only the records it did not persist,
+/// and records already committed or journaled as oversize are never retried.
+pub async fn enqueue_probe_observations(
+    observations: Vec<pb::ProbeObservation>,
+    window: i64,
+) -> Result<(), ProbeEnqueueError> {
+    let spool = match queue("probe_observation") {
+        Ok(spool) => spool,
+        Err(source) => return Err(ProbeEnqueueError::new(source, observations, 0)),
+    };
+    enqueue_probe_observations_on(spool, observations, window).await
+}
+
+async fn enqueue_probe_observations_on(
+    spool: Arc<Spool>,
+    observations: Vec<pb::ProbeObservation>,
+    window: i64,
+) -> Result<(), ProbeEnqueueError> {
+    let (batches, oversize) = split_records(observations, payload_budget("probe_observation"));
+    let mut oversize = oversize.into_iter();
+    while let Some(observation) = oversize.next() {
+        let cost = record_cost(&observation);
+        if let Err(source) =
+            journal_oversize_on(Arc::clone(&spool), "probe_observation", cost).await
+        {
+            let mut unsent = vec![observation];
+            unsent.extend(oversize);
+            for batch in batches {
+                unsent.extend(batch);
+            }
+            return Err(ProbeEnqueueError::new(source, unsent, 0));
+        }
+    }
+    let mut batches = batches.into_iter();
+    while let Some(batch) = batches.next() {
+        if let Err(mut error) = append_probe_chunk(Arc::clone(&spool), batch, window).await {
+            for remaining in batches {
+                error.unsent.extend(remaining);
+            }
+            return Err(error);
+        }
     }
     Ok(())
+}
+
+async fn append_probe_chunk(
+    spool: Arc<Spool>,
+    observations: Vec<pb::ProbeObservation>,
+    window: i64,
+) -> Result<(), ProbeEnqueueError> {
+    let count = observations.len();
+    let at = crate::utils::time::now_timestamp();
+    let batch = pb::ProbeObservationBatch { observations };
+    match tokio::task::spawn_blocking(move || {
+        let payload = batch.encode_to_vec();
+        match spool.append("probe_observation", payload, window, false, at) {
+            Ok(_) => Ok(()),
+            Err(error) => Err((error, batch.observations)),
+        }
+    })
+    .await
+    {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err((source, observations))) => Err(ProbeEnqueueError::new(source, observations, 0)),
+        Err(join) => Err(ProbeEnqueueError::new(
+            anyhow::anyhow!("probe append task failed: {join}"),
+            Vec::new(),
+            count,
+        )),
+    }
 }
 
 pub async fn enqueue_prepared(batch: pb::TelemetryBatch) -> anyhow::Result<()> {
@@ -1843,6 +1906,14 @@ fn split_records<M: Message>(records: Vec<M>, budget: usize) -> (Vec<Vec<M>>, Ve
 /// with a reason and a size, counted on the lane that produced it.
 async fn journal_oversize(kind: &str, encoded_bytes: usize) -> anyhow::Result<()> {
     let spool = queue(kind)?;
+    journal_oversize_on(spool, kind, encoded_bytes).await
+}
+
+async fn journal_oversize_on(
+    spool: Arc<Spool>,
+    kind: &str,
+    encoded_bytes: usize,
+) -> anyhow::Result<()> {
     let kind = kind.to_owned();
     tokio::task::spawn_blocking(move || spool.journal_oversize(&kind, encoded_bytes)).await??;
     Ok(())
@@ -2707,18 +2778,18 @@ mod tests {
         let per_batch = budget / cost;
         assert!(per_batch >= 2, "the case needs more than one per batch");
 
-        let payload = pb::ProbeObservationBatch {
-            observations: (0..per_batch + 1).map(|_| fat(MIB as usize)).collect(),
-        }
-        .encode_to_vec();
-        let (batches, oversize) = split_observation_payload(&payload);
+        let records = (0..per_batch + 1).map(|_| fat(MIB as usize)).collect();
+        let (batches, oversize) = split_records(records, budget);
         assert!(oversize.is_empty());
         assert_eq!(batches.len(), 2, "the count cap alone would have shipped one");
-        for payload in &batches {
+        for observations in &batches {
             let batch = pb::TelemetryBatch {
                 schema_version: 1,
                 kind: "probe_observation".into(),
-                payload: payload.clone(),
+                payload: pb::ProbeObservationBatch {
+                    observations: observations.clone(),
+                }
+                .encode_to_vec(),
                 occurred_at: 1,
                 ..Default::default()
             };
@@ -2729,30 +2800,75 @@ mod tests {
             );
         }
         // Every observation is carried exactly once.
-        let carried: usize = batches
-            .iter()
-            .map(|payload| {
-                <pb::ProbeObservationBatch as Message>::decode(payload.as_slice())
-                    .unwrap()
-                    .observations
-                    .len()
-            })
-            .sum();
-        assert_eq!(carried, per_batch + 1);
+        assert_eq!(batches.iter().map(Vec::len).sum::<usize>(), per_batch + 1);
 
         // One observation over the whole cap: returned for journaling, never
         // padded into an empty batch.
-        let payload = pb::ProbeObservationBatch {
-            observations: vec![fat(budget + 1)],
-        }
-        .encode_to_vec();
-        let (batches, oversize) = split_observation_payload(&payload);
+        let (batches, oversize) = split_records(vec![fat(budget + 1)], budget);
         assert!(
             batches.is_empty(),
             "an oversize observation must not become an empty batch"
         );
         assert_eq!(oversize.len(), 1);
-        assert!(oversize[0] > budget);
+        assert!(record_cost(&oversize[0]) > budget);
+    }
+
+    /// A failed chunk must return exactly the records the spool did not
+    /// persist: committed chunks and journaled oversize records stay out, and
+    /// every remaining record appears once.
+    #[tokio::test]
+    async fn probe_enqueue_failure_returns_only_unpersisted_records() {
+        let budget = payload_budget("probe_observation");
+        let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let noisy = |len: usize| -> String {
+            incompressible(len)
+                .into_iter()
+                .map(|byte| char::from(alphabet[(byte & 63) as usize]))
+                .collect()
+        };
+        let records: Vec<_> = (0..60)
+            .map(|index| pb::ProbeObservation {
+                target_id: format!("pt_{index}"),
+                error: noisy(250_000),
+                ..Default::default()
+            })
+            .collect();
+        let (batches, oversize) = split_records(records.clone(), budget);
+        assert!(oversize.is_empty());
+        assert!(batches.len() >= 2, "the case needs a later chunk to fail");
+        let committed = batches[0].len();
+        // Size the lane so the first chunk fits with the envelope, while any
+        // later chunk cannot: the failure is guaranteed to land mid-batch.
+        let first = pb::ProbeObservationBatch {
+            observations: batches[0].clone(),
+        }
+        .encode_to_vec();
+        let first_compressed = zstd::encode_all(first.as_slice(), 3).unwrap().len() as u64;
+        let limit = first_compressed + 8 * 1024;
+
+        let path = std::env::temp_dir().join(format!("telemetry-probe-{}", uuid::Uuid::new_v4()));
+        let spool = Arc::new(Spool::open(&path, false, limit).unwrap());
+        let error = enqueue_probe_observations_on(spool.clone(), records, 0)
+            .await
+            .expect_err("the second chunk exceeds the spool budget");
+        assert_eq!(error.lost(), 0);
+        let unsent = error.into_unsent();
+        assert_eq!(
+            unsent.len(),
+            60 - committed,
+            "only the chunks after the committed one are unsent"
+        );
+        for (offset, observation) in unsent.iter().enumerate() {
+            assert_eq!(
+                observation.target_id,
+                format!("pt_{}", committed + offset),
+                "unsent records must be the exact tail, in order"
+            );
+        }
+        // The committed chunk is durable; the failed one is not.
+        assert_eq!(spool.snapshot()["pendingBatches"], 1);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
     }
 
     /// P1-2: the node status exposes the lanes' queue position, the quarantine
@@ -3074,7 +3190,7 @@ mod tests {
     }
 
     // Mirrors probe.rs: the Edge executor builds the batch from the pushed plan
-    // identity and hands it to telemetry::enqueue for "probe_observation".
+    // identity and hands it to telemetry::enqueue_probe_observations.
     #[test]
     fn probe_observation_batch_reaches_the_spool_with_plan_identity() {
         let plan: crate::config_models::ProbePlan = serde_json::from_str(

@@ -193,6 +193,8 @@
 
 `BorrowingInputs::borrowable_bytes` 当前只提供可测试的计算模型，**尚未接入准入与回收**；`MetricAggregator::memory_estimate` 仅提供进程内按需快照，**尚未接入状态、限制扩容或跟踪已 flush 的批次**。现有周期性 gauge 仍不计动态属性。`BackgroundWork` 同时用于配置应用和缓存工作，不能不区分调用方就归到可丢弃资源。后续阶段必须把分配、借用和批次生命周期接到实际许可账本，完成验证后再更新本节。
 
+已落地的边界：probe outbox 以 16,384 条 / 64 MiB 同时约束排队与正在写 Mace 的批次；失败只回填未持久化的记录，追加任务丢失会计入受控丢弃；flusher 不再随探测计划切换而中止，丢弃计数经 node status 的 `probeOutbox` 暴露。溢出策略是保留队列中较旧的观测、拒绝新观测，而不是无界回填。daily pending 与 aggregator 仍是后续工作。
+
 ## 7. 非代码因素
 
 - 宿主 `transparent_hugepage=always` 会放大 RSS（10-22 实测 anon_thp 占 40–75%），并让
