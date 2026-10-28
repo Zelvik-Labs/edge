@@ -373,9 +373,14 @@ current `lowPriorityBorrowableBytes`,
 and `configApplyActive`; `priorityReserveEnforced=true` because the
 connection-establishment, established-traffic and control-plane admission
 reserves are all enforced. Remaining gaps stay explicit: the installed
-configuration generation's steady-state residency is not charged, and
-L1/analytics global revocation remains separate lifecycle work. Logical refunds
-never increase observed physical headroom, and estimated bytes are not RSS.
+configuration generation's steady-state residency is not charged, and the
+client-agent verified-IP table has no bounded index yet. Pressure reclaim
+already revokes the reclaimable L1/analytics caches — L1 is halved at High and
+drained at Critical, with negative cache, Bloom, surrogate, geo/UA,
+TLS-connector and regex caches trimmed alongside — while metric aggregation
+samples are billing state and are never revoked (only new keys are
+cap-rejected). Logical refunds never increase observed physical headroom, and
+estimated bytes are not RSS.
 
 Per-server metric state now has a concrete deletion lifecycle. A configuration
 snapshot that drops a server id moves its metric instance to a retired set; the
