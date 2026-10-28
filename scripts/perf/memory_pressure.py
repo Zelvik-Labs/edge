@@ -582,7 +582,29 @@ async def normal_completion():
     return results
 
 
-async def recovery_checkpoint(clients, held_samples, cg, pid):
+async def probe_bursts(count):
+    """Measure new work on freshly established connections.
+
+    Idle H1/H2 connections are closed by their pressure-scaled idle timeouts,
+    so reusing a long-lived probe client would report the previous stage's
+    idle close as a new-request failure. Each probe set opens its own
+    connections and releases them afterwards.
+    """
+    clients = {"h1": H1(), "h2": await H2Pool().open(4), "h3": await H3().open()}
+    try:
+        rows = {}
+        for proto, client in clients.items():
+            rows[proto] = await burst(client, count, 4)
+        return rows
+    finally:
+        for client in clients.values():
+            try:
+                await client.close()
+            except Exception:
+                pass
+
+
+async def recovery_checkpoint(held_samples, cg, pid):
     """Release the pressure source and prove accepted streams resume.
 
     This checkpoint runs before the extreme final-resort stage, so a kill
@@ -602,10 +624,8 @@ async def recovery_checkpoint(clients, held_samples, cg, pid):
         "pressure_below_critical": state["pressure"] != "critical",
         "state": state,
         "physical": observation(cg, pid),
-        "new_requests": {},
+        "new_requests": await probe_bursts(16),
     }
-    for proto, client in clients.items():
-        row["new_requests"][proto] = await burst(client, 16, 4)
     row["accepted_progress"] = {proto: progress(sample, before[proto]) for proto, sample in held_samples.items()}
     row["shed"] = shed_snapshot(state)
     row["cache"] = state.get("cache")
@@ -688,8 +708,7 @@ async def run_acceptance(args, clients, output, cg, pid):
             row["reclaim"] = state.get("reclaim")
             row["shed"] = shed_snapshot(state)
             row["admission_rejects"] = rejection_snapshot(state)
-            for proto, client in clients.items():
-                row["new_requests"][proto] = await burst(client, 32, 4)
+            row["new_requests"] = await probe_bursts(32)
             row["accepted_progress"] = {proto: progress(sample, before_bytes[proto]) for proto, sample in held_samples.items()}
             row["isolation"] = {
                 proto: {
@@ -707,7 +726,7 @@ async def run_acceptance(args, clients, output, cg, pid):
                 passes = row["shed"].get("final_resort_passes_total") or 0
                 if alive and passes == initial_passes:
                     output["mid_recovery"] = await recovery_checkpoint(
-                        clients, held_samples, cg, pid
+                        held_samples, cg, pid
                     )
                     print(json.dumps(output["mid_recovery"]), flush=True)
                 else:
@@ -787,10 +806,12 @@ async def run_acceptance(args, clients, output, cg, pid):
         row["reclaim"] = state.get("reclaim")
         row["shed"] = shed_snapshot(state)
         row["admission_rejects"] = rejection_snapshot(state)
-        for proto, client in clients.items():
-            row["new_requests"][proto] = await burst(client, 16, 4)
+        row["new_requests"] = await probe_bursts(16)
         row["accepted_progress"] = {proto: progress(sample, before_bytes[proto]) for proto, sample in held_samples.items()}
-        stages.append(row)
+        if not final_seen:
+            stages.append(row)
+        else:
+            output["post_final"] = row
         print(json.dumps(row), flush=True)
         output["stages"] = stages
         output["last_resort"] = row["last_resort"]
