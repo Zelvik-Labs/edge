@@ -242,7 +242,7 @@ pub fn hash_waf_snapshot(
     )
 }
 
-/// How long an apply may wait for a `BackgroundWork` permit before giving up
+/// How long an apply may wait for a `ConfigApply` permit before giving up
 /// and keeping the installed generation.
 const CONFIG_SYNC_ADMISSION_BUDGET: Duration = Duration::from_secs(2);
 
@@ -252,7 +252,7 @@ async fn admit_config_sync(governor: &MemoryGovernor) -> (Option<AdmissionPermit
     let deadline = Instant::now() + CONFIG_SYNC_ADMISSION_BUDGET;
     let mut retries = 0u32;
     loop {
-        if let Some(permit) = governor.try_admit(AdmissionClass::BackgroundWork) {
+        if let Some(permit) = governor.try_admit(AdmissionClass::ConfigApply) {
             return (Some(permit), retries);
         }
         let pressure = governor.current_memory_pressure_level();
@@ -543,7 +543,7 @@ mod tests {
             crate::utils::time::system_timestamp_millis() as u64,
         );
         let mut held = Vec::new();
-        while let Some(permit) = governor.try_admit(AdmissionClass::BackgroundWork) {
+        while let Some(permit) = governor.try_admit(AdmissionClass::ConfigApply) {
             held.push(permit);
         }
         assert!(!held.is_empty());

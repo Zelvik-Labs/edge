@@ -199,6 +199,7 @@ metric 与 daily 的按项所有权：metric 报表失败后不再 restore 整�
 
 MetricAggregator 现在同时受 cardinality cap 与 per-aggregator 字节预算约束（`state_budget/16`，16 MiB–512 MiB）。每条 entry 的收费包含其 flush/restore 临时副本；`request_samples` 在插入前按属性字节做原子 CAS 计费，flush 退款、restore 重新计费并可在预算不足时拒绝。`approximate_bytes` 改为读取该账本，不再每 30 秒遍历全部 entry 估算。
 
+控制面共享额度已有独立保留门槛：普通 shared grant 不得使用 32 个集群控制连接、16 个 RPC stream 命令及一次配置 materialization 的 Normal 估算额度；配置 materialization 使用独立单槽准入，不与缓存后台争用 `BackgroundWork`。配置 decode 与 materialized 代际峰值尚未计入该保留。
 distinct-IP tracker 原先按创建时的服务器数分配独立容量：每个新服务器再拿一份 `cardinality_state/8` 的切片，旧服务器切片不回收，总容量因此随服务器代数按调和级数增长。现在所有 tracker 共用一个进程级原子条目预算（`state_budget/8` 按每项 64 字节估算，16,384–16,000,000 项），插入前计费、重复项退款、tracker 释放时按实际条目退款；预算耗尽会计入既有 `metricsCardinalityDropped`。该结构仍没有 TTL，先到的高流量 server 可以占满全局预算，因此其他 server 的新 IP 会被拒绝；这是指标分析数据的受控丢弃，不改变连接、控制面或安全状态。
 
 `parent_pressure` 的样本在 60 秒后逻辑失效，但旧实现让条目永久驻留。现在更新路径每 60 秒至多触发一次 `retain`，删除已过期地址；清理不在请求路径，且只影响父节点压力反馈，不改变选路或连接状态。

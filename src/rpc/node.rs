@@ -1316,6 +1316,9 @@ fn shared_account_status(snapshot: &crate::memory_governor::GovernorSnapshot) ->
         "committedLiveBytes": snapshot.account_committed_live_bytes,
         "observationAgeMs": snapshot.observation_age_ms,
         "priorityReserveEnforced": false,
+        "controlPlaneAccountReserveEnforced": true,
+        "controlPlaneReserveBytes": snapshot.control_plane_reserve_bytes,
+        "configApplyActive": snapshot.config_apply_active,
         "lowPriorityBorrowingEnforced": true,
         "lowPriorityBorrowableBytes": snapshot.low_priority_borrowable_bytes
     })
@@ -1327,7 +1330,7 @@ mod shared_account_status_tests {
     use crate::memory_governor::MemoryGovernor;
 
     #[test]
-    fn status_matches_snapshot_and_does_not_claim_reserve_enforcement() {
+    fn status_matches_snapshot_and_reports_scoped_reserves() {
         let governor = MemoryGovernor::new();
         let snapshot = governor.snapshot(1);
         let status = shared_account_status(&snapshot);
@@ -1361,9 +1364,18 @@ mod shared_account_status_tests {
         );
         assert_eq!(status["priorityReserveEnforced"].as_bool(), Some(false));
         assert_eq!(
-            status["lowPriorityBorrowingEnforced"].as_bool(),
+            status["controlPlaneAccountReserveEnforced"].as_bool(),
             Some(true)
         );
+        assert_eq!(
+            status["controlPlaneReserveBytes"].as_u64(),
+            Some(snapshot.control_plane_reserve_bytes)
+        );
+        assert_eq!(
+            status["configApplyActive"].as_u64(),
+            Some(snapshot.config_apply_active)
+        );
+        assert_eq!(status["lowPriorityBorrowingEnforced"].as_bool(), Some(true));
         assert_eq!(
             status["lowPriorityBorrowableBytes"].as_u64(),
             Some(snapshot.low_priority_borrowable_bytes)

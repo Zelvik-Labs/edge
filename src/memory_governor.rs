@@ -25,6 +25,7 @@ pub enum AdmissionClass {
     ClusterInternalConnection,
     RpcStreamCommand,
     SniRelay,
+    ConfigApply,
 }
 
 /// Resource domains describe who owns a commitment. Security state is kept
@@ -53,7 +54,7 @@ impl AdmissionClass {
             | Self::OriginConnect
             | Self::SniRelay
             | Self::ResponseTransform => ResourceDomain::EstablishedTraffic,
-            Self::ClusterInternalConnection | Self::RpcStreamCommand => {
+            Self::ClusterInternalConnection | Self::RpcStreamCommand | Self::ConfigApply => {
                 ResourceDomain::ControlPlane
             }
             Self::RequestBodyWaf | Self::ResponseBodyWaf => ResourceDomain::SecurityState,
@@ -113,7 +114,7 @@ impl BorrowingInputs {
     }
 }
 
-const ADMISSION_CLASS_COUNT: usize = 17;
+const ADMISSION_CLASS_COUNT: usize = 18;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct AdmissionRejectSnapshot {
@@ -125,6 +126,7 @@ pub struct AdmissionRejectSnapshot {
     pub h3_request: u64,
     pub origin_connect: u64,
     pub background_work: u64,
+    pub config_apply: u64,
     pub request_body_waf: u64,
     pub response_body_waf: u64,
     pub response_transform: u64,
@@ -146,6 +148,7 @@ impl AdmissionRejectSnapshot {
             .saturating_add(self.h3_request)
             .saturating_add(self.origin_connect)
             .saturating_add(self.background_work)
+            .saturating_add(self.config_apply)
             .saturating_add(self.request_body_waf)
             .saturating_add(self.response_body_waf)
             .saturating_add(self.response_transform)
@@ -181,6 +184,8 @@ pub struct GovernorSnapshot {
     pub keepalive_fd_budget: u64,
     pub cpu_parallelism: usize,
     pub connection_budget_bytes: u64,
+    pub control_plane_reserve_bytes: u64,
+    pub config_apply_active: u64,
     pub connection_admission_used_bytes: u64,
     pub zero_copy_relay_active: u64,
     pub zero_copy_relay_limit: usize,
@@ -621,6 +626,11 @@ const CACHE_WRITE_ESTIMATED_BYTES: u64 = 1024 * 1024;
 const CACHE_READ_MEMORY_ESTIMATED_BYTES: u64 = 4 * 1024 * 1024;
 const CLUSTER_INTERNAL_CONNECTION_ESTIMATED_BYTES: u64 = 64 * 1024;
 const RPC_STREAM_COMMAND_ESTIMATED_BYTES: u64 = 256 * 1024;
+// Existing Normal-pressure control floors plus one independent config apply.
+const CONTROL_PLANE_RESERVE_BYTES: u64 = MIN_CLUSTER_INTERNAL_CONNECTION_LIMIT as u64
+    * CLUSTER_INTERNAL_CONNECTION_ESTIMATED_BYTES
+    + MIN_RPC_STREAM_COMMAND_LIMIT as u64 * RPC_STREAM_COMMAND_ESTIMATED_BYTES
+    + BACKGROUND_WORK_ESTIMATED_BYTES;
 const KEEPALIVE_CONN_ESTIMATED_BYTES: u64 = 16 * 1024;
 const NEGATIVE_CACHE_ESTIMATED_BYTES: u64 = 160;
 const FIREWALL_IP_LIMITER_ESTIMATED_BYTES: u64 = 1024;
@@ -831,7 +841,7 @@ impl std::ops::Deref for PaddedAtomicU64 {
     }
 }
 
-const N_ADMISSION_CLASSES: usize = 17;
+const N_ADMISSION_CLASSES: usize = 18;
 
 /// Materialized per-snapshot-epoch admission view: every class limit and
 /// byte budget is a pure function of the `cached_*` snapshot fields, so the
@@ -845,6 +855,7 @@ struct GovernorLimits {
     /// `limit_for` output per class, indexed by `class_index`.
     class_limit: [u64; N_ADMISSION_CLASSES],
     connection_budget_bytes: u64,
+    control_plane_reserve_bytes: u64,
     shared_connection_budget_bytes: u64,
     cache_read_memory_budget_bytes: u64,
     cache_read_memory_object_limit_bytes: u64,
@@ -906,6 +917,7 @@ pub struct MemoryGovernor {
     /// consume the datagram budget (or vice versa).
     tcp_queue_bytes: PaddedAtomicU64,
     background_work: PaddedAtomicU64,
+    config_apply: PaddedAtomicU64,
     request_body_waf: PaddedAtomicU64,
     response_body_waf: PaddedAtomicU64,
     response_transform: PaddedAtomicU64,
@@ -1052,7 +1064,7 @@ impl<'a> AdmissionPermit<'a> {
             purpose: self.shared.purpose,
             bytes,
             committed: self.shared.committed,
-            low_priority: self.shared.low_priority,
+            priority: self.shared.priority,
         }
     }
 }
@@ -1222,6 +1234,13 @@ fn shared_purpose_index(purpose: SharedGrantPurpose) -> usize {
 /// published snapshot confirms the physical release — freed-but-still-
 /// resident pages (mimalloc arenas, pinned maps mid-teardown) are never
 /// re-promised early.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AccountPriority {
+    Ordinary,
+    Cache,
+    Control,
+}
+
 pub struct SharedPermit<'a> {
     governor: &'a MemoryGovernor,
     purpose: SharedGrantPurpose,
@@ -1230,7 +1249,7 @@ pub struct SharedPermit<'a> {
     /// Cache/analytics work may only borrow headroom left after the
     /// connection-budget reserve. The flag follows the credential through
     /// growth so a later `grow` cannot bypass the original gate.
-    low_priority: bool,
+    priority: AccountPriority,
 }
 
 pub type StaticSharedPermit = SharedPermit<'static>;
@@ -1241,7 +1260,7 @@ impl std::fmt::Debug for SharedPermit<'_> {
             .field("purpose", &self.purpose)
             .field("bytes", &self.bytes)
             .field("committed", &self.committed)
-            .field("low_priority", &self.low_priority)
+            .field("priority", &self.priority)
             .finish()
     }
 }
@@ -1296,7 +1315,7 @@ impl SharedPermit<'_> {
             delta,
             self.committed,
             self.purpose,
-            self.low_priority,
+            self.priority,
         ) {
             self.bytes = self.bytes.saturating_add(delta);
             true
@@ -1401,6 +1420,7 @@ impl MemoryGovernor {
             udp_queued_bytes: PaddedAtomicU64::new(0),
             tcp_queue_bytes: PaddedAtomicU64::new(0),
             background_work: PaddedAtomicU64::new(0),
+            config_apply: PaddedAtomicU64::new(0),
             request_body_waf: PaddedAtomicU64::new(0),
             response_body_waf: PaddedAtomicU64::new(0),
             response_transform: PaddedAtomicU64::new(0),
@@ -1467,6 +1487,7 @@ impl MemoryGovernor {
                 generation: 0,
                 class_limit: [0; N_ADMISSION_CLASSES],
                 connection_budget_bytes: 0,
+                control_plane_reserve_bytes: 0,
                 shared_connection_budget_bytes: 0,
                 cache_read_memory_budget_bytes: 0,
                 cache_read_memory_object_limit_bytes: 0,
@@ -1515,7 +1536,7 @@ impl MemoryGovernor {
     /// Allocation-heavy cache background work shares the normal background
     /// class ceiling, but must also yield its bytes to connection reserves.
     pub fn try_admit_cache_background(&self) -> Option<AdmissionPermit<'_>> {
-        self.try_admit_with_priority(AdmissionClass::BackgroundWork, 0, true)
+        self.try_admit_with_priority(AdmissionClass::BackgroundWork, 0, AccountPriority::Cache)
     }
 
     pub fn try_admit_cache_read(&self, bytes: u64) -> Option<AdmissionPermit<'_>> {
@@ -1607,6 +1628,7 @@ impl MemoryGovernor {
         }
         self.account_grantable_bytes()
             .saturating_sub(limits.connection_budget_bytes)
+            .saturating_sub(limits.control_plane_reserve_bytes)
     }
 
     /// Charge `bytes` against the account. `committed` selects which
@@ -1615,7 +1637,7 @@ impl MemoryGovernor {
     /// Committed charges also land in the live/purpose attribution
     /// immediately — the covered allocation is already real.
     fn try_charge_account(&self, bytes: u64, committed: bool, purpose: SharedGrantPurpose) -> bool {
-        self.try_charge_account_with_priority(bytes, committed, purpose, false)
+        self.try_charge_account_with_priority(bytes, committed, purpose, AccountPriority::Ordinary)
     }
 
     fn try_charge_account_with_priority(
@@ -1623,9 +1645,9 @@ impl MemoryGovernor {
         bytes: u64,
         committed: bool,
         purpose: SharedGrantPurpose,
-        low_priority: bool,
+        priority: AccountPriority,
     ) -> bool {
-        self.try_charge_account_before_cas(bytes, committed, purpose, low_priority, || {})
+        self.try_charge_account_before_cas(bytes, committed, purpose, priority, || {})
     }
 
     fn try_charge_account_before_cas(
@@ -1633,7 +1655,7 @@ impl MemoryGovernor {
         bytes: u64,
         committed: bool,
         purpose: SharedGrantPurpose,
-        low_priority: bool,
+        priority: AccountPriority,
         before_cas: impl FnOnce(),
     ) -> bool {
         let mut before_cas = Some(before_cas);
@@ -1647,23 +1669,27 @@ impl MemoryGovernor {
         // protocol queues and relay slices), and only while pressure is
         // Normal. A non-Normal observation closes the borrowing gate even
         // if the arithmetic would still leave headroom.
-        let low_priority_reserve = if low_priority {
-            let limits = self.limits();
-            if limits.memory_pressure_level == MemoryPressureLevel::Normal
-                && self.cached_account_headroom_bytes.load(Ordering::Relaxed) != u64::MAX
-            {
-                limits.connection_budget_bytes
-            } else {
-                u64::MAX
+        let reserve = match priority {
+            AccountPriority::Control => 0,
+            AccountPriority::Ordinary => CONTROL_PLANE_RESERVE_BYTES,
+            AccountPriority::Cache => {
+                let limits = self.limits();
+                if limits.memory_pressure_level == MemoryPressureLevel::Normal
+                    && self.cached_account_headroom_bytes.load(Ordering::Relaxed) != u64::MAX
+                {
+                    limits
+                        .connection_budget_bytes
+                        .saturating_add(limits.control_plane_reserve_bytes)
+                } else {
+                    u64::MAX
+                }
             }
-        } else {
-            0
         };
         let mut current = self.account_outstanding_bytes.load(Ordering::Acquire);
         loop {
             let capacity = self
                 .account_grantable_from_outstanding()
-                .saturating_sub(low_priority_reserve);
+                .saturating_sub(reserve);
             if bytes > capacity.saturating_sub(current) {
                 self.account_rejects_total.fetch_add(1, Ordering::Relaxed);
                 return false;
@@ -1732,7 +1758,11 @@ impl MemoryGovernor {
         self.try_grant_shared_with_priority(
             purpose,
             bytes,
-            purpose == SharedGrantPurpose::CacheReadMemory,
+            match purpose {
+                SharedGrantPurpose::CacheReadMemory => AccountPriority::Cache,
+                SharedGrantPurpose::ConfigPublish => AccountPriority::Control,
+                _ => AccountPriority::Ordinary,
+            },
         )
     }
 
@@ -1740,10 +1770,10 @@ impl MemoryGovernor {
         &self,
         purpose: SharedGrantPurpose,
         bytes: u64,
-        low_priority: bool,
+        priority: AccountPriority,
     ) -> Option<SharedPermit<'_>> {
         let bytes = bytes.max(1);
-        if !self.try_charge_account_with_priority(bytes, false, purpose, low_priority) {
+        if !self.try_charge_account_with_priority(bytes, false, purpose, priority) {
             return None;
         }
         Some(SharedPermit {
@@ -1751,7 +1781,7 @@ impl MemoryGovernor {
             purpose,
             bytes,
             committed: false,
-            low_priority,
+            priority,
         })
     }
 
@@ -1996,7 +2026,11 @@ impl MemoryGovernor {
         self.try_admit_with_priority(
             class,
             cache_read_memory_charge_bytes,
-            class.resource_domain() == Some(ResourceDomain::CacheAndAnalytics),
+            match class.resource_domain() {
+                Some(ResourceDomain::CacheAndAnalytics) => AccountPriority::Cache,
+                Some(ResourceDomain::ControlPlane) => AccountPriority::Control,
+                _ => AccountPriority::Ordinary,
+            },
         )
     }
 
@@ -2004,7 +2038,7 @@ impl MemoryGovernor {
         &self,
         class: AdmissionClass,
         cache_read_memory_charge_bytes: u64,
-        low_priority: bool,
+        priority: AccountPriority,
     ) -> Option<AdmissionPermit<'_>> {
         // Admission: add then check-then-rollback. The counter may transiently
         // read above the cap by at most the number of in-flight adders, but a
@@ -2058,7 +2092,7 @@ impl MemoryGovernor {
         let Some(mut shared) = self.try_grant_shared_with_priority(
             SharedGrantPurpose::Admission,
             account_charge,
-            low_priority,
+            priority,
         ) else {
             if cache_read_memory_charge_bytes > 0 {
                 self.cache_read_memory_bytes
@@ -2260,6 +2294,7 @@ impl MemoryGovernor {
                 MIN_ORIGIN_CONNECT_LIMIT,
                 MAX_ORIGIN_CONNECT_LIMIT,
             ),
+            AdmissionClass::ConfigApply => 1,
             AdmissionClass::BackgroundWork => connection_limit(
                 snapshot.cache_budget_bytes / 8,
                 BACKGROUND_WORK_ESTIMATED_BYTES,
@@ -3104,6 +3139,8 @@ impl MemoryGovernor {
             keepalive_fd_budget: fd_budget(&mem, KEEPALIVE_FD_BUDGET_PCT),
             cpu_parallelism: mem.cpu_parallelism,
             connection_budget_bytes: mem.connection_budget_bytes,
+            control_plane_reserve_bytes: self.limits().control_plane_reserve_bytes,
+            config_apply_active: self.config_apply.load(Ordering::Relaxed),
             connection_admission_used_bytes: self.shared_connection_used_bytes(),
             zero_copy_relay_active: self.zero_copy_relay_active(),
             zero_copy_relay_limit: self.zero_copy_relay_limit(),
@@ -3292,6 +3329,7 @@ impl MemoryGovernor {
                 generation,
                 class_limit,
                 connection_budget_bytes: snapshot.connection_budget_bytes,
+                control_plane_reserve_bytes: CONTROL_PLANE_RESERVE_BYTES,
                 // A landed-but-blind observation (availability Unknown and
                 // no headroom reading at all) collapses the derived byte
                 // budget toward ~1B and would refuse every charged admission
@@ -3338,6 +3376,7 @@ impl MemoryGovernor {
             AdmissionClass::Http3Request => &self.h3_requests.0,
             AdmissionClass::OriginConnect => &self.origin_connects.0,
             AdmissionClass::BackgroundWork => &self.background_work.0,
+            AdmissionClass::ConfigApply => &self.config_apply.0,
             AdmissionClass::RequestBodyWaf => &self.request_body_waf.0,
             AdmissionClass::ResponseBodyWaf => &self.response_body_waf.0,
             AdmissionClass::ResponseTransform => &self.response_transform.0,
@@ -3380,6 +3419,9 @@ impl MemoryGovernor {
                 .load(Ordering::Relaxed),
             origin_connect: self
                 .reject_counter(AdmissionClass::OriginConnect)
+                .load(Ordering::Relaxed),
+            config_apply: self
+                .reject_counter(AdmissionClass::ConfigApply)
                 .load(Ordering::Relaxed),
             background_work: self
                 .reject_counter(AdmissionClass::BackgroundWork)
@@ -4920,7 +4962,8 @@ fn shared_connection_charge_bytes(class: AdmissionClass) -> u64 {
         AdmissionClass::Http2Stream => H2_STREAM_ESTIMATED_BYTES,
         AdmissionClass::Http3Request => H3_REQUEST_ESTIMATED_BYTES,
         AdmissionClass::OriginConnect => ORIGIN_CONNECT_ESTIMATED_BYTES,
-        AdmissionClass::BackgroundWork
+        AdmissionClass::ConfigApply
+        | AdmissionClass::BackgroundWork
         | AdmissionClass::RequestBodyWaf
         | AdmissionClass::ResponseBodyWaf
         | AdmissionClass::ResponseTransform
@@ -4945,7 +4988,9 @@ pub fn class_estimated_bytes(class: AdmissionClass) -> u64 {
         AdmissionClass::Http2Stream => H2_STREAM_ESTIMATED_BYTES,
         AdmissionClass::Http3Request => H3_REQUEST_ESTIMATED_BYTES,
         AdmissionClass::OriginConnect => ORIGIN_CONNECT_ESTIMATED_BYTES,
-        AdmissionClass::BackgroundWork => BACKGROUND_WORK_ESTIMATED_BYTES,
+        AdmissionClass::BackgroundWork | AdmissionClass::ConfigApply => {
+            BACKGROUND_WORK_ESTIMATED_BYTES
+        }
         AdmissionClass::RequestBodyWaf => REQUEST_BODY_WAF_ESTIMATED_BYTES,
         AdmissionClass::ResponseBodyWaf => RESPONSE_BODY_WAF_ESTIMATED_BYTES,
         AdmissionClass::ResponseTransform => RESPONSE_TRANSFORM_ESTIMATED_BYTES,
@@ -4978,6 +5023,7 @@ const ALL_ADMISSION_CLASSES: [AdmissionClass; N_ADMISSION_CLASSES] = [
     AdmissionClass::ClusterInternalConnection,
     AdmissionClass::RpcStreamCommand,
     AdmissionClass::SniRelay,
+    AdmissionClass::ConfigApply,
 ];
 
 fn class_index(class: AdmissionClass) -> usize {
@@ -4999,6 +5045,7 @@ fn class_index(class: AdmissionClass) -> usize {
         AdmissionClass::ClusterInternalConnection => 14,
         AdmissionClass::RpcStreamCommand => 15,
         AdmissionClass::SniRelay => 16,
+        AdmissionClass::ConfigApply => 17,
     }
 }
 
@@ -5057,7 +5104,8 @@ fn runtime_limit(
             Some(ORIGIN_FD_BUDGET_PCT),
             16_384,
         ),
-        AdmissionClass::BackgroundWork
+        AdmissionClass::ConfigApply
+        | AdmissionClass::BackgroundWork
         | AdmissionClass::RequestBodyWaf
         | AdmissionClass::ResponseBodyWaf
         | AdmissionClass::ResponseTransform
@@ -6814,9 +6862,9 @@ mod resident_memory_tests {
 #[cfg(test)]
 mod en16_pool_tests {
     use super::{
-        AdmissionClass, BudgetedMemorySnapshot, DiskLedgerClass, MemoryGovernor,
-        MemoryPressureLevel, SharedGrantPurpose, pinned_alloc_headroom_bytes,
-        pinned_alloc_reserve_bytes,
+        AccountPriority, AdmissionClass, BudgetedMemorySnapshot, CONTROL_PLANE_RESERVE_BYTES,
+        DiskLedgerClass, MemoryGovernor, MemoryPressureLevel, SharedGrantPurpose,
+        class_estimated_bytes, pinned_alloc_headroom_bytes, pinned_alloc_reserve_bytes,
     };
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -7152,13 +7200,21 @@ mod en16_pool_tests {
         seed_governor_memory(&governor, 2 << 30, 1 << 30, 1 << 20, 0);
         let capacity = governor.account_view().grantable_bytes;
         let mut permit = governor
-            .try_grant_shared(SharedGrantPurpose::TcpQueue, capacity)
+            .try_grant_shared_with_priority(
+                SharedGrantPurpose::TcpQueue,
+                capacity,
+                AccountPriority::Control,
+            )
             .unwrap();
         permit.commit_during_transfer(|| {
             assert_eq!(governor.account_view().grantable_bytes, 0);
             assert!(
                 governor
-                    .try_grant_shared(SharedGrantPurpose::Admission, 1)
+                    .try_grant_shared_with_priority(
+                        SharedGrantPurpose::Admission,
+                        1,
+                        AccountPriority::Control,
+                    )
                     .is_none()
             );
         });
@@ -7188,6 +7244,7 @@ mod en16_pool_tests {
             headroom
                 .saturating_sub(snapshot.account_safety_margin_bytes)
                 .saturating_sub(reserve)
+                .saturating_sub(snapshot.control_plane_reserve_bytes)
         );
         assert!(borrowable > 1);
         assert_eq!(snapshot.low_priority_borrowable_bytes, borrowable);
@@ -7211,6 +7268,54 @@ mod en16_pool_tests {
         // The connection reserve itself is still available.
         assert!(governor.try_admit(AdmissionClass::HttpConnection).is_some());
         drop(fill_permit);
+    }
+
+    #[test]
+    fn ordinary_saturation_cannot_consume_the_control_plane_reserve() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 4 << 30, 2 << 30, 1 << 20, 0);
+        let grantable = governor.account_view().grantable_bytes;
+        let reserve = governor.limits().control_plane_reserve_bytes;
+        assert_eq!(reserve, CONTROL_PLANE_RESERVE_BYTES);
+        assert!(grantable > reserve);
+        let fill = governor
+            .try_grant_shared(SharedGrantPurpose::TcpQueue, grantable - reserve)
+            .expect("ordinary work may use everything outside the control reserve");
+        assert!(
+            governor
+                .try_grant_shared(SharedGrantPurpose::TcpQueue, 1)
+                .is_none(),
+            "ordinary grants must stop at the control-plane reserve"
+        );
+
+        let rpc = governor
+            .try_admit(AdmissionClass::RpcStreamCommand)
+            .expect("RPC command keeps its reserved bytes");
+        let internal = governor
+            .try_admit(AdmissionClass::ClusterInternalConnection)
+            .expect("cluster-control connection keeps its reserved bytes");
+        let apply = governor
+            .try_admit(AdmissionClass::ConfigApply)
+            .expect("configuration apply has an independent reserved slot");
+        assert!(
+            governor.try_admit(AdmissionClass::ConfigApply).is_none(),
+            "only one configuration apply runs at a time"
+        );
+        assert_eq!(governor.admission_reject_snapshot().config_apply, 1);
+
+        drop(apply);
+        drop(internal);
+        drop(rpc);
+        drop(fill);
+        // Committed control work stays deducted until a physical observation
+        // confirms it; only the uncommitted ordinary fill refunds immediately.
+        assert_eq!(
+            governor.account_view().grantable_bytes,
+            grantable
+                - class_estimated_bytes(AdmissionClass::RpcStreamCommand)
+                - class_estimated_bytes(AdmissionClass::ClusterInternalConnection)
+                - class_estimated_bytes(AdmissionClass::ConfigApply)
+        );
     }
 
     #[test]
@@ -7261,7 +7366,11 @@ mod en16_pool_tests {
         let borrowable = governor.low_priority_borrowable_bytes();
         assert!(borrowable > 1);
         let mut permit = governor
-            .try_grant_shared_with_priority(SharedGrantPurpose::Admission, 1, true)
+            .try_grant_shared_with_priority(
+                SharedGrantPurpose::Admission,
+                1,
+                AccountPriority::Cache,
+            )
             .expect("one byte fits the low-priority window");
         let fill = borrowable - 1;
         let _fill_permit = governor
@@ -7285,7 +7394,7 @@ mod en16_pool_tests {
             half,
             true,
             SharedGrantPurpose::RequestWorkspace,
-            false,
+            AccountPriority::Ordinary,
             || {
                 pending = governor.try_grant_shared(SharedGrantPurpose::Admission, half);
                 assert!(pending.is_some());
@@ -7476,14 +7585,19 @@ mod en16_pool_tests {
         let grantable = governor.account_view().grantable_bytes;
         assert!(grantable > 0 && grantable < 200 << 20);
 
-        // Exhaust the account with a KernelBpf grant.
+        // Exhaust ordinary capacity with a KernelBpf grant; the control
+        // reserve stays outside it.
+        let reserve = governor.limits().control_plane_reserve_bytes;
         let _bulk = governor
-            .try_grant_shared(SharedGrantPurpose::KernelBpf, grantable)
-            .expect("bulk grant within capacity");
+            .try_grant_shared(SharedGrantPurpose::KernelBpf, grantable - reserve)
+            .expect("bulk grant within ordinary capacity");
         assert!(
             governor.try_admit(AdmissionClass::HttpConnection).is_none(),
-            "class ceiling has room but the account is empty — fail closed"
+            "class ceiling has room but the ordinary account is empty — fail closed"
         );
+        let _rpc = governor
+            .try_admit(AdmissionClass::RpcStreamCommand)
+            .expect("control commands keep their reserve");
         drop(_bulk);
         assert!(
             governor.try_admit(AdmissionClass::HttpConnection).is_some(),

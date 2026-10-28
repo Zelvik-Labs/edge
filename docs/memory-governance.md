@@ -333,23 +333,31 @@ rate-limited `METRICS_MEMORY` warning fires when the gauge exceeds max(1/8 of
 node memory, 64MiB).
 
 Cache reads, writes, revalidation and allocation-heavy cache background work
-now borrow through the shared-account CAS gate: observed headroom minus safety
-margin, outstanding commitments and the full connection budget. Borrowing closes
-outside Normal pressure and without observed physical headroom; credential growth
-keeps the same priority. Config apply, expiry cleanup and disk purging retain their
-existing background admission because cleanup must still progress under pressure.
-Memory-only fills charge buffer capacity before allocation, including the old/new
-coexistence peak during reallocation. Failed growth leaves the current buffer
-unchanged; the handler stops caching while origin forwarding continues.
+borrow through the shared-account CAS gate: observed headroom minus safety
+margin, outstanding commitments, the full connection budget and the control-plane
+reserve. Borrowing closes outside Normal pressure and without observed physical
+headroom; credential growth keeps the same priority.
 
-The separate `BorrowingInputs` model also describes independent established and
-control-plane reserves and an additional working set; those broader invariants
-are still pending. `resourceGovernor.sharedAccount` therefore reports
-`lowPriorityBorrowingEnforced=true`, current `lowPriorityBorrowableBytes`, and
-`priorityReserveEnforced=false`. Logical refunds never increase observed physical
-headroom, and estimated bytes are not RSS. L1/analytics global revocation and
-retirement of per-server metrics without losing unflushed billing data remain
-separate lifecycle work.
+Ordinary shared grants cannot consume the control-plane reserve. That reserve is
+the existing Normal-pressure minimum for 32 cluster-control connections plus 16
+RPC stream commands, plus one configuration materialization. `ConfigApply` has
+its own admission class and one slot, so cache background saturation cannot fill
+the shared `BackgroundWork` class and block configuration. Expiry cleanup and
+disk purging keep ordinary `BackgroundWork` admission because cleanup must still
+progress under pressure. Configuration decode happens before that materialization
+permit, and the materialized generation's real peak is not yet charged through
+`SharedGrantPurpose::ConfigPublish`; the reserve protects the admission path, not
+the whole configuration working set.
+
+`resourceGovernor.sharedAccount` reports `lowPriorityBorrowingEnforced=true`,
+current `lowPriorityBorrowableBytes`,
+`controlPlaneAccountReserveEnforced=true`, `controlPlaneReserveBytes`, and
+`configApplyActive`; `priorityReserveEnforced` stays false because established
+traffic, connection working sets, configuration peaks and all resident
+cache/analytics owners are not yet covered by independent, enforced reserves.
+Logical refunds never increase observed physical headroom, and estimated bytes
+are not RSS. L1/analytics global revocation and retirement of per-server metrics
+without losing unflushed billing data remain separate lifecycle work.
 
 Tracker cardinality is additionally hard-bounded: each tracker
 (`MetricAggregator` x2 incl. nested `request_samples`, `TopIpTracker`,

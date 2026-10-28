@@ -54,4 +54,12 @@
 - 新增真实 TCP relay 64 轮双向通信，中间执行 High/Critical cache reclaim：各方向 1 MiB 字节精确一致，loopback p50 41,004µs / p99 42,272µs。这不是吞吐优化基准或完整协议矩阵。
 - 当前 Linux 全量库 **1147 通过 / 2 忽略**，macOS cache 50、body owner 1 通过，`clippy --lib` 通过。最新单次 sharded H3 close 扫描与上述反向对照恢复后，cache 51、H3 7、名单 4 重新通过。
 
+## 控制通道保留（验证中）
+
+- shared account 增加独立控制保留：32 个集群控制连接、16 个 RPC stream 命令的 Normal 下限及一次配置 materialization 的估算字节。普通 grant/扩容只能使用保留之外的额度；控制类准入不受该扣除限制。缓存借用仍先扣完整控制保留，再扣完整 connection budget。
+- 配置 materialization 改用独立 `AdmissionClass::ConfigApply` 单槽，不再与缓存共用 `BackgroundWork`；缓存 class 饱和时配置仍可取得准入。过期清理、磁盘 purge 保持普通后台准入。
+- node status 增加 `controlPlaneAccountReserveEnforced`、`controlPlaneReserveBytes`、`configApplyActive`；`priorityReserveEnforced` 仍为 false。
+- 去掉普通 grant 的控制保留扣除，`ordinary_saturation_cannot_consume_the_control_plane_reserve` 以「ordinary grants must stop at the control-plane reserve」确定性失败；恢复后 governor 77 用例通过，config apply 7、status 1 通过。
+- 限制：配置 JSON decode 发生在 materialization 准入之前，materialized 代际的真实峰值也尚未通过 `SharedGrantPurpose::ConfigPublish` 计入；当前保留保护的是准入路径，不是完整配置工作集。
+
 站点 metrics 立即删除方案未采用：本地持久化、带宽、daily 三个消费者各有独立 cursor，删除会隐去最后窗口及 in-flight 流量。须在有界 retirement 生命周期下完成消费，再释放 tracker；现有约束不允许为了内存回收丢计费数据。
