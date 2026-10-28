@@ -17,6 +17,8 @@
 
 所有本机 Rust 测试通过工作区 `scripts/local-rust.sh`、mbx、单编译槽运行。未清缓存。未发布、部署或修改 tag。
 
+全量库测试：macOS debug `cargo test --lib` 1055 通过 / 2 手动 UDP 用例忽略；`cargo clippy --all-targets -D clippy::correctness -D clippy::suspicious` 通过（仅保留既有 `items_after_test_module` 警告）。Linux/cgroup/RSS/Long-run 验证仍未运行。
+
 ## 共享账本原子性（实施中）
 
 现有 pending 与 committed-unconfirmed 各自 CAS，跨计数器申请会同时通过；commit 先减 pending 再加 committed 会短暂开放已承诺额度。确定性回归测试在恢复旧算法时均失败：commit 窗口误开放 905969664 bytes；交错的 pending/committed 申请同时获准。
