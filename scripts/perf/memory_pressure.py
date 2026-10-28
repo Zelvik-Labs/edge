@@ -655,9 +655,17 @@ async def run_acceptance(args, clients, output, cg, pid):
         initial_shed = (await control("stats")).get("shed") or {}
         initial_passes = initial_shed.get("final_resort_passes_total") or 0
         initial_drained = initial_shed.get("drained_connections_total") or 0
+        last_shed = initial_shed
         for pct in [50, 70, 85, 90, 94, 97]:
+            if (last_shed.get("final_resort_passes_total") or 0) > initial_passes:
+                output["stopped_after_final_resort_at"] = output["stages"][-1]["target_percent"]
+                break
             before_bytes = {proto: sample.bytes for proto, sample in held_samples.items()}
-            applied = await apply_acceptance_pressure(args, source, pct, cg, fill)
+            try:
+                applied = await apply_acceptance_pressure(args, source, pct, cg, fill)
+            except asyncio.TimeoutError:
+                output["interrupted_stage"] = {"target_percent": pct, "error": "control timeout"}
+                break
             maximum = int((cg / "memory.max").read_text())
             current = int((cg / "memory.current").read_text())
             target = maximum * pct // 100
@@ -692,6 +700,7 @@ async def run_acceptance(args, clients, output, cg, pid):
                 for proto, sample in held_samples.items()
             }
             stages.append(row)
+            last_shed = row["shed"]
             print(json.dumps(row), flush=True)
             if pct in (85, 90) and "mid_recovery" not in output:
                 alive = all(not sample.done.is_set() for sample in held_samples.values())
@@ -714,19 +723,41 @@ async def run_acceptance(args, clients, output, cg, pid):
         before_bytes = {proto: sample.bytes for proto, sample in held_samples.items()}
         before_passes = initial_passes
         before_drained = initial_drained
-        applied = await apply_acceptance_pressure(args, source, 98, cg, fill)
-        maximum = int((cg / "memory.max").read_text())
-        current = int((cg / "memory.current").read_text())
-        target = maximum * 98 // 100
-        reached = current >= (target if source == "cache" else target - (1 << 20))
-        dwell = 30 if reached else 2
-        await asyncio.sleep(dwell)
-        state = await control("stats")
+        final_seen = (last_shed.get("final_resort_passes_total") or 0) > initial_passes
+        if final_seen:
+            # The previous stage already reached the hard-exhaustion fallback;
+            # pushing further only stalls the fixture's allocator under a full
+            # cgroup and repeats the same evidence.
+            applied = {
+                "kind": "skipped_after_final_resort",
+                "trigger_stage": stages[-1]["target_percent"],
+            }
+            reached = stages[-1]["reached"]
+            dwell = 0
+            state = stages[-1]["state"]
+        else:
+            try:
+                applied = await apply_acceptance_pressure(args, source, 98, cg, fill)
+            except asyncio.TimeoutError:
+                output["final_control_timeout"] = True
+                applied = {"kind": "control_timeout"}
+                reached = False
+                dwell = 0
+                state = stages[-1]["state"] if stages else await control("stats")
+            else:
+                maximum = int((cg / "memory.max").read_text())
+                current = int((cg / "memory.current").read_text())
+                target = maximum * 98 // 100
+                reached = current >= (target if source == "cache" else target - (1 << 20))
+                dwell = 30 if reached else 2
+                await asyncio.sleep(dwell)
+                state = await control("stats")
         after_shed = state.get("shed") or {}
         after_passes = after_shed.get("final_resort_passes_total") or 0
         after_drained = after_shed.get("drained_connections_total") or 0
         row = {
-            "target_percent": 98,
+            "target_percent": stages[-1]["target_percent"] if final_seen else 98,
+            "requested_percent": 98,
             "source": source,
             "reached": reached,
             "dwell_seconds": dwell,
@@ -736,6 +767,7 @@ async def run_acceptance(args, clients, output, cg, pid):
             "new_requests": {},
             "last_resort": {
                 "reached": reached,
+                "trigger_stage": stages[-1]["target_percent"] if final_seen else 98,
                 "final_resort_passes_delta": after_passes - before_passes,
                 "final_resort_passes_total": after_shed.get("final_resort_passes_total"),
                 "final_resort_seen_in_run": after_passes > before_passes,
@@ -761,6 +793,7 @@ async def run_acceptance(args, clients, output, cg, pid):
         stages.append(row)
         print(json.dumps(row), flush=True)
         output["stages"] = stages
+        output["last_resort"] = row["last_resort"]
         if source == "cache":
             # Cache alone is bounded below the High threshold by the governor,
             # so a pressure-triggered reclaim cannot occur. Prove the retained
