@@ -141,6 +141,17 @@ async fn control(acceptance_enabled: bool, cache_enabled: bool) -> Result<()> {
             let shed = shed_stats();
             let object = reply.as_object_mut().context("reply is not an object")?;
             object.insert("forcedReclaim".into(), json!(forced_reclaim));
+            // The l4 pressure level de-escalates on a 5s dwell and gates the
+            // per-IP TCP active limit, so acceptance must not mistake its
+            // still-tightened window for a memory-admission refusal.
+            object.insert(
+                "l4Pressure".into(),
+                json!(zelvik_edge::l4_defense::current_pressure_level().as_str()),
+            );
+            object.insert(
+                "tcpActivePerIpLimit".into(),
+                json!(zelvik_edge::l4_defense::current_tcp_active_limit_per_ip()),
+            );
             object.insert(
                 "cache".into(),
                 cache

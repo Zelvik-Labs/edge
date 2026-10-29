@@ -619,7 +619,66 @@ async def probe_bursts(count):
                 pass
 
 
-async def recovery_checkpoint(held_samples, cg, pid):
+async def probe_held(held, held_samples, count=8):
+    """Send new work on an already-accepted H2/H3 connection.
+
+    A new stream refused for admission must not tear down the connection
+    carrying the accepted long response. Opening a fresh connection cannot
+    prove that distinction: under Critical the TCP accept path is itself
+    tightened by the per-IP active limit.
+    """
+    results = {}
+    for proto in ("h2", "h3"):
+        client = held.get(proto)
+        held_sample = held_samples.get(proto)
+        if client is None or held_sample is None or held_sample.done.is_set():
+            continue
+        protocol = client if proto == "h2" else client.client
+        before = held_sample.bytes
+        samples = []
+        for _ in range(count):
+            try:
+                samples.append(await client.request("/fast"))
+            except Exception as error:
+                failed = Sample()
+                failed.finish(str(error))
+                failed.headers.set()
+                samples.append(failed)
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*(request_sample.done.wait() for request_sample in samples)), 5
+            )
+        except asyncio.TimeoutError:
+            for request_sample in samples:
+                if not request_sample.done.is_set():
+                    request_sample.finish("timeout")
+                    request_sample.headers.set()
+        good = [
+            request_sample
+            for request_sample in samples
+            if request_sample.status == 200
+            and not request_sample.error
+            and request_sample.bytes == len(PAYLOAD)
+        ]
+        results[proto] = {
+            "requests": count,
+            "attempted": len(samples),
+            "success": len(good),
+            "errors": [
+                request_sample.error
+                or f"status:{request_sample.status},bytes:{request_sample.bytes}"
+                for request_sample in samples
+                if request_sample not in good
+            ][:20],
+            "connection_alive": (not held_sample.done.is_set())
+            and getattr(protocol, "connection_error", None) is None,
+            "held_status": held_sample.status,
+            "held_progress_bytes": held_sample.bytes - before,
+        }
+    return results
+
+
+async def recovery_checkpoint(held, held_samples, cg, pid):
     """Release the pressure source and prove accepted streams resume.
 
     This checkpoint runs before the extreme final-resort stage, so a kill
@@ -628,19 +687,32 @@ async def recovery_checkpoint(held_samples, cg, pid):
     before = {proto: sample.bytes for proto, sample in held_samples.items()}
     started = time.monotonic()
     await control("release")
+    deadline = started + 30
     state = await control("stats")
-    while state["pressure"] == "critical" and time.monotonic() - started < 30:
-        await asyncio.sleep(2)
+    # The L4 rollup de-escalates on its own 5s dwell; a still-Critical L4
+    # level keeps the per-IP TCP active limit at its floor and would reject
+    # fresh H1/H2 connections even after the governor reports Normal.
+    while (
+        state["pressure"] == "critical" or state.get("l4Pressure") == "critical"
+    ) and time.monotonic() < deadline:
+        await asyncio.sleep(1)
         state = await control("stats")
-    await asyncio.sleep(3)
+    if "l4Pressure" in state:
+        await asyncio.sleep(1)
+    else:
+        # Fixture predating the L4 status field: allow its 5s dwell to expire.
+        await asyncio.sleep(8)
     state = await control("stats")
     row = {
         "release_seconds": time.monotonic() - started,
         "pressure_below_critical": state["pressure"] != "critical",
+        "l4_pressure_below_critical": state.get("l4Pressure") != "critical",
+        "tcp_active_per_ip_limit": state.get("tcpActivePerIpLimit"),
         "state": state,
         "physical": observation(cg, pid),
         "new_requests": await probe_bursts(16),
     }
+    row["held_new_requests"] = await probe_held(held, held_samples)
     row["accepted_progress"] = {proto: progress(sample, before[proto]) for proto, sample in held_samples.items()}
     row["shed"] = shed_snapshot(state)
     row["cache"] = state.get("cache")
@@ -726,6 +798,7 @@ async def run_acceptance(args, clients, output, cg, pid):
             row["shed"] = shed_snapshot(state)
             row["admission_rejects"] = rejection_snapshot(state)
             row["new_requests"] = await probe_bursts(32)
+            row["held_new_requests"] = await probe_held(held, held_samples)
             row["accepted_progress"] = {proto: progress(sample, before_bytes[proto]) for proto, sample in held_samples.items()}
             row["isolation"] = {
                 proto: {
@@ -743,7 +816,7 @@ async def run_acceptance(args, clients, output, cg, pid):
                 passes = row["shed"].get("final_resort_passes_total") or 0
                 if alive and passes == initial_passes:
                     output["mid_recovery"] = await recovery_checkpoint(
-                        held_samples, cg, pid
+                        held, held_samples, cg, pid
                     )
                     print(json.dumps(output["mid_recovery"]), flush=True)
                 else:
