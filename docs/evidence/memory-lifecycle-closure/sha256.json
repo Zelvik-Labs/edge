@@ -15,5 +15,14 @@
   "mace-020-review.txt": "c58aaea8c2ed7432ce8ec5d5e621813ea596e19151a5461da1f07e9db8e181b8",
   "mace-020-storage-tests.log": "1fa534999bde806a1a38038adb757559616b3312f0ade8672a05e1c379d0afb4",
   "mace-020-telemetry-tests.log": "b28a7dd86ae44f84ef341c967eef2fdb5a69da20a685495c20f21599451dbb75",
-  "metric-retention-tests.log": "e5302d142bd667e2b53321f9fce443c2577a94b9caad73a10e8decafaaa80f2d"
+  "metric-retention-tests.log": "e5302d142bd667e2b53321f9fce443c2577a94b9caad73a10e8decafaaa80f2d",
+  "server-metrics-all-target-check.log": "5666a1330c7497161f1da48053eade657e155d29e7446d16360f25531af8bfa6",
+  "server-metrics-clippy.log": "47bcfaf843b877e364df72b4d514d7116f4672d622c9e3d8deffb71beb3efdab",
+  "server-metrics-config-retirement.log": "95ec4c38ab4631dcb574ef1139468beabbaf55d9405e0fd21d1b8f5ec8288f5c",
+  "server-metrics-config-sync.log": "457908a9c6d173cdece3aa261003729769205213067686535fd1b16ff4cc4105",
+  "server-metrics-negative-control-capacity.log": "eda015fd97f2980d5a5297efea1b374068f8f1ae8ab91bad997c67f8646ed039",
+  "server-metrics-negative-control-held-ack.log": "3cc9d3e1b6dd183eaa94e0947ad818a63b1293cae8dbc3ad2f20230fa0e9144f",
+  "server-metrics-negative-control-sweep.log": "dabdaf2f8aec2a826ee17b6822c6dfa629d24044b9320a1d40964719396f2229",
+  "server-metrics-repro-before.log": "cbbcc1244d520052d5a9e383b0641af3aabdb648353fd9068ad742d563d82587",
+  "server-metrics-retirement-tests.log": "6f72ac5f6caa7cb9d30bde8ced2f5812aec119a997d43406cc20a2c13ba86c90"
 }

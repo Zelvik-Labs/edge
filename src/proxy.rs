@@ -5806,7 +5806,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
         };
 
         if ctx.server_metrics.is_none() {
-            ctx.server_metrics = Some(crate::metrics::record::get_or_create(server_id));
+            ctx.server_metrics = Some(ctx.server.as_ref().expect("selected server").runtime_metrics.get());
         }
         let plan_id = if user_plan_id > 0 {
             self.config.get_user_plan_id_sync(user_plan_id).unwrap_or(0)
@@ -8348,8 +8348,10 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                     )
                 })
                 .await;
-                if let Ok((lb_arc, _has_hc)) = built {
-                    config.cache_server_route(host_c, server_c, lb_arc).await;
+                if let Ok((lb_arc, _has_hc)) = built
+                    && let Err(error) = config.cache_server_route(host_c, server_c, lb_arc).await
+                {
+                    warn!(%error, "route cache installation rejected");
                 }
             });
             session.respond_error(502).await?;

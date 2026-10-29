@@ -1464,7 +1464,7 @@ impl TcpProxyManager {
             let tls_connector =
                 build_upstream_tls_connector(verify_origin_tls, ext.client_cert.as_ref())?;
 
-            self.record_request_start(client_addr, &mut context);
+            self.record_request_start(client_addr, &server, &mut context);
             let toa_config = self.config_store.get_toa_config_sync();
             let mut backend_stream = match crate::toa::connect_upstream(
                 &context.backend_addr,
@@ -1564,7 +1564,7 @@ impl TcpProxyManager {
         let origin_connect_permit = MEMORY_GOVERNOR
             .try_admit(AdmissionClass::OriginConnect)
             .ok_or_else(|| anyhow::anyhow!("origin connect memory admission rejected"))?;
-        self.record_request_start(client_addr, &mut context);
+        self.record_request_start(client_addr, &server, &mut context);
         let toa_config = self.config_store.get_toa_config_sync();
         #[cfg(target_os = "linux")]
         AF_XDP_TCP_PROXY_DIAG_BACKEND_CONNECT_START.fetch_add(1, Ordering::Relaxed);
@@ -1679,7 +1679,7 @@ impl TcpProxyManager {
         let origin_connect_permit = MEMORY_GOVERNOR
             .try_admit(AdmissionClass::OriginConnect)
             .ok_or_else(|| anyhow::anyhow!("origin connect memory admission rejected"))?;
-        self.record_request_start(client_addr, &mut context);
+        self.record_request_start(client_addr, &server, &mut context);
         let toa_config = self.config_store.get_toa_config_sync();
         let mut backend_stream = match crate::toa::connect_upstream(
             &context.backend_addr,
@@ -1736,9 +1736,9 @@ impl TcpProxyManager {
         res.map(|_| ()).map_err(Into::into)
     }
 
-    fn record_request_start(&self, client_addr: SocketAddr, context: &mut TcpForwardContext) {
+    fn record_request_start(&self, client_addr: SocketAddr, server: &ServerConfig, context: &mut TcpForwardContext) {
         let client_ip = client_addr.ip().to_string();
-        let metrics = crate::metrics::record::get_or_create(context.sid);
+        let metrics = server.runtime_metrics.get();
         context.metrics_guard = Some(crate::metrics::ActiveRequestMetricsGuard::new(
             metrics.clone(),
         ));
@@ -3798,7 +3798,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
     }
 
     /// A least-connections pool over the given origin ids, built through the
@@ -4023,7 +4023,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
     }
 
     async fn connected_proxy_streams() -> (TcpStream, TcpStream, TcpStream, TcpStream) {
@@ -4268,6 +4268,7 @@ mod tests {
             7,
         );
         let server = Arc::new(ServerConfig {
+            runtime_metrics: Default::default(),
             id: Some(91_003),
             description: String::new(),
             user_id: 0,

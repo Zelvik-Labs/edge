@@ -1,4 +1,10 @@
-#[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
+#[cfg_attr(
+    not(target_os = "linux"),
+    expect(
+        unused_imports,
+        reason = "smoke helpers are linux-only, so the glob import is unused elsewhere"
+    )
+)]
 use super::*;
 
 /// Resolves when SIGINT or SIGTERM arrives. Smoke paths must observe
@@ -474,7 +480,7 @@ pub async fn dial_smoke(
 }
 
 #[cfg(target_os = "linux")]
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "dial probe exposes each timing/control knob as an explicit parameter")]
 async fn dial_smoke_inner(
     manager: std::sync::Arc<XdpManager>,
     target: std::net::SocketAddr,
@@ -1491,7 +1497,8 @@ async fn xdp_proxy_smoke_config_store(
             None,
             None,
         )
-        .await;
+        .await
+        .expect("xdp smoke configuration installs");
     store
 }
 

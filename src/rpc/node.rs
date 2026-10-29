@@ -567,6 +567,19 @@ where
                     };
                     let numeric_id = payload.id.unwrap_or(0);
                     let payload_servers = std::mem::take(&mut payload.servers);
+                    // Reserve metric instances before building filters, runtime
+                    // maps, health registrations, XDP or runtime API effects.
+                    // The binding persists on each config through the
+                    // materialization await, so the install below reuses it.
+                    if let Err(err) =
+                        crate::metrics::METRICS.admit_configs(payload_servers.iter())
+                    {
+                        warn!(
+                            "RPC_NODE: server metric family capacity exhausted ({}/{}); keeping current configuration",
+                            err.used, err.limit
+                        );
+                        return false;
+                    }
                     // Auto-derived business listen ports from this snapshot's
                     // typed server list — a later runtime.xdp section without
                     // explicit proxy.ports must not strip the active set.
@@ -1085,7 +1098,7 @@ where
                         crate::probe::apply_plan(runtime_push.probe);
                     }
                     let deleted_contents = config_store.get_deleted_contents().await;
-                    config_store
+                    if let Err(err) = config_store
                         .update_config(
                             numeric_id,
                             payload_config_version,
@@ -1136,7 +1149,14 @@ where
                                 .as_ref()
                                 .and_then(|g| g.http_access_log.clone()),
                         )
-                        .await;
+                        .await
+                    {
+                        warn!(
+                            "RPC_NODE: config install rejected by server metric capacity ({}/{}); keeping previous configuration",
+                            err.used, err.limit
+                        );
+                        return false;
+                    }
                     crate::config_apply::record_installed_config_bytes(
                         runtime_maps.stats.json_bytes,
                     );
@@ -1527,6 +1547,12 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
         let shed = crate::memory_shed::shed_stats();
         let (distinct_ip_entries, distinct_ip_budget_entries) =
             crate::metrics::distinct_ip_budget_status();
+        let (
+            unattributed_requests,
+            unattributed_bytes_sent,
+            unattributed_bytes_received,
+            unattributed_origin_bytes,
+        ) = crate::metrics::METRICS.unattributed_totals();
         let resource_governor_extra = serde_json::json!({
             "metricsAggregatorBytes": governor_snapshot.metrics_aggregator_bytes,
             "cacheL1EstimatedBytes": governor_snapshot.cache_l1_bytes,
@@ -1534,7 +1560,11 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             "distinctIpTrackerEntries": distinct_ip_entries,
             "distinctIpBudgetEntries": distinct_ip_budget_entries,
             "retiredServerMetricInstances": crate::metrics::METRICS.retired_server_metrics_count(),
-            "metricRetirementBacklog": config_store.metric_retirement_backlog_len(),
+            "metricFamilyInstances": crate::metrics::METRICS.family_instance_count(),
+            "metricUnattributedRequests": unattributed_requests,
+            "metricUnattributedBytesSent": unattributed_bytes_sent,
+            "metricUnattributedBytesReceived": unattributed_bytes_received,
+            "metricUnattributedOriginBytes": unattributed_origin_bytes,
             "metricRetirementDeferredTotal": crate::metrics::METRICS.retirement_deferred_total(),
             "sharedAccount": shared_account_status(&governor_snapshot),
             "unaccountedRssBytes": governor_snapshot.unaccounted_rss_bytes,

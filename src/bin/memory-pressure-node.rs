@@ -370,7 +370,8 @@ fn main() -> Result<()> {
         HashMap::new(),
         None,
         None,
-    ));
+    ))
+    .expect("fixture configuration installs");
     let key = api.challenge_key().context("fixture challenge key")?;
     let proxy = EdgeProxy {
         config: store.clone(),

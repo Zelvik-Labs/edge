@@ -1,0 +1,407 @@
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+mbx[progress]: 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+warning: unused `std::result::Result` that must be used
+    --> src/config.rs:2545:9
+     |
+2545 | /         store
+2546 | |             .update_config(
+2547 | |                 1,
+2548 | |                 1,
+...    |
+2593 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+     = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+     |
+2545 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/config.rs:2744:9
+     |
+2744 | /         store
+2745 | |             .update_config(
+2746 | |                 10,
+2747 | |                 20,
+...    |
+2811 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2744 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/config.rs:2885:9
+     |
+2885 | /         store
+2886 | |             .cache_server_route("*.example.com".to_string(), server, lb)
+2887 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2885 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/config.rs:2918:9
+     |
+2918 | /         store
+2919 | |             .cache_server_route("*.example.com".to_string(), server, lb)
+2920 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2918 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/config.rs:2979:9
+     |
+2979 | /         store
+2980 | |             .update_config(
+2981 | |                 1,
+2982 | |                 1,
+...    |
+3027 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2979 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/config.rs:3093:9
+     |
+3093 | /         store
+3094 | |             .update_config(
+3095 | |                 1,
+3096 | |                 1,
+...    |
+3141 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+3093 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/config.rs:3188:9
+     |
+3188 | /         store
+3189 | |             .update_config(
+3190 | |                 1,
+3191 | |                 1,
+...    |
+3236 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+3188 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/config.rs:3273:9
+     |
+3273 | /         store
+3274 | |             .update_config(
+3275 | |                 1,
+3276 | |                 1,
+...    |
+3321 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+3273 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/config.rs:3368:9
+     |
+3368 | /         store
+3369 | |             .update_config(
+3370 | |                 1,
+3371 | |                 1,
+...    |
+3416 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+3368 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/config.rs:3459:9
+     |
+3459 | /         store
+3460 | |             .update_config(
+3461 | |                 1,
+3462 | |                 1,
+...    |
+3507 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+3459 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/config.rs:3570:9
+     |
+3570 | /         store
+3571 | |             .update_config(
+3572 | |                 1,
+3573 | |                 1,
+...    |
+3618 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+3570 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/config.rs:3655:9
+     |
+3655 | /         store
+3656 | |             .update_config(
+3657 | |                 1,
+3658 | |                 2,
+...    |
+3703 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+3655 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/http_proxy_manager.rs:3460:9
+     |
+3460 | /         store
+3461 | |             .update_config(
+3462 | |                 1,
+3463 | |                 1,
+...    |
+3508 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+3460 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/http_proxy_manager.rs:3584:9
+     |
+3584 | /         store
+3585 | |             .replace_all_servers(servers, HashMap::new(), HashMap::new(), lbs)
+3586 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+3584 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/http_proxy_manager.rs:3654:9
+     |
+3654 | /         store
+3655 | |             .replace_all_servers(Vec::new(), HashMap::new(), HashMap::new(), HashMap::new())
+3656 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+3654 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/kernel_syn_defense.rs:1451:9
+     |
+1451 | /         store
+1452 | |             .update_config(
+1453 | |                 1,
+1454 | |                 1,
+...    |
+1499 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+1451 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/l4_defense.rs:2212:9
+     |
+2212 | /         store
+2213 | |             .update_config(
+2214 | |                 1,
+2215 | |                 1,
+...    |
+2260 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2212 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/quic_udp_demux.rs:2932:9
+     |
+2932 | /         store
+2933 | |             .update_config(
+2934 | |                 1,
+2935 | |                 1,
+...    |
+2980 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2932 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/tcp_proxy.rs:3753:9
+     |
+3753 | /         store
+3754 | |             .update_config(
+3755 | |                 1,
+3756 | |                 1,
+...    |
+3801 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+3753 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/tcp_proxy.rs:3951:9
+     |
+3951 | /         store
+3952 | |             .update_config(
+3953 | |                 1,
+3954 | |                 1,
+...    |
+4026 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+3951 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/udp_proxy.rs:2508:9
+     |
+2508 | /         store
+2509 | |             .update_config(
+2510 | |                 1,
+2511 | |                 1,
+...    |
+2556 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+2508 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/udp_proxy.rs:3820:9
+     |
+3820 | /         store
+3821 | |             .update_config(
+3822 | |                 1,
+3823 | |                 1,
+...    |
+3868 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+3820 |         let _ = store
+     |         +++++++
+
+warning: unused `std::result::Result` that must be used
+    --> src/udp_proxy.rs:3944:9
+     |
+3944 | /         store
+3945 | |             .update_config(
+3946 | |                 1,
+3947 | |                 1,
+...    |
+3992 | |             .await;
+     | |__________________^
+     |
+     = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+     |
+3944 |         let _ = store
+     |         +++++++
+
+mbx[progress]: 45s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+warning: `zelvik-edge` (lib test) generated 23 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 12s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-a82c0c7016030509)
+mbx[progress]: 1m 15s elapsed; 0 hits, 2 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+
+running 1 test
+
+thread 'metrics::retirement_tests::acknowledged_retirement_drains_without_another_configuration' (9485052) panicked at src/metrics.rs:2194:9:
+assertion failed: node.take_reporting_snapshots().is_empty()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test metrics::retirement_tests::acknowledged_retirement_drains_without_another_configuration ... FAILED
+
+failures:
+
+failures:
+    metrics::retirement_tests::acknowledged_retirement_drains_without_another_configuration
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1111 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--lib`
+mbx[cache]: 0 hits, 2 misses; 0 B downloaded, 0 B uploaded, 181.1 MiB stored locally
+mbx[savings]: 24599 cache hits and counting. rustc thinks it has been busy.

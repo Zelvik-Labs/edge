@@ -82,7 +82,7 @@ WAL ring 分配后 zero 写满；LRU、NodeCache、dirty pool 是目标/门限�
 | 结构 / owner | 源码入口 | 增长 / 持久化关系 | 当前释放与故障边界 | 状态 |
 |---|---|---|---|---|
 | Bandwidth active / pending，reporter task | `src/rpc/stats.rs:271`、`:756`、`:830` | 2 秒采样、5 分钟追加；pending 窗口 12 个上限 | 已修：恢复不再按当前时钟丢弃 stale 窗口；关闭窗口入 spool 与 producer state 原子提交；恢复及持续积压均受 12 窗口约束，溢出有计数 gap 和日志，不伪装完成 | 部分修复 |
-| ServerMetrics live / retired，NodeMetrics | `src/metrics.rs:1093`、`:1285` | 请求创建 Arc；退役等待三消费者最终 fingerprint | retired cap 4096；满后旧实例留在 live，deferred/config backlog 无联合上界 | 待修 |
+| ServerMetrics live / retired，NodeMetrics | `src/metrics.rs:1093`、`:1285` | 请求创建 Arc；退役等待三消费者最终 fingerprint | 已修：全家族（live+retired+候选预留）统一名额，安装前预留并由配置绑定持有；旧请求经 `Arc<ServerConfig>` 的 binding 继续更新；三消费者确认后由周期 reporting 扫描释放，无需新配置 | 已修复并有负向对照 |
 | Flusher Weak baseline | `src/metrics.rs:1713` | 每实例快照，写入成功才推进 | Weak 不持有实例；清理错误与写入结果合并会使成功增量重放 | 待修 |
 | Metrics history，MetricStorage | `src/metrics/storage.rs:386`、`:448` | 每 5 分钟每站点一行；保留 1 天 | 已修：每 30 秒独立执行，server/node 各 2048 次检查预算，按 range 游标推进并在到达末尾后回绕；清理失败不再阻止 baseline 推进。100/1000 站点真实吞吐与 Mace 文件/PageMap 尚未测 | 部分修复 |
 | MetricAggregator，metrics worker / reporter | `src/metrics/aggregator.rs:226`、`:400` | 动态属性与 samples 有估算字节限制 | flush 即退款但调用方仍持有对象；无 item 提前 continue；所有 item 上传同时展开 | 待修 |
@@ -113,6 +113,16 @@ Client-Agent 契约复核：`control-plane/internal/gcloud/services_contract.go:
 
 实施中，逐项补充代码和负向对照；不把此前静态审计当作当前修复证据。
 
+### ServerMetrics 家族容量闭环（2026-10-29）
+
+修复前复现：固定 1 个活跃站点、连续轮换 8,200 个站点 ID、三消费者均不确认，`servers + retired` 达到 8,200 个对象（retired 4,096，deferred/config backlog 继续增长）。测试 `metrics::retirement_tests::consumer_failure_churn_bounds_the_whole_metric_family` 在旧实现下失败。
+
+修复后：`NodeMetrics` 用家族级名额覆盖已安装、候选预留、退役和旧请求持有的全部实例；名额上限由 `MEMORY_GOVERNOR.metrics_cardinality_capacity()` 推导，至少 4,096。配置安装在任何建图/XDP/运行时副作用之前调用 `admit_configs` 预留并绑定到 `ServerConfig`；`publish_configs` 只发布已预留实例，不再可能因容量失败。退役对象由三个消费者确认当前 fingerprint 后，在每次 `take_reporting_snapshots` 的周期扫描中释放；旧请求和新配置都不再触发无界 backlog。若流量晚于配置和退役对象（例如数据面残留），不会再按 ID 新建实例，而是计入 `metricUnattributed*` 状态字段，避免静默丢弃也无法归因的增量。
+
+负向对照（均先转红后恢复）：移除容量上限判断 → `retirement_cap_defers_instead_of_dropping_metric_state` 失败；移除周期扫描 → `acknowledged_retirement_drains_without_another_configuration` 失败；恢复“持有点存在时拒绝记录确认”的旧逻辑 → 同一测试失败。
+
+仍未覆盖：Bandwidth/Daily 窗口本身是进程内状态，进程崩溃会丢失尚未入 spool 的最终增量（与活跃站点窗口相同，未因退役释放而额外丢弃）；非容量安装失败（如 XDP/运行时 API 失败）仍可能已覆盖健康检查注册，本轮未扩大处理；NodeTask 在安装拒绝并报告失败后仍推进 `task_version`，单站点/用户任务没有本地重放保证。上述均为后续边界，不冒充已修复。
+
 ### 未决业务语义（没有擅自实施）
 
 1. **带宽 12 窗口之外的溢出**：当前按计数 gap 记录覆盖缺失并尝试持久化 gap，未伪装完成，也未删除已入 spool 的 batch。是否允许这种受控覆盖缺失、或改为在耗尽前暂停相关转发，需要产品/计费确认；不能同时保证无限接入与无损。
@@ -135,9 +145,9 @@ Client-Agent 契约复核：`control-plane/internal/gcloud/services_contract.go:
 
 目前不能证明 7/30 天稳定；不构成生产升级依据。以下是实施中状态，不是最终验收结论。
 
-本轮本地提交：`9ed075c`（Mace 0.2.0 独立升级与 fail-fast）、`6d1e8b1`（Bandwidth 原子交接与 12 窗口 backlog 上界）、`ac4e572`（Metrics 历史有界增量清理与独立执行）。退役联合边界、无消费者聚合/上传展开、辅助状态、Config/Zstd/L1 以及全部长期/压力验收仍未完成，不得当作生产就绪。
+本轮本地提交：`9ed075c`（Mace 0.2.0 独立升级与 fail-fast）、`6d1e8b1`（Bandwidth 原子交接与 12 窗口 backlog 上界）、`ac4e572`（Metrics 历史有界增量清理与独立执行），以及 ServerMetrics 家族容量与配置安装修复的独立提交（见本轮 `git log`）。无消费者聚合/上传展开、辅助状态、Config/Zstd/L1 以及全部长期/压力验收仍未完成，不得当作生产就绪。
 
-1. **是否仍有随时间无限增长的 Rust heap？** 仍有：consumer 失败叠加配置 churn 时的 ServerMetrics family、Client-Agent 历史有效身份；Bandwidth pending 已从无界改为 12 窗口计数上界，但单窗口字节仍随站点基数增长。
+1. **是否仍有随时间无限增长的 Rust heap？** ServerMetrics 家族已改为统一名额并可在消费者确认后自行释放；仍有无界风险：Client-Agent 历史有效身份。Bandwidth pending 已从无界改为 12 窗口计数上界，但单窗口字节仍随站点基数增长。
 2. **是否仍有无清理边界的数据库历史？** WAFTOK 过期行、loss journal 容量例外、未具备安全回收水位的 CTOMB 和有效身份仍无完整边界。Metrics retention 已改为有界增量扫描并在每个 30 秒周期执行，但还没有 100/1000 站点的真实吞吐与文件尺寸数据，不能宣称已追平新增。
 3. **哪些有界结构可能超过低内存节点预算？** Mace 的三个 engine、metadata cache、epoch retired pages，叠加 aggregator、L1/L2 和解码/配置代际峰值；表格中的局部目标不能相加当作严格总上限。
 4. **0.2.0 是否改善长期高水位？** 源码推导显示两个 durable lane 的物理 WAL ring 名义减少 30 MiB，上游有 GC 修复；尚无本轮持续运行证据证明总高水位改善。PageMap 高水位仍在。

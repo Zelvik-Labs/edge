@@ -885,6 +885,8 @@ impl NetworkAddressConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct ServerConfig {
+    #[serde(skip)]
+    pub runtime_metrics: crate::metrics::ServerMetricBinding,
     #[serde(default, deserialize_with = "deserialize_flexible_i64_opt")]
     pub id: Option<i64>,
     #[serde(

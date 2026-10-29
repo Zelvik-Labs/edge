@@ -1,0 +1,55 @@
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+mbx[progress]: 15s elapsed; 0 hits, 1 misses, 0 bypassed, 2 not looked up; ~0s compiler work saved
+warning: items after a test module
+   --> src/origin_state.rs:236:1
+    |
+236 | mod tests {
+    | ^^^^^^^^^
+...
+301 | fn now_seconds() -> i64 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#items_after_test_module
+    = note: `#[warn(clippy::items_after_test_module)]` on by default
+    = help: move the items to before the test module was defined
+
+warning: items after a test module
+    --> src/rpc/client.rs:1276:1
+     |
+1276 | mod tests {
+     | ^^^^^^^^^
+...
+1580 | pub async fn register_instance_with_retry(api_config: ApiConfig, max_backoff: Duration) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#items_after_test_module
+     = help: move the items to before the test module was defined
+
+warning: items after a test module
+    --> src/rpc/node.rs:1349:1
+     |
+1349 |   mod shared_account_status_tests {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1415 |   pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: ApiConfig) {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1745 | / pub async fn report_node_online_once(
+1746 | |     config_store: &ConfigStore,
+1747 | |     api_config: &ApiConfig,
+1748 | | ) -> anyhow::Result<()> {
+     | |_______________________^
+...
+1845 |   fn is_unsupported_node_type_error(err: &tonic::Status) -> bool {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1849 |   pub async fn start_node_value_reporter(config_store: Arc<ConfigStore>) {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#items_after_test_module
+     = help: move the items to before the test module was defined
+
+warning: `zelvik-edge` (lib test) generated 3 warnings (run `cargo clippy --fix --lib -p zelvik-edge --tests -- -D clippy::correctness -D clippy::suspicious` to apply 3 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 29.53s
+mbx[cache]: 0 hits, 1 misses, 57 not looked up, 57 incremental; 0 B downloaded, 0 B uploaded, 712.0 KiB stored locally
+mbx[savings]: linked 32.8 GiB into place. copying is for people with disk to spare.

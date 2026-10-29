@@ -2078,7 +2078,7 @@ impl HttpProxyManager {
         };
 
         let client_ip = client_addr.ip().to_string();
-        let metrics = crate::metrics::record::get_or_create(server_id);
+        let metrics = server.runtime_metrics.get();
         let mut metrics_guard = crate::metrics::ActiveRequestMetricsGuard::new(metrics.clone());
         crate::metrics::record::request_start_without_active(
             server_id,
@@ -3505,7 +3505,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
         let manager = HttpProxyManager::new(
             store,
             Arc::new(DynamicCertSelector::new()),
@@ -3583,7 +3583,7 @@ mod tests {
         }
         store
             .replace_all_servers(servers, HashMap::new(), HashMap::new(), lbs)
-            .await;
+            .await.expect("configuration installs");
         let certs = Arc::new(DynamicCertSelector::new());
         crate::ssl::sync_certs(
             &certs,
@@ -3653,7 +3653,7 @@ mod tests {
         .await;
         store
             .replace_all_servers(Vec::new(), HashMap::new(), HashMap::new(), HashMap::new())
-            .await;
+            .await.expect("configuration installs");
         tokio::time::timeout(Duration::from_secs(3), async {
             while !http.handled_ports.is_empty() {
                 tokio::time::sleep(Duration::from_millis(20)).await;

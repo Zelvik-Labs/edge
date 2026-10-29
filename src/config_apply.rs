@@ -411,6 +411,29 @@ pub async fn materialize_runtime_servers(
         None
     };
     let _publish_charge = publish_charge;
+    // Bind metric instances before any health/XDP/runtime effect. The binding
+    // lives inside each `ServerConfig` across the materialization await, so
+    // every install that reuses this generation cannot fail on capacity again.
+    if let Err(err) = crate::metrics::METRICS.admit_configs(servers.iter()) {
+        tracing::warn!(
+            target: "config_apply",
+            servers_in,
+            used = err.used,
+            limit = err.limit,
+            admission_retries,
+            "config apply deferred: server metric family capacity exhausted; keeping previous generation"
+        );
+        return RuntimeServerMaps {
+            stats: ConfigApplyStats {
+                servers_in,
+                admitted: false,
+                admission_retries,
+                elapsed: started.elapsed(),
+                ..ConfigApplyStats::default()
+            },
+            ..RuntimeServerMaps::default()
+        };
+    }
     let mut last_reclaimed = MemoryPressureLevel::Normal;
     maybe_reclaim(limits, &mut stats, &mut last_reclaimed);
 
@@ -520,7 +543,7 @@ pub async fn apply_server_snapshot(
     let (node_level, parent_nodes, tiered_origin_bypass, allow_lan) =
         store.get_origin_runtime_context().await;
     let global_http = Some(store.get_global_http_config_sync());
-    let maps = materialize_runtime_servers(MaterializeRuntimeServersArgs {
+    let mut maps = materialize_runtime_servers(MaterializeRuntimeServersArgs {
         servers,
         health_manager,
         node_level,
@@ -533,20 +556,38 @@ pub async fn apply_server_snapshot(
     })
     .await;
     if maps.stats.admitted {
-        store
+        match store
             .replace_all_servers(
                 maps.all_servers.clone(),
                 maps.servers.clone(),
                 maps.routes.clone(),
                 maps.id_to_lb.clone(),
             )
-            .await;
-        // `replace_all_servers` just dropped the previous generation on this
-        // thread. Under elevated pressure, purge the freed segments now —
-        // mimalloc only returns a thread's retained pages when that thread
-        // collects, and the next sync may not run on this worker.
-        if limits.pressure >= MemoryPressureLevel::High {
-            crate::memory_reclaim::trim_released_heap();
+            .await
+        {
+            Ok(()) => {
+                // `replace_all_servers` just dropped the previous generation on
+                // this thread. Under elevated pressure, purge the freed
+                // segments now — mimalloc only returns a thread's retained
+                // pages when that thread collects, and the next sync may not
+                // run on this worker.
+                if limits.pressure >= MemoryPressureLevel::High {
+                    crate::memory_reclaim::trim_released_heap();
+                }
+            }
+            Err(err) => {
+                // The preadmitted generation was rejected: keep the installed
+                // one, leave freed heap untouched, and report the snapshot as
+                // not applied so callers retry instead of acknowledging it.
+                tracing::warn!(
+                    target: "config_apply",
+                    servers_in = maps.stats.servers_in,
+                    used = err.used,
+                    limit = err.limit,
+                    "config install rejected by server metric capacity; keeping previous generation"
+                );
+                maps.stats.admitted = false;
+            }
         }
     }
     maps

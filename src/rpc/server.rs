@@ -76,7 +76,14 @@ pub async fn sync_single_server_config(
         Ok(resp) => {
             let payload = resp.into_inner();
             if payload.server_config_json.is_empty() {
-                config_store.remove_server(server_id).await;
+                if let Err(err) = config_store.remove_server(server_id).await {
+                    warn!(
+                        server_id,
+                        "server removal deferred: server metric capacity exhausted ({}/{}); keeping previous generation",
+                        err.used, err.limit
+                    );
+                    return false;
+                }
                 let _ = sync_active_plans(api_config, config_store).await;
                 return true;
             }
@@ -109,6 +116,18 @@ pub async fn sync_single_server_config(
             match serde_json::from_slice::<ServerConfig>(&payload.server_config_json) {
                 Ok(server) => {
                     let user_id = server.user_id;
+                    // Reserve before any runtime map / health effect so the
+                    // install below reuses the bound instance.
+                    if let Err(err) =
+                        crate::metrics::METRICS.admit_configs(std::iter::once(&server))
+                    {
+                        warn!(
+                            server_id,
+                            "server config deferred: server metric capacity exhausted ({}/{}); keeping previous generation",
+                            err.used, err.limit
+                        );
+                        return false;
+                    }
                     let (node_level, parent_nodes, tiered_origin_bypass, allow_lan) =
                         config_store.get_origin_runtime_context().await;
                     let global_http = Some((*config_store.get_global_http_config_sync()).clone());
@@ -130,7 +149,7 @@ pub async fn sync_single_server_config(
                         );
                         return false;
                     }
-                    if user_id > 0 {
+                    let installed = if user_id > 0 {
                         config_store
                             .replace_user_servers(
                                 user_id,
@@ -138,11 +157,19 @@ pub async fn sync_single_server_config(
                                 maps.servers,
                                 maps.routes,
                             )
-                            .await;
+                            .await
                     } else {
                         config_store
                             .replace_server(server_id, maps.all_servers, maps.servers, maps.routes)
-                            .await;
+                            .await
+                    };
+                    if let Err(err) = installed {
+                        warn!(
+                            server_id,
+                            "server config install rejected by server metric capacity ({}/{}); keeping previous generation",
+                            err.used, err.limit
+                        );
+                        return false;
                     }
                     config_store.mark_published_fingerprint(
                         fingerprint_scope,
@@ -239,7 +266,14 @@ pub async fn sync_user_servers_state(
     };
 
     if !is_enabled {
-        config_store.remove_user_servers(user_id).await;
+        if let Err(err) = config_store.remove_user_servers(user_id).await {
+            warn!(
+                user_id,
+                "user server removal deferred: server metric capacity exhausted ({}/{}); keeping previous generation",
+                err.used, err.limit
+            );
+            return false;
+        }
         let _ = sync_active_plans(api_config, config_store).await;
         return true;
     }
@@ -251,7 +285,14 @@ pub async fn sync_user_servers_state(
         Ok(resp) => {
             let payload = resp.into_inner();
             if payload.servers_config_json.is_empty() {
-                config_store.remove_user_servers(user_id).await;
+                if let Err(err) = config_store.remove_user_servers(user_id).await {
+                    warn!(
+                        user_id,
+                        "user server removal deferred: server metric capacity exhausted ({}/{}); keeping previous generation",
+                        err.used, err.limit
+                    );
+                    return false;
+                }
                 let _ = sync_active_plans(api_config, config_store).await;
                 return true;
             }
@@ -283,6 +324,16 @@ pub async fn sync_user_servers_state(
             }
             match serde_json::from_slice::<Vec<ServerConfig>>(&payload.servers_config_json) {
                 Ok(servers) => {
+                    // Reserve before any runtime map / health effect so the
+                    // install below reuses the bound instances.
+                    if let Err(err) = crate::metrics::METRICS.admit_configs(servers.iter()) {
+                        warn!(
+                            user_id,
+                            "user servers config deferred: server metric capacity exhausted ({}/{}); keeping previous generation",
+                            err.used, err.limit
+                        );
+                        return false;
+                    }
                     let (node_level, parent_nodes, tiered_origin_bypass, allow_lan) =
                         config_store.get_origin_runtime_context().await;
                     let global_http = Some((*config_store.get_global_http_config_sync()).clone());
@@ -304,9 +355,17 @@ pub async fn sync_user_servers_state(
                         );
                         return false;
                     }
-                    config_store
+                    if let Err(err) = config_store
                         .replace_user_servers(user_id, maps.all_servers, maps.servers, maps.routes)
-                        .await;
+                        .await
+                    {
+                        warn!(
+                            user_id,
+                            "user servers config install rejected by server metric capacity ({}/{}); keeping previous generation",
+                            err.used, err.limit
+                        );
+                        return false;
+                    }
                     config_store.mark_published_fingerprint(
                         fingerprint_scope,
                         scoped_fingerprint(config_store, &current_hash),

@@ -1,0 +1,19 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.83s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-a82c0c7016030509)
+
+running 1 test
+active=1 rotations=8200 objects=8200 retired=4096 deferred=4103
+
+thread 'metrics::retirement_tests::consumer_failure_churn_bounds_the_whole_metric_family' (9346336) panicked at src/metrics.rs:1985:9:
+failed consumers must backpressure installation before the whole family grows
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test metrics::retirement_tests::consumer_failure_churn_bounds_the_whole_metric_family ... FAILED
+
+failures:
+
+failures:
+    metrics::retirement_tests::consumer_failure_churn_bounds_the_whole_metric_family
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1110 filtered out; finished in 10.25s
+
+error: test failed, to rerun pass `--lib`

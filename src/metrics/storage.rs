@@ -292,17 +292,18 @@ fn cleanup_period_prefix(
     let mut upper = prefix.to_vec();
     *upper.last_mut().expect("cleanup prefix is non-empty") += 1;
 
-    let mut inspected = 0usize;
     let mut removed = 0usize;
     let mut last_key = None;
     let mut exhausted = true;
-    for item in view.range::<Vec<u8>, _>((start, Bound::Excluded(upper))) {
+    for (inspected, item) in view
+        .range::<Vec<u8>, _>((start, Bound::Excluded(upper)))
+        .enumerate()
+    {
         if inspected >= max_inspected {
             exhausted = false;
             break;
         }
         let key = item.key();
-        inspected += 1;
         last_key = Some(key.to_vec());
         let Ok(key_str) = std::str::from_utf8(key) else {
             continue;
