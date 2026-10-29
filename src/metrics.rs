@@ -1820,8 +1820,8 @@ pub async fn start_persistence_flusher() {
         let node_sent_delta = node_sent - last_node_sent;
         let node_recv_delta = node_recv - last_node_recv;
 
-        let cleanup_before = (now % 3600 < 30).then_some(now - 86400);
-        if !updates.is_empty() || cleanup_before.is_some() {
+        let cleanup = now - 86400;
+        {
             let write_result = tokio::task::spawn_blocking(move || {
                 let record_result = if !updates.is_empty() {
                     storage::STORAGE
@@ -1832,17 +1832,14 @@ pub async fn start_persistence_flusher() {
                 } else {
                     Ok(())
                 };
-                let cleanup_result = if let Some(older_than) = cleanup_before {
-                    storage::STORAGE
-                        .cleanup_old_stats(older_than)
-                        .inspect_err(|err| {
-                            tracing::error!(?err, "metric history cleanup failed");
-                        })
-                        .map(|_| ())
-                } else {
-                    Ok(())
-                };
-                record_result.and(cleanup_result)
+                // Cleanup has its own durable cursor and must advance even
+                // while no samples were written this tick. Its failure must
+                // not roll back the counters that were already persisted, and
+                // a record failure must not stop retention either.
+                if let Err(err) = storage::STORAGE.cleanup_old_stats(cleanup) {
+                    tracing::error!(?err, "metric history cleanup failed");
+                }
+                record_result
             })
             .await;
             match write_result {

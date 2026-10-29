@@ -14,5 +14,6 @@
   "mace-020-node-check.log": "b2c73a8b62ad25a8e1f0f1653e10fa0d9dc8353064d9150e38e19905a07df0e4",
   "mace-020-review.txt": "c58aaea8c2ed7432ce8ec5d5e621813ea596e19151a5461da1f07e9db8e181b8",
   "mace-020-storage-tests.log": "1fa534999bde806a1a38038adb757559616b3312f0ade8672a05e1c379d0afb4",
-  "mace-020-telemetry-tests.log": "b28a7dd86ae44f84ef341c967eef2fdb5a69da20a685495c20f21599451dbb75"
+  "mace-020-telemetry-tests.log": "b28a7dd86ae44f84ef341c967eef2fdb5a69da20a685495c20f21599451dbb75",
+  "metric-retention-tests.log": "e5302d142bd667e2b53321f9fce443c2577a94b9caad73a10e8decafaaa80f2d"
 }
