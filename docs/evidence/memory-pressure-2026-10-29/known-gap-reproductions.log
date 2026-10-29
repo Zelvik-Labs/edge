@@ -1,0 +1,9 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.87s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-c8c3a1a23565cbce)
+
+running 2 tests
+test memory_ticket::tests::audit_known_gap_single_bucket_exhausts_global_workspace ... ok
+test memory_ticket::tests::audit_known_gap_pooled_h2_streams_bypass_global_count_limit ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1089 filtered out; finished in 0.03s
+

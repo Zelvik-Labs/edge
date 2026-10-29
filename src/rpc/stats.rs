@@ -1,18 +1,16 @@
 use crate::api_config::ApiConfig;
 use crate::config::ConfigStore;
-use crate::metrics::ServerStatusSnapshot;
+use crate::metrics::{MetricConsumer, ServerMetrics, ServerStatusSnapshot};
 use crate::pb;
 use crate::rpc::client::SharedRpcClient;
 use chrono::{Datelike, Duration as ChronoDuration, Timelike};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::LazyLock as Lazy;
 use std::sync::atomic::{AtomicI64, AtomicU8, Ordering};
+use std::sync::{Arc, Weak};
 use tracing::{debug, info, warn};
 
-#[allow(dead_code)]
-const ORIGIN_HEALTH_STATUS_UNKNOWN: u8 = 0;
 const ORIGIN_HEALTH_STATUS_HEALTHY: u8 = 1;
 const ORIGIN_HEALTH_STATUS_DOWN: u8 = 2;
 
@@ -271,6 +269,11 @@ struct StoredPendingBandwidthStat {
 }
 
 const BANDWIDTH_STATE_STORAGE_KEY: &str = "STAT_BANDWIDTH_STATE_V1";
+/// Closed windows retained in heap while the durable spool refuses them.
+/// Twelve windows is one hour of outage. Beyond it the reporter records a
+/// counted coverage gap rather than growing without bound; the receiver keeps
+/// the window incomplete, so settlement cannot treat it as full coverage.
+const MAX_PENDING_BANDWIDTH_WINDOWS: usize = 12;
 
 impl From<&pb::ServerBandwidthStat> for StoredPendingBandwidthStat {
     fn from(stat: &pb::ServerBandwidthStat) -> Self {
@@ -381,16 +384,13 @@ fn load_bandwidth_state() -> (
         }
     };
 
-    let now = crate::utils::time::now_local();
-    let today = now.format("%Y%m%d").to_string();
-    let available_time = (now - ChronoDuration::seconds(BANDWIDTH_REPORT_INTERVAL_SECS as i64))
-        .format("%H%M")
-        .to_string();
+    // `window_stats` always describes `current_window` at save time. Do not
+    // filter it by the clock here: after a restart that window is stale and
+    // `flush_stale_window` must upload it as an incomplete segment. Filtering
+    // by age would silently discard its billable rows before that handoff.
     let mut window_stats = HashMap::new();
     for stat in state.window_stats {
-        if stat.day == today && stat.time_at >= available_time {
-            window_stats.insert(stat.server_id, stat);
-        }
+        window_stats.insert(stat.server_id, stat);
     }
     let current_window = if window_stats.is_empty() {
         String::new()
@@ -400,11 +400,29 @@ fn load_bandwidth_state() -> (
 
     // Legacy `pending_stats` (pre-spool state) is dropped: its entries were
     // either already uploaded or their windows surface as incomplete.
-    let pending_windows = state
+    let mut pending_windows: Vec<PendingWindow> = state
         .pending_windows
         .into_iter()
         .map(PendingWindow::from)
         .collect();
+    if pending_windows.len() > MAX_PENDING_BANDWIDTH_WINDOWS {
+        // Restoring an unbounded backlog into heap would peak with the outage
+        // length. Keep a contiguous oldest run and report the remainder as a
+        // coverage gap; never present it as delivered or complete.
+        let first_dropped = pending_windows[MAX_PENDING_BANDWIDTH_WINDOWS].window_start;
+        warn!(
+            retained = MAX_PENDING_BANDWIDTH_WINDOWS,
+            dropped = pending_windows.len() - MAX_PENDING_BANDWIDTH_WINDOWS,
+            first_dropped,
+            "bandwidth state has more pending windows than the restore cap; recording a coverage gap"
+        );
+        crate::telemetry::record_gap(
+            "bandwidth",
+            first_dropped,
+            "restore of bandwidth backlog exceeded the 12-window heap cap",
+        );
+        pending_windows.truncate(MAX_PENDING_BANDWIDTH_WINDOWS);
+    }
 
     (
         current_window,
@@ -421,6 +439,27 @@ async fn persist_bandwidth_state(
     pending_windows: &[PendingWindow],
     segment_started_at: i64,
 ) {
+    match encode_bandwidth_state(
+        current_window,
+        window_stats,
+        pending_windows,
+        segment_started_at,
+    ) {
+        Ok(raw) => {
+            if let Err(e) = crate::telemetry::save_state(BANDWIDTH_STATE_STORAGE_KEY, raw).await {
+                warn!("bandwidth window state persist failed: {}", e);
+            }
+        }
+        Err(e) => warn!("bandwidth window state encode failed: {}", e),
+    }
+}
+
+fn encode_bandwidth_state(
+    current_window: &str,
+    window_stats: &HashMap<i64, BandwidthWindowStat>,
+    pending_windows: &[PendingWindow],
+    segment_started_at: i64,
+) -> serde_json::Result<Vec<u8>> {
     let state = StoredBandwidthState {
         current_window: current_window.to_string(),
         window_stats: window_stats.values().cloned().collect(),
@@ -432,14 +471,7 @@ async fn persist_bandwidth_state(
         segment_started_at,
         pending_stats: Vec::new(),
     };
-    match serde_json::to_vec(&state) {
-        Ok(raw) => {
-            if let Err(e) = crate::telemetry::save_state(BANDWIDTH_STATE_STORAGE_KEY, raw).await {
-                warn!("bandwidth window state persist failed: {}", e);
-            }
-        }
-        Err(e) => warn!("bandwidth window state encode failed: {}", e),
-    }
+    serde_json::to_vec(&state)
 }
 
 /// `day`(YYYYMMDD) + `time_at`(HHMM) as produced by the reporter — the same
@@ -510,7 +542,34 @@ fn drain_bandwidth_window(
     }
 }
 
-async fn enqueue_window_batch(window: &PendingWindow, complete: bool) -> anyhow::Result<()> {
+/// Offer a closed window to the bounded backlog. A full backlog drops the
+/// window as an explicitly counted coverage gap; it never silently disappears.
+/// Returns the gap to journal when the window was not retained.
+fn retain_pending_window(
+    pending: &mut Vec<PendingWindow>,
+    window: PendingWindow,
+) -> Option<PendingWindow> {
+    if pending.len() < MAX_PENDING_BANDWIDTH_WINDOWS {
+        pending.push(window);
+        None
+    } else {
+        Some(window)
+    }
+}
+
+fn drop_pending_window_gap(window: &PendingWindow) -> pb::TelemetryBatch {
+    pb::TelemetryBatch {
+        kind: "gap".into(),
+        has_gap: true,
+        gap_kind: "bandwidth".into(),
+        gap_reason: "bandwidth durable backlog at its 12-window cap; window coverage lost".into(),
+        window_start: window.window_start,
+        occurred_at: crate::utils::time::now_timestamp(),
+        ..Default::default()
+    }
+}
+
+fn window_batch(window: &PendingWindow, complete: bool) -> pb::TelemetryBatch {
     let request = pb::UploadServerBandwidthStatsRequest {
         server_bandwidth_stats: window.stats.clone(),
     };
@@ -527,7 +586,11 @@ async fn enqueue_window_batch(window: &PendingWindow, complete: bool) -> anyhow:
     if !window.source_boot.is_empty() {
         batch.source_boot_id = window.source_boot.clone();
     }
-    crate::telemetry::enqueue_prepared(batch).await
+    batch
+}
+
+async fn enqueue_window_batch(window: &PendingWindow, complete: bool) -> anyhow::Result<()> {
+    crate::telemetry::enqueue_prepared(window_batch(window, complete)).await
 }
 
 /// A window that closed while the process was down keeps partial coverage:
@@ -537,6 +600,7 @@ async fn flush_stale_window(
     config_store: &ConfigStore,
     current_window: &mut String,
     window_stats: &mut HashMap<i64, BandwidthWindowStat>,
+    pending_windows: &mut Vec<PendingWindow>,
     stored_boot: &str,
     segment_started_at: i64,
 ) {
@@ -564,14 +628,29 @@ async fn flush_stale_window(
         node_region_id,
         stored_boot.to_string(),
     );
+    if window.stats.is_empty() {
+        *current_window = String::new();
+        return;
+    }
     if let Err(e) = enqueue_window_batch(&window, false).await {
         warn!(
             "stale bandwidth window could not reach the durable queue: {}",
             e
         );
+        // The closed window still owns billable data. Keep it in the bounded
+        // backlog for retry instead of discarding it because the spool refused
+        // the first attempt.
+        if let Some(dropped) = retain_pending_window(pending_windows, window) {
+            crate::telemetry::record_gap(
+                "bandwidth",
+                dropped.window_start,
+                "stale bandwidth window exceeded the restore backlog cap",
+            );
+        }
     }
     // The downtime span is permanent loss: emit a gap batch whose range covers
-    // the stale window so settlement for it stays paused.
+    // the stale window so settlement for it stays paused. It does not replace
+    // the stale window's retained rows; those still carry their own coverage.
     let gap = pb::TelemetryBatch {
         kind: "gap".into(),
         has_gap: true,
@@ -587,6 +666,25 @@ async fn flush_stale_window(
     *current_window = String::new();
 }
 
+struct ReportingBaseline {
+    metrics: Weak<ServerMetrics>,
+    snapshot: ServerStatusSnapshot,
+}
+
+fn reporting_prior(
+    last: &HashMap<u64, ReportingBaseline>,
+    metrics: &Arc<ServerMetrics>,
+    instance_id: u64,
+) -> Option<ServerStatusSnapshot> {
+    last.get(&instance_id).and_then(|baseline| {
+        baseline
+            .metrics
+            .upgrade()
+            .filter(|previous| Arc::ptr_eq(previous, metrics))
+            .map(|_| baseline.snapshot.clone())
+    })
+}
+
 fn snapshot_delta(
     current: &ServerStatusSnapshot,
     last: Option<&ServerStatusSnapshot>,
@@ -598,6 +696,7 @@ fn snapshot_delta(
     };
 
     ServerStatusSnapshot {
+        instance_id: current.instance_id,
         server_id: current.server_id,
         count_errors: delta(|s| s.count_errors),
         user_id: current.user_id,
@@ -622,7 +721,7 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(
         BANDWIDTH_SAMPLE_INTERVAL_SECS,
     ));
-    let mut last_snapshots: HashMap<i64, ServerStatusSnapshot> = HashMap::new();
+    let mut last_snapshots: HashMap<u64, ReportingBaseline> = HashMap::new();
     let (
         mut current_window,
         mut window_stats,
@@ -634,6 +733,7 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
         &config_store,
         &mut current_window,
         &mut window_stats,
+        &mut pending_windows,
         &stored_boot,
         segment_started_at,
     )
@@ -641,7 +741,7 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
 
     loop {
         interval.tick().await;
-        let snapshots = crate::metrics::METRICS.take_snapshots();
+        let snapshots = crate::metrics::METRICS.take_reporting_snapshots();
 
         let now = crate::utils::time::now_local();
         let day = now.format("%Y%m%d").to_string();
@@ -663,25 +763,57 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
             // The closed window is pushed as a pending entry before draining:
             // a spool that cannot accept it keeps complete data for the next
             // rollover instead of dropping it.
-            pending_windows.push(drain_bandwidth_window(
+            let closed = drain_bandwidth_window(
                 &config_store,
                 &mut window_stats,
                 closed_start,
                 segment_started_at,
                 node_region_id,
-                String::new(),
-            ));
-            let mut sent = 0;
-            while sent < pending_windows.len() {
-                if enqueue_window_batch(&pending_windows[sent], true)
-                    .await
-                    .is_err()
+                crate::telemetry::process_boot().to_string(),
+            );
+            if let Some(dropped) = retain_pending_window(&mut pending_windows, closed) {
+                warn!(
+                    window_start = dropped.window_start,
+                    rows = dropped.stats.len(),
+                    cap = MAX_PENDING_BANDWIDTH_WINDOWS,
+                    "bandwidth backlog full; recording a coverage gap"
+                );
+                crate::telemetry::record_gap(
+                    "bandwidth",
+                    dropped.window_start,
+                    "bandwidth durable backlog at its 12-window cap",
+                );
+                if let Err(error) =
+                    crate::telemetry::enqueue_prepared(drop_pending_window_gap(&dropped)).await
                 {
+                    warn!(%error, "bandwidth backlog overflow gap could not be persisted");
+                }
+            }
+            while let Some(window) = pending_windows.first() {
+                let next_state = match encode_bandwidth_state(
+                    &window_key,
+                    &window_stats,
+                    &pending_windows[1..],
+                    window_started_at,
+                ) {
+                    Ok(raw) => raw,
+                    Err(error) => {
+                        warn!(%error, "bandwidth handoff state encode failed");
+                        break;
+                    }
+                };
+                if let Err(error) = crate::telemetry::enqueue_prepared_with_state(
+                    window_batch(window, true),
+                    BANDWIDTH_STATE_STORAGE_KEY,
+                    next_state,
+                )
+                .await
+                {
+                    warn!(%error, "bandwidth durable handoff failed; retaining window");
                     break;
                 }
-                sent += 1;
+                pending_windows.remove(0);
             }
-            pending_windows.drain(..sent);
             current_window = window_key.clone();
             segment_started_at = window_started_at;
             persist_bandwidth_state(
@@ -693,15 +825,38 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
             .await;
         }
 
-        for snap_tuple in snapshots {
-            let snap = &snap_tuple.1;
-            let prior = last_snapshots.insert(snap.server_id, snap.clone());
-            // Skip first sample for a server — without a baseline the delta
-            // would be the cumulative total, producing a phantom bandwidth spike.
-            if prior.is_none() {
+        for sample in snapshots {
+            let crate::metrics::ReportingSnapshot {
+                metrics,
+                snapshot: snap,
+                retired,
+            } = sample;
+            let instance_id = snap.instance_id;
+            let fingerprint = snap.fingerprint();
+            let prior = reporting_prior(&last_snapshots, &metrics, instance_id);
+            last_snapshots.insert(
+                instance_id,
+                ReportingBaseline {
+                    metrics: Arc::downgrade(&metrics),
+                    snapshot: snap.clone(),
+                },
+            );
+            drop(metrics);
+            // A live server's first sample has no baseline; skipping it avoids
+            // counting the process-cumulative total as one sample. A retired
+            // instance gets no later sample, so its full remaining counters are
+            // the final delta instead of being discarded.
+            if prior.is_none() && !retired {
                 continue;
             }
-            let delta = snapshot_delta(snap, prior.as_ref());
+            let delta = snapshot_delta(&snap, prior.as_ref());
+            if retired {
+                crate::metrics::METRICS.acknowledge_retired(
+                    MetricConsumer::Bandwidth,
+                    instance_id,
+                    fingerprint,
+                );
+            }
             if delta.server_id <= 0 {
                 continue;
             }
@@ -736,6 +891,7 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
             stat.origin_avg_bits = (stat.origin_total_bytes * 8) / BANDWIDTH_REPORT_INTERVAL_SECS;
             stat.count_ips = stat.count_ips.max(delta.count_ips);
         }
+        last_snapshots.retain(|_, baseline| baseline.metrics.strong_count() > 0);
         persist_bandwidth_state(
             &current_window,
             &window_stats,
@@ -746,11 +902,70 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
     }
 }
 
+const DAILY_PENDING_MAX_STATS: usize = 65_536;
+const DAILY_PENDING_MAX_DOMAINS: usize = 65_536;
+const DAILY_PENDING_MAX_BYTES: u64 = 64 * 1024 * 1024;
+
+fn daily_pending_row_bytes<T: prost::Message>(row: &T) -> u64 {
+    prost::Message::encoded_len(row) as u64 + std::mem::size_of::<T>() as u64
+}
+
+/// Bound the rows the daily reporter keeps after a failed persist. Server rows
+/// are billing-relevant and get the larger share; domain detail is discardable
+/// analytics. Oldest rows are kept, and the caller reports one telemetry gap
+/// for the whole truncation.
+fn cap_daily_pending(
+    stats: &mut Vec<pb::ServerDailyStat>,
+    domains: &mut Vec<pb::upload_server_daily_stats_request::DomainStat>,
+) -> u64 {
+    cap_daily_pending_with_limits(
+        stats,
+        domains,
+        DAILY_PENDING_MAX_STATS,
+        DAILY_PENDING_MAX_DOMAINS,
+        DAILY_PENDING_MAX_BYTES,
+    )
+}
+
+fn cap_daily_pending_with_limits(
+    stats: &mut Vec<pb::ServerDailyStat>,
+    domains: &mut Vec<pb::upload_server_daily_stats_request::DomainStat>,
+    max_stats: usize,
+    max_domains: usize,
+    max_bytes: u64,
+) -> u64 {
+    let mut bytes = 0u64;
+    let mut kept_stats = 0usize;
+    for stat in stats.iter() {
+        let row_bytes = daily_pending_row_bytes(stat);
+        if kept_stats >= max_stats || bytes.saturating_add(row_bytes) > max_bytes {
+            break;
+        }
+        bytes = bytes.saturating_add(row_bytes);
+        kept_stats += 1;
+    }
+    let dropped_stats = stats.len().saturating_sub(kept_stats);
+    stats.truncate(kept_stats);
+
+    let mut kept_domains = 0usize;
+    for domain in domains.iter() {
+        let row_bytes = daily_pending_row_bytes(domain);
+        if kept_domains >= max_domains || bytes.saturating_add(row_bytes) > max_bytes {
+            break;
+        }
+        bytes = bytes.saturating_add(row_bytes);
+        kept_domains += 1;
+    }
+    let dropped_domains = domains.len().saturating_sub(kept_domains);
+    domains.truncate(kept_domains);
+    (dropped_stats + dropped_domains) as u64
+}
+
 pub async fn start_daily_stat_reporter(config_store: ConfigStore) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(
         BANDWIDTH_SAMPLE_INTERVAL_SECS,
     ));
-    let mut last_snapshots: HashMap<i64, ServerStatusSnapshot> = HashMap::new();
+    let mut last_snapshots: HashMap<u64, ReportingBaseline> = HashMap::new();
     let mut current_window = String::new();
     let mut window_stats: HashMap<i64, pb::ServerDailyStat> = HashMap::new();
     let mut pending_stats: Vec<pb::ServerDailyStat> = Vec::new();
@@ -759,7 +974,7 @@ pub async fn start_daily_stat_reporter(config_store: ConfigStore) {
 
     loop {
         interval.tick().await;
-        let snapshots = crate::metrics::METRICS.take_snapshots();
+        let snapshots = crate::metrics::METRICS.take_reporting_snapshots();
 
         let now = crate::utils::time::now_local();
         let day = now.format("%Y%m%d").to_string();
@@ -822,29 +1037,60 @@ pub async fn start_daily_stat_reporter(config_store: ConfigStore) {
 
             if !stats.is_empty() || !domain_stats.is_empty() {
                 let request = pb::UploadServerDailyStatsRequest {
-                    stats: stats.clone(),
-                    domain_stats: domain_stats.clone(),
+                    stats,
+                    domain_stats,
                 };
-                // A full spool keeps the drained window in memory — pending
-                // entries are never aged out, they are re-offered next window.
-                if let Err(e) = crate::telemetry::enqueue("daily", &request, 0, false).await {
-                    warn!("Failed to persist daily stats: {}", e);
-                    pending_stats = stats;
-                    pending_domain_stats = domain_stats;
+                if let Err(error) = crate::telemetry::enqueue_daily_stats(request).await {
+                    let source = error.to_string();
+                    let lost = error.lost();
+                    let unsent = error.into_unsent();
+                    pending_stats = unsent.stats;
+                    pending_domain_stats = unsent.domain_stats;
+                    let mut dropped = lost as u64;
+                    dropped += cap_daily_pending(&mut pending_stats, &mut pending_domain_stats);
+                    warn!(
+                        lost,
+                        pending_stats = pending_stats.len(),
+                        pending_domains = pending_domain_stats.len(),
+                        error = %source,
+                        "failed to persist daily stats; unpersisted rows retained"
+                    );
+                    if dropped > 0 {
+                        crate::telemetry::record_gap(
+                            "daily",
+                            now.timestamp(),
+                            "daily_pending_capacity",
+                        );
+                    }
                 }
             }
             current_window = window_key.clone();
         }
 
-        for snap_tuple in snapshots {
-            let snap = &snap_tuple.1;
-            let prior = last_snapshots.insert(snap.server_id, snap.clone());
-            // Skip first sample for a server — without a baseline the delta
-            // would be the cumulative total, producing phantom traffic.
-            if prior.is_none() {
+        for sample in snapshots {
+            let crate::metrics::ReportingSnapshot {
+                metrics,
+                snapshot: snap,
+                retired,
+            } = sample;
+            let instance_id = snap.instance_id;
+            let fingerprint = snap.fingerprint();
+            let prior = reporting_prior(&last_snapshots, &metrics, instance_id);
+            last_snapshots.insert(
+                instance_id,
+                ReportingBaseline {
+                    metrics: Arc::downgrade(&metrics),
+                    snapshot: snap.clone(),
+                },
+            );
+            drop(metrics);
+            // Skip the first live sample for the same reason as the bandwidth
+            // reporter; a retired instance has no later sample, so its full
+            // remaining counters are consumed before acknowledgement.
+            if prior.is_none() && !retired {
                 continue;
             }
-            let delta = snapshot_delta(snap, prior.as_ref());
+            let delta = snapshot_delta(&snap, prior.as_ref());
             if delta.server_id <= 0 {
                 continue;
             }
@@ -877,7 +1123,15 @@ pub async fn start_daily_stat_reporter(config_store: ConfigStore) {
             stat.count_cached_requests += delta.count_cached_requests as i64;
             stat.count_attack_requests += delta.count_attack_requests as i64;
             stat.attack_bytes += delta.attack_bytes as i64;
+            if retired {
+                crate::metrics::METRICS.acknowledge_retired(
+                    MetricConsumer::Daily,
+                    instance_id,
+                    fingerprint,
+                );
+            }
         }
+        last_snapshots.retain(|_, baseline| baseline.metrics.strong_count() > 0);
     }
 }
 
@@ -945,7 +1199,6 @@ fn build_metric_uploads_for_item(
         crate::metrics::aggregator::AggregationKey,
         crate::metrics::aggregator::AggregatedValue,
     )],
-    values_cache: &mut HashMap<String, f32>,
 ) -> Vec<pb::UploadMetricStatsRequest> {
     let item_category = metric_item_category(item);
     let mut grouped: HashMap<(i64, Vec<String>), (i64, f32)> = HashMap::new();
@@ -1000,7 +1253,6 @@ fn build_metric_uploads_for_item(
         rows.sort_by(|a, b| a.0.cmp(&b.0));
 
         let mut metric_stats = Vec::with_capacity(rows.len());
-        let mut keep_keys = Vec::new();
         let mut count = 0i64;
         let mut total = 0f32;
 
@@ -1015,16 +1267,6 @@ fn build_metric_uploads_for_item(
                 server_id, keys_data, time_key, item.version, item.id
             );
             let hash = crate::utils::fnv_hash64(&hash_raw).to_string();
-
-            let cache_key = format!("{}_{}", item.id, hash);
-            if let Some(&old_val) = values_cache.get(&cache_key)
-                && (value - old_val).abs() < 0.001
-            {
-                keep_keys.push(hash);
-                continue;
-            }
-
-            values_cache.insert(cache_key, value);
 
             metric_stats.push(pb::UploadingMetricStat {
                 id: 0,
@@ -1042,19 +1284,109 @@ fn build_metric_uploads_for_item(
             version: item.version,
             item_id: item.id,
             metric_stats,
-            keep_keys,
+            keep_keys: Vec::new(),
         });
     }
 
     requests
 }
 
+const METRIC_PENDING_MAX_REQUESTS: usize = 4_096;
+const METRIC_PENDING_MAX_BYTES: u64 = 16 * 1024 * 1024;
+
+/// Metric uploads that failed to persist, retained in memory until the spool
+/// accepts them. The queue is bounded: metric rows are analytics and may be
+/// dropped under sustained local storage failure, but every drop is counted and
+/// reported through the telemetry gap path.
+#[derive(Default)]
+struct MetricPendingUploads {
+    requests: Vec<pb::UploadMetricStatsRequest>,
+    bytes: u64,
+    dropped_rows: u64,
+}
+
+impl MetricPendingUploads {
+    fn estimated_bytes(request: &pb::UploadMetricStatsRequest) -> u64 {
+        prost::Message::encoded_len(request) as u64
+            + std::mem::size_of::<pb::UploadMetricStatsRequest>() as u64
+    }
+
+    fn push(&mut self, request: pb::UploadMetricStatsRequest) {
+        let bytes = Self::estimated_bytes(&request);
+        if self.requests.len() >= METRIC_PENDING_MAX_REQUESTS
+            || self.bytes.saturating_add(bytes) > METRIC_PENDING_MAX_BYTES
+        {
+            self.dropped_rows += request.metric_stats.len().max(1) as u64;
+            return;
+        }
+        self.bytes = self.bytes.saturating_add(bytes);
+        self.requests.push(request);
+    }
+
+    fn record_lost(&mut self, rows: usize) {
+        self.dropped_rows += rows as u64;
+    }
+
+    fn drain(&mut self) -> std::vec::IntoIter<pb::UploadMetricStatsRequest> {
+        self.bytes = 0;
+        std::mem::take(&mut self.requests).into_iter()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.requests.is_empty()
+    }
+}
+
 pub async fn start_metric_stat_reporter(config_store: Arc<crate::config::ConfigStore>) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
-    let mut values_cache: HashMap<String, f32> = HashMap::new();
+    let mut pending = MetricPendingUploads::default();
+    let mut reported_drops = 0u64;
 
     loop {
         interval.tick().await;
+        if pending.dropped_rows > reported_drops {
+            crate::telemetry::record_gap(
+                "metric_stat",
+                crate::utils::time::now_timestamp(),
+                "metric_pending_capacity",
+            );
+            reported_drops = pending.dropped_rows;
+        }
+
+        // Retry older requests first. A failure stops the retry loop and keeps
+        // the failed request plus everything behind it in the bounded queue;
+        // nothing that already reached the spool is replayed.
+        let mut retry_failed = false;
+        for request in pending.drain() {
+            if retry_failed {
+                pending.push(request);
+                continue;
+            }
+            match crate::telemetry::enqueue_metric_stat(request).await {
+                Ok(()) => {}
+                Err(error) => {
+                    let source = error.to_string();
+                    let lost = error.lost();
+                    let unsent = error.into_unsent();
+                    warn!(
+                        server_id = unsent.server_id,
+                        item_id = unsent.item_id,
+                        unsent_rows = unsent.metric_stats.len(),
+                        lost,
+                        error = %source,
+                        "failed to persist pending metric stats; retained"
+                    );
+                    if lost > 0 {
+                        pending.record_lost(lost);
+                    }
+                    if !unsent.metric_stats.is_empty() {
+                        pending.push(unsent);
+                    }
+                    retry_failed = true;
+                }
+            }
+        }
+
         let metric_items = config_store.get_metric_items().await;
         if metric_items.is_empty() {
             continue;
@@ -1062,18 +1394,15 @@ pub async fn start_metric_stat_reporter(config_store: Arc<crate::config::ConfigS
 
         let samples = crate::metrics::aggregator::METRIC_STAT_AGGREGATOR.flush();
         if samples.is_empty() {
-            // Even if no new samples, we might still want to report if we have cached keys
-            // But usually we skip
             continue;
         }
 
-        let mut upload_succeeded = true;
+        let mut uploads = Vec::new();
         for item in metric_items {
             if !item.is_on {
                 continue;
             }
             let item_category = metric_item_category(&item);
-
             let time_key = get_period_time(item.period, &item.period_unit);
             if !samples
                 .iter()
@@ -1081,21 +1410,43 @@ pub async fn start_metric_stat_reporter(config_store: Arc<crate::config::ConfigS
             {
                 continue;
             }
+            uploads.extend(build_metric_uploads_for_item(&item, &time_key, &samples));
+        }
 
-            for req in build_metric_uploads_for_item(&item, &time_key, &samples, &mut values_cache)
-            {
-                let server_id = req.server_id;
-                if let Err(e) = crate::telemetry::enqueue("metric_stat", &req, 0, false).await {
+        if !pending.is_empty() {
+            for request in uploads {
+                pending.push(request);
+            }
+            continue;
+        }
+        let mut uploads = uploads.into_iter();
+        while let Some(request) = uploads.next() {
+            match crate::telemetry::enqueue_metric_stat(request).await {
+                Ok(()) => {}
+                Err(error) => {
+                    let source = error.to_string();
+                    let lost = error.lost();
+                    let unsent = error.into_unsent();
                     warn!(
-                        "Failed to persist metric stats for server {} item {}: {}",
-                        server_id, item.id, e
+                        server_id = unsent.server_id,
+                        item_id = unsent.item_id,
+                        unsent_rows = unsent.metric_stats.len(),
+                        lost,
+                        error = %source,
+                        "failed to persist metric stats; retained"
                     );
-                    upload_succeeded = false;
+                    if lost > 0 {
+                        pending.record_lost(lost);
+                    }
+                    if !unsent.metric_stats.is_empty() {
+                        pending.push(unsent);
+                    }
+                    for remaining in uploads {
+                        pending.push(remaining);
+                    }
+                    break;
                 }
             }
-        }
-        if !upload_succeeded {
-            crate::metrics::aggregator::METRIC_STAT_AGGREGATOR.restore(samples);
         }
     }
 }
@@ -1399,6 +1750,29 @@ pub async fn start_top_ip_stat_reporter() {
 }
 
 #[cfg(test)]
+mod reporting_baseline_tests {
+    use super::*;
+
+    #[test]
+    fn baseline_identity_is_the_metric_instance_not_the_server_id() {
+        let first = Arc::new(ServerMetrics::new());
+        let second = Arc::new(ServerMetrics::new());
+        let snapshot = first.snapshot();
+        let mut baselines = HashMap::new();
+        baselines.insert(
+            first.instance_id,
+            ReportingBaseline {
+                metrics: Arc::downgrade(&first),
+                snapshot,
+            },
+        );
+        assert!(reporting_prior(&baselines, &first, first.instance_id).is_some());
+        assert!(reporting_prior(&baselines, &second, second.instance_id).is_none());
+        assert_ne!(first.instance_id, second.instance_id);
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -1446,6 +1820,74 @@ mod tests {
     }
 
     #[test]
+    fn daily_pending_cap_keeps_oldest_rows_within_count_and_byte_limits() {
+        let mut stats = (0..5)
+            .map(|server_id| pb::ServerDailyStat {
+                server_id,
+                ..Default::default()
+            })
+            .collect::<Vec<_>>();
+        let mut domains = (0..5)
+            .map(
+                |server_id| pb::upload_server_daily_stats_request::DomainStat {
+                    server_id,
+                    domain: format!("d{server_id}.example"),
+                    ..Default::default()
+                },
+            )
+            .collect::<Vec<_>>();
+        let dropped = cap_daily_pending_with_limits(&mut stats, &mut domains, 3, 2, 1 << 30);
+        assert_eq!(dropped, 5);
+        assert_eq!(
+            stats.iter().map(|row| row.server_id).collect::<Vec<_>>(),
+            vec![0, 1, 2]
+        );
+        assert_eq!(
+            domains.iter().map(|row| row.server_id).collect::<Vec<_>>(),
+            vec![0, 1]
+        );
+
+        let mut stats = vec![pb::ServerDailyStat::default()];
+        let mut domains = vec![pb::upload_server_daily_stats_request::DomainStat::default()];
+        assert_eq!(
+            cap_daily_pending_with_limits(&mut stats, &mut domains, 8, 8, 0),
+            2
+        );
+        assert!(stats.is_empty());
+        assert!(domains.is_empty());
+    }
+
+    #[test]
+    fn metric_pending_uploads_are_bounded_and_drain_resets_accounting() {
+        let request = |index: usize| pb::UploadMetricStatsRequest {
+            server_id: index as i64,
+            metric_stats: vec![pb::UploadingMetricStat {
+                keys: vec![format!("k_{index}")],
+                value: 1.0,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let mut pending = MetricPendingUploads::default();
+        for index in 0..METRIC_PENDING_MAX_REQUESTS + 10 {
+            pending.push(request(index));
+        }
+        assert_eq!(pending.requests.len(), METRIC_PENDING_MAX_REQUESTS);
+        assert_eq!(pending.dropped_rows, 10);
+        assert!(pending.bytes > 0);
+
+        let drained: Vec<_> = pending.drain().collect();
+        assert_eq!(drained.len(), METRIC_PENDING_MAX_REQUESTS);
+        assert_eq!(drained[0].server_id, 0);
+        assert_eq!(
+            drained.last().unwrap().server_id as usize,
+            METRIC_PENDING_MAX_REQUESTS - 1
+        );
+        assert_eq!(pending.bytes, 0);
+        assert!(pending.is_empty());
+    }
+
+    #[test]
     fn metric_stat_upload_groups_request_count_by_resolved_ip() {
         let aggregator = crate::metrics::aggregator::MetricAggregator::with_request_samples(true);
         for request_id in ["a", "b"] {
@@ -1463,8 +1905,7 @@ mod tests {
         assert_eq!(samples.len(), 1);
 
         let item = metric_item(10, vec!["${remoteAddr}"], "${countRequest}");
-        let mut cache = HashMap::new();
-        let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples, &mut cache);
+        let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples);
 
         assert_eq!(uploads.len(), 1);
         assert_eq!(uploads[0].count, 2);
@@ -1472,6 +1913,7 @@ mod tests {
         assert_eq!(uploads[0].metric_stats.len(), 1);
         assert_eq!(uploads[0].metric_stats[0].keys, vec!["203.0.113.9"]);
         assert_eq!(uploads[0].metric_stats[0].value, 2.0);
+        assert!(uploads[0].keep_keys.is_empty());
     }
 
     #[test]
@@ -1491,8 +1933,7 @@ mod tests {
 
         let samples = aggregator.flush();
         let item = metric_item(11, vec!["${requestPath}"], "${countTrafficOut}");
-        let mut cache = HashMap::new();
-        let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples, &mut cache);
+        let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples);
 
         assert_eq!(uploads.len(), 1);
         assert_eq!(uploads[0].count, 2);
@@ -1517,8 +1958,7 @@ mod tests {
             vec!["${requestMethod}", "${method}", "${request.method}"],
             "${countRequest}",
         );
-        let mut cache = HashMap::new();
-        let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples, &mut cache);
+        let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples);
 
         assert_eq!(uploads.len(), 1);
         assert_eq!(
@@ -1597,6 +2037,59 @@ mod tests {
         assert_eq!(req.region_providers.len(), 2);
         assert_eq!(req.systems.len(), 2);
         assert_eq!(req.browsers.len(), 2);
+    }
+
+    #[test]
+    fn bandwidth_pending_backlog_is_bounded_and_overflow_is_an_explicit_gap() {
+        let window = |start| PendingWindow {
+            window_start: start,
+            segment_started_at: start,
+            source_boot: "source-generation".into(),
+            stats: vec![pb::ServerBandwidthStat {
+                server_id: 7,
+                total_bytes: 42,
+                ..Default::default()
+            }],
+            error_counts: HashMap::new(),
+        };
+        let mut pending = Vec::new();
+        for start in 0..MAX_PENDING_BANDWIDTH_WINDOWS {
+            assert!(retain_pending_window(&mut pending, window(start as i64)).is_none());
+        }
+        let dropped = retain_pending_window(&mut pending, window(99))
+            .expect("the cap must reject, not grow");
+        assert_eq!(pending.len(), MAX_PENDING_BANDWIDTH_WINDOWS);
+        let gap = drop_pending_window_gap(&dropped);
+        assert!(gap.has_gap);
+        assert_eq!(gap.gap_kind, "bandwidth");
+        assert_eq!(gap.window_start, 99);
+        assert!(gap.gap_reason.contains("12-window cap"));
+    }
+
+    #[test]
+    fn bandwidth_handoff_state_keeps_only_undelivered_windows_and_source_identity() {
+        let window = |start| PendingWindow {
+            window_start: start,
+            segment_started_at: start,
+            source_boot: "source-generation".into(),
+            stats: vec![pb::ServerBandwidthStat {
+                server_id: 7,
+                total_bytes: 42,
+                ..Default::default()
+            }],
+            error_counts: HashMap::new(),
+        };
+        let pending = [window(300), window(600)];
+        let batch = window_batch(&pending[0], true);
+        assert_eq!(batch.source_boot_id, "source-generation");
+        assert_eq!(batch.window_start, 300);
+        let raw = encode_bandwidth_state("next-window", &HashMap::new(), &pending[1..], 900).unwrap();
+        let state: StoredBandwidthState = serde_json::from_slice(&raw).unwrap();
+        assert_eq!(state.pending_windows.len(), 1);
+        assert_eq!(state.pending_windows[0].window_start, 600);
+        assert_eq!(state.pending_windows[0].source_boot, "source-generation");
+        assert_eq!(state.pending_windows[0].stats[0].total_bytes, 42);
+        assert_eq!(pending.len(), 2, "preparing state cannot release uncommitted work");
     }
 
     #[test]

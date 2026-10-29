@@ -1,0 +1,512 @@
+{
+  "baseline": {
+    "rounds": [
+      {
+        "repeat": "0",
+        "h1": {
+          "rps": 2508.54,
+          "p99_ms": 20.97,
+          "requests": 30115,
+          "success": 30115,
+          "errors": [],
+          "counters": {
+            "task-clock": 23819.97,
+            "context-switches": 25358.0,
+            "syscalls:sys_enter_futex": 11767.0
+          }
+        },
+        "h2": {
+          "rps": 2009.64,
+          "p99_ms": 24.791,
+          "requests": 4800,
+          "success": 4800,
+          "failed": 0,
+          "errored": 0,
+          "counters": {
+            "task-clock": 4676.74,
+            "context-switches": 4981.0,
+            "syscalls:sys_enter_futex": 2924.0
+          }
+        },
+        "h3": {
+          "rps": 2375.480383059603,
+          "p99_ms": 24.165,
+          "requests": 28514,
+          "success": 28514,
+          "errors": {
+            "h3 error": 0
+          },
+          "counters": {
+            "task-clock": 23862.33,
+            "context-switches": 26055.0,
+            "syscalls:sys_enter_futex": 15377.0
+          }
+        }
+      },
+      {
+        "repeat": "1",
+        "h1": {
+          "rps": 2495.85,
+          "p99_ms": 21.26,
+          "requests": 29970,
+          "success": 29970,
+          "errors": [],
+          "counters": {
+            "task-clock": 23819.17,
+            "context-switches": 25317.0,
+            "syscalls:sys_enter_futex": 11799.0
+          }
+        },
+        "h2": {
+          "rps": 2007.21,
+          "p99_ms": 24.764,
+          "requests": 4800,
+          "success": 4800,
+          "failed": 0,
+          "errored": 0,
+          "counters": {
+            "task-clock": 4681.45,
+            "context-switches": 4999.0,
+            "syscalls:sys_enter_futex": 2994.0
+          }
+        },
+        "h3": {
+          "rps": 2400.772693553291,
+          "p99_ms": 23.674,
+          "requests": 28813,
+          "success": 28813,
+          "errors": {
+            "h3 error": 0
+          },
+          "counters": {
+            "task-clock": 23859.93,
+            "context-switches": 25897.0,
+            "syscalls:sys_enter_futex": 15429.0
+          }
+        }
+      },
+      {
+        "repeat": "2",
+        "h1": {
+          "rps": 2513.91,
+          "p99_ms": 21.33,
+          "requests": 30173,
+          "success": 30173,
+          "errors": [],
+          "counters": {
+            "task-clock": 23797.32,
+            "context-switches": 25217.0,
+            "syscalls:sys_enter_futex": 11715.0
+          }
+        },
+        "h2": {
+          "rps": 2056.82,
+          "p99_ms": 24.368,
+          "requests": 4800,
+          "success": 4800,
+          "failed": 0,
+          "errored": 0,
+          "counters": {
+            "task-clock": 4571.4,
+            "context-switches": 4855.0,
+            "syscalls:sys_enter_futex": 2929.0
+          }
+        },
+        "h3": {
+          "rps": 2376.928120270352,
+          "p99_ms": 23.874,
+          "requests": 28534,
+          "success": 28534,
+          "errors": {
+            "h3 error": 0
+          },
+          "counters": {
+            "task-clock": 23851.69,
+            "context-switches": 25916.0,
+            "syscalls:sys_enter_futex": 15415.0
+          }
+        }
+      },
+      {
+        "repeat": "3",
+        "h1": {
+          "rps": 2533.73,
+          "p99_ms": 21.07,
+          "requests": 30415,
+          "success": 30415,
+          "errors": [],
+          "counters": {
+            "task-clock": 23828.66,
+            "context-switches": 25348.0,
+            "syscalls:sys_enter_futex": 11813.0
+          }
+        },
+        "h2": {
+          "rps": 2016.66,
+          "p99_ms": 24.783,
+          "requests": 4800,
+          "success": 4800,
+          "failed": 0,
+          "errored": 0,
+          "counters": {
+            "task-clock": 4658.01,
+            "context-switches": 4985.0,
+            "syscalls:sys_enter_futex": 2988.0
+          }
+        },
+        "h3": {
+          "rps": 2404.6188256899554,
+          "p99_ms": 23.73,
+          "requests": 28870,
+          "success": 28870,
+          "errors": {
+            "h3 error": 0
+          },
+          "counters": {
+            "task-clock": 23855.41,
+            "context-switches": 26088.0,
+            "syscalls:sys_enter_futex": 15569.0
+          }
+        }
+      },
+      {
+        "repeat": "4",
+        "h1": {
+          "rps": 2521.54,
+          "p99_ms": 21.08,
+          "requests": 30271,
+          "success": 30271,
+          "errors": [],
+          "counters": {
+            "task-clock": 23817.78,
+            "context-switches": 25389.0,
+            "syscalls:sys_enter_futex": 11813.0
+          }
+        },
+        "h2": {
+          "rps": 2004.69,
+          "p99_ms": 23.809,
+          "requests": 4800,
+          "success": 4800,
+          "failed": 0,
+          "errored": 0,
+          "counters": {
+            "task-clock": 4693.58,
+            "context-switches": 5018.0,
+            "syscalls:sys_enter_futex": 2939.0
+          }
+        },
+        "h3": {
+          "rps": 2405.212095059988,
+          "p99_ms": 23.652,
+          "requests": 28863,
+          "success": 28863,
+          "errors": {
+            "h3 error": 0
+          },
+          "counters": {
+            "task-clock": 23854.94,
+            "context-switches": 26121.0,
+            "syscalls:sys_enter_futex": 15737.0
+          }
+        }
+      }
+    ],
+    "medians": {
+      "h1": {
+        "rps": 2513.91,
+        "rps_min": 2495.85,
+        "rps_max": 2533.73,
+        "p99_ms": 21.08,
+        "p99_min": 20.97,
+        "p99_max": 21.33,
+        "success": 150944,
+        "requests": 150944,
+        "task_clock_ms_per_request": 0.788695853909124,
+        "context_switches_per_kreq": 838.723530772026,
+        "futex_per_kreq": 390.24148524990915
+      },
+      "h2": {
+        "rps": 2009.64,
+        "rps_min": 2004.69,
+        "rps_max": 2056.82,
+        "p99_ms": 24.764,
+        "p99_min": 23.809,
+        "p99_max": 24.791,
+        "success": 24000,
+        "requests": 24000,
+        "task_clock_ms_per_request": 0.9743208333333333,
+        "context_switches_per_kreq": 1038.5416666666667,
+        "futex_per_kreq": 612.2916666666666
+      },
+      "h3": {
+        "rps": 2400.772693553291,
+        "rps_min": 2375.480383059603,
+        "rps_max": 2405.212095059988,
+        "p99_ms": 23.73,
+        "p99_min": 23.652,
+        "p99_max": 24.165,
+        "success": 143594,
+        "requests": 143594,
+        "task_clock_ms_per_request": 0.8280959983340853,
+        "context_switches_per_kreq": 904.9994803035028,
+        "futex_per_kreq": 539.2795289227572
+      }
+    }
+  },
+  "candidate": {
+    "rounds": [
+      {
+        "repeat": "0",
+        "h1": {
+          "rps": 2724.19,
+          "p99_ms": 18.82,
+          "requests": 32698,
+          "success": 32698,
+          "errors": [],
+          "counters": {
+            "task-clock": 23787.74,
+            "context-switches": 25171.0,
+            "syscalls:sys_enter_futex": 11789.0
+          }
+        },
+        "h2": {
+          "rps": 2325.49,
+          "p99_ms": 19.891,
+          "requests": 4800,
+          "success": 4800,
+          "failed": 0,
+          "errored": 0,
+          "counters": {
+            "task-clock": 4029.82,
+            "context-switches": 4309.0,
+            "syscalls:sys_enter_futex": 2616.0
+          }
+        },
+        "h3": {
+          "rps": 2814.189189550885,
+          "p99_ms": 19.697,
+          "requests": 33777,
+          "success": 33777,
+          "errors": {
+            "h3 error": 0
+          },
+          "counters": {
+            "task-clock": 23788.5,
+            "context-switches": 26630.0,
+            "syscalls:sys_enter_futex": 18218.0
+          }
+        }
+      },
+      {
+        "repeat": "1",
+        "h1": {
+          "rps": 2817.48,
+          "p99_ms": 17.94,
+          "requests": 33827,
+          "success": 33827,
+          "errors": [],
+          "counters": {
+            "task-clock": 23803.19,
+            "context-switches": 25309.0,
+            "syscalls:sys_enter_futex": 11789.0
+          }
+        },
+        "h2": {
+          "rps": 2351.31,
+          "p99_ms": 19.649,
+          "requests": 4800,
+          "success": 4800,
+          "failed": 0,
+          "errored": 0,
+          "counters": {
+            "task-clock": 3977.98,
+            "context-switches": 4285.0,
+            "syscalls:sys_enter_futex": 2623.0
+          }
+        },
+        "h3": {
+          "rps": 2823.4307926315046,
+          "p99_ms": 19.671,
+          "requests": 33893,
+          "success": 33893,
+          "errors": {
+            "h3 error": 0
+          },
+          "counters": {
+            "task-clock": 23794.55,
+            "context-switches": 26627.0,
+            "syscalls:sys_enter_futex": 18171.0
+          }
+        }
+      },
+      {
+        "repeat": "2",
+        "h1": {
+          "rps": 2933.9,
+          "p99_ms": 17.25,
+          "requests": 35222,
+          "success": 35222,
+          "errors": [],
+          "counters": {
+            "task-clock": 23782.13,
+            "context-switches": 25171.0,
+            "syscalls:sys_enter_futex": 11840.0
+          }
+        },
+        "h2": {
+          "rps": 2333.26,
+          "p99_ms": 19.22,
+          "requests": 4800,
+          "success": 4800,
+          "failed": 0,
+          "errored": 0,
+          "counters": {
+            "task-clock": 4015.79,
+            "context-switches": 4303.0,
+            "syscalls:sys_enter_futex": 2686.0
+          }
+        },
+        "h3": {
+          "rps": 2846.6244559507822,
+          "p99_ms": 19.48,
+          "requests": 34171,
+          "success": 34171,
+          "errors": {
+            "h3 error": 0
+          },
+          "counters": {
+            "task-clock": 23782.44,
+            "context-switches": 26740.0,
+            "syscalls:sys_enter_futex": 18447.0
+          }
+        }
+      },
+      {
+        "repeat": "3",
+        "h1": {
+          "rps": 2836.42,
+          "p99_ms": 17.93,
+          "requests": 34048,
+          "success": 34048,
+          "errors": [],
+          "counters": {
+            "task-clock": 23804.95,
+            "context-switches": 25268.0,
+            "syscalls:sys_enter_futex": 11791.0
+          }
+        },
+        "h2": {
+          "rps": 2312.66,
+          "p99_ms": 19.757,
+          "requests": 4800,
+          "success": 4800,
+          "failed": 0,
+          "errored": 0,
+          "counters": {
+            "task-clock": 4052.64,
+            "context-switches": 4383.0,
+            "syscalls:sys_enter_futex": 2711.0
+          }
+        },
+        "h3": {
+          "rps": 2823.2247555760305,
+          "p99_ms": 19.661,
+          "requests": 33891,
+          "success": 33891,
+          "errors": {
+            "h3 error": 0
+          },
+          "counters": {
+            "task-clock": 23778.95,
+            "context-switches": 26779.0,
+            "syscalls:sys_enter_futex": 18264.0
+          }
+        }
+      },
+      {
+        "repeat": "4",
+        "h1": {
+          "rps": 2789.91,
+          "p99_ms": 18.05,
+          "requests": 33489,
+          "success": 33489,
+          "errors": [],
+          "counters": {
+            "task-clock": 23816.36,
+            "context-switches": 25380.0,
+            "syscalls:sys_enter_futex": 11821.0
+          }
+        },
+        "h2": {
+          "rps": 2329.77,
+          "p99_ms": 19.061,
+          "requests": 4800,
+          "success": 4800,
+          "failed": 0,
+          "errored": 0,
+          "counters": {
+            "task-clock": 4025.78,
+            "context-switches": 4402.0,
+            "syscalls:sys_enter_futex": 2733.0
+          }
+        },
+        "h3": {
+          "rps": 2786.3960417888147,
+          "p99_ms": 20.143,
+          "requests": 33441,
+          "success": 33441,
+          "errors": {
+            "h3 error": 0
+          },
+          "counters": {
+            "task-clock": 23781.97,
+            "context-switches": 26704.0,
+            "syscalls:sys_enter_futex": 18434.0
+          }
+        }
+      }
+    ],
+    "medians": {
+      "h1": {
+        "rps": 2817.48,
+        "rps_min": 2724.19,
+        "rps_max": 2933.9,
+        "p99_ms": 17.94,
+        "p99_min": 17.25,
+        "p99_max": 18.82,
+        "success": 169284,
+        "requests": 169284,
+        "task_clock_ms_per_request": 0.7036742838560912,
+        "context_switches_per_kreq": 748.1893162266829,
+        "futex_per_kreq": 348.5085878144677
+      },
+      "h2": {
+        "rps": 2329.77,
+        "rps_min": 2312.66,
+        "rps_max": 2351.31,
+        "p99_ms": 19.649,
+        "p99_min": 19.061,
+        "p99_max": 19.891,
+        "success": 24000,
+        "requests": 24000,
+        "task_clock_ms_per_request": 0.8387041666666667,
+        "context_switches_per_kreq": 897.7083333333334,
+        "futex_per_kreq": 559.5833333333334
+      },
+      "h3": {
+        "rps": 2823.2247555760305,
+        "rps_min": 2786.3960417888147,
+        "rps_max": 2846.6244559507822,
+        "p99_ms": 19.671,
+        "p99_min": 19.48,
+        "p99_max": 20.143,
+        "success": 169173,
+        "requests": 169173,
+        "task_clock_ms_per_request": 0.7020490956834744,
+        "context_switches_per_kreq": 788.4063119874471,
+        "futex_per_kreq": 539.3611037096249
+      }
+    }
+  }
+}

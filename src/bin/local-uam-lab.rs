@@ -260,7 +260,8 @@ fn main() -> anyhow::Result<()> {
         HashMap::new(),
         None,
         None,
-    ));
+    ))
+    .expect("local lab configuration installs");
 
     let challenge_key = api_config
         .challenge_key()

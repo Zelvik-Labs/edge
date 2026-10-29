@@ -1,0 +1,12 @@
+2026-10-28T21:05:53.845258Z  WARN memory_shed: memory pressure critical: shed 3 in-flight connection(s) older than 0ms l4_drained=2 h3_drained=1 h3_drained_total=1 max_age_ms=0 streak=5
+2026-10-28T21:07:43.514513Z  WARN memory_shed: memory pressure critical: shed 3 in-flight connection(s) older than 0ms l4_drained=2 h3_drained=1 h3_drained_total=1 max_age_ms=0 streak=5
+2026-10-28T21:09:55.332499Z  WARN memory_shed: memory pressure critical: shed 3 in-flight connection(s) older than 0ms l4_drained=2 h3_drained=1 h3_drained_total=1 max_age_ms=0 streak=5
+2026-10-28T20:58:50.669609Z  WARN memory_shed: memory pressure critical: shed 3 in-flight connection(s) older than 0ms l4_drained=2 h3_drained=1 h3_drained_total=1 max_age_ms=0 streak=5
+2026-10-28T21:01:07.164652Z  WARN memory_shed: memory pressure critical: shed 3 in-flight connection(s) older than 30000ms l4_drained=2 h3_drained=1 h3_drained_total=1 max_age_ms=30000 streak=4
+2026-10-28T21:03:12.058886Z  WARN memory_shed: memory pressure critical: shed 3 in-flight connection(s) older than 0ms l4_drained=2 h3_drained=1 h3_drained_total=1 max_age_ms=0 streak=5
+2026-10-28T20:49:34.531097Z  WARN memory_shed: memory pressure critical: shed 2 in-flight connection(s) older than 0ms l4_drained=1 h3_drained=1 h3_drained_total=1 max_age_ms=0 streak=5
+2026-10-28T20:52:21.090572Z  WARN memory_shed: memory pressure critical: shed 2 in-flight connection(s) older than 0ms l4_drained=1 h3_drained=1 h3_drained_total=1 max_age_ms=0 streak=5
+2026-10-28T20:54:24.453289Z  WARN memory_shed: memory pressure critical: shed 2 in-flight connection(s) older than 0ms l4_drained=1 h3_drained=1 h3_drained_total=1 max_age_ms=0 streak=5
+2026-10-28T20:42:56.261990Z  WARN memory_shed: memory pressure critical: shed 2 in-flight connection(s) older than 30000ms l4_drained=1 h3_drained=1 h3_drained_total=1 max_age_ms=30000 streak=4
+2026-10-28T20:45:18.132803Z  WARN memory_shed: memory pressure critical: shed 2 in-flight connection(s) older than 30000ms l4_drained=1 h3_drained=1 h3_drained_total=1 max_age_ms=30000 streak=4
+2026-10-28T20:47:29.155264Z  WARN memory_shed: memory pressure critical: shed 2 in-flight connection(s) older than 0ms l4_drained=1 h3_drained=1 h3_drained_total=1 max_age_ms=0 streak=5

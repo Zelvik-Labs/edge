@@ -16,9 +16,10 @@
 
 use crate::config_models::{ProbePlan, ProbeProviderPlan, ProbeTargetPlan};
 use crate::pb;
+use prost::Message;
 use rustls::pki_types::ServerName;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 use tokio::net::TcpStream;
@@ -32,6 +33,8 @@ const SAMPLES_PER_CYCLE: u32 = 3;
 /// Hard ceiling on concurrently probed targets; a plan beyond this is trimmed
 /// (and logged) rather than allowed to spawn unbounded tasks.
 const MAX_TARGETS: usize = 4096;
+const OUTBOX_MAX_OBSERVATIONS: usize = 16_384;
+const OUTBOX_MAX_BYTES: u64 = 64 * 1024 * 1024;
 const DEFAULT_INTERVAL_SECS: u32 = 60;
 const DEFAULT_TIMEOUT_MS: u32 = 3000;
 const MIN_INTERVAL_SECS: u32 = 5;
@@ -85,8 +88,112 @@ static TLS_CONFIG: LazyLock<Result<Arc<rustls::ClientConfig>, String>> = LazyLoc
 /// 一条观测一个批次会让 detail 通道的串行上传成为吞吐上限（实测恒为
 /// 60 批/分钟），目标一多就必然积压、滞后单调增长。合并后一次上传承载
 /// 该窗口内的全部观测，吞吐随目标数线性扩展，而通道压力恒定。
-static OUTBOX: LazyLock<parking_lot::Mutex<Vec<pb::ProbeObservation>>> =
-    LazyLock::new(|| parking_lot::Mutex::new(Vec::new()));
+static OUTBOX: LazyLock<parking_lot::Mutex<ProbeOutbox>> =
+    LazyLock::new(|| parking_lot::Mutex::new(ProbeOutbox::default()));
+
+#[derive(Default)]
+struct ProbeOutbox {
+    observations: Vec<pb::ProbeObservation>,
+    estimated_bytes: u64,
+    /// A drained batch is still owned by this module until its append settles.
+    /// Keeping it inside the same ceiling means a slow Mace write cannot let
+    /// producers queue a second full outbox behind it.
+    inflight_observations: usize,
+    inflight_bytes: u64,
+}
+
+impl ProbeOutbox {
+    fn at_capacity(&self, bytes: u64) -> bool {
+        self.observations
+            .len()
+            .saturating_add(self.inflight_observations)
+            >= OUTBOX_MAX_OBSERVATIONS
+            || self
+                .estimated_bytes
+                .saturating_add(self.inflight_bytes)
+                .saturating_add(bytes)
+                > OUTBOX_MAX_BYTES
+    }
+
+    fn retain(&mut self, observation: pb::ProbeObservation, bytes: u64) -> bool {
+        if self.at_capacity(bytes) {
+            return false;
+        }
+        self.estimated_bytes = self.estimated_bytes.saturating_add(bytes);
+        self.observations.push(observation);
+        true
+    }
+}
+
+/// Controlled drops are counted here and reported at most once per flusher
+/// tick, so a full outbox cannot turn into one error log and one gap marker
+/// attempt per rejected observation.
+static OUTBOX_DROPPED_TOTAL: AtomicU64 = AtomicU64::new(0);
+static OUTBOX_DROP_AT: AtomicI64 = AtomicI64::new(0);
+static OUTBOX_DROP_REPORTED: AtomicU64 = AtomicU64::new(0);
+static OUTBOX_DROP_REPORTED_AT: AtomicI64 = AtomicI64::new(0);
+/// One gap report per minute while overload persists: the flap is already
+/// reflected in `droppedObservationsTotal`, and logging every second would
+/// turn the indication into its own load.
+const OUTBOX_DROP_REPORT_INTERVAL_SECS: i64 = 60;
+
+fn note_outbox_drop(count: usize, at: i64) {
+    OUTBOX_DROPPED_TOTAL.fetch_add(count as u64, Ordering::Relaxed);
+    OUTBOX_DROP_AT.fetch_max(at, Ordering::Relaxed);
+}
+
+fn report_outbox_drops() {
+    let total = OUTBOX_DROPPED_TOTAL.load(Ordering::Relaxed);
+    if total <= OUTBOX_DROP_REPORTED.load(Ordering::Relaxed) {
+        return;
+    }
+    let reported_at = OUTBOX_DROP_REPORTED_AT.load(Ordering::Relaxed);
+    let at = OUTBOX_DROP_AT
+        .load(Ordering::Relaxed)
+        .max(crate::utils::time::now_timestamp());
+    if reported_at > 0 && at.saturating_sub(reported_at) < OUTBOX_DROP_REPORT_INTERVAL_SECS {
+        return;
+    }
+    crate::telemetry::record_gap("probe_observation", at, "probe_outbox_capacity");
+    OUTBOX_DROP_REPORTED.store(total, Ordering::Relaxed);
+    OUTBOX_DROP_REPORTED_AT.store(at, Ordering::Relaxed);
+}
+
+/// Outbox pressure as the node status reports it: queued and in-flight records
+/// share one ceiling, and the drop counter is cumulative for the process.
+pub fn outbox_status() -> serde_json::Value {
+    let outbox = OUTBOX.lock();
+    serde_json::json!({
+        "queuedObservations": outbox.observations.len(),
+        "queuedBytes": outbox.estimated_bytes,
+        "inflightObservations": outbox.inflight_observations,
+        "inflightBytes": outbox.inflight_bytes,
+        "maxObservations": OUTBOX_MAX_OBSERVATIONS,
+        "maxBytes": OUTBOX_MAX_BYTES,
+        "droppedObservationsTotal": OUTBOX_DROPPED_TOTAL.load(Ordering::Relaxed),
+        "lastDropAt": OUTBOX_DROP_AT.load(Ordering::Relaxed),
+    })
+}
+
+fn observation_event_time(observation: &pb::ProbeObservation) -> i64 {
+    chrono::NaiveDateTime::parse_from_str(&observation.event_time, "%Y-%m-%d %H:%M:%S%.3f")
+        .ok()
+        .map(|value| value.and_utc().timestamp())
+        .unwrap_or_else(crate::utils::time::now_timestamp)
+}
+
+fn observation_estimated_bytes(observation: &pb::ProbeObservation) -> u64 {
+    observation.encoded_len() as u64 + std::mem::size_of::<pb::ProbeObservation>() as u64
+}
+
+fn push_observation(observation: pb::ProbeObservation) {
+    let bytes = observation_estimated_bytes(&observation);
+    let at = observation_event_time(&observation);
+    let mut outbox = OUTBOX.lock();
+    if !outbox.retain(observation, bytes) {
+        note_outbox_drop(1, at);
+    }
+}
 /// 合并窗口。与 flusher 的 tick 一致，避免同一观测跨窗口。
 const FLUSH_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -94,11 +201,24 @@ const FLUSH_INTERVAL: Duration = Duration::from_secs(1);
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 static TASKS: LazyLock<parking_lot::Mutex<Vec<JoinHandle<()>>>> =
     LazyLock::new(|| parking_lot::Mutex::new(Vec::new()));
+/// The flusher is independent of the plan: aborting it on a plan change would
+/// leave a drained batch owned by nobody. It starts with the first plan and
+/// keeps draining until process shutdown.
+static FLUSHER: LazyLock<parking_lot::Mutex<Option<JoinHandle<()>>>> =
+    LazyLock::new(|| parking_lot::Mutex::new(None));
 /// The plan currently applied, compared by value so an identical push (the
 /// control plane re-sends nodeJSON on any unrelated config change) does not
 /// restart running probes.
 static APPLIED_PLAN: LazyLock<parking_lot::Mutex<Option<ProbePlan>>> =
     LazyLock::new(|| parking_lot::Mutex::new(None));
+
+fn ensure_flusher() {
+    let mut flusher = FLUSHER.lock();
+    if flusher.as_ref().is_some_and(|handle| !handle.is_finished()) {
+        return;
+    }
+    *flusher = Some(tokio::spawn(flush_observations()));
+}
 
 /// apply_plan replaces the running probe set. `None` (or `enabled = false`)
 /// stops every probe — the control plane removes the key when a node's cluster
@@ -124,8 +244,9 @@ pub fn apply_plan(plan: Option<ProbePlan>) {
             return;
         }
     };
-    // 计划生效即启动合并上报任务；清空计划时它随 generation 一起退出。
-    tasks.push(tokio::spawn(flush_observations(generation)));
+    // 计划生效即启动合并上报任务；它不随计划清除而退出，否则一个已经
+    // drain 出来、正在写 Mace 的批次会失去所有者。
+    ensure_flusher();
     let mut spawned = 0usize;
     let mut trimmed = 0usize;
     for provider in &plan.providers {
@@ -170,36 +291,73 @@ pub fn apply_plan(plan: Option<ProbePlan>) {
 }
 
 /// flush_observations 把缓冲里的观测每秒合并成一个批次入队一次。
-/// 空窗口不发包；入队失败时把观测放回缓冲，下一个窗口重试。
-async fn flush_observations(generation: u64) {
+/// 空窗口不发包；入队失败时只把未持久化的观测放回缓冲，下一个窗口重试。
+async fn flush_observations() {
     let mut ticker = tokio::time::interval(FLUSH_INTERVAL);
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
     loop {
         ticker.tick().await;
-        if GENERATION.load(Ordering::SeqCst) != generation {
-            break;
-        }
-        let Some(batch) = drain_outbox() else {
+        report_outbox_drops();
+        let Some((batch, bytes)) = drain_outbox() else {
             continue;
         };
         let count = batch.observations.len();
-        if let Err(err) = crate::telemetry::enqueue("probe_observation", &batch, 0, false).await {
-            warn!(observation_count = count, error = %err, "probe observation enqueue failed; retained");
-            OUTBOX.lock().extend(batch.observations);
+        match crate::telemetry::enqueue_probe_observations(batch.observations, 0).await {
+            Ok(()) => settle_outbox(count, bytes, Vec::new()),
+            Err(error) => {
+                let source = error.to_string();
+                let lost = error.lost();
+                warn!(
+                    observation_count = count,
+                    unsent = error.unsent().len(),
+                    lost,
+                    error = %source,
+                    "probe observation enqueue failed; unpersisted observations retained"
+                );
+                if lost > 0 {
+                    note_outbox_drop(lost, crate::utils::time::now_timestamp());
+                }
+                settle_outbox(count, bytes, error.into_unsent());
+            }
         }
     }
 }
 
-/// drain_outbox 把当前窗口的观测合并成一个批次；空窗口返回 None。
+/// drain_outbox 把当前窗口的观测交给 flusher，并计入 in-flight 额度。
 ///
 /// 合并是吞吐的关键：93 个目标 × 15 秒 = 每分钟 372 条，一条一批会把
 /// detail 通道压到 60 批/分钟的上限，从这里开始就必然积压。
-fn drain_outbox() -> Option<pb::ProbeObservationBatch> {
-    let drained = std::mem::take(&mut *OUTBOX.lock());
+fn drain_outbox() -> Option<(pb::ProbeObservationBatch, u64)> {
+    let mut outbox = OUTBOX.lock();
+    let bytes = outbox.estimated_bytes;
+    let drained = std::mem::take(&mut outbox.observations);
+    outbox.estimated_bytes = 0;
     if drained.is_empty() {
         return None;
     }
-    Some(pb::ProbeObservationBatch { observations: drained })
+    outbox.inflight_observations = outbox.inflight_observations.saturating_add(drained.len());
+    outbox.inflight_bytes = outbox.inflight_bytes.saturating_add(bytes);
+    Some((
+        pb::ProbeObservationBatch {
+            observations: drained,
+        },
+        bytes,
+    ))
+}
+
+/// settle_outbox 结束一个批次的 in-flight 生命周期，并把未持久化的观测重新
+/// 放回队列。重新入队同样受总上限约束；放不下的部分计入受控丢弃。
+fn settle_outbox(inflight_count: usize, inflight_bytes: u64, retry: Vec<pb::ProbeObservation>) {
+    let mut outbox = OUTBOX.lock();
+    outbox.inflight_observations = outbox.inflight_observations.saturating_sub(inflight_count);
+    outbox.inflight_bytes = outbox.inflight_bytes.saturating_sub(inflight_bytes);
+    for observation in retry {
+        let bytes = observation_estimated_bytes(&observation);
+        let at = observation_event_time(&observation);
+        if !outbox.retain(observation, bytes) {
+            note_outbox_drop(1, at);
+        }
+    }
 }
 
 /// run_target probes one target every interval until the plan generation
@@ -215,7 +373,7 @@ async fn run_target(generation: u64, provider: Arc<ProbeProviderPlan>, target: P
             break;
         }
         let observation = probe_once(&provider, &target, timeout_dur).await;
-        OUTBOX.lock().push(observation);
+        push_observation(observation);
     }
 }
 
@@ -505,20 +663,70 @@ mod tests {
 
     /// 合并上报的核心契约：同一窗口内的多条观测必须进入同一个批次，
     /// 否则 detail 通道的「一批一次 RTT」会重新变成吞吐上限。
-    #[test]
-    fn drain_outbox_merges_window_observations_into_one_batch() {
-        OUTBOX.lock().clear();
-        assert!(drain_outbox().is_none(), "空窗口不应产生批次");
-        for index in 0..93u32 {
-            OUTBOX.lock().push(pb::ProbeObservation {
-                target_id: format!("pt_{index}"),
-                ..Default::default()
-            });
+    static OUTBOX_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn reset_outbox() {
+        *OUTBOX.lock() = ProbeOutbox::default();
+        OUTBOX_DROPPED_TOTAL.store(0, Ordering::Relaxed);
+        OUTBOX_DROP_AT.store(0, Ordering::Relaxed);
+        OUTBOX_DROP_REPORTED.store(0, Ordering::Relaxed);
+        OUTBOX_DROP_REPORTED_AT.store(0, Ordering::Relaxed);
+    }
+
+    fn observation(id: &str) -> pb::ProbeObservation {
+        pb::ProbeObservation {
+            target_id: id.into(),
+            ..Default::default()
         }
-        let batch = drain_outbox().expect("窗口内有观测时必须产出批次");
-        assert_eq!(batch.observations.len(), 93);
-        assert_eq!(batch.observations[7].target_id, "pt_7");
-        assert!(drain_outbox().is_none(), "取走之后缓冲必须清空，避免重复上报");
+    }
+
+    #[test]
+    fn outbox_capacity_counts_queued_and_inflight_bytes() {
+        let _guard = OUTBOX_TEST_LOCK.lock().unwrap();
+        reset_outbox();
+        OUTBOX.lock().inflight_bytes = OUTBOX_MAX_BYTES;
+        push_observation(observation("pt_dropped"));
+        {
+            let outbox = OUTBOX.lock();
+            assert!(outbox.observations.is_empty());
+            assert_eq!(outbox.inflight_bytes, OUTBOX_MAX_BYTES);
+        }
+        assert_eq!(OUTBOX_DROPPED_TOTAL.load(Ordering::Relaxed), 1);
+        OUTBOX.lock().inflight_bytes = 0;
+        push_observation(observation("pt_retained"));
+        let outbox = OUTBOX.lock();
+        assert_eq!(outbox.observations.len(), 1);
+        assert_eq!(outbox.observations[0].target_id, "pt_retained");
+    }
+
+    #[test]
+    fn drain_and_settle_return_only_unpersisted_observations() {
+        let _guard = OUTBOX_TEST_LOCK.lock().unwrap();
+        reset_outbox();
+        push_observation(observation("pt_a"));
+        push_observation(observation("pt_b"));
+        let (batch, bytes) = drain_outbox().expect("窗口内有观测时必须产出批次");
+        assert_eq!(batch.observations.len(), 2);
+        assert!(bytes > 0);
+        {
+            let outbox = OUTBOX.lock();
+            assert!(outbox.observations.is_empty());
+            assert_eq!(outbox.estimated_bytes, 0);
+            assert_eq!(outbox.inflight_observations, 2);
+            assert_eq!(outbox.inflight_bytes, bytes);
+        }
+        assert!(
+            drain_outbox().is_none(),
+            "取走之后缓冲必须清空，避免重复上报"
+        );
+        // 模拟第二个观测已持久化、第一个未持久化：只允许第一个回到队列。
+        settle_outbox(2, bytes, vec![observation("pt_a")]);
+        let outbox = OUTBOX.lock();
+        assert_eq!(outbox.inflight_observations, 0);
+        assert_eq!(outbox.inflight_bytes, 0);
+        assert_eq!(outbox.observations.len(), 1);
+        assert_eq!(outbox.observations[0].target_id, "pt_a");
+        assert_eq!(OUTBOX_DROPPED_TOTAL.load(Ordering::Relaxed), 0);
     }
 
     #[test]
@@ -617,11 +825,29 @@ mod tests {
         };
         apply_plan(Some(plan.clone()));
         let generation = GENERATION.load(Ordering::SeqCst);
-        assert_eq!(TASKS.lock().len(), 2, "one target and its batch flusher");
+        assert_eq!(
+            TASKS.lock().len(),
+            1,
+            "one target task; the flusher is independent"
+        );
+        assert!(
+            FLUSHER
+                .lock()
+                .as_ref()
+                .is_some_and(|handle| !handle.is_finished()),
+            "the batch flusher must run independently of the plan"
+        );
         apply_plan(Some(plan));
         assert_eq!(GENERATION.load(Ordering::SeqCst), generation);
         apply_plan(None);
         assert!(TASKS.lock().is_empty());
+        assert!(
+            FLUSHER
+                .lock()
+                .as_ref()
+                .is_some_and(|handle| !handle.is_finished()),
+            "clearing the plan must not abort a batch the flusher is writing"
+        );
         assert!(APPLIED_PLAN.lock().is_none());
         assert!(GENERATION.load(Ordering::SeqCst) > generation);
     }
@@ -838,8 +1064,8 @@ mod tests {
         apply_plan(Some(plan));
         assert_eq!(
             TASKS.lock().len(),
-            4,
-            "tcp/http/tls and their shared batch flusher must be dispatched"
+            3,
+            "tcp/http/tls target tasks; the shared batch flusher is independent"
         );
         apply_plan(None);
         assert!(TASKS.lock().is_empty());

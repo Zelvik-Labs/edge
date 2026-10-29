@@ -255,7 +255,9 @@ struct LaneBudget {
     counter: Arc<LaneCounter>,
 }
 fn mace_error(e: OpCode) -> anyhow::Error {
-    anyhow::anyhow!("telemetry spool: {e:?}")
+    anyhow::anyhow!(
+        "telemetry Mace 0.2 spool: {e:?}; Mace 0.1.x databases require an explicit offline rebuild; startup never deletes queued data"
+    )
 }
 /// Distinguishes "the disk cannot take this batch" from every other spool
 /// failure, so operators and alerts can point straight at capacity instead of
@@ -385,7 +387,7 @@ impl Spool {
             enable_backpressure: true,
             ..Default::default()
         };
-        let bucket = match db.get_bucket("queue") {
+        let bucket = match db.open_bucket("queue") {
             Ok(b) => b,
             Err(OpCode::NotFound) => db.new_bucket("queue", options).map_err(mace_error)?,
             Err(e) => return Err(mace_error(e)),
@@ -496,7 +498,17 @@ impl Spool {
         };
         self.append_prepared(batch)
     }
-    pub fn append_prepared(&self, mut batch: pb::TelemetryBatch) -> anyhow::Result<String> {
+    pub fn append_prepared(&self, batch: pb::TelemetryBatch) -> anyhow::Result<String> {
+        self.append_prepared_with_state(batch, None)
+    }
+
+    /// Transfer producer ownership and its cursor in the same durable commit.
+    /// A refused append leaves both the queue and the producer state untouched.
+    fn append_prepared_with_state(
+        &self,
+        mut batch: pb::TelemetryBatch,
+        state: Option<(&str, &[u8])>,
+    ) -> anyhow::Result<String> {
         let mut meta = self.meta.lock();
         batch.schema_version = 1;
         batch.batch_id = format!("{}:{}", meta.boot, meta.tail);
@@ -552,6 +564,10 @@ impl Spool {
             .map_err(mace_error)?;
         txn.upsert(b"meta", serde_json::to_vec(&next)?)
             .map_err(mace_error)?;
+        if let Some((key, raw)) = state {
+            txn.upsert(format!("state:{key}").as_bytes(), raw)
+                .map_err(mace_error)?;
+        }
         txn.commit().map_err(mace_error)?;
         let level = capacity_level(next.bytes, available, self.budget.limit);
         *meta = next;
@@ -1237,12 +1253,6 @@ pub async fn enqueue<M: Message>(
     complete: bool,
 ) -> anyhow::Result<()> {
     let payload = message.encode_to_vec();
-    // The probe flusher hands its whole per-second observation batch to one
-    // call, so this is the last place those records can still be split into
-    // wire-sized batches; every other producer splits its own before enqueueing.
-    if kind == "probe_observation" {
-        return enqueue_observations(payload, window, complete).await;
-    }
     let spool = queue(kind)?;
     let kind = kind.to_owned();
     let at = crate::utils::time::now_timestamp();
@@ -1251,53 +1261,436 @@ pub async fn enqueue<M: Message>(
     Ok(())
 }
 
-/// Split a `probe_observation` payload into wire-sized batches.
-///
-/// Returns the encoded sub-payloads that fit, plus the encoded size of every
-/// observation too large for any batch, so the caller can journal those without
-/// keeping their bytes. A payload that is not a decodable observation batch is
-/// handed back whole: the spool's own cap then refuses it by name rather than a
-/// decode guess silently reshaping the data.
-fn split_observation_payload(payload: &[u8]) -> (Vec<Vec<u8>>, Vec<usize>) {
-    let Ok(batch) = <pb::ProbeObservationBatch as Message>::decode(payload) else {
-        return (vec![payload.to_vec()], Vec::new());
-    };
-    let (batches, oversize) =
-        split_records(batch.observations, payload_budget("probe_observation"));
-    (
-        batches
-            .into_iter()
-            .map(|observations| pb::ProbeObservationBatch { observations }.encode_to_vec())
-            .collect(),
-        oversize.iter().map(record_cost).collect(),
-    )
+/// Probe observations that a failed enqueue did not durably accept.
+#[derive(Debug)]
+pub struct ProbeEnqueueError {
+    source: anyhow::Error,
+    unsent: Vec<pb::ProbeObservation>,
+    lost: usize,
 }
 
-/// Enqueue a probe observation batch, splitting it to the wire cap first.
-///
-/// The flusher re-queues the whole batch when this returns an error, so a record
-/// journaled as too large must not also be reported as a failure: only a failed
-/// enqueue of the batches that fit is an error, and those are the ones worth
-/// retrying.
-async fn enqueue_observations(
-    payload: Vec<u8>,
-    window: i64,
-    complete: bool,
-) -> anyhow::Result<()> {
-    let (batches, oversize) = split_observation_payload(&payload);
-    for bytes in oversize {
-        journal_oversize("probe_observation", bytes).await?;
+impl ProbeEnqueueError {
+    fn new(source: anyhow::Error, unsent: Vec<pb::ProbeObservation>, lost: usize) -> Self {
+        Self {
+            source,
+            unsent,
+            lost,
+        }
     }
-    let spool = queue("probe_observation")?;
-    let at = crate::utils::time::now_timestamp();
-    for payload in batches {
-        let spool = spool.clone();
-        tokio::task::spawn_blocking(move || {
-            spool.append("probe_observation", payload, window, complete, at)
-        })
-        .await??;
+
+    pub fn unsent(&self) -> &[pb::ProbeObservation] {
+        &self.unsent
+    }
+
+    /// Observations whose append task panicked or was cancelled after the
+    /// records left the caller's ownership; they cannot be retried and must be
+    /// counted as a gap rather than silently forgotten.
+    pub fn lost(&self) -> usize {
+        self.lost
+    }
+
+    pub fn into_unsent(self) -> Vec<pb::ProbeObservation> {
+        self.unsent
+    }
+}
+
+impl std::fmt::Display for ProbeEnqueueError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}", self.source)
+    }
+}
+
+impl std::error::Error for ProbeEnqueueError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.source.source()
+    }
+}
+
+/// Enqueue probe observations in wire-sized chunks while retaining exact
+/// ownership: a failed append returns only the records it did not persist,
+/// and records already committed or journaled as oversize are never retried.
+pub async fn enqueue_probe_observations(
+    observations: Vec<pb::ProbeObservation>,
+    window: i64,
+) -> Result<(), ProbeEnqueueError> {
+    let spool = match queue("probe_observation") {
+        Ok(spool) => spool,
+        Err(source) => return Err(ProbeEnqueueError::new(source, observations, 0)),
+    };
+    enqueue_probe_observations_on(spool, observations, window).await
+}
+
+async fn enqueue_probe_observations_on(
+    spool: Arc<Spool>,
+    observations: Vec<pb::ProbeObservation>,
+    window: i64,
+) -> Result<(), ProbeEnqueueError> {
+    let (batches, oversize) = split_records(observations, payload_budget("probe_observation"));
+    let mut oversize = oversize.into_iter();
+    while let Some(observation) = oversize.next() {
+        let cost = record_cost(&observation);
+        if let Err(source) =
+            journal_oversize_on(Arc::clone(&spool), "probe_observation", cost).await
+        {
+            let mut unsent = vec![observation];
+            unsent.extend(oversize);
+            for batch in batches {
+                unsent.extend(batch);
+            }
+            return Err(ProbeEnqueueError::new(source, unsent, 0));
+        }
+    }
+    let mut batches = batches.into_iter();
+    while let Some(batch) = batches.next() {
+        if let Err(mut error) = append_probe_chunk(Arc::clone(&spool), batch, window).await {
+            for remaining in batches {
+                error.unsent.extend(remaining);
+            }
+            return Err(error);
+        }
     }
     Ok(())
+}
+
+async fn append_probe_chunk(
+    spool: Arc<Spool>,
+    observations: Vec<pb::ProbeObservation>,
+    window: i64,
+) -> Result<(), ProbeEnqueueError> {
+    let count = observations.len();
+    let at = crate::utils::time::now_timestamp();
+    let batch = pb::ProbeObservationBatch { observations };
+    match tokio::task::spawn_blocking(move || {
+        let payload = batch.encode_to_vec();
+        match spool.append("probe_observation", payload, window, false, at) {
+            Ok(_) => Ok(()),
+            Err(error) => Err((error, batch.observations)),
+        }
+    })
+    .await
+    {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err((source, observations))) => Err(ProbeEnqueueError::new(source, observations, 0)),
+        Err(join) => Err(ProbeEnqueueError::new(
+            anyhow::anyhow!("probe append task failed: {join}"),
+            Vec::new(),
+            count,
+        )),
+    }
+}
+
+/// Metric rows that a failed enqueue did not durably accept.
+#[derive(Debug)]
+pub struct MetricEnqueueError {
+    source: anyhow::Error,
+    unsent: pb::UploadMetricStatsRequest,
+    lost: usize,
+}
+
+impl MetricEnqueueError {
+    fn new(source: anyhow::Error, unsent: pb::UploadMetricStatsRequest, lost: usize) -> Self {
+        Self {
+            source,
+            unsent,
+            lost,
+        }
+    }
+
+    /// Rows whose append task panicked or was cancelled after ownership moved
+    /// out of the reporter; they cannot be retried and must be counted as a gap.
+    pub fn lost(&self) -> usize {
+        self.lost
+    }
+
+    pub fn into_unsent(self) -> pb::UploadMetricStatsRequest {
+        self.unsent
+    }
+}
+
+impl std::fmt::Display for MetricEnqueueError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}", self.source)
+    }
+}
+
+impl std::error::Error for MetricEnqueueError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.source.source()
+    }
+}
+
+/// Enqueue one server's metric rows in wire-sized requests. Each chunk keeps
+/// the request header so rows remain attributable to the same item/version and
+/// period. A failed append returns only the rows the spool did not persist.
+pub async fn enqueue_metric_stat(
+    request: pb::UploadMetricStatsRequest,
+) -> Result<(), MetricEnqueueError> {
+    let spool = match queue("metric_stat") {
+        Ok(spool) => spool,
+        Err(source) => return Err(MetricEnqueueError::new(source, request, 0)),
+    };
+    enqueue_metric_stat_on(spool, request).await
+}
+
+async fn enqueue_metric_stat_on(
+    spool: Arc<Spool>,
+    request: pb::UploadMetricStatsRequest,
+) -> Result<(), MetricEnqueueError> {
+    let header = MetricRequestHeader {
+        server_id: request.server_id,
+        time: request.time,
+        count: request.count,
+        total: request.total,
+        version: request.version,
+        item_id: request.item_id,
+        keep_keys: request.keep_keys,
+    };
+    // The inner request header travels inside the telemetry payload, so it
+    // must come out of the row budget; otherwise a full batch plus header
+    // could exceed the wire cap and be refused forever.
+    let budget =
+        payload_budget("metric_stat").saturating_sub(header.build(Vec::new()).encoded_len());
+    let (batches, oversize) = split_records(request.metric_stats, budget.max(1));
+    let mut oversize = oversize.into_iter();
+    while let Some(stat) = oversize.next() {
+        let cost = record_cost(&stat);
+        if let Err(source) = journal_oversize_on(Arc::clone(&spool), "metric_stat", cost).await {
+            let mut unsent = vec![stat];
+            unsent.extend(oversize);
+            for batch in batches {
+                unsent.extend(batch);
+            }
+            return Err(MetricEnqueueError::new(source, header.build(unsent), 0));
+        }
+    }
+    let mut batches = batches.into_iter();
+    while let Some(batch) = batches.next() {
+        let request = header.build(batch);
+        if let Err(mut error) = append_metric_chunk(Arc::clone(&spool), request).await {
+            for remaining in batches {
+                error.unsent.metric_stats.extend(remaining);
+            }
+            return Err(error);
+        }
+    }
+    Ok(())
+}
+
+struct MetricRequestHeader {
+    server_id: i64,
+    time: String,
+    count: i64,
+    total: f32,
+    version: i32,
+    item_id: i64,
+    keep_keys: Vec<String>,
+}
+
+impl MetricRequestHeader {
+    fn build(&self, metric_stats: Vec<pb::UploadingMetricStat>) -> pb::UploadMetricStatsRequest {
+        pb::UploadMetricStatsRequest {
+            server_id: self.server_id,
+            time: self.time.clone(),
+            count: self.count,
+            total: self.total,
+            version: self.version,
+            item_id: self.item_id,
+            metric_stats,
+            keep_keys: self.keep_keys.clone(),
+        }
+    }
+}
+
+async fn append_metric_chunk(
+    spool: Arc<Spool>,
+    request: pb::UploadMetricStatsRequest,
+) -> Result<(), MetricEnqueueError> {
+    let count = request.metric_stats.len();
+    let at = crate::utils::time::now_timestamp();
+    match tokio::task::spawn_blocking(move || {
+        let payload = request.encode_to_vec();
+        match spool.append("metric_stat", payload, 0, false, at) {
+            Ok(_) => Ok(()),
+            Err(error) => Err((error, request)),
+        }
+    })
+    .await
+    {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err((source, request))) => Err(MetricEnqueueError::new(source, request, 0)),
+        Err(join) => Err(MetricEnqueueError::new(
+            anyhow::anyhow!("metric append task failed: {join}"),
+            pb::UploadMetricStatsRequest::default(),
+            count,
+        )),
+    }
+}
+
+/// Daily rows that a failed enqueue did not durably accept.
+#[derive(Debug)]
+pub struct DailyEnqueueError {
+    source: anyhow::Error,
+    unsent: pb::UploadServerDailyStatsRequest,
+    lost: usize,
+}
+
+impl DailyEnqueueError {
+    fn new(source: anyhow::Error, unsent: pb::UploadServerDailyStatsRequest, lost: usize) -> Self {
+        Self {
+            source,
+            unsent,
+            lost,
+        }
+    }
+
+    pub fn lost(&self) -> usize {
+        self.lost
+    }
+
+    pub fn into_unsent(self) -> pb::UploadServerDailyStatsRequest {
+        self.unsent
+    }
+}
+
+impl std::fmt::Display for DailyEnqueueError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}", self.source)
+    }
+}
+
+impl std::error::Error for DailyEnqueueError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.source.source()
+    }
+}
+
+/// Enqueue daily server and domain rows in wire-sized requests. Server rows
+/// and domain rows are chunked independently; a failed append returns exactly
+/// the rows the spool did not persist, so the reporter never replays committed
+/// chunks or drops the batches behind them.
+pub async fn enqueue_daily_stats(
+    request: pb::UploadServerDailyStatsRequest,
+) -> Result<(), DailyEnqueueError> {
+    let spool = match queue("daily") {
+        Ok(spool) => spool,
+        Err(source) => return Err(DailyEnqueueError::new(source, request, 0)),
+    };
+    enqueue_daily_stats_on(spool, request).await
+}
+
+async fn enqueue_daily_stats_on(
+    spool: Arc<Spool>,
+    request: pb::UploadServerDailyStatsRequest,
+) -> Result<(), DailyEnqueueError> {
+    let budget = payload_budget("daily");
+    let (stats_batches, stats_oversize) = split_records(request.stats, budget);
+    let (domain_batches, domain_oversize) = split_records(request.domain_stats, budget);
+
+    let mut stats_oversize = stats_oversize.into_iter();
+    while let Some(stat) = stats_oversize.next() {
+        let cost = record_cost(&stat);
+        if let Err(source) = journal_oversize_on(Arc::clone(&spool), "daily", cost).await {
+            let mut stats = vec![stat];
+            stats.extend(stats_oversize);
+            for batch in stats_batches {
+                stats.extend(batch);
+            }
+            let mut domain_stats = domain_oversize;
+            for batch in domain_batches {
+                domain_stats.extend(batch);
+            }
+            return Err(DailyEnqueueError::new(
+                source,
+                daily_request(stats, domain_stats),
+                0,
+            ));
+        }
+    }
+
+    let mut domain_oversize = domain_oversize.into_iter();
+    while let Some(stat) = domain_oversize.next() {
+        let cost = record_cost(&stat);
+        if let Err(source) = journal_oversize_on(Arc::clone(&spool), "daily", cost).await {
+            let stats = stats_batches.into_iter().flatten().collect::<Vec<_>>();
+            let mut domain_stats = vec![stat];
+            domain_stats.extend(domain_oversize);
+            for batch in domain_batches {
+                domain_stats.extend(batch);
+            }
+            return Err(DailyEnqueueError::new(
+                source,
+                daily_request(stats, domain_stats),
+                0,
+            ));
+        }
+    }
+
+    let mut chunks = stats_batches
+        .into_iter()
+        .map(DailyChunk::Stats)
+        .chain(domain_batches.into_iter().map(DailyChunk::Domains));
+    while let Some(chunk) = chunks.next() {
+        let request = chunk.into_request();
+        if let Err(mut error) = append_daily_chunk(Arc::clone(&spool), request).await {
+            for remaining in chunks {
+                match remaining {
+                    DailyChunk::Stats(rows) => error.unsent.stats.extend(rows),
+                    DailyChunk::Domains(rows) => error.unsent.domain_stats.extend(rows),
+                }
+            }
+            return Err(error);
+        }
+    }
+    Ok(())
+}
+
+enum DailyChunk {
+    Stats(Vec<pb::ServerDailyStat>),
+    Domains(Vec<pb::upload_server_daily_stats_request::DomainStat>),
+}
+
+impl DailyChunk {
+    fn into_request(self) -> pb::UploadServerDailyStatsRequest {
+        match self {
+            DailyChunk::Stats(stats) => daily_request(stats, Vec::new()),
+            DailyChunk::Domains(domain_stats) => daily_request(Vec::new(), domain_stats),
+        }
+    }
+}
+
+fn daily_request(
+    stats: Vec<pb::ServerDailyStat>,
+    domain_stats: Vec<pb::upload_server_daily_stats_request::DomainStat>,
+) -> pb::UploadServerDailyStatsRequest {
+    pb::UploadServerDailyStatsRequest {
+        stats,
+        domain_stats,
+    }
+}
+
+async fn append_daily_chunk(
+    spool: Arc<Spool>,
+    request: pb::UploadServerDailyStatsRequest,
+) -> Result<(), DailyEnqueueError> {
+    let count = request.stats.len() + request.domain_stats.len();
+    let at = crate::utils::time::now_timestamp();
+    match tokio::task::spawn_blocking(move || {
+        let payload = request.encode_to_vec();
+        match spool.append("daily", payload, 0, false, at) {
+            Ok(_) => Ok(()),
+            Err(error) => Err((error, request)),
+        }
+    })
+    .await
+    {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err((source, request))) => Err(DailyEnqueueError::new(source, request, 0)),
+        Err(join) => Err(DailyEnqueueError::new(
+            anyhow::anyhow!("daily append task failed: {join}"),
+            pb::UploadServerDailyStatsRequest::default(),
+            count,
+        )),
+    }
 }
 
 pub async fn enqueue_prepared(batch: pb::TelemetryBatch) -> anyhow::Result<()> {
@@ -1305,6 +1698,20 @@ pub async fn enqueue_prepared(batch: pb::TelemetryBatch) -> anyhow::Result<()> {
     tokio::task::spawn_blocking(move || spool.append_prepared(batch)).await??;
     Ok(())
 }
+pub async fn enqueue_prepared_with_state(
+    batch: pb::TelemetryBatch,
+    key: &str,
+    raw: Vec<u8>,
+) -> anyhow::Result<()> {
+    let spool = queue(&batch.kind)?;
+    let key = key.to_owned();
+    tokio::task::spawn_blocking(move || {
+        spool.append_prepared_with_state(batch, Some((&key, &raw)))
+    })
+    .await??;
+    Ok(())
+}
+
 pub async fn save_state(key: &str, raw: Vec<u8>) -> anyhow::Result<()> {
     let spool = queue("bandwidth")?;
     let key = key.to_owned();
@@ -1843,6 +2250,14 @@ fn split_records<M: Message>(records: Vec<M>, budget: usize) -> (Vec<Vec<M>>, Ve
 /// with a reason and a size, counted on the lane that produced it.
 async fn journal_oversize(kind: &str, encoded_bytes: usize) -> anyhow::Result<()> {
     let spool = queue(kind)?;
+    journal_oversize_on(spool, kind, encoded_bytes).await
+}
+
+async fn journal_oversize_on(
+    spool: Arc<Spool>,
+    kind: &str,
+    encoded_bytes: usize,
+) -> anyhow::Result<()> {
     let kind = kind.to_owned();
     tokio::task::spawn_blocking(move || spool.journal_oversize(&kind, encoded_bytes)).await??;
     Ok(())
@@ -2707,18 +3122,18 @@ mod tests {
         let per_batch = budget / cost;
         assert!(per_batch >= 2, "the case needs more than one per batch");
 
-        let payload = pb::ProbeObservationBatch {
-            observations: (0..per_batch + 1).map(|_| fat(MIB as usize)).collect(),
-        }
-        .encode_to_vec();
-        let (batches, oversize) = split_observation_payload(&payload);
+        let records = (0..per_batch + 1).map(|_| fat(MIB as usize)).collect();
+        let (batches, oversize) = split_records(records, budget);
         assert!(oversize.is_empty());
         assert_eq!(batches.len(), 2, "the count cap alone would have shipped one");
-        for payload in &batches {
+        for observations in &batches {
             let batch = pb::TelemetryBatch {
                 schema_version: 1,
                 kind: "probe_observation".into(),
-                payload: payload.clone(),
+                payload: pb::ProbeObservationBatch {
+                    observations: observations.clone(),
+                }
+                .encode_to_vec(),
                 occurred_at: 1,
                 ..Default::default()
             };
@@ -2729,30 +3144,185 @@ mod tests {
             );
         }
         // Every observation is carried exactly once.
-        let carried: usize = batches
-            .iter()
-            .map(|payload| {
-                <pb::ProbeObservationBatch as Message>::decode(payload.as_slice())
-                    .unwrap()
-                    .observations
-                    .len()
-            })
-            .sum();
-        assert_eq!(carried, per_batch + 1);
+        assert_eq!(batches.iter().map(Vec::len).sum::<usize>(), per_batch + 1);
 
         // One observation over the whole cap: returned for journaling, never
         // padded into an empty batch.
-        let payload = pb::ProbeObservationBatch {
-            observations: vec![fat(budget + 1)],
-        }
-        .encode_to_vec();
-        let (batches, oversize) = split_observation_payload(&payload);
+        let (batches, oversize) = split_records(vec![fat(budget + 1)], budget);
         assert!(
             batches.is_empty(),
             "an oversize observation must not become an empty batch"
         );
         assert_eq!(oversize.len(), 1);
-        assert!(oversize[0] > budget);
+        assert!(record_cost(&oversize[0]) > budget);
+    }
+
+    /// A failed chunk must return exactly the records the spool did not
+    /// persist: committed chunks and journaled oversize records stay out, and
+    /// every remaining record appears once.
+    #[tokio::test]
+    async fn probe_enqueue_failure_returns_only_unpersisted_records() {
+        let budget = payload_budget("probe_observation");
+        let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let noisy = |len: usize| -> String {
+            incompressible(len)
+                .into_iter()
+                .map(|byte| char::from(alphabet[(byte & 63) as usize]))
+                .collect()
+        };
+        let records: Vec<_> = (0..60)
+            .map(|index| pb::ProbeObservation {
+                target_id: format!("pt_{index}"),
+                error: noisy(250_000),
+                ..Default::default()
+            })
+            .collect();
+        let (batches, oversize) = split_records(records.clone(), budget);
+        assert!(oversize.is_empty());
+        assert!(batches.len() >= 2, "the case needs a later chunk to fail");
+        let committed = batches[0].len();
+        // Size the lane so the first chunk fits with the envelope, while any
+        // later chunk cannot: the failure is guaranteed to land mid-batch.
+        let first = pb::ProbeObservationBatch {
+            observations: batches[0].clone(),
+        }
+        .encode_to_vec();
+        let first_compressed = zstd::encode_all(first.as_slice(), 3).unwrap().len() as u64;
+        let limit = first_compressed + 8 * 1024;
+
+        let path = std::env::temp_dir().join(format!("telemetry-probe-{}", uuid::Uuid::new_v4()));
+        let spool = Arc::new(Spool::open(&path, false, limit).unwrap());
+        let error = enqueue_probe_observations_on(spool.clone(), records, 0)
+            .await
+            .expect_err("the second chunk exceeds the spool budget");
+        assert_eq!(error.lost(), 0);
+        let unsent = error.into_unsent();
+        assert_eq!(
+            unsent.len(),
+            60 - committed,
+            "only the chunks after the committed one are unsent"
+        );
+        for (offset, observation) in unsent.iter().enumerate() {
+            assert_eq!(
+                observation.target_id,
+                format!("pt_{}", committed + offset),
+                "unsent records must be the exact tail, in order"
+            );
+        }
+        // The committed chunk is durable; the failed one is not.
+        assert_eq!(spool.snapshot()["pendingBatches"], 1);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    /// The metric reporter must retain exactly the rows a failed chunk did not
+    /// persist; committed chunks are not replayed.
+    #[tokio::test]
+    async fn metric_enqueue_failure_returns_only_unpersisted_rows() {
+        let budget = payload_budget("metric_stat");
+        let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let noisy = |len: usize| -> String {
+            incompressible(len)
+                .into_iter()
+                .map(|byte| char::from(alphabet[(byte & 63) as usize]))
+                .collect()
+        };
+        let rows: Vec<_> = (0..60)
+            .map(|index| pb::UploadingMetricStat {
+                keys: vec![format!("k_{index}"), noisy(250_000)],
+                value: index as f32,
+                ..Default::default()
+            })
+            .collect();
+        let header = |metric_stats| pb::UploadMetricStatsRequest {
+            server_id: 7,
+            time: "202610281200".into(),
+            count: 60,
+            total: 1770.0,
+            version: 3,
+            item_id: 9,
+            metric_stats,
+            ..Default::default()
+        };
+        let row_budget = budget
+            .saturating_sub(header(Vec::new()).encoded_len())
+            .max(1);
+        let (batches, oversize) = split_records(rows.clone(), row_budget);
+        assert!(oversize.is_empty());
+        assert!(batches.len() >= 2, "the case needs a later chunk to fail");
+        let committed = batches[0].len();
+        let first = header(batches[0].clone()).encode_to_vec();
+        let first_compressed = zstd::encode_all(first.as_slice(), 3).unwrap().len() as u64;
+        let limit = first_compressed + 8 * 1024;
+
+        let path = std::env::temp_dir().join(format!("telemetry-metric-{}", uuid::Uuid::new_v4()));
+        let spool = Arc::new(Spool::open(&path, false, limit).unwrap());
+        let error = enqueue_metric_stat_on(spool.clone(), header(rows))
+            .await
+            .expect_err("the second chunk exceeds the spool budget");
+        assert_eq!(error.lost(), 0);
+        let unsent = error.into_unsent();
+        assert_eq!(unsent.server_id, 7);
+        assert_eq!(unsent.item_id, 9);
+        assert_eq!(unsent.metric_stats.len(), 60 - committed);
+        for (offset, row) in unsent.metric_stats.iter().enumerate() {
+            assert_eq!(
+                row.keys[0],
+                format!("k_{}", committed + offset),
+                "unsent rows must be the exact tail, in order"
+            );
+        }
+        assert_eq!(spool.snapshot()["pendingBatches"], 1);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    /// Daily server rows keep the same exact-ownership rule: only the chunks
+    /// after the committed one are returned for the next window.
+    #[tokio::test]
+    async fn daily_enqueue_failure_returns_only_unpersisted_rows() {
+        let budget = payload_budget("daily");
+        let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let noisy = |len: usize| -> String {
+            incompressible(len)
+                .into_iter()
+                .map(|byte| char::from(alphabet[(byte & 63) as usize]))
+                .collect()
+        };
+        let rows: Vec<_> = (0..60)
+            .map(|index| pb::ServerDailyStat {
+                server_id: index,
+                time_from: noisy(250_000),
+                ..Default::default()
+            })
+            .collect();
+        let (batches, oversize) = split_records(rows.clone(), budget);
+        assert!(oversize.is_empty());
+        assert!(batches.len() >= 2, "the case needs a later chunk to fail");
+        let committed = batches[0].len();
+        let first = daily_request(batches[0].clone(), Vec::new()).encode_to_vec();
+        let first_compressed = zstd::encode_all(first.as_slice(), 3).unwrap().len() as u64;
+        let limit = first_compressed + 8 * 1024;
+
+        let path = std::env::temp_dir().join(format!("telemetry-daily-{}", uuid::Uuid::new_v4()));
+        let spool = Arc::new(Spool::open(&path, false, limit).unwrap());
+        let error = enqueue_daily_stats_on(spool.clone(), daily_request(rows, Vec::new()))
+            .await
+            .expect_err("the second chunk exceeds the spool budget");
+        assert_eq!(error.lost(), 0);
+        let unsent = error.into_unsent();
+        assert!(unsent.domain_stats.is_empty());
+        assert_eq!(unsent.stats.len(), 60 - committed);
+        for (offset, row) in unsent.stats.iter().enumerate() {
+            assert_eq!(
+                row.server_id,
+                (committed + offset) as i64,
+                "unsent rows must be the exact tail, in order"
+            );
+        }
+        assert_eq!(spool.snapshot()["pendingBatches"], 1);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
     }
 
     /// P1-2: the node status exposes the lanes' queue position, the quarantine
@@ -3074,7 +3644,7 @@ mod tests {
     }
 
     // Mirrors probe.rs: the Edge executor builds the batch from the pushed plan
-    // identity and hands it to telemetry::enqueue for "probe_observation".
+    // identity and hands it to telemetry::enqueue_probe_observations.
     #[test]
     fn probe_observation_batch_reaches_the_spool_with_plan_identity() {
         let plan: crate::config_models::ProbePlan = serde_json::from_str(
@@ -3159,6 +3729,96 @@ mod tests {
         drop(spool);
         std::fs::remove_dir_all(path).unwrap();
     }
+    #[test]
+    fn producer_handoff_commits_queue_and_cursor_together() {
+        let path = std::env::temp_dir().join(format!("telemetry-handoff-{}", uuid::Uuid::new_v4()));
+        {
+            let mut spool = Spool::open(&path, true, 1 << 20).unwrap();
+            spool.save_state("handoff", b"pending").unwrap();
+            let refused = pb::TelemetryBatch {
+                kind: "bandwidth".into(),
+                payload: vec![0; MAX_BATCH_ENCODED_BYTES],
+                ..Default::default()
+            };
+            assert!(
+                spool
+                    .append_prepared_with_state(refused, Some(("handoff", b"advanced")))
+                    .is_err()
+            );
+            assert!(spool.front().unwrap().is_none());
+            assert_eq!(
+                spool.load_state("handoff").unwrap().as_deref(),
+                Some(b"pending".as_slice())
+            );
+            spool.budget.limit = spool.meta.lock().bytes + 1;
+            let capacity_error = spool
+                .append_prepared_with_state(
+                    pb::TelemetryBatch {
+                        kind: "bandwidth".into(),
+                        payload: vec![41],
+                        ..Default::default()
+                    },
+                    Some(("handoff", b"advanced")),
+                )
+                .unwrap_err();
+            assert!(is_capacity_exhausted(capacity_error.as_ref()));
+            assert!(spool.front().unwrap().is_none());
+            assert_eq!(
+                spool.load_state("handoff").unwrap().as_deref(),
+                Some(b"pending".as_slice())
+            );
+            spool.budget.limit = 1 << 20;
+            spool
+                .append_prepared_with_state(
+                    pb::TelemetryBatch {
+                        kind: "bandwidth".into(),
+                        payload: vec![42],
+                        ..Default::default()
+                    },
+                    Some(("handoff", b"advanced")),
+                )
+                .unwrap();
+        }
+        let spool = Spool::open(&path, true, 1 << 20).unwrap();
+        assert_eq!(
+            spool.load_state("handoff").unwrap().as_deref(),
+            Some(b"advanced".as_slice())
+        );
+        assert_eq!(spool.front().unwrap().unwrap().payload, vec![42]);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn rebuilt_spool_rejects_receipts_from_the_previous_data_generation() {
+        let path = std::env::temp_dir().join(format!("telemetry-reset-{}", uuid::Uuid::new_v4()));
+        let old_batch = {
+            let spool = Spool::open(&path, true, 1 << 20).unwrap();
+            spool.append("node_metric", vec![1], 0, false, 1).unwrap();
+            spool.front().unwrap().unwrap()
+        };
+        std::fs::remove_dir_all(&path).unwrap();
+        let spool = Spool::open(&path, true, 1 << 20).unwrap();
+        spool.append("node_metric", vec![2], 0, false, 2).unwrap();
+        let new_batch = spool.front().unwrap().unwrap();
+        assert_eq!(new_batch.sequence, old_batch.sequence);
+        assert_ne!(new_batch.boot_id, old_batch.boot_id);
+        assert_ne!(new_batch.batch_id, old_batch.batch_id);
+        assert!(
+            spool
+                .acknowledge(&pb::TelemetryReceipt {
+                    batch_id: old_batch.batch_id,
+                    sequence: old_batch.sequence,
+                    backend: "direct".into(),
+                    durable_at: 3,
+                })
+                .is_err()
+        );
+        assert_eq!(spool.front().unwrap().unwrap().payload, vec![2]);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
     #[test]
     fn no_age_expiration_and_no_overwrite_at_capacity() {
         let path = std::env::temp_dir().join(format!("telemetry-{}", uuid::Uuid::new_v4()));

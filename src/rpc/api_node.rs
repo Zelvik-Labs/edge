@@ -115,6 +115,19 @@ pub async fn sync_updating_server_list_once(
                             .iter()
                             .filter_map(|server| server.id)
                             .collect::<std::collections::HashSet<_>>();
+                        // Only the selected (is_on) servers are installed below;
+                        // reserve their metric instances before the build.
+                        let selected = servers
+                            .iter()
+                            .filter(|server| server.is_on)
+                            .collect::<Vec<_>>();
+                        if let Err(err) = crate::metrics::METRICS.admit_configs(selected) {
+                            warn!(
+                                "Failed to admit updating server metrics (used={}, limit={}); keeping previous generation",
+                                err.used, err.limit
+                            );
+                            return false;
+                        }
                         let (node_level, parent_nodes, tiered_origin_bypass, allow_lan) =
                             config_store.get_origin_runtime_context().await;
                         let global_http =
@@ -127,14 +140,21 @@ pub async fn sync_updating_server_list_once(
                             tiered_origin_bypass,
                             allow_lan,
                             global_http,
+                            resp.servers_json.len() as u64,
                         )
                         .await;
+                        if !maps.stats.admitted {
+                            warn!(
+                                "updating server config apply deferred by memory governor; keeping previous generation"
+                            );
+                            return false;
+                        }
                         let added = maps
                             .all_servers
                             .into_iter()
                             .filter(|server| server.is_on)
                             .collect::<Vec<_>>();
-                        config_store
+                        if let Err(err) = config_store
                             .replace_servers_snapshot(
                                 changed,
                                 added,
@@ -142,7 +162,14 @@ pub async fn sync_updating_server_list_once(
                                 maps.routes,
                                 maps.id_to_lb,
                             )
-                            .await;
+                            .await
+                        {
+                            warn!(
+                                "Failed to install updating server config (metric capacity {}/{}); keeping previous generation",
+                                err.used, err.limit
+                            );
+                            return false;
+                        }
                         refresh_certificates(config_store, cert_selector).await;
                     }
                     Err(e) => {

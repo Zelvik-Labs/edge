@@ -21,6 +21,7 @@ pub struct StoreApplyResult {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StoreApplyError {
     InvalidPayload(String),
+    MetricCapacity { used: usize, limit: usize },
 }
 
 fn parse_i64_map<T: Clone>(raw: &HashMap<String, T>) -> HashMap<i64, T> {
@@ -83,6 +84,17 @@ pub async fn apply_node_payload(
 ) -> Result<StoreApplyResult, StoreApplyError> {
     let node_id = payload.id.unwrap_or(0);
     let config_version = payload.version.unwrap_or(0);
+    // Reserve metric instances before building host maps: index_servers only
+    // keeps enabled sites, and the clones below carry the binding into
+    // `update_config`, so the install cannot fail on capacity afterwards.
+    if let Err(err) = crate::metrics::METRICS
+        .admit_configs(payload.servers.iter().filter(|server| server.is_on))
+    {
+        return Err(StoreApplyError::MetricCapacity {
+            used: err.used,
+            limit: err.limit,
+        });
+    }
     let (all_servers, servers, routes, id_to_lb) = index_servers(&payload.servers);
     let deleted_contents = store.get_deleted_contents().await;
 
@@ -194,7 +206,11 @@ pub async fn apply_node_payload(
                 .as_ref()
                 .and_then(|g| g.http_access_log.clone()),
         )
-        .await;
+        .await
+        .map_err(|err| StoreApplyError::MetricCapacity {
+            used: err.used,
+            limit: err.limit,
+        })?;
 
     Ok(StoreApplyResult {
         node_id,

@@ -74,6 +74,10 @@ struct H2ConnectionDefenseState {
     errors: u64,
     pending_l4_stream_events: u64,
     churn_hint_reported: bool,
+    /// Streams spawned and not yet finished. A long accepted response keeps
+    /// this above zero, so the idle timer cannot close the connection under
+    /// it; stream completion is not keepalive activity.
+    active_streams: Arc<AtomicUsize>,
 }
 
 impl H2ConnectionDefenseState {
@@ -91,6 +95,7 @@ impl H2ConnectionDefenseState {
             errors: 0,
             pending_l4_stream_events: 0,
             churn_hint_reported: false,
+            active_streams: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -106,13 +111,38 @@ impl H2ConnectionDefenseState {
         self.last_activity_at = TokioInstant::now();
     }
 
+    /// Refusals after the maximum lifetime must not count as activity: a
+    /// client that keeps opening streams would otherwise slide the idle
+    /// deadline forever and hold a connection past its lifetime.
+    fn record_lifetime_reject(&mut self) {
+        self.rejected_streams = self.rejected_streams.saturating_add(1);
+    }
+
     fn record_error(&mut self) {
         self.errors = self.errors.saturating_add(1);
         self.last_activity_at = TokioInstant::now();
     }
 
+    fn stream_guard(&self) -> H2ActiveStreamGuard {
+        self.active_streams.fetch_add(1, Ordering::AcqRel);
+        H2ActiveStreamGuard {
+            active_streams: Arc::clone(&self.active_streams),
+        }
+    }
+
+    fn has_active_streams(&self) -> bool {
+        self.active_streams.load(Ordering::Acquire) > 0
+    }
+
     fn next_idle_deadline(&self) -> TokioInstant {
-        self.last_activity_at + self.idle_timeout()
+        if self.has_active_streams() {
+            // Slide the idle deadline while a stream is in flight. Otherwise a
+            // long download would be mistaken for an idle connection and cut
+            // off at the pressure-scaled idle timeout.
+            TokioInstant::now() + self.idle_timeout()
+        } else {
+            self.last_activity_at + self.idle_timeout()
+        }
     }
 
     fn lifetime_deadline(&self) -> TokioInstant {
@@ -184,6 +214,16 @@ impl H2ConnectionDefenseState {
             crate::l4_defense::L4PressureLevel::High => Duration::from_secs(120),
             crate::l4_defense::L4PressureLevel::Critical => Duration::from_secs(30),
         }
+    }
+}
+
+struct H2ActiveStreamGuard {
+    active_streams: Arc<AtomicUsize>,
+}
+
+impl Drop for H2ActiveStreamGuard {
+    fn drop(&mut self) {
+        self.active_streams.fetch_sub(1, Ordering::AcqRel);
     }
 }
 
@@ -603,7 +643,11 @@ impl HttpProxyManager {
         );
         info!(
             "HTTP/HTTPS Proxy Manager: Initializing listener on {} (TLS={}, proxy_protocol={}, http2={}, min_version={:?})",
-            bind_addr, is_tls, enable_proxy_protocol, tls_policy.http2_enabled, tls_policy.min_version
+            bind_addr,
+            is_tls,
+            enable_proxy_protocol,
+            tls_policy.http2_enabled,
+            tls_policy.min_version
         );
 
         let manager = self.clone();
@@ -815,10 +859,7 @@ impl HttpProxyManager {
         } else {
             None
         };
-        let node_id = self
-            .proxy_logic
-            .api_config
-            .numeric_gcloud_node_id();
+        let node_id = self.proxy_logic.api_config.numeric_gcloud_node_id();
 
         let mut scale_retire = std::pin::pin!(async {
             match &scale_state {
@@ -1257,7 +1298,10 @@ impl HttpProxyManager {
     }
 
     #[cfg(any(test, target_os = "linux"))]
-    fn shared_tls_acceptor(&self, tls_policy: TlsPolicy) -> anyhow::Result<Arc<PingoraTlsAcceptor>> {
+    fn shared_tls_acceptor(
+        &self,
+        tls_policy: TlsPolicy,
+    ) -> anyhow::Result<Arc<PingoraTlsAcceptor>> {
         if let Some(acceptor) = self.tls_acceptor.read().get(&tls_policy) {
             return Ok(acceptor.clone());
         }
@@ -1359,10 +1403,7 @@ impl HttpProxyManager {
         pressure_level: crate::l4_defense::L4PressureLevel,
         detail: impl Into<String>,
     ) -> crate::l4_defense::L4DefenseVerdict {
-        let node_id = self
-            .proxy_logic
-            .api_config
-            .numeric_gcloud_node_id();
+        let node_id = self.proxy_logic.api_config.numeric_gcloud_node_id();
         crate::l4_defense::record_l4_event_with_pressure(
             &self.config_store,
             &self.proxy_logic.waf_state,
@@ -1472,10 +1513,7 @@ impl HttpProxyManager {
     }
 
     fn record_tls_handshake_failure(&self, ip: IpAddr) {
-        let node_id = self
-            .proxy_logic
-            .api_config
-            .numeric_gcloud_node_id();
+        let node_id = self.proxy_logic.api_config.numeric_gcloud_node_id();
         crate::special_defense::record_tls_handshake_failure(
             &self.config_store,
             &self.proxy_logic.waf_state,
@@ -1495,10 +1533,7 @@ impl HttpProxyManager {
         kind: L4DefenseKind,
         detail: impl Into<String>,
     ) -> crate::l4_defense::L4DefenseVerdict {
-        let node_id = self
-            .proxy_logic
-            .api_config
-            .numeric_gcloud_node_id();
+        let node_id = self.proxy_logic.api_config.numeric_gcloud_node_id();
         crate::l4_defense::record_l4_event(
             &self.config_store,
             &self.proxy_logic.waf_state,
@@ -1516,10 +1551,7 @@ impl HttpProxyManager {
         amount: u64,
         detail: impl Into<String>,
     ) -> crate::l4_defense::L4DefenseVerdict {
-        let node_id = self
-            .proxy_logic
-            .api_config
-            .numeric_gcloud_node_id();
+        let node_id = self.proxy_logic.api_config.numeric_gcloud_node_id();
         crate::l4_defense::record_l4_event_weighted_with_pressure(crate::l4_defense::L4EventArgs {
             config_store: &self.config_store,
             waf_state: &self.proxy_logic.waf_state,
@@ -1539,10 +1571,7 @@ impl HttpProxyManager {
         ip: IpAddr,
         config: crate::special_defense::SpecialDefenseConfig,
     ) {
-        let node_id = self
-            .proxy_logic
-            .api_config
-            .numeric_gcloud_node_id();
+        let node_id = self.proxy_logic.api_config.numeric_gcloud_node_id();
         crate::special_defense::record_special_defense_hit(
             &self.proxy_logic.waf_state,
             node_id,
@@ -1801,9 +1830,7 @@ impl HttpProxyManager {
             crate::l4_defense::record_tcp_connection_churn_under_pressure(
                 &self.config_store,
                 &self.proxy_logic.waf_state,
-                self.proxy_logic
-                    .api_config
-                    .numeric_gcloud_node_id(),
+                self.proxy_logic.api_config.numeric_gcloud_node_id(),
                 client_addr.ip(),
                 || {
                     format!(
@@ -2058,7 +2085,7 @@ impl HttpProxyManager {
         };
 
         let client_ip = client_addr.ip().to_string();
-        let metrics = crate::metrics::record::get_or_create(server_id);
+        let metrics = server.runtime_metrics.get();
         let mut metrics_guard = crate::metrics::ActiveRequestMetricsGuard::new(metrics.clone());
         crate::metrics::record::request_start_without_active(
             server_id,
@@ -2568,20 +2595,35 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                 port,
                 crate::l4_defense::current_pressure_level(),
             );
-            // Per-connection admission ticket: stream admissions draw from a
-            // local pool instead of the global counter — one registry lookup
-            // per connection instead of one global RMW per stream.
+            // Resolve the owner once; H2 slots still hold globally counted
+            // class permits rather than drawing from reusable byte float.
             let stream_ticket = crate::l4_connection_registry::ticket_for(&client_addr);
+            let mut graceful_churn = false;
+            let mut lifetime_reached = false;
             let mut malformed_streams = 0;
             loop {
                 let idle_deadline = h2_state.next_idle_deadline();
-                let lifetime_deadline = h2_state.lifetime_deadline();
+                let lifetime_deadline = if lifetime_reached {
+                    // New streams are refused individually below; keep polling
+                    // until the accepted streams finish. GOAWAY is deliberately
+                    // not used here because some clients stop processing every
+                    // in-flight stream once they see it.
+                    TokioInstant::now() + Duration::from_secs(3600)
+                } else {
+                    h2_state.lifetime_deadline()
+                };
                 let accept_result = tokio::select! {
                     _ = h2_cancel_rx.changed() => {
                         debug!("HTTP/2 connection from {} cancelled by L4 registry", client_addr);
                         break;
                     }
                     _ = tokio::time::sleep_until(idle_deadline) => {
+                        if h2_state.has_active_streams() {
+                            // The deadline was computed before this stream was
+                            // accepted (or before its task was scheduled).
+                            // Re-arm instead of closing under live work.
+                            continue;
+                        }
                         manager.record_l4_event(
                             client_addr.ip(),
                             L4DefenseKind::H2ConnectionAbuse,
@@ -2596,6 +2638,24 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                         break;
                     }
                     _ = tokio::time::sleep_until(lifetime_deadline) => {
+                        if h2_state.has_active_streams() {
+                            // Do not break the connection under an accepted
+                            // response. Refuse new streams individually and
+                            // keep polling until the accepted ones finish.
+                            lifetime_reached = true;
+                            manager.record_l4_event(
+                                client_addr.ip(),
+                                L4DefenseKind::H2ConnectionAbuse,
+                                format!(
+                                    "port={} peer={} reason=max_lifetime_active_streams streams={} rejects={}",
+                                    port,
+                                    client_addr,
+                                    h2_state.accepted_streams,
+                                    h2_state.rejected_streams
+                                ),
+                            );
+                            continue;
+                        }
                         manager.record_l4_event(
                             client_addr.ip(),
                             L4DefenseKind::H2ConnectionAbuse,
@@ -2613,8 +2673,24 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                 };
                 match accept_result {
                     Ok(Some(pingora_core::protocols::http::v2::server::H2Accept::Session(
-                        h2_session,
+                        mut h2_session,
                     ))) => {
+                        if lifetime_reached {
+                            h2_state.record_lifetime_reject();
+                            manager.record_l4_event(
+                                client_addr.ip(),
+                                L4DefenseKind::H2StreamAdmissionReject,
+                                format!(
+                                    "port={} peer={} scope=lifetime streams={} rejects={}",
+                                    port,
+                                    client_addr,
+                                    h2_state.accepted_streams,
+                                    h2_state.rejected_streams
+                                ),
+                            );
+                            h2_session.shutdown_with_reason(h2::Reason::REFUSED_STREAM);
+                            continue;
+                        }
                         h2_state.record_stream();
                         if let Some(events) = h2_state.take_pending_l4_stream_events_if_due() {
                             manager.record_l4_event_weighted(
@@ -2632,6 +2708,14 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                             );
                         }
                         if h2_state.should_close_for_churn() {
+                            // GOAWAY disallows new work while the connection is
+                            // still polled to flush already accepted responses.
+                            h2_session.shutdown_with_reason(h2::Reason::REFUSED_STREAM);
+                            if graceful_churn {
+                                continue;
+                            }
+                            graceful_churn = true;
+                            h2_conn.graceful_shutdown();
                             let pending = h2_state.take_pending_l4_stream_events();
                             if pending > 0 {
                                 manager.record_l4_event_weighted(
@@ -2658,7 +2742,7 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                                     H2_CHURN_WINDOW.as_secs()
                                 ),
                             );
-                            break;
+                            continue;
                         }
                         let proxy_inner_h2 = proxy_inner.clone();
                         let shutdown_inner_h2 = shutdown_inner.clone();
@@ -2681,9 +2765,10 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                                     ),
                                 );
                                 debug!(
-                                    "H2 stream admission limit reached for connection, closing connection"
+                                    "H2 connection stream admission rejected; refusing only new stream"
                                 );
-                                break;
+                                h2_session.shutdown_with_reason(h2::Reason::REFUSED_STREAM);
+                                continue;
                             }
                         };
                         let global_stream_permit = match crate::memory_ticket::admit_pooled(
@@ -2708,9 +2793,10 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                                     ),
                                 );
                                 debug!(
-                                    "Global H2 stream admission limit reached, closing connection"
+                                    "Global H2 stream admission rejected; refusing only new stream"
                                 );
-                                break;
+                                h2_session.shutdown_with_reason(h2::Reason::REFUSED_STREAM);
+                                continue;
                             }
                         };
                         if h2_state.should_report_churn_hint() {
@@ -2722,7 +2808,9 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                                 crate::l4_defense::current_pressure_level().as_str()
                             );
                         };
+                        let active_stream = h2_state.stream_guard();
                         tokio::spawn(async move {
+                            let _active_stream = active_stream;
                             let _stream_permit = stream_permit;
                             let _global_stream_permit = global_stream_permit;
                             let server_session = ServerSession::new_http2(h2_session);
@@ -2807,10 +2895,7 @@ async fn process_http1_stream(args: ProcessHttp1StreamArgs) {
         } else {
             L4DefenseKind::HttpEarlyCloseOrTinyRequest
         };
-        let node_id = manager
-            .proxy_logic
-            .api_config
-            .numeric_gcloud_node_id();
+        let node_id = manager.proxy_logic.api_config.numeric_gcloud_node_id();
         crate::l4_defense::record_completed_handshake_event(
             &manager.config_store,
             &manager.proxy_logic.waf_state,
@@ -3288,6 +3373,46 @@ mod tests {
         }
     }
 
+    #[test]
+    fn h2_active_stream_slides_idle_deadline() {
+        let mut state = H2ConnectionDefenseState::new(
+            "127.0.0.1".parse().unwrap(),
+            443,
+            crate::l4_defense::L4PressureLevel::Critical,
+        );
+        state.last_activity_at = TokioInstant::now() - Duration::from_secs(10);
+        assert!(state.next_idle_deadline() <= TokioInstant::now());
+
+        let guard = state.stream_guard();
+        assert!(state.has_active_streams());
+        assert!(state.next_idle_deadline() > TokioInstant::now());
+
+        drop(guard);
+        assert!(!state.has_active_streams());
+        assert!(state.next_idle_deadline() <= TokioInstant::now());
+    }
+
+    #[test]
+    fn h2_lifetime_rejects_do_not_slide_the_idle_deadline() {
+        let mut state = H2ConnectionDefenseState::new(
+            "127.0.0.1".parse().unwrap(),
+            443,
+            crate::l4_defense::L4PressureLevel::Critical,
+        );
+        state.last_activity_at = TokioInstant::now() - Duration::from_secs(10);
+        let before = state.last_activity_at;
+
+        state.record_lifetime_reject();
+
+        assert_eq!(state.rejected_streams, 1);
+        assert_eq!(state.last_activity_at, before);
+        assert!(state.next_idle_deadline() <= TokioInstant::now());
+
+        // Rejections outside the lifetime branch still count as activity.
+        state.record_reject();
+        assert!(state.last_activity_at > before);
+    }
+
     /// A least-connections pool over the given origin ids, built through the
     /// production `build_lb` path so the shared in-flight counters are wired in.
     fn least_conn_test_lb(ids: &[i64]) -> Arc<crate::lb_factory::AnyLoadBalancer> {
@@ -3303,20 +3428,15 @@ mod tests {
                 })
             })
             .collect();
-        let cfg: crate::config_models::ReverseProxyConfig = serde_json::from_value(serde_json::json!({
-            "isOn": true,
-            "primaryOrigins": origins,
-            "scheduling": { "code": "least_conn", "options": {} },
-        }))
-        .unwrap();
-        let (lb, _hc) = crate::lb_factory::build_lb(
-            0,
-            &cfg,
-            2,
-            &std::collections::HashMap::new(),
-            false,
-            true,
-        );
+        let cfg: crate::config_models::ReverseProxyConfig =
+            serde_json::from_value(serde_json::json!({
+                "isOn": true,
+                "primaryOrigins": origins,
+                "scheduling": { "code": "least_conn", "options": {} },
+            }))
+            .unwrap();
+        let (lb, _hc) =
+            crate::lb_factory::build_lb(0, &cfg, 2, &std::collections::HashMap::new(), false, true);
         lb
     }
 
@@ -3326,8 +3446,7 @@ mod tests {
             rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
             rpc_disable_update: true,
             instance_id: "nd_0123456789".to_string(),
-            secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
-                .to_string(),
+            secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".to_string(),
             comm_mode: String::new(),
             gcloud_node_id: "1".to_string(),
             access_log_pipeline: crate::api_config::AccessLogPipelineConfig::default(),
@@ -3414,7 +3533,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
         let manager = HttpProxyManager::new(
             store,
             Arc::new(DynamicCertSelector::new()),
@@ -3492,7 +3611,7 @@ mod tests {
         }
         store
             .replace_all_servers(servers, HashMap::new(), HashMap::new(), lbs)
-            .await;
+            .await.expect("configuration installs");
         let certs = Arc::new(DynamicCertSelector::new());
         crate::ssl::sync_certs(
             &certs,
@@ -3562,7 +3681,7 @@ mod tests {
         .await;
         store
             .replace_all_servers(Vec::new(), HashMap::new(), HashMap::new(), HashMap::new())
-            .await;
+            .await.expect("configuration installs");
         tokio::time::timeout(Duration::from_secs(3), async {
             while !http.handled_ports.is_empty() {
                 tokio::time::sleep(Duration::from_millis(20)).await;
@@ -3841,5 +3960,107 @@ mod tests {
             }
         );
         client.await.unwrap();
+    }
+
+    /// A resource-shortage refusal resets only the refused stream. The
+    /// connection keeps accepting, so already accepted sibling streams can
+    /// finish instead of being collateral damage of admission pressure.
+    #[tokio::test]
+    async fn refusing_one_h2_stream_keeps_connection_accepting() {
+        use pingora_core::protocols::http::v2::server::{H2Accept, HttpSession};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut conn = pingora_core::protocols::http::v2::server::handshake(
+                Box::new(L4Stream::from(tcp)),
+                None,
+            )
+            .await
+            .unwrap();
+            let digest = Arc::new(pingora_core::protocols::Digest::default());
+            let mut malformed = 0;
+            match HttpSession::from_h2_conn_with_malformed_budget(
+                &mut conn,
+                digest.clone(),
+                &mut malformed,
+            )
+            .await
+            .unwrap()
+            .unwrap()
+            {
+                H2Accept::Session(mut session) => {
+                    session.shutdown_with_reason(h2::Reason::REFUSED_STREAM);
+                }
+                H2Accept::Rejected => panic!("expected first session, got a rejected stream"),
+            }
+            match HttpSession::from_h2_conn_with_malformed_budget(
+                &mut conn,
+                digest.clone(),
+                &mut malformed,
+            )
+                .await
+                .unwrap()
+                .unwrap()
+            {
+                H2Accept::Session(mut session) => {
+                    let response = pingora_http::ResponseHeader::build(200, None).unwrap();
+                    session
+                        .write_response_header(Box::new(response), true)
+                        .unwrap();
+                }
+                H2Accept::Rejected => panic!("expected sibling session, got a rejected stream"),
+            }
+            // Keep polling the codec so the queued response is flushed and
+            // the connection ends cleanly after the client drops its handle.
+            let _ = tokio::time::timeout(
+                Duration::from_secs(5),
+                HttpSession::from_h2_conn_with_malformed_budget(
+                    &mut conn,
+                    digest.clone(),
+                    &mut malformed,
+                ),
+            )
+            .await;
+        });
+
+        let tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let (sender, connection) = h2::client::handshake(tcp).await.unwrap();
+        let driver = tokio::spawn(connection);
+        let mut sender = sender.ready().await.unwrap();
+        let request = http::Request::builder()
+            .uri("http://localhost/refused")
+            .body(())
+            .unwrap();
+        let (response, _) = sender.send_request(request, true).unwrap();
+        let error = tokio::time::timeout(Duration::from_secs(5), response)
+            .await
+            .expect("first stream must be resolved")
+            .expect_err("first stream must be refused");
+        assert_eq!(
+            error.reason(),
+            Some(h2::Reason::REFUSED_STREAM),
+            "the refused stream must carry REFUSED_STREAM, not a connection error"
+        );
+
+        sender = sender.ready().await.unwrap();
+        let request = http::Request::builder()
+            .uri("http://localhost/sibling")
+            .body(())
+            .unwrap();
+        let (response, _) = sender.send_request(request, true).unwrap();
+        let status = tokio::time::timeout(Duration::from_secs(5), response)
+            .await
+            .expect("sibling stream must be resolved")
+            .unwrap()
+            .status();
+        assert_eq!(
+            status, 200,
+            "the connection must still accept a sibling stream"
+        );
+        drop(sender);
+        driver.abort();
+        server.await.unwrap();
     }
 }

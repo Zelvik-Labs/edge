@@ -83,9 +83,30 @@ impl CacheManager {
     }
 }
 
+/// Default L1 memory budget when the governor reports a usable cache budget.
+const DEFAULT_L1_MEMORY_BYTES: u64 = 512 * 1024 * 1024;
+
+/// Keep the fixed 512MiB default from exceeding the whole governor cache
+/// budget on small nodes. A larger governor budget does not grow L1: the
+/// default remains the cap, so this only tightens the existing behavior.
+fn l1_budget_for_cache_budget(cache_budget_bytes: u64) -> u64 {
+    if cache_budget_bytes == 0 {
+        DEFAULT_L1_MEMORY_BYTES
+    } else {
+        DEFAULT_L1_MEMORY_BYTES.min(cache_budget_bytes)
+    }
+}
+
 /// Global cache manager singleton
 pub static CACHE: std::sync::LazyLock<CacheManager> = std::sync::LazyLock::new(|| {
-    CacheManager::new(1024 * 1024 * 512) // Default 512MB memory cache
+    let bytes =
+        l1_budget_for_cache_budget(crate::memory_governor::MEMORY_GOVERNOR.cache_budget_bytes());
+    let manager = CacheManager::new(bytes.min(usize::MAX as u64) as usize);
+    manager
+        .storage
+        .l1
+        .use_governor_budget(DEFAULT_L1_MEMORY_BYTES);
+    manager
 });
 
 /// Shared utilities for cache metadata creation
@@ -94,4 +115,23 @@ pub fn create_meta(status: u16, ttl_seconds: u64) -> CacheMeta {
     let fresh_until = now + std::time::Duration::from_secs(ttl_seconds);
     let header = pingora_http::ResponseHeader::build(status, None).unwrap();
     CacheMeta::new(fresh_until, now, 0, 0, header)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DEFAULT_L1_MEMORY_BYTES;
+    use super::l1_budget_for_cache_budget;
+
+    #[test]
+    fn l1_budget_never_exceeds_the_smaller_cache_budget() {
+        assert_eq!(
+            l1_budget_for_cache_budget(128 * 1024 * 1024),
+            128 * 1024 * 1024
+        );
+        assert_eq!(
+            l1_budget_for_cache_budget(4 * 1024 * 1024 * 1024),
+            DEFAULT_L1_MEMORY_BYTES
+        );
+        assert_eq!(l1_budget_for_cache_budget(0), DEFAULT_L1_MEMORY_BYTES);
+    }
 }

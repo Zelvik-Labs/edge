@@ -314,7 +314,7 @@ pub(crate) fn migrate_rocksdb_metrics(
 }
 
 fn open_bucket(engine: &Mace, name: &str) -> Result<Bucket> {
-    match engine.get_bucket(name) {
+    match engine.open_bucket(name) {
         Ok(bucket) => Ok(bucket),
         Err(OpCode::NotFound) => engine
             .new_bucket(name, bucket_options())

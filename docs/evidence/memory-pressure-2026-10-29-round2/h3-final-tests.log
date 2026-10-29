@@ -1,0 +1,23 @@
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+mbx[progress]: 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m 30s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 30s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-c8c3a1a23565cbce)
+
+running 7 tests
+test http3_proxy_manager::tests::h3_final_resort_closes_oldest_and_guard_cleans_registry ... ok
+test http3_proxy_manager::tests::h3_incoming_refuse_is_prompt ... ok
+test http3_proxy_manager::tests::h3_retry_budget_bounded ... ok
+test http3_proxy_manager::tests::h3_retry_required_matrix ... ok
+test http3_proxy_manager::tests::h3_retry_roundtrip_validates_without_loop ... ok
+test http3_proxy_manager::tests::h3_incoming_ignore_is_silent ... ok
+test http3_proxy_manager::tests::h3_run_endpoint_retry_gate_and_budget ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 1096 filtered out; finished in 11.23s
+
+mbx[cache]: 0 hits, 2 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 4.9 KiB stored locally
+mbx[savings]: has saved 2h 31s across 197 builds. this line is the only thanks it needs.

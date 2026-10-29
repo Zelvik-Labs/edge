@@ -331,6 +331,7 @@ pub struct ConfigStore {
     reload_notify: Arc<Notify>,
     reload_generation: Arc<AtomicU64>,
     parent_pressure: Arc<DashMap<String, (f32, std::time::Instant)>>,
+    parent_pressure_swept_at: Arc<AtomicU64>,
     published_fingerprints: Arc<DashMap<String, String>>,
     /// Hash of the global runtime context (global HTTP settings, node level,
     /// parent nodes, tiered bypass, LAN allow). Per-server/per-user published
@@ -443,6 +444,7 @@ impl ConfigStore {
             reload_notify: Arc::new(Notify::new()),
             reload_generation: Arc::new(AtomicU64::new(0)),
             parent_pressure: Arc::new(DashMap::new()),
+            parent_pressure_swept_at: Arc::new(AtomicU64::new(0)),
             published_fingerprints: Arc::new(DashMap::new()),
             runtime_context_salt: Arc::new(Mutex::new(String::new())),
         }
@@ -499,6 +501,14 @@ impl ConfigStore {
         ))
         .unwrap_or_default();
         format!("{:x}", md5_legacy::compute(context_json))
+    }
+
+    /// Hand ids removed by the latest snapshot to the metric registry. The
+    /// registry keeps their instances until persistence, bandwidth and daily
+    /// consumers acknowledge the final deltas; admission prevents the family
+    /// from growing beyond its bound while a consumer is stalled.
+    fn retire_removed_server_metrics(&self, removed: &HashSet<i64>, live: &HashSet<i64>) {
+        crate::metrics::METRICS.retire_servers_absent_from(removed, live);
     }
 
     /// Forget fingerprints whose server/user no longer exists after a full
@@ -1120,7 +1130,7 @@ impl ConfigStore {
         )
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments, reason = "configuration snapshot carries explicit global settings")]
     pub fn set_enabled_features(
         &self,
         has_dns: bool,
@@ -1215,6 +1225,32 @@ impl ConfigStore {
     pub fn update_parent_pressure(&self, addr: &str, pressure: f32) {
         self.parent_pressure
             .insert(addr.to_string(), (pressure, std::time::Instant::now()));
+        self.sweep_parent_pressure();
+    }
+
+    /// Parent-pressure samples are logically valid for 60 seconds, but an
+    /// entry used to stay allocated forever after its last update. Sweep at
+    /// most once per interval so address churn cannot grow the map without
+    /// adding an O(entries) walk to every health update.
+    fn sweep_parent_pressure(&self) {
+        let now = crate::utils::time::now_timestamp().max(0) as u64;
+        let last = self.parent_pressure_swept_at.load(Ordering::Relaxed);
+        if now.saturating_sub(last) < 60 {
+            return;
+        }
+        if self
+            .parent_pressure_swept_at
+            .compare_exchange(last, now, Ordering::AcqRel, Ordering::Relaxed)
+            .is_err()
+        {
+            return;
+        }
+        self.prune_parent_pressure();
+    }
+
+    fn prune_parent_pressure(&self) {
+        self.parent_pressure
+            .retain(|_, (_, updated_at)| updated_at.elapsed() < std::time::Duration::from_secs(60));
     }
 
     pub fn get_parent_pressure(&self, addr: &str) -> f32 {
@@ -1431,7 +1467,7 @@ impl ConfigStore {
         lock.deleted_contents.clone()
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments, reason = "configuration snapshot carries explicit global settings")]
     pub async fn update_config(
         &self,
         id: i64,
@@ -1480,8 +1516,9 @@ impl ConfigStore {
         webp_image_policies: HashMap<i64, WebPImagePolicy>,
         toa: Option<TOAConfig>,
         global_access_log: Option<crate::config_models::GlobalHTTPAccessLogConfig>,
-    ) {
+    ) -> Result<(), crate::metrics::MetricCapacityError> {
         let _update = self.update_gate.lock();
+        crate::metrics::METRICS.admit_configs(all_servers.iter().map(AsRef::as_ref))?;
         for server in &all_servers {
             server.compile_url_patterns();
         }
@@ -1499,10 +1536,16 @@ impl ConfigStore {
             &all_servers,
         );
         let mut lock = self.inner.write();
+        let previous_server_ids: HashSet<i64> = lock
+            .all_servers
+            .iter()
+            .map(|server| server.numeric_id())
+            .collect();
         lock.id = id;
         lock.version = version;
         lock.node_region_id = node_region_id;
         lock.node_cluster_id = node_cluster_id;
+        crate::metrics::METRICS.publish_configs(&all_servers);
         lock.all_servers = all_servers;
         lock.servers = servers;
         lock.routes = routes;
@@ -1598,9 +1641,15 @@ impl ConfigStore {
         Self::refresh_cluster_policy_indexes(&mut lock);
         crate::traffic_quota::sync_from_config(&lock);
         drop(lock);
+        let removed_server_ids: HashSet<i64> = previous_server_ids
+            .difference(&live_server_ids)
+            .copied()
+            .collect();
+        self.retire_removed_server_metrics(&removed_server_ids, &live_server_ids);
         *self.runtime_context_salt.lock() = new_salt;
         self.prune_published_fingerprints(&live_server_ids, &live_user_ids);
         self.notify_runtime_reload();
+        Ok(())
     }
 
     pub async fn replace_all_servers(
@@ -1609,8 +1658,9 @@ impl ConfigStore {
         servers: HashMap<String, Arc<ServerConfig>>,
         routes: HashMap<String, Arc<crate::lb_factory::AnyLoadBalancer>>,
         id_to_lb: HashMap<i64, Arc<crate::lb_factory::AnyLoadBalancer>>,
-    ) {
+    ) -> Result<(), crate::metrics::MetricCapacityError> {
         let _update = self.update_gate.lock();
+        crate::metrics::METRICS.admit_configs(all_servers.iter().map(AsRef::as_ref))?;
         for server in &all_servers {
             server.compile_url_patterns();
         }
@@ -1628,6 +1678,12 @@ impl ConfigStore {
             &all_servers,
         );
         let mut lock = self.inner.write();
+        let previous_server_ids: HashSet<i64> = lock
+            .all_servers
+            .iter()
+            .map(|server| server.numeric_id())
+            .collect();
+        crate::metrics::METRICS.publish_configs(&all_servers);
         lock.all_servers = all_servers;
         lock.servers = servers;
         lock.routes = routes;
@@ -1636,9 +1692,20 @@ impl ConfigStore {
         Self::refresh_passthrough_indexes(&mut lock);
         Self::refresh_cluster_policy_indexes(&mut lock);
         crate::traffic_quota::sync_from_config(&lock);
+        let live_server_ids: HashSet<i64> = lock
+            .all_servers
+            .iter()
+            .map(|server| server.numeric_id())
+            .collect();
         drop(lock);
+        let removed_server_ids: HashSet<i64> = previous_server_ids
+            .difference(&live_server_ids)
+            .copied()
+            .collect();
+        self.retire_removed_server_metrics(&removed_server_ids, &live_server_ids);
         drop(_update);
         self.notify_runtime_reload();
+        Ok(())
     }
 
     pub async fn replace_server(
@@ -1647,7 +1714,7 @@ impl ConfigStore {
         all_servers: Vec<Arc<ServerConfig>>,
         servers: HashMap<String, Arc<ServerConfig>>,
         routes: HashMap<String, Arc<crate::lb_factory::AnyLoadBalancer>>,
-    ) {
+    ) -> Result<(), crate::metrics::MetricCapacityError> {
         let mut id_to_lb = HashMap::new();
         if server_id > 0
             && let Some(lb) = routes.values().next()
@@ -1661,7 +1728,7 @@ impl ConfigStore {
             routes,
             id_to_lb,
         )
-        .await;
+        .await
     }
 
     pub async fn replace_servers_snapshot(
@@ -1671,8 +1738,9 @@ impl ConfigStore {
         servers: HashMap<String, Arc<ServerConfig>>,
         routes: HashMap<String, Arc<crate::lb_factory::AnyLoadBalancer>>,
         id_to_lb: HashMap<i64, Arc<crate::lb_factory::AnyLoadBalancer>>,
-    ) {
+    ) -> Result<(), crate::metrics::MetricCapacityError> {
         let _update = self.update_gate.lock();
+        crate::metrics::METRICS.admit_configs(added_servers.iter().map(AsRef::as_ref))?;
         for server in &added_servers {
             server.compile_url_patterns();
         }
@@ -1686,6 +1754,11 @@ impl ConfigStore {
             )
         };
         let mut lock = self.inner.write();
+        let previous_server_ids: HashSet<i64> = lock
+            .all_servers
+            .iter()
+            .map(|server| server.numeric_id())
+            .collect();
         if !stale_ids.is_empty() {
             lock.all_servers
                 .retain(|server| !stale_ids.contains(&server.numeric_id()));
@@ -1704,6 +1777,7 @@ impl ConfigStore {
             }
         }
         lock.compiled_plans = compiled_plans;
+        crate::metrics::METRICS.publish_configs(&added_servers);
         lock.all_servers.extend(added_servers);
         lock.servers.extend(servers);
         lock.routes.extend(routes);
@@ -1715,9 +1789,20 @@ impl ConfigStore {
         Self::refresh_passthrough_indexes(&mut lock);
         Self::refresh_cluster_policy_indexes(&mut lock);
         crate::traffic_quota::sync_from_config(&lock);
+        let live_server_ids: HashSet<i64> = lock
+            .all_servers
+            .iter()
+            .map(|server| server.numeric_id())
+            .collect();
         drop(lock);
+        let removed_server_ids: HashSet<i64> = previous_server_ids
+            .difference(&live_server_ids)
+            .copied()
+            .collect();
+        self.retire_removed_server_metrics(&removed_server_ids, &live_server_ids);
         drop(_update);
         self.notify_runtime_reload();
+        Ok(())
     }
 
     pub async fn replace_user_servers(
@@ -1726,7 +1811,7 @@ impl ConfigStore {
         all_servers: Vec<Arc<ServerConfig>>,
         servers: HashMap<String, Arc<ServerConfig>>,
         routes: HashMap<String, Arc<crate::lb_factory::AnyLoadBalancer>>,
-    ) {
+    ) -> Result<(), crate::metrics::MetricCapacityError> {
         let stale_ids = {
             let lock = self.inner.read();
             lock.all_servers
@@ -1743,10 +1828,10 @@ impl ConfigStore {
             }
         }
         self.replace_servers_snapshot(stale_ids, all_servers, servers, routes, id_to_lb)
-            .await;
+            .await
     }
 
-    pub async fn remove_user_servers(&self, user_id: i64) {
+    pub async fn remove_user_servers(&self, user_id: i64) -> Result<(), crate::metrics::MetricCapacityError> {
         let stale_ids = {
             let lock = self.inner.read();
             lock.all_servers
@@ -1754,7 +1839,6 @@ impl ConfigStore {
                 .filter_map(|server| (server.user_id == user_id).then_some(server.numeric_id()))
                 .collect::<std::collections::HashSet<_>>()
         };
-        self.clear_published_fingerprint(&format!("user:{user_id}"));
         self.replace_servers_snapshot(
             stale_ids,
             Vec::new(),
@@ -1762,11 +1846,12 @@ impl ConfigStore {
             HashMap::new(),
             HashMap::new(),
         )
-        .await;
+        .await?;
+        self.clear_published_fingerprint(&format!("user:{user_id}"));
+        Ok(())
     }
 
-    pub async fn remove_server(&self, server_id: i64) {
-        self.clear_published_fingerprint(&format!("server:{server_id}"));
+    pub async fn remove_server(&self, server_id: i64) -> Result<(), crate::metrics::MetricCapacityError> {
         self.replace_servers_snapshot(
             std::iter::once(server_id).collect(),
             Vec::new(),
@@ -1774,7 +1859,9 @@ impl ConfigStore {
             HashMap::new(),
             HashMap::new(),
         )
-        .await;
+        .await?;
+        self.clear_published_fingerprint(&format!("server:{server_id}"));
+        Ok(())
     }
 
     pub async fn cache_server_route(
@@ -1782,7 +1869,7 @@ impl ConfigStore {
         host: String,
         server: Arc<ServerConfig>,
         lb: Arc<crate::lb_factory::AnyLoadBalancer>,
-    ) {
+    ) -> Result<(), crate::metrics::MetricCapacityError> {
         let server_id = server.numeric_id();
         let mut id_to_lb = HashMap::new();
         if server_id > 0 {
@@ -1798,7 +1885,7 @@ impl ConfigStore {
             std::collections::HashSet::new()
         };
         self.replace_servers_snapshot(stale_ids, vec![server], servers, routes, id_to_lb)
-            .await;
+            .await
     }
 
     fn refresh_plan_derived(lock: &mut NodeConfig) {
@@ -2287,6 +2374,96 @@ mod tests {
         assert_eq!(store.published_fingerprint("user:10"), None);
     }
 
+    #[tokio::test]
+    async fn server_snapshot_retires_metrics_until_delta_consumers_ack() {
+        let store = ConfigStore::new();
+        let removed_id = 7_710_101;
+        let readded_id = 7_710_102;
+
+        store
+            .replace_all_servers(
+                vec![
+                    Arc::new(ServerConfig {
+                        id: Some(removed_id),
+                        ..Default::default()
+                    }),
+                    Arc::new(ServerConfig {
+                        id: Some(readded_id),
+                        ..Default::default()
+                    }),
+                ],
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+            )
+            .await
+            .expect("installation fits");
+        store
+            .replace_all_servers(
+                vec![Arc::new(ServerConfig {
+                    id: Some(readded_id),
+                    ..Default::default()
+                })],
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+            )
+            .await
+            .expect("installation fits");
+
+        assert!(!crate::metrics::METRICS.servers.contains_key(&removed_id));
+        assert!(crate::metrics::METRICS.servers.contains_key(&readded_id));
+        let removed = crate::metrics::METRICS.find_server(removed_id).expect("installed instance");
+        let removed_instance = removed.instance_id;
+        let readded = crate::metrics::METRICS.find_server(readded_id).expect("installed instance");
+        drop(removed);
+
+        let sample = crate::metrics::METRICS
+            .take_reporting_snapshots()
+            .into_iter()
+            .find(|sample| sample.snapshot.instance_id == removed_instance)
+            .expect("removed metric remains reportable until consumers acknowledge");
+        assert!(sample.retired);
+        let fingerprint = sample.snapshot.fingerprint();
+        drop(sample);
+        for consumer in [
+            crate::metrics::MetricConsumer::Persistence,
+            crate::metrics::MetricConsumer::Bandwidth,
+            crate::metrics::MetricConsumer::Daily,
+        ] {
+            crate::metrics::METRICS.acknowledge_retired(consumer, removed_instance, fingerprint);
+        }
+        assert!(
+            !crate::metrics::METRICS
+                .take_reporting_snapshots()
+                .iter()
+                .any(|sample| sample.snapshot.instance_id == removed_instance),
+            "all consumers acknowledged the quiescent final state"
+        );
+
+        crate::metrics::METRICS.servers.remove(&readded_id);
+        drop(readded);
+    }
+
+    #[test]
+    fn parent_pressure_prune_removes_only_expired_samples() {
+        let store = ConfigStore::new();
+        store.update_parent_pressure("fresh.example:443", 0.4);
+        store.parent_pressure.insert(
+            "stale.example:443".to_string(),
+            (
+                0.9,
+                std::time::Instant::now() - std::time::Duration::from_secs(120),
+            ),
+        );
+
+        store.prune_parent_pressure();
+
+        assert_eq!(store.get_parent_pressure("stale.example:443"), 0.0);
+        assert!(!store.parent_pressure.contains_key("stale.example:443"));
+        assert_eq!(store.get_parent_pressure("fresh.example:443"), 0.4);
+    }
+
     #[test]
     fn runtime_fingerprint_salt_tracks_global_context() {
         let store = ConfigStore::new();
@@ -2408,7 +2585,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
     }
 
     #[tokio::test]
@@ -2626,7 +2803,7 @@ mod tests {
                     sample_rate: 1.0,
                 }),
             )
-            .await;
+            .await.expect("configuration installs");
 
         let snapshot = store.get_hot_path_snapshot_sync();
         assert!(snapshot.is_on);
@@ -2702,7 +2879,7 @@ mod tests {
 
         store
             .cache_server_route("*.example.com".to_string(), server, lb)
-            .await;
+            .await.expect("configuration installs");
 
         for host in ["example.com", "www.example.com", "a.b.example.com"] {
             assert_eq!(
@@ -2735,7 +2912,7 @@ mod tests {
 
         store
             .cache_server_route("*.example.com".to_string(), server, lb)
-            .await;
+            .await.expect("configuration installs");
 
         for host in ["example.com", "www.example.com", "a.b.example.com"] {
             assert_eq!(
@@ -2842,7 +3019,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
 
         assert_eq!(
             store
@@ -2956,7 +3133,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
 
         let route = store
             .inspect_tls_route_sync("rancher.mymya.cn", 443)
@@ -3051,7 +3228,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
 
         assert!(store.has_any_sni_passthrough_sync());
         let route = store
@@ -3136,7 +3313,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
 
         assert!(store.has_any_quic_passthrough_sync());
         assert_eq!(
@@ -3231,7 +3408,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
 
         assert!(store.has_any_quic_passthrough_sync());
         assert_eq!(
@@ -3322,7 +3499,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
 
         assert_eq!(
             store
@@ -3433,7 +3610,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
 
         assert_eq!(
             store
@@ -3518,7 +3695,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
 
         assert_eq!(
             store

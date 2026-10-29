@@ -6,7 +6,7 @@ use crate::rpc::cache::sync_cache_tasks;
 use crate::rpc::client::SharedRpcClient;
 use crate::rpc::ip_list::sync_ip_items_incremental;
 use crate::rpc::plan::sync_active_plans;
-use crate::rpc::server::{sync_single_server_config, sync_user_servers_state};
+use crate::rpc::server::{SyncOutcome, sync_single_server_config, sync_user_servers_state};
 use std::sync::LazyLock as Lazy;
 use tokio::sync::Notify;
 use tracing::{debug, info, warn};
@@ -49,7 +49,7 @@ pub async fn sync_node_tasks(
                 // The admin may embed a target version as upgradeNode@{"version":…}.
                 let mut pending_upgrade_restart = false;
                 let mut task_error = String::new();
-                let success = match task_type {
+                let outcome = match task_type {
                     t if crate::node_upgrade::parse_upgrade_task_version(t).is_some() => {
                         // The upgrade payload is downloaded from the admin
                         // management address over plain HTTP(S); the gRPC
@@ -59,12 +59,12 @@ pub async fn sync_node_tasks(
                         {
                             Ok(needs_restart) => {
                                 pending_upgrade_restart = needs_restart;
-                                true
+                                SyncOutcome::Applied
                             }
                             Err(err) => {
                                 warn!("NodeTask {} upgrade failed: {}", task.id, err);
                                 task_error = format!("{err:#}");
-                                false
+                                SyncOutcome::Failed
                             }
                         }
                     }
@@ -96,40 +96,48 @@ pub async fn sync_node_tasks(
                             .await
                         } else if config_synced {
                             trigger_task_sync();
-                            true
+                            SyncOutcome::Applied
                         } else {
                             warn!(
                                 "Deferring NodeTask {} ({}) because config sync has not completed successfully in this round.",
                                 task.id, task.r#type
                             );
-                            break;
+                            SyncOutcome::Deferred
                         }
                     }
-                    "nodeLevelChanged" => {
-                        crate::rpc::find_node_level_info(api_config, config_store).await
+                    "nodeLevelChanged" => SyncOutcome::from_applied(
+                        crate::rpc::find_node_level_info(api_config, config_store).await,
+                    ),
+                    "planChanged" => {
+                        SyncOutcome::from_applied(sync_active_plans(api_config, config_store).await)
                     }
-                    "planChanged" => sync_active_plans(api_config, config_store).await,
                     "purgeServerCache" | "purgePathCache" | "preheatCache" => {
-                        sync_cache_tasks(
-                            client.channel(),
-                            api_config,
-                            config_store,
-                            task.id,
-                            task.server_id,
+                        SyncOutcome::from_applied(
+                            sync_cache_tasks(
+                                client.channel(),
+                                api_config,
+                                config_store,
+                                task.id,
+                                task.server_id,
+                            )
+                            .await,
                         )
-                        .await
                     }
-                    "ipItemChanged" => sync_ip_items_incremental(api_config, ip_list_manager).await,
+                    "ipItemChanged" => SyncOutcome::from_applied(
+                        sync_ip_items_incremental(api_config, ip_list_manager).await,
+                    ),
                     "updatingServers" => {
                         let mut last_id = 0i64;
-                        sync_updating_server_list_once(
-                            api_config,
-                            config_store,
-                            health_manager,
-                            cert_selector,
-                            &mut last_id,
+                        SyncOutcome::from_applied(
+                            sync_updating_server_list_once(
+                                api_config,
+                                config_store,
+                                health_manager,
+                                cert_selector,
+                                &mut last_id,
+                            )
+                            .await,
                         )
-                        .await
                     }
                     "userServersStateChanged" => {
                         sync_user_servers_state(
@@ -149,7 +157,7 @@ pub async fn sync_node_tasks(
                             "Received node lifecycle task '{}'. Acknowledging locally.",
                             task.r#type
                         );
-                        true
+                        SyncOutcome::Applied
                     }
                     "scriptsChanged" => {
                         let unsupported = crate::unsupported::request_scripts::unsupported();
@@ -157,15 +165,15 @@ pub async fn sync_node_tasks(
                             "Ignoring unsupported task 'scriptsChanged': {} ({})",
                             unsupported.reason, unsupported.code
                         );
-                        true
+                        SyncOutcome::Applied
                     }
-                    "plusChanged" | "nodeVersionChanged" => true,
+                    "plusChanged" | "nodeVersionChanged" => SyncOutcome::Applied,
                     other => {
                         warn!(
                             "Unknown NodeTask type '{}' (task id={}). Marking done to avoid retry loop.",
                             other, task.id
                         );
-                        true
+                        SyncOutcome::Applied
                     }
                 };
 
@@ -189,34 +197,110 @@ pub async fn sync_node_tasks(
                     return;
                 }
 
-                let reported = crate::rpc::track_rpc(task_service.report_node_task_done(
-                    pb::ReportNodeTaskDoneRequest {
-                        node_task_id: task.id,
-                        is_ok: success,
-                        error: if success {
-                            "".to_string()
-                        } else if task_error.is_empty() {
-                            "Task failed".to_string()
-                        } else {
-                            task_error.clone()
-                        },
-                    },
-                ))
-                .await
-                .is_ok();
-
-                if reported {
-                    if task.version > *task_version {
-                        *task_version = task.version;
+                match completion_request(task.id, outcome, &task_error) {
+                    None => {
+                        // `ReportNodeTaskDone` marks the task done in the
+                        // control plane even with `is_ok=false`, and
+                        // `FindNodeTasks` only returns tasks that are not done.
+                        // A locally deferred install therefore must not be
+                        // acknowledged, or the update would never be retried.
+                        warn!(
+                            task_id = task.id,
+                            task_type = task.r#type,
+                            "NodeTask deferred locally; leaving it pending for a later retry"
+                        );
+                        break;
                     }
-                } else {
-                    warn!("Failed to report NodeTask {} completion", task.id);
-                    break;
+                    Some(request) => {
+                        let reported = crate::rpc::track_rpc(
+                            task_service.report_node_task_done(request),
+                        )
+                        .await
+                        .is_ok();
+
+                        if reported {
+                            if task.version > *task_version {
+                                *task_version = task.version;
+                            }
+                        } else {
+                            warn!("Failed to report NodeTask {} completion", task.id);
+                            break;
+                        }
+                    }
                 }
             }
         }
         Err(e) => {
             debug!("Failed to find node tasks: {}", e);
         }
+    }
+}
+
+/// The acknowledgement to send for a finished task, or `None` when the task
+/// must stay pending.
+///
+/// The control plane marks a task done on any `ReportNodeTaskDone`, including
+/// `is_ok=false`, and only returns tasks that are not done, so a retryable
+/// local deferral (exhausted metric family, governor rejection) must produce
+/// no report at all. Terminal failures keep the previous behavior and are
+/// reported so the failure is visible and does not retry forever.
+fn completion_request(
+    task_id: i64,
+    outcome: SyncOutcome,
+    task_error: &str,
+) -> Option<pb::ReportNodeTaskDoneRequest> {
+    match outcome {
+        SyncOutcome::Deferred => None,
+        SyncOutcome::Applied => Some(pb::ReportNodeTaskDoneRequest {
+            node_task_id: task_id,
+            is_ok: true,
+            error: String::new(),
+        }),
+        SyncOutcome::Failed => Some(pb::ReportNodeTaskDoneRequest {
+            node_task_id: task_id,
+            is_ok: false,
+            error: if task_error.is_empty() {
+                "Task failed".to_string()
+            } else {
+                task_error.to_string()
+            },
+        }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deferred_install_is_not_acknowledged() {
+        // Regression: a capacity rejection reported as `is_ok=false` used to
+        // mark the task done in the control plane, permanently losing the
+        // config update.
+        assert!(completion_request(7, SyncOutcome::Deferred, "capacity").is_none());
+    }
+
+    #[test]
+    fn applied_task_reports_success() {
+        let request = completion_request(7, SyncOutcome::Applied, "").expect("applied reports");
+        assert_eq!(request.node_task_id, 7);
+        assert!(request.is_ok);
+        assert!(request.error.is_empty());
+    }
+
+    #[test]
+    fn terminal_failure_reports_its_error() {
+        let request =
+            completion_request(7, SyncOutcome::Failed, "decode error").expect("failed reports");
+        assert_eq!(request.node_task_id, 7);
+        assert!(!request.is_ok);
+        assert_eq!(request.error, "decode error");
+    }
+
+    #[test]
+    fn terminal_failure_without_detail_reports_a_generic_error() {
+        let request = completion_request(7, SyncOutcome::Failed, "").expect("failed reports");
+        assert!(!request.is_ok);
+        assert_eq!(request.error, "Task failed");
     }
 }

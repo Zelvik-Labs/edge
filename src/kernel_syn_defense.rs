@@ -1496,7 +1496,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
         assert!(empty_connection_flood_active(&store));
     }
 

@@ -6,6 +6,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::ops::Bound;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::LazyLock as Lazy;
@@ -271,8 +272,54 @@ pub fn apply_node_period_deltas(
     buf
 }
 
-fn txn_get_slice(txn: &mace::TxnKV<'_>, key: &[u8]) -> Result<Option<Vec<u8>>, OpCode> {
-    match txn.get(key) {
+/// Scan one period namespace from a cursor with bounded inspections.
+/// `seek(prefix)` is prefix matching, so continuing from a full key requires a
+/// range with an excluded lower bound; otherwise every tick rescans from the
+/// start. Returns the number deleted and the next cursor (`None` at range end).
+fn cleanup_period_prefix(
+    view: &mace::TxnView<'_>,
+    txn: &mace::TxnKV<'_>,
+    cursor: Option<Vec<u8>>,
+    prefix: &[u8],
+    older_than: i64,
+    max_inspected: usize,
+    period_of: impl Fn(&str) -> Option<i64>,
+) -> Result<(usize, Option<Vec<u8>>), OpCode> {
+    let start = match cursor {
+        Some(key) => Bound::Excluded(key),
+        None => Bound::Included(prefix.to_vec()),
+    };
+    let mut upper = prefix.to_vec();
+    *upper.last_mut().expect("cleanup prefix is non-empty") += 1;
+
+    let mut removed = 0usize;
+    let mut last_key = None;
+    let mut exhausted = true;
+    for (inspected, item) in view
+        .range::<Vec<u8>, _>((start, Bound::Excluded(upper)))
+        .enumerate()
+    {
+        if inspected >= max_inspected {
+            exhausted = false;
+            break;
+        }
+        let key = item.key();
+        last_key = Some(key.to_vec());
+        let Ok(key_str) = std::str::from_utf8(key) else {
+            continue;
+        };
+        let Some(period) = period_of(key_str) else {
+            continue;
+        };
+        if period < older_than {
+            txn.del(key)?;
+            removed += 1;
+        }
+    }
+    Ok((removed, if exhausted { None } else { last_key }))
+}
+
+fn txn_get_slice(txn: &mace::TxnKV<'_>, key: &[u8]) -> Result<Option<Vec<u8>>, OpCode> {    match txn.get(key) {
         Ok(value) => Ok(Some(value.to_vec())),
         Err(OpCode::NotFound) => Ok(None),
         Err(err) => Err(err),
@@ -316,8 +363,8 @@ impl MetricStorage {
             .map_err(mace_open_error)?;
         let mace = Mace::new(opts).map_err(mace_open_error)?;
         let bucket_options = mace_metrics_bucket_options();
-        let bucket = match mace.update_bucket_opt(METRICS_BUCKET, bucket_options) {
-            Ok(()) => mace.get_bucket(METRICS_BUCKET),
+        let bucket = match mace.update_bucket_opt(METRICS_BUCKET, bucket_options.clone()) {
+            Ok(()) => mace.open_bucket(METRICS_BUCKET),
             Err(OpCode::NotFound) => mace.new_bucket(METRICS_BUCKET, bucket_options),
             Err(err) => Err(err),
         }
@@ -455,71 +502,37 @@ impl MetricStorage {
         let view = bucket.view()?;
         let txn = bucket.begin()?;
 
-        const MAX_CLEANUP_ROWS: usize = 1_024;
-        let mut removed = 0usize;
-        let server_cursor = backend.server_cleanup_cursor.lock().clone();
-        let mut last_key = None;
-        for item in view.seek("S") {
-            if removed >= MAX_CLEANUP_ROWS {
-                break;
-            }
-            let key = item.key();
-            if server_cursor.as_deref().is_some_and(|cursor| key <= cursor) {
-                continue;
-            }
-            let key_str = match std::str::from_utf8(key) {
-                Ok(key_str) => key_str,
-                Err(_) => continue,
-            };
-            let Some((_, period)) = parse_server_period_key(key_str) else {
-                continue;
-            };
-            if period >= older_than_timestamp {
-                continue;
-            }
-            txn.del(key)?;
-            removed += 1;
-            last_key = Some(key.to_vec());
-        }
-        if removed < MAX_CLEANUP_ROWS {
-            let node_cursor = backend.node_cleanup_cursor.lock().clone();
-            for item in view.seek("NODE_T") {
-                if removed >= MAX_CLEANUP_ROWS {
-                    break;
-                }
-                let key = item.key();
-                if node_cursor.as_deref().is_some_and(|cursor| key <= cursor) {
-                    continue;
-                }
-                let key_str = match std::str::from_utf8(key) {
-                    Ok(key_str) => key_str,
-                    Err(_) => continue,
-                };
-                let Some(period) = key_str
-                    .strip_prefix("NODE_T")
-                    .and_then(|v| v.parse::<i64>().ok())
-                else {
-                    continue;
-                };
-                if period >= older_than_timestamp {
-                    continue;
-                }
-                txn.del(key)?;
-                removed += 1;
-                last_key = Some(key.to_vec());
-            }
-        }
+        // Bounded work per tick, counted in inspected keys rather than
+        // deletions: a range of retained rows must not stall the scan forever.
+        // The server and node namespaces have independent budgets so neither
+        // can starve the other.
+        const MAX_INSPECTED_PER_PREFIX: usize = 2_048;
+        let (removed_server, next_server) = cleanup_period_prefix(
+            &view,
+            &txn,
+            backend.server_cleanup_cursor.lock().clone(),
+            b"S",
+            older_than_timestamp,
+            MAX_INSPECTED_PER_PREFIX,
+            |key| parse_server_period_key(key).map(|(_, period)| period),
+        )?;
+        let (removed_node, next_node) = cleanup_period_prefix(
+            &view,
+            &txn,
+            backend.node_cleanup_cursor.lock().clone(),
+            b"NODE_T",
+            older_than_timestamp,
+            MAX_INSPECTED_PER_PREFIX,
+            |key| key.strip_prefix("NODE_T").and_then(|v| v.parse().ok()),
+        )?;
 
         txn.commit()?;
-        if last_key
-            .as_deref()
-            .is_some_and(|key| key.starts_with(b"NODE_T"))
-        {
-            *backend.node_cleanup_cursor.lock() = last_key;
-        } else {
-            *backend.server_cleanup_cursor.lock() = last_key;
-        }
-        Ok(removed)
+        // Advance only after the deletion transaction is durable. A wrapped
+        // cursor (None) restarts from the prefix so newly expired low keys are
+        // seen again.
+        *backend.server_cleanup_cursor.lock() = next_server;
+        *backend.node_cleanup_cursor.lock() = next_node;
+        Ok(removed_server + removed_node)
     }
 
     pub fn put_json<T: Serialize>(&self, key: &str, value: &T) -> bool {
@@ -1262,7 +1275,20 @@ impl MetricStorage {
 }
 
 fn mace_open_error(err: OpCode) -> anyhow::Error {
-    anyhow::anyhow!("Failed to open Mace storage: {err:?}")
+    anyhow::anyhow!(
+        "Failed to open Mace 0.2 storage: {err:?}; databases from Mace 0.1.x are incompatible. Stop the instance and explicitly rebuild authorized development data; startup never deletes a database"
+    )
+}
+
+pub fn initialize() -> anyhow::Result<()> {
+    anyhow::ensure!(
+        STORAGE.backend.is_some(),
+        "required Mace metrics storage is unavailable at {}; see the preceding open error",
+        crate::paths::NodePaths::current()
+            .metrics_db_dir()
+            .display()
+    );
+    Ok(())
 }
 
 pub static STORAGE: Lazy<MetricStorage> = Lazy::new(|| {
@@ -2597,6 +2623,113 @@ mod tests {
         let ips = storage.load_unique_ips("20260818");
         assert_eq!(ips.len(), 1);
         assert_eq!(ips[0].0, 1);
+
+        drop(storage);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn mace_020_reopens_all_runtime_namespaces_without_committing_aborted_writes() {
+        let dir = std::env::temp_dir().join(format!("zelvik-mace-020-{}", uuid::Uuid::new_v4()));
+        let records = [
+            ("S7_T1700000000", b"metric".as_slice()),
+            ("NODE_T1700000000", b"node".as_slice()),
+            ("UIP_7_20261029_203.0.113.9", b"unique".as_slice()),
+            ("CAIP_IP_203.0.113.9", b"agent".as_slice()),
+            ("WAFTOK_token", b"token".as_slice()),
+            ("CTOMB_hash", b"200".as_slice()),
+            ("CMETA_hash", b"metadata".as_slice()),
+            ("FWBLK_V1_global_0_203.0.113.9", b"block".as_slice()),
+        ];
+        {
+            let storage = MetricStorage::open(&dir).unwrap();
+            assert!(
+                storage.write_raw_batch(
+                    records
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.to_vec()))
+                        .collect(),
+                    Vec::new()
+                )
+            );
+            let txn = storage.bucket().unwrap().begin().unwrap();
+            txn.upsert(b"ABORTED", b"must not survive").unwrap();
+            drop(txn);
+            storage.backend.as_ref().unwrap()._mace.sync().unwrap();
+        }
+        {
+            let storage = MetricStorage::open(&dir).unwrap();
+            for (key, expected) in records {
+                assert_eq!(
+                    storage.get_raw(key.as_bytes()).as_deref(),
+                    Some(expected),
+                    "{key}"
+                );
+            }
+            assert!(storage.get_raw(b"ABORTED").is_none());
+        }
+        let report = mace::check_database(&mace_metrics_options(&dir));
+        assert!(report.is_ok(), "{report:?}");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn history_cleanup_advances_by_inspected_keys_and_wraps_to_newly_expired_low_keys() {
+        let dir = std::env::temp_dir().join(format!(
+            "zelvik-edge-mace-retention-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let storage = MetricStorage::open(&dir).expect("open mace storage");
+        let update = |server_id| crate::rpc::metrics::ServerMetricUpdate {
+            server_id,
+            user_id: 0,
+            user_plan_id: 0,
+            plan_id: 0,
+            total_requests: 1,
+            bytes_sent: 0,
+            bytes_received: 0,
+            cached_bytes: 0,
+            count_cached_requests: 0,
+            count_attack_requests: 0,
+            attack_bytes: 0,
+            active_connections: 0,
+            count_websocket_connections: 0,
+            count_ips: 0,
+        };
+
+        for server_id in 1..=3_000i64 {
+            storage
+                .record_server_batch(100, vec![update(server_id)], 0, 0)
+                .expect("write expired row");
+        }
+        storage
+            .record_server_batch(200_000, vec![update(10_000)], 0, 0)
+            .expect("write fresh row");
+
+        let first = storage.cleanup_old_stats(150).expect("first bounded scan");
+        assert!(first > 0 && first < 3_000, "one tick must be bounded: {first}");
+        let second = storage.cleanup_old_stats(150).expect("second scan");
+        assert_eq!(first + second, 3_000, "all expired rows must be removed");
+        assert!(
+            storage
+                .get_raw(server_period_key(10_000, 200_000).as_bytes())
+                .is_some(),
+            "fresh row must survive"
+        );
+
+        // The range end wraps the cursor; a key written later but sorting
+        // before the old cursor must still be found.
+        storage
+            .record_server_batch(50, vec![update(0)], 0, 0)
+            .expect("write low-key expired row");
+        assert_eq!(storage.cleanup_old_stats(150).expect("post-wrap scan"), 1);
+        assert!(
+            storage
+                .get_raw(server_period_key(0, 50).as_bytes())
+                .is_none(),
+            "newly expired low key must be removed after the wrap"
+        );
 
         drop(storage);
         let _ = std::fs::remove_dir_all(&dir);

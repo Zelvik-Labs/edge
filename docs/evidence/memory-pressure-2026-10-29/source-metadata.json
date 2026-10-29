@@ -1,0 +1,26 @@
+{
+  "baseline_revision": "0a9499b1b1be33cc20deea424f1cc60111a1ea86",
+  "candidate_revision": "2c6b2e19c7a27ca12f21d392ba6640b602f0774c",
+  "baseline_archive": "git archive; memory_governor.rs and proxy.rs hashes verified against baseline revision",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "compile_env": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_DEV_OPT_LEVEL": "2",
+    "CARGO_PROFILE_DEV_CODEGEN_UNITS": "16",
+    "target_cpu": "native (.cargo/config.toml)"
+  },
+  "sha256": {
+    "/root/zelvik-dev/pressure-results/candidate-node": "11dc3cadd032a5a782f9419a16a7d1b497aa5afee22cc2de422187e12d14075a",
+    "/root/zelvik-dev/pressure-results/baseline-node": "0f9b6a2bdc700272aea4926d9643c50eb51848713ed4c5edc7c2479de5b0d46f",
+    "/root/zelvik-dev/edge/Cargo.lock": "d9caf641fbba2221466bdc0a9c45d1d4939af21f8d5ff4997a3de78297f69fc1",
+    "/root/zelvik-dev/pressure-baseline/Cargo.lock": "d9caf641fbba2221466bdc0a9c45d1d4939af21f8d5ff4997a3de78297f69fc1",
+    "/root/zelvik-dev/edge/src/bin/memory-pressure-node.rs": "df2056a85f98d403eb08541aa534adf590e821fd525ead93b046780a81a7f5aa",
+    "/root/zelvik-dev/pressure-baseline/src/bin/memory-pressure-node.rs": "df2056a85f98d403eb08541aa534adf590e821fd525ead93b046780a81a7f5aa"
+  },
+  "thp": "always [madvise] never\n",
+  "kernel": "Linux iZ0xib4uta0g6tgs4ywst8Z 6.8.0-139-generic #139-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 03:52:05 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux",
+  "candidate_scope": "2c6b2e1 + identical memory-pressure-node.rs fixture; excludes current local compressed L2 cancellation fix",
+  "clock_note": "server wall clock reports previous UTC day; monotonic timings used"
+}

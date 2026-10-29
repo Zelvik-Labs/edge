@@ -107,10 +107,6 @@ fn cache_memory_hit_limit_bytes() -> u64 {
         .min(MEMORY_SERVE_MAX)
 }
 
-fn try_admit_cache_memory_hit(bytes: u64) -> Option<StaticAdmissionPermit> {
-    MEMORY_GOVERNOR.try_admit_cache_read(bytes)
-}
-
 pub(crate) fn cache_write_lock_for_key(key: &str) -> Arc<Mutex<()>> {
     // Full objects and all partial-range selectors represent the same
     // resource. Canonicalizing here makes lookup, fill, purge, and cluster
@@ -248,11 +244,45 @@ fn zstd_decompress_to_bytes(data: &[u8], capacity: usize) -> Option<Vec<u8>> {
     }
 }
 
+/// Decode one compressed L2 object and, in the same blocking step, normalize
+/// its allocation and hand the charges to the returned body.
+///
+/// The caller moves the read permit into the blocking task, so dropping the
+/// `JoinHandle` (a cancelled lookup) cannot refund the charge while the decode
+/// still runs. The body and the remaining permit travel back together: both
+/// keep their charges alive until the caller uses them, or until the detached
+/// task's output is dropped after the work completes.
+fn decode_charged_cache_body<F>(
+    file_data: Vec<u8>,
+    capacity: usize,
+    expected_len: u64,
+    mut cache_read_permit: StaticAdmissionPermit,
+    decode: F,
+) -> Option<(bytes::Bytes, StaticAdmissionPermit)>
+where
+    F: FnOnce(&[u8], usize) -> Option<Vec<u8>>,
+{
+    let data = decode(&file_data, capacity)?;
+    // The compressed buffer is no longer needed; release it before the output
+    // is normalized so the peak matches the previous single-pass decode.
+    drop(file_data);
+    if data.len() as u64 != expected_len {
+        return None;
+    }
+    let data = Vec::from(data.into_boxed_slice());
+    let body = charged_cache_bytes_with_read_charge(data, &mut cache_read_permit, expected_len);
+    Some((body, cache_read_permit))
+}
+
 /// Dynamic Disk-based storage for Pingora-cache
 pub struct FileStorage {
     pub inner: ArcSwap<FileStorageInner>,
     enable_sendfile: AtomicBool,
     enable_file_cache: AtomicBool,
+    #[cfg(test)]
+    test_governor: Option<&'static crate::memory_governor::MemoryGovernor>,
+    #[cfg(test)]
+    decode_hook: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 pub struct FileStorageInner {
@@ -291,7 +321,19 @@ impl FileStorage {
             inner: ArcSwap::from_pointee(FileStorageInner::single(main_root, Vec::new())),
             enable_sendfile: AtomicBool::new(true),
             enable_file_cache: AtomicBool::new(true),
+            #[cfg(test)]
+            test_governor: None,
+            #[cfg(test)]
+            decode_hook: None,
         }
+    }
+
+    fn admission_governor(&self) -> &'static crate::memory_governor::MemoryGovernor {
+        #[cfg(test)]
+        if let Some(governor) = self.test_governor {
+            return governor;
+        }
+        &MEMORY_GOVERNOR
     }
 
     pub fn update_config(
@@ -887,12 +929,12 @@ impl Storage for FileStorage {
                 && meta.size <= memory_hit_limit
                 && file_size <= memory_hit_limit
             {
-                try_admit_cache_memory_hit(file_size)
+                self.admission_governor().try_admit_cache_read(file_size)
             } else {
                 None
             };
-            if let Some(cache_read_permit) = memory_hit_permit {
-                let file_data = match tokio::fs::read(&path).await {
+            if let Some(mut cache_read_permit) = memory_hit_permit {
+                let file_data = match read_cache_file_exact(&path, file_size).await {
                     Ok(data) => data,
                     Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                         crate::metrics::storage::STORAGE
@@ -905,7 +947,11 @@ impl Storage for FileStorage {
                 PROF_DISK_READ_US
                     .fetch_add(io_start.elapsed().as_micros() as u64, Ordering::Relaxed);
                 crate::metrics::storage::record_cache_access_memory(&hash);
-                let body = bytes::Bytes::from(file_data);
+                let body = charged_cache_bytes_with_read_charge(
+                    file_data,
+                    &mut cache_read_permit,
+                    file_size,
+                );
                 let body_len = body.len();
                 return Ok(Some((
                     cache_meta,
@@ -989,12 +1035,13 @@ impl Storage for FileStorage {
             && meta.size <= DISK_HIT_CHUNK_BYTES as u64
             && file_size <= disk_hit_chunk_bytes as u64
         {
-            try_admit_cache_memory_hit(compressed_memory_charge)
+            self.admission_governor()
+                .try_admit_cache_read(compressed_memory_charge)
         } else {
             None
         };
         if let Some(cache_read_permit) = compressed_memory_permit {
-            let file_data = match tokio::fs::read(&path).await {
+            let file_data = match read_cache_file_exact(&path, file_size).await {
                 Ok(data) => data,
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                     crate::metrics::storage::STORAGE
@@ -1007,11 +1054,31 @@ impl Storage for FileStorage {
             PROF_DISK_READ_US.fetch_add(io_start.elapsed().as_micros() as u64, Ordering::Relaxed);
             crate::metrics::storage::record_cache_access_memory(&hash);
             let capacity = meta.size.min(MEMORY_SERVE_MAX) as usize;
-            let result =
-                tokio::task::spawn_blocking(move || zstd_decompress_to_bytes(&file_data, capacity))
-                    .await;
-            let body = match result {
-                Ok(Some(data)) if data.len() as u64 == meta.size => bytes::Bytes::from(data),
+            let expected_len = meta.size;
+            // Decode, normalize, and transfer the charges inside the blocking
+            // task. If this lookup is cancelled, the detached closure keeps
+            // the permit (and therefore the ledger charge) until the work
+            // finishes instead of refunding it while the allocation is live.
+            #[cfg(test)]
+            let decode_hook = self.decode_hook.clone();
+            let result = tokio::task::spawn_blocking(move || {
+                decode_charged_cache_body(
+                    file_data,
+                    capacity,
+                    expected_len,
+                    cache_read_permit,
+                    |data, capacity| {
+                        #[cfg(test)]
+                        if let Some(hook) = decode_hook {
+                            hook();
+                        }
+                        zstd_decompress_to_bytes(data, capacity)
+                    },
+                )
+            })
+            .await;
+            let (body, cache_read_permit) = match result {
+                Ok(Some(pair)) => pair,
                 _ => {
                     discard_corrupt_cache_entry_locked(CorruptCacheEntry::from_meta(
                         &hash, key_str, &path, &meta,
@@ -1136,7 +1203,9 @@ impl Storage for FileStorage {
                 max_size: None,
             };
             let location = self.partial_location_for_key_str(k_str);
-            let Some(cache_write_permit) = MEMORY_GOVERNOR.try_admit(AdmissionClass::CacheWrite)
+            let Some(cache_write_permit) = self
+                .admission_governor()
+                .try_admit(AdmissionClass::CacheWrite)
             else {
                 return Ok(Box::new(NoopMissHandler));
             };
@@ -1171,7 +1240,10 @@ impl Storage for FileStorage {
             }));
         }
 
-        let Some(cache_write_permit) = MEMORY_GOVERNOR.try_admit(AdmissionClass::CacheWrite) else {
+        let Some(cache_write_permit) = self
+            .admission_governor()
+            .try_admit(AdmissionClass::CacheWrite)
+        else {
             return Ok(Box::new(NoopMissHandler));
         };
 
@@ -1563,6 +1635,61 @@ impl Storage for FileStorage {
     }
 }
 
+struct ChargedCacheBuffer {
+    data: Vec<u8>,
+    _charge: crate::memory_governor::StaticSharedPermit,
+    /// Present for L2 memory reads: keeps the cache-read ledger charged for
+    /// the allocation's lifetime rather than the handler's.
+    _cache_read_lease: Option<crate::memory_governor::StaticCacheReadLease>,
+}
+
+impl AsRef<[u8]> for ChargedCacheBuffer {
+    fn as_ref(&self) -> &[u8] {
+        &self.data
+    }
+}
+
+fn charged_cache_bytes(data: Vec<u8>, permit: &mut StaticAdmissionPermit) -> bytes::Bytes {
+    charged_cache_bytes_with_read_charge(data, permit, 0)
+}
+
+/// Hand `data` to a `Bytes` owner that keeps the shared-account charge, and
+/// the cache-read ledger charge when non-zero, alive for as long as any
+/// downstream slice exists.
+fn charged_cache_bytes_with_read_charge(
+    data: Vec<u8>,
+    permit: &mut StaticAdmissionPermit,
+    cache_read_charge_bytes: u64,
+) -> bytes::Bytes {
+    let charge = permit.take_buffer_charge(data.capacity() as u64);
+    let cache_read_lease = (cache_read_charge_bytes > 0)
+        .then(|| permit.take_cache_read_charge(cache_read_charge_bytes));
+    bytes::Bytes::from_owner(ChargedCacheBuffer {
+        data,
+        _charge: charge,
+        _cache_read_lease: cache_read_lease,
+    })
+}
+
+/// Read an immutable cache object into an allocation of exactly `len` bytes.
+/// `fs::read`/`read_to_end` may grow the Vec past the charged object length, so
+/// the memory-read path uses this helper and hands the exact Vec capacity to
+/// the Bytes owner that keeps the charge alive for downstream slices.
+async fn read_cache_file_exact(path: &std::path::Path, len: u64) -> std::io::Result<Vec<u8>> {
+    let len = usize::try_from(len).map_err(|_| {
+        std::io::Error::new(std::io::ErrorKind::InvalidData, "cache object is too large")
+    })?;
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut data = Vec::new();
+    data.try_reserve_exact(len)
+        .map_err(|_| std::io::Error::other("cache read allocation failed"))?;
+    data.resize(len, 0);
+    file.read_exact(&mut data).await?;
+    // `try_reserve_exact` is a request; normalize the reported capacity by
+    // handing back a boxed slice so the charge matches the allocation.
+    Ok(Vec::from(data.into_boxed_slice()))
+}
+
 /// In-memory hit handler that serves from a Bytes buffer in 32KB chunks.
 /// Chunked delivery is required by Pingora's HTTP framing — one-shot delivery
 /// breaks keep-alive and causes connection leaks.
@@ -1571,6 +1698,9 @@ struct MemoryHitHandler {
     offset: usize,
     end: usize,
     _process_lock: Option<CacheProcessLockGuard>,
+    /// Handler-scoped part of the read admission: the class estimate and, for
+    /// compressed objects, the compressed-file bytes. The body's shared and
+    /// cache-read charges live in the `Bytes` owner instead.
     _cache_read_permit: Option<StaticAdmissionPermit>,
 }
 
@@ -2081,6 +2211,28 @@ impl HandleMiss for NoopMissHandler {
     }
 }
 
+fn reserve_cache_buffer(
+    data: &mut Vec<u8>,
+    permit: &mut StaticAdmissionPermit,
+    capacity: usize,
+) -> bool {
+    if capacity <= data.capacity() {
+        return true;
+    }
+    // Reallocation may coexist with the old buffer; reserve the full new
+    // capacity first, then refund the old allocation after the move.
+    if !permit.grow(capacity as u64) {
+        return false;
+    }
+    let old_capacity = data.capacity();
+    if data.try_reserve_exact(capacity - data.len()).is_err() {
+        permit.shrink(capacity as u64);
+        return false;
+    }
+    permit.shrink(old_capacity as u64);
+    true
+}
+
 #[async_trait]
 impl HandleMiss for MemoryMissHandler {
     async fn write_body(&mut self, data: bytes::Bytes, _eof: bool) -> Result<()> {
@@ -2113,6 +2265,18 @@ impl HandleMiss for MemoryMissHandler {
             self.data.clear();
             return Ok(());
         }
+        let capacity = if next_len > self.data.capacity() {
+            next_len
+                .max(self.data.capacity().saturating_mul(2))
+                .min(MEMORY_SERVE_MAX as usize)
+        } else {
+            self.data.capacity()
+        };
+        if !reserve_cache_buffer(&mut self.data, &mut self._cache_write_permit, capacity) {
+            self.rejected = true;
+            self.data = Vec::new();
+            return Ok(());
+        }
         self.data.extend_from_slice(&data);
         Ok(())
     }
@@ -2137,7 +2301,7 @@ impl HandleMiss for MemoryMissHandler {
             rejected,
             _purge_guard: _,
             write_guard,
-            _cache_write_permit: _,
+            _cache_write_permit: mut cache_write_permit,
         } = *self;
         let _write_guard = write_guard;
         let now = crate::utils::time::now_timestamp();
@@ -2177,7 +2341,7 @@ impl HandleMiss for MemoryMissHandler {
             &key,
             TinyUfoL1Entry {
                 cache_key: key.clone(),
-                data: bytes::Bytes::from(data),
+                data: charged_cache_bytes(data, &mut cache_write_permit),
                 response_header: Arc::new(response_header),
                 fresh_until,
                 created_at,
@@ -2818,6 +2982,7 @@ pub(crate) struct TinyUfoL1 {
     // configured item capacity.
     keys: DashSet<String>,
     auto_budget: AtomicBool,
+    auto_budget_cap: AtomicU64,
     max_bytes: AtomicU64,
     current_weight: AtomicU64,
 }
@@ -2835,6 +3000,7 @@ impl TinyUfoL1 {
             inner: StdRwLock::new(cache),
             keys: DashSet::new(),
             auto_budget: AtomicBool::new(auto_budget),
+            auto_budget_cap: AtomicU64::new(u64::MAX),
             max_bytes: AtomicU64::new(resolved_max_bytes),
             current_weight: AtomicU64::new(0),
         }
@@ -2991,24 +3157,38 @@ impl TinyUfoL1 {
         let auto_budget = bytes == 0;
         self.auto_budget.store(auto_budget, Ordering::Relaxed);
         let resolved = if auto_budget {
-            crate::memory_governor::MEMORY_GOVERNOR.cache_budget_bytes()
+            crate::memory_governor::MEMORY_GOVERNOR
+                .cache_budget_bytes()
+                .min(self.auto_budget_cap.load(Ordering::Relaxed))
         } else {
             bytes
         };
-        let old = self.max_bytes.swap(resolved, Ordering::Relaxed);
-        if !Self::should_rebuild_for_budget_change(old, resolved) {
-            return;
+        self.apply_budget(resolved);
+    }
+
+    fn apply_budget(&self, resolved: u64) {
+        let old = self.max_bytes.load(Ordering::Relaxed);
+        if Self::should_rebuild_for_budget_change(old, resolved) {
+            // Keep the old applied value until hysteresis actually resizes;
+            // otherwise small steps would never accumulate into a resize.
+            self.force_rebuild_with_limit(resolved);
         }
-        // Reuse the salvage path: a budget change should shrink the cache to
-        // what fits, not wipe it.
-        self.force_rebuild_with_limit(resolved);
+    }
+
+    pub(crate) fn use_governor_budget(&self, cap: u64) {
+        self.auto_budget_cap.store(cap, Ordering::Relaxed);
+        self.auto_budget.store(true, Ordering::Relaxed);
+        self.refresh_auto_budget();
     }
 
     fn refresh_auto_budget(&self) {
-        if !self.auto_budget.load(Ordering::Relaxed) {
-            return;
+        self.refresh_auto_budget_from(HybridStorage::compute_memory_budget());
+    }
+
+    fn refresh_auto_budget_from(&self, budget: u64) {
+        if self.auto_budget.load(Ordering::Relaxed) {
+            self.apply_budget(budget.min(self.auto_budget_cap.load(Ordering::Relaxed)));
         }
-        self.set_max_bytes(0);
     }
 
     fn force_rebuild_with_limit(&self, bytes: u64) {
@@ -3458,8 +3638,7 @@ impl DualGenerationBloom {
     }
 
     fn rotate_from_cache_meta(&self) {
-        let Some(_permit) = crate::memory_governor::MEMORY_GOVERNOR
-            .try_admit(crate::memory_governor::AdmissionClass::BackgroundWork)
+        let Some(_permit) = crate::memory_governor::MEMORY_GOVERNOR.try_admit_cache_background()
         else {
             return;
         };
@@ -3528,9 +3707,7 @@ fn bloom_generation() -> u64 {
 }
 
 fn warm_bloom_from_cache_meta() {
-    let Some(_permit) = crate::memory_governor::MEMORY_GOVERNOR
-        .try_admit(crate::memory_governor::AdmissionClass::BackgroundWork)
-    else {
+    let Some(_permit) = crate::memory_governor::MEMORY_GOVERNOR.try_admit_cache_background() else {
         tracing::warn!("CACHE_BLOOM: skipping warmup because background memory admission is full");
         return;
     };
@@ -3850,6 +4027,10 @@ impl HybridStorage {
         }
     }
 
+    fn admission_governor(&self) -> &'static crate::memory_governor::MemoryGovernor {
+        self.l2.admission_governor()
+    }
+
     pub fn partial_location_for_key_str(&self, key: &str) -> PartialStorageLocation {
         self.l2.partial_location_for_key_str(key)
     }
@@ -3897,7 +4078,10 @@ impl HybridStorage {
             return Ok(Box::new(NoopMissHandler));
         }
 
-        let Some(cache_write_permit) = MEMORY_GOVERNOR.try_admit(AdmissionClass::CacheWrite) else {
+        let Some(cache_write_permit) = self
+            .admission_governor()
+            .try_admit(AdmissionClass::CacheWrite)
+        else {
             return Ok(Box::new(NoopMissHandler));
         };
         let hash = format!("{:x}", md5_legacy::compute(key_str.as_bytes()));
@@ -3955,9 +4139,14 @@ impl HybridStorage {
             .unwrap_or(0)
             .min(MEMORY_SERVE_MAX as usize);
         let head_request = cache_key_is_head_variant(&key_str);
+        let mut data = Vec::new();
+        let mut cache_write_permit = cache_write_permit;
+        if !reserve_cache_buffer(&mut data, &mut cache_write_permit, capacity) {
+            return Ok(Box::new(NoopMissHandler));
+        }
         Ok(Box::new(MemoryMissHandler {
             key: key_str,
-            data: Vec::with_capacity(capacity),
+            data,
             response_header: response_header.clone(),
             fresh_until: timestamp_from_system_time(meta.fresh_until()),
             created_at: timestamp_from_system_time(meta.created()),
@@ -4818,11 +5007,12 @@ impl Storage for HybridStorage {
                                 && current.expires > now
                         })
                 });
-                let background_permit = crate::memory_governor::MEMORY_GOVERNOR
-                    .try_admit(crate::memory_governor::AdmissionClass::BackgroundWork);
+                let background_permit =
+                    crate::memory_governor::MEMORY_GOVERNOR.try_admit_cache_background();
                 if promotion_data.len() <= MEMORY_SERVE_MAX as usize
                     && background_permit.is_some()
-                    && !crate::memory_governor::MEMORY_GOVERNOR.is_memory_pressure_high()
+                    && self.admission_governor().current_memory_pressure_level()
+                        == crate::memory_governor::MemoryPressureLevel::Normal
                     && stamp_is_current
                 {
                     let current_meta = current_meta.expect("stamp validation checked metadata");
@@ -5396,6 +5586,47 @@ mod tests {
         format!("{prefix}-{}-{seq}", std::process::id())
     }
 
+    fn cache_test_governor() -> &'static crate::memory_governor::MemoryGovernor {
+        let governor = Box::leak(Box::new(crate::memory_governor::MemoryGovernor::new()));
+        // Freeze this private fixture's observation clock. Tests exercise cache
+        // lifecycle, independent of host load and the global refresher thread.
+        governor.seed_cached_for_test(64 << 30, 60 << 30, 1 << 20, 0, i64::MAX as u64);
+        governor
+    }
+
+    fn file_storage_for_test(root: impl Into<PathBuf>) -> FileStorage {
+        let mut storage = FileStorage::new(root);
+        storage.test_governor = Some(cache_test_governor());
+        storage
+    }
+
+    /// Write a cache fixture with the same streaming encoder the miss path
+    /// uses (`FileMissHandler`), so the frame shape (including the window its
+    /// header advertises) matches production instead of a one-shot
+    /// `encode_all` frame.
+    async fn write_streaming_compressed_fixture(path: &Path, body: &[u8]) {
+        let file = tokio::fs::File::create(path)
+            .await
+            .expect("create compressed cache file");
+        let mut encoder = async_compression::tokio::write::ZstdEncoder::new(file);
+        tokio::io::AsyncWriteExt::write_all(&mut encoder, body)
+            .await
+            .expect("compress cache body");
+        tokio::io::AsyncWriteExt::shutdown(&mut encoder)
+            .await
+            .expect("finish compressed cache frame");
+    }
+
+    fn hybrid_storage_for_test(max_mem_bytes: usize, root: impl Into<PathBuf>) -> HybridStorage {
+        HybridStorage {
+            l1: Arc::new(TinyUfoL1::new(max_mem_bytes as u64)),
+            l2: Box::leak(Box::new(file_storage_for_test(root))),
+            max_disk_bytes: AtomicU64::new(10 * 1024 * 1024 * 1024),
+            min_free_bytes: AtomicU64::new(2 * 1024 * 1024 * 1024),
+            policy_type: AtomicU8::new(POLICY_FILE),
+        }
+    }
+
     async fn memory_miss_handler_for_test(
         storage: &HybridStorage,
         key: String,
@@ -5406,12 +5637,19 @@ mod tests {
             .insert_header("content-length", expected_body_len.to_string())
             .expect("content length");
         let now = crate::utils::time::now_timestamp();
-        let permit = MEMORY_GOVERNOR
+        let mut permit = storage
+            .admission_governor()
             .try_admit(AdmissionClass::CacheWrite)
             .expect("cache write permit should be available");
+        let mut data = Vec::new();
+        assert!(reserve_cache_buffer(
+            &mut data,
+            &mut permit,
+            expected_body_len as usize
+        ));
         Box::new(MemoryMissHandler {
             key: key.clone(),
-            data: Vec::with_capacity(expected_body_len as usize),
+            data,
             response_header,
             fresh_until: now + 60,
             created_at: now,
@@ -5447,7 +5685,7 @@ mod tests {
             .await
             .expect("temp file");
         let now = crate::utils::time::now_timestamp();
-        let permit = MEMORY_GOVERNOR
+        let permit = cache_test_governor()
             .try_admit(AdmissionClass::CacheWrite)
             .expect("cache write permit should be available");
         let handler = Box::new(FileMissHandler {
@@ -5542,7 +5780,7 @@ mod tests {
         let unique = unique_test_suffix("purge-encoding-variants");
         let base = format!("https://cache.example.test/{unique}");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
+        let storage = Box::leak(Box::new(hybrid_storage_for_test(0, &root)));
 
         let mut seeded = Vec::new();
         let mut add = |key: String, encoding: Option<&str>| {
@@ -5618,7 +5856,7 @@ mod tests {
         let unique = unique_test_suffix("local-purge-variants");
         let base = format!("https://cache.example.test/{unique}");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
+        let storage = Box::leak(Box::new(hybrid_storage_for_test(0, &root)));
         let br = current_encoding_variant(&base, "", "br");
         let head_webp_gzip = current_encoding_variant(&base, "@method:HEAD@webp", "gzip");
         let entries = [
@@ -5663,7 +5901,7 @@ mod tests {
         let unique = unique_test_suffix("partial-write-shard-order");
         let root_a = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}-a"));
         let root_b = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}-b"));
-        let storage = FileStorage::new(root_a.clone());
+        let storage = file_storage_for_test(root_a.clone());
         storage.update_shards(
             vec![
                 CacheShard {
@@ -5750,7 +5988,7 @@ mod tests {
         let unique = unique_test_suffix("small-l2-hit");
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
@@ -5776,6 +6014,9 @@ mod tests {
         );
 
         let trace = pingora_cache::trace::Span::inactive().handle();
+        let governor = storage.admission_governor();
+        let committed_before = governor.account_view().committed_live_bytes;
+        let cache_read_before = governor.snapshot(1).cache_read_memory_used_bytes;
         let (meta, handler) = storage
             .lookup(&key, &trace)
             .await
@@ -5789,6 +6030,29 @@ mod tests {
                 .and_then(|value| value.to_str().ok()),
             Some("10")
         );
+        let memory = handler
+            .as_any()
+            .downcast_ref::<MemoryHitHandler>()
+            .expect("memory handler");
+        assert_eq!(memory.data.as_ref(), b"small-body");
+        let body = memory.data.clone();
+        drop(handler);
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            committed_before + body.len() as u64,
+            "the body owner keeps the exact read-capacity charge after the handler drops"
+        );
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            cache_read_before + body.len() as u64,
+            "the cache-read ledger follows the body owner, not the handler"
+        );
+        drop(body);
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            cache_read_before,
+            "the last body release refunds the cache-read ledger"
+        );
 
         crate::metrics::storage::delete_cache_meta_for_test(&hash);
         let _ = tokio::fs::remove_dir_all(&root).await;
@@ -5799,7 +6063,7 @@ mod tests {
         let unique = unique_test_suffix("stream-l2-hit");
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
@@ -5854,7 +6118,7 @@ mod tests {
         let unique = unique_test_suffix("file-cache-off");
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         storage.update_config(root.clone(), Vec::new(), true, false);
         let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
@@ -5904,7 +6168,7 @@ mod tests {
         let unique = unique_test_suffix("small-meta-large-file");
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path_by_hash(&hash);
@@ -5944,7 +6208,7 @@ mod tests {
     async fn file_update_meta_rejects_content_length_mismatch() {
         let unique = unique_test_suffix("update-meta-length-mismatch");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(unique.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
@@ -6031,7 +6295,7 @@ mod tests {
         let unique = unique_test_suffix("invalid-status-l2-hit");
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
@@ -6069,7 +6333,7 @@ mod tests {
     async fn l2_hit_with_legacy_error_status_is_treated_as_miss() {
         let unique = unique_test_suffix("legacy-error-status-l2-hit");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(unique.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
@@ -6110,7 +6374,7 @@ mod tests {
     async fn corrupted_compressed_l2_entry_is_removed_before_origin_retry() {
         let unique = unique_test_suffix("corrupt-compressed-l2");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(unique.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
@@ -6146,6 +6410,85 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn l2_streaming_preserves_body_and_corruption_checks_when_borrowing_is_full() {
+        for compressed in [false, true] {
+            for corrupt in [false, true] {
+                let unique = unique_test_suffix("borrow-full-l2");
+                let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
+                let storage = Box::leak(Box::new(file_storage_for_test(&root)));
+                let governor = storage.admission_governor();
+                let _borrow = governor
+                    .try_grant_shared(
+                        crate::memory_governor::SharedGrantPurpose::CacheReadMemory,
+                        governor.low_priority_borrowable_bytes(),
+                    )
+                    .expect("fill the cache borrowing window");
+                assert!(governor.try_admit(AdmissionClass::CacheWrite).is_none());
+                let _connection = governor
+                    .try_admit(AdmissionClass::HttpConnection)
+                    .expect("connections retain headroom");
+
+                let key = CacheKey::new(unique.as_str(), "");
+                let hash = storage.get_hash(&key);
+                let path = storage.get_path(&key);
+                tokio::fs::create_dir_all(path.parent().expect("cache parent"))
+                    .await
+                    .expect("cache directory");
+                let body = b"cached response body";
+                let on_disk = if corrupt {
+                    b"bad".to_vec()
+                } else if compressed {
+                    zstd::encode_all(body.as_slice(), 0).expect("compress")
+                } else {
+                    body.to_vec()
+                };
+                tokio::fs::write(&path, on_disk).await.expect("cache body");
+                crate::metrics::storage::insert_cache_meta_for_test(
+                    hash.clone(),
+                    crate::metrics::storage::CacheMetaEntry {
+                        cache_key: unique,
+                        size: body.len() as u64,
+                        expires: crate::utils::time::now_timestamp() + 60,
+                        access_time: crate::utils::time::now_timestamp(),
+                        access_count: 1,
+                        status: 200,
+                        compressed,
+                        ..Default::default()
+                    },
+                );
+                let trace = pingora_cache::trace::Span::inactive().handle();
+                let hit = storage.lookup(&key, &trace).await.expect("lookup");
+                if !compressed && corrupt {
+                    // Plain file length is validated before a handler is returned.
+                    assert!(hit.is_none());
+                } else {
+                    let (_, mut handler) = hit.expect("streaming hit");
+                    assert!(handler.as_any().is::<FileHitHandler>());
+                    if corrupt {
+                        assert!(handler.read_body().await.is_err());
+                    } else {
+                        let mut received = Vec::new();
+                        while let Some(chunk) = handler.read_body().await.expect("read body") {
+                            received.extend_from_slice(&chunk);
+                        }
+                        assert_eq!(received, body);
+                    }
+                }
+                if corrupt {
+                    if compressed {
+                        assert!(!path.exists());
+                    }
+                    assert!(crate::metrics::storage::get_cache_meta_memory(&hash).is_none());
+                }
+                crate::metrics::storage::delete_cache_meta_for_test(&hash);
+                tokio::fs::remove_dir_all(root)
+                    .await
+                    .expect("remove cache directory");
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn partial_miss_handler_holds_purge_fences_before_first_body_chunk() {
         let unique = unique_test_suffix("partial-miss-purge-race");
         let base = format!("https://cache.example.test/{unique}");
@@ -6155,7 +6498,7 @@ mod tests {
         tokio::fs::create_dir_all(&root)
             .await
             .expect("create cache root");
-        let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
+        let storage = Box::leak(Box::new(hybrid_storage_for_test(0, &root)));
         let location = storage.partial_location_for_key_str(&key);
         let capture = crate::cache::partial::PartialCapture {
             start: 0,
@@ -6172,7 +6515,7 @@ mod tests {
             min_size: None,
             max_size: None,
         };
-        let permit = MEMORY_GOVERNOR
+        let permit = cache_test_governor()
             .try_admit(AdmissionClass::CacheWrite)
             .expect("cache write permit should be available");
         let mut handler = Box::new(PartialMissHandler {
@@ -6300,7 +6643,7 @@ mod tests {
         let unique = unique_test_suffix("small-compressed-l2-hit");
         let key_str = unique.clone();
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(FileStorage::new(&root)));
+        let storage = Box::leak(Box::new(file_storage_for_test(&root)));
         let key = CacheKey::new(key_str.as_str(), "");
         let hash = storage.get_hash(&key);
         let path = storage.get_path(&key);
@@ -6308,10 +6651,7 @@ mod tests {
             .await
             .expect("create cache dir");
         let body = b"small compressed text body";
-        let compressed = zstd::encode_all(body.as_slice(), 0).expect("compress body");
-        tokio::fs::write(&path, compressed)
-            .await
-            .expect("write cache file");
+        write_streaming_compressed_fixture(&path, body.as_slice()).await;
         crate::metrics::storage::insert_cache_meta_for_test(
             hash.clone(),
             crate::metrics::storage::CacheMetaEntry {
@@ -6328,6 +6668,9 @@ mod tests {
         );
 
         let trace = pingora_cache::trace::Span::inactive().handle();
+        let governor = storage.admission_governor();
+        let committed_before = governor.account_view().committed_live_bytes;
+        let cache_read_before = governor.snapshot(1).cache_read_memory_used_bytes;
         let (meta, mut handler) = storage
             .lookup(&key, &trace)
             .await
@@ -6348,16 +6691,261 @@ mod tests {
             .expect("read body")
             .expect("body chunk");
         assert_eq!(chunk.as_ref(), body);
+        let tail = chunk.slice(1..);
+        drop(handler);
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            committed_before + body.len() as u64,
+            "the decompressed Bytes owner keeps its capacity charge for downstream slices"
+        );
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            cache_read_before + body.len() as u64,
+            "the cache-read ledger keeps the decompressed body charged after the handler drops"
+        );
+        drop(chunk);
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            cache_read_before + body.len() as u64,
+            "an outstanding decompressed slice keeps the cache-read charge"
+        );
+        assert!(
+            governor.account_view().committed_live_bytes >= committed_before + body.len() as u64,
+            "an outstanding decompressed slice keeps the body's shared charge"
+        );
+        drop(tail);
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            cache_read_before,
+            "the last decompressed slice release refunds the cache-read ledger"
+        );
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            committed_before,
+            "the last decompressed slice release refunds the body's shared charge"
+        );
 
         crate::metrics::storage::delete_cache_meta_for_test(&hash);
         let _ = tokio::fs::remove_dir_all(&root).await;
+    }
+
+    #[test]
+    fn decode_charged_cache_body_refunds_permit_on_decode_failure() {
+        let governor = cache_test_governor();
+        let baseline_read = governor.snapshot(1).cache_read_memory_used_bytes;
+        let baseline_committed = governor.account_view().committed_live_bytes;
+
+        let permit = governor
+            .try_admit_cache_read(64)
+            .expect("cache read permit");
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            baseline_read + 64
+        );
+        let out = decode_charged_cache_body(vec![1, 2, 3], 64, 32, permit, |_, _| None);
+        assert!(out.is_none(), "a decode failure must not produce a body");
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            baseline_read,
+            "a failed decode must refund the cache-read charge"
+        );
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            baseline_committed,
+            "a failed decode must refund the shared account"
+        );
+
+        let permit = governor
+            .try_admit_cache_read(64)
+            .expect("cache read permit");
+        let out =
+            decode_charged_cache_body(vec![1, 2, 3], 64, 32, permit, |_, _| Some(vec![0u8; 16]));
+        assert!(
+            out.is_none(),
+            "a decompressed length mismatch must not produce a body"
+        );
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            baseline_read,
+            "a length mismatch must refund the cache-read charge"
+        );
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            baseline_committed
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelled_compressed_decode_keeps_read_charge_until_blocking_work_finishes() {
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
+
+        // The blocking task waits for this release. Releasing on drop keeps a
+        // failed assertion from leaving the test runtime waiting forever for
+        // the detached decode to finish.
+        struct SendOnDrop(mpsc::Sender<()>);
+        impl Drop for SendOnDrop {
+            fn drop(&mut self) {
+                let _ = self.0.send(());
+            }
+        }
+
+        let governor = cache_test_governor();
+        let baseline_read = governor.snapshot(1).cache_read_memory_used_bytes;
+        let baseline_committed = governor.account_view().committed_live_bytes;
+        let permit = governor
+            .try_admit_cache_read(64)
+            .expect("cache read permit");
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            baseline_read + 64
+        );
+
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (done_tx, done_rx) = mpsc::channel();
+        let release = SendOnDrop(release_tx);
+        let handle = tokio::task::spawn_blocking(move || {
+            let out = decode_charged_cache_body(
+                vec![7u8; 8],
+                64,
+                32,
+                permit,
+                move |_data: &[u8], _capacity: usize| {
+                    started_tx.send(()).expect("signal decode start");
+                    release_rx.recv().expect("wait for test release");
+                    Some(vec![b'a'; 32])
+                },
+            );
+            let _ = done_tx.send(());
+            out
+        });
+
+        started_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("decode should start");
+        // Dropping the JoinHandle detaches the blocking task; it still owns the
+        // permit and the allocation that permit covers.
+        drop(handle);
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            baseline_read + 64,
+            "cancellation must not refund a charge owned by an in-flight decode"
+        );
+
+        drop(release);
+        done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("decode should finish");
+
+        // The detached task's output owns the body charges until the runtime
+        // drops it; wait briefly for that release.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while governor.snapshot(1).cache_read_memory_used_bytes != baseline_read {
+            assert!(
+                Instant::now() < deadline,
+                "detached decode output was not released"
+            );
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            baseline_committed,
+            "the detached decode output must refund the shared account when released"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelled_l2_lookup_keeps_decode_charge_until_blocking_work_finishes() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        struct ReleaseOnDrop(Option<mpsc::Sender<()>>);
+        impl Drop for ReleaseOnDrop {
+            fn drop(&mut self) {
+                if let Some(sender) = self.0.take() {
+                    let _ = sender.send(());
+                }
+            }
+        }
+
+        let unique = unique_test_suffix("cancelled-l2-lookup");
+        let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
+        let mut storage = file_storage_for_test(&root);
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let started = std::sync::Mutex::new(Some(started_tx));
+        let (release_tx, release_rx) = mpsc::channel();
+        let release_rx = std::sync::Mutex::new(release_rx);
+        let release = ReleaseOnDrop(Some(release_tx));
+        let (finished_tx, mut finished_rx) = tokio::sync::oneshot::channel();
+        let finished = std::sync::Mutex::new(Some(finished_tx));
+        storage.decode_hook = Some(Arc::new(move || {
+            let _ = started.lock().unwrap().take().unwrap().send(());
+            release_rx.lock().unwrap().recv().expect("release decode");
+            let _ = finished.lock().unwrap().take().unwrap().send(());
+        }));
+        let storage = Box::leak(Box::new(storage));
+        let key = CacheKey::new(unique.as_str(), "");
+        let hash = storage.get_hash(&key);
+        let path = storage.get_path(&key);
+        tokio::fs::create_dir_all(path.parent().unwrap())
+            .await
+            .unwrap();
+        let body = b"compressed body in a cancelled production lookup";
+        write_streaming_compressed_fixture(&path, body).await;
+        let file_size = tokio::fs::metadata(&path).await.unwrap().len();
+        crate::metrics::storage::insert_cache_meta_for_test(
+            hash.clone(),
+            crate::metrics::storage::CacheMetaEntry {
+                cache_key: unique,
+                size: body.len() as u64,
+                expires: crate::utils::time::now_timestamp() + 60,
+                status: 200,
+                compressed: true,
+                ..Default::default()
+            },
+        );
+        let governor = storage.admission_governor();
+        let baseline_read = governor.snapshot(1).cache_read_memory_used_bytes;
+        let baseline_live = governor.account_view().committed_live_bytes;
+        let trace = pingora_cache::trace::Span::inactive().handle();
+        let mut lookup = Box::pin(storage.lookup(&key, &trace));
+        tokio::select! {
+            result = &mut lookup => panic!("lookup completed before decode release: {}", result.is_ok()),
+            result = started_rx => result.expect("decode started"),
+            _ = tokio::time::sleep(Duration::from_secs(30)) => panic!("decode did not start"),
+        }
+        let charged_read = governor.snapshot(1).cache_read_memory_used_bytes;
+        let charged_live = governor.account_view().committed_live_bytes;
+        assert_eq!(charged_read, baseline_read + body.len() as u64 + file_size);
+        drop(lookup);
+        assert_eq!(
+            governor.snapshot(1).cache_read_memory_used_bytes,
+            charged_read
+        );
+        assert_eq!(governor.account_view().committed_live_bytes, charged_live);
+        drop(release);
+        tokio::time::timeout(Duration::from_secs(5), &mut finished_rx)
+            .await
+            .unwrap()
+            .expect("blocking decode released");
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while governor.snapshot(1).cache_read_memory_used_bytes != baseline_read {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("detached output refunded");
+        assert_eq!(governor.account_view().committed_live_bytes, baseline_live);
+        crate::metrics::storage::delete_cache_meta_for_test(&hash);
+        tokio::fs::remove_dir_all(root).await.unwrap();
     }
 
     #[tokio::test]
     async fn metadata_less_l1_is_rejected_by_a_shared_exact_purge_fence() {
         let unique = unique_test_suffix("metadata-less-l1-fence");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
+        let storage = Box::leak(Box::new(hybrid_storage_for_test(0, &root)));
         let key = CacheKey::new(unique.as_str(), "");
         let hash = format!("{:x}", md5_legacy::compute(unique.as_bytes()));
         let state_version = crate::metrics::storage::next_cache_meta_event_version();
@@ -6414,7 +7002,7 @@ mod tests {
             .find(|key| !bloom_may_exist(key))
             .expect("find a Bloom false-negative candidate");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = Box::leak(Box::new(HybridStorage::new(0, &root)));
+        let storage = Box::leak(Box::new(hybrid_storage_for_test(0, &root)));
         let key = CacheKey::new(unique.as_str(), "");
         let hash = storage.l2.get_hash(&key);
         let path = storage.l2.get_path_by_hash(&hash);
@@ -6470,7 +7058,7 @@ mod tests {
         let unique = unique_test_suffix("runtime-stats-l1");
         let key = format!("https://cache.example.com/{unique}");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-stats-test-{unique}"));
-        let storage = HybridStorage::new(0, &root);
+        let storage = hybrid_storage_for_test(0, &root);
         let before = storage.runtime_stats().await;
         assert!(before.file_cache_enabled);
         assert!(before.sendfile_enabled);
@@ -6592,6 +7180,32 @@ mod tests {
     }
 
     #[test]
+    fn default_l1_tracks_governor_budget_and_preserves_explicit_capacity() {
+        let l1 = TinyUfoL1::new(512 << 20);
+        l1.auto_budget_cap.store(512 << 20, Ordering::Relaxed);
+        l1.auto_budget.store(true, Ordering::Relaxed);
+        l1.refresh_auto_budget_from(128 << 20);
+        assert_eq!(l1.max_bytes(), 128 << 20);
+        l1.refresh_auto_budget_from(4 << 30);
+        assert_eq!(l1.max_bytes(), 512 << 20);
+        l1.set_max_bytes(64 << 20);
+        l1.refresh_auto_budget_from(16 << 20);
+        assert_eq!(l1.max_bytes(), 64 << 20, "explicit policy remains explicit");
+    }
+
+    #[test]
+    fn l1_small_budget_steps_accumulate_against_applied_capacity() {
+        let l1 = TinyUfoL1::new(512 << 20);
+        for budget in [500, 490, 480, 470, 460, 450] {
+            l1.set_max_bytes(budget << 20);
+        }
+        assert!(
+            l1.max_bytes() <= 460 << 20,
+            "hysteresis must eventually resize"
+        );
+    }
+
+    #[test]
     fn tiny_ufo_l1_resize_hysteresis_ignores_small_budget_changes() {
         let old = 512 * 1024 * 1024;
         assert!(!TinyUfoL1::should_rebuild_for_budget_change(
@@ -6627,7 +7241,7 @@ mod tests {
             .open(&temp_path)
             .await
             .unwrap();
-        let permit = MEMORY_GOVERNOR
+        let permit = cache_test_governor()
             .try_admit(AdmissionClass::CacheWrite)
             .expect("cache write permit should be available");
         let write_guard = cache_write_lock_for_key(&unique).lock_owned().await;
@@ -6679,7 +7293,7 @@ mod tests {
         let final_path = root.join("object");
         tokio::fs::create_dir_all(&final_path).await.unwrap();
         let file = tokio::fs::File::create(&temp_path).await.unwrap();
-        let permit = MEMORY_GOVERNOR
+        let permit = cache_test_governor()
             .try_admit(AdmissionClass::CacheWrite)
             .expect("cache write permit should be available");
         let write_guard = cache_write_lock_for_key(&unique).lock_owned().await;
@@ -6749,11 +7363,70 @@ mod tests {
         let _ = tokio::fs::remove_dir_all(root).await;
     }
 
+    #[test]
+    fn cache_body_charge_follows_last_bytes_slice_after_handler_release() {
+        let governor = cache_test_governor();
+        let mut permit = governor
+            .try_admit(AdmissionClass::CacheWrite)
+            .expect("cache permit");
+        let mut data = Vec::new();
+        assert!(reserve_cache_buffer(&mut data, &mut permit, 2 << 20));
+        data.extend_from_slice(b"body");
+        let capacity = data.capacity() as u64;
+        let body = charged_cache_bytes(data, &mut permit);
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            permit.account_bytes() + capacity
+        );
+        let slice = body.slice(1..);
+        drop(body);
+        drop(permit);
+        assert_eq!(
+            governor.account_view().committed_live_bytes,
+            capacity,
+            "handler release must not refund an Arc-held body"
+        );
+        assert_eq!(&slice[..], b"ody");
+        drop(slice);
+        assert_eq!(governor.account_view().committed_live_bytes, 0);
+        assert!(
+            governor.account_view().committed_unconfirmed_bytes >= capacity,
+            "physical headroom still waits for observation"
+        );
+    }
+
+    #[test]
+    fn cache_buffer_capacity_is_charged_before_allocation_and_growth() {
+        let governor = cache_test_governor();
+        let mut permit = governor
+            .try_admit(AdmissionClass::CacheWrite)
+            .expect("cache permit");
+        let base = permit.account_bytes();
+        let mut data = Vec::new();
+        assert!(reserve_cache_buffer(&mut data, &mut permit, 2 << 20));
+        assert_eq!(permit.account_bytes(), base + data.capacity() as u64);
+        data.extend_from_slice(&[1, 2, 3]);
+        assert!(reserve_cache_buffer(&mut data, &mut permit, 4 << 20));
+        assert_eq!(permit.account_bytes(), base + data.capacity() as u64);
+        assert_eq!(data, [1, 2, 3]);
+
+        let _fill = governor
+            .try_grant_shared(
+                crate::memory_governor::SharedGrantPurpose::CacheReadMemory,
+                governor.low_priority_borrowable_bytes(),
+            )
+            .expect("fill borrowing window");
+        let before = permit.account_bytes();
+        assert!(!reserve_cache_buffer(&mut data, &mut permit, 8 << 20));
+        assert_eq!(permit.account_bytes(), before);
+        assert_eq!(data, [1, 2, 3], "failed growth preserves the buffer");
+    }
+
     #[tokio::test]
     async fn memory_miss_handler_rejects_body_shorter_than_content_length() {
         let unique = unique_test_suffix("memory-short-body");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = HybridStorage::new(1024 * 1024, &root);
+        let storage = hybrid_storage_for_test(1024 * 1024, &root);
         let mut handler = memory_miss_handler_for_test(&storage, unique.clone(), 4).await;
 
         handler
@@ -6772,7 +7445,7 @@ mod tests {
     async fn memory_miss_handler_rejects_body_longer_than_content_length() {
         let unique = unique_test_suffix("memory-long-body");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
-        let storage = HybridStorage::new(1024 * 1024, &root);
+        let storage = hybrid_storage_for_test(1024 * 1024, &root);
         let mut handler = memory_miss_handler_for_test(&storage, unique.clone(), 4).await;
 
         handler
@@ -6792,7 +7465,7 @@ mod tests {
         let unique = unique_test_suffix("memory-double-check");
         let root = std::env::temp_dir().join(format!("zelvik-edge-cache-test-{unique}"));
         let storage: &'static HybridStorage =
-            Box::leak(Box::new(HybridStorage::new(1024 * 1024, &root)));
+            Box::leak(Box::new(hybrid_storage_for_test(1024 * 1024, &root)));
         storage.policy_type.store(POLICY_MEMORY, Ordering::Release);
 
         let make_meta = || {

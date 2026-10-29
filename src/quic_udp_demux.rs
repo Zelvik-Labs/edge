@@ -2977,7 +2977,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
 
         let client_hello = crate::quic_probe::QuicClientHello {
             server_name: Some("other.example.com".to_string()),

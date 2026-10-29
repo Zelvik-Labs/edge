@@ -295,7 +295,8 @@ fn main() -> anyhow::Result<()> {
         HashMap::new(),
         None,
         None,
-    ));
+    ))
+    .expect("benchmark fixture configuration installs");
 
     let challenge_key = api_config
         .challenge_key()
@@ -407,7 +408,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "benchmark fixture constructor takes explicit CLI knobs")]
 fn build_servers(
     http_port: u16,
     tls_port: u16,

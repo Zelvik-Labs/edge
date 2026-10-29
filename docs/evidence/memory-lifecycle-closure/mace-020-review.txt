@@ -1,0 +1,3 @@
+The completed dependency check does not change the review outcome: **no verified correctness findings within the requested upgrade slice**.
+
+Its additional candidates concern excluded workflow changes, documented fail-fast behavior, diagnostic wording, or dependency cleanup. None meets this review’s scope and acceptance criteria.

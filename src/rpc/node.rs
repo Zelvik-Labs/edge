@@ -2,8 +2,8 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use std::sync::LazyLock as Lazy;
 use std::time::Duration;
-use tonic::transport::Channel;
 use tonic::Request;
+use tonic::transport::Channel;
 use tracing::{debug, info, warn};
 
 use crate::api_config::ApiConfig;
@@ -567,13 +567,24 @@ where
                     };
                     let numeric_id = payload.id.unwrap_or(0);
                     let payload_servers = std::mem::take(&mut payload.servers);
+                    // Reserve metric instances before building filters, runtime
+                    // maps, health registrations, XDP or runtime API effects.
+                    // The binding persists on each config through the
+                    // materialization await, so the install below reuses it.
+                    if let Err(err) =
+                        crate::metrics::METRICS.admit_configs(payload_servers.iter())
+                    {
+                        warn!(
+                            "RPC_NODE: server metric family capacity exhausted ({}/{}); keeping current configuration",
+                            err.used, err.limit
+                        );
+                        return false;
+                    }
                     // Auto-derived business listen ports from this snapshot's
                     // typed server list — a later runtime.xdp section without
                     // explicit proxy.ports must not strip the active set.
                     let derived_xdp_proxy_ports =
-                        crate::xdp_auto_config::xdp_proxy_ports_from_server_refs(
-                            &payload_servers,
-                        );
+                        crate::xdp_auto_config::xdp_proxy_ports_from_server_refs(&payload_servers);
 
                     debug!(
                         "Successfully parsed NodeConfigPayload. Numeric ID: {}, Server count: {}",
@@ -891,6 +902,7 @@ where
                             tiered_origin_bypass,
                             allow_lan: allow_lan_ip,
                             global_http: global_http_arc,
+                            payload_bytes: decoded_bytes,
                             limits: apply_limits,
                         },
                     )
@@ -1086,7 +1098,7 @@ where
                         crate::probe::apply_plan(runtime_push.probe);
                     }
                     let deleted_contents = config_store.get_deleted_contents().await;
-                    config_store
+                    if let Err(err) = config_store
                         .update_config(
                             numeric_id,
                             payload_config_version,
@@ -1137,7 +1149,14 @@ where
                                 .as_ref()
                                 .and_then(|g| g.http_access_log.clone()),
                         )
-                        .await;
+                        .await
+                    {
+                        warn!(
+                            "RPC_NODE: config install rejected by server metric capacity ({}/{}); keeping previous configuration",
+                            err.used, err.limit
+                        );
+                        return false;
+                    }
                     crate::config_apply::record_installed_config_bytes(
                         runtime_maps.stats.json_bytes,
                     );
@@ -1306,6 +1325,93 @@ where
     true
 }
 
+fn shared_account_status(snapshot: &crate::memory_governor::GovernorSnapshot) -> serde_json::Value {
+    serde_json::json!({
+        "headroomBytes": snapshot.account_headroom_bytes,
+        "safetyMarginBytes": snapshot.account_safety_margin_bytes,
+        "grantableBytes": snapshot.account_grantable_bytes,
+        "pendingBytes": snapshot.account_pending_bytes,
+        "committedUnconfirmedBytes": snapshot.account_committed_unconfirmed_bytes,
+        "committedLiveBytes": snapshot.account_committed_live_bytes,
+        "observationAgeMs": snapshot.observation_age_ms,
+        "priorityReserveEnforced": true,
+        "controlPlaneAccountReserveEnforced": true,
+        "controlPlaneReserveBytes": snapshot.control_plane_reserve_bytes,
+        "establishedTrafficAccountReserveEnforced": true,
+        "establishedTrafficReserveBytes": snapshot.established_traffic_reserve_bytes,
+        "configApplyActive": snapshot.config_apply_active,
+        "lowPriorityBorrowingEnforced": true,
+        "lowPriorityBorrowableBytes": snapshot.low_priority_borrowable_bytes
+    })
+}
+
+#[cfg(test)]
+mod shared_account_status_tests {
+    use super::shared_account_status;
+    use crate::memory_governor::MemoryGovernor;
+
+    #[test]
+    fn status_matches_snapshot_and_reports_scoped_reserves() {
+        let governor = MemoryGovernor::new();
+        let snapshot = governor.snapshot(1);
+        let status = shared_account_status(&snapshot);
+        assert_eq!(
+            status["headroomBytes"].as_u64(),
+            snapshot.account_headroom_bytes
+        );
+        assert_eq!(
+            status["safetyMarginBytes"].as_u64(),
+            Some(snapshot.account_safety_margin_bytes)
+        );
+        assert_eq!(
+            status["grantableBytes"].as_u64(),
+            Some(snapshot.account_grantable_bytes)
+        );
+        assert_eq!(
+            status["pendingBytes"].as_u64(),
+            Some(snapshot.account_pending_bytes)
+        );
+        assert_eq!(
+            status["committedUnconfirmedBytes"].as_u64(),
+            Some(snapshot.account_committed_unconfirmed_bytes)
+        );
+        assert_eq!(
+            status["committedLiveBytes"].as_u64(),
+            Some(snapshot.account_committed_live_bytes)
+        );
+        assert_eq!(
+            status["observationAgeMs"].as_u64(),
+            Some(snapshot.observation_age_ms)
+        );
+        assert_eq!(status["priorityReserveEnforced"].as_bool(), Some(true));
+        assert_eq!(
+            status["controlPlaneAccountReserveEnforced"].as_bool(),
+            Some(true)
+        );
+        assert_eq!(
+            status["controlPlaneReserveBytes"].as_u64(),
+            Some(snapshot.control_plane_reserve_bytes)
+        );
+        assert_eq!(
+            status["establishedTrafficAccountReserveEnforced"].as_bool(),
+            Some(true)
+        );
+        assert_eq!(
+            status["establishedTrafficReserveBytes"].as_u64(),
+            Some(snapshot.established_traffic_reserve_bytes)
+        );
+        assert_eq!(
+            status["configApplyActive"].as_u64(),
+            Some(snapshot.config_apply_active)
+        );
+        assert_eq!(status["lowPriorityBorrowingEnforced"].as_bool(), Some(true));
+        assert_eq!(
+            status["lowPriorityBorrowableBytes"].as_u64(),
+            Some(snapshot.low_priority_borrowable_bytes)
+        );
+    }
+}
+
 pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: ApiConfig) {
     let mut sys = sysinfo::System::new_all();
     // Initial refresh to populate CPU baseline
@@ -1388,6 +1494,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             0.0
         };
         let cache_stats = crate::cache_manager::CACHE.storage.runtime_stats().await;
+        crate::memory_governor::MEMORY_GOVERNOR.set_cache_l1_bytes(cache_stats.memory_bytes);
         let governor_snapshot = crate::memory_governor::MEMORY_GOVERNOR
             .snapshot(crate::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads());
         let mace_memory = crate::metrics::storage::mace_memory_observation();
@@ -1438,8 +1545,28 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
         // The json! macro hits the recursion limit past ~50 fields; merge a
         // second object for the slower-changing observability fields.
         let shed = crate::memory_shed::shed_stats();
+        let (distinct_ip_entries, distinct_ip_budget_entries) =
+            crate::metrics::distinct_ip_budget_status();
+        let (
+            unattributed_requests,
+            unattributed_bytes_sent,
+            unattributed_bytes_received,
+            unattributed_origin_bytes,
+        ) = crate::metrics::METRICS.unattributed_totals();
         let resource_governor_extra = serde_json::json!({
             "metricsAggregatorBytes": governor_snapshot.metrics_aggregator_bytes,
+            "cacheL1EstimatedBytes": governor_snapshot.cache_l1_bytes,
+            "cacheL1BudgetBytes": cache_stats.memory_budget_bytes,
+            "distinctIpTrackerEntries": distinct_ip_entries,
+            "distinctIpBudgetEntries": distinct_ip_budget_entries,
+            "retiredServerMetricInstances": crate::metrics::METRICS.retired_server_metrics_count(),
+            "metricFamilyInstances": crate::metrics::METRICS.family_instance_count(),
+            "metricUnattributedRequests": unattributed_requests,
+            "metricUnattributedBytesSent": unattributed_bytes_sent,
+            "metricUnattributedBytesReceived": unattributed_bytes_received,
+            "metricUnattributedOriginBytes": unattributed_origin_bytes,
+            "metricRetirementDeferredTotal": crate::metrics::METRICS.retirement_deferred_total(),
+            "sharedAccount": shared_account_status(&governor_snapshot),
             "unaccountedRssBytes": governor_snapshot.unaccounted_rss_bytes,
             "unaccountedAnonRssBytes": governor_snapshot.unaccounted_anon_rss_bytes,
             "requestWorkspaceUsedBytes": governor_snapshot.request_workspace_used_bytes,
@@ -1448,10 +1575,13 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             "ledgerReconcileBytesRefunded": crate::memory_reclaim::ledger_reconcile_bytes_refunded(),
             "shed": serde_json::json!({
                 "keepaliveShedActive": shed.keepalive_shed_active,
-                "criticalStreak": shed.critical_streak,
+                "criticalSamples": shed.critical_samples,
                 "drainedConnectionsTotal": shed.drained_connections_total,
+                "h3DrainedConnectionsTotal": crate::http3_proxy_manager::h3_shed_drained_total(),
                 "keepaliveMarkedTotal": shed.keepalive_marked_total,
-                "lastDrainAgeMs": shed.last_drain_age_ms
+                "reclaimExhausted": shed.reclaim_exhausted,
+                "finalResortPassesTotal": shed.final_resort_passes_total,
+                "lastFinalResortAtMs": shed.last_final_resort_at_ms
             }),
             "ledgerOwnerCapRejections": governor_snapshot.resident_memory.owner_cap_rejections,
             "ledgerTrackedOwners": governor_snapshot.resident_memory.tracked_owners,
@@ -1574,6 +1704,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
                    "resourceGovernor": resource_governor,
                    "pipelines": pipelines,
         "telemetry":crate::telemetry::snapshot(),
+        "probeOutbox": crate::probe::outbox_status(),
         "trafficQuota": crate::traffic_quota::status_snapshot_json(),
                    "l4Defense": l4_defense,
                    "xdp": xdp_status,
@@ -1646,6 +1777,7 @@ pub async fn report_node_online_once(
         0.0
     };
     let cache_stats = crate::cache_manager::CACHE.storage.runtime_stats().await;
+    crate::memory_governor::MEMORY_GOVERNOR.set_cache_l1_bytes(cache_stats.memory_bytes);
     let hostname = hostname::get()
         .ok()
         .and_then(|h| h.into_string().ok())
@@ -1765,6 +1897,7 @@ pub async fn start_node_value_reporter(config_store: Arc<ConfigStore>) {
             0.0
         };
         let cache_stats = crate::cache_manager::CACHE.storage.runtime_stats().await;
+        crate::memory_governor::MEMORY_GOVERNOR.set_cache_l1_bytes(cache_stats.memory_bytes);
 
         let cpu_usage = sys.global_cpu_usage() as f64 / 100.0;
         let snapshots = crate::metrics::METRICS.take_snapshots();

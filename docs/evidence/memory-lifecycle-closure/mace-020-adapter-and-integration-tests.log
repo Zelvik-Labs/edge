@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "byte_accounting": "logical",
+  "max_bytes": 536870912,
+  "max_total_bytes": 12884901888,
+  "target_max_bytes": null,
+  "incremental_max_bytes": 10737418240,
+  "dry_run": false,
+  "action_store": {
+    "removed_objects": 1819,
+    "removed_action_results": 485,
+    "removed_checkout_records": 0,
+    "removed_session_streams": 4,
+    "removed_bytes": 1575732061,
+    "remaining_bytes": 518920184
+  },
+  "targets": {
+    "removed_directories": 0,
+    "removed_bytes": 0,
+    "removed_units": 0,
+    "removed_unit_bytes": 0,
+    "remaining_directories": 2,
+    "remaining_bytes": 8915924218,
+    "kept_active_directories": 0
+  },
+  "incremental": {
+    "removed_units": 0,
+    "remaining_units": 43,
+    "skipped_active_units": 0,
+    "removed_sessions": 0,
+    "session_units": 0,
+    "kept_hot_units": 0,
+    "removed_directories": 0,
+    "removed_bytes": 0,
+    "remaining_directories": 9,
+    "remaining_bytes": 2418054847,
+    "skipped_active_directories": 0,
+    "untracked_directories": 0
+  },
+  "generated": {
+    "removed_directories": 0,
+    "removed_bytes": 0,
+    "remaining_directories": 15,
+    "remaining_bytes": 39954739
+  }
+}
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+mbx[progress]: 15s elapsed; 0 hits, 0 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 0 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 0 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m elapsed; 0 hits, 0 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m 15s elapsed; 0 hits, 0 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 22s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-a82c0c7016030509)
+
+running 2 tests
+test metrics::mace_backend::tests::preserves_legacy_key_semantics_across_mace_buckets ... ok
+test metrics::mace_backend::tests::serializes_concurrent_reads_without_view_churn ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1104 filtered out; finished in 1.03s
+
+mbx[cache]: 0 hits, 1 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: has quietly disposed of 161.5 GiB logical of build leftovers. nobody saw anything.
+local-storage: waiting for the rust build slot
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.77s
+     Running tests/mace_storage.rs (target/debug/deps/mace_storage-798c9c3635c45898)
+
+running 8 tests
+test fold_counter_deltas_coalesces_and_skips_zero ... ok
+test mace_crash_child ... ok
+test mace_memory_observation_labels_capacity_semantics ... ok
+test mace_tier_uses_stable_capacity_boundaries ... ok
+
+running 1 test
+test metric_storage_increment_and_server_batch_round_trip ... ok
+test old_metadata_format_is_rejected_without_rewriting_the_manifest ... ok
+test packed_period_records_merge_in_memory ... ok
+test committed_wal_survives_exit_without_engine_shutdown ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+
+[exited with code 0]

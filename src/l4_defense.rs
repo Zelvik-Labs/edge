@@ -2257,7 +2257,7 @@ mod tests {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
         store
     }
 

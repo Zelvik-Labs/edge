@@ -1,0 +1,13 @@
+{
+  "path": "/Users/moying/Documents/Zelvik/edge/data/metrics.mace",
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "Error: Failed to open Mace 0.2 storage: Corruption; databases from Mace 0.1.x are incompatible. Stop the instance and explicitly rebuild authorized development data; startup never deletes a database\n",
+  "manifest_sha256_before": "663f5262320844fab523474a83ea2214aab56fe110a9bafaefed37e48c0c62a8",
+  "manifest_sha256_after": "663f5262320844fab523474a83ea2214aab56fe110a9bafaefed37e48c0c62a8",
+  "rebuild": {
+    "returncode": 0,
+    "stdout": "{\n  \"mode\": \"reopen\",\n  \"reopen_ok\": true\n}\n",
+    "manifest_bytes": 102400
+  }
+}

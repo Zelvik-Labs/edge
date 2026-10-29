@@ -1,9 +1,9 @@
 use chrono::Timelike;
 use dashmap::DashMap;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::OnceLock as OnceCell;
-use std::sync::atomic::{AtomicI64, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, LazyLock};
+use std::sync::atomic::{AtomicI64, AtomicU64, AtomicU8, AtomicUsize, Ordering};
+use std::sync::{Arc, LazyLock, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 
@@ -536,22 +536,74 @@ pub fn init_http_dimension_worker(queue_capacity: usize) {
     });
 }
 
+/// Process-wide entry budget shared by every server's distinct-IP set.
+/// Per-server capacities were derived from the server count at creation, so
+/// each new server added another slice while old slices remained, making the
+/// aggregate capacity grow with the harmonic sum of server generations.
+struct DistinctIpBudget {
+    capacity: usize,
+    used: AtomicUsize,
+}
+
+impl DistinctIpBudget {
+    fn new(capacity: usize) -> Self {
+        Self {
+            capacity,
+            used: AtomicUsize::new(0),
+        }
+    }
+
+    fn try_charge(&self) -> bool {
+        self.used
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |used| {
+                (used < self.capacity).then_some(used + 1)
+            })
+            .is_ok()
+    }
+
+    fn refund(&self, count: usize) {
+        let _ = self
+            .used
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |used| {
+                Some(used.saturating_sub(count))
+            });
+    }
+
+    fn used(&self) -> usize {
+        self.used.load(Ordering::Acquire)
+    }
+
+    fn capacity(&self) -> usize {
+        self.capacity
+    }
+}
+
+static DISTINCT_IP_BUDGET: LazyLock<Arc<DistinctIpBudget>> = LazyLock::new(|| {
+    Arc::new(DistinctIpBudget::new(
+        crate::memory_governor::MEMORY_GOVERNOR.metrics_distinct_ip_capacity(),
+    ))
+});
+
+/// Process-wide distinct-IP budget `(used_entries, capacity_entries)` for
+/// node status. The budget is shared by every server.
+pub fn distinct_ip_budget_status() -> (usize, usize) {
+    (DISTINCT_IP_BUDGET.used(), DISTINCT_IP_BUDGET.capacity())
+}
+
 pub struct RuntimeDistinctIpTracker {
     ips: dashmap::DashSet<std::net::IpAddr>,
-    reserved: AtomicUsize,
-    capacity: usize,
+    budget: Arc<DistinctIpBudget>,
 }
 
 impl RuntimeDistinctIpTracker {
-    fn new(max_servers: u64) -> Self {
-        let budget = crate::memory_governor::MEMORY_GOVERNOR
-            .snapshot(crate::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads())
-            .cardinality_state_budget_bytes;
-        let tracker_budget = budget / max_servers.max(1);
+    fn new() -> Self {
+        Self::with_budget(DISTINCT_IP_BUDGET.clone())
+    }
+
+    fn with_budget(budget: Arc<DistinctIpBudget>) -> Self {
         Self {
             ips: dashmap::DashSet::new(),
-            reserved: AtomicUsize::new(0),
-            capacity: (tracker_budget / 64).max(1).min(usize::MAX as u64) as usize,
+            budget,
         }
     }
 
@@ -559,17 +611,16 @@ impl RuntimeDistinctIpTracker {
         if self.ips.contains(&ip) {
             return;
         }
-        if self
-            .reserved
-            .try_update(Ordering::AcqRel, Ordering::Acquire, |reserved| {
-                (reserved < self.capacity).then_some(reserved + 1)
-            })
-            .is_err()
-        {
+        if !self.budget.try_charge() {
+            crate::pipeline_metrics::note_cardinality_drop(
+                "runtime_distinct_ip_tracker",
+                self.budget.used(),
+                self.budget.capacity(),
+            );
             return;
         }
         if !self.ips.insert(ip) {
-            self.reserved.fetch_sub(1, Ordering::AcqRel);
+            self.budget.refund(1);
         }
     }
 
@@ -579,12 +630,93 @@ impl RuntimeDistinctIpTracker {
 
     #[cfg(test)]
     fn capacity(&self) -> usize {
-        self.capacity
+        self.budget.capacity()
+    }
+
+    #[cfg(test)]
+    fn with_capacity(capacity: usize) -> Self {
+        Self::with_budget(Arc::new(DistinctIpBudget::new(capacity)))
     }
 }
 
+impl Drop for RuntimeDistinctIpTracker {
+    fn drop(&mut self) {
+        self.budget.refund(self.ips.len());
+    }
+}
+
+/// Fallback when the governor has not produced a memory-derived capacity
+/// yet. The admission limit covers installed, staged, retired and
+/// reader-held instances together; a failed consumer consumes slots and
+/// blocks new IDs.
+const MIN_SERVER_METRIC_INSTANCES: usize = 4_096;
+
+#[derive(Clone, Default)]
+pub struct ServerMetricBinding(OnceCell<Arc<ServerMetrics>>);
+
+impl std::fmt::Debug for ServerMetricBinding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("ServerMetricBinding")
+            .field(&self.0.get().map(|metrics| metrics.instance_id))
+            .finish()
+    }
+}
+
+impl ServerMetricBinding {
+    pub fn get(&self) -> Arc<ServerMetrics> {
+        Arc::clone(self.0.get().expect("installed config has admitted metrics"))
+    }
+}
+
+#[derive(Debug)]
+pub struct MetricCapacityError {
+    pub used: usize,
+    pub limit: usize,
+}
+
+impl std::fmt::Display for MetricCapacityError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "server metric family capacity exhausted ({}/{}); keep the installed configuration",
+            self.used, self.limit
+        )
+    }
+}
+
+impl std::error::Error for MetricCapacityError {}
+
+struct MetricSlot(Arc<AtomicUsize>);
+
+impl Drop for MetricSlot {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+/// A candidate owns its reserved instances until publication or cancellation.
+/// Creating a reservation never changes the live registry.
+pub struct MetricReservation {
+    metrics: BTreeMap<i64, Arc<ServerMetrics>>,
+}
+
+impl MetricReservation {
+    pub fn bind(&self, server: &crate::config_models::ServerConfig) {
+        if let Some(metrics) = self.metrics.get(&server.numeric_id()) {
+            let _ = server.runtime_metrics.0.set(Arc::clone(metrics));
+        }
+    }
+}
+
+static NEXT_SERVER_METRIC_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
+
 /// Metrics for a specific server (site)
 pub struct ServerMetrics {
+    /// Monotonic process-local identity. A removed site that is re-added gets
+    /// a new instance even though its server id is unchanged, so consumer
+    /// baselines cannot subtract one lifecycle's counters from another's.
+    pub instance_id: u64,
+    slot: Option<MetricSlot>,
     pub count_errors: AtomicU64,
     pub user_id: AtomicI64,
     pub user_plan_id: AtomicI64,
@@ -647,11 +779,13 @@ impl Default for ServerMetrics {
 
 impl ServerMetrics {
     pub fn new() -> Self {
-        Self::with_server_count(1)
+        Self::with_distinct_ip_tracker(RuntimeDistinctIpTracker::new())
     }
 
-    fn with_server_count(max_servers: u64) -> Self {
+    fn with_distinct_ip_tracker(distinct_ips: RuntimeDistinctIpTracker) -> Self {
         Self {
+            instance_id: NEXT_SERVER_METRIC_INSTANCE_ID.fetch_add(1, Ordering::Relaxed),
+            slot: None,
             count_errors: AtomicU64::new(0),
             user_id: AtomicI64::new(0),
             user_plan_id: AtomicI64::new(0),
@@ -667,12 +801,13 @@ impl ServerMetrics {
             origin_bytes_received: AtomicU64::new(0),
             active_connections: AtomicI64::new(0),
             count_websocket_connections: AtomicU64::new(0),
-            distinct_ips: RuntimeDistinctIpTracker::new(max_servers),
+            distinct_ips,
         }
     }
 
     pub fn snapshot(&self) -> ServerStatusSnapshot {
         ServerStatusSnapshot {
+            instance_id: self.instance_id,
             server_id: 0, // set by caller
             count_errors: self.count_errors.load(Ordering::Relaxed),
             user_id: self.user_id.load(Ordering::Relaxed),
@@ -706,8 +841,10 @@ fn decrement_active_connections(counter: &AtomicI64) {
     });
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct ServerStatusSnapshot {
+    /// Process-local metric-instance identity; see `ServerMetrics::instance_id`.
+    pub instance_id: u64,
     pub server_id: i64,
     pub count_errors: u64,
     pub user_id: i64,
@@ -731,12 +868,105 @@ impl ServerStatusSnapshot {
     pub fn total_bytes(&self) -> u64 {
         self.bytes_sent + self.bytes_received
     }
+
+    /// Content identity of one sampled state. Retirement waits until all
+    /// delta consumers have acknowledged the same fingerprinted state and no
+    /// request still holds the metrics Arc, so late in-flight updates cannot
+    /// be discarded after an earlier acknowledgement.
+    pub fn fingerprint(&self) -> u64 {
+        let mut hash = 0xcbf29ce484222325u64;
+        let values = [
+            self.instance_id,
+            self.server_id as u64,
+            self.count_errors,
+            self.user_id as u64,
+            self.user_plan_id as u64,
+            self.plan_id as u64,
+            self.total_requests,
+            self.bytes_sent,
+            self.bytes_received,
+            self.cached_bytes,
+            self.count_cached_requests,
+            self.count_attack_requests,
+            self.attack_bytes,
+            self.origin_bytes_sent,
+            self.origin_bytes_received,
+            self.active_connections as u64,
+            self.count_websocket_connections,
+            self.count_ips,
+        ];
+        for value in values {
+            hash ^= value;
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        hash
+    }
+}
+
+/// The three consumers that report per-server counter deltas. Node and
+/// performance snapshots read live state only and are not retirement barriers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MetricConsumer {
+    Persistence,
+    Bandwidth,
+    Daily,
+}
+
+impl MetricConsumer {
+    fn bit(self) -> u8 {
+        1 << match self {
+            Self::Persistence => 0,
+            Self::Bandwidth => 1,
+            Self::Daily => 2,
+        }
+    }
+}
+
+const METRIC_CONSUMER_COUNT: usize = 3;
+const METRIC_ACK_ALL: u8 = (1 << METRIC_CONSUMER_COUNT) - 1;
+
+/// One sample returned to a delta consumer. `metrics` is the exact Arc the
+/// sample came from; consumers keep its Weak as the baseline identity and
+/// drop the Arc before acknowledging so quiescence is observable.
+pub struct ReportingSnapshot {
+    pub metrics: Arc<ServerMetrics>,
+    pub snapshot: ServerStatusSnapshot,
+    pub retired: bool,
+}
+
+struct RetiredServerMetrics {
+    server_id: i64,
+    metrics: Arc<ServerMetrics>,
+    acknowledged_mask: AtomicU8,
+    acknowledged_fingerprints: [AtomicU64; METRIC_CONSUMER_COUNT],
+}
+
+impl RetiredServerMetrics {
+    fn new(server_id: i64, metrics: Arc<ServerMetrics>) -> Self {
+        Self {
+            server_id,
+            metrics,
+            acknowledged_mask: AtomicU8::new(0),
+            acknowledged_fingerprints: std::array::from_fn(|_| AtomicU64::new(0)),
+        }
+    }
 }
 
 pub struct NodeMetrics {
     pub total_bytes_sent: AtomicU64,
     pub total_bytes_received: AtomicU64,
-    pub servers: DashMap<i64, Arc<ServerMetrics>>,
+    pub(crate) servers: DashMap<i64, Arc<ServerMetrics>>,
+    family_gate: parking_lot::Mutex<()>,
+    family_slots: Arc<AtomicUsize>,
+    family_limit: usize,
+    unattributed_requests: AtomicU64,
+    unattributed_bytes_sent: AtomicU64,
+    unattributed_bytes_received: AtomicU64,
+    unattributed_origin_bytes: AtomicU64,
+    /// Entries removed from the live id map but not yet fully consumed by the
+    /// persistence, bandwidth and daily delta reporters.
+    retired_servers: DashMap<u64, RetiredServerMetrics>,
+    retirement_deferred_total: AtomicU64,
     pub rpc: RpcMetrics,
     pub waf: WafRuntimeMetrics,
 }
@@ -861,6 +1091,133 @@ pub struct RpcStatusSnapshot {
 }
 
 impl NodeMetrics {
+    pub fn new() -> Self {
+        Self::with_family_limit(0)
+    }
+
+    fn with_family_limit(family_limit: usize) -> Self {
+        Self {
+            total_bytes_sent: AtomicU64::new(0),
+            total_bytes_received: AtomicU64::new(0),
+            servers: DashMap::with_shard_amount(32),
+            family_gate: parking_lot::Mutex::new(()),
+            family_slots: Arc::new(AtomicUsize::new(0)),
+            family_limit,
+            unattributed_requests: AtomicU64::new(0),
+            unattributed_bytes_sent: AtomicU64::new(0),
+            unattributed_bytes_received: AtomicU64::new(0),
+            unattributed_origin_bytes: AtomicU64::new(0),
+            retired_servers: DashMap::with_shard_amount(8),
+            retirement_deferred_total: AtomicU64::new(0),
+            rpc: RpcMetrics {
+                total_requests: AtomicU64::new(0),
+                total_errors: AtomicU64::new(0),
+                total_cost_ms: AtomicU64::new(0),
+            },
+            waf: WafRuntimeMetrics::new(),
+        }
+    }
+
+    pub fn reserve_servers(
+        &self,
+        ids: impl IntoIterator<Item = i64>,
+    ) -> Result<MetricReservation, MetricCapacityError> {
+        let _gate = self.family_gate.lock();
+        let ids: std::collections::BTreeSet<_> = ids.into_iter().filter(|id| *id > 0).collect();
+        let missing = ids.iter().filter(|id| !self.servers.contains_key(id)).count();
+        let used = self.family_slots.load(Ordering::Acquire);
+        let limit = self.family_limit_value();
+        if missing > limit.saturating_sub(used) {
+            return Err(MetricCapacityError { used, limit });
+        }
+        let mut metrics = BTreeMap::new();
+        for id in ids {
+            let instance = if let Some(entry) = self.servers.get(&id) {
+                Arc::clone(&entry)
+            } else {
+                self.family_slots.fetch_add(1, Ordering::AcqRel);
+                let mut instance = ServerMetrics::new();
+                instance.slot = Some(MetricSlot(Arc::clone(&self.family_slots)));
+                Arc::new(instance)
+            };
+            metrics.insert(id, instance);
+        }
+        Ok(MetricReservation { metrics })
+    }
+
+    /// Called before any candidate can affect active runtime state. Bindings
+    /// own reservations across awaits, including cancellation of a build.
+    pub fn admit_configs<'a>(
+        &self,
+        servers: impl IntoIterator<Item = &'a crate::config_models::ServerConfig>,
+    ) -> Result<(), MetricCapacityError> {
+        let servers: Vec<_> = servers.into_iter().collect();
+        let reservation = self.reserve_servers(servers.iter()
+            .filter(|server| server.runtime_metrics.0.get().is_none())
+            .map(|server| server.numeric_id()))?;
+        for server in servers {
+            reservation.bind(server);
+        }
+        Ok(())
+    }
+
+    /// Publish only already admitted instances. No capacity failure is
+    /// possible after the caller starts installing its runtime generation.
+    pub fn publish_configs(&self, servers: &[Arc<crate::config_models::ServerConfig>]) {
+        let _gate = self.family_gate.lock();
+        for server in servers {
+            let id = server.numeric_id();
+            if id <= 0 { continue; }
+            let metrics = server.runtime_metrics.get();
+            if let Some(previous) = self.servers.insert(id, Arc::clone(&metrics))
+                && !Arc::ptr_eq(&previous, &metrics)
+            {
+                self.retired_servers.insert(previous.instance_id,
+                    RetiredServerMetrics::new(id, previous));
+            }
+        }
+    }
+
+    fn family_limit_value(&self) -> usize {
+        if self.family_limit != 0 {
+            return self.family_limit;
+        }
+        crate::memory_governor::MEMORY_GOVERNOR
+            .metrics_cardinality_capacity()
+            .max(MIN_SERVER_METRIC_INSTANCES)
+    }
+
+    pub fn family_instance_count(&self) -> usize {
+        self.family_slots.load(Ordering::Acquire)
+    }
+
+    /// Traffic observed for an id that no configuration ever admitted. It is
+    /// reported separately instead of creating an off-config instance; a
+    /// non-zero counter means the dataplane or a caller outlived its config.
+    pub fn unattributed_totals(&self) -> (u64, u64, u64, u64) {
+        (
+            self.unattributed_requests.load(Ordering::Acquire),
+            self.unattributed_bytes_sent.load(Ordering::Acquire),
+            self.unattributed_bytes_received.load(Ordering::Acquire),
+            self.unattributed_origin_bytes.load(Ordering::Acquire),
+        )
+    }
+
+    pub fn find_server(&self, server_id: i64) -> Option<Arc<ServerMetrics>> {
+        if let Some(entry) = self.servers.get(&server_id) {
+            return Some(Arc::clone(&entry));
+        }
+        // Late dataplane flushes can arrive after the id left the live map.
+        // The retired instance still owns the final counters until every
+        // consumer acknowledged them, so attribute the delta there.
+        self.retired_servers
+            .iter()
+            .find(|entry| entry.value().server_id == server_id)
+            .map(|entry| Arc::clone(&entry.value().metrics))
+    }
+
+    /// Live snapshots for node/perf status. Retired entries stay out of these
+    /// views while they drain through the delta consumers.
     pub fn take_snapshots(&self) -> Vec<(i64, ServerStatusSnapshot)> {
         self.servers
             .iter()
@@ -872,11 +1229,158 @@ impl NodeMetrics {
             .collect()
     }
 
+    /// Live plus retired samples for the three delta-reporting consumers.
+    pub fn take_reporting_snapshots(&self) -> Vec<ReportingSnapshot> {
+        self.sweep_retired();
+        let mut snapshots = Vec::with_capacity(self.servers.len() + self.retired_servers.len());
+        let mut seen = HashSet::with_capacity(snapshots.capacity());
+        for entry in self.servers.iter() {
+            let instance_id = entry.value().instance_id;
+            if !seen.insert(instance_id) {
+                continue;
+            }
+            let mut snapshot = entry.value().snapshot();
+            snapshot.server_id = *entry.key();
+            snapshots.push(ReportingSnapshot {
+                metrics: Arc::clone(entry.value()),
+                snapshot,
+                retired: false,
+            });
+        }
+        for entry in self.retired_servers.iter() {
+            let instance_id = entry.value().metrics.instance_id;
+            if !seen.insert(instance_id) {
+                continue;
+            }
+            let mut snapshot = entry.value().metrics.snapshot();
+            snapshot.server_id = entry.value().server_id;
+            snapshots.push(ReportingSnapshot {
+                metrics: Arc::clone(&entry.value().metrics),
+                snapshot,
+                retired: true,
+            });
+        }
+        snapshots
+    }
+
+    /// Move metric instances for removed server ids out of the live map.
+    /// Candidates are ids that were present in an earlier configuration
+    /// snapshot, not every id absent from the new one, so an unrelated test or
+    /// pre-config request cannot be retired by a partial snapshot.
+    ///
+    /// Returns candidates that could not be retired because the bounded
+    /// retirement set is full. The caller keeps and retries them on later
+    /// configuration snapshots; data is retained rather than silently dropped.
+    pub fn retire_servers_absent_from(
+        &self,
+        candidates: &HashSet<i64>,
+        live_server_ids: &HashSet<i64>,
+    ) -> HashSet<i64> {
+        let _gate = self.family_gate.lock();
+        let mut deferred = HashSet::new();
+        for &server_id in candidates {
+            if server_id <= 0 || live_server_ids.contains(&server_id) {
+                continue;
+            }
+            let Some(instance_id) = self.servers.get(&server_id).map(|entry| entry.instance_id)
+            else {
+                // No metric state exists for this id; nothing to retire.
+                continue;
+            };
+            let Some((_, metrics)) = self
+                .servers
+                .remove_if(&server_id, |_, entry| entry.instance_id == instance_id)
+            else {
+                // A concurrent creation replaced it; the next snapshot retries.
+                deferred.insert(server_id);
+                continue;
+            };
+            self.retired_servers
+                .insert(instance_id, RetiredServerMetrics::new(server_id, metrics));
+        }
+        if !deferred.is_empty() {
+            self.retirement_deferred_total
+                .fetch_add(deferred.len() as u64, Ordering::Relaxed);
+        }
+        deferred
+    }
+
+    /// Record that one consumer has processed `fingerprint` from this retired
+    /// instance. The entry is released only when all three consumers have
+    /// acknowledged the current fingerprint and no request holds the Arc.
+    pub fn acknowledge_retired(
+        &self,
+        consumer: MetricConsumer,
+        instance_id: u64,
+        fingerprint: u64,
+    ) {
+        let Some(entry) = self.retired_servers.get(&instance_id) else {
+            return;
+        };
+        let bit = consumer.bit();
+        entry.acknowledged_fingerprints[bit.trailing_zeros() as usize]
+            .store(fingerprint, Ordering::Release);
+        let previous = entry.acknowledged_mask.fetch_or(bit, Ordering::AcqRel);
+        if previous | bit != METRIC_ACK_ALL {
+            return;
+        }
+        let mut current_snapshot = entry.metrics.snapshot();
+        current_snapshot.server_id = entry.server_id;
+        let current = current_snapshot.fingerprint();
+        if entry
+            .acknowledged_fingerprints
+            .iter()
+            .any(|value| value.load(Ordering::Acquire) != current)
+        {
+            return;
+        }
+        drop(entry);
+        self.retired_servers.remove_if(&instance_id, |_, entry| {
+            Arc::strong_count(&entry.metrics) == 1
+                && entry.acknowledged_mask.load(Ordering::Acquire) == METRIC_ACK_ALL
+                && entry
+                    .acknowledged_fingerprints
+                    .iter()
+                    .all(|value| value.load(Ordering::Acquire) == current)
+        });
+    }
+
+    pub fn sweep_retired(&self) {
+        self.retired_servers.retain(|_, entry| {
+            if Arc::strong_count(&entry.metrics) != 1
+                || entry.acknowledged_mask.load(Ordering::Acquire) != METRIC_ACK_ALL
+            {
+                return true;
+            }
+            let mut snapshot = entry.metrics.snapshot();
+            snapshot.server_id = entry.server_id;
+            let current = snapshot.fingerprint();
+            !entry.acknowledged_fingerprints.iter()
+                .all(|value| value.load(Ordering::Acquire) == current)
+        });
+    }
+
+    pub fn retired_server_metrics_count(&self) -> usize {
+        self.retired_servers.len()
+    }
+
+    pub fn retirement_deferred_total(&self) -> u64 {
+        self.retirement_deferred_total.load(Ordering::Relaxed)
+    }
+
     pub fn get_node_totals(&self) -> (u64, u64, i64) {
         let mut total_conns = 0;
         for entry in self.servers.iter() {
             total_conns += entry
                 .value()
+                .active_connections
+                .load(Ordering::Relaxed)
+                .max(0);
+        }
+        for entry in self.retired_servers.iter() {
+            total_conns += entry
+                .value()
+                .metrics
                 .active_connections
                 .load(Ordering::Relaxed)
                 .max(0);
@@ -893,19 +1397,13 @@ impl NodeMetrics {
     }
 }
 
-pub static METRICS: LazyLock<Arc<NodeMetrics>> = LazyLock::new(|| {
-    Arc::new(NodeMetrics {
-        total_bytes_sent: AtomicU64::new(0),
-        total_bytes_received: AtomicU64::new(0),
-        servers: DashMap::with_shard_amount(32),
-        rpc: RpcMetrics {
-            total_requests: AtomicU64::new(0),
-            total_errors: AtomicU64::new(0),
-            total_cost_ms: AtomicU64::new(0),
-        },
-        waf: WafRuntimeMetrics::new(),
-    })
-});
+impl Default for NodeMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub static METRICS: LazyLock<Arc<NodeMetrics>> = LazyLock::new(|| Arc::new(NodeMetrics::new()));
 
 use std::sync::RwLock;
 
@@ -972,13 +1470,12 @@ pub mod record {
     use super::*;
     use std::net::IpAddr;
 
-    pub fn get_or_create(server_id: i64) -> Arc<ServerMetrics> {
-        let max_servers = METRICS.servers.len().saturating_add(1) as u64;
-        METRICS
-            .servers
-            .entry(server_id)
-            .or_insert_with(|| Arc::new(ServerMetrics::with_server_count(max_servers)))
-            .clone()
+    /// Returns the admitted lifecycle for `server_id`. The registry is
+    /// populated by configuration publication, so a missing instance means
+    /// no configuration ever admitted this id; callers record the delta as
+    /// unattributed instead of creating an unbounded off-config instance.
+    pub fn get_or_create(server_id: i64) -> Option<Arc<ServerMetrics>> {
+        METRICS.find_server(server_id)
     }
 
     pub fn request_start(
@@ -992,8 +1489,11 @@ pub mod record {
     ) -> bool {
         let m = if let Some(m) = cached_m {
             (*m).clone()
+        } else if let Some(m) = get_or_create(server_id) {
+            m
         } else {
-            get_or_create(server_id)
+            METRICS.unattributed_requests.fetch_add(1, Ordering::Relaxed);
+            return false;
         };
         if user_id > 0 {
             m.user_id.store(user_id, Ordering::Relaxed);
@@ -1031,9 +1531,14 @@ pub mod record {
         cached_m: Option<&Arc<ServerMetrics>>,
         ip_recorded: bool,
     ) -> bool {
-        let m = cached_m
-            .cloned()
-            .unwrap_or_else(|| get_or_create(server_id));
+        let m = if let Some(m) = cached_m.cloned() {
+            m
+        } else if let Some(m) = get_or_create(server_id) {
+            m
+        } else {
+            METRICS.unattributed_requests.fetch_add(1, Ordering::Relaxed);
+            return false;
+        };
         if user_id > 0 {
             m.user_id.store(user_id, Ordering::Relaxed);
         }
@@ -1057,10 +1562,11 @@ pub mod record {
         server_id: i64,
         cached_m: Option<&Arc<ServerMetrics>>,
     ) -> ActiveRequestMetricsGuard {
-        let metrics = cached_m
-            .cloned()
-            .unwrap_or_else(|| get_or_create(server_id));
-        ActiveRequestMetricsGuard::new(metrics)
+        if let Some(metrics) = cached_m.cloned().or_else(|| get_or_create(server_id)) {
+            return ActiveRequestMetricsGuard::new(metrics);
+        }
+        METRICS.unattributed_requests.fetch_add(1, Ordering::Relaxed);
+        ActiveRequestMetricsGuard::new(Arc::new(ServerMetrics::new()))
     }
 
     pub fn request_end(
@@ -1121,8 +1627,11 @@ pub mod record {
     ) {
         let m = if let Some(m) = cached_m {
             (*m).clone()
+        } else if let Some(m) = get_or_create(server_id) {
+            m
         } else {
-            get_or_create(server_id)
+            METRICS.unattributed_requests.fetch_add(1, Ordering::Relaxed);
+            return;
         };
         if release_active {
             decrement_active_connections(&m.active_connections);
@@ -1163,8 +1672,12 @@ pub mod record {
     ) {
         let m = if let Some(m) = cached_m {
             (*m).clone()
+        } else if let Some(m) = get_or_create(server_id) {
+            m
         } else {
-            get_or_create(server_id)
+            METRICS.unattributed_bytes_sent.fetch_add(bytes_sent, Ordering::Relaxed);
+            METRICS.unattributed_bytes_received.fetch_add(bytes_received, Ordering::Relaxed);
+            return;
         };
         m.bytes_sent.fetch_add(bytes_sent, Ordering::Relaxed);
         m.bytes_received
@@ -1187,8 +1700,11 @@ pub mod record {
     ) {
         let m = if let Some(m) = cached_m {
             (*m).clone()
+        } else if let Some(m) = get_or_create(server_id) {
+            m
         } else {
-            get_or_create(server_id)
+            METRICS.unattributed_origin_bytes.fetch_add(sent.saturating_add(received), Ordering::Relaxed);
+            return;
         };
         m.origin_bytes_sent.fetch_add(sent, Ordering::Relaxed);
         m.origin_bytes_received
@@ -1401,10 +1917,23 @@ pub mod record {
     }
 }
 
+struct FlusherBaseline {
+    metrics: Weak<ServerMetrics>,
+    snapshot: ServerStatusSnapshot,
+}
+
+fn flusher_delta(
+    current: &ServerStatusSnapshot,
+    last: Option<&ServerStatusSnapshot>,
+    field: fn(&ServerStatusSnapshot) -> u64,
+) -> u64 {
+    field(current).saturating_sub(last.map(field).unwrap_or(0))
+}
+
 pub async fn start_persistence_flusher() {
     use std::collections::HashMap;
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
-    let mut last_values: HashMap<i64, ServerStatusSnapshot> = HashMap::new();
+    let mut last_values: HashMap<u64, FlusherBaseline> = HashMap::new();
     let mut last_node_sent = 0u64;
     let mut last_node_recv = 0u64;
 
@@ -1445,54 +1974,52 @@ pub async fn start_persistence_flusher() {
         // Baselines are only committed after the Mace write succeeds; on a
         // failed write the next round recomputes the same deltas instead of
         // silently losing them.
-        let mut new_baselines: Vec<(i64, ServerStatusSnapshot)> = Vec::new();
+        let mut new_baselines: Vec<(u64, FlusherBaseline)> = Vec::new();
+        let mut retired_acks: Vec<(u64, u64)> = Vec::new();
         let now = crate::utils::time::now_timestamp();
         let period = (now / 300) * 300;
 
-        for entry in METRICS.servers.iter() {
-            let server_id = *entry.key();
-            let current = entry.value().snapshot();
-            let last = last_values
-                .entry(server_id)
-                .or_insert_with(|| ServerStatusSnapshot {
-                    count_errors: 0,
-                    server_id,
-                    user_id: 0,
-                    user_plan_id: 0,
-                    plan_id: 0,
-                    total_requests: 0,
-                    bytes_sent: 0,
-                    bytes_received: 0,
-                    cached_bytes: 0,
-                    count_cached_requests: 0,
-                    count_attack_requests: 0,
-                    attack_bytes: 0,
-                    origin_bytes_sent: 0,
-                    origin_bytes_received: 0,
-                    active_connections: 0,
-                    count_websocket_connections: 0,
-                    count_ips: 0,
-                });
+        for sample in METRICS.take_reporting_snapshots() {
+            let current = sample.snapshot;
+            let instance_id = current.instance_id;
+            let server_id = current.server_id;
+            let last = last_values.get(&instance_id).and_then(|baseline| {
+                baseline
+                    .metrics
+                    .upgrade()
+                    .filter(|metrics| Arc::ptr_eq(metrics, &sample.metrics))
+                    .map(|_| &baseline.snapshot)
+            });
 
             updates.push(crate::rpc::metrics::ServerMetricUpdate {
                 server_id,
                 user_id: current.user_id,
                 user_plan_id: current.user_plan_id,
                 plan_id: current.plan_id,
-                total_requests: current.total_requests - last.total_requests,
-                bytes_sent: current.bytes_sent - last.bytes_sent,
-                bytes_received: current.bytes_received - last.bytes_received,
-                cached_bytes: current.cached_bytes - last.cached_bytes,
-                count_cached_requests: current.count_cached_requests - last.count_cached_requests,
-                count_attack_requests: current.count_attack_requests - last.count_attack_requests,
-                attack_bytes: current.attack_bytes - last.attack_bytes,
+                total_requests: flusher_delta(&current, last, |s| s.total_requests),
+                bytes_sent: flusher_delta(&current, last, |s| s.bytes_sent),
+                bytes_received: flusher_delta(&current, last, |s| s.bytes_received),
+                cached_bytes: flusher_delta(&current, last, |s| s.cached_bytes),
+                count_cached_requests: flusher_delta(&current, last, |s| s.count_cached_requests),
+                count_attack_requests: flusher_delta(&current, last, |s| s.count_attack_requests),
+                attack_bytes: flusher_delta(&current, last, |s| s.attack_bytes),
                 active_connections: current.active_connections,
-                count_websocket_connections: current.count_websocket_connections
-                    - last.count_websocket_connections,
+                count_websocket_connections: flusher_delta(&current, last, |s| {
+                    s.count_websocket_connections
+                }),
                 count_ips: current.count_ips,
             });
 
-            new_baselines.push((server_id, current));
+            if sample.retired {
+                retired_acks.push((instance_id, current.fingerprint()));
+            }
+            new_baselines.push((
+                instance_id,
+                FlusherBaseline {
+                    metrics: Arc::downgrade(&sample.metrics),
+                    snapshot: current,
+                },
+            ));
         }
 
         let node_sent = METRICS.total_bytes_sent.load(Ordering::Relaxed);
@@ -1500,8 +2027,8 @@ pub async fn start_persistence_flusher() {
         let node_sent_delta = node_sent - last_node_sent;
         let node_recv_delta = node_recv - last_node_recv;
 
-        let cleanup_before = (now % 3600 < 30).then_some(now - 86400);
-        if !updates.is_empty() || cleanup_before.is_some() {
+        let cleanup = now - 86400;
+        {
             let write_result = tokio::task::spawn_blocking(move || {
                 let record_result = if !updates.is_empty() {
                     storage::STORAGE
@@ -1512,24 +2039,29 @@ pub async fn start_persistence_flusher() {
                 } else {
                     Ok(())
                 };
-                let cleanup_result = if let Some(older_than) = cleanup_before {
-                    storage::STORAGE
-                        .cleanup_old_stats(older_than)
-                        .inspect_err(|err| {
-                            tracing::error!(?err, "metric history cleanup failed");
-                        })
-                        .map(|_| ())
-                } else {
-                    Ok(())
-                };
-                record_result.and(cleanup_result)
+                // Cleanup has its own durable cursor and must advance even
+                // while no samples were written this tick. Its failure must
+                // not roll back the counters that were already persisted, and
+                // a record failure must not stop retention either.
+                if let Err(err) = storage::STORAGE.cleanup_old_stats(cleanup) {
+                    tracing::error!(?err, "metric history cleanup failed");
+                }
+                record_result
             })
             .await;
             match write_result {
                 Ok(Ok(())) => {
-                    for (server_id, snapshot) in new_baselines {
-                        last_values.insert(server_id, snapshot);
+                    for (instance_id, baseline) in new_baselines {
+                        last_values.insert(instance_id, baseline);
                     }
+                    for (instance_id, fingerprint) in retired_acks {
+                        METRICS.acknowledge_retired(
+                            MetricConsumer::Persistence,
+                            instance_id,
+                            fingerprint,
+                        );
+                    }
+                    last_values.retain(|_, baseline| baseline.metrics.strong_count() > 0);
                     last_node_sent = node_sent;
                     last_node_recv = node_recv;
                 }
@@ -1545,9 +2077,183 @@ pub async fn start_persistence_flusher() {
 }
 
 #[cfg(test)]
+mod retirement_tests {
+    use super::*;
+    use std::sync::atomic::Ordering;
+
+    fn acknowledge_all(node: &NodeMetrics, consumer: MetricConsumer, id: u64, fingerprint: u64) {
+        node.acknowledge_retired(consumer, id, fingerprint);
+    }
+
+    #[test]
+    fn retirement_waits_for_consumers_quiescence_and_the_final_delta() {
+        let node = NodeMetrics::new();
+        let metrics = Arc::new(ServerMetrics::new());
+        let instance_id = metrics.instance_id;
+        node.servers.insert(7_710_001, Arc::clone(&metrics));
+
+        let deferred =
+            node.retire_servers_absent_from(&HashSet::from([7_710_001]), &HashSet::new());
+        assert!(deferred.is_empty());
+        assert!(!node.servers.contains_key(&7_710_001));
+        assert_eq!(node.retired_server_metrics_count(), 1);
+        drop(metrics);
+
+        let sample = node
+            .take_reporting_snapshots()
+            .pop()
+            .expect("retired instance is still reportable");
+        assert!(sample.retired);
+        let stale_fingerprint = sample.snapshot.fingerprint();
+        let in_flight = Arc::clone(&sample.metrics);
+        drop(sample);
+
+        for consumer in [
+            MetricConsumer::Persistence,
+            MetricConsumer::Bandwidth,
+            MetricConsumer::Daily,
+        ] {
+            acknowledge_all(&node, consumer, instance_id, stale_fingerprint);
+        }
+        assert_eq!(
+            node.retired_server_metrics_count(),
+            1,
+            "an in-flight Arc must keep the final counters reportable"
+        );
+
+        in_flight.bytes_sent.fetch_add(1_024, Ordering::Relaxed);
+        drop(in_flight);
+
+        let samples = node.take_reporting_snapshots();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].snapshot.bytes_sent, 1_024);
+        let final_fingerprint = samples[0].snapshot.fingerprint();
+        assert_ne!(final_fingerprint, stale_fingerprint);
+        drop(samples);
+
+        for consumer in [
+            MetricConsumer::Persistence,
+            MetricConsumer::Bandwidth,
+            MetricConsumer::Daily,
+        ] {
+            acknowledge_all(&node, consumer, instance_id, final_fingerprint);
+        }
+        assert_eq!(node.retired_server_metrics_count(), 0);
+    }
+
+    #[test]
+    fn re_added_server_id_uses_a_distinct_metric_instance() {
+        let node = NodeMetrics::new();
+        let old = Arc::new(ServerMetrics::new());
+        let old_instance = old.instance_id;
+        node.servers.insert(7_710_002, Arc::clone(&old));
+        node.retire_servers_absent_from(&HashSet::from([7_710_002]), &HashSet::new());
+
+        let new = Arc::new(ServerMetrics::new());
+        let new_instance = new.instance_id;
+        node.servers.insert(7_710_002, Arc::clone(&new));
+        let deferred = node
+            .retire_servers_absent_from(&HashSet::from([7_710_002]), &HashSet::from([7_710_002]));
+        assert!(deferred.is_empty());
+        assert!(node.servers.contains_key(&7_710_002));
+
+        let instances: HashSet<u64> = node
+            .take_reporting_snapshots()
+            .into_iter()
+            .filter(|sample| sample.snapshot.server_id == 7_710_002)
+            .map(|sample| sample.snapshot.instance_id)
+            .collect();
+        assert_eq!(instances, HashSet::from([old_instance, new_instance]));
+        assert_ne!(old_instance, new_instance);
+        assert_eq!(
+            node.take_snapshots().len(),
+            1,
+            "node/perf views only expose the live instance"
+        );
+    }
+
+    #[test]
+    fn acknowledged_retirement_drains_without_another_configuration() {
+        let node = NodeMetrics::new();
+        let server = Arc::new(crate::config_models::ServerConfig {
+            id: Some(7_730_001),
+            ..Default::default()
+        });
+        node.admit_configs(std::iter::once(server.as_ref())).expect("family has room");
+        node.publish_configs(&[Arc::clone(&server)]);
+        let held = node.find_server(7_730_001).expect("published instance");
+        let instance_id = held.instance_id;
+        let deferred = node.retire_servers_absent_from(&HashSet::from([7_730_001]), &HashSet::new());
+        assert!(deferred.is_empty());
+
+        let sample = node.take_reporting_snapshots().pop().expect("retired sample");
+        let fingerprint = sample.snapshot.fingerprint();
+        drop(sample);
+        for consumer in [
+            MetricConsumer::Persistence,
+            MetricConsumer::Bandwidth,
+            MetricConsumer::Daily,
+        ] {
+            node.acknowledge_retired(consumer, instance_id, fingerprint);
+        }
+        assert_eq!(node.retired_server_metrics_count(), 1, "the held request keeps it reportable");
+
+        drop(held);
+        drop(server);
+        // No new configuration snapshot: the periodic reporting pass alone
+        // must release the acknowledged retired object.
+        assert!(node.take_reporting_snapshots().is_empty());
+        assert_eq!(node.retired_server_metrics_count(), 0);
+    }
+
+    #[test]
+    fn consumer_failure_churn_holds_the_whole_metric_family_bound() {
+        let node = NodeMetrics::with_family_limit(8_200);
+        let mut held = Vec::new();
+        for offset in 0..8_200 {
+            let id = 8_000_000 + offset;
+            let reservation = node.reserve_servers([id]).expect("capacity below the bound");
+            let server = Arc::new(crate::config_models::ServerConfig {
+                id: Some(id), ..Default::default()
+            });
+            reservation.bind(&server);
+            held.push((reservation, server.clone()));
+            node.publish_configs(&[server]);
+            node.retire_servers_absent_from(&HashSet::from([id]), &HashSet::new());
+        }
+        assert_eq!(node.family_instance_count(), 8_200);
+        let overflow = node.reserve_servers([8_999_999]);
+        assert!(overflow.is_err(),
+            "a failed consumer must backpressure new IDs before the whole family grows");
+        held.clear();
+        for id in 8_000_000..8_008_200 {
+            node.servers.remove(&id);
+        }
+        node.sweep_retired();
+        assert_eq!(node.family_instance_count(), 8_200, "released objects are bounded by consumers");
+    }
+
+    #[test]
+    fn retirement_cap_defers_instead_of_dropping_metric_state() {
+        let node = NodeMetrics::with_family_limit(2);
+        let ids: HashSet<i64> = HashSet::from([7_720_001, 7_720_002]);
+        for id in &ids {
+            let server = Arc::new(crate::config_models::ServerConfig { id: Some(*id), ..Default::default() });
+            node.admit_configs(std::iter::once(server.as_ref())).expect("two slots");
+            node.publish_configs(&[server]);
+        }
+        let third = crate::config_models::ServerConfig { id: Some(7_720_003), ..Default::default() };
+        let err = node.admit_configs(std::iter::once(&third)).expect_err("cap refuses admission");
+        assert_eq!((err.used, err.limit), (2, 2));
+        assert!(!node.servers.contains_key(&7_720_003));
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::MetricRequestContext;
     use std::net::IpAddr;
+    use std::sync::Arc;
 
     #[test]
     fn metric_request_context_resolves_go_style_keys() {
@@ -1617,12 +2323,8 @@ mod tests {
 
     #[test]
     fn runtime_distinct_ip_tracker_fail_closed_at_capacity() {
-        let tracker = super::RuntimeDistinctIpTracker::new(1);
+        let tracker = super::RuntimeDistinctIpTracker::with_capacity(512);
         let capacity = tracker.capacity();
-        assert!(
-            capacity > 0,
-            "distinct IP tracker must derive a positive capacity"
-        );
 
         for i in 0..capacity.saturating_add(128) {
             let ip = IpAddr::from([10, 0, (i / 256) as u8, (i % 256) as u8]);
@@ -1633,6 +2335,27 @@ mod tests {
             "distinct IP tracker must not grow beyond capacity ({capacity}), got {}",
             tracker.len()
         );
+    }
+
+    #[test]
+    fn distinct_ip_trackers_share_one_budget_and_refund_on_drop() {
+        let budget = Arc::new(super::DistinctIpBudget::new(2));
+        let first = super::RuntimeDistinctIpTracker::with_budget(budget.clone());
+        let second = super::RuntimeDistinctIpTracker::with_budget(budget.clone());
+
+        first.insert(IpAddr::from([10, 0, 0, 1]));
+        second.insert(IpAddr::from([10, 0, 0, 2]));
+        first.insert(IpAddr::from([10, 0, 0, 3]));
+        assert_eq!(budget.used(), 2);
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 1);
+        assert!(budget.used() <= budget.capacity());
+
+        drop(first);
+        assert_eq!(budget.used(), 1);
+        second.insert(IpAddr::from([10, 0, 0, 3]));
+        assert_eq!(second.len(), 2);
+        assert_eq!(budget.used(), 2);
     }
 
     #[test]
@@ -1677,10 +2400,15 @@ mod tests {
 
     #[test]
     fn active_request_guard_keeps_old_arc_after_registry_replacement() {
-        let old = super::record::get_or_create(9_001);
+        // get_or_create no longer creates instances, so seed the shared
+        // registry directly instead of depending on another test having
+        // registered this id first.
+        let old = std::sync::Arc::new(super::ServerMetrics::new());
+        super::METRICS.servers.insert(9_001, old.clone());
         let mut guard = super::ActiveRequestMetricsGuard::new(old.clone());
         super::METRICS.servers.remove(&9_001);
-        let new = super::record::get_or_create(9_001);
+        let new = std::sync::Arc::new(super::ServerMetrics::new());
+        super::METRICS.servers.insert(9_001, new.clone());
         guard.finish();
         assert_eq!(
             old.active_connections

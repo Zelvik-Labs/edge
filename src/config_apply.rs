@@ -6,7 +6,7 @@
 //! alive, and without rebuilding every derived index when only a few sites change.
 //!
 //! Under memory pressure the apply path:
-//! - admits as `BackgroundWork` (backpressure, not a silent drop)
+//! - admits as `ConfigApply` (backpressure, not a silent drop)
 //! - reclaims cache/resident state between chunks
 //! - yields so request workers can run
 //! - keeps one `Arc<ServerConfig>` per site shared by host indexes
@@ -16,6 +16,7 @@ use crate::config_models::{GlobalHTTPAllConfig, ParentNodeConfig, ServerConfig};
 use crate::health_manager::GlobalHealthManager;
 use crate::memory_governor::{
     AdmissionClass, AdmissionPermit, MEMORY_GOVERNOR, MemoryGovernor, MemoryPressureLevel,
+    SharedGrantPurpose, SharedPermit,
 };
 use crate::memory_reclaim::request_reclaim;
 use std::collections::HashMap;
@@ -242,7 +243,7 @@ pub fn hash_waf_snapshot(
     )
 }
 
-/// How long an apply may wait for a `BackgroundWork` permit before giving up
+/// How long an apply may wait for a `ConfigApply` permit before giving up
 /// and keeping the installed generation.
 const CONFIG_SYNC_ADMISSION_BUDGET: Duration = Duration::from_secs(2);
 
@@ -252,7 +253,7 @@ async fn admit_config_sync(governor: &MemoryGovernor) -> (Option<AdmissionPermit
     let deadline = Instant::now() + CONFIG_SYNC_ADMISSION_BUDGET;
     let mut retries = 0u32;
     loop {
-        if let Some(permit) = governor.try_admit(AdmissionClass::BackgroundWork) {
+        if let Some(permit) = governor.try_admit(AdmissionClass::ConfigApply) {
             return (Some(permit), retries);
         }
         let pressure = governor.current_memory_pressure_level();
@@ -265,6 +266,18 @@ async fn admit_config_sync(governor: &MemoryGovernor) -> (Option<AdmissionPermit
         retries += 1;
         tokio::time::sleep(Duration::from_millis(1u64 << retries.min(6))).await;
     }
+}
+
+/// Charge a configuration build against the shared account. `payload_bytes`
+/// is the decoded JSON length, the cheapest measured lower bound of the maps
+/// being built: the previous generation is still installed, so both map sets
+/// are resident for the duration of the build. The returned credential is
+/// committed (the materialization is real from here on) and released when the
+/// build finishes.
+fn admit_config_publish(governor: &MemoryGovernor, payload_bytes: u64) -> Option<SharedPermit<'_>> {
+    let mut permit = governor.try_grant_shared(SharedGrantPurpose::ConfigPublish, payload_bytes)?;
+    permit.commit();
+    Some(permit)
 }
 
 fn maybe_reclaim(
@@ -296,6 +309,10 @@ pub struct MaterializeRuntimeServersArgs<'a> {
     pub tiered_origin_bypass: bool,
     pub allow_lan: bool,
     pub global_http: Option<Arc<GlobalHTTPAllConfig>>,
+    /// Decoded JSON length of the payload that produced `servers`, when the
+    /// caller knows it. Charged through `ConfigPublish` for the build window;
+    /// zero skips the charge (callers additionally guard the decode budget).
+    pub payload_bytes: u64,
     pub limits: ConfigApplyLimits,
 }
 
@@ -321,6 +338,7 @@ pub async fn materialize_runtime_servers(
         tiered_origin_bypass,
         allow_lan,
         global_http,
+        payload_bytes,
         limits,
     } = args;
     let started = Instant::now();
@@ -363,6 +381,59 @@ pub async fn materialize_runtime_servers(
         ..ConfigApplyStats::default()
     };
     let _permit = permit;
+    // The class permit reserves the control-plane slot, not the bytes: charge
+    // the build window so the account does not promise the same headroom to
+    // connections while the new generation is being materialized next to the
+    // installed one. Refusal keeps the previous generation, like the class
+    // admission above.
+    let publish_charge = if payload_bytes > 0 {
+        let Some(charge) = admit_config_publish(&MEMORY_GOVERNOR, payload_bytes) else {
+            tracing::warn!(
+                target: "config_apply",
+                servers_in,
+                payload_bytes,
+                admission_retries,
+                "config materialization refused by the shared account; keeping previous generation"
+            );
+            return RuntimeServerMaps {
+                stats: ConfigApplyStats {
+                    servers_in,
+                    admitted: false,
+                    admission_retries,
+                    elapsed: started.elapsed(),
+                    ..ConfigApplyStats::default()
+                },
+                ..RuntimeServerMaps::default()
+            };
+        };
+        Some(charge)
+    } else {
+        None
+    };
+    let _publish_charge = publish_charge;
+    // Bind metric instances before any health/XDP/runtime effect. The binding
+    // lives inside each `ServerConfig` across the materialization await, so
+    // every install that reuses this generation cannot fail on capacity again.
+    if let Err(err) = crate::metrics::METRICS.admit_configs(servers.iter()) {
+        tracing::warn!(
+            target: "config_apply",
+            servers_in,
+            used = err.used,
+            limit = err.limit,
+            admission_retries,
+            "config apply deferred: server metric family capacity exhausted; keeping previous generation"
+        );
+        return RuntimeServerMaps {
+            stats: ConfigApplyStats {
+                servers_in,
+                admitted: false,
+                admission_retries,
+                elapsed: started.elapsed(),
+                ..ConfigApplyStats::default()
+            },
+            ..RuntimeServerMaps::default()
+        };
+    }
     let mut last_reclaimed = MemoryPressureLevel::Normal;
     maybe_reclaim(limits, &mut stats, &mut last_reclaimed);
 
@@ -472,7 +543,7 @@ pub async fn apply_server_snapshot(
     let (node_level, parent_nodes, tiered_origin_bypass, allow_lan) =
         store.get_origin_runtime_context().await;
     let global_http = Some(store.get_global_http_config_sync());
-    let maps = materialize_runtime_servers(MaterializeRuntimeServersArgs {
+    let mut maps = materialize_runtime_servers(MaterializeRuntimeServersArgs {
         servers,
         health_manager,
         node_level,
@@ -480,24 +551,43 @@ pub async fn apply_server_snapshot(
         tiered_origin_bypass,
         allow_lan,
         global_http,
+        payload_bytes: 0,
         limits,
     })
     .await;
     if maps.stats.admitted {
-        store
+        match store
             .replace_all_servers(
                 maps.all_servers.clone(),
                 maps.servers.clone(),
                 maps.routes.clone(),
                 maps.id_to_lb.clone(),
             )
-            .await;
-        // `replace_all_servers` just dropped the previous generation on this
-        // thread. Under elevated pressure, purge the freed segments now —
-        // mimalloc only returns a thread's retained pages when that thread
-        // collects, and the next sync may not run on this worker.
-        if limits.pressure >= MemoryPressureLevel::High {
-            crate::memory_reclaim::trim_released_heap();
+            .await
+        {
+            Ok(()) => {
+                // `replace_all_servers` just dropped the previous generation on
+                // this thread. Under elevated pressure, purge the freed
+                // segments now — mimalloc only returns a thread's retained
+                // pages when that thread collects, and the next sync may not
+                // run on this worker.
+                if limits.pressure >= MemoryPressureLevel::High {
+                    crate::memory_reclaim::trim_released_heap();
+                }
+            }
+            Err(err) => {
+                // The preadmitted generation was rejected: keep the installed
+                // one, leave freed heap untouched, and report the snapshot as
+                // not applied so callers retry instead of acknowledging it.
+                tracing::warn!(
+                    target: "config_apply",
+                    servers_in = maps.stats.servers_in,
+                    used = err.used,
+                    limit = err.limit,
+                    "config install rejected by server metric capacity; keeping previous generation"
+                );
+                maps.stats.admitted = false;
+            }
         }
     }
     maps
@@ -543,7 +633,7 @@ mod tests {
             crate::utils::time::system_timestamp_millis() as u64,
         );
         let mut held = Vec::new();
-        while let Some(permit) = governor.try_admit(AdmissionClass::BackgroundWork) {
+        while let Some(permit) = governor.try_admit(AdmissionClass::ConfigApply) {
             held.push(permit);
         }
         assert!(!held.is_empty());
@@ -573,6 +663,7 @@ mod tests {
             tiered_origin_bypass: false,
             allow_lan: true,
             global_http: None,
+            payload_bytes: 0,
             limits: ConfigApplyLimits::synthetic(8 * 1024 * 1024 * 1024, 4 * 1024 * 1024 * 1024),
         })
         .await;
@@ -601,6 +692,7 @@ mod tests {
             tiered_origin_bypass: false,
             allow_lan: true,
             global_http: None,
+            payload_bytes: 0,
             limits,
         })
         .await;
@@ -634,6 +726,32 @@ mod tests {
         assert!(second.stats.admitted);
         assert_eq!(store.get_all_servers_sync().len(), 1);
         assert!(store.get_server_sync("a.example.com").is_some());
+    }
+
+    #[test]
+    fn config_publish_charge_refuses_when_the_account_is_full() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(4 << 30, 2 << 30, 1 << 20, 0, i64::MAX as u64);
+        let grantable = governor.account_view().grantable_bytes;
+        assert!(grantable > 1);
+        let fill = governor
+            .try_grant_shared(SharedGrantPurpose::ConfigPublish, grantable)
+            .expect("control-priority work may use the whole account");
+        assert!(
+            admit_config_publish(&governor, 1).is_none(),
+            "a full account must defer the materialization instead of overcommitting"
+        );
+        drop(fill);
+        let charge =
+            admit_config_publish(&governor, 4096).expect("refunded capacity admits the build");
+        assert_eq!(
+            charge.bytes(),
+            4096,
+            "the full decoded payload length is charged, not a token amount"
+        );
+        assert_eq!(governor.account_view().committed_live_bytes, 4096);
+        drop(charge);
+        assert_eq!(governor.account_view().committed_live_bytes, 0);
     }
 
     #[test]

@@ -8,6 +8,10 @@ use std::time::{Duration, Instant};
 use tokio::sync::watch;
 
 static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
+
+/// Hard cap on one emergency-shed drain pass, so a single pass cannot
+/// cancel an unbounded share of the connection table.
+pub(crate) const L4_SHED_MAX_BATCH: usize = 32;
 pub static L4_CONNECTION_REGISTRY: LazyLock<L4ConnectionRegistry> =
     LazyLock::new(L4ConnectionRegistry::new);
 
@@ -258,6 +262,36 @@ impl L4ConnectionRegistry {
         count
     }
 
+    /// Cancel up to `limit` of the oldest connections, skipping records that
+    /// already carry a cancel reason (a previous drain, defense block, or
+    /// shutdown) so a repeated final-resort pass cannot re-select them.
+    ///
+    /// `limit` is clamped to [`L4_SHED_MAX_BATCH`]. Ordering is by
+    /// registration time with the monotonically increasing connection id as
+    /// the tiebreaker, which makes selection deterministic even when the
+    /// clock resolution makes two `Instant`s compare equal.
+    pub fn drain_oldest_with_reason(&self, limit: usize, reason: ConnectionCancelReason) -> usize {
+        let limit = limit.min(L4_SHED_MAX_BATCH);
+        if limit == 0 {
+            return 0;
+        }
+        let mut candidates = self
+            .by_key
+            .iter()
+            .filter_map(|entry| {
+                let conn = entry.value();
+                (*conn.cancel_rx.borrow() == ConnectionCancelReason::None).then(|| conn.clone())
+            })
+            .collect::<Vec<_>>();
+        candidates.sort_by_key(|conn| (conn.started_at, conn.id));
+        candidates.truncate(limit);
+        let count = candidates.len();
+        for conn in candidates {
+            conn.cancel(reason);
+        }
+        count
+    }
+
     pub fn snapshot(&self) -> L4ConnectionRegistrySnapshot {
         let mut snapshot = L4ConnectionRegistrySnapshot {
             total: self.by_key.len(),
@@ -292,7 +326,7 @@ pub fn snapshot() -> L4ConnectionRegistrySnapshot {
 }
 
 /// Serializes tests that touch the shared `L4_CONNECTION_REGISTRY` — global
-/// drains (e.g. memory-shed age ladders) can cancel connections registered
+/// drains (e.g. final-resort memory sheds) can cancel connections registered
 /// by another test running in parallel.
 #[cfg(test)]
 pub(crate) static REGISTRY_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -349,5 +383,56 @@ mod tests {
         );
         drop(guard);
         assert_eq!(drain_ip(ip), 0);
+    }
+
+    #[test]
+    fn drain_oldest_is_bounded_ordered_and_skips_already_shed_records() {
+        let _serial = REGISTRY_TEST_LOCK.lock().unwrap();
+        // A private registry instance keeps this test independent of the
+        // global table and of other tests' connections.
+        let registry = L4ConnectionRegistry::new();
+        let mut guards = Vec::new();
+        let mut receivers = Vec::new();
+        for index in 0..40u8 {
+            let ip = IpAddr::V4(Ipv4Addr::new(203, 0, 113, index));
+            let addr = SocketAddr::new(ip, 43_000 + u16::from(index));
+            let guard = registry.register(addr, L4ConnectionProtocol::Http1);
+            let rx = registry
+                .get(ip, L4ConnectionProtocol::Http1, guard.id)
+                .expect("registered connection must be retrievable")
+                .cancel_rx;
+            receivers.push(rx);
+            guards.push(guard);
+        }
+
+        assert_eq!(
+            registry
+                .drain_oldest_with_reason(usize::MAX, ConnectionCancelReason::MemoryPressureShed),
+            L4_SHED_MAX_BATCH,
+            "a pass must be bounded to the oldest batch"
+        );
+        for (index, rx) in receivers.iter().enumerate() {
+            let expected = if index < L4_SHED_MAX_BATCH {
+                ConnectionCancelReason::MemoryPressureShed
+            } else {
+                ConnectionCancelReason::None
+            };
+            assert_eq!(*rx.borrow(), expected, "unexpected selection at {index}");
+        }
+
+        // The second pass picks up exactly the remaining records — the
+        // already-shed ones are never re-selected.
+        assert_eq!(
+            registry
+                .drain_oldest_with_reason(usize::MAX, ConnectionCancelReason::MemoryPressureShed),
+            40 - L4_SHED_MAX_BATCH
+        );
+        assert_eq!(
+            registry
+                .drain_oldest_with_reason(usize::MAX, ConnectionCancelReason::MemoryPressureShed),
+            0,
+            "nothing is left to shed"
+        );
+        drop(guards);
     }
 }

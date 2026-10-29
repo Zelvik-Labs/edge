@@ -1,0 +1,1095 @@
+{
+  "pressure": [],
+  "paired": {
+    "alloc:h1": {
+      "baseline": {
+        "samples": [
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 2633.20732967866,
+            "p50_ms": 5.7516419983585365,
+            "p99_ms": 17.86138599709375,
+            "errors": [],
+            "file": "alloc-0-baseline.json",
+            "allocations_per_success": 484.537,
+            "allocatedBytes_per_success": 175232.407,
+            "reallocations_per_success": 33.076
+          },
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 2662.26451642209,
+            "p50_ms": 5.765867994341534,
+            "p99_ms": 17.47692599747097,
+            "errors": [],
+            "file": "alloc-1-baseline.json",
+            "allocations_per_success": 484.246,
+            "allocatedBytes_per_success": 175215.587,
+            "reallocations_per_success": 33.078
+          },
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 2690.7511062345247,
+            "p50_ms": 5.746100992837455,
+            "p99_ms": 13.99782099906588,
+            "errors": [],
+            "file": "alloc-2-baseline.json",
+            "allocations_per_success": 484.229,
+            "allocatedBytes_per_success": 175197.385,
+            "reallocations_per_success": 33.081
+          }
+        ],
+        "rps": {
+          "n": 3,
+          "min": 2633.20732967866,
+          "median": 2662.26451642209,
+          "max": 2690.7511062345247
+        },
+        "p99_ms": {
+          "n": 3,
+          "min": 13.99782099906588,
+          "median": 17.47692599747097,
+          "max": 17.86138599709375
+        },
+        "all_requests_succeeded": true
+      },
+      "candidate": {
+        "samples": [
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 2673.009011362533,
+            "p50_ms": 5.746272996475454,
+            "p99_ms": 19.896984995284583,
+            "errors": [],
+            "file": "alloc-0-candidate.json",
+            "allocations_per_success": 484.524,
+            "allocatedBytes_per_success": 175212.761,
+            "reallocations_per_success": 33.081
+          },
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 2574.458872836081,
+            "p50_ms": 5.944714997895062,
+            "p99_ms": 18.049618003715295,
+            "errors": [],
+            "file": "alloc-1-candidate.json",
+            "allocations_per_success": 484.764,
+            "allocatedBytes_per_success": 175168.241,
+            "reallocations_per_success": 33.075
+          },
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 2663.783430080804,
+            "p50_ms": 5.748972995206714,
+            "p99_ms": 14.255350004532374,
+            "errors": [],
+            "file": "alloc-2-candidate.json",
+            "allocations_per_success": 484.446,
+            "allocatedBytes_per_success": 175253.699,
+            "reallocations_per_success": 33.078
+          }
+        ],
+        "rps": {
+          "n": 3,
+          "min": 2574.458872836081,
+          "median": 2663.783430080804,
+          "max": 2673.009011362533
+        },
+        "p99_ms": {
+          "n": 3,
+          "min": 14.255350004532374,
+          "median": 18.049618003715295,
+          "max": 19.896984995284583
+        },
+        "all_requests_succeeded": true
+      }
+    },
+    "alloc:h2": {
+      "baseline": {
+        "samples": [
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 1283.611381672206,
+            "p50_ms": 11.145143005705904,
+            "p99_ms": 14.497843003482558,
+            "errors": [],
+            "file": "alloc-0-baseline.json",
+            "allocations_per_success": 505.855,
+            "allocatedBytes_per_success": 163539.588,
+            "reallocations_per_success": 23.222
+          },
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 1281.3860472057245,
+            "p50_ms": 11.10930299910251,
+            "p99_ms": 13.818319006531965,
+            "errors": [],
+            "file": "alloc-1-baseline.json",
+            "allocations_per_success": 506.095,
+            "allocatedBytes_per_success": 163527.095,
+            "reallocations_per_success": 23.171
+          },
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 1335.6503037260748,
+            "p50_ms": 10.643642999639269,
+            "p99_ms": 13.739773996348958,
+            "errors": [],
+            "file": "alloc-2-baseline.json",
+            "allocations_per_success": 505.316,
+            "allocatedBytes_per_success": 163515.705,
+            "reallocations_per_success": 23.171
+          }
+        ],
+        "rps": {
+          "n": 3,
+          "min": 1281.3860472057245,
+          "median": 1283.611381672206,
+          "max": 1335.6503037260748
+        },
+        "p99_ms": {
+          "n": 3,
+          "min": 13.739773996348958,
+          "median": 13.818319006531965,
+          "max": 14.497843003482558
+        },
+        "all_requests_succeeded": true
+      },
+      "candidate": {
+        "samples": [
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 1319.4795910820203,
+            "p50_ms": 10.857850000320468,
+            "p99_ms": 12.938152998685837,
+            "errors": [],
+            "file": "alloc-0-candidate.json",
+            "allocations_per_success": 505.121,
+            "allocatedBytes_per_success": 163398.946,
+            "reallocations_per_success": 23.174
+          },
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 1280.1072357126234,
+            "p50_ms": 11.068330000853166,
+            "p99_ms": 14.182165999955032,
+            "errors": [],
+            "file": "alloc-1-candidate.json",
+            "allocations_per_success": 505.934,
+            "allocatedBytes_per_success": 163468.196,
+            "reallocations_per_success": 23.222
+          },
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 1238.8079907590984,
+            "p50_ms": 11.554608994629234,
+            "p99_ms": 14.674918995297048,
+            "errors": [],
+            "file": "alloc-2-candidate.json",
+            "allocations_per_success": 506.853,
+            "allocatedBytes_per_success": 163471.126,
+            "reallocations_per_success": 23.227
+          }
+        ],
+        "rps": {
+          "n": 3,
+          "min": 1238.8079907590984,
+          "median": 1280.1072357126234,
+          "max": 1319.4795910820203
+        },
+        "p99_ms": {
+          "n": 3,
+          "min": 12.938152998685837,
+          "median": 14.182165999955032,
+          "max": 14.674918995297048
+        },
+        "all_requests_succeeded": true
+      }
+    },
+    "alloc:h3": {
+      "baseline": {
+        "samples": [
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 443.4453927207814,
+            "p50_ms": 36.091879999730736,
+            "p99_ms": 41.400971000257414,
+            "errors": [],
+            "file": "alloc-0-baseline.json",
+            "allocations_per_success": 622.448,
+            "allocatedBytes_per_success": 181660.235,
+            "reallocations_per_success": 35.85
+          },
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 442.8902539651281,
+            "p50_ms": 36.059587000636384,
+            "p99_ms": 53.63460299849976,
+            "errors": [],
+            "file": "alloc-1-baseline.json",
+            "allocations_per_success": 622.437,
+            "allocatedBytes_per_success": 181682.945,
+            "reallocations_per_success": 35.936
+          },
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 466.1367247733319,
+            "p50_ms": 34.51056100311689,
+            "p99_ms": 40.047832000709604,
+            "errors": [],
+            "file": "alloc-2-baseline.json",
+            "allocations_per_success": 619.131,
+            "allocatedBytes_per_success": 181553.455,
+            "reallocations_per_success": 35.772
+          }
+        ],
+        "rps": {
+          "n": 3,
+          "min": 442.8902539651281,
+          "median": 443.4453927207814,
+          "max": 466.1367247733319
+        },
+        "p99_ms": {
+          "n": 3,
+          "min": 40.047832000709604,
+          "median": 41.400971000257414,
+          "max": 53.63460299849976
+        },
+        "all_requests_succeeded": true
+      },
+      "candidate": {
+        "samples": [
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 443.77109163340884,
+            "p50_ms": 35.854152993124444,
+            "p99_ms": 43.89396999613382,
+            "errors": [],
+            "file": "alloc-0-candidate.json",
+            "allocations_per_success": 622.321,
+            "allocatedBytes_per_success": 181553.609,
+            "reallocations_per_success": 35.718
+          },
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 440.2041753784031,
+            "p50_ms": 36.39779899822315,
+            "p99_ms": 41.82684899569722,
+            "errors": [],
+            "file": "alloc-1-candidate.json",
+            "allocations_per_success": 622.431,
+            "allocatedBytes_per_success": 181551.671,
+            "reallocations_per_success": 35.936
+          },
+          {
+            "requests": 1000,
+            "attempted": 1000,
+            "success": 1000,
+            "rps": 431.67961640801934,
+            "p50_ms": 37.23788999923272,
+            "p99_ms": 42.53082699869992,
+            "errors": [],
+            "file": "alloc-2-candidate.json",
+            "allocations_per_success": 623.863,
+            "allocatedBytes_per_success": 181611.561,
+            "reallocations_per_success": 36.012
+          }
+        ],
+        "rps": {
+          "n": 3,
+          "min": 431.67961640801934,
+          "median": 440.2041753784031,
+          "max": 443.77109163340884
+        },
+        "p99_ms": {
+          "n": 3,
+          "min": 41.82684899569722,
+          "median": 42.53082699869992,
+          "max": 43.89396999613382
+        },
+        "all_requests_succeeded": true
+      }
+    },
+    "timing:h1": {
+      "baseline": {
+        "samples": [
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 2607.2705951534094,
+            "p50_ms": 5.959422000159975,
+            "p99_ms": 10.422323997772764,
+            "errors": [],
+            "file": "bench-0-baseline.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 2593.05118474443,
+            "p50_ms": 5.894387999433093,
+            "p99_ms": 10.288602999935392,
+            "errors": [],
+            "file": "bench-1-baseline.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 2625.7434157446446,
+            "p50_ms": 5.828344001201913,
+            "p99_ms": 10.472637994098477,
+            "errors": [],
+            "file": "bench-2-baseline.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 2574.9319570918065,
+            "p50_ms": 5.95281499408884,
+            "p99_ms": 10.654755002178717,
+            "errors": [],
+            "file": "bench-3-baseline.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 2617.3235876886315,
+            "p50_ms": 5.881313001736999,
+            "p99_ms": 10.949464005534537,
+            "errors": [],
+            "file": "bench-4-baseline.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          }
+        ],
+        "rps": {
+          "n": 5,
+          "min": 2574.9319570918065,
+          "median": 2607.2705951534094,
+          "max": 2625.7434157446446
+        },
+        "p99_ms": {
+          "n": 5,
+          "min": 10.288602999935392,
+          "median": 10.472637994098477,
+          "max": 10.949464005534537
+        },
+        "all_requests_succeeded": true
+      },
+      "candidate": {
+        "samples": [
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 2787.990376264335,
+            "p50_ms": 5.538543002330698,
+            "p99_ms": 9.559835001709871,
+            "errors": [],
+            "file": "bench-0-candidate.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 2703.627546097485,
+            "p50_ms": 5.680962996848393,
+            "p99_ms": 9.79415300389519,
+            "errors": [],
+            "file": "bench-1-candidate.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 2783.5777680061797,
+            "p50_ms": 5.507351997948717,
+            "p99_ms": 9.865397005341947,
+            "errors": [],
+            "file": "bench-2-candidate.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 2783.81065892643,
+            "p50_ms": 5.52908700046828,
+            "p99_ms": 9.417961999133695,
+            "errors": [],
+            "file": "bench-3-candidate.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 2772.266930807942,
+            "p50_ms": 5.536509997909889,
+            "p99_ms": 9.48759700258961,
+            "errors": [],
+            "file": "bench-4-candidate.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          }
+        ],
+        "rps": {
+          "n": 5,
+          "min": 2703.627546097485,
+          "median": 2783.5777680061797,
+          "max": 2787.990376264335
+        },
+        "p99_ms": {
+          "n": 5,
+          "min": 9.417961999133695,
+          "median": 9.559835001709871,
+          "max": 9.865397005341947
+        },
+        "all_requests_succeeded": true
+      }
+    },
+    "timing:h2": {
+      "baseline": {
+        "samples": [
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 1301.0095007604205,
+            "p50_ms": 11.06055399577599,
+            "p99_ms": 13.123012999130879,
+            "errors": [],
+            "file": "bench-0-baseline.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 1263.8429991485912,
+            "p50_ms": 11.341828998411074,
+            "p99_ms": 14.04977999482071,
+            "errors": [],
+            "file": "bench-1-baseline.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 1293.9083671976282,
+            "p50_ms": 11.062416997447144,
+            "p99_ms": 13.492956997652072,
+            "errors": [],
+            "file": "bench-2-baseline.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 1267.162121838741,
+            "p50_ms": 11.346238003170583,
+            "p99_ms": 13.877955003408715,
+            "errors": [],
+            "file": "bench-3-baseline.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 1325.5045592190406,
+            "p50_ms": 10.843810996448155,
+            "p99_ms": 13.142261996108573,
+            "errors": [],
+            "file": "bench-4-baseline.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          }
+        ],
+        "rps": {
+          "n": 5,
+          "min": 1263.8429991485912,
+          "median": 1293.9083671976282,
+          "max": 1325.5045592190406
+        },
+        "p99_ms": {
+          "n": 5,
+          "min": 13.123012999130879,
+          "median": 13.492956997652072,
+          "max": 14.04977999482071
+        },
+        "all_requests_succeeded": true
+      },
+      "candidate": {
+        "samples": [
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 1310.4045171906898,
+            "p50_ms": 10.838720998435747,
+            "p99_ms": 13.449861005938146,
+            "errors": [],
+            "file": "bench-0-candidate.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 1255.013088995945,
+            "p50_ms": 11.316586002067197,
+            "p99_ms": 13.919719996920321,
+            "errors": [],
+            "file": "bench-1-candidate.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 1340.9483061024412,
+            "p50_ms": 10.531768995861057,
+            "p99_ms": 13.22558300307719,
+            "errors": [],
+            "file": "bench-2-candidate.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 1338.0343878123176,
+            "p50_ms": 10.647544993844349,
+            "p99_ms": 12.883089999377262,
+            "errors": [],
+            "file": "bench-3-candidate.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 1312.0074916777096,
+            "p50_ms": 10.929739997664,
+            "p99_ms": 13.030823996814433,
+            "errors": [],
+            "file": "bench-4-candidate.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          }
+        ],
+        "rps": {
+          "n": 5,
+          "min": 1255.013088995945,
+          "median": 1312.0074916777096,
+          "max": 1340.9483061024412
+        },
+        "p99_ms": {
+          "n": 5,
+          "min": 12.883089999377262,
+          "median": 13.22558300307719,
+          "max": 13.919719996920321
+        },
+        "all_requests_succeeded": true
+      }
+    },
+    "timing:h3": {
+      "baseline": {
+        "samples": [
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 444.84332754794076,
+            "p50_ms": 35.79383699980099,
+            "p99_ms": 41.14659599872539,
+            "errors": [],
+            "file": "bench-0-baseline.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 444.74758162890924,
+            "p50_ms": 35.89798499888275,
+            "p99_ms": 41.52323699963745,
+            "errors": [],
+            "file": "bench-1-baseline.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 456.93633795012624,
+            "p50_ms": 34.812481004337315,
+            "p99_ms": 40.9489029989345,
+            "errors": [],
+            "file": "bench-2-baseline.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 447.0885656151104,
+            "p50_ms": 35.68019899830688,
+            "p99_ms": 41.64741499698721,
+            "errors": [],
+            "file": "bench-3-baseline.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 451.1145284768405,
+            "p50_ms": 35.32790200551972,
+            "p99_ms": 40.457429000525735,
+            "errors": [],
+            "file": "bench-4-baseline.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          }
+        ],
+        "rps": {
+          "n": 5,
+          "min": 444.74758162890924,
+          "median": 447.0885656151104,
+          "max": 456.93633795012624
+        },
+        "p99_ms": {
+          "n": 5,
+          "min": 40.457429000525735,
+          "median": 41.14659599872539,
+          "max": 41.64741499698721
+        },
+        "all_requests_succeeded": true
+      },
+      "candidate": {
+        "samples": [
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 450.6270807884126,
+            "p50_ms": 35.30967600090662,
+            "p99_ms": 40.50711499439785,
+            "errors": [],
+            "file": "bench-0-candidate.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 451.86409036334567,
+            "p50_ms": 35.36863000044832,
+            "p99_ms": 41.34271599468775,
+            "errors": [],
+            "file": "bench-1-candidate.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 448.25232759673924,
+            "p50_ms": 35.59793400199851,
+            "p99_ms": 42.879754000750836,
+            "errors": [],
+            "file": "bench-2-candidate.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 463.01520694071087,
+            "p50_ms": 34.51587400195422,
+            "p99_ms": 40.60091799328802,
+            "errors": [],
+            "file": "bench-3-candidate.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          },
+          {
+            "requests": 4000,
+            "attempted": 4000,
+            "success": 4000,
+            "rps": 469.50231841071735,
+            "p50_ms": 33.88768800505204,
+            "p99_ms": 38.95941199880326,
+            "errors": [],
+            "file": "bench-4-candidate.json",
+            "allocations_per_success": 0.0,
+            "allocatedBytes_per_success": 0.0,
+            "reallocations_per_success": 0.0
+          }
+        ],
+        "rps": {
+          "n": 5,
+          "min": 448.25232759673924,
+          "median": 451.86409036334567,
+          "max": 469.50231841071735
+        },
+        "p99_ms": {
+          "n": 5,
+          "min": 38.95941199880326,
+          "median": 40.60091799328802,
+          "max": 42.879754000750836
+        },
+        "all_requests_succeeded": true
+      }
+    }
+  },
+  "native": {
+    "h1": {
+      "baseline": [
+        {
+          "file": "native/0-baseline-h1.txt",
+          "rps": 2508.54,
+          "p99_ms": 20.97,
+          "errors": []
+        },
+        {
+          "file": "native/1-baseline-h1.txt",
+          "rps": 2495.85,
+          "p99_ms": 21.26,
+          "errors": []
+        },
+        {
+          "file": "native/2-baseline-h1.txt",
+          "rps": 2513.91,
+          "p99_ms": 21.33,
+          "errors": []
+        },
+        {
+          "file": "native/3-baseline-h1.txt",
+          "rps": 2533.73,
+          "p99_ms": 21.07,
+          "errors": []
+        },
+        {
+          "file": "native/4-baseline-h1.txt",
+          "rps": 2521.54,
+          "p99_ms": 21.08,
+          "errors": []
+        }
+      ],
+      "candidate": [
+        {
+          "file": "native/0-candidate-h1.txt",
+          "rps": 2724.19,
+          "p99_ms": 18.82,
+          "errors": []
+        },
+        {
+          "file": "native/1-candidate-h1.txt",
+          "rps": 2817.48,
+          "p99_ms": 17.94,
+          "errors": []
+        },
+        {
+          "file": "native/2-candidate-h1.txt",
+          "rps": 2933.9,
+          "p99_ms": 17.25,
+          "errors": []
+        },
+        {
+          "file": "native/3-candidate-h1.txt",
+          "rps": 2836.42,
+          "p99_ms": 17.93,
+          "errors": []
+        },
+        {
+          "file": "native/4-candidate-h1.txt",
+          "rps": 2789.91,
+          "p99_ms": 18.05,
+          "errors": []
+        }
+      ]
+    },
+    "h2": {
+      "baseline": [
+        {
+          "file": "native/0-baseline.h2-latency.tsv",
+          "requests": 4800,
+          "success": 4800,
+          "p99_ms": 24.791,
+          "rps": 2009.64
+        },
+        {
+          "file": "native/1-baseline.h2-latency.tsv",
+          "requests": 4800,
+          "success": 4800,
+          "p99_ms": 24.764,
+          "rps": 2007.21
+        },
+        {
+          "file": "native/2-baseline.h2-latency.tsv",
+          "requests": 4800,
+          "success": 4800,
+          "p99_ms": 24.368,
+          "rps": 2056.82
+        },
+        {
+          "file": "native/3-baseline.h2-latency.tsv",
+          "requests": 4800,
+          "success": 4800,
+          "p99_ms": 24.783,
+          "rps": 2016.66
+        },
+        {
+          "file": "native/4-baseline.h2-latency.tsv",
+          "requests": 4800,
+          "success": 4800,
+          "p99_ms": 23.809,
+          "rps": 2004.69
+        }
+      ],
+      "candidate": [
+        {
+          "file": "native/0-candidate.h2-latency.tsv",
+          "requests": 4800,
+          "success": 4800,
+          "p99_ms": 19.891,
+          "rps": 2325.49
+        },
+        {
+          "file": "native/1-candidate.h2-latency.tsv",
+          "requests": 4800,
+          "success": 4800,
+          "p99_ms": 19.649,
+          "rps": 2351.31
+        },
+        {
+          "file": "native/2-candidate.h2-latency.tsv",
+          "requests": 4800,
+          "success": 4800,
+          "p99_ms": 19.22,
+          "rps": 2333.26
+        },
+        {
+          "file": "native/3-candidate.h2-latency.tsv",
+          "requests": 4800,
+          "success": 4800,
+          "p99_ms": 19.757,
+          "rps": 2312.66
+        },
+        {
+          "file": "native/4-candidate.h2-latency.tsv",
+          "requests": 4800,
+          "success": 4800,
+          "p99_ms": 19.061,
+          "rps": 2329.77
+        }
+      ]
+    },
+    "h3": {
+      "baseline": [
+        {
+          "file": "native/0-baseline.h3.json",
+          "rps": 2375.480383059603,
+          "p99_ms": 24.165,
+          "success": 28514,
+          "errors": {
+            "h3 error": 0
+          },
+          "sizePerRequest": 16384
+        },
+        {
+          "file": "native/1-baseline.h3.json",
+          "rps": 2400.772693553291,
+          "p99_ms": 23.674,
+          "success": 28813,
+          "errors": {
+            "h3 error": 0
+          },
+          "sizePerRequest": 16384
+        },
+        {
+          "file": "native/2-baseline.h3.json",
+          "rps": 2376.928120270352,
+          "p99_ms": 23.874,
+          "success": 28534,
+          "errors": {
+            "h3 error": 0
+          },
+          "sizePerRequest": 16384
+        },
+        {
+          "file": "native/3-baseline.h3.json",
+          "rps": 2404.6188256899554,
+          "p99_ms": 23.73,
+          "success": 28870,
+          "errors": {
+            "h3 error": 0
+          },
+          "sizePerRequest": 16384
+        },
+        {
+          "file": "native/4-baseline.h3.json",
+          "rps": 2405.212095059988,
+          "p99_ms": 23.652,
+          "success": 28863,
+          "errors": {
+            "h3 error": 0
+          },
+          "sizePerRequest": 16384
+        }
+      ],
+      "candidate": [
+        {
+          "file": "native/0-candidate.h3.json",
+          "rps": 2814.189189550885,
+          "p99_ms": 19.697,
+          "success": 33777,
+          "errors": {
+            "h3 error": 0
+          },
+          "sizePerRequest": 16384
+        },
+        {
+          "file": "native/1-candidate.h3.json",
+          "rps": 2823.4307926315046,
+          "p99_ms": 19.671,
+          "success": 33893,
+          "errors": {
+            "h3 error": 0
+          },
+          "sizePerRequest": 16384
+        },
+        {
+          "file": "native/2-candidate.h3.json",
+          "rps": 2846.6244559507822,
+          "p99_ms": 19.48,
+          "success": 34171,
+          "errors": {
+            "h3 error": 0
+          },
+          "sizePerRequest": 16384
+        },
+        {
+          "file": "native/3-candidate.h3.json",
+          "rps": 2823.2247555760305,
+          "p99_ms": 19.661,
+          "success": 33891,
+          "errors": {
+            "h3 error": 0
+          },
+          "sizePerRequest": 16384
+        },
+        {
+          "file": "native/4-candidate.h3.json",
+          "rps": 2786.3960417888147,
+          "p99_ms": 20.143,
+          "success": 33441,
+          "errors": {
+            "h3 error": 0
+          },
+          "sizePerRequest": 16384
+        }
+      ]
+    }
+  }
+}

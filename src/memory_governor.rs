@@ -25,9 +25,96 @@ pub enum AdmissionClass {
     ClusterInternalConnection,
     RpcStreamCommand,
     SniRelay,
+    ConfigApply,
 }
 
-const ADMISSION_CLASS_COUNT: usize = 17;
+/// Resource domains describe who owns a commitment. Security state is kept
+/// separate from discardable cache and analytics data.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ResourceDomain {
+    CriticalConnection,
+    EstablishedTraffic,
+    ControlPlane,
+    DurableTelemetry,
+    CacheAndAnalytics,
+    SecurityState,
+}
+
+impl AdmissionClass {
+    /// `BackgroundWork` is shared by cache tasks and configuration apply. Its
+    /// domain must be supplied by the caller before priority can be enforced.
+    pub fn resource_domain(self) -> Option<ResourceDomain> {
+        let domain = match self {
+            Self::HttpConnection
+            | Self::TcpConnection
+            | Self::Http3Connection
+            | Self::UdpSession => ResourceDomain::CriticalConnection,
+            Self::Http2Stream
+            | Self::Http3Request
+            | Self::OriginConnect
+            | Self::SniRelay
+            | Self::ResponseTransform => ResourceDomain::EstablishedTraffic,
+            Self::ClusterInternalConnection | Self::RpcStreamCommand | Self::ConfigApply => {
+                ResourceDomain::ControlPlane
+            }
+            Self::RequestBodyWaf | Self::ResponseBodyWaf => ResourceDomain::SecurityState,
+            Self::CacheRevalidate | Self::CacheWrite | Self::CacheReadMemory => {
+                ResourceDomain::CacheAndAnalytics
+            }
+            Self::BackgroundWork => return None,
+        };
+        Some(domain)
+    }
+}
+
+/// Hard reserves are unavailable for borrowing, even when presently unused.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ProtectedReserves {
+    pub critical_connection_bytes: u64,
+    pub established_traffic_bytes: u64,
+    pub control_plane_bytes: u64,
+}
+
+/// Inputs for the borrowing calculation. Headroom must be an observed
+/// physical value; neither logical refunds nor reclaim targets increase it.
+/// Use the `Option` from `SharedAccountView`, not its raw atomic sentinel.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BorrowingInputs {
+    pub observed_headroom_bytes: Option<u64>,
+    pub observation_fresh: bool,
+    pub pressure: MemoryPressureLevel,
+    pub protected: ProtectedReserves,
+    pub safety_margin_bytes: u64,
+    pub pending_bytes: u64,
+    pub committed_unconfirmed_bytes: u64,
+    /// Additional future buffers required by existing connections, excluding
+    /// their already-resident bytes and the hard reserve above.
+    pub established_working_set_bytes: u64,
+}
+
+impl BorrowingInputs {
+    /// Compute an advisory ceiling. Enforcement requires every borrower to
+    /// reserve bytes atomically and hold its charge for the allocation's
+    /// lifetime; this calculation alone does not enforce that contract.
+    pub fn borrowable_bytes(self) -> u64 {
+        if !self.observation_fresh || self.pressure != MemoryPressureLevel::Normal {
+            return 0;
+        }
+        let Some(headroom) = self.observed_headroom_bytes else {
+            return 0;
+        };
+        headroom
+            .saturating_sub(self.protected.critical_connection_bytes)
+            .saturating_sub(self.protected.established_traffic_bytes)
+            .saturating_sub(self.protected.control_plane_bytes)
+            .saturating_sub(self.safety_margin_bytes)
+            .saturating_sub(self.pending_bytes)
+            .saturating_sub(self.committed_unconfirmed_bytes)
+            .saturating_sub(self.established_working_set_bytes)
+    }
+}
+
+const ADMISSION_CLASS_COUNT: usize = 18;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct AdmissionRejectSnapshot {
@@ -39,6 +126,7 @@ pub struct AdmissionRejectSnapshot {
     pub h3_request: u64,
     pub origin_connect: u64,
     pub background_work: u64,
+    pub config_apply: u64,
     pub request_body_waf: u64,
     pub response_body_waf: u64,
     pub response_transform: u64,
@@ -60,6 +148,7 @@ impl AdmissionRejectSnapshot {
             .saturating_add(self.h3_request)
             .saturating_add(self.origin_connect)
             .saturating_add(self.background_work)
+            .saturating_add(self.config_apply)
             .saturating_add(self.request_body_waf)
             .saturating_add(self.response_body_waf)
             .saturating_add(self.response_transform)
@@ -95,6 +184,11 @@ pub struct GovernorSnapshot {
     pub keepalive_fd_budget: u64,
     pub cpu_parallelism: usize,
     pub connection_budget_bytes: u64,
+    pub control_plane_reserve_bytes: u64,
+    /// Slice of the shared connection budget reserved for established
+    /// classes; new connection establishment cannot consume it.
+    pub established_traffic_reserve_bytes: u64,
+    pub config_apply_active: u64,
     pub connection_admission_used_bytes: u64,
     pub zero_copy_relay_active: u64,
     pub zero_copy_relay_limit: usize,
@@ -195,6 +289,10 @@ pub struct GovernorSnapshot {
     /// Estimated bytes held by metrics trackers that are not covered by the
     /// resident ledger (aggregator maps, top-IP, daily domain, unique IP).
     pub metrics_aggregator_bytes: u64,
+    /// Estimated bytes held by the L1 response-body cache. Weight-based
+    /// (KB-rounded entries), outside the resident ledger; subtracts from the
+    /// anonymous-RSS attribution gap as a known structure.
+    pub cache_l1_bytes: u64,
     /// Attribution gap: process RSS minus every tracked byte ledger
     /// (resident ledger + connection/relay/queue/cache-read ledgers +
     /// metrics gauge). Sustained growth means uninstrumented allocations or
@@ -232,6 +330,10 @@ pub struct GovernorSnapshot {
     pub account_pending_bytes: u64,
     /// Committed bytes not yet inside a published observation.
     pub account_committed_unconfirmed_bytes: u64,
+    /// Headroom cache/analytics work may borrow after the connection-budget
+    /// reserve; 0 outside Normal pressure. Enforcement is in the shared
+    /// account charge path, not just this advisory value.
+    pub low_priority_borrowable_bytes: u64,
     /// Managed stock under promise: committed credentials still held.
     pub account_committed_live_bytes: u64,
     pub account_grants_total: u64,
@@ -527,6 +629,20 @@ const CACHE_WRITE_ESTIMATED_BYTES: u64 = 1024 * 1024;
 const CACHE_READ_MEMORY_ESTIMATED_BYTES: u64 = 4 * 1024 * 1024;
 const CLUSTER_INTERNAL_CONNECTION_ESTIMATED_BYTES: u64 = 64 * 1024;
 const RPC_STREAM_COMMAND_ESTIMATED_BYTES: u64 = 256 * 1024;
+// Existing Normal-pressure control floors plus one independent config apply.
+const CONTROL_PLANE_RESERVE_BYTES: u64 = MIN_CLUSTER_INTERNAL_CONNECTION_LIMIT as u64
+    * CLUSTER_INTERNAL_CONNECTION_ESTIMATED_BYTES
+    + MIN_RPC_STREAM_COMMAND_LIMIT as u64 * RPC_STREAM_COMMAND_ESTIMATED_BYTES
+    + BACKGROUND_WORK_ESTIMATED_BYTES;
+// Normal-pressure floors for established-traffic work a new-connection flood
+// must not consume: H2 streams, H3 requests and origin connects. SNI relay and
+// response transforms are deliberately excluded — the former is a legacy
+// passthrough with its own half-budget limit, and one transform's 16 MiB
+// estimate makes a 32-slot floor a memory plan by itself.
+const ESTABLISHED_TRAFFIC_RESERVE_BYTES: u64 = MIN_H2_STREAM_GLOBAL_LIMIT as u64
+    * H2_STREAM_ESTIMATED_BYTES
+    + MIN_H3_REQUEST_GLOBAL_LIMIT as u64 * H3_REQUEST_ESTIMATED_BYTES
+    + MIN_ORIGIN_CONNECT_LIMIT as u64 * ORIGIN_CONNECT_ESTIMATED_BYTES;
 const KEEPALIVE_CONN_ESTIMATED_BYTES: u64 = 16 * 1024;
 const NEGATIVE_CACHE_ESTIMATED_BYTES: u64 = 160;
 const FIREWALL_IP_LIMITER_ESTIMATED_BYTES: u64 = 1024;
@@ -646,6 +762,10 @@ const MAX_FIREWALL_STATE_ENTRIES: usize = 8_000_000;
 const METRIC_CARDINALITY_ENTRY_ESTIMATED_BYTES: u64 = 256;
 const MIN_METRIC_CARDINALITY_ENTRIES: usize = 65_536;
 const MAX_METRIC_CARDINALITY_ENTRIES: usize = 4_000_000;
+/// One distinct-IP set entry (IpAddr + DashSet slot + shard overhead).
+const DISTINCT_IP_ENTRY_ESTIMATED_BYTES: u64 = 64;
+const MIN_DISTINCT_IP_ENTRIES: usize = 16_384;
+const MAX_DISTINCT_IP_ENTRIES: usize = 16_000_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ConfigSyncBudget {
@@ -733,7 +853,7 @@ impl std::ops::Deref for PaddedAtomicU64 {
     }
 }
 
-const N_ADMISSION_CLASSES: usize = 17;
+const N_ADMISSION_CLASSES: usize = 18;
 
 /// Materialized per-snapshot-epoch admission view: every class limit and
 /// byte budget is a pure function of the `cached_*` snapshot fields, so the
@@ -746,6 +866,11 @@ struct GovernorLimits {
     generation: u64,
     /// `limit_for` output per class, indexed by `class_index`.
     class_limit: [u64; N_ADMISSION_CLASSES],
+    connection_budget_bytes: u64,
+    control_plane_reserve_bytes: u64,
+    /// Portion of `shared_connection_budget_bytes` that only established
+    /// classes may consume.
+    established_traffic_reserve_bytes: u64,
     shared_connection_budget_bytes: u64,
     cache_read_memory_budget_bytes: u64,
     cache_read_memory_object_limit_bytes: u64,
@@ -807,6 +932,7 @@ pub struct MemoryGovernor {
     /// consume the datagram budget (or vice versa).
     tcp_queue_bytes: PaddedAtomicU64,
     background_work: PaddedAtomicU64,
+    config_apply: PaddedAtomicU64,
     request_body_waf: PaddedAtomicU64,
     response_body_waf: PaddedAtomicU64,
     response_transform: PaddedAtomicU64,
@@ -827,6 +953,9 @@ pub struct MemoryGovernor {
     /// and letting unbudgeted metrics maps share that total would starve the
     /// cache categories it protects.
     metrics_aggregator_bytes: AtomicU64,
+    /// Observational gauge for the L1 response-body cache, which the cache
+    /// manager sizes outside the resident ledger.
+    cache_l1_bytes: AtomicU64,
     /// Reject counters get their own lines too: rejects only happen under
     /// floods, which is exactly when an unpadded array would false-share.
     admission_rejects: [PaddedAtomicU64; ADMISSION_CLASS_COUNT],
@@ -869,7 +998,8 @@ pub struct MemoryGovernor {
     resident: ResidentMemoryAccounting,
     /// Shared memory account. The ledger tracks *commitments* — bytes a
     /// credential holder has been granted — never claims about physical
-    /// pages. Two counters bound new grants:
+    /// pages. A single outstanding counter bounds new grants; the following
+    /// counters classify its lifecycle:
     ///
     /// - `account_pending_bytes`: granted but not yet committed (the
     ///   credential holder has not confirmed its allocation).
@@ -880,10 +1010,12 @@ pub struct MemoryGovernor {
     ///   stay deducted too — freed memory is only re-promised after a
     ///   snapshot confirms it.
     ///
-    /// `pending + committed_unconfirmed + request <= account_capacity`
-    /// admits a grant. Confirmed commitments need no deduction — they
-    /// are already inside observed `used`, which is exactly what the
-    /// capacity formula "managed stock + genuine new headroom" means.
+    /// `outstanding + request <= account_capacity` admits a grant. In a
+    /// settled view, outstanding = pending + committed_unconfirmed; changing
+    /// classification never opens capacity. Confirmed commitments need no
+    /// deduction: they are already inside observed `used`. Category transitions
+    /// never release the outstanding commitment.
+    account_outstanding_bytes: PaddedAtomicU64,
     account_pending_bytes: PaddedAtomicU64,
     account_committed_unconfirmed_bytes: PaddedAtomicU64,
     /// Stats/attribution: committed bytes still held (excl. released),
@@ -923,10 +1055,64 @@ pub struct AdmissionPermit<'a> {
     shared: SharedPermit<'a>,
 }
 
-impl AdmissionPermit<'_> {
+impl<'a> AdmissionPermit<'a> {
     /// Bytes this admission holds against the shared account.
     pub fn account_bytes(&self) -> u64 {
         self.shared.bytes()
+    }
+
+    pub(crate) fn grow(&mut self, bytes: u64) -> bool {
+        self.shared.grow(bytes)
+    }
+
+    pub(crate) fn shrink(&mut self, bytes: u64) {
+        self.shared.shrink(bytes);
+    }
+
+    /// Move an existing charge to the buffer owner without refunding it.
+    /// The class slot stays with the handler; shared byte slices may outlive it.
+    pub(crate) fn take_buffer_charge(&mut self, bytes: u64) -> SharedPermit<'a> {
+        assert!(bytes <= self.shared.bytes);
+        self.shared.bytes -= bytes;
+        SharedPermit {
+            governor: self.governor,
+            purpose: self.shared.purpose,
+            bytes,
+            committed: self.shared.committed,
+            priority: self.shared.priority,
+        }
+    }
+
+    /// Move part of the cache-read ledger charge to the buffer owner. Once
+    /// transferred, this permit no longer refunds those bytes on drop: the
+    /// returned lease refunds them when the last body slice is released, so
+    /// the read budget tracks the allocation's real lifetime.
+    pub(crate) fn take_cache_read_charge(&mut self, bytes: u64) -> CacheReadLease<'a> {
+        assert!(bytes <= self.cache_read_memory_charge_bytes);
+        self.cache_read_memory_charge_bytes -= bytes;
+        CacheReadLease {
+            governor: self.governor,
+            bytes,
+        }
+    }
+}
+
+/// RAII ownership of cache-read ledger bytes independent of the handler
+/// permit that admitted them. See `AdmissionPermit::take_cache_read_charge`.
+pub struct CacheReadLease<'a> {
+    governor: &'a MemoryGovernor,
+    bytes: u64,
+}
+
+pub type StaticCacheReadLease = CacheReadLease<'static>;
+
+impl Drop for CacheReadLease<'_> {
+    fn drop(&mut self) {
+        if self.bytes > 0 {
+            self.governor
+                .cache_read_memory_bytes
+                .fetch_sub(self.bytes, Ordering::AcqRel);
+        }
     }
 }
 
@@ -1095,11 +1281,29 @@ fn shared_purpose_index(purpose: SharedGrantPurpose) -> usize {
 /// published snapshot confirms the physical release — freed-but-still-
 /// resident pages (mimalloc arenas, pinned maps mid-teardown) are never
 /// re-promised early.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AccountPriority {
+    /// New work and large request workspaces leave the continuation reserve.
+    Ordinary,
+    /// Only necessary small allocations belonging to already accepted work.
+    Established,
+    /// New connection/stream-establishment work. It must leave the
+    /// established-traffic reserve for streams and origin connects that
+    /// already-admitted connections need.
+    ConnectionEstablishment,
+    Cache,
+    Control,
+}
+
 pub struct SharedPermit<'a> {
     governor: &'a MemoryGovernor,
     purpose: SharedGrantPurpose,
     bytes: u64,
     committed: bool,
+    /// Cache/analytics work may only borrow headroom left after the
+    /// connection-budget reserve. The flag follows the credential through
+    /// growth so a later `grow` cannot bypass the original gate.
+    priority: AccountPriority,
 }
 
 pub type StaticSharedPermit = SharedPermit<'static>;
@@ -1110,6 +1314,7 @@ impl std::fmt::Debug for SharedPermit<'_> {
             .field("purpose", &self.purpose)
             .field("bytes", &self.bytes)
             .field("committed", &self.committed)
+            .field("priority", &self.priority)
             .finish()
     }
 }
@@ -1131,6 +1336,10 @@ impl SharedPermit<'_> {
     /// charge pending → committed-unconfirmed; it is lifted from the
     /// deduction once the next snapshot observes it inside `used`.
     pub fn commit(&mut self) {
+        self.commit_during_transfer(|| {});
+    }
+
+    fn commit_during_transfer(&mut self, during_transfer: impl FnOnce()) {
         if self.committed || self.bytes == 0 {
             return;
         }
@@ -1138,6 +1347,7 @@ impl SharedPermit<'_> {
         self.governor
             .account_pending_bytes
             .fetch_sub(self.bytes, Ordering::AcqRel);
+        during_transfer();
         self.governor
             .account_committed_unconfirmed_bytes
             .fetch_add(self.bytes, Ordering::AcqRel);
@@ -1155,10 +1365,12 @@ impl SharedPermit<'_> {
         if delta == 0 {
             return true;
         }
-        if self
-            .governor
-            .try_charge_account(delta, self.committed, self.purpose)
-        {
+        if self.governor.try_charge_account_with_priority(
+            delta,
+            self.committed,
+            self.purpose,
+            self.priority,
+        ) {
             self.bytes = self.bytes.saturating_add(delta);
             true
         } else {
@@ -1184,6 +1396,9 @@ impl SharedPermit<'_> {
         } else {
             self.governor
                 .account_pending_bytes
+                .fetch_sub(delta, Ordering::AcqRel);
+            self.governor
+                .account_outstanding_bytes
                 .fetch_sub(delta, Ordering::AcqRel);
         }
     }
@@ -1223,6 +1438,9 @@ impl Drop for SharedPermit<'_> {
             self.governor
                 .account_pending_bytes
                 .fetch_sub(self.bytes, Ordering::AcqRel);
+            self.governor
+                .account_outstanding_bytes
+                .fetch_sub(self.bytes, Ordering::AcqRel);
         }
     }
 }
@@ -1256,6 +1474,7 @@ impl MemoryGovernor {
             udp_queued_bytes: PaddedAtomicU64::new(0),
             tcp_queue_bytes: PaddedAtomicU64::new(0),
             background_work: PaddedAtomicU64::new(0),
+            config_apply: PaddedAtomicU64::new(0),
             request_body_waf: PaddedAtomicU64::new(0),
             response_body_waf: PaddedAtomicU64::new(0),
             response_transform: PaddedAtomicU64::new(0),
@@ -1268,6 +1487,7 @@ impl MemoryGovernor {
             cache_read_memory_bytes: PaddedAtomicU64::new(0),
             request_workspace_bytes: PaddedAtomicU64::new(0),
             metrics_aggregator_bytes: AtomicU64::new(0),
+            cache_l1_bytes: AtomicU64::new(0),
             admission_rejects: std::array::from_fn(|_| PaddedAtomicU64::new(0)),
             cached_total_bytes: AtomicU64::new(0),
             cached_used_bytes: AtomicU64::new(0),
@@ -1296,6 +1516,7 @@ impl MemoryGovernor {
             cached_psi_some_avg10_x100: AtomicU64::new(0),
             cached_psi_full_avg10_x100: AtomicU64::new(0),
             resident: ResidentMemoryAccounting::new(),
+            account_outstanding_bytes: PaddedAtomicU64::new(0),
             account_pending_bytes: PaddedAtomicU64::new(0),
             account_committed_unconfirmed_bytes: PaddedAtomicU64::new(0),
             account_committed_live_bytes: AtomicU64::new(0),
@@ -1319,6 +1540,9 @@ impl MemoryGovernor {
             cached_limits: arc_swap::ArcSwap::from_pointee(GovernorLimits {
                 generation: 0,
                 class_limit: [0; N_ADMISSION_CLASSES],
+                connection_budget_bytes: 0,
+                control_plane_reserve_bytes: 0,
+                established_traffic_reserve_bytes: 0,
                 shared_connection_budget_bytes: 0,
                 cache_read_memory_budget_bytes: 0,
                 cache_read_memory_object_limit_bytes: 0,
@@ -1362,6 +1586,12 @@ impl MemoryGovernor {
             0
         };
         self.try_admit_with_charges(class, cache_read_memory_charge_bytes)
+    }
+
+    /// Allocation-heavy cache background work shares the normal background
+    /// class ceiling, but must also yield its bytes to connection reserves.
+    pub fn try_admit_cache_background(&self) -> Option<AdmissionPermit<'_>> {
+        self.try_admit_with_priority(AdmissionClass::BackgroundWork, 0, AccountPriority::Cache)
     }
 
     pub fn try_admit_cache_read(&self, bytes: u64) -> Option<AdmissionPermit<'_>> {
@@ -1430,20 +1660,30 @@ impl MemoryGovernor {
     /// 0 when no observation has ever landed — the account opens
     /// fail-closed.
     fn account_grantable_bytes(&self) -> u64 {
+        let outstanding = self.account_outstanding_bytes.load(Ordering::Acquire);
         let headroom = match self.cached_account_headroom_bytes.load(Ordering::Relaxed) {
             u64::MAX => self.unobservable_account_bound(),
             value => value,
         };
-        let outstanding = self
-            .account_pending_bytes
-            .load(Ordering::Acquire)
-            .saturating_add(
-                self.account_committed_unconfirmed_bytes
-                    .load(Ordering::Acquire),
-            );
         headroom
             .saturating_sub(self.account_safety_margin_bytes())
             .saturating_sub(outstanding)
+    }
+
+    /// Bytes cache/analytics work may borrow right now, after the full
+    /// connection-budget reserve and every outstanding commitment. Returns
+    /// zero outside Normal pressure. This is the same gate enforced by
+    /// `try_admit_with_charges`, exposed for status and tests.
+    pub fn low_priority_borrowable_bytes(&self) -> u64 {
+        let limits = self.limits();
+        if limits.memory_pressure_level != MemoryPressureLevel::Normal
+            || self.cached_account_headroom_bytes.load(Ordering::Relaxed) == u64::MAX
+        {
+            return 0;
+        }
+        self.account_grantable_bytes()
+            .saturating_sub(limits.connection_budget_bytes)
+            .saturating_sub(limits.control_plane_reserve_bytes)
     }
 
     /// Charge `bytes` against the account. `committed` selects which
@@ -1452,31 +1692,84 @@ impl MemoryGovernor {
     /// Committed charges also land in the live/purpose attribution
     /// immediately — the covered allocation is already real.
     fn try_charge_account(&self, bytes: u64, committed: bool, purpose: SharedGrantPurpose) -> bool {
+        self.try_charge_account_with_priority(bytes, committed, purpose, AccountPriority::Ordinary)
+    }
+
+    fn try_charge_account_with_priority(
+        &self,
+        bytes: u64,
+        committed: bool,
+        purpose: SharedGrantPurpose,
+        priority: AccountPriority,
+    ) -> bool {
+        self.try_charge_account_before_cas(bytes, committed, purpose, priority, || {})
+    }
+
+    fn try_charge_account_before_cas(
+        &self,
+        bytes: u64,
+        committed: bool,
+        purpose: SharedGrantPurpose,
+        priority: AccountPriority,
+        before_cas: impl FnOnce(),
+    ) -> bool {
+        let mut before_cas = Some(before_cas);
         let counter = if committed {
             &self.account_committed_unconfirmed_bytes
         } else {
             &self.account_pending_bytes
         };
-        let mut current = counter.load(Ordering::Acquire);
+        // Low-priority work may use only what remains after reserving the
+        // whole connection budget (which already covers established
+        // protocol queues and relay slices), and only while pressure is
+        // Normal. A non-Normal observation closes the borrowing gate even
+        // if the arithmetic would still leave headroom.
+        let reserve = match priority {
+            AccountPriority::Control => 0,
+            AccountPriority::Established => CONTROL_PLANE_RESERVE_BYTES,
+            AccountPriority::Ordinary => {
+                CONTROL_PLANE_RESERVE_BYTES.saturating_add(self.established_reserve_for_gate())
+            }
+            // A new-connection flood must leave the established floors for
+            // streams and origin connects that already-admitted connections
+            // need. Established-class admissions themselves keep only the
+            // control reserve.
+            AccountPriority::ConnectionEstablishment => {
+                CONTROL_PLANE_RESERVE_BYTES.saturating_add(self.established_reserve_for_gate())
+            }
+            AccountPriority::Cache => {
+                let limits = self.limits();
+                if limits.memory_pressure_level == MemoryPressureLevel::Normal
+                    && self.cached_account_headroom_bytes.load(Ordering::Relaxed) != u64::MAX
+                {
+                    limits
+                        .connection_budget_bytes
+                        .saturating_add(limits.control_plane_reserve_bytes)
+                } else {
+                    u64::MAX
+                }
+            }
+        };
+        let mut current = self.account_outstanding_bytes.load(Ordering::Acquire);
         loop {
-            let other = if committed {
-                self.account_pending_bytes.load(Ordering::Acquire)
-            } else {
-                self.account_committed_unconfirmed_bytes
-                    .load(Ordering::Acquire)
-            };
-            let outstanding = current.saturating_add(other).saturating_add(bytes);
-            if outstanding > self.account_grantable_from_outstanding() {
+            let capacity = self
+                .account_grantable_from_outstanding()
+                .saturating_sub(reserve);
+            if bytes > capacity.saturating_sub(current) {
                 self.account_rejects_total.fetch_add(1, Ordering::Relaxed);
                 return false;
             }
-            match counter.compare_exchange_weak(
+            if let Some(before_cas) = before_cas.take() {
+                before_cas();
+            }
+            match self.account_outstanding_bytes.compare_exchange_weak(
                 current,
-                current.saturating_add(bytes),
+                current + bytes,
                 Ordering::AcqRel,
                 Ordering::Acquire,
             ) {
                 Ok(_) => {
+                    counter.fetch_add(bytes, Ordering::AcqRel);
                     self.account_grants_total.fetch_add(1, Ordering::Relaxed);
                     if committed {
                         self.account_committed_live_bytes
@@ -1488,6 +1781,18 @@ impl MemoryGovernor {
                 }
                 Err(observed) => current = observed,
             }
+        }
+    }
+
+    /// Established reserve for the account gate without forcing the first
+    /// snapshot refresh from an admission path. Generation 0 means no
+    /// observation has landed; returning 0 keeps the account fail-closed
+    /// instead of opening the blind-observation fallback as a side effect.
+    fn established_reserve_for_gate(&self) -> u64 {
+        if self.cached_generation.load(Ordering::Acquire) == 0 {
+            0
+        } else {
+            self.limits().established_traffic_reserve_bytes
         }
     }
 
@@ -1527,8 +1832,28 @@ impl MemoryGovernor {
         purpose: SharedGrantPurpose,
         bytes: u64,
     ) -> Option<SharedPermit<'_>> {
+        self.try_grant_shared_with_priority(
+            purpose,
+            bytes,
+            match purpose {
+                SharedGrantPurpose::CacheReadMemory => AccountPriority::Cache,
+                SharedGrantPurpose::ConfigPublish => AccountPriority::Control,
+                SharedGrantPurpose::TcpQueue
+                | SharedGrantPurpose::UdpQueue
+                | SharedGrantPurpose::ZeroCopyRelay => AccountPriority::Established,
+                _ => AccountPriority::Ordinary,
+            },
+        )
+    }
+
+    fn try_grant_shared_with_priority(
+        &self,
+        purpose: SharedGrantPurpose,
+        bytes: u64,
+        priority: AccountPriority,
+    ) -> Option<SharedPermit<'_>> {
         let bytes = bytes.max(1);
-        if !self.try_charge_account(bytes, false, purpose) {
+        if !self.try_charge_account_with_priority(bytes, false, purpose, priority) {
             return None;
         }
         Some(SharedPermit {
@@ -1536,6 +1861,7 @@ impl MemoryGovernor {
             purpose,
             bytes,
             committed: false,
+            priority,
         })
     }
 
@@ -1591,10 +1917,14 @@ impl MemoryGovernor {
         self.request_workspace_bytes.load(Ordering::Acquire)
     }
 
-    /// Pressure-scaled refill slack for a ticket bucket (bytes checked
-    /// out ahead of `need`). Reads the materialized limits table — one
-    /// ArcSwap load, never a snapshot refresh from the hot path unless
-    /// the table itself is stale.
+    /// Keep independent owners' workspace available at every pool size.
+    /// Large new transforms are refused when a quarter of the pool cannot
+    /// cover them; their size must not become a floor that consumes the pool.
+    pub(crate) fn ticket_owner_limit_bytes(&self) -> u64 {
+        self.limits().request_workspace_budget_bytes / 4
+    }
+
+    /// Pressure-scaled refill slack; loaded from the materialized limits table.
     pub(crate) fn ticket_float_bytes(&self) -> u64 {
         self.limits().ticket_float_bytes
     }
@@ -1777,6 +2107,27 @@ impl MemoryGovernor {
         class: AdmissionClass,
         cache_read_memory_charge_bytes: u64,
     ) -> Option<AdmissionPermit<'_>> {
+        self.try_admit_with_priority(
+            class,
+            cache_read_memory_charge_bytes,
+            match class.resource_domain() {
+                _ if class == AdmissionClass::OriginConnect => AccountPriority::Established,
+                Some(ResourceDomain::CriticalConnection) => {
+                    AccountPriority::ConnectionEstablishment
+                }
+                Some(ResourceDomain::CacheAndAnalytics) => AccountPriority::Cache,
+                Some(ResourceDomain::ControlPlane) => AccountPriority::Control,
+                _ => AccountPriority::Ordinary,
+            },
+        )
+    }
+
+    fn try_admit_with_priority(
+        &self,
+        class: AdmissionClass,
+        cache_read_memory_charge_bytes: u64,
+        priority: AccountPriority,
+    ) -> Option<AdmissionPermit<'_>> {
         // Admission: add then check-then-rollback. The counter may transiently
         // read above the cap by at most the number of in-flight adders, but a
         // grant is issued only while the settled count is below the limit —
@@ -1796,7 +2147,16 @@ impl MemoryGovernor {
         if shared_connection_charge_bytes(class) > 0 {
             // The shared ledger is derived from the class counters: my count
             // add above already moved the derived total by this charge.
-            if self.shared_connection_used_bytes() > limits.shared_connection_budget_bytes {
+            // Connection establishment stops at the established reserve;
+            // established classes may use the whole budget.
+            let budget = if priority != AccountPriority::Established {
+                limits
+                    .shared_connection_budget_bytes
+                    .saturating_sub(limits.established_traffic_reserve_bytes)
+            } else {
+                limits.shared_connection_budget_bytes
+            };
+            if self.shared_connection_used_bytes() > budget {
                 counter.fetch_sub(1, Ordering::AcqRel);
                 self.record_reject(class);
                 return None;
@@ -1826,8 +2186,11 @@ impl MemoryGovernor {
         // attributable.
         let account_charge =
             class_estimated_bytes(class).saturating_add(cache_read_memory_charge_bytes);
-        let Some(mut shared) = self.try_grant_shared(SharedGrantPurpose::Admission, account_charge)
-        else {
+        let Some(mut shared) = self.try_grant_shared_with_priority(
+            SharedGrantPurpose::Admission,
+            account_charge,
+            priority,
+        ) else {
             if cache_read_memory_charge_bytes > 0 {
                 self.cache_read_memory_bytes
                     .fetch_sub(cache_read_memory_charge_bytes, Ordering::AcqRel);
@@ -2028,6 +2391,7 @@ impl MemoryGovernor {
                 MIN_ORIGIN_CONNECT_LIMIT,
                 MAX_ORIGIN_CONNECT_LIMIT,
             ),
+            AdmissionClass::ConfigApply => 1,
             AdmissionClass::BackgroundWork => connection_limit(
                 snapshot.cache_budget_bytes / 8,
                 BACKGROUND_WORK_ESTIMATED_BYTES,
@@ -2566,9 +2930,31 @@ impl MemoryGovernor {
         metrics_cardinality_capacity(&self.memory_snapshot())
     }
 
+    /// Entries available to the process-wide distinct-IP set budget. The
+    /// tracker is shared by every server, so this is a total cap, not a
+    /// per-server cap.
+    pub fn metrics_distinct_ip_capacity(&self) -> usize {
+        metrics_distinct_ip_capacity(&self.memory_snapshot())
+    }
+
+    /// Per-aggregator key cap and aggregate byte budget from one snapshot.
+    pub fn metrics_aggregator_limits(&self) -> (usize, u64) {
+        let snapshot = self.memory_snapshot();
+        (
+            metrics_cardinality_capacity(&snapshot),
+            metrics_aggregator_budget_bytes(&snapshot),
+        )
+    }
+
     pub fn set_metrics_aggregator_bytes(&self, bytes: u64) {
         self.metrics_aggregator_bytes
             .store(bytes, Ordering::Relaxed);
+    }
+
+    /// Publish the L1 cache's weight-based byte estimate for attribution.
+    /// This is a gauge only; it does not grant or enforce cache capacity.
+    pub fn set_cache_l1_bytes(&self, bytes: u64) {
+        self.cache_l1_bytes.store(bytes, Ordering::Relaxed);
     }
 
     /// Drop the snapshot TTL so the next `memory_snapshot()` re-reads
@@ -2811,6 +3197,7 @@ impl MemoryGovernor {
             .saturating_add(self.cache_read_memory_bytes.load(Ordering::Relaxed))
             .saturating_add(self.request_workspace_bytes.load(Ordering::Relaxed))
             .saturating_add(self.metrics_aggregator_bytes.load(Ordering::Relaxed))
+            .saturating_add(self.cache_l1_bytes.load(Ordering::Relaxed))
     }
 
     /// RSS minus all tracked byte ledgers — the live "attribution gap"
@@ -2849,6 +3236,9 @@ impl MemoryGovernor {
             keepalive_fd_budget: fd_budget(&mem, KEEPALIVE_FD_BUDGET_PCT),
             cpu_parallelism: mem.cpu_parallelism,
             connection_budget_bytes: mem.connection_budget_bytes,
+            control_plane_reserve_bytes: self.limits().control_plane_reserve_bytes,
+            established_traffic_reserve_bytes: self.limits().established_traffic_reserve_bytes,
+            config_apply_active: self.config_apply.load(Ordering::Relaxed),
             connection_admission_used_bytes: self.shared_connection_used_bytes(),
             zero_copy_relay_active: self.zero_copy_relay_active(),
             zero_copy_relay_limit: self.zero_copy_relay_limit(),
@@ -2937,6 +3327,7 @@ impl MemoryGovernor {
             pingora_keepalive_pool_size: self.pingora_keepalive_pool_size(pingora_threads),
             resident_memory: resident,
             metrics_aggregator_bytes: self.metrics_aggregator_bytes.load(Ordering::Relaxed),
+            cache_l1_bytes: self.cache_l1_bytes.load(Ordering::Relaxed),
             unaccounted_rss_bytes,
             cgroup_managed: mem.cgroup_managed,
             cgroup_memory_max_bytes: mem.cgroup_memory_max_bytes,
@@ -2960,6 +3351,7 @@ impl MemoryGovernor {
             account_committed_unconfirmed_bytes: self
                 .account_committed_unconfirmed_bytes
                 .load(Ordering::Relaxed),
+            low_priority_borrowable_bytes: self.low_priority_borrowable_bytes(),
             account_committed_live_bytes: self.account_committed_live_bytes.load(Ordering::Relaxed),
             account_grants_total: self.account_grants_total.load(Ordering::Relaxed),
             account_rejects_total: self.account_rejects_total.load(Ordering::Relaxed),
@@ -3034,6 +3426,15 @@ impl MemoryGovernor {
             .store(std::sync::Arc::new(GovernorLimits {
                 generation,
                 class_limit,
+                connection_budget_bytes: snapshot.connection_budget_bytes,
+                control_plane_reserve_bytes: CONTROL_PLANE_RESERVE_BYTES,
+                // Half the connection budget is the ceiling on this reserve:
+                // on a node whose budget is below twice the floors, protecting
+                // the floors outright would leave new connections no room at
+                // all, so the split stays workable and still favours
+                // established traffic.
+                established_traffic_reserve_bytes: ESTABLISHED_TRAFFIC_RESERVE_BYTES
+                    .min(snapshot.connection_budget_bytes / 2),
                 // A landed-but-blind observation (availability Unknown and
                 // no headroom reading at all) collapses the derived byte
                 // budget toward ~1B and would refuse every charged admission
@@ -3080,6 +3481,7 @@ impl MemoryGovernor {
             AdmissionClass::Http3Request => &self.h3_requests.0,
             AdmissionClass::OriginConnect => &self.origin_connects.0,
             AdmissionClass::BackgroundWork => &self.background_work.0,
+            AdmissionClass::ConfigApply => &self.config_apply.0,
             AdmissionClass::RequestBodyWaf => &self.request_body_waf.0,
             AdmissionClass::ResponseBodyWaf => &self.response_body_waf.0,
             AdmissionClass::ResponseTransform => &self.response_transform.0,
@@ -3122,6 +3524,9 @@ impl MemoryGovernor {
                 .load(Ordering::Relaxed),
             origin_connect: self
                 .reject_counter(AdmissionClass::OriginConnect)
+                .load(Ordering::Relaxed),
+            config_apply: self
+                .reject_counter(AdmissionClass::ConfigApply)
                 .load(Ordering::Relaxed),
             background_work: self
                 .reject_counter(AdmissionClass::BackgroundWork)
@@ -3254,6 +3659,8 @@ impl MemoryGovernor {
         // a committed release only stops deducting here, once an
         // observation has had the chance to see the freed bytes.
         self.account_committed_unconfirmed_bytes
+            .fetch_sub(committed_pre, Ordering::AcqRel);
+        self.account_outstanding_bytes
             .fetch_sub(committed_pre, Ordering::AcqRel);
         self.cached_process_rss_bytes
             .store(snapshot.process_rss_bytes, Ordering::Relaxed);
@@ -3456,15 +3863,10 @@ fn read_memory_snapshot() -> MemorySnapshot {
     sys.refresh_memory();
 
     #[cfg(target_os = "linux")]
-    let mut total_bytes = effective_total_bytes(
-        sys.total_memory().max(MIN_MEMORY_TOTAL_BYTES),
-        None,
-    );
+    let mut total_bytes =
+        effective_total_bytes(sys.total_memory().max(MIN_MEMORY_TOTAL_BYTES), None);
     #[cfg(not(target_os = "linux"))]
-    let total_bytes = effective_total_bytes(
-        sys.total_memory().max(MIN_MEMORY_TOTAL_BYTES),
-        None,
-    );
+    let total_bytes = effective_total_bytes(sys.total_memory().max(MIN_MEMORY_TOTAL_BYTES), None);
     #[cfg(target_os = "linux")]
     let mut used_bytes = sys.used_memory().min(total_bytes);
     #[cfg(not(target_os = "linux"))]
@@ -3515,11 +3917,8 @@ fn read_memory_snapshot() -> MemorySnapshot {
                     total_bytes = effective_total_bytes(total_bytes, Some(max));
                     if cgroup.current_known {
                         used_bytes = cgroup.current_bytes.min(total_bytes);
-                        available_before_reserve = effective_available_bytes(
-                            total_bytes,
-                            used_bytes,
-                            host_available,
-                        );
+                        available_before_reserve =
+                            effective_available_bytes(total_bytes, used_bytes, host_available);
                         used_bytes = total_bytes.saturating_sub(available_before_reserve);
                         raw_available_bytes = Some(available_before_reserve);
                         availability = MemoryAvailability::Known;
@@ -4480,6 +4879,25 @@ fn metrics_cardinality_capacity(snapshot: &BudgetedMemorySnapshot) -> usize {
     )
 }
 
+/// Process-wide distinct-IP capacity. The cardinality slice is shared by all
+/// servers rather than divided per server: per-server division would let the
+/// total capacity grow with the sum over server-creation counts.
+fn metrics_distinct_ip_capacity(snapshot: &BudgetedMemorySnapshot) -> usize {
+    connection_limit(
+        state_budget_bytes(snapshot) / 8,
+        DISTINCT_IP_ENTRY_ESTIMATED_BYTES,
+        MIN_DISTINCT_IP_ENTRIES,
+        MAX_DISTINCT_IP_ENTRIES,
+    )
+}
+
+/// Per-aggregator byte budget. The two aggregators together take a quarter of
+/// the state slice; each charge covers the live entry plus room for its
+/// flush/restore temporary copy, so a flush cannot exceed the budget silently.
+fn metrics_aggregator_budget_bytes(snapshot: &BudgetedMemorySnapshot) -> u64 {
+    (state_budget_bytes(snapshot) / 16).clamp(16 * 1024 * 1024, 512 * 1024 * 1024)
+}
+
 fn memory_pressure_high(snapshot: &BudgetedMemorySnapshot) -> bool {
     matches!(
         memory_pressure_level(snapshot),
@@ -4649,7 +5067,8 @@ fn shared_connection_charge_bytes(class: AdmissionClass) -> u64 {
         AdmissionClass::Http2Stream => H2_STREAM_ESTIMATED_BYTES,
         AdmissionClass::Http3Request => H3_REQUEST_ESTIMATED_BYTES,
         AdmissionClass::OriginConnect => ORIGIN_CONNECT_ESTIMATED_BYTES,
-        AdmissionClass::BackgroundWork
+        AdmissionClass::ConfigApply
+        | AdmissionClass::BackgroundWork
         | AdmissionClass::RequestBodyWaf
         | AdmissionClass::ResponseBodyWaf
         | AdmissionClass::ResponseTransform
@@ -4674,7 +5093,9 @@ pub fn class_estimated_bytes(class: AdmissionClass) -> u64 {
         AdmissionClass::Http2Stream => H2_STREAM_ESTIMATED_BYTES,
         AdmissionClass::Http3Request => H3_REQUEST_ESTIMATED_BYTES,
         AdmissionClass::OriginConnect => ORIGIN_CONNECT_ESTIMATED_BYTES,
-        AdmissionClass::BackgroundWork => BACKGROUND_WORK_ESTIMATED_BYTES,
+        AdmissionClass::BackgroundWork | AdmissionClass::ConfigApply => {
+            BACKGROUND_WORK_ESTIMATED_BYTES
+        }
         AdmissionClass::RequestBodyWaf => REQUEST_BODY_WAF_ESTIMATED_BYTES,
         AdmissionClass::ResponseBodyWaf => RESPONSE_BODY_WAF_ESTIMATED_BYTES,
         AdmissionClass::ResponseTransform => RESPONSE_TRANSFORM_ESTIMATED_BYTES,
@@ -4707,6 +5128,7 @@ const ALL_ADMISSION_CLASSES: [AdmissionClass; N_ADMISSION_CLASSES] = [
     AdmissionClass::ClusterInternalConnection,
     AdmissionClass::RpcStreamCommand,
     AdmissionClass::SniRelay,
+    AdmissionClass::ConfigApply,
 ];
 
 fn class_index(class: AdmissionClass) -> usize {
@@ -4728,6 +5150,7 @@ fn class_index(class: AdmissionClass) -> usize {
         AdmissionClass::ClusterInternalConnection => 14,
         AdmissionClass::RpcStreamCommand => 15,
         AdmissionClass::SniRelay => 16,
+        AdmissionClass::ConfigApply => 17,
     }
 }
 
@@ -4786,7 +5209,8 @@ fn runtime_limit(
             Some(ORIGIN_FD_BUDGET_PCT),
             16_384,
         ),
-        AdmissionClass::BackgroundWork
+        AdmissionClass::ConfigApply
+        | AdmissionClass::BackgroundWork
         | AdmissionClass::RequestBodyWaf
         | AdmissionClass::ResponseBodyWaf
         | AdmissionClass::ResponseTransform
@@ -4990,6 +5414,110 @@ fn read_current_fd_count() -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn borrowing_inputs() -> BorrowingInputs {
+        BorrowingInputs {
+            observed_headroom_bytes: Some(1_000),
+            observation_fresh: true,
+            pressure: MemoryPressureLevel::Normal,
+            protected: ProtectedReserves {
+                critical_connection_bytes: 100,
+                established_traffic_bytes: 150,
+                control_plane_bytes: 50,
+            },
+            safety_margin_bytes: 100,
+            pending_bytes: 50,
+            committed_unconfirmed_bytes: 75,
+            established_working_set_bytes: 125,
+        }
+    }
+
+    #[test]
+    fn borrowing_preserves_every_reserve_and_connection_working_set() {
+        let mut inputs = borrowing_inputs();
+        assert_eq!(inputs.borrowable_bytes(), 350);
+        inputs.pending_bytes += 351;
+        assert_eq!(inputs.borrowable_bytes(), 0);
+        inputs.observed_headroom_bytes = Some(u64::MAX);
+        inputs.protected.critical_connection_bytes = u64::MAX;
+        assert_eq!(inputs.borrowable_bytes(), 0);
+    }
+
+    #[test]
+    fn borrowing_refuses_unknown_stale_and_pressure_observations() {
+        let mut inputs = borrowing_inputs();
+        inputs.observed_headroom_bytes = None;
+        assert_eq!(inputs.borrowable_bytes(), 0);
+        inputs.observed_headroom_bytes = Some(1_000);
+        inputs.observation_fresh = false;
+        assert_eq!(inputs.borrowable_bytes(), 0);
+        inputs.observation_fresh = true;
+        for pressure in [
+            MemoryPressureLevel::Elevated,
+            MemoryPressureLevel::High,
+            MemoryPressureLevel::Critical,
+        ] {
+            inputs.pressure = pressure;
+            assert_eq!(inputs.borrowable_bytes(), 0);
+        }
+    }
+
+    #[test]
+    fn logical_release_does_not_create_observed_headroom() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 2 << 30, 1 << 30, 1 << 20, 0);
+        let mut permit = governor
+            .try_grant_shared(SharedGrantPurpose::TcpQueue, 8 << 20)
+            .expect("grant fits observed headroom");
+        permit.commit();
+        let inputs_from_account = || {
+            let account = governor.account_view();
+            BorrowingInputs {
+                observed_headroom_bytes: account.headroom_bytes,
+                observation_fresh: true,
+                pressure: MemoryPressureLevel::Normal,
+                protected: ProtectedReserves::default(),
+                safety_margin_bytes: account.safety_margin_bytes,
+                pending_bytes: account.pending_bytes,
+                committed_unconfirmed_bytes: account.committed_unconfirmed_bytes,
+                established_working_set_bytes: 0,
+            }
+        };
+        let inputs = inputs_from_account();
+        let before_drop = inputs.borrowable_bytes();
+        assert_eq!(inputs.committed_unconfirmed_bytes, 8 << 20);
+        assert_eq!(
+            before_drop,
+            inputs.observed_headroom_bytes.unwrap() - inputs.safety_margin_bytes - (8 << 20)
+        );
+        drop(permit);
+        assert_eq!(inputs_from_account().borrowable_bytes(), before_drop);
+    }
+
+    #[test]
+    fn security_work_is_not_classified_as_discardable_analytics() {
+        assert_eq!(
+            AdmissionClass::RequestBodyWaf.resource_domain(),
+            Some(ResourceDomain::SecurityState)
+        );
+        assert_eq!(
+            AdmissionClass::ResponseBodyWaf.resource_domain(),
+            Some(ResourceDomain::SecurityState)
+        );
+        assert_eq!(
+            AdmissionClass::Http2Stream.resource_domain(),
+            Some(ResourceDomain::EstablishedTraffic)
+        );
+        assert_eq!(
+            AdmissionClass::RpcStreamCommand.resource_domain(),
+            Some(ResourceDomain::ControlPlane)
+        );
+        assert_eq!(
+            AdmissionClass::CacheWrite.resource_domain(),
+            Some(ResourceDomain::CacheAndAnalytics)
+        );
+        assert_eq!(AdmissionClass::BackgroundWork.resource_domain(), None);
+    }
 
     #[test]
     fn effective_memory_total_uses_the_smaller_host_or_cgroup_limit() {
@@ -5329,6 +5857,9 @@ mod tests {
     #[test]
     fn high_cost_admission_classes_have_limits_and_release() {
         let governor = MemoryGovernor::new();
+        // Cache classes now borrow only after the connection reserve; seed a
+        // normal large host so this test exercises counters, not host luck.
+        seed_governor_memory(&governor, 64 << 30, 60 << 30, 1 << 20, 0);
         for class in [
             AdmissionClass::UdpSession,
             AdmissionClass::RequestBodyWaf,
@@ -5350,6 +5881,9 @@ mod tests {
     #[test]
     fn cache_read_memory_admission_tracks_bytes_and_object_limit() {
         let governor = MemoryGovernor::new();
+        // The shared account gates cache work after the connection reserve;
+        // use a deterministic normal host instead of the CI host's headroom.
+        seed_governor_memory(&governor, 64 << 30, 60 << 30, 1 << 20, 0);
         let object_limit = governor.cache_read_memory_object_limit_bytes();
         assert!(
             governor
@@ -5475,7 +6009,11 @@ mod tests {
     fn shared_connection_admission_rolls_back_when_budget_is_full() {
         let governor = MemoryGovernor::new();
         seed_governor_memory(&governor, 64 << 30, 60 << 30, 1 << 20, 0);
-        let budget = shared_connection_admission_budget(&governor.memory_snapshot());
+        let full_budget = shared_connection_admission_budget(&governor.memory_snapshot());
+        // New-connection admission stops at the established reserve.
+        let reserve = governor.limits().established_traffic_reserve_bytes;
+        assert!(reserve > 0 && reserve < full_budget);
+        let budget = full_budget - reserve;
 
         // Fill the byte budget mostly via HTTP counts (its seeded count can
         // exceed the class limit — store bypasses admission); TCP stays small
@@ -5728,6 +6266,28 @@ mod tests {
             "256GiB box must scale beyond small defaults"
         );
         assert!(big_http <= 64 * 16_384);
+
+        assert_eq!(
+            metrics_aggregator_budget_bytes(&tiny),
+            16 * 1024 * 1024,
+            "tiny snapshots get the per-aggregator floor"
+        );
+        assert_eq!(
+            metrics_aggregator_budget_bytes(&big),
+            512 * 1024 * 1024,
+            "large snapshots stop at the per-aggregator ceiling"
+        );
+
+        assert_eq!(
+            metrics_distinct_ip_capacity(&tiny),
+            128 * 1024,
+            "512MiB node shares one 8MiB cardinality slice across all servers"
+        );
+        assert_eq!(
+            metrics_distinct_ip_capacity(&big),
+            MAX_DISTINCT_IP_ENTRIES,
+            "large nodes stop at the distinct-IP entry ceiling"
+        );
 
         // Unknown availability keeps the per-core fallback: derived
         // memory caps are untrustworthy (~0) so the floor still applies.
@@ -6395,13 +6955,26 @@ mod resident_memory_tests {
         // ledger's enforced total.
         assert_eq!(snapshot.resident_memory.total_used_bytes, 0);
     }
+
+    #[test]
+    fn l1_gauge_reduces_the_attribution_gap_without_touching_the_resident_ledger() {
+        let governor = MemoryGovernor::new();
+        governor.set_cache_l1_bytes(64 << 20);
+
+        assert_eq!(governor.tracked_rss_bytes(0), 64 << 20);
+        assert_eq!(governor.unaccounted_rss_bytes(100 << 20, 0), 36 << 20);
+        assert_eq!(governor.snapshot(1).cache_l1_bytes, 64 << 20);
+        assert_eq!(governor.resident_memory_snapshot().total_used_bytes, 0);
+    }
 }
 
 #[cfg(test)]
 mod en16_pool_tests {
     use super::{
-        AdmissionClass, BudgetedMemorySnapshot, DiskLedgerClass, MemoryGovernor,
-        SharedGrantPurpose, pinned_alloc_headroom_bytes, pinned_alloc_reserve_bytes,
+        AccountPriority, AdmissionClass, BudgetedMemorySnapshot, CONTROL_PLANE_RESERVE_BYTES,
+        DiskLedgerClass, ESTABLISHED_TRAFFIC_RESERVE_BYTES, HTTP_CONN_ESTIMATED_BYTES,
+        MemoryGovernor, MemoryPressureLevel, SharedGrantPurpose, class_estimated_bytes,
+        pinned_alloc_headroom_bytes, pinned_alloc_reserve_bytes,
     };
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -6731,6 +7304,409 @@ mod en16_pool_tests {
         );
     }
 
+    #[test]
+    fn shared_account_commit_transfer_never_opens_capacity() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 2 << 30, 1 << 30, 1 << 20, 0);
+        let capacity = governor.account_view().grantable_bytes;
+        let mut permit = governor
+            .try_grant_shared_with_priority(
+                SharedGrantPurpose::TcpQueue,
+                capacity,
+                AccountPriority::Control,
+            )
+            .unwrap();
+        permit.commit_during_transfer(|| {
+            assert_eq!(governor.account_view().grantable_bytes, 0);
+            assert!(
+                governor
+                    .try_grant_shared_with_priority(
+                        SharedGrantPurpose::Admission,
+                        1,
+                        AccountPriority::Control,
+                    )
+                    .is_none()
+            );
+        });
+        assert_eq!(
+            governor.account_view().committed_unconfirmed_bytes,
+            capacity
+        );
+        assert_eq!(
+            governor.account_outstanding_bytes.load(Ordering::Acquire),
+            capacity
+        );
+        drop(permit);
+        assert_eq!(governor.account_view().grantable_bytes, 0);
+    }
+
+    #[test]
+    fn cache_admissions_stop_at_the_connection_budget_reserve() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 4 << 30, 2 << 30, 1 << 20, 0);
+        let snapshot = governor.snapshot(1);
+        assert_eq!(snapshot.memory_pressure_level, MemoryPressureLevel::Normal);
+        let headroom = snapshot.account_headroom_bytes.expect("seeded headroom");
+        let reserve = snapshot.connection_budget_bytes;
+        let borrowable = governor.low_priority_borrowable_bytes();
+        assert_eq!(
+            borrowable,
+            headroom
+                .saturating_sub(snapshot.account_safety_margin_bytes)
+                .saturating_sub(reserve)
+                .saturating_sub(snapshot.control_plane_reserve_bytes)
+        );
+        assert!(borrowable > 1);
+        assert_eq!(snapshot.low_priority_borrowable_bytes, borrowable);
+
+        // Leave exactly one byte of low-priority window.
+        let fill = borrowable - 1;
+        let fill_permit = governor
+            .try_grant_shared(SharedGrantPurpose::ConfigPublish, fill)
+            .expect("high-priority grant may use the full account");
+        assert_eq!(governor.low_priority_borrowable_bytes(), 1);
+        assert!(
+            governor.try_admit_cache_read(2).is_none(),
+            "cache work must not borrow into the connection-budget reserve"
+        );
+        assert!(
+            governor
+                .try_grant_shared(SharedGrantPurpose::CacheReadMemory, 2)
+                .is_none(),
+            "a direct cache-read grant must use the same gate"
+        );
+        // The connection reserve itself is still available.
+        assert!(governor.try_admit(AdmissionClass::HttpConnection).is_some());
+        drop(fill_permit);
+    }
+
+    /// A new-connection flood must stop at the established reserve: streams,
+    /// H3 requests and origin connects for already-admitted connections keep
+    /// their Normal-pressure floors.
+    #[test]
+    fn connection_flood_cannot_consume_the_established_traffic_reserve() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 4 << 30, 2 << 30, 1 << 20, 0);
+        // Keep the CPU floor above the memory-derived class limit so the
+        // shared connection budget, not the class counter, stops the flood.
+        governor.cached_cpu_parallelism.store(64, Ordering::Release);
+        let limits = governor.limits();
+        assert_eq!(
+            limits.established_traffic_reserve_bytes, ESTABLISHED_TRAFFIC_RESERVE_BYTES,
+            "this seed is large enough for the unclamped floors"
+        );
+        let capacity = limits
+            .shared_connection_budget_bytes
+            .saturating_sub(limits.established_traffic_reserve_bytes);
+
+        let mut permits = Vec::new();
+        while let Some(permit) = governor.try_admit(AdmissionClass::HttpConnection) {
+            permits.push(permit);
+        }
+        let used = governor.connection_admission_used_bytes();
+        assert!(
+            used <= capacity,
+            "new connections must stop before the established reserve"
+        );
+        assert!(
+            used > capacity.saturating_sub(HTTP_CONN_ESTIMATED_BYTES),
+            "the reserve, not the class counter, must stop the flood"
+        );
+
+        assert!(
+            governor.try_admit(AdmissionClass::Http2Stream).is_none(),
+            "new streams must not use the continuation reserve"
+        );
+        assert!(governor.try_admit(AdmissionClass::Http3Request).is_none());
+        assert!(
+            governor.try_admit(AdmissionClass::OriginConnect).is_some(),
+            "origin connects for accepted requests keep their reserved bytes"
+        );
+        drop(permits);
+        assert_eq!(governor.connection_admission_used_bytes(), 0);
+    }
+
+    /// The same reserve is enforced against the shared account, so a flood
+    /// cannot leave established admissions without account capacity.
+    #[test]
+    fn connection_establishment_keeps_the_established_account_reserve() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 4 << 30, 2 << 30, 1 << 20, 0);
+        let grantable = governor.account_view().grantable_bytes;
+        let control = governor.limits().control_plane_reserve_bytes;
+        let established = governor.limits().established_traffic_reserve_bytes;
+        assert!(established > 0);
+        let fill = governor
+            .try_grant_shared(
+                SharedGrantPurpose::Admission,
+                grantable - control - established,
+            )
+            .expect("new ordinary work fills everything outside both reserves");
+
+        assert!(
+            governor.try_admit(AdmissionClass::HttpConnection).is_none(),
+            "new connections must not consume the established account reserve"
+        );
+        assert!(
+            governor.try_admit(AdmissionClass::Http2Stream).is_none(),
+            "new streams must not consume the continuation reserve"
+        );
+        let origin = governor
+            .try_admit(AdmissionClass::OriginConnect)
+            .expect("accepted requests keep origin-connect capacity");
+        drop(origin);
+        drop(fill);
+    }
+
+    #[test]
+    fn concurrent_connection_grants_preserve_exactly_one_established_reserve() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(4 << 30, 2 << 30, 1 << 20, 0, i64::MAX as u64);
+        let capacity = governor.account_view().grantable_bytes;
+        let control = governor.limits().control_plane_reserve_bytes;
+        let established = governor.limits().established_traffic_reserve_bytes;
+        let connection_capacity = capacity - control - established;
+        let barrier = std::sync::Barrier::new(8);
+        let grants = std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..8)
+                .map(|_| {
+                    let governor = &governor;
+                    let barrier = &barrier;
+                    scope.spawn(move || {
+                        barrier.wait();
+                        let mut permits = Vec::new();
+                        while let Some(permit) = governor.try_grant_shared_with_priority(
+                            SharedGrantPurpose::Admission,
+                            1 << 20,
+                            AccountPriority::ConnectionEstablishment,
+                        ) {
+                            permits.push(permit);
+                        }
+                        permits
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .flat_map(|h| h.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+        let used = governor.account_view().pending_bytes;
+        assert_eq!(used, connection_capacity / (1 << 20) * (1 << 20));
+        assert_eq!(used, grants.len() as u64 * (1 << 20));
+        let remainder = connection_capacity - used;
+        let tail = governor
+            .try_grant_shared_with_priority(
+                SharedGrantPurpose::Admission,
+                remainder,
+                AccountPriority::ConnectionEstablishment,
+            )
+            .expect("remaining connection capacity fits exactly");
+        assert!(
+            governor
+                .try_grant_shared_with_priority(
+                    SharedGrantPurpose::Admission,
+                    1,
+                    AccountPriority::ConnectionEstablishment
+                )
+                .is_none()
+        );
+        let continuation = governor
+            .try_grant_shared_with_priority(
+                SharedGrantPurpose::RequestWorkspace,
+                established,
+                AccountPriority::Established,
+            )
+            .expect("continuation work uses its protected reserve");
+        let control_work = governor
+            .try_grant_shared_with_priority(
+                SharedGrantPurpose::ConfigPublish,
+                control,
+                AccountPriority::Control,
+            )
+            .expect("control reserve remains independently available");
+        assert_eq!(governor.account_view().grantable_bytes, 0);
+        drop((grants, tail, continuation, control_work));
+        assert_eq!(governor.account_view().grantable_bytes, capacity);
+    }
+
+    /// On a node whose connection budget is below twice the floors, the
+    /// reserve is capped at half the budget instead of starving new
+    /// connections outright.
+    #[test]
+    fn established_traffic_reserve_is_clamped_on_small_budgets() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 256 << 20, 128 << 20, 1 << 20, 0);
+        let limits = governor.limits();
+        let budget = limits.shared_connection_budget_bytes;
+        assert!(
+            budget < ESTABLISHED_TRAFFIC_RESERVE_BYTES * 2,
+            "the seed must produce a budget below twice the floors"
+        );
+        assert_eq!(limits.established_traffic_reserve_bytes, budget / 2);
+    }
+
+    #[test]
+    fn ordinary_saturation_cannot_consume_the_control_plane_reserve() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 4 << 30, 2 << 30, 1 << 20, 0);
+        let grantable = governor.account_view().grantable_bytes;
+        let reserve = governor.limits().control_plane_reserve_bytes;
+        let established = governor.limits().established_traffic_reserve_bytes;
+        assert_eq!(reserve, CONTROL_PLANE_RESERVE_BYTES);
+        assert!(grantable > reserve + established);
+        let fill = governor
+            .try_grant_shared(
+                SharedGrantPurpose::Admission,
+                grantable - reserve - established,
+            )
+            .expect("ordinary work may use everything outside both reserves");
+        assert!(
+            governor
+                .try_grant_shared(SharedGrantPurpose::Admission, 1)
+                .is_none(),
+            "new ordinary work must stop at the continuation reserve"
+        );
+        let continuation = governor
+            .try_grant_shared_with_priority(
+                SharedGrantPurpose::TcpQueue,
+                established,
+                AccountPriority::Established,
+            )
+            .expect("accepted traffic keeps its reserved transfer bytes");
+        assert!(
+            governor
+                .try_grant_shared_with_priority(
+                    SharedGrantPurpose::TcpQueue,
+                    1,
+                    AccountPriority::Established
+                )
+                .is_none(),
+            "continuation work stops at the control reserve"
+        );
+
+        let rpc = governor
+            .try_admit(AdmissionClass::RpcStreamCommand)
+            .expect("RPC command keeps its reserved bytes");
+        let internal = governor
+            .try_admit(AdmissionClass::ClusterInternalConnection)
+            .expect("cluster-control connection keeps its reserved bytes");
+        let apply = governor
+            .try_admit(AdmissionClass::ConfigApply)
+            .expect("configuration apply has an independent reserved slot");
+        assert!(
+            governor.try_admit(AdmissionClass::ConfigApply).is_none(),
+            "only one configuration apply runs at a time"
+        );
+        assert_eq!(governor.admission_reject_snapshot().config_apply, 1);
+
+        drop(continuation);
+        drop(apply);
+        drop(internal);
+        drop(rpc);
+        drop(fill);
+        // Committed control work stays deducted until a physical observation
+        // confirms it; only the uncommitted ordinary fill refunds immediately.
+        assert_eq!(
+            governor.account_view().grantable_bytes,
+            grantable
+                - class_estimated_bytes(AdmissionClass::RpcStreamCommand)
+                - class_estimated_bytes(AdmissionClass::ClusterInternalConnection)
+                - class_estimated_bytes(AdmissionClass::ConfigApply)
+        );
+    }
+
+    #[test]
+    fn cache_admissions_are_closed_outside_normal_pressure() {
+        let governor = MemoryGovernor::new();
+        // 15% available is Elevated: cache work stops growing even though
+        // the raw arithmetic would still show headroom beyond the reserve.
+        seed_governor_memory(&governor, 10 << 30, 3 << 29, 1 << 20, 0);
+        let snapshot = governor.snapshot(1);
+        assert_eq!(
+            snapshot.memory_pressure_level,
+            MemoryPressureLevel::Elevated
+        );
+        assert_eq!(governor.low_priority_borrowable_bytes(), 0);
+        assert!(governor.try_admit_cache_read(1).is_none());
+        assert!(governor.try_admit_cache_background().is_none());
+        assert!(
+            governor.try_admit(AdmissionClass::BackgroundWork).is_some(),
+            "control-plane apply and expiry cleanup retain background admission"
+        );
+        assert!(
+            governor.try_admit(AdmissionClass::HttpConnection).is_some(),
+            "connection admission keeps its own reserve"
+        );
+    }
+
+    #[test]
+    fn cache_borrowing_requires_observed_physical_headroom() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(64 << 30, 60 << 30, 1 << 20, 0, i64::MAX as u64);
+        governor
+            .cached_account_headroom_bytes
+            .store(u64::MAX, Ordering::Release);
+        assert_eq!(governor.low_priority_borrowable_bytes(), 0);
+        assert!(governor.try_admit_cache_read(1).is_none());
+        assert!(
+            governor
+                .try_grant_shared(SharedGrantPurpose::CacheReadMemory, 1)
+                .is_none()
+        );
+        assert!(governor.try_admit(AdmissionClass::HttpConnection).is_some());
+    }
+
+    #[test]
+    fn shared_grant_growth_keeps_the_low_priority_gate() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 4 << 30, 2 << 30, 1 << 20, 0);
+        let borrowable = governor.low_priority_borrowable_bytes();
+        assert!(borrowable > 1);
+        let mut permit = governor
+            .try_grant_shared_with_priority(
+                SharedGrantPurpose::Admission,
+                1,
+                AccountPriority::Cache,
+            )
+            .expect("one byte fits the low-priority window");
+        let fill = borrowable - 1;
+        let _fill_permit = governor
+            .try_grant_shared(SharedGrantPurpose::ConfigPublish, fill)
+            .expect("high-priority fill fits");
+        assert_eq!(governor.low_priority_borrowable_bytes(), 0);
+        assert!(
+            !permit.grow(10),
+            "growth of a cache credential must not bypass its gate"
+        );
+    }
+
+    #[test]
+    fn shared_account_pending_and_committed_charges_use_one_gate() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 2 << 30, 1 << 30, 1 << 20, 0);
+        let capacity = governor.account_view().grantable_bytes;
+        let half = capacity / 2 + 1;
+        let mut pending = None;
+        let charged = governor.try_charge_account_before_cas(
+            half,
+            true,
+            SharedGrantPurpose::RequestWorkspace,
+            AccountPriority::Ordinary,
+            || {
+                pending = governor.try_grant_shared(SharedGrantPurpose::Admission, half);
+                assert!(pending.is_some());
+            },
+        );
+        assert!(!charged, "the racing pending grant consumed the capacity");
+        let view = governor.account_view();
+        assert_eq!(view.pending_bytes, half);
+        assert_eq!(view.committed_unconfirmed_bytes, 0);
+        assert_eq!(view.grantable_bytes, capacity - half);
+        drop(pending);
+        assert_eq!(governor.account_view().grantable_bytes, capacity);
+    }
+
     /// Pending grants deduct capacity immediately; dropping an
     /// uncommitted credential refunds it at once (cancel path).
     #[test]
@@ -6811,11 +7787,25 @@ mod en16_pool_tests {
         let view = governor.account_view();
         assert_eq!(view.committed_unconfirmed_bytes, 0);
         assert_eq!(
+            governor.account_outstanding_bytes.load(Ordering::Acquire),
+            0
+        );
+        assert_eq!(
+            view.grantable_bytes,
+            view.headroom_bytes
+                .unwrap()
+                .saturating_sub(view.safety_margin_bytes)
+        );
+        assert_eq!(
             view.committed_live_bytes,
             1 << 30,
             "only the still-held grant remains live"
         );
         drop(held);
+        assert_eq!(
+            governor.account_outstanding_bytes.load(Ordering::Acquire),
+            0
+        );
     }
 
     /// grow() is subject to the same capacity check; shrink() and
@@ -6893,14 +7883,23 @@ mod en16_pool_tests {
         let grantable = governor.account_view().grantable_bytes;
         assert!(grantable > 0 && grantable < 200 << 20);
 
-        // Exhaust the account with a KernelBpf grant.
+        // Exhaust ordinary capacity with a KernelBpf grant; the control and
+        // continuation reserves stay outside it.
+        let reserve = governor.limits().control_plane_reserve_bytes;
+        let established = governor.limits().established_traffic_reserve_bytes;
         let _bulk = governor
-            .try_grant_shared(SharedGrantPurpose::KernelBpf, grantable)
-            .expect("bulk grant within capacity");
+            .try_grant_shared(
+                SharedGrantPurpose::KernelBpf,
+                grantable - reserve - established,
+            )
+            .expect("bulk grant within ordinary capacity");
         assert!(
             governor.try_admit(AdmissionClass::HttpConnection).is_none(),
-            "class ceiling has room but the account is empty — fail closed"
+            "class ceiling has room but the ordinary account is empty — fail closed"
         );
+        let _rpc = governor
+            .try_admit(AdmissionClass::RpcStreamCommand)
+            .expect("control commands keep their reserve");
         drop(_bulk);
         assert!(
             governor.try_admit(AdmissionClass::HttpConnection).is_some(),

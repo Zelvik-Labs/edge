@@ -1,0 +1,6 @@
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+mbx[progress]: 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 31.68s
+mbx[cache]: 0 hits, 2 misses, 1 not looked up, 2 incremental; 0 B downloaded, 0 B uploaded, 4.9 KiB stored locally
+mbx[savings]: 121.8 GiB logical of old build output has been shown the door.

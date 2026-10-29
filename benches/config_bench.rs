@@ -71,7 +71,7 @@ fn bench_config_lookup(c: &mut Criterion) {
                 None,
                 None,
             )
-            .await;
+            .await.expect("configuration installs");
     });
 
     c.bench_function("config_lookup_1000_items", |b| {

@@ -1,0 +1,4 @@
+acceptance-ballast-256-0.server.log: 2026-10-29T01:31:16.038329Z  WARN memory_shed: final-resort memory shed: reclaim exhausted, drained oldest in-flight connections l4=2 h3=1 working_set_bytes=155648 headroom_bytes=0 critical_samples=4
+acceptance-ballast-512-0.server.log: 2026-10-29T01:25:50.202534Z  WARN memory_shed: final-resort memory shed: reclaim exhausted, drained oldest in-flight connections l4=2 h3=1 working_set_bytes=155648 headroom_bytes=0 critical_samples=4
+acceptance-mixed-256-0.server.log: 2026-10-29T01:33:56.068929Z  WARN memory_shed: final-resort memory shed: reclaim exhausted, drained oldest in-flight connections l4=2 h3=1 working_set_bytes=155648 headroom_bytes=0 critical_samples=4
+acceptance-mixed-512-0.server.log: 2026-10-29T01:28:01.778574Z  WARN memory_shed: final-resort memory shed: reclaim exhausted, drained oldest in-flight connections l4=32 h3=1 working_set_bytes=1204224 headroom_bytes=0 critical_samples=4

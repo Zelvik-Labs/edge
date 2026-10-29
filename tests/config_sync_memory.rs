@@ -405,6 +405,7 @@ async fn large_server_json_and_hot_reload_under_low_memory() {
                     tiered_origin_bypass: false,
                     allow_lan: true,
                     global_http: None,
+                    payload_bytes: 0,
                     limits,
                 },
             ),
@@ -418,7 +419,8 @@ async fn large_server_json_and_hot_reload_under_low_memory() {
                 round_maps.servers.clone(),
                 round_maps.routes.clone(),
             )
-            .await;
+            .await
+            .expect("hot-reloaded server installs");
         elapsed = started.elapsed();
         let delta = process_rss().rss_bytes.saturating_sub(before.rss_bytes);
         if round == 0 {

@@ -1,0 +1,21 @@
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+mbx[progress]: 15s elapsed; 0 hits, 0 misses, 0 bypassed, 5 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 0 misses, 0 bypassed, 10 not looked up; ~0s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 38.17s
+     Running tests/config_sync_memory.rs (/Users/moying/Documents/Zelvik/edge/target/debug/deps/config_sync_memory-ec4544d2221428e5)
+
+running 3 tests
+test apply_limits_track_governor_available_memory ... ok
+hot-reload large-server json_bytes=562677 elapsed_ms=1 rss_delta_round1=0 rss_delta_round2=0 chunks=1 reclaim=1
+test large_server_json_and_hot_reload_under_low_memory ... ok
+config-sync budget=normal round=0 sites=800 json_bytes=7184305 elapsed_ms=189 rss_before=0 rss_after=0 rss_delta=0 vmhwm=0 chunks=4 reclaim=0 admitted=true gov_used_before=12658769920 gov_used_after=12658769920
+config-sync budget=elevated round=1 sites=800 json_bytes=7184305 elapsed_ms=220 rss_before=0 rss_after=0 rss_delta=0 vmhwm=0 chunks=13 reclaim=1 admitted=true gov_used_before=12658769920 gov_used_after=12705693696
+config-sync budget=high round=2 sites=800 json_bytes=7184305 elapsed_ms=180 rss_before=0 rss_after=0 rss_delta=0 vmhwm=0 chunks=50 reclaim=1 admitted=true gov_used_before=12705693696 gov_used_after=12767789056
+config-sync budget=low round=3 sites=800 json_bytes=7184305 elapsed_ms=170 rss_before=0 rss_after=0 rss_delta=0 vmhwm=0 chunks=200 reclaim=1 admitted=true gov_used_before=12767789056 gov_used_after=12767789056
+config-sync budget=low-repeat round=4 sites=800 json_bytes=7184305 elapsed_ms=171 rss_before=0 rss_after=0 rss_delta=0 vmhwm=0 chunks=200 reclaim=1 admitted=true gov_used_before=12767789056 gov_used_after=12790333440
+test large_site_config_sync_survives_low_memory_budgets ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.69s
+
+mbx[cache]: 0 hits, 0 misses, 10 not looked up, 10 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: found 142.7 GiB logical of target/ whose checkouts left long ago. the estate has been settled.

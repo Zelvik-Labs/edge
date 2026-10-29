@@ -1,0 +1,3 @@
+Oct 29 09:00:52 iZ0xib4uta0g6tgs4ywst8Z kernel: memgov-snapshot invoked oom-killer: gfp_mask=0x400cc0(GFP_KERNEL_ACCOUNT), order=1, oom_score_adj=0
+Oct 29 09:00:52 iZ0xib4uta0g6tgs4ywst8Z kernel: oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=zelvik-memory-acceptance-ballast-256-0.service,mems_allowed=0,oom_memcg=/system.slice/zelvik-memory-acceptance-ballast-256-0.service,task_memcg=/system.slice/zelvik-memory-acceptance-ballast-256-0.service,task=candidate-round,pid=149471,uid=0
+Oct 29 09:00:52 iZ0xib4uta0g6tgs4ywst8Z kernel: Memory cgroup out of memory: Killed process 149471 (candidate-round) total-vm:1765944kB, anon-rss:244020kB, file-rss:23040kB, shmem-rss:0kB, UID:0 pgtables:688kB oom_score_adj:0

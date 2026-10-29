@@ -5806,7 +5806,7 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
         };
 
         if ctx.server_metrics.is_none() {
-            ctx.server_metrics = Some(crate::metrics::record::get_or_create(server_id));
+            ctx.server_metrics = Some(ctx.server.as_ref().expect("selected server").runtime_metrics.get());
         }
         let plan_id = if user_plan_id > 0 {
             self.config.get_user_plan_id_sync(user_plan_id).unwrap_or(0)
@@ -8348,8 +8348,10 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
                     )
                 })
                 .await;
-                if let Ok((lb_arc, _has_hc)) = built {
-                    config.cache_server_route(host_c, server_c, lb_arc).await;
+                if let Ok((lb_arc, _has_hc)) = built
+                    && let Err(error) = config.cache_server_route(host_c, server_c, lb_arc).await
+                {
+                    warn!(%error, "route cache installation rejected");
                 }
             });
             session.respond_error(502).await?;
@@ -8765,14 +8767,15 @@ impl ProxyHttp for EdgeProxy {
     }
 
     async fn early_request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<()> {
-        // Resolve the connection's admission ticket once per request: the
-        // registry indexes buckets by the transport peer address, which is
-        // exactly what `client_addr()` returns.
-        ctx.ticket_bucket = session
-            .downstream_session
-            .client_addr()
-            .and_then(|addr| addr.as_inet().copied())
-            .and_then(|addr| crate::l4_connection_registry::ticket_for(&addr));
+        // QUIC hands off its stable connection owner explicitly; L4 uses the
+        // registration index. Never key a QUIC owner by a migratable address.
+        ctx.ticket_bucket = crate::memory_ticket::current_connection_ticket().or_else(|| {
+            session
+                .downstream_session
+                .client_addr()
+                .and_then(|addr| addr.as_inet().copied())
+                .and_then(|addr| crate::l4_connection_registry::ticket_for(&addr))
+        });
         let global_http = self.config.get_global_http_config_sync();
         let read_timeout = global_http
             .auto_read_timeout

@@ -1,0 +1,19 @@
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+mbx[progress]: 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 24s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-a82c0c7016030509)
+
+running 2 tests
+test metrics::storage::tests::history_cleanup_removes_only_expired_metric_namespaces ... ok
+test metrics::storage::tests::history_cleanup_advances_by_inspected_keys_and_wraps_to_newly_expired_low_keys ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1108 filtered out; finished in 0.37s
+
+mbx[cache]: 0 hits, 2 misses; 0 B downloaded, 0 B uploaded, 180.7 MiB stored locally
+mbx[savings]: 23981 compilations, each compiled once and served warm ever since
+
+[exited with code 0]

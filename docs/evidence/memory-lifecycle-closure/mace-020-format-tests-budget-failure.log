@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "byte_accounting": "logical",
+  "max_bytes": 4294967296,
+  "max_total_bytes": 11811160064,
+  "target_max_bytes": null,
+  "incremental_max_bytes": 10737418240,
+  "dry_run": false,
+  "action_store": {
+    "removed_objects": 5191,
+    "removed_action_results": 1244,
+    "removed_checkout_records": 0,
+    "removed_session_streams": 5,
+    "removed_bytes": 2072520056,
+    "remaining_bytes": 4294297479
+  },
+  "targets": {
+    "removed_directories": 0,
+    "removed_bytes": 0,
+    "removed_units": 0,
+    "removed_unit_bytes": 0,
+    "remaining_directories": 1,
+    "remaining_bytes": 6190644715,
+    "kept_active_directories": 0
+  },
+  "incremental": {
+    "removed_units": 0,
+    "remaining_units": 29,
+    "skipped_active_units": 0,
+    "removed_sessions": 0,
+    "session_units": 0,
+    "kept_hot_units": 0,
+    "removed_directories": 0,
+    "removed_bytes": 0,
+    "remaining_directories": 8,
+    "remaining_bytes": 452049535,
+    "skipped_active_directories": 0,
+    "untracked_directories": 0
+  },
+  "generated": {
+    "removed_directories": 0,
+    "removed_bytes": 0,
+    "remaining_directories": 13,
+    "remaining_bytes": 39638587
+  }
+}
+Local storage report for /Users/moying/Documents/Zelvik
+free 23.30 GiB   minimum 5.00 GiB   build start needs 6.00 GiB
+
+category            actual     budget   status
+mbx              10.83 GiB  12.00 GiB   ok
+go-build         950.4 MiB   1.00 GiB   ok
+npm             1005.1 MiB   1.00 GiB   ok
+pnpm             706.0 MiB   1.00 GiB   ok
+build-outputs    766.7 MiB   1.00 GiB   ok
+go-mod            3.06 GiB   4.00 GiB   ok
+cargo-downloads   1.23 GiB   2.00 GiB   ok
+rust-toolchains   1.26 GiB   2.00 GiB   ok
+----------------------------------------------------
+managed total    19.74 GiB  24.00 GiB   ok
+
+external mbx target symlinks (never followed or deleted):
+  /Users/moying/Documents/Zelvik/.worktrees/edge-issue34/target
+  /Users/moying/Documents/Zelvik/edge/pingora-main/target
+
+OK: all managed budgets and the free-space floor hold
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+mbx[progress]: 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m 30s elapsed; 0 hits, 2 misses, 0 bypassed, 4 not looked up; ~0s compiler work saved
+mbx[progress]: 1m 45s elapsed; 0 hits, 2 misses, 0 bypassed, 8 not looked up; ~0s compiler work saved
+mbx[progress]: 2m elapsed; 0 hits, 2 misses, 0 bypassed, 11 not looked up; ~0s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 10s
+     Running tests/mace_storage.rs (target/debug/deps/mace_storage-798c9c3635c45898)
+
+running 8 tests
+test fold_counter_deltas_coalesces_and_skips_zero ... ok
+test mace_crash_child ... ok
+test mace_memory_observation_labels_capacity_semantics ... ok
+test mace_tier_uses_stable_capacity_boundaries ... ok
+
+running 1 test
+test metric_storage_increment_and_server_batch_round_trip ... ok
+test old_metadata_format_is_rejected_without_rewriting_the_manifest ... ok
+test packed_period_records_merge_in_memory ... ok
+test committed_wal_survives_exit_without_engine_shutdown ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+mbx[cache]: 0 hits, 2 misses, 11 not looked up, 12 incremental; 0 B downloaded, 0 B uploaded, 4.9 KiB stored locally
+mbx[savings]: 32.5 GiB of outputs, one copy, several very confident checkouts.
+local-storage: terminating build: budget exceeded: mbx 12.06 GiB exceeds 12.00 GiB
+Traceback (most recent call last):
+  File "/Users/moying/Documents/Zelvik/scripts/local-storage.py", line 817, in <module>
+    sys.exit(main())
+  File "/Users/moying/Documents/Zelvik/scripts/local-storage.py", line 804, in main
+    return run_monitored(
+  File "/Users/moying/Documents/Zelvik/scripts/local-storage.py", line 700, in run_monitored
+    _terminate_group(
+  File "/Users/moying/Documents/Zelvik/scripts/local-storage.py", line 620, in _terminate_group
+    os.killpg(process.pid, signal.SIGTERM)
+PermissionError: [Errno 1] Operation not permitted
+
+[exited with code 1]

@@ -36,7 +36,7 @@
 - 请求：`ReportNodeTaskDoneRequest { node_task_id, is_ok, error }`
 - 响应：`RPCSuccess {}` 空消息
 - 采样说明：未对真实任务做完成回报，避免改变控制面任务游标。
-- 应用：只有回报成功后才推进本地 task version。
+- 应用：只有回报成功后才推进本地 task version。本地准入拒绝（ServerMetrics 家族容量或内存治理）不上报，任务保持 pending 由后续轮询重试；确定性失败上报 `is_ok=false`，控制面收到任何回报都会把任务标记为 done。
 
 ### NodeService.UpdateNodeStatus
 
