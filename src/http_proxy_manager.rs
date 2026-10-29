@@ -74,6 +74,10 @@ struct H2ConnectionDefenseState {
     errors: u64,
     pending_l4_stream_events: u64,
     churn_hint_reported: bool,
+    /// Streams spawned and not yet finished. A long accepted response keeps
+    /// this above zero, so the idle timer cannot close the connection under
+    /// it; stream completion is not keepalive activity.
+    active_streams: Arc<AtomicUsize>,
 }
 
 impl H2ConnectionDefenseState {
@@ -91,6 +95,7 @@ impl H2ConnectionDefenseState {
             errors: 0,
             pending_l4_stream_events: 0,
             churn_hint_reported: false,
+            active_streams: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -111,8 +116,26 @@ impl H2ConnectionDefenseState {
         self.last_activity_at = TokioInstant::now();
     }
 
+    fn stream_guard(&self) -> H2ActiveStreamGuard {
+        self.active_streams.fetch_add(1, Ordering::AcqRel);
+        H2ActiveStreamGuard {
+            active_streams: Arc::clone(&self.active_streams),
+        }
+    }
+
+    fn has_active_streams(&self) -> bool {
+        self.active_streams.load(Ordering::Acquire) > 0
+    }
+
     fn next_idle_deadline(&self) -> TokioInstant {
-        self.last_activity_at + self.idle_timeout()
+        if self.has_active_streams() {
+            // Slide the idle deadline while a stream is in flight. Otherwise a
+            // long download would be mistaken for an idle connection and cut
+            // off at the pressure-scaled idle timeout.
+            TokioInstant::now() + self.idle_timeout()
+        } else {
+            self.last_activity_at + self.idle_timeout()
+        }
     }
 
     fn lifetime_deadline(&self) -> TokioInstant {
@@ -184,6 +207,16 @@ impl H2ConnectionDefenseState {
             crate::l4_defense::L4PressureLevel::High => Duration::from_secs(120),
             crate::l4_defense::L4PressureLevel::Critical => Duration::from_secs(30),
         }
+    }
+}
+
+struct H2ActiveStreamGuard {
+    active_streams: Arc<AtomicUsize>,
+}
+
+impl Drop for H2ActiveStreamGuard {
+    fn drop(&mut self) {
+        self.active_streams.fetch_sub(1, Ordering::AcqRel);
     }
 }
 
@@ -2559,16 +2592,31 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
             // class permits rather than drawing from reusable byte float.
             let stream_ticket = crate::l4_connection_registry::ticket_for(&client_addr);
             let mut graceful_churn = false;
+            let mut lifetime_reached = false;
             let mut malformed_streams = 0;
             loop {
                 let idle_deadline = h2_state.next_idle_deadline();
-                let lifetime_deadline = h2_state.lifetime_deadline();
+                let lifetime_deadline = if lifetime_reached {
+                    // New streams are refused individually below; keep polling
+                    // until the accepted streams finish. GOAWAY is deliberately
+                    // not used here because some clients stop processing every
+                    // in-flight stream once they see it.
+                    TokioInstant::now() + Duration::from_secs(3600)
+                } else {
+                    h2_state.lifetime_deadline()
+                };
                 let accept_result = tokio::select! {
                     _ = h2_cancel_rx.changed() => {
                         debug!("HTTP/2 connection from {} cancelled by L4 registry", client_addr);
                         break;
                     }
                     _ = tokio::time::sleep_until(idle_deadline) => {
+                        if h2_state.has_active_streams() {
+                            // The deadline was computed before this stream was
+                            // accepted (or before its task was scheduled).
+                            // Re-arm instead of closing under live work.
+                            continue;
+                        }
                         manager.record_l4_event(
                             client_addr.ip(),
                             L4DefenseKind::H2ConnectionAbuse,
@@ -2583,6 +2631,24 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                         break;
                     }
                     _ = tokio::time::sleep_until(lifetime_deadline) => {
+                        if h2_state.has_active_streams() {
+                            // Do not break the connection under an accepted
+                            // response. Refuse new streams individually and
+                            // keep polling until the accepted ones finish.
+                            lifetime_reached = true;
+                            manager.record_l4_event(
+                                client_addr.ip(),
+                                L4DefenseKind::H2ConnectionAbuse,
+                                format!(
+                                    "port={} peer={} reason=max_lifetime_active_streams streams={} rejects={}",
+                                    port,
+                                    client_addr,
+                                    h2_state.accepted_streams,
+                                    h2_state.rejected_streams
+                                ),
+                            );
+                            continue;
+                        }
                         manager.record_l4_event(
                             client_addr.ip(),
                             L4DefenseKind::H2ConnectionAbuse,
@@ -2602,6 +2668,22 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                     Ok(Some(pingora_core::protocols::http::v2::server::H2Accept::Session(
                         mut h2_session,
                     ))) => {
+                        if lifetime_reached {
+                            h2_state.record_reject();
+                            manager.record_l4_event(
+                                client_addr.ip(),
+                                L4DefenseKind::H2StreamAdmissionReject,
+                                format!(
+                                    "port={} peer={} scope=lifetime streams={} rejects={}",
+                                    port,
+                                    client_addr,
+                                    h2_state.accepted_streams,
+                                    h2_state.rejected_streams
+                                ),
+                            );
+                            h2_session.shutdown_with_reason(h2::Reason::REFUSED_STREAM);
+                            continue;
+                        }
                         h2_state.record_stream();
                         if let Some(events) = h2_state.take_pending_l4_stream_events_if_due() {
                             manager.record_l4_event_weighted(
@@ -2719,7 +2801,9 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                                 crate::l4_defense::current_pressure_level().as_str()
                             );
                         };
+                        let active_stream = h2_state.stream_guard();
                         tokio::spawn(async move {
+                            let _active_stream = active_stream;
                             let _stream_permit = stream_permit;
                             let _global_stream_permit = global_stream_permit;
                             let server_session = ServerSession::new_http2(h2_session);
@@ -3280,6 +3364,25 @@ mod tests {
             }
             assert!(desired[&addr].enable_proxy_protocol);
         }
+    }
+
+    #[test]
+    fn h2_active_stream_slides_idle_deadline() {
+        let mut state = H2ConnectionDefenseState::new(
+            "127.0.0.1".parse().unwrap(),
+            443,
+            crate::l4_defense::L4PressureLevel::Critical,
+        );
+        state.last_activity_at = TokioInstant::now() - Duration::from_secs(10);
+        assert!(state.next_idle_deadline() <= TokioInstant::now());
+
+        let guard = state.stream_guard();
+        assert!(state.has_active_streams());
+        assert!(state.next_idle_deadline() > TokioInstant::now());
+
+        drop(guard);
+        assert!(!state.has_active_streams());
+        assert!(state.next_idle_deadline() <= TokioInstant::now());
     }
 
     /// A least-connections pool over the given origin ids, built through the
