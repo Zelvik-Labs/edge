@@ -478,7 +478,10 @@ async def cache_preflight(client, cg):
     # batch overruns a 256MiB cgroup, and the resulting 503s look like a
     # cache failure instead of the intentional budget refusal.
     budget = max(8 << 20, (state.get("governor") or {}).get("cache_budget_bytes", 0))
-    keys = max(8, min(64, budget // len(CACHE_PAYLOAD)))
+    # A quarter of the budget is enough to prove promotion and keeps the
+    # preflight below the governor's cache-read headroom when the same cgroup
+    # also carries three accepted long responses.
+    keys = max(4, min(64, budget // (4 * len(CACHE_PAYLOAD))))
     batch = await fill_cache_batch(client, "preflight", 0, keys)
     after = before
     for _ in range(20):
