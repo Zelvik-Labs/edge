@@ -64,12 +64,17 @@ fn repeated_aggregation_and_reclaim_converge_with_held_admissions() {
     let mut final_rss = Vec::new();
     let started = Instant::now();
     for cycle in 0..cycles {
+        // Admission limits follow live RSS and host headroom. A later, smaller
+        // limit stops growth; it does not evict already admitted rows before
+        // flush. Check the cycle's admission envelope, then verify reclamation.
+        let mut budget = MEMORY_GOVERNOR.metrics_aggregator_limits().1;
         for row in 0..rows {
+            budget = budget.max(MEMORY_GOVERNOR.metrics_aggregator_limits().1);
             aggregator.record(key(cycle, row), 1024, 64, false);
+            budget = budget.max(MEMORY_GOVERNOR.metrics_aggregator_limits().1);
+            assert!(aggregator.approximate_bytes() <= budget, "aggregate byte budget exceeded");
         }
         let charged = aggregator.approximate_bytes();
-        let (_, budget) = MEMORY_GOVERNOR.metrics_aggregator_limits();
-        assert!(charged <= budget, "aggregate byte budget exceeded");
         let before = MEMORY_GOVERNOR.snapshot(1);
         let drained = aggregator.flush();
         assert!(aggregator.data.is_empty());

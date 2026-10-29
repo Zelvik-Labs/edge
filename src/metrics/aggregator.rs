@@ -829,6 +829,23 @@ mod tests {
     }
 
     #[test]
+    fn shrinking_budget_stops_growth_until_flush() {
+        let aggregator = MetricAggregator::with_request_samples(true);
+        aggregator.record_with_limits(test_key(1, "a"), 1, 0, false, 10, u64::MAX);
+        let admitted = aggregator.approximate_bytes();
+        assert!(admitted > 0);
+        let lower_budget = admitted - 1;
+        aggregator.record_with_limits(test_key(2, "b"), 1, 0, false, 10, lower_budget);
+        assert_eq!(aggregator.data.len(), 1);
+        assert_eq!(aggregator.approximate_bytes(), admitted);
+        aggregator.flush();
+        assert_eq!(aggregator.approximate_bytes(), 0);
+        aggregator.record_with_limits(test_key(2, "b"), 1, 0, false, 10, 1);
+        assert!(aggregator.data.is_empty());
+        assert_eq!(aggregator.approximate_bytes(), 0);
+    }
+
+    #[test]
     fn restore_charges_the_same_budget_and_rejects_oversize_samples() {
         let source = MetricAggregator::with_request_samples(true);
         let mut key = test_key(1, "a");
