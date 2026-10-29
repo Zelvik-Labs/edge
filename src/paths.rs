@@ -147,7 +147,7 @@ impl NodePaths {
     }
 
     pub fn metrics_db_dir(&self) -> PathBuf {
-        self.data_dir().join("metrics.mace")
+        crate::storage_migration::store_root(&self.data_dir()).join("metrics.mace")
     }
 
     /// Mace must never be opened on the legacy RocksDB directory.

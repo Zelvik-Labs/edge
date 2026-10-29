@@ -1276,7 +1276,7 @@ impl MetricStorage {
 
 fn mace_open_error(err: OpCode) -> anyhow::Error {
     anyhow::anyhow!(
-        "Failed to open Mace 0.2 storage: {err:?}; databases from Mace 0.1.x are incompatible. Stop the instance and explicitly rebuild authorized development data; startup never deletes a database"
+        "Failed to open Mace 0.2 storage: {err:?}; run `zelvik-edge storage-migrate` while the service is stopped and check the migration receipt; startup never deletes a database"
     )
 }
 

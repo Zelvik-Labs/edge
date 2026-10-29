@@ -218,6 +218,9 @@ enum Commands {
     Restart,
     /// Install the cloud node as a systemd service and global command
     Install,
+    /// Run the offline Mace 0.1.x -> 0.2.0 storage migration and exit.
+    #[command(hide = true)]
+    StorageMigrate,
     /// Internal upgrade recovery supervisor.
     #[command(hide = true)]
     UpgradeGuard {
@@ -2834,6 +2837,13 @@ fn main() -> anyhow::Result<()> {
         Some(Commands::UpgradeGuard { manifest }) => {
             zelvik_edge::node_upgrade::run_upgrade_guard(&manifest)?
         }
+        Some(Commands::StorageMigrate) => {
+            anyhow::ensure!(check_running().is_none(), "storage migration requires the Edge service to be stopped");
+            let paths = zelvik_edge::paths::NodePaths::try_current()?;
+            zelvik_edge::storage_migration::prepare(&paths.data_dir())?;
+            zelvik_edge::storage_migration::mark_ready(&paths.data_dir())?;
+            println!("Mace storage migration verified; previous stores preserved");
+        }
         None => {
             // Default: Foreground
             run_node(cli.monitor_port, cli.monitor_clear)?;
@@ -3400,6 +3410,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         .build()?;
     let _guard = rt.enter();
 
+    zelvik_edge::storage_migration::ensure_ready(&node_paths.data_dir())?;
     zelvik_edge::metrics::storage::initialize()?;
     zelvik_edge::telemetry::initialize()?;
 
