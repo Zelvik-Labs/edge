@@ -71,11 +71,14 @@ async def origin(reader, writer):
                 await reader.readexactly(int(fields[b"content-length"]))
             # Slow requests emit data for the entire ramp. Headers and the
             # first chunk prove acceptance before the first pressure stage.
-            slow = path.startswith(b"/stream") or path.startswith(b"/hold")
+            slow = path.startswith((b"/stream", b"/hold", b"/complete"))
             bounded = path.startswith(b"/bounded")
             cacheable = path.startswith(b"/cache/")
             body = CACHE_PAYLOAD if cacheable else PAYLOAD
-            count = 24000 if slow else (80 if bounded else 1)
+            if path.startswith(b"/complete"):
+                count = 2400
+            else:
+                count = 24000 if slow else (80 if bounded else 1)
             writer.write(f"HTTP/1.1 200 OK\r\nContent-Length: {len(body)*count}\r\nContent-Type: application/octet-stream\r\n\r\n".encode())
             for _ in range(count):
                 writer.write(body)
