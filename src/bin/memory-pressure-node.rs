@@ -211,7 +211,19 @@ async fn control(acceptance_enabled: bool, cache_enabled: bool) -> Result<()> {
                 "psi_some_avg10_x100": s.psi_some_avg10_x100,
                 "psi_full_avg10_x100": s.psi_full_avg10_x100,
                 "resident_cache_metadata_bytes": s.resident_memory.cache_metadata_used_bytes,
-                "request_workspace_used_bytes": s.request_workspace_used_bytes
+                "request_workspace_used_bytes": s.request_workspace_used_bytes,
+                "memory_available_bytes": s.memory_available_bytes,
+                "account_headroom_bytes": s.account_headroom_bytes,
+                "account_grantable_bytes": s.account_grantable_bytes,
+                "account_pending_bytes": s.account_pending_bytes,
+                "account_committed_unconfirmed_bytes": s.account_committed_unconfirmed_bytes,
+                "account_committed_live_bytes": s.account_committed_live_bytes,
+                "connection_admission_used_bytes": s.connection_admission_used_bytes,
+                "connection_budget_bytes": s.connection_budget_bytes,
+                "estimated_http_connections": s.estimated_http_connections,
+                "estimated_h2_streams": s.estimated_h2_streams,
+                "estimated_h3_requests": s.estimated_h3_requests,
+                "estimated_origin_connects": s.estimated_origin_connects
             }));
         }
         stream
