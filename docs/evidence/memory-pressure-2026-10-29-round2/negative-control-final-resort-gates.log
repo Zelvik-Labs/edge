@@ -1,0 +1,49 @@
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+mbx[progress]: 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+warning: fields `now_ms`, `actual_pressure`, `ineffective_reclaim_at_ms`, and `last_pass_at_ms` are never read
+   --> src/memory_shed.rs:350:5
+    |
+349 | struct FinalResortFacts {
+    |        ---------------- fields in this struct
+350 |     now_ms: u64,
+    |     ^^^^^^
+351 |     actual_pressure: MemoryPressureLevel,
+    |     ^^^^^^^^^^^^^^^
+...
+355 |     ineffective_reclaim_at_ms: u64,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+356 |     /// `u64::MAX` = no pass yet.
+357 |     last_pass_at_ms: u64,
+    |     ^^^^^^^^^^^^^^^
+    |
+    = note: `FinalResortFacts` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `zelvik-edge` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 22s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-c8c3a1a23565cbce)
+
+running 1 test
+test memory_shed::tests::final_resort_predicate_boundaries ... FAILED
+
+failures:
+
+---- memory_shed::tests::final_resort_predicate_boundaries stdout ----
+
+thread 'memory_shed::tests::final_resort_predicate_boundaries' (8539531) panicked at src/memory_shed.rs:523:9:
+assertion failed: !final_resort_allowed(FinalResortFacts { headroom_bytes: Some(100), ..base })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    memory_shed::tests::final_resort_predicate_boundaries
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1101 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`
+mbx[cache]: 0 hits, 2 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 4.9 KiB stored locally
+mbx[savings]: your deleted worktrees left 111.6 GiB logical behind. left. past tense.

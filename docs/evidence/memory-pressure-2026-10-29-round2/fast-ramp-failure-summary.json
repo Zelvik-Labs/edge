@@ -1,0 +1,316 @@
+{
+  "source": "round2-acceptance-final3/acceptance-ballast-256-0.json",
+  "failure": "ConnectionResetError(104, 'Connection reset by peer')",
+  "interrupted_stage": null,
+  "final_control_timeout": null,
+  "terminal": {
+    "memory.current": "cgroup gone",
+    "memory.peak": "cgroup gone",
+    "memory.events": "cgroup gone",
+    "memory.pressure": "cgroup gone",
+    "cpu.stat": "cgroup gone",
+    "unit": "Result=success\nExecMainStatus=0\n"
+  },
+  "stages": [
+    {
+      "target_percent": 50,
+      "dwell_seconds": 6,
+      "accepted_progress": {
+        "h1": {
+          "status": 200,
+          "alive": true,
+          "done": false,
+          "bytes": 4161536,
+          "bytes_delta": 4145152,
+          "expected_bytes": 393216000,
+          "progress_ratio": 0.010583333333333333,
+          "gap_p99_ms": 26.35708000161685,
+          "latency_ms": null,
+          "error": null,
+          "completed_normally": false
+        },
+        "h2": {
+          "status": 200,
+          "alive": true,
+          "done": false,
+          "bytes": 4161536,
+          "bytes_delta": 4145152,
+          "expected_bytes": 393216000,
+          "progress_ratio": 0.010583333333333333,
+          "gap_p99_ms": 26.371476000349503,
+          "latency_ms": null,
+          "error": null,
+          "completed_normally": false
+        },
+        "h3": {
+          "status": 200,
+          "alive": true,
+          "done": false,
+          "bytes": 4145152,
+          "bytes_delta": 4134522,
+          "expected_bytes": 393216000,
+          "progress_ratio": 0.010541666666666666,
+          "gap_p99_ms": 24.11134500289336,
+          "latency_ms": null,
+          "error": null,
+          "completed_normally": false
+        }
+      },
+      "shed": {
+        "final_resort_passes_total": 0,
+        "drained_connections_total": 0,
+        "critical_samples": 0,
+        "reclaim_exhausted": false,
+        "last_final_resort_at_ms": null,
+        "drain_reason": "MemoryPressureShed",
+        "keepalive_marked_total": 0,
+        "keepalive_shed_active": false
+      },
+      "pressure": "normal",
+      "physical": {
+        "memory.current": "133586944",
+        "memory.peak": "135675904",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "memory.pressure": "some avg10=0.00 avg60=0.00 avg300=0.00 total=0\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+        "memory.stat": "anon 132501504\nfile 98304\nkernel 962560\nkernel_stack 163840\npagetables 462848\nsec_pagetables 0\npercpu 0\nsock 4096\nvmalloc 0\nshmem 0\nzswap 0\nzswapped 0\nfile_mapped 0\nfile_dirty 28672\nfile_writeback 0\nswapcached 0\nanon_thp 130023424\nfile_thp 0\nshmem_thp 0\ninactive_anon 0\nactive_anon 132501504\ninactive_file 98304\nactive_file 0\nunevictable 0\nslab_reclaimable 100456\nslab_unreclaimable 219864\nslab 320320\nworkingset_refault_anon 0\nworkingset_refault_file 1\nworkingset_activate_anon 0\nworkingset_activate_file 0\nworkingset_restore_anon 0\nworkingset_restore_file 0\nworkingset_nodereclaim 0\npgscan 0\npgsteal 0\npgscan_kswapd 0\npgscan_direct 0\npgscan_khugepaged 0\npgsteal_kswapd 0\npgsteal_direct 0\npgsteal_khugepaged 0\npgfault 1577\npgmajfault 0\npgrefill 0\npgactivate 0\npgdeactivate 0\npglazyfree 0\npglazyfreed 0\nzswpin 0\nzswpout 0\nzswpwb 0\nthp_fault_alloc 62\nthp_collapse_alloc 1\nthp_swpout 0\nthp_swpout_fallback 0",
+        "cpu.stat": "usage_usec 699741\nuser_usec 404763\nsystem_usec 294978\ncore_sched.force_idle_usec 0\nnr_periods 67\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "host_memory_pressure": "some avg10=0.00 avg60=4.54 avg300=7.33 total=1577746416\nfull avg10=0.00 avg60=4.48 avg300=7.24 total=1557508060",
+        "status": {
+          "VmHWM": "152248 kB",
+          "VmRSS": "152248 kB"
+        },
+        "smaps_rollup": {
+          "Rss": "152248 kB",
+          "Pss": "149794 kB",
+          "Private_Dirty": "129400 kB",
+          "Anonymous": "129400 kB"
+        }
+      }
+    },
+    {
+      "target_percent": 70,
+      "dwell_seconds": 6,
+      "accepted_progress": {
+        "h1": {
+          "status": 200,
+          "alive": true,
+          "done": false,
+          "bytes": 8437760,
+          "bytes_delta": 4276224,
+          "expected_bytes": 393216000,
+          "progress_ratio": 0.021458333333333333,
+          "gap_p99_ms": 26.183816997217946,
+          "latency_ms": null,
+          "error": null,
+          "completed_normally": false
+        },
+        "h2": {
+          "status": 200,
+          "alive": true,
+          "done": false,
+          "bytes": 8437760,
+          "bytes_delta": 4276224,
+          "expected_bytes": 393216000,
+          "progress_ratio": 0.021458333333333333,
+          "gap_p99_ms": 26.26938400499057,
+          "latency_ms": null,
+          "error": null,
+          "completed_normally": false
+        },
+        "h3": {
+          "status": 200,
+          "alive": true,
+          "done": false,
+          "bytes": 8424307,
+          "bytes_delta": 4279155,
+          "expected_bytes": 393216000,
+          "progress_ratio": 0.021424120585123697,
+          "gap_p99_ms": 24.118651999742724,
+          "latency_ms": null,
+          "error": null,
+          "completed_normally": false
+        }
+      },
+      "shed": {
+        "final_resort_passes_total": 0,
+        "drained_connections_total": 0,
+        "critical_samples": 2,
+        "reclaim_exhausted": true,
+        "last_final_resort_at_ms": null,
+        "drain_reason": "MemoryPressureShed",
+        "keepalive_marked_total": 0,
+        "keepalive_shed_active": true
+      },
+      "pressure": "critical",
+      "physical": {
+        "memory.current": "207470592",
+        "memory.peak": "208228352",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "memory.pressure": "some avg10=0.00 avg60=0.00 avg300=0.00 total=15\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=15",
+        "memory.stat": "anon 204197888\nfile 102400\nkernel 1331200\nkernel_stack 163840\npagetables 606208\nsec_pagetables 0\npercpu 0\nsock 4096\nvmalloc 0\nshmem 0\nzswap 0\nzswapped 0\nfile_mapped 0\nfile_dirty 24576\nfile_writeback 0\nswapcached 0\nanon_thp 192937984\nfile_thp 0\nshmem_thp 0\ninactive_anon 0\nactive_anon 206032896\ninactive_file 102400\nactive_file 0\nunevictable 0\nslab_reclaimable 188320\nslab_unreclaimable 357120\nslab 545440\nworkingset_refault_anon 0\nworkingset_refault_file 1\nworkingset_activate_anon 0\nworkingset_activate_file 0\nworkingset_restore_anon 0\nworkingset_restore_file 0\nworkingset_nodereclaim 0\npgscan 0\npgsteal 0\npgscan_kswapd 0\npgscan_direct 0\npgscan_khugepaged 0\npgsteal_kswapd 0\npgsteal_direct 0\npgsteal_khugepaged 0\npgfault 1652\npgmajfault 0\npgrefill 0\npgactivate 0\npgdeactivate 0\npglazyfree 0\npglazyfreed 0\nzswpin 0\nzswpout 0\nzswpwb 0\nthp_fault_alloc 97\nthp_collapse_alloc 1\nthp_swpout 0\nthp_swpout_fallback 0",
+        "cpu.stat": "usage_usec 1726279\nuser_usec 1024325\nsystem_usec 701954\ncore_sched.force_idle_usec 0\nnr_periods 132\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "host_memory_pressure": "some avg10=0.00 avg60=4.10 avg300=7.18 total=1577746431\nfull avg10=0.00 avg60=4.05 avg300=7.09 total=1557508075",
+        "status": {
+          "VmHWM": "223988 kB",
+          "VmRSS": "222580 kB"
+        },
+        "smaps_rollup": {
+          "Rss": "222580 kB",
+          "Pss": "220130 kB",
+          "Private_Dirty": "199412 kB",
+          "Anonymous": "199412 kB"
+        }
+      }
+    },
+    {
+      "target_percent": 85,
+      "dwell_seconds": 6,
+      "accepted_progress": {
+        "h1": {
+          "status": 200,
+          "alive": true,
+          "done": false,
+          "bytes": 12713984,
+          "bytes_delta": 4276224,
+          "expected_bytes": 393216000,
+          "progress_ratio": 0.03233333333333333,
+          "gap_p99_ms": 26.183816997217946,
+          "latency_ms": null,
+          "error": null,
+          "completed_normally": false
+        },
+        "h2": {
+          "status": 200,
+          "alive": true,
+          "done": false,
+          "bytes": 12713984,
+          "bytes_delta": 4276224,
+          "expected_bytes": 393216000,
+          "progress_ratio": 0.03233333333333333,
+          "gap_p99_ms": 26.26938400499057,
+          "latency_ms": null,
+          "error": null,
+          "completed_normally": false
+        },
+        "h3": {
+          "status": 200,
+          "alive": true,
+          "done": false,
+          "bytes": 12697600,
+          "bytes_delta": 4273293,
+          "expected_bytes": 393216000,
+          "progress_ratio": 0.03229166666666667,
+          "gap_p99_ms": 24.117574997944757,
+          "latency_ms": null,
+          "error": null,
+          "completed_normally": false
+        }
+      },
+      "shed": {
+        "final_resort_passes_total": 0,
+        "drained_connections_total": 0,
+        "critical_samples": 3,
+        "reclaim_exhausted": true,
+        "last_final_resort_at_ms": null,
+        "drain_reason": "MemoryPressureShed",
+        "keepalive_marked_total": 0,
+        "keepalive_shed_active": true
+      },
+      "pressure": "critical",
+      "physical": {
+        "memory.current": "228503552",
+        "memory.peak": "229269504",
+        "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "memory.pressure": "some avg10=0.00 avg60=0.00 avg300=0.00 total=15\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=15",
+        "memory.stat": "anon 225062912\nfile 102400\nkernel 1372160\nkernel_stack 163840\npagetables 647168\nsec_pagetables 0\npercpu 0\nsock 4096\nvmalloc 0\nshmem 0\nzswap 0\nzswapped 0\nfile_mapped 0\nfile_dirty 24576\nfile_writeback 0\nswapcached 0\nanon_thp 209715200\nfile_thp 0\nshmem_thp 0\ninactive_anon 0\nactive_anon 227004416\ninactive_file 102400\nactive_file 0\nunevictable 0\nslab_reclaimable 189240\nslab_unreclaimable 357120\nslab 546360\nworkingset_refault_anon 0\nworkingset_refault_file 1\nworkingset_activate_anon 0\nworkingset_activate_file 0\nworkingset_restore_anon 0\nworkingset_restore_file 0\nworkingset_nodereclaim 0\npgscan 0\npgsteal 0\npgscan_kswapd 0\npgscan_direct 0\npgscan_khugepaged 0\npgsteal_kswapd 0\npgsteal_direct 0\npgsteal_khugepaged 0\npgfault 1672\npgmajfault 0\npgrefill 0\npgactivate 0\npgdeactivate 0\npglazyfree 0\npglazyfreed 0\nzswpin 0\nzswpout 0\nzswpwb 0\nthp_fault_alloc 107\nthp_collapse_alloc 1\nthp_swpout 0\nthp_swpout_fallback 0",
+        "cpu.stat": "usage_usec 2086144\nuser_usec 1200602\nsystem_usec 885542\ncore_sched.force_idle_usec 0\nnr_periods 198\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "host_memory_pressure": "some avg10=0.00 avg60=3.71 avg300=7.04 total=1577746431\nfull avg10=0.00 avg60=3.67 avg300=6.94 total=1557508075",
+        "status": {
+          "VmHWM": "242956 kB",
+          "VmRSS": "242956 kB"
+        },
+        "smaps_rollup": {
+          "Rss": "242956 kB",
+          "Pss": "240502 kB",
+          "Private_Dirty": "219788 kB",
+          "Anonymous": "219788 kB"
+        }
+      }
+    },
+    {
+      "target_percent": 90,
+      "dwell_seconds": 2,
+      "accepted_progress": {
+        "h1": {
+          "status": 200,
+          "alive": true,
+          "done": false,
+          "bytes": 19808256,
+          "bytes_delta": 1769472,
+          "expected_bytes": 393216000,
+          "progress_ratio": 0.050375,
+          "gap_p99_ms": 26.183816997217946,
+          "latency_ms": null,
+          "error": null,
+          "completed_normally": false
+        },
+        "h2": {
+          "status": 200,
+          "alive": true,
+          "done": false,
+          "bytes": 19808256,
+          "bytes_delta": 1785856,
+          "expected_bytes": 393216000,
+          "progress_ratio": 0.050375,
+          "gap_p99_ms": 26.219970000965986,
+          "latency_ms": null,
+          "error": null,
+          "completed_normally": false
+        },
+        "h3": {
+          "status": 200,
+          "alive": true,
+          "done": false,
+          "bytes": 19791872,
+          "bytes_delta": 1782925,
+          "expected_bytes": 393216000,
+          "progress_ratio": 0.050333333333333334,
+          "gap_p99_ms": 24.11571599805029,
+          "latency_ms": null,
+          "error": null,
+          "completed_normally": false
+        }
+      },
+      "shed": {
+        "final_resort_passes_total": 0,
+        "drained_connections_total": 0,
+        "critical_samples": 1,
+        "reclaim_exhausted": true,
+        "last_final_resort_at_ms": null,
+        "drain_reason": "MemoryPressureShed",
+        "keepalive_marked_total": 64,
+        "keepalive_shed_active": true
+      },
+      "pressure": "critical",
+      "physical": {
+        "memory.current": "238465024",
+        "memory.peak": "242454528",
+        "memory.events": "low 0\nhigh 2\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+        "memory.pressure": "some avg10=0.00 avg60=0.00 avg300=0.00 total=2815\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=2415",
+        "memory.stat": "anon 235184128\nfile 24576\nkernel 1286144\nkernel_stack 163840\npagetables 675840\nsec_pagetables 0\npercpu 0\nsock 4096\nvmalloc 0\nshmem 0\nzswap 0\nzswapped 0\nfile_mapped 0\nfile_dirty 0\nfile_writeback 0\nswapcached 0\nanon_thp 207618048\nfile_thp 0\nshmem_thp 0\ninactive_anon 0\nactive_anon 237150208\ninactive_file 24576\nactive_file 0\nunevictable 0\nslab_reclaimable 137600\nslab_unreclaimable 292176\nslab 429776\nworkingset_refault_anon 0\nworkingset_refault_file 1\nworkingset_activate_anon 0\nworkingset_activate_file 0\nworkingset_restore_anon 0\nworkingset_restore_file 0\nworkingset_nodereclaim 0\npgscan 19\npgsteal 19\npgscan_kswapd 0\npgscan_direct 19\npgscan_khugepaged 0\npgsteal_kswapd 0\npgsteal_direct 19\npgsteal_khugepaged 0\npgfault 4034\npgmajfault 0\npgrefill 26\npgactivate 0\npgdeactivate 0\npglazyfree 0\npglazyfreed 0\nzswpin 0\nzswpout 0\nzswpwb 0\nthp_fault_alloc 169\nthp_collapse_alloc 2\nthp_swpout 0\nthp_swpout_fallback 0",
+        "cpu.stat": "usage_usec 2882215\nuser_usec 1606929\nsystem_usec 1275286\ncore_sched.force_idle_usec 0\nnr_periods 309\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0",
+        "host_memory_pressure": "some avg10=0.00 avg60=3.04 avg300=6.75 total=1577747911\nfull avg10=0.00 avg60=3.00 avg300=6.66 total=1557509396",
+        "status": {
+          "VmHWM": "256500 kB",
+          "VmRSS": "252840 kB"
+        },
+        "smaps_rollup": {
+          "Rss": "252840 kB",
+          "Pss": "250383 kB",
+          "Private_Dirty": "229672 kB",
+          "Anonymous": "229672 kB"
+        }
+      }
+    }
+  ]
+}

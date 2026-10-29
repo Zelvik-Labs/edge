@@ -1,0 +1,31 @@
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+mbx[progress]: 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 15s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-c8c3a1a23565cbce)
+
+running 1 test
+test memory_ticket::tests::small_workspace_owner_cannot_take_transform_floor ... FAILED
+
+failures:
+
+---- memory_ticket::tests::small_workspace_owner_cannot_take_transform_floor stdout ----
+
+thread 'memory_ticket::tests::small_workspace_owner_cannot_take_transform_floor' (8767222) panicked at src/memory_ticket.rs:365:9:
+assertion `left == right` failed
+  left: 16777216
+ right: 4194304
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    memory_ticket::tests::small_workspace_owner_cannot_take_transform_floor
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1103 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`
+mbx[cache]: 0 hits, 2 misses; 0 B downloaded, 0 B uploaded, 178.3 MiB stored locally
+mbx[savings]: 2h 7m refunded over 200 builds. no receipt necessary.

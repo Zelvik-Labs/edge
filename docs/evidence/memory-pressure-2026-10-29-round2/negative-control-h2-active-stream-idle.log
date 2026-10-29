@@ -1,0 +1,24 @@
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.75s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-c8c3a1a23565cbce)
+
+running 1 test
+test http_proxy_manager::tests::h2_active_stream_slides_idle_deadline ... FAILED
+
+failures:
+
+---- http_proxy_manager::tests::h2_active_stream_slides_idle_deadline stdout ----
+
+thread 'http_proxy_manager::tests::h2_active_stream_slides_idle_deadline' (8614169) panicked at src/http_proxy_manager.rs:3374:9:
+assertion failed: state.next_idle_deadline() > TokioInstant::now()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    http_proxy_manager::tests::h2_active_stream_slides_idle_deadline
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1102 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--lib`
+mbx[cache]: 2 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 20571 cache hits and counting. rustc thinks it has been busy.

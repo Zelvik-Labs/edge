@@ -1,0 +1,83 @@
+{
+  "round": "2026-10-29-round2",
+  "candidate_revision": "672c9d9c87b945c03d5571a6621f0414c6de5d45",
+  "candidate_binary_source_revision": "f2e0872948d78c51cad87b7522e6217847d48a1c",
+  "baseline_revision": "2c6b2e19c7a27ca12f21d392ba6640b602f0774c",
+  "baseline_source_note": "baseline binary was built from 2c6b2e1 with the fixture at sha256 df2056a85f98d403eb08541aa534adf590e821fd525ead93b046780a81a7f5aa; candidate binary carries the accepted-stream fixture and H2 timer fix",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "compile_env": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_DEV_OPT_LEVEL": "2",
+    "CARGO_PROFILE_DEV_CODEGEN_UNITS": "16",
+    "target_cpu": "native (.cargo/config.toml)"
+  },
+  "sha256": {
+    "/root/zelvik-dev/pressure-results/candidate-round2-opt-node": "e5804e2498a82c314b72b7b6c682c76fca71b1185cc587dc2b7df533a4e703a0",
+    "/root/zelvik-dev/pressure-results/candidate-node": "11dc3cadd032a5a782f9419a16a7d1b497aa5afee22cc2de422187e12d14075a",
+    "/root/zelvik-dev/edge/Cargo.lock": "d9caf641fbba2221466bdc0a9c45d1d4939af21f8d5ff4997a3de78297f69fc1",
+    "/root/zelvik-dev/edge/src/bin/memory-pressure-node.rs": "f237855f5ee231150e914cc98407c860ab2afef5422552a2482c8454dd575e6d",
+    "/root/zelvik-dev/edge/src/http_proxy_manager.rs": "042c301a3300886eee95f5c44328fd67b94bb3cc685778ec0ab5cb8bb327291e",
+    "/root/zelvik-dev/edge/src/memory_ticket.rs": "71c1c09b1c579a8b3de8c71a76f0771661576427787d2e8dbbbbfb22ebcc64f2",
+    "/root/zelvik-dev/edge/src/memory_governor.rs": "8b6b6456ebf88448ca703033450487835df417606bf08aa755cba16dfb5cbe9c",
+    "/root/zelvik-dev/edge/src/memory_shed.rs": "92155b6d37bf95abd5e9e59563ef10c1730beb3f36ac6a91f7d2d11f7f06a9c3",
+    "/root/zelvik-dev/memory_pressure.py": "0b0998931831f1d9585b7db5f20105b473988f99af9693915fdcb43155b53bb1"
+  },
+  "kernel": "Linux iZ0xib4uta0g6tgs4ywst8Z 6.8.0-139-generic #139-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 03:52:05 UTC 2026 x86_64",
+  "thp": "always [madvise] never",
+  "python": {
+    "h2": "4.4.1",
+    "aioquic": "1.7.0"
+  },
+  "limits_mib": [
+    512,
+    256
+  ],
+  "profile_note": "acceptance and performance binaries use opt-level=2/debug=0/incremental=0/codegen-units=16; the 2026-10-29 round-2 smoke runs before the optimized rebuild used the dev profile for behavior iteration only",
+  "accepted_completion_driver_revision": "5aa64f1",
+  "accepted_completion_fixture_note": "Same candidate binary; driver adds /complete: 2400 chunks x 16384 B with 25ms pacing. Original six-run ramp and paired benchmarks used the 672c9d9 driver.",
+  "accepted_completion_sha256": {
+    "scripts/perf/memory_pressure.py": "5cd101c13d159042d2f5c30e8ff26d98a9bbee5d5bbb364aab69eb0dc6ca877f",
+    "scripts/perf/complete_accepted.py": "d150964332cf6f8c2e664b50df6ba8eec0d0b1d2235713f639539bf062b8f4bb"
+  },
+  "post_measurement_code_cleanup_revision": "6520f63",
+  "post_measurement_code_cleanup_note": "H3 request permit held by outer owning task instead of passed to helper; test assertion simplified. Same RAII task lifetime. Verified by 7 H3 tests and clippy, not rebuilt into measured Linux binary.",
+  "staged_completion_driver_revision": "8bf7968",
+  "completion_one_step_note": "5aa64f1 driver: cache512, ballast512, mixed512, cache256 completed; ballast256 reached zero headroom and final-resort drain before release, failed completion. 8bf7968 uses staged 50/70/85 with snapshots for remaining 256MiB recovery verification; failed evidence retained.",
+  "final_strict_owner_binary": {
+    "path": "/root/zelvik-dev/pressure-results/candidate-round2-fair-node",
+    "sha256": "f95619c38e69889766dbb8d2f3f8deb8ce7b9b392089d940f74c354b1551a174",
+    "build_elapsed": "6m37s",
+    "note": "Same optimized profile; H3 permit task ownership and strict workspace/4 owner cap. Only the newly added unit-test formatting differs from the remote source file, with no effect on the fixture binary.",
+    "source_sha256": {
+      "src/memory_governor.rs": "c6e046e4ae0635d52b169ef315095e8a3ea4595544e27821813ce7310c0d3d8e",
+      "src/http3_proxy_manager.rs": "f011946b6d8fe6033c592eeeea8b129a78fcb38513396106eace3ad2cea866bc"
+    },
+    "source_revision": "3181e71",
+    "remote_source_sha256": {
+      "src/memory_governor.rs": "c6e046e4ae0635d52b169ef315095e8a3ea4595544e27821813ce7310c0d3d8e",
+      "src/memory_ticket.rs": "1e0059b6e5e84daa0b278c99be209a374f8484b496f60859499cfa2c395e566c",
+      "src/http3_proxy_manager.rs": "f011946b6d8fe6033c592eeeea8b129a78fcb38513396106eace3ad2cea866bc"
+    },
+    "local_source_sha256": {
+      "src/memory_governor.rs": "c6e046e4ae0635d52b169ef315095e8a3ea4595544e27821813ce7310c0d3d8e",
+      "src/memory_ticket.rs": "19f63de0ab963d03804af850a82291e96e828a946ea2f27a9e976f0ad7c49958",
+      "src/http3_proxy_manager.rs": "f011946b6d8fe6033c592eeeea8b129a78fcb38513396106eace3ad2cea866bc"
+    }
+  },
+  "final_strict_owner_artifacts": {
+    "acceptance/acceptance-mixed-256-0.json": "6be5249e0b674a8c1ed719942ea3e2c495782d7f09b613e28764ee1a7c25c240",
+    "acceptance/acceptance-mixed-256-0.start.json": "95d2f7d46a33f1ced6816ab4cbcc692acc74dcde47b40b3aa3dd001c782113a8",
+    "acceptance/acceptance-mixed-256-0.terminal.json": "dba05338acef124c743e71e947419bcd5595199a9bdf3ea374192af17cba26bc",
+    "acceptance/metadata.json": "63888ea308cfe8aad6bbb8f8d3e5df57226b1b1da7e7cdddc755158adef4b7c6",
+    "completion/acceptance-mixed-256-0.json": "7a990d803a98c3fdcb34a02877357b84a42efd92ff1018885c7d5c5d3cd148df",
+    "completion/acceptance-mixed-256-0.start.json": "716a164e81e7d64e2f8f1cc8180ee8233d25271d38ad92a76b03276ab70b55ee",
+    "completion/acceptance-mixed-256-0.terminal.json": "7675f3f79e490bbbfea574404318cfa9733aeb786e91e183e65ad0d0165c9d1a",
+    "completion/metadata.json": "63888ea308cfe8aad6bbb8f8d3e5df57226b1b1da7e7cdddc755158adef4b7c6"
+  },
+  "final_fair_summaries": {
+    "final-fair-paired-summary.json": "17a2bd9f6fefbb984e2f9a3a599b14e989d7b8d07f12e7a6ca28428ba0e7b709",
+    "final-fair-native-summary.json": "d9215b9f08f03c678d9845c2d44f8b0bd6f48a2a0d59e5128adabff58c2e98a2"
+  }
+}

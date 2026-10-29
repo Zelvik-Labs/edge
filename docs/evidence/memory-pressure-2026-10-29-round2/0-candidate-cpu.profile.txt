@@ -1,0 +1,1135 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 1K of event 'cpu-clock'
+# Event count (approx.): 14575757430
+#
+# Overhead  Command          Shared Object              Symbol                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
+# ........  ...............  .........................  ..............................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+#
+     6.17%  tokio-rt-worker  libc.so.6                  [.] 0x000000000019869e
+            |
+            ---0x76fa96f9869e
+               |          
+                --5.96%--0xc4ffffffffb83677
+
+     5.54%  tokio-rt-worker  candidate-round2-opt-node  [.] _mi_page_malloc_zero
+            |
+            ---_mi_page_malloc_zero
+               |          
+               |--0.97%--_RINvNvXs0_NtNtNtCsgFX3jaOk65H_5alloc11collections5btree3mapINtB8_8BTreeMappppENtNtCskADBYZwJmSU_4core5clone5Clone5clone13clone_subtreeNtNtBe_6string6StringB28_NtNtBe_5alloc6GlobalECs3qHxVHDIbm9_11zelvik_edge.llvm.8146272875198317022
+               |          
+                --0.35%--0x1
+
+     3.88%  tokio-rt-worker  [kernel.kallsyms]          [k] _raw_spin_unlock_irqrestore
+            |
+            ---_raw_spin_unlock_irqrestore
+               |          
+               |--3.47%--__wake_up_sync_key
+               |          sock_def_readable
+               |          tcp_data_ready
+               |          |          
+               |          |--2.15%--tcp_data_queue
+               |          |          tcp_rcv_established
+               |          |          tcp_v4_do_rcv
+               |          |          tcp_v4_rcv
+               |          |          ip_protocol_deliver_rcu
+               |          |          ip_local_deliver_finish
+               |          |          ip_local_deliver
+               |          |          ip_rcv
+               |          |          __netif_receive_skb_one_core
+               |          |          __netif_receive_skb
+               |          |          process_backlog
+               |          |          __napi_poll
+               |          |          net_rx_action
+               |          |          handle_softirqs
+               |          |          __do_softirq
+               |          |          do_softirq.part.0
+               |          |          __local_bh_enable_ip
+               |          |          __dev_queue_xmit
+               |          |          neigh_hh_output
+               |          |          ip_finish_output2
+               |          |          __ip_finish_output
+               |          |          ip_finish_output
+               |          |          ip_output
+               |          |          ip_local_out
+               |          |          __ip_queue_xmit
+               |          |          ip_queue_xmit
+               |          |          __tcp_transmit_skb
+               |          |          tcp_write_xmit
+               |          |          __tcp_push_pending_frames
+               |          |          tcp_push
+               |          |          tcp_sendmsg_locked
+               |          |          tcp_sendmsg
+               |          |          inet_sendmsg
+               |          |          __sys_sendto
+               |          |          __x64_sys_sendto
+               |          |          x64_sys_call
+               |          |          do_syscall_64
+               |          |          entry_SYSCALL_64_after_hwframe
+               |          |          __send
+               |          |          _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               |          |          _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               |          |          |          
+               |          |          |--1.32%--0x76fa969bd4c0
+               |          |          |          |          
+               |          |          |          |--0.21%--0x3697fc30d80
+               |          |          |          |          _RNvNtNtNtCs9Lgq8TZwqlN_5tokio7runtime4task5waker11wake_by_val
+               |          |          |          |          0x7c10f48f0000000
+               |          |          |          |          
+               |          |          |           --0.21%--0x3697afba100
+               |          |          |                     _RNvNtNtNtCs9Lgq8TZwqlN_5tokio7runtime4task5waker11wake_by_val
+               |          |          |                     0x7c10f48f0000000
+               |          |          |          
+               |          |           --0.83%--0x76fa96bbe4c0
+               |          |                     |          
+               |          |                      --0.21%--0x3697afba100
+               |          |                                _RNvNtNtNtCs9Lgq8TZwqlN_5tokio7runtime4task5waker11wake_by_val
+               |          |                                0x7c10f48f0000000
+               |          |          
+               |           --1.32%--tcp_rcv_established
+               |                     tcp_v4_do_rcv
+               |                     tcp_v4_rcv
+               |                     ip_protocol_deliver_rcu
+               |                     ip_local_deliver_finish
+               |                     ip_local_deliver
+               |                     ip_rcv
+               |                     __netif_receive_skb_one_core
+               |                     __netif_receive_skb
+               |                     process_backlog
+               |                     __napi_poll
+               |                     net_rx_action
+               |                     handle_softirqs
+               |                     __do_softirq
+               |                     do_softirq.part.0
+               |                     __local_bh_enable_ip
+               |                     __dev_queue_xmit
+               |                     neigh_hh_output
+               |                     ip_finish_output2
+               |                     __ip_finish_output
+               |                     ip_finish_output
+               |                     ip_output
+               |                     ip_local_out
+               |                     __ip_queue_xmit
+               |                     ip_queue_xmit
+               |                     __tcp_transmit_skb
+               |                     tcp_write_xmit
+               |                     __tcp_push_pending_frames
+               |                     tcp_push
+               |                     tcp_sendmsg_locked
+               |                     tcp_sendmsg
+               |                     inet_sendmsg
+               |                     __sys_sendto
+               |                     __x64_sys_sendto
+               |                     x64_sys_call
+               |                     do_syscall_64
+               |                     entry_SYSCALL_64_after_hwframe
+               |                     __send
+               |                     _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               |                     _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               |                     |          
+               |                     |--0.76%--0x76fa969bd4c0
+               |                     |          
+               |                      --0.55%--0x76fa96bbe4c0
+               |                                |          
+               |                                 --0.21%--0x3697afba100
+               |                                           _RNvNtNtNtCs9Lgq8TZwqlN_5tokio7runtime4task5waker11wake_by_val
+               |                                           0x7c10f48f0000000
+               |          
+                --0.35%--__mod_timer
+                          mod_timer
+                          sk_reset_timer
+                          |          
+                           --0.28%--tcp_send_delayed_ack
+                                     __tcp_ack_snd_check
+                                     tcp_rcv_established
+                                     tcp_v4_do_rcv
+                                     tcp_v4_rcv
+                                     ip_protocol_deliver_rcu
+                                     ip_local_deliver_finish
+                                     ip_local_deliver
+                                     ip_rcv
+                                     __netif_receive_skb_one_core
+                                     __netif_receive_skb
+                                     process_backlog
+                                     __napi_poll
+                                     net_rx_action
+                                     handle_softirqs
+                                     __do_softirq
+                                     do_softirq.part.0
+                                     __local_bh_enable_ip
+                                     __dev_queue_xmit
+                                     neigh_hh_output
+                                     ip_finish_output2
+                                     __ip_finish_output
+                                     ip_finish_output
+                                     ip_output
+                                     ip_local_out
+                                     __ip_queue_xmit
+                                     ip_queue_xmit
+                                     __tcp_transmit_skb
+                                     tcp_write_xmit
+                                     __tcp_push_pending_frames
+                                     tcp_push
+                                     tcp_sendmsg_locked
+                                     tcp_sendmsg
+                                     inet_sendmsg
+                                     __sys_sendto
+                                     __x64_sys_sendto
+                                     x64_sys_call
+                                     do_syscall_64
+                                     entry_SYSCALL_64_after_hwframe
+                                     __send
+                                     _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+                                     _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+                                     0x76fa96bbe4c0
+
+     3.60%  tokio-rt-worker  candidate-round2-opt-node  [.] _RINvYINtNtNtNtCsgFX3jaOk65H_5alloc11collections5btree3map4IterNtNtBc_6string6StringBY_ENtNtNtNtCskADBYZwJmSU_4core4iter6traits8iterator8Iterator6cmp_byB3_NCINvYB3_B1n_3cmpB3_E0ECs3qHxVHDIbm9_11zelvik_edge
+            |
+            ---_RINvYINtNtNtNtCsgFX3jaOk65H_5alloc11collections5btree3map4IterNtNtBc_6string6StringBY_ENtNtNtNtCskADBYZwJmSU_4core4iter6traits8iterator8Iterator6cmp_byB3_NCINvYB3_B1n_3cmpB3_E0ECs3qHxVHDIbm9_11zelvik_edge
+               |          
+                --3.53%--0xc4ffffffffb83677
+
+     3.05%  tokio-rt-worker  libc.so.6                  [.] 0x00000000001986a5
+            |
+            ---0x76fa96f986a5
+               |          
+                --2.70%--0xc4ffffffffb83677
+
+     2.84%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvXsk_NtNtNtCsgFX3jaOk65H_5alloc11collections5btree3mapINtB5_4IterNtNtBb_6string6StringINtNtBb_3vec3VechEENtNtNtNtCskADBYZwJmSU_4core4iter6traits8iterator8Iterator4nextCs3qHxVHDIbm9_11zelvik_edge
+            |
+            ---_RNvXsk_NtNtNtCsgFX3jaOk65H_5alloc11collections5btree3mapINtB5_4IterNtNtBb_6string6StringINtNtBb_3vec3VechEENtNtNtNtCskADBYZwJmSU_4core4iter6traits8iterator8Iterator4nextCs3qHxVHDIbm9_11zelvik_edge
+               |          
+                --2.77%--0xc4ffffffffb83677
+
+     2.77%  tokio-rt-worker  libc.so.6                  [.] 0x0000000000198f89
+            |
+            ---0x76fa96f98f89
+               |          
+                --1.66%--0x1
+
+     2.49%  tokio-rt-worker  [kernel.kallsyms]          [k] rep_movs_alternative
+            |
+            ---rep_movs_alternative
+               |          
+               |--1.52%--skb_do_copy_data_nocache
+               |          tcp_sendmsg_locked
+               |          tcp_sendmsg
+               |          inet_sendmsg
+               |          __sys_sendto
+               |          __x64_sys_sendto
+               |          x64_sys_call
+               |          do_syscall_64
+               |          entry_SYSCALL_64_after_hwframe
+               |          __send
+               |          _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               |          _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               |          |          
+               |          |--0.76%--0x76fa96bbe4c0
+               |          |          
+               |           --0.76%--0x76fa969bd4c0
+               |          
+                --0.97%--simple_copy_to_iter
+                          __skb_datagram_iter
+                          skb_copy_datagram_iter
+                          tcp_recvmsg_locked
+                          tcp_recvmsg
+                          inet_recvmsg
+                          sock_recvmsg
+                          __sys_recvfrom
+                          __x64_sys_recvfrom
+                          x64_sys_call
+                          do_syscall_64
+                          entry_SYSCALL_64_after_hwframe
+                          recv
+                          _RNvXs1_NtNtCs8ZKwes1zzDd_3std3net3tcpRNtB5_9TcpStreamNtNtNtCsgFX3jaOk65H_5alloc2io4read4Read4read
+                          _RNvXs0_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCsgFX3jaOk65H_5alloc2io4read4Read4read
+
+     1.46%  tokio-rt-worker  candidate-round2-opt-node  [.] mi_free
+            |
+            ---mi_free
+               |          
+               |--0.28%--0xa
+               |          0x7
+               |          
+                --0.21%--0x9
+                          0x7
+
+     0.97%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNCNvXsl_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtB7_9EdgeProxyNtNtCsjpZMZBllIwR_13pingora_proxy11proxy_trait9ProxyHttp14request_filter0B9_.llvm.13762063054294592065
+            |
+            ---_RNCNvXsl_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtB7_9EdgeProxyNtNtCsjpZMZBllIwR_13pingora_proxy11proxy_trait9ProxyHttp14request_filter0B9_.llvm.13762063054294592065
+               |          
+                --0.55%--0
+
+     0.90%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNCNvMs7_CsjpZMZBllIwR_13pingora_proxyINtB7_9HttpProxyNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy9EdgeProxyE15process_request0Cs1PzzEoKxY84_20memory_pressure_node
+            |
+            ---_RNCNvMs7_CsjpZMZBllIwR_13pingora_proxyINtB7_9HttpProxyNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy9EdgeProxyE15process_request0Cs1PzzEoKxY84_20memory_pressure_node
+               |          
+                --0.28%--0x36977680300
+                          0x1
+
+     0.69%  tokio-rt-worker  candidate-round2-opt-node  [.] _RINvMsi_NtNtNtCsgFX3jaOk65H_5alloc11collections5btree3mapINtB6_8BTreeMapINtNtBc_4sync3ArcIBU_NtNtBc_6string6StringB1t_EENtNtNtCs3qHxVHDIbm9_11zelvik_edge7metrics10aggregator22AggregatedRequestValueE7get_mutB18_EB20_
+            |
+            ---_RINvMsi_NtNtNtCsgFX3jaOk65H_5alloc11collections5btree3mapINtB6_8BTreeMapINtNtBc_4sync3ArcIBU_NtNtBc_6string6StringB1t_EENtNtNtCs3qHxVHDIbm9_11zelvik_edge7metrics10aggregator22AggregatedRequestValueE7get_mutB18_EB20_
+               |          
+                --0.62%--0x1
+
+     0.62%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMsP_NtNtCsi9mBaspp6lW_4http6header4nameNtB5_14StandardHeader10from_bytes
+            |
+            ---_RNvMsP_NtNtCsi9mBaspp6lW_4http6header4nameNtB5_14StandardHeader10from_bytes
+
+     0.62%  tokio-rt-worker  candidate-round2-opt-node  [.] mi_page_thread_collect_to_local
+            |
+            ---mi_page_thread_collect_to_local
+
+     0.55%  tokio-rt-worker  candidate-round2-opt-node  [.] _RINvNtCskADBYZwJmSU_4core3ptr9drop_glueNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy8ProxyCTXECs1PzzEoKxY84_20memory_pressure_node
+            |
+            ---_RINvNtCskADBYZwJmSU_4core3ptr9drop_glueNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy8ProxyCTXECs1PzzEoKxY84_20memory_pressure_node
+               |          
+                --0.28%--0x1
+
+     0.55%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvCs5fGHjzWXRav_7___rustc12___rust_alloc
+            |
+            ---_RNvCs5fGHjzWXRav_7___rustc12___rust_alloc
+
+     0.55%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMs5_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtB5_9EdgeProxy22metric_request_context
+            |
+            ---_RNvMs5_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtB5_9EdgeProxy22metric_request_context
+
+     0.49%  tokio-rt-worker  [kernel.kallsyms]          [k] clear_page_erms
+            |
+            ---clear_page_erms
+               get_page_from_freelist
+               __alloc_pages
+               alloc_pages_mpol
+               alloc_pages
+               skb_page_frag_refill
+               sk_page_frag_refill
+               tcp_sendmsg_locked
+               tcp_sendmsg
+               inet_sendmsg
+               __sys_sendto
+               __x64_sys_sendto
+               x64_sys_call
+               do_syscall_64
+               entry_SYSCALL_64_after_hwframe
+               __send
+               _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               |          
+                --0.35%--0x76fa969bd4c0
+
+     0.49%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNCNvXsl_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtB7_9EdgeProxyNtNtCsjpZMZBllIwR_13pingora_proxy11proxy_trait9ProxyHttp13upstream_peer0B9_.llvm.13762063054294592065
+            |
+            ---_RNCNvXsl_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtB7_9EdgeProxyNtNtCsjpZMZBllIwR_13pingora_proxy11proxy_trait9ProxyHttp13upstream_peer0B9_.llvm.13762063054294592065
+
+     0.49%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvXs0_NtNtCskADBYZwJmSU_4core6future7poll_fnINtB5_6PollFnNCNCNCNvMs5_NtCs3qHxVHDIbm9_11zelvik_edge18http_proxy_managerNtB16_16HttpProxyManager24run_http_listener_worker000ENtNtB7_6future6Future4pollCs1PzzEoKxY84_20memory_pressure_node
+            |
+            ---_RNvXs0_NtNtCskADBYZwJmSU_4core6future7poll_fnINtB5_6PollFnNCNCNCNvMs5_NtCs3qHxVHDIbm9_11zelvik_edge18http_proxy_managerNtB16_16HttpProxyManager24run_http_listener_worker000ENtNtB7_6future6Future4pollCs1PzzEoKxY84_20memory_pressure_node
+               0x1
+
+     0.42%  tokio-rt-worker  [kernel.kallsyms]          [k] tcp_v4_rcv
+            |
+            ---tcp_v4_rcv
+               ip_protocol_deliver_rcu
+               ip_local_deliver_finish
+               ip_local_deliver
+               ip_rcv
+               __netif_receive_skb_one_core
+               __netif_receive_skb
+               process_backlog
+               __napi_poll
+               net_rx_action
+               handle_softirqs
+               __do_softirq
+               do_softirq.part.0
+               __local_bh_enable_ip
+               __dev_queue_xmit
+               neigh_hh_output
+               ip_finish_output2
+               __ip_finish_output
+               ip_finish_output
+               ip_output
+               ip_local_out
+               __ip_queue_xmit
+               ip_queue_xmit
+               __tcp_transmit_skb
+               tcp_write_xmit
+               __tcp_push_pending_frames
+               tcp_push
+               tcp_sendmsg_locked
+               tcp_sendmsg
+               inet_sendmsg
+               __sys_sendto
+               __x64_sys_sendto
+               x64_sys_call
+               do_syscall_64
+               entry_SYSCALL_64_after_hwframe
+               __send
+               _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               |          
+                --0.28%--0x76fa969bd4c0
+
+     0.42%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNCNvXsm_CsjpZMZBllIwR_13pingora_proxyINtB7_9HttpProxyNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy9EdgeProxyENtNtCs3zq4rogTWem_12pingora_core4apps13HttpServerApp16process_new_http0Cs1PzzEoKxY84_20memory_pressure_node.llvm.1903017674291272104
+            |
+            ---_RNCNvXsm_CsjpZMZBllIwR_13pingora_proxyINtB7_9HttpProxyNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy9EdgeProxyENtNtCs3zq4rogTWem_12pingora_core4apps13HttpServerApp16process_new_http0Cs1PzzEoKxY84_20memory_pressure_node.llvm.1903017674291272104
+               |          
+                --0.35%--0x1
+
+     0.42%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvNtNtCsi9mBaspp6lW_4http6header4name9parse_hdr
+            |
+            ---_RNvNtNtCsi9mBaspp6lW_4http6header4name9parse_hdr
+
+     0.42%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvXNtNtNtCsgFX3jaOk65H_5alloc11collections5btree3mapINtB2_8BTreeMapNtNtB8_6string6StringINtNtB8_3vec3VechEENtNtNtCskADBYZwJmSU_4core3ops4drop4Drop4dropCs3qHxVHDIbm9_11zelvik_edge
+            |
+            ---_RNvXNtNtNtCsgFX3jaOk65H_5alloc11collections5btree3mapINtB2_8BTreeMapNtNtB8_6string6StringINtNtB8_3vec3VechEENtNtNtCskADBYZwJmSU_4core3ops4drop4Drop4dropCs3qHxVHDIbm9_11zelvik_edge
+
+     0.42%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvXs4_NtCsgFX3jaOk65H_5alloc6stringNtB5_6StringNtNtCskADBYZwJmSU_4core5clone5Clone5clone
+            |
+            ---_RNvXs4_NtCsgFX3jaOk65H_5alloc6stringNtB5_6StringNtNtCskADBYZwJmSU_4core5clone5Clone5clone
+               _RINvNvXs0_NtNtNtCsgFX3jaOk65H_5alloc11collections5btree3mapINtB8_8BTreeMappppENtNtCskADBYZwJmSU_4core5clone5Clone5clone13clone_subtreeNtNtBe_6string6StringB28_NtNtBe_5alloc6GlobalECs3qHxVHDIbm9_11zelvik_edge.llvm.8146272875198317022
+
+     0.35%  tokio-rt-worker  [kernel.kallsyms]          [k] kfree
+            |
+            ---kfree
+               |          
+                --0.28%--skb_free_head
+                          skb_release_data
+                          |          
+                           --0.21%--napi_consume_skb
+                                     net_rx_action
+                                     handle_softirqs
+                                     __do_softirq
+                                     do_softirq.part.0
+                                     __local_bh_enable_ip
+                                     __dev_queue_xmit
+                                     neigh_hh_output
+                                     ip_finish_output2
+                                     __ip_finish_output
+                                     ip_finish_output
+                                     ip_output
+                                     ip_local_out
+                                     __ip_queue_xmit
+                                     ip_queue_xmit
+                                     __tcp_transmit_skb
+                                     tcp_write_xmit
+                                     __tcp_push_pending_frames
+                                     tcp_push
+                                     tcp_sendmsg_locked
+                                     tcp_sendmsg
+                                     inet_sendmsg
+                                     __sys_sendto
+                                     __x64_sys_sendto
+                                     x64_sys_call
+                                     do_syscall_64
+                                     entry_SYSCALL_64_after_hwframe
+                                     __send
+                                     _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+                                     _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+
+     0.35%  tokio-rt-worker  [kernel.kallsyms]          [k] net_rx_action
+            |
+            ---net_rx_action
+               |          
+                --0.28%--handle_softirqs
+                          __do_softirq
+                          do_softirq.part.0
+                          __local_bh_enable_ip
+                          __dev_queue_xmit
+                          neigh_hh_output
+                          ip_finish_output2
+                          __ip_finish_output
+                          ip_finish_output
+                          ip_output
+                          ip_local_out
+                          __ip_queue_xmit
+                          ip_queue_xmit
+                          __tcp_transmit_skb
+                          tcp_write_xmit
+                          __tcp_push_pending_frames
+                          tcp_push
+                          tcp_sendmsg_locked
+                          tcp_sendmsg
+                          inet_sendmsg
+                          __sys_sendto
+                          __x64_sys_sendto
+                          x64_sys_call
+                          do_syscall_64
+                          entry_SYSCALL_64_after_hwframe
+                          __send
+                          _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+                          _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+
+     0.35%  tokio-rt-worker  [kernel.kallsyms]          [k] tcp_rcv_established
+            |
+            ---tcp_rcv_established
+               tcp_v4_do_rcv
+               tcp_v4_rcv
+               ip_protocol_deliver_rcu
+               ip_local_deliver_finish
+               ip_local_deliver
+               ip_rcv
+               __netif_receive_skb_one_core
+               __netif_receive_skb
+               process_backlog
+               __napi_poll
+               net_rx_action
+               handle_softirqs
+               __do_softirq
+               do_softirq.part.0
+               __local_bh_enable_ip
+               __dev_queue_xmit
+               neigh_hh_output
+               ip_finish_output2
+               __ip_finish_output
+               ip_finish_output
+               ip_output
+               ip_local_out
+               __ip_queue_xmit
+               ip_queue_xmit
+               __tcp_transmit_skb
+               tcp_write_xmit
+               __tcp_push_pending_frames
+               tcp_push
+               tcp_sendmsg_locked
+               tcp_sendmsg
+               inet_sendmsg
+               __sys_sendto
+               __x64_sys_sendto
+               x64_sys_call
+               do_syscall_64
+               entry_SYSCALL_64_after_hwframe
+               __send
+               _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               |          
+                --0.21%--0x76fa969bd4c0
+
+     0.35%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNCINvMs7_NtNtNtNtCs3zq4rogTWem_12pingora_core9protocols4http2v14bodyNtB8_10BodyWriter10write_bodyINtNtCsgFX3jaOk65H_5alloc5boxed3BoxDNtBe_2IOEL_EE0Cs1PzzEoKxY84_20memory_pressure_node
+            |
+            ---_RNCINvMs7_NtNtNtNtCs3zq4rogTWem_12pingora_core9protocols4http2v14bodyNtB8_10BodyWriter10write_bodyINtNtCsgFX3jaOk65H_5alloc5boxed3BoxDNtBe_2IOEL_EE0Cs1PzzEoKxY84_20memory_pressure_node
+               |          
+                --0.21%--0x369776d0a80
+                          0x74b94a8f2f3bb740
+
+     0.35%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNCNvMNtNtNtNtCs3zq4rogTWem_12pingora_core9protocols4http2v16clientNtB4_11HttpSession18read_response_task0Cs1PzzEoKxY84_20memory_pressure_node
+            |
+            ---_RNCNvMNtNtNtNtCs3zq4rogTWem_12pingora_core9protocols4http2v16clientNtB4_11HttpSession18read_response_task0Cs1PzzEoKxY84_20memory_pressure_node
+
+     0.35%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNCNvMs0_CsjpZMZBllIwR_13pingora_proxyINtB7_9HttpProxyNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy9EdgeProxyE17proxy_to_upstream0Cs1PzzEoKxY84_20memory_pressure_node
+            |
+            ---_RNCNvMs0_CsjpZMZBllIwR_13pingora_proxyINtB7_9HttpProxyNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy9EdgeProxyE17proxy_to_upstream0Cs1PzzEoKxY84_20memory_pressure_node
+
+     0.35%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNCNvXsl_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtB7_9EdgeProxyNtNtCsjpZMZBllIwR_13pingora_proxy11proxy_trait9ProxyHttp15response_filter0B9_.llvm.13762063054294592065
+            |
+            ---_RNCNvXsl_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtB7_9EdgeProxyNtNtCsjpZMZBllIwR_13pingora_proxy11proxy_trait9ProxyHttp15response_filter0B9_.llvm.13762063054294592065
+
+     0.35%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMsi_NtNtNtCsgFX3jaOk65H_5alloc11collections5btree3mapINtB5_8BTreeMapNtNtBb_6string6StringB17_E5entryCs3qHxVHDIbm9_11zelvik_edge
+            |
+            ---_RNvMsi_NtNtNtCsgFX3jaOk65H_5alloc11collections5btree3mapINtB5_8BTreeMapNtNtBb_6string6StringB17_E5entryCs3qHxVHDIbm9_11zelvik_edge
+
+     0.35%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMsz_NtNtNtCsgFX3jaOk65H_5alloc11collections5btree3mapINtB5_8IntoIterINtNtBb_4sync3ArcINtB5_8BTreeMapNtNtBb_6string6StringB1D_EENtNtNtCs3qHxVHDIbm9_11zelvik_edge7metrics10aggregator22AggregatedRequestValueE10dying_nextB2a_.llvm.8146272875198317022
+            |
+            ---_RNvMsz_NtNtNtCsgFX3jaOk65H_5alloc11collections5btree3mapINtB5_8IntoIterINtNtBb_4sync3ArcINtB5_8BTreeMapNtNtBb_6string6StringB1D_EENtNtNtCs3qHxVHDIbm9_11zelvik_edge7metrics10aggregator22AggregatedRequestValueE10dying_nextB2a_.llvm.8146272875198317022
+               |          
+                --0.21%--0x7
+
+     0.35%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvXs3_NtNtCskADBYZwJmSU_4core4hash3sipINtB5_6HasherNtB5_11Sip13RoundsENtB7_6Hasher5writeCs3qHxVHDIbm9_11zelvik_edge.llvm.9733452612918167799
+            |          
+             --0.28%--_RNvXs3_NtNtCskADBYZwJmSU_4core4hash3sipINtB5_6HasherNtB5_11Sip13RoundsENtB7_6Hasher5writeCs3qHxVHDIbm9_11zelvik_edge.llvm.9733452612918167799
+
+     0.35%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvXs4_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtB5_8ProxyCTXNtNtCskADBYZwJmSU_4core7default7Default7default
+            |
+            ---_RNvXs4_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtB5_8ProxyCTXNtNtCskADBYZwJmSU_4core7default7Default7default
+
+     0.35%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvXs_NtNtCs31IdrLHDPqE_6chrono6format10formattingINtB4_13DelayedFormatNtNtB6_8strftime13StrftimeItemsENtNtCskADBYZwJmSU_4core3fmt7Display3fmtCs3qHxVHDIbm9_11zelvik_edge
+            |
+            ---_RNvXs_NtNtCs31IdrLHDPqE_6chrono6format10formattingINtB4_13DelayedFormatNtNtB6_8strftime13StrftimeItemsENtNtCskADBYZwJmSU_4core3fmt7Display3fmtCs3qHxVHDIbm9_11zelvik_edge
+               0xbf320800bf31be
+
+     0.35%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvXs_NtNtCs31IdrLHDPqE_6chrono6format8strftimeNtB4_13StrftimeItemsNtNtNtNtCskADBYZwJmSU_4core4iter6traits8iterator8Iterator4next
+            |
+            ---_RNvXs_NtNtCs31IdrLHDPqE_6chrono6format8strftimeNtB4_13StrftimeItemsNtNtNtNtCskADBYZwJmSU_4core4iter6traits8iterator8Iterator4next
+               |          
+                --0.21%--0xbf3bef00bf3f0f00
+
+     0.35%  tokio-rt-worker  candidate-round2-opt-node  [.] mi_theap_malloc_aligned
+            |
+            ---mi_theap_malloc_aligned
+
+     0.35%  tokio-rt-worker  libc.so.6                  [.] 0x0000000000198c40
+            |
+            ---0x76fa96f98c40
+
+     0.35%  tokio-rt-worker  libc.so.6                  [.] 0x0000000000198e06
+            |
+            ---0x76fa96f98e06
+
+     0.28%  tokio-rt-worker  [kernel.kallsyms]          [k] __dev_queue_xmit
+            |
+            ---__dev_queue_xmit
+               neigh_hh_output
+               ip_finish_output2
+               __ip_finish_output
+               ip_finish_output
+               ip_output
+               ip_local_out
+               __ip_queue_xmit
+               ip_queue_xmit
+               __tcp_transmit_skb
+               tcp_write_xmit
+               __tcp_push_pending_frames
+               tcp_push
+               tcp_sendmsg_locked
+               tcp_sendmsg
+               inet_sendmsg
+               __sys_sendto
+               __x64_sys_sendto
+               x64_sys_call
+               do_syscall_64
+               entry_SYSCALL_64_after_hwframe
+               __send
+               _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               |          
+                --0.21%--0x76fa96bbe4c0
+
+     0.28%  tokio-rt-worker  [kernel.kallsyms]          [k] dev_hard_start_xmit
+            |
+            ---dev_hard_start_xmit
+               |          
+                --0.21%--__dev_queue_xmit
+                          neigh_hh_output
+                          ip_finish_output2
+                          __ip_finish_output
+                          ip_finish_output
+                          ip_output
+                          ip_local_out
+                          __ip_queue_xmit
+                          ip_queue_xmit
+                          __tcp_transmit_skb
+                          tcp_write_xmit
+                          __tcp_push_pending_frames
+                          tcp_push
+                          tcp_sendmsg_locked
+                          tcp_sendmsg
+                          inet_sendmsg
+                          __sys_sendto
+                          __x64_sys_sendto
+                          x64_sys_call
+                          do_syscall_64
+                          entry_SYSCALL_64_after_hwframe
+                          __send
+                          _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+                          _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+
+     0.28%  tokio-rt-worker  [kernel.kallsyms]          [k] tcp_recvmsg_locked
+            |
+            ---tcp_recvmsg_locked
+               tcp_recvmsg
+               inet_recvmsg
+               sock_recvmsg
+               __sys_recvfrom
+               __x64_sys_recvfrom
+               x64_sys_call
+               do_syscall_64
+               entry_SYSCALL_64_after_hwframe
+               recv
+               _RNvXs1_NtNtCs8ZKwes1zzDd_3std3net3tcpRNtB5_9TcpStreamNtNtNtCsgFX3jaOk65H_5alloc2io4read4Read4read
+               _RNvXs0_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCsgFX3jaOk65H_5alloc2io4read4Read4read
+
+     0.28%  tokio-rt-worker  [kernel.kallsyms]          [k] tcp_sendmsg_locked
+            |
+            ---tcp_sendmsg_locked
+               tcp_sendmsg
+               inet_sendmsg
+               __sys_sendto
+               __x64_sys_sendto
+               x64_sys_call
+               do_syscall_64
+               entry_SYSCALL_64_after_hwframe
+               __send
+               _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               |          
+                --0.21%--0x76fa96bbe4c0
+
+     0.28%  tokio-rt-worker  [vdso]                     [.] 0x0000000000000b03
+            |
+            ---0x7ffd6289cb03
+               clock_gettime
+               _RNvMNtNtNtNtCs8ZKwes1zzDd_3std3sys3pal4unix4timeNtB2_8Timespec3now
+               |          
+                --0.21%--_RNvMNtNtCs31IdrLHDPqE_6chrono6offset3utcNtB2_3Utc3now
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] _RINvCslyLeaeNWqII_12pingora_http19append_header_valueNtNtNtCsi9mBaspp6lW_4http6header5value11HeaderValueNtNtB2_16case_header_name14CaseHeaderNameECs1PzzEoKxY84_20memory_pressure_node.llvm.6921429638052798853
+            |
+            ---_RINvCslyLeaeNWqII_12pingora_http19append_header_valueNtNtNtCsi9mBaspp6lW_4http6header5value11HeaderValueNtNtB2_16case_header_name14CaseHeaderNameECs1PzzEoKxY84_20memory_pressure_node.llvm.6921429638052798853
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] _RINvMs0_NtNtCsi9mBaspp6lW_4http6header3mapNtB6_9HeaderMap11try_insert2NtNtB8_4name10HeaderNameECs3qHxVHDIbm9_11zelvik_edge.llvm.14850638897160013076
+            |
+            ---_RINvMs0_NtNtCsi9mBaspp6lW_4http6header3mapNtB6_9HeaderMap11try_insert2NtNtB8_4name10HeaderNameECs3qHxVHDIbm9_11zelvik_edge.llvm.14850638897160013076
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] _RINvMsN_NtNtNtCsgFX3jaOk65H_5alloc11collections5btree4nodeINtB6_6HandleINtB6_7NodeRefNtNtB6_6marker3MutNtNtBc_6string6StringB1D_NtB1n_4LeafENtB1n_4EdgeE16insert_recursingNtNtBc_5alloc6GlobalNCNvMs4_NtNtB8_3map5entryINtB3a_11VacantEntryB1D_B1D_E12insert_entry0ECs3qHxVHDIbm9_11zelvik_edge
+            |
+            ---_RINvMsN_NtNtNtCsgFX3jaOk65H_5alloc11collections5btree4nodeINtB6_6HandleINtB6_7NodeRefNtNtB6_6marker3MutNtNtBc_6string6StringB1D_NtB1n_4LeafENtB1n_4EdgeE16insert_recursingNtNtBc_5alloc6GlobalNCNvMs4_NtNtB8_3map5entryINtB3a_11VacantEntryB1D_B1D_E12insert_entry0ECs3qHxVHDIbm9_11zelvik_edge
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] _RINvNtNtNtCs9Lgq8TZwqlN_5tokio4sync4mpsc7bounded7channelNtNtNtCs3zq4rogTWem_12pingora_core9protocols4http8HttpTaskECs1PzzEoKxY84_20memory_pressure_node
+            |
+            ---_RINvNtNtNtCs9Lgq8TZwqlN_5tokio4sync4mpsc7bounded7channelNtNtNtCs3zq4rogTWem_12pingora_core9protocols4http8HttpTaskECs1PzzEoKxY84_20memory_pressure_node
+               _RNCNvMs0_CsjpZMZBllIwR_13pingora_proxyINtB7_9HttpProxyNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy9EdgeProxyE17proxy_to_upstream0Cs1PzzEoKxY84_20memory_pressure_node
+               0
+               |          
+                --0.21%--0x312f505454482074
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] _RINvXs2_Cs2Fv2dHwmAvD_7dashmapINtB6_7DashMapNtNtNtCskADBYZwJmSU_4core3net7ip_addr6IpAddruEINtNtB6_1t3MapBG_uNtNtNtCs8ZKwes1zzDd_3std4hash6random11RandomStateE4__getBG_ECs3qHxVHDIbm9_11zelvik_edge
+            |
+            ---_RINvXs2_Cs2Fv2dHwmAvD_7dashmapINtB6_7DashMapNtNtNtCskADBYZwJmSU_4core3net7ip_addr6IpAddruEINtNtB6_1t3MapBG_uNtNtNtCs8ZKwes1zzDd_3std4hash6random11RandomStateE4__getBG_ECs3qHxVHDIbm9_11zelvik_edge
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNCNvMs_NtNtNtNtCs3zq4rogTWem_12pingora_core9protocols4http2v16serverNtB6_11HttpSession12read_request0Cs1PzzEoKxY84_20memory_pressure_node
+            |
+            ---_RNCNvMs_NtNtNtNtCs3zq4rogTWem_12pingora_core9protocols4http2v16serverNtB6_11HttpSession12read_request0Cs1PzzEoKxY84_20memory_pressure_node
+               _RNCNvMs_NtNtNtCs3zq4rogTWem_12pingora_core9protocols4http6serverNtB6_7Session12read_request0Cs1PzzEoKxY84_20memory_pressure_node
+               0x1
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNCNvNtCs3qHxVHDIbm9_11zelvik_edge18http_proxy_manager20process_http1_stream0Cs1PzzEoKxY84_20memory_pressure_node.llvm.7921485791948488102
+            |
+            ---_RNCNvNtCs3qHxVHDIbm9_11zelvik_edge18http_proxy_manager20process_http1_stream0Cs1PzzEoKxY84_20memory_pressure_node.llvm.7921485791948488102
+               0x1
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvCs6nwpIFnB3XC_8httparse25parse_headers_iter_uninit
+            |
+            ---_RNvCs6nwpIFnB3XC_8httparse25parse_headers_iter_uninit
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMs_NtNtNtCs9Lgq8TZwqlN_5tokio7runtime2io12scheduled_ioNtB4_11ScheduledIo14poll_readiness
+            |
+            ---_RNvMs_NtNtNtCs9Lgq8TZwqlN_5tokio7runtime2io12scheduled_ioNtB4_11ScheduledIo14poll_readiness
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMsi_NtNtNtCsgFX3jaOk65H_5alloc11collections5btree3mapINtB5_8BTreeMapNtNtBb_6string6StringB17_E6insertCs3qHxVHDIbm9_11zelvik_edge
+            |
+            ---_RNvMsi_NtNtNtCsgFX3jaOk65H_5alloc11collections5btree3mapINtB5_8BTreeMapNtNtBb_6string6StringB17_E6insertCs3qHxVHDIbm9_11zelvik_edge
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvNtCs3qHxVHDIbm9_11zelvik_edge7logging10log_access
+            |
+            ---_RNvNtCs3qHxVHDIbm9_11zelvik_edge7logging10log_access
+               0xd30383039313a31
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvXs2_NtNtNtCs3zq4rogTWem_12pingora_core9protocols2l46streamNtB5_16RawStreamWrapperNtNtNtCs9Lgq8TZwqlN_5tokio2io10async_read9AsyncRead9poll_read
+            |
+            ---_RNvXs2_NtNtNtCs3zq4rogTWem_12pingora_core9protocols2l46streamNtB5_16RawStreamWrapperNtNtNtCs9Lgq8TZwqlN_5tokio2io10async_read9AsyncRead9poll_read
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvXs_NtNtCs9Lgq8TZwqlN_5tokio6future10maybe_doneINtB4_9MaybeDoneNCNvMNtCsjpZMZBllIwR_13pingora_proxy8proxy_h1INtB18_9HttpProxyNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy9EdgeProxyE21proxy_handle_upstream0ENtNtNtCskADBYZwJmSU_4core6future6future6Future4pollCs1PzzEoKxY84_20memory_pressure_node
+            |
+            ---_RNvXs_NtNtCs9Lgq8TZwqlN_5tokio6future10maybe_doneINtB4_9MaybeDoneNCNvMNtCsjpZMZBllIwR_13pingora_proxy8proxy_h1INtB18_9HttpProxyNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy9EdgeProxyE21proxy_handle_upstream0ENtNtNtCskADBYZwJmSU_4core6future6future6Future4pollCs1PzzEoKxY84_20memory_pressure_node
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvXsh_NtNtNtCs3zq4rogTWem_12pingora_core9protocols2l46streamNtB5_6StreamNtNtNtCs9Lgq8TZwqlN_5tokio2io10async_read9AsyncRead9poll_read
+            |
+            ---_RNvXsh_NtNtNtCs3zq4rogTWem_12pingora_core9protocols2l46streamNtB5_6StreamNtNtNtCs9Lgq8TZwqlN_5tokio2io10async_read9AsyncRead9poll_read
+               |          
+                --0.21%--0x5b410c78b9a8
+                          0x1
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] _mi_bin_size
+            |
+            ---_mi_bin_size
+
+     0.28%  tokio-rt-worker  candidate-round2-opt-node  [.] mi_malloc_aligned
+            |
+            ---mi_malloc_aligned
+
+     0.28%  tokio-rt-worker  libc.so.6                  [.] __send
+            |
+            ---__send
+               _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               |          
+                --0.21%--0x76fa969bd4c0
+
+     0.28%  tokio-rt-worker  libc.so.6                  [.] 0x0000000000198680
+            |
+            ---0x76fa96f98680
+               |          
+                --0.21%--0xc4ffffffffb83677
+
+     0.21%  checkpointer     candidate-round2-opt-node  [.] _RNvMs1_NtNtNtCs8ZKwes1zzDd_3std4sync4mpmc4listINtB5_7ChannelNtNtNtCs8EAAMFMzZxV_4mace3map4data14CheckpointTaskE4recvB12_
+            |
+            ---_RNvMs1_NtNtNtCs8ZKwes1zzDd_3std4sync4mpmc4listINtB5_7ChannelNtNtNtCs8EAAMFMzZxV_4mace3map4data14CheckpointTaskE4recvB12_
+
+     0.21%  tokio-rt-worker  [kernel.kallsyms]          [k] __fdget
+            |
+            ---__fdget
+
+     0.21%  tokio-rt-worker  [kernel.kallsyms]          [k] __netif_receive_skb_core.constprop.0
+            |
+            ---__netif_receive_skb_core.constprop.0
+               __netif_receive_skb_one_core
+               __netif_receive_skb
+               process_backlog
+               __napi_poll
+               net_rx_action
+               handle_softirqs
+               __do_softirq
+               do_softirq.part.0
+               __local_bh_enable_ip
+               __dev_queue_xmit
+               neigh_hh_output
+               ip_finish_output2
+               __ip_finish_output
+               ip_finish_output
+               ip_output
+               ip_local_out
+               __ip_queue_xmit
+               ip_queue_xmit
+               __tcp_transmit_skb
+               tcp_write_xmit
+               __tcp_push_pending_frames
+               tcp_push
+               tcp_sendmsg_locked
+               tcp_sendmsg
+               inet_sendmsg
+               __sys_sendto
+               __x64_sys_sendto
+               x64_sys_call
+               do_syscall_64
+               entry_SYSCALL_64_after_hwframe
+               __send
+               _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+
+     0.21%  tokio-rt-worker  [kernel.kallsyms]          [k] __tcp_cleanup_rbuf
+            |
+            ---__tcp_cleanup_rbuf
+               tcp_cleanup_rbuf
+               tcp_recvmsg_locked
+               tcp_recvmsg
+               inet_recvmsg
+               sock_recvmsg
+               __sys_recvfrom
+               __x64_sys_recvfrom
+               x64_sys_call
+               do_syscall_64
+               entry_SYSCALL_64_after_hwframe
+               recv
+               _RNvXs1_NtNtCs8ZKwes1zzDd_3std3net3tcpRNtB5_9TcpStreamNtNtNtCsgFX3jaOk65H_5alloc2io4read4Read4read
+               _RNvXs0_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCsgFX3jaOk65H_5alloc2io4read4Read4read
+
+     0.21%  tokio-rt-worker  [kernel.kallsyms]          [k] do_syscall_64
+            |
+            ---do_syscall_64
+               entry_SYSCALL_64_after_hwframe
+
+     0.21%  tokio-rt-worker  [kernel.kallsyms]          [k] handle_softirqs
+            |
+            ---handle_softirqs
+
+     0.21%  tokio-rt-worker  [kernel.kallsyms]          [k] memset_orig
+            |
+            ---memset_orig
+
+     0.21%  tokio-rt-worker  [kernel.kallsyms]          [k] post_alloc_hook
+            |
+            ---post_alloc_hook
+               get_page_from_freelist
+               __alloc_pages
+               alloc_pages_mpol
+               alloc_pages
+               skb_page_frag_refill
+               sk_page_frag_refill
+               tcp_sendmsg_locked
+               tcp_sendmsg
+               inet_sendmsg
+               __sys_sendto
+               __x64_sys_sendto
+               x64_sys_call
+               do_syscall_64
+               entry_SYSCALL_64_after_hwframe
+               __send
+               _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+
+     0.21%  tokio-rt-worker  [kernel.kallsyms]          [k] skb_page_frag_refill
+            |
+            ---skb_page_frag_refill
+               sk_page_frag_refill
+               tcp_sendmsg_locked
+               tcp_sendmsg
+               inet_sendmsg
+               __sys_sendto
+               __x64_sys_sendto
+               x64_sys_call
+               do_syscall_64
+               entry_SYSCALL_64_after_hwframe
+               __send
+               _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+
+     0.21%  tokio-rt-worker  [kernel.kallsyms]          [k] skb_release_data
+            |
+            ---skb_release_data
+               napi_consume_skb
+               net_rx_action
+               handle_softirqs
+               __do_softirq
+               do_softirq.part.0
+               __local_bh_enable_ip
+               __dev_queue_xmit
+               neigh_hh_output
+               ip_finish_output2
+               __ip_finish_output
+               ip_finish_output
+               ip_output
+               ip_local_out
+               __ip_queue_xmit
+               ip_queue_xmit
+               __tcp_transmit_skb
+               tcp_write_xmit
+               __tcp_push_pending_frames
+               tcp_push
+               tcp_sendmsg_locked
+               tcp_sendmsg
+               inet_sendmsg
+               __sys_sendto
+               __x64_sys_sendto
+               x64_sys_call
+               do_syscall_64
+               entry_SYSCALL_64_after_hwframe
+               __send
+               _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               0x76fa96bbe4c0
+
+     0.21%  tokio-rt-worker  [kernel.kallsyms]          [k] tcp_ack
+            |
+            ---tcp_ack
+               tcp_rcv_established
+               tcp_v4_do_rcv
+               tcp_v4_rcv
+               ip_protocol_deliver_rcu
+               ip_local_deliver_finish
+               ip_local_deliver
+               ip_rcv
+               __netif_receive_skb_one_core
+               __netif_receive_skb
+               process_backlog
+               __napi_poll
+               net_rx_action
+               handle_softirqs
+               __do_softirq
+               do_softirq.part.0
+               __local_bh_enable_ip
+               __dev_queue_xmit
+               neigh_hh_output
+               ip_finish_output2
+               __ip_finish_output
+               ip_finish_output
+               ip_output
+               ip_local_out
+               __ip_queue_xmit
+               ip_queue_xmit
+               __tcp_transmit_skb
+
+     0.21%  tokio-rt-worker  [kernel.kallsyms]          [k] tcp_try_rmem_schedule
+            |
+            ---tcp_try_rmem_schedule
+               tcp_data_queue
+               tcp_rcv_established
+               tcp_v4_do_rcv
+               tcp_v4_rcv
+               ip_protocol_deliver_rcu
+               ip_local_deliver_finish
+               ip_local_deliver
+               ip_rcv
+               __netif_receive_skb_one_core
+               __netif_receive_skb
+               process_backlog
+               __napi_poll
+               net_rx_action
+               handle_softirqs
+               __do_softirq
+               do_softirq.part.0
+               __local_bh_enable_ip
+               __dev_queue_xmit
+               neigh_hh_output
+               ip_finish_output2
+               __ip_finish_output
+               ip_finish_output
+               ip_output
+               ip_local_out
+               __ip_queue_xmit
+               ip_queue_xmit
+               __tcp_transmit_skb
+               tcp_write_xmit
+               __tcp_push_pending_frames
+               tcp_push
+               tcp_sendmsg_locked
+               tcp_sendmsg
+               inet_sendmsg
+               __sys_sendto
+               __x64_sys_sendto
+               x64_sys_call
+               do_syscall_64
+               entry_SYSCALL_64_after_hwframe
+               __send
+               _RNvXs3_NtNtNtNtCs8ZKwes1zzDd_3std2os4unix3net6streamRNtB5_10UnixStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+               _RNvXs2_NtNtNtCsh0M3tU7NeTW_3mio3net3tcp6streamRNtB5_9TcpStreamNtNtNtCskADBYZwJmSU_4core2io5write5Write5write
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RINvMs0_NtNtCsi9mBaspp6lW_4http6header3mapNtB6_9HeaderMap4findNtNtB8_4name10HeaderNameECs3qHxVHDIbm9_11zelvik_edge.llvm.14850638897160013076
+            |
+            ---_RINvMs0_NtNtCsi9mBaspp6lW_4http6header3mapNtB6_9HeaderMap4findNtNtB8_4name10HeaderNameECs3qHxVHDIbm9_11zelvik_edge.llvm.14850638897160013076
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RINvMs0_NtNtCsi9mBaspp6lW_4http6header3mapNtB6_9HeaderMap4findNtNtB8_4name10HeaderNameECs3zq4rogTWem_12pingora_core.llvm.2682255211883628512
+            |
+            ---_RINvMs0_NtNtCsi9mBaspp6lW_4http6header3mapNtB6_9HeaderMap4findNtNtB8_4name10HeaderNameECs3zq4rogTWem_12pingora_core.llvm.2682255211883628512
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RINvMsq_NtNtCsi9mBaspp6lW_4http6header4nameNtB6_7HdrName10from_bytesNCINvXs4_NtNtB8_3map14as_header_nameReNtB1d_6Sealed4findNtNtB8_5value11HeaderValueE0INtNtCskADBYZwJmSU_4core6option6OptionTjjEEECs3qHxVHDIbm9_11zelvik_edge
+            |
+            ---_RINvMsq_NtNtCsi9mBaspp6lW_4http6header4nameNtB6_7HdrName10from_bytesNCINvXs4_NtNtB8_3map14as_header_nameReNtB1d_6Sealed4findNtNtB8_5value11HeaderValueE0INtNtCskADBYZwJmSU_4core6option6OptionTjjEEECs3qHxVHDIbm9_11zelvik_edge
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RINvNtCskADBYZwJmSU_4core3ptr9drop_glueINtNtNtCs9Lgq8TZwqlN_5tokio6future10maybe_done9MaybeDoneNCNvMNtCsjpZMZBllIwR_13pingora_proxy8proxy_h1INtB1C_9HttpProxyNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy9EdgeProxyNtNtB2z_9origin_h317OriginH3ConnectorE23proxy_handle_downstream0EECs1PzzEoKxY84_20memory_pressure_node.llvm.4015149362118145732
+            |
+            ---_RINvNtCskADBYZwJmSU_4core3ptr9drop_glueINtNtNtCs9Lgq8TZwqlN_5tokio6future10maybe_done9MaybeDoneNCNvMNtCsjpZMZBllIwR_13pingora_proxy8proxy_h1INtB1C_9HttpProxyNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy9EdgeProxyNtNtB2z_9origin_h317OriginH3ConnectorE23proxy_handle_downstream0EECs1PzzEoKxY84_20memory_pressure_node.llvm.4015149362118145732
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RINvNtCskADBYZwJmSU_4core3ptr9drop_glueNCNvMs5_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtBJ_9EdgeProxy16run_limits_phase0EBL_
+            |
+            ---_RINvNtCskADBYZwJmSU_4core3ptr9drop_glueNCNvMs5_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtBJ_9EdgeProxy16run_limits_phase0EBL_
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RINvNtCskADBYZwJmSU_4core3ptr9drop_glueSINtNtNtCsi9mBaspp6lW_4http6header3map6BucketNtNtBH_5value11HeaderValueEECs1PzzEoKxY84_20memory_pressure_node.llvm.6475662426319207168
+            |
+            ---_RINvNtCskADBYZwJmSU_4core3ptr9drop_glueSINtNtNtCsi9mBaspp6lW_4http6header3map6BucketNtNtBH_5value11HeaderValueEECs1PzzEoKxY84_20memory_pressure_node.llvm.6475662426319207168
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RINvXs0_NtNtNtCskADBYZwJmSU_4core4iter8adapters3mapINtB6_3MapINtNtB8_3zip3ZipINtNtNtCsi9mBaspp6lW_4http6header3map4IterNtNtCslyLeaeNWqII_12pingora_http16case_header_name14CaseHeaderNameEIB1e_NtNtB1i_5value11HeaderValueEENCNCNvB1X_16case_header_iter00ENtNtNtBa_6traits8iterator8Iterator4folduQNCINvNvB41_8for_each4callTRB1T_RB33_ENCINvB1X_17header_to_h1_wireNtNtCsjNzn1xVBJcr_5bytes9bytes_mut8BytesMutE0E0ECs3zq4rogTWem_12pingora_core
+            |
+            ---_RINvXs0_NtNtNtCskADBYZwJmSU_4core4iter8adapters3mapINtB6_3MapINtNtB8_3zip3ZipINtNtNtCsi9mBaspp6lW_4http6header3map4IterNtNtCslyLeaeNWqII_12pingora_http16case_header_name14CaseHeaderNameEIB1e_NtNtB1i_5value11HeaderValueEENCNCNvB1X_16case_header_iter00ENtNtNtBa_6traits8iterator8Iterator4folduQNCINvNvB41_8for_each4callTRB1T_RB33_ENCINvB1X_17header_to_h1_wireNtNtCsjNzn1xVBJcr_5bytes9bytes_mut8BytesMutE0E0ECs3zq4rogTWem_12pingora_core
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNCNvMNtCsjpZMZBllIwR_13pingora_proxy8proxy_h1INtB6_9HttpProxyNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy9EdgeProxyE18h1_response_filter0Cs1PzzEoKxY84_20memory_pressure_node
+            |
+            ---_RNCNvMNtCsjpZMZBllIwR_13pingora_proxy8proxy_h1INtB6_9HttpProxyNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy9EdgeProxyE18h1_response_filter0Cs1PzzEoKxY84_20memory_pressure_node
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNCNvMs_NtNtNtCs3zq4rogTWem_12pingora_core9protocols4http6serverNtB6_7Session17read_body_or_idle0Cs1PzzEoKxY84_20memory_pressure_node
+            |
+            ---_RNCNvMs_NtNtNtCs3zq4rogTWem_12pingora_core9protocols4http6serverNtB6_7Session17read_body_or_idle0Cs1PzzEoKxY84_20memory_pressure_node
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNCNvXsl_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtB7_9EdgeProxyNtNtCsjpZMZBllIwR_13pingora_proxy11proxy_trait9ProxyHttp23upstream_request_filter0B9_.llvm.13762063054294592065
+            |
+            ---_RNCNvXsl_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtB7_9EdgeProxyNtNtCsjpZMZBllIwR_13pingora_proxy11proxy_trait9ProxyHttp23upstream_request_filter0B9_.llvm.13762063054294592065
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMNtNtCsi9mBaspp6lW_4http6header5valueNtB2_11HeaderValue6to_str
+            |
+            ---_RNvMNtNtCsi9mBaspp6lW_4http6header5valueNtB2_11HeaderValue6to_str
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMNtNtNtCs9Lgq8TZwqlN_5tokio7runtime2io6driverNtB2_6Driver4turn.llvm.17695857673749187403
+            |
+            ---_RNvMNtNtNtCs9Lgq8TZwqlN_5tokio7runtime2io6driverNtB2_6Driver4turn.llvm.17695857673749187403
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMs0_NtCs3qHxVHDIbm9_11zelvik_edge6configNtB5_11ConfigStore26get_global_uam_policy_sync
+            |
+            ---_RNvMs0_NtCs3qHxVHDIbm9_11zelvik_edge6configNtB5_11ConfigStore26get_global_uam_policy_sync
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMs0_NtNtNtCs9Lgq8TZwqlN_5tokio4sync4task12atomic_wakerNtB5_11AtomicWaker10take_waker
+            |
+            ---_RNvMs0_NtNtNtCs9Lgq8TZwqlN_5tokio4sync4task12atomic_wakerNtB5_11AtomicWaker10take_waker
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMs0_NtNtNtNtCs9Lgq8TZwqlN_5tokio7runtime9scheduler12multi_thread5queueINtB5_5LocalINtNtCsgFX3jaOk65H_5alloc4sync3ArcNtNtB7_6handle6HandleEE3popBd_.llvm.4691379479399926760
+            |
+            ---_RNvMs0_NtNtNtNtCs9Lgq8TZwqlN_5tokio7runtime9scheduler12multi_thread5queueINtB5_5LocalINtNtCsgFX3jaOk65H_5alloc4sync3ArcNtNtB7_6handle6HandleEE3popBd_.llvm.4691379479399926760
+               0x1
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMs1_NtNtCs9Lgq8TZwqlN_5tokio7runtime9schedulerNtB5_6Handle7current
+            |
+            ---_RNvMs1_NtNtCs9Lgq8TZwqlN_5tokio7runtime9schedulerNtB5_6Handle7current
+               0x1
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMs2_CslyLeaeNWqII_12pingora_httpNtB5_13RequestHeader14as_owned_parts
+            |
+            ---_RNvMs2_CslyLeaeNWqII_12pingora_httpNtB5_13RequestHeader14as_owned_parts
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMs5_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtB5_9EdgeProxy19is_https_downstream
+            |
+            ---_RNvMs5_NtCs3qHxVHDIbm9_11zelvik_edge5proxyNtB5_9EdgeProxy19is_https_downstream
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMs5_NtCs8ZKwes1zzDd_3std4timeNtB5_10SystemTime14duration_since
+            |
+            ---_RNvMs5_NtCs8ZKwes1zzDd_3std4timeNtB5_10SystemTime14duration_since
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMs5_NtCsgFX3jaOk65H_5alloc7raw_vecNtB5_11RawVecInner11finish_growCsjNzn1xVBJcr_5bytes.llvm.5664320829149781257
+            |
+            ---_RNvMs5_NtCsgFX3jaOk65H_5alloc7raw_vecNtB5_11RawVecInner11finish_growCsjNzn1xVBJcr_5bytes.llvm.5664320829149781257
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMs9_NtNtCs3qHxVHDIbm9_11zelvik_edge8firewall5stateNtB5_15WafStateManager13is_graylisted
+            |
+            ---_RNvMs9_NtNtCs3qHxVHDIbm9_11zelvik_edge8firewall5stateNtB5_15WafStateManager13is_graylisted
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMs_NtCslyLeaeNWqII_12pingora_http16case_header_nameNtB4_14CaseHeaderName8as_slice
+            |
+            ---_RNvMs_NtCslyLeaeNWqII_12pingora_http16case_header_nameNtB4_14CaseHeaderName8as_slice
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMs_NtNtNtNtCs3zq4rogTWem_12pingora_core9protocols4http2v16serverNtB4_11HttpSession16init_body_reader
+            |
+            ---_RNvMs_NtNtNtNtCs3zq4rogTWem_12pingora_core9protocols4http2v16serverNtB4_11HttpSession16init_body_reader
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvMsa_NtNtCs8XIROWyfvRr_9hashbrown3raw5innerNtB5_13RawTableInner30find_or_find_insert_slot_inner
+            |
+            ---_RNvMsa_NtNtCs8XIROWyfvRr_9hashbrown3raw5innerNtB5_13RawTableInner30find_or_find_insert_slot_inner
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvNtCsjNzn1xVBJcr_5bytes5bytes14release_shared
+            |
+            ---_RNvNtCsjNzn1xVBJcr_5bytes5bytes14release_shared
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvXs0_NtNtCskADBYZwJmSU_4core6future7poll_fnINtB5_6PollFnNCNCNvMNtCsjpZMZBllIwR_13pingora_proxy8proxy_h1INtB13_9HttpProxyNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy9EdgeProxyNtNtB20_9origin_h317OriginH3ConnectorE23proxy_handle_downstream0s1_0ENtNtB7_6future6Future4pollCs1PzzEoKxY84_20memory_pressure_node
+            |
+            ---_RNvXs0_NtNtCskADBYZwJmSU_4core6future7poll_fnINtB5_6PollFnNCNCNvMNtCsjpZMZBllIwR_13pingora_proxy8proxy_h1INtB13_9HttpProxyNtNtCs3qHxVHDIbm9_11zelvik_edge5proxy9EdgeProxyNtNtB20_9origin_h317OriginH3ConnectorE23proxy_handle_downstream0s1_0ENtNtB7_6future6Future4pollCs1PzzEoKxY84_20memory_pressure_node
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvXs2_Cs2Fv2dHwmAvD_7dashmapINtB5_7DashMapNtNtNtCs3qHxVHDIbm9_11zelvik_edge7metrics10aggregator14AggregationKeyNtBH_15AggregatedValueEINtNtB5_1t3MapBF_B1M_NtNtNtCs8ZKwes1zzDd_3std4hash6random11RandomStateE6__entryBL_
+            |
+            ---_RNvXs2_Cs2Fv2dHwmAvD_7dashmapINtB5_7DashMapNtNtNtCs3qHxVHDIbm9_11zelvik_edge7metrics10aggregator14AggregationKeyNtBH_15AggregatedValueEINtNtB5_1t3MapBF_B1M_NtNtNtCs8ZKwes1zzDd_3std4hash6random11RandomStateE6__entryBL_
+               0x4
+               0x1
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _RNvXsb_NtCsgFX3jaOk65H_5alloc3vecINtB5_3VecINtNtNtCsi9mBaspp6lW_4http6header3map6BucketNtNtCslyLeaeNWqII_12pingora_http16case_header_name14CaseHeaderNameEENtNtCskADBYZwJmSU_4core5clone5Clone5cloneB1r_
+            |
+            ---_RNvXsb_NtCsgFX3jaOk65H_5alloc3vecINtB5_3VecINtNtNtCsi9mBaspp6lW_4http6header3map6BucketNtNtCslyLeaeNWqII_12pingora_http16case_header_name14CaseHeaderNameEENtNtCskADBYZwJmSU_4core5clone5Clone5cloneB1r_
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] _mi_theap_realloc_zero
+            |
+            ---_mi_theap_realloc_zero
+
+     0.21%  tokio-rt-worker  candidate-round2-opt-node  [.] mi_find_page
+            |
+            ---mi_find_page
+
+     0.21%  tokio-rt-worker  libc.so.6                  [.] getpeername
+            |
+            ---getpeername
+
+     0.21%  tokio-rt-worker  libc.so.6                  [.] 0x0000000000198698
+            |
+            ---0x76fa96f98698
+               0xc4ffffffffb83677
+
+     0.21%  tokio-rt-worker  libc.so.6                  [.] 0x00000000001986a9
+            |
+            ---0x76fa96f986a9
+               0xc4ffffffffb83677
+
+     0.21%  tokio-rt-worker  libc.so.6                  [.] 0x0000000000198cc5
+            |
+            ---0x76fa96f98cc5
+
+     0.21%  tokio-rt-worker  libc.so.6                  [.] 0x0000000000198e25
+            |
+            ---0x76fa96f98e25
+
+     0.21%  tokio-rt-worker  libc.so.6                  [.] 0x0000000000198e2c
+            |
+            ---0x76fa96f98e2c
+               0x36977680300
+               0x1
+
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

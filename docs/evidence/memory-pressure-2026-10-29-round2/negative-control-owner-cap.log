@@ -1,0 +1,28 @@
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+mbx[progress]: 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 09s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-c8c3a1a23565cbce)
+
+running 1 test
+test memory_ticket::tests::single_owner_cannot_starve_independent_workspace ... FAILED
+
+failures:
+
+---- memory_ticket::tests::single_owner_cannot_starve_independent_workspace stdout ----
+
+thread 'memory_ticket::tests::single_owner_cannot_starve_independent_workspace' (8521381) panicked at src/memory_ticket.rs:356:14:
+one owner must leave space for independent work
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    memory_ticket::tests::single_owner_cannot_starve_independent_workspace
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1101 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`
+mbx[cache]: 0 hits, 2 misses; 0 B downloaded, 0 B uploaded, 178.3 MiB stored locally
+mbx[savings]: 26.2 GiB of outputs materialized without a copy. the copy machine stays off.
