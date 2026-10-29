@@ -127,7 +127,7 @@ Client-Agent 契约复核：`control-plane/internal/gcloud/services_contract.go:
 
 ## E. 测试与性能
 
-已执行（本轮）：Mace 升级的 storage 19、telemetry 34、adapter 2、integration 8；节点二进制 `check`；可选 importer Rust API `check`；bandwidth 交接 1 项 + reporter 策略 3 项（0.22 秒 / 0.04 秒）通过。负向对照：format-1 manifest 被拒且字节不变；容量拒收与超大批次拒收不推进 producer state；恢复时超 12 窗口的 backlog 被记录为覆盖 gap；bounded cleanup 用 3000 条过期行和 1 条 fresh 行验证游标推进、预算和回绕。
+已执行（本轮）：Mace 升级的 storage 19、telemetry 34、adapter 2、integration 8；节点二进制 `check`；可选 importer Rust API `check`；bandwidth 交接 1 项 + reporter 策略 3 项（0.22 秒 / 0.04 秒）通过；retention 定向 2 项（0.37 秒）通过。负向对照：format-1 manifest 被拒且字节不变；容量拒收与超大批次拒收不推进 producer state；恢复时超 12 窗口的 backlog 被记录为覆盖 gap；bounded cleanup 用 3000 条过期行和 1 条 fresh 行验证游标推进、预算和回绕。
 
 未执行：逻辑 30 天、最终 cgroup 六组、实际 soak、配对性能和最终全量门禁。既有 d6e2422 验收不能代表升级后结果；静态审计/确定性单测/模拟压力/真实持续运行必须分开陈述。
 
@@ -135,7 +135,7 @@ Client-Agent 契约复核：`control-plane/internal/gcloud/services_contract.go:
 
 目前不能证明 7/30 天稳定；不构成生产升级依据。以下是实施中状态，不是最终验收结论。
 
-本轮本地提交：`9ed075c`（Mace 0.2.0 独立升级与 fail-fast）、`6d1e8b1`（Bandwidth 原子交接与 12 窗口 backlog 上界）。Metrics retention 的增量清理改动仍在本工作树验证；未提交的改动不应当作已交付。
+本轮本地提交：`9ed075c`（Mace 0.2.0 独立升级与 fail-fast）、`6d1e8b1`（Bandwidth 原子交接与 12 窗口 backlog 上界）、`ac4e572`（Metrics 历史有界增量清理与独立执行）。退役联合边界、无消费者聚合/上传展开、辅助状态、Config/Zstd/L1 以及全部长期/压力验收仍未完成，不得当作生产就绪。
 
 1. **是否仍有随时间无限增长的 Rust heap？** 仍有：consumer 失败叠加配置 churn 时的 ServerMetrics family、Client-Agent 历史有效身份；Bandwidth pending 已从无界改为 12 窗口计数上界，但单窗口字节仍随站点基数增长。
 2. **是否仍有无清理边界的数据库历史？** WAFTOK 过期行、loss journal 容量例外、未具备安全回收水位的 CTOMB 和有效身份仍无完整边界。Metrics retention 已改为有界增量扫描并在每个 30 秒周期执行，但还没有 100/1000 站点的真实吞吐与文件尺寸数据，不能宣称已追平新增。
