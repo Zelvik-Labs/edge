@@ -2400,7 +2400,11 @@ mod tests {
 
     #[test]
     fn active_request_guard_keeps_old_arc_after_registry_replacement() {
-        let old = super::record::get_or_create(9_001).expect("seeded instance");
+        // get_or_create no longer creates instances, so seed the shared
+        // registry directly instead of depending on another test having
+        // registered this id first.
+        let old = std::sync::Arc::new(super::ServerMetrics::new());
+        super::METRICS.servers.insert(9_001, old.clone());
         let mut guard = super::ActiveRequestMetricsGuard::new(old.clone());
         super::METRICS.servers.remove(&9_001);
         let new = std::sync::Arc::new(super::ServerMetrics::new());
