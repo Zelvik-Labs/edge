@@ -15,6 +15,33 @@ static LAST_SINGLE_SERVER_JSON_HASH: Lazy<RwLock<String>> =
     Lazy::new(|| RwLock::new(String::new()));
 static LAST_MULTI_SERVER_JSON_HASH: Lazy<RwLock<String>> = Lazy::new(|| RwLock::new(String::new()));
 
+/// Result of applying one server/user configuration to the local runtime.
+///
+/// The distinction matters to the NodeTask reporter: the control plane marks a
+/// task done as soon as `ReportNodeTaskDone` arrives, including `is_ok=false`,
+/// and `FindNodeTasks` only returns tasks that are still not done. A local
+/// admission rejection therefore must stay [`SyncOutcome::Deferred`] so the
+/// next poll retries it; reporting it as a failure would drop the update
+/// permanently. Terminal failures keep their old behavior and are reported.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncOutcome {
+    /// The configuration was applied (or was already up to date).
+    Applied,
+    /// The change could not be admitted locally because a bounded resource
+    /// (server metric family, memory governor) is exhausted. The previous
+    /// generation remains active and a later poll may succeed.
+    Deferred,
+    /// The fetch, decode or apply failed for a reason a retry cannot fix.
+    Failed,
+}
+
+impl SyncOutcome {
+    /// Classify a helper that only distinguishes success from failure.
+    pub fn from_applied(applied: bool) -> Self {
+        if applied { Self::Applied } else { Self::Failed }
+    }
+}
+
 fn log_server_json_hints(label: &str, raw: &[u8]) {
     let text = String::from_utf8_lossy(raw);
     for needle in ["@sni_passthrough", "speedtest", "www.speedtest.cn"] {
@@ -49,7 +76,7 @@ pub async fn sync_single_server_config(
     config_store: &ConfigStore,
     health_manager: &crate::health_manager::GlobalHealthManager,
     server_id: i64,
-) -> bool {
+) -> SyncOutcome {
     let client = match crate::rpc::client::SharedRpcClient::get(api_config).await {
         Ok(s) => s.as_rpc_client(),
         Err(e) => {
@@ -64,7 +91,7 @@ pub async fn sync_single_server_config(
                 None,
             )
             .await;
-            return false;
+            return SyncOutcome::Failed;
         }
     };
     let mut server_service = client.server_service();
@@ -82,10 +109,10 @@ pub async fn sync_single_server_config(
                         "server removal deferred: server metric capacity exhausted ({}/{}); keeping previous generation",
                         err.used, err.limit
                     );
-                    return false;
+                    return SyncOutcome::Deferred;
                 }
                 let _ = sync_active_plans(api_config, config_store).await;
-                return true;
+                return SyncOutcome::Applied;
             }
             let current_hash = format!("{:x}", md5_legacy::compute(&payload.server_config_json));
             let fingerprint_scope = format!("server:{server_id}");
@@ -99,7 +126,7 @@ pub async fn sync_single_server_config(
                     fingerprint = %current_hash,
                     "server config unchanged; skipping rebuild"
                 );
-                return true;
+                return SyncOutcome::Applied;
             }
             let mut should_log = true;
             {
@@ -126,7 +153,7 @@ pub async fn sync_single_server_config(
                             "server config deferred: server metric capacity exhausted ({}/{}); keeping previous generation",
                             err.used, err.limit
                         );
-                        return false;
+                        return SyncOutcome::Deferred;
                     }
                     let (node_level, parent_nodes, tiered_origin_bypass, allow_lan) =
                         config_store.get_origin_runtime_context().await;
@@ -147,7 +174,7 @@ pub async fn sync_single_server_config(
                             server_id,
                             "server config apply deferred by memory governor; keeping previous generation"
                         );
-                        return false;
+                        return SyncOutcome::Deferred;
                     }
                     let installed = if user_id > 0 {
                         config_store
@@ -169,14 +196,14 @@ pub async fn sync_single_server_config(
                             "server config install rejected by server metric capacity ({}/{}); keeping previous generation",
                             err.used, err.limit
                         );
-                        return false;
+                        return SyncOutcome::Deferred;
                     }
                     config_store.mark_published_fingerprint(
                         fingerprint_scope,
                         scoped_fingerprint(config_store, &current_hash),
                     );
                     let _ = sync_active_plans(api_config, config_store).await;
-                    true
+                    SyncOutcome::Applied
                 }
                 Err(e) => {
                     error!("Failed to decode server config {}: {}", server_id, e);
@@ -190,7 +217,7 @@ pub async fn sync_single_server_config(
                         None,
                     )
                     .await;
-                    false
+                    SyncOutcome::Failed
                 }
             }
         }
@@ -206,7 +233,7 @@ pub async fn sync_single_server_config(
                 None,
             )
             .await;
-            false
+            SyncOutcome::Failed
         }
     }
 }
@@ -216,9 +243,9 @@ pub async fn sync_user_servers_state(
     config_store: &ConfigStore,
     health_manager: &crate::health_manager::GlobalHealthManager,
     user_id: i64,
-) -> bool {
+) -> SyncOutcome {
     if user_id <= 0 {
-        return true;
+        return SyncOutcome::Applied;
     }
 
     let client = match crate::rpc::client::SharedRpcClient::get(api_config).await {
@@ -238,7 +265,7 @@ pub async fn sync_user_servers_state(
                 Some(serde_json::json!({ "userId": user_id })),
             )
             .await;
-            return false;
+            return SyncOutcome::Failed;
         }
     };
     let mut user_service = client.user_service();
@@ -261,7 +288,7 @@ pub async fn sync_user_servers_state(
                 Some(serde_json::json!({ "userId": user_id })),
             )
             .await;
-            return false;
+            return SyncOutcome::Failed;
         }
     };
 
@@ -272,10 +299,10 @@ pub async fn sync_user_servers_state(
                 "user server removal deferred: server metric capacity exhausted ({}/{}); keeping previous generation",
                 err.used, err.limit
             );
-            return false;
+            return SyncOutcome::Deferred;
         }
         let _ = sync_active_plans(api_config, config_store).await;
-        return true;
+        return SyncOutcome::Applied;
     }
 
     match server_service
@@ -291,10 +318,10 @@ pub async fn sync_user_servers_state(
                         "user server removal deferred: server metric capacity exhausted ({}/{}); keeping previous generation",
                         err.used, err.limit
                     );
-                    return false;
+                    return SyncOutcome::Deferred;
                 }
                 let _ = sync_active_plans(api_config, config_store).await;
-                return true;
+                return SyncOutcome::Applied;
             }
             let current_hash = format!("{:x}", md5_legacy::compute(&payload.servers_config_json));
             let fingerprint_scope = format!("user:{user_id}");
@@ -308,7 +335,7 @@ pub async fn sync_user_servers_state(
                     fingerprint = %current_hash,
                     "user server config unchanged; skipping rebuild"
                 );
-                return true;
+                return SyncOutcome::Applied;
             }
             let mut should_log = true;
             {
@@ -332,7 +359,7 @@ pub async fn sync_user_servers_state(
                             "user servers config deferred: server metric capacity exhausted ({}/{}); keeping previous generation",
                             err.used, err.limit
                         );
-                        return false;
+                        return SyncOutcome::Deferred;
                     }
                     let (node_level, parent_nodes, tiered_origin_bypass, allow_lan) =
                         config_store.get_origin_runtime_context().await;
@@ -353,7 +380,7 @@ pub async fn sync_user_servers_state(
                             user_id,
                             "user servers config apply deferred by memory governor; keeping previous generation"
                         );
-                        return false;
+                        return SyncOutcome::Deferred;
                     }
                     if let Err(err) = config_store
                         .replace_user_servers(user_id, maps.all_servers, maps.servers, maps.routes)
@@ -364,14 +391,14 @@ pub async fn sync_user_servers_state(
                             "user servers config install rejected by server metric capacity ({}/{}); keeping previous generation",
                             err.used, err.limit
                         );
-                        return false;
+                        return SyncOutcome::Deferred;
                     }
                     config_store.mark_published_fingerprint(
                         fingerprint_scope,
                         scoped_fingerprint(config_store, &current_hash),
                     );
                     let _ = sync_active_plans(api_config, config_store).await;
-                    true
+                    SyncOutcome::Applied
                 }
                 Err(e) => {
                     error!("Failed to decode user {} servers config: {}", user_id, e);
@@ -385,7 +412,7 @@ pub async fn sync_user_servers_state(
                         Some(serde_json::json!({ "userId": user_id })),
                     )
                     .await;
-                    false
+                    SyncOutcome::Failed
                 }
             }
         }
@@ -401,7 +428,7 @@ pub async fn sync_user_servers_state(
                 Some(serde_json::json!({ "userId": user_id })),
             )
             .await;
-            false
+            SyncOutcome::Failed
         }
     }
 }
