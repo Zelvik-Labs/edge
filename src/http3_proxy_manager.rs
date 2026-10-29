@@ -606,6 +606,7 @@ impl Http3ProxyManager {
                     let ticket_owner = ticket_owner.clone();
                     tokio::spawn(async move {
                         let _stream_permit = stream_permit;
+                        let _request_permit = request_permit;
                         if let Err(err) = manager
                             .handle_request(
                                 resolver,
@@ -613,7 +614,6 @@ impl Http3ProxyManager {
                                 remote_addr,
                                 proxy,
                                 shutdown,
-                                request_permit,
                                 ticket_owner,
                             )
                             .await
@@ -644,7 +644,6 @@ impl Http3ProxyManager {
         remote_addr: SocketAddr,
         proxy: Arc<pingora_proxy::HttpProxy<EdgeProxy, crate::origin_h3::OriginH3Connector>>,
         shutdown_rx: watch::Receiver<bool>,
-        _request_permit: crate::memory_governor::StaticAdmissionPermit,
         ticket_owner: Arc<crate::memory_ticket::TicketBucket>,
     ) -> Result<()>
     where
@@ -1184,7 +1183,7 @@ mod tests {
 
             assert!(drain_h3_oldest(H3_CONNECTIONS.len()) >= 1);
             assert!(!H3_CONNECTIONS.contains_key(&registration.id));
-            assert!(h3_shed_drained_total() >= drained_total + 1);
+            assert!(h3_shed_drained_total() > drained_total);
 
             // The guard is a no-op after the drain: no second close, no
             // registry entry left behind.
