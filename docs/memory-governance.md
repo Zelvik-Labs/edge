@@ -235,13 +235,13 @@ uncontended CAS on a connection-private line.
 - Ledger bound: `available/4` normally, `available/16` under High+
   pressure, floored at one transform charge. Classes on one connection share
   the pool.
-- Owner bound: one bucket may hold at most `max(workspace/4, 16MiB)`,
-  capped at the whole workspace. The 16 MiB floor lets one legitimate
-  transform fit; pools below 4×16 MiB can still be consumed by that single
-  transform, so the guarantee is proportional rather than absolute. Refills
-  reserve owner bytes with an atomic before touching the global ledger, so
-  concurrent refills cannot each observe the same unused allowance. A victim
-  owner can still obtain a 16 KiB charge while another owner is capped.
+- Owner bound: one bucket may hold at most `workspace/4`, including idle
+  float and in-flight spends. There is no transform-sized owner floor:
+  under a small pool, new large WAF/transform work is refused so it cannot
+  consume all independent owners' workspace. Refills reserve owner bytes
+  with an atomic before touching the global ledger, so concurrent refills
+  cannot each observe the same unused allowance. A 16 MiB pool caps one
+  owner at 4 MiB and leaves room for an independent 16 KiB request.
 - H2 stream slots are **not** drawn from this byte pool. Pooled and
   unregistered H2 paths both hold an ordinary `Http2Stream` class permit for
   exactly the stream lifetime, so the global stream count and shared

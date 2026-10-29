@@ -359,6 +359,29 @@ mod tests {
     }
 
     #[test]
+    fn small_workspace_owner_cannot_take_transform_floor() {
+        let g = frozen_governor(64 << 20);
+        let attacker = Arc::new(TicketBucket::new(g));
+        assert_eq!(g.ticket_owner_limit_bytes(), 4 << 20);
+        assert!(
+            attacker
+                .spend(AdmissionClass::ResponseTransform, 16 << 20)
+                .is_none()
+        );
+        let mut held = Vec::new();
+        while let Some(permit) = attacker.spend(AdmissionClass::RequestBodyWaf, 2 << 20) {
+            held.push(permit);
+        }
+        assert!(!held.is_empty());
+        let victim = Arc::new(TicketBucket::new(g));
+        let victim_permit = victim
+            .spend(AdmissionClass::RequestBodyWaf, 16 << 10)
+            .expect("a small workspace must retain independent owner capacity");
+        drop((held, victim_permit, attacker, victim));
+        assert_eq!(g.request_workspace_used_bytes(), 0);
+    }
+
+    #[test]
     fn concurrent_refills_respect_owner_cap_and_refund() {
         let g = frozen_governor(256 << 20);
         let bucket = Arc::new(TicketBucket::new(g));

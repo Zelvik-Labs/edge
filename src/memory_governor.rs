@@ -1917,14 +1917,11 @@ impl MemoryGovernor {
         self.request_workspace_bytes.load(Ordering::Acquire)
     }
 
-    /// One owner may hold at most a quarter of a large workspace pool. The
-    /// 16 MiB floor lets one transform fit whenever the pool can hold it;
-    /// pools below 4×16 MiB may be consumed by that one legitimate transform.
+    /// Keep independent owners' workspace available at every pool size.
+    /// Large new transforms are refused when a quarter of the pool cannot
+    /// cover them; their size must not become a floor that consumes the pool.
     pub(crate) fn ticket_owner_limit_bytes(&self) -> u64 {
-        let budget = self.limits().request_workspace_budget_bytes;
-        (budget / 4)
-            .max(RESPONSE_TRANSFORM_ESTIMATED_BYTES)
-            .min(budget)
+        self.limits().request_workspace_budget_bytes / 4
     }
 
     /// Pressure-scaled refill slack; loaded from the materialized limits table.
