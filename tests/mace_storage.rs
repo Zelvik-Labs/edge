@@ -91,6 +91,65 @@ fn metric_storage_increment_and_server_batch_round_trip() {
 }
 
 #[test]
+fn old_metadata_format_is_rejected_without_rewriting_the_manifest() {
+    let path = std::env::temp_dir().join(format!("zelvik-mace-v1-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(path.join("log")).unwrap();
+    // Two checksum-valid format-1 meta headers from the stopped development
+    // database. Payload references are never followed for an unsupported format.
+    let mut manifest = vec![0u8; 8192];
+    for (offset, header) in [
+        (0, "6565727462776f633d0100000000000001000000330000009100000002000000050000003c3a4833"),
+        (4096, "6565727462776f633e01000000000000010000001600000091000000030000000400000065f6a75c"),
+    ] {
+        let header = hex::decode(header).unwrap();
+        manifest[offset..offset + header.len()].copy_from_slice(&header);
+    }
+    let manifest_path = path.join("log/manifest");
+    std::fs::write(&manifest_path, &manifest).unwrap();
+    let report = mace::check_database(&mace::Options::new(&path));
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .any(|d| d.category == mace::CheckCategory::UnsupportedMetadataFormat),
+        "{report:?}"
+    );
+    let error = match MetricStorage::open(&path) {
+        Ok(_) => panic!("format-1 storage must not open"),
+        Err(error) => error,
+    };
+    assert!(error.to_string().contains("Corruption"), "{error}");
+    assert_eq!(std::fs::read(manifest_path).unwrap(), manifest);
+    std::fs::remove_dir_all(path).unwrap();
+}
+
+#[test]
+fn mace_crash_child() {
+    let Ok(path) = std::env::var("ZELVIK_MACE_CRASH_FIXTURE") else {
+        return;
+    };
+    let storage = MetricStorage::open(path).expect("open child storage");
+    assert!(storage.put_json("CRASH_COMMITTED", &42u64));
+    // Process exit deliberately bypasses engine and transaction destructors.
+    std::process::exit(0);
+}
+
+#[test]
+fn committed_wal_survives_exit_without_engine_shutdown() {
+    let path = std::env::temp_dir().join(format!("zelvik-mace-crash-{}", uuid::Uuid::new_v4()));
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "mace_crash_child", "--nocapture"])
+        .env("ZELVIK_MACE_CRASH_FIXTURE", &path)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let storage = MetricStorage::open(&path).expect("recover committed WAL");
+    assert_eq!(storage.get_json::<u64>("CRASH_COMMITTED"), Some(42));
+    drop(storage);
+    std::fs::remove_dir_all(path).unwrap();
+}
+
+#[test]
 fn mace_tier_uses_stable_capacity_boundaries() {
     assert_eq!(
         mace_memory_tier_for_stable_capacity(512 * 1024 * 1024),

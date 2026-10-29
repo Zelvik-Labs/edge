@@ -1,0 +1,14 @@
+local-storage: waiting for the rust build slot
+   Compiling rust-librocksdb-sys v0.46.0+11.1.1
+mbx[warning]: cc cache bypassed: compiler invocation names no output file
+mbx[progress]: 15s elapsed; 0 hits, 15 misses, 1 bypassed, 2 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 30 misses, 1 bypassed, 2 not looked up; ~0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 40 misses, 1 bypassed, 2 not looked up; ~0s compiler work saved
+mbx[progress]: 1m elapsed; 0 hits, 49 misses, 1 bypassed, 2 not looked up; ~0s compiler work saved
+mbx[progress]: 1m 15s elapsed; 0 hits, 56 misses, 1 bypassed, 2 not looked up; ~0s compiler work saved
+mbx[progress]: 1m 30s elapsed; 0 hits, 66 misses, 1 bypassed, 2 not looked up; ~0s compiler work saved
+mbx[progress]: 1m 45s elapsed; 0 hits, 77 misses, 1 bypassed, 2 not looked up; ~0s compiler work saved
+mbx[progress]: 2m elapsed; 0 hits, 91 misses, 1 bypassed, 2 not looked up; ~0s compiler work saved
+local-storage: terminating build: budget exceeded: mbx 12.01 GiB exceeds 12.00 GiB
+
+[exited with code 4]

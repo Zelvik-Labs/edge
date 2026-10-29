@@ -1,0 +1,78 @@
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+mbx[progress]: 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 06s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-a82c0c7016030509)
+
+running 19 tests
+test metrics::storage::tests::cache_access_flush_does_not_resurrect_tombstoned_metadata ... ok
+test metrics::storage::tests::cache_access_log_charge_is_symmetric_with_removal ... ok
+test metrics::storage::tests::cache_access_flush_does_not_overwrite_newer_durable_metadata ... ok
+test metrics::storage::tests::cache_metadata_tombstone_fences_unversioned_upsert ... ok
+test metrics::storage::tests::cache_metadata_delete_tombstone_fences_delayed_upsert ... ok
+test metrics::storage::tests::cache_status_parsing_preserves_missing_default_and_rejects_invalid_values ... ok
+test metrics::storage::tests::cancelled_metadata_upsert_rolls_back_hot_entry ... ok
+test metrics::storage::tests::failed_old_metadata_cleanup_cannot_remove_newer_hot_entry ... ok
+test metrics::storage::tests::cache_metadata_upsert_rejects_explicitly_invalid_status ... ok
+test metrics::storage::tests::legacy_error_metadata_requires_explicit_persisted_opt_in ... ok
+test metrics::storage::tests::history_cleanup_removes_only_expired_metric_namespaces ... ok
+test metrics::storage::tests::mace_capacity_uses_the_smaller_host_or_cgroup_limit ... ok
+test metrics::storage::tests::mace_020_reopens_all_runtime_namespaces_without_committing_aborted_writes ... ok
+test metrics::storage::tests::mace_tier_boundaries_select_smaller_footprint_on_small_nodes ... ok
+test metrics::storage::tests::server_period_parser_uses_numeric_period_not_key_order ... ok
+test metrics::storage::tests::successful_metadata_upsert_clears_only_older_hot_tombstone ... ok
+test metrics::storage::tests::unavailable_metric_storage_reports_persistence_failure ... ok
+test metrics::storage::tests::unique_ip_key_round_trips_ipv4_and_ipv6 ... ok
+test metrics::storage::tests::mace_storage_round_trip_and_prefix_scan ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 1087 filtered out; finished in 1.29s
+
+mbx[cache]: 0 hits, 2 misses; 0 B downloaded, 0 B uploaded, 180.5 MiB stored locally
+mbx[savings]: 32.5 GiB in every checkout, 32.5 GiB on disk. arithmetic declined to comment.
+
+[exited with code 0]
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.74s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-a82c0c7016030509)
+
+running 34 tests
+test telemetry::tests::append_prepared_refuses_a_batch_over_the_wire_cap ... ok
+test telemetry::tests::assignment_before_first_is_terminal_only_with_its_stable_code ... ok
+test telemetry::tests::authorization_failures_keep_the_queue ... ok
+test telemetry::tests::byte_cap_splits_batches_under_the_wire_limit ... ok
+test telemetry::tests::capacity_escalates ... ok
+test telemetry::tests::capacity_invariants_hold_across_disk_sizes ... ok
+test telemetry::tests::capacity_refusal_is_distinguishable_from_other_failures ... ok
+test telemetry::tests::client_timeout_is_retryable_not_terminal ... ok
+test telemetry::tests::append_uses_the_adaptive_budget_on_a_tight_disk ... ok
+test telemetry::tests::daily_enqueue_failure_returns_only_unpersisted_rows ... ok
+test telemetry::tests::failed_head_does_not_discard_later_upload_receipts ... ok
+test telemetry::tests::metric_enqueue_failure_returns_only_unpersisted_rows ... ok
+test telemetry::tests::no_age_expiration_and_no_overwrite_at_capacity ... ok
+test telemetry::tests::observation_payloads_are_split_under_the_wire_cap ... ok
+test telemetry::tests::out_of_order_receipts_preserve_rejected_head_across_reopen ... ok
+test telemetry::tests::oversize_record_is_journaled_not_silently_dropped ... ok
+test telemetry::tests::payload_refusals_are_terminal ... ok
+test telemetry::tests::probe_enqueue_failure_returns_only_unpersisted_records ... ok
+test telemetry::tests::probe_observation_batch_reaches_the_spool_with_plan_identity ... ok
+test telemetry::tests::quarantine_is_atomic_and_survives_reopen ... ok
+test telemetry::tests::quarantine_of_a_non_head_batch_changes_nothing ... ok
+test telemetry::tests::rebuilt_spool_rejects_receipts_from_the_previous_data_generation ... ok
+test telemetry::tests::refused_gap_marker_does_not_recurse ... ok
+test telemetry::tests::replay_cursor_reaches_batches_beyond_a_failed_window ... ok
+test telemetry::tests::replay_reports_missing_unconfirmed_payloads ... ok
+test telemetry::tests::reserve_adapts_to_available_space_and_stops_at_zero_free ... ok
+test telemetry::tests::restart_preserves_batch_until_matching_receipt ... ok
+test telemetry::tests::retryable_head_failure_backs_off_and_retains_the_batch ... ok
+test telemetry::tests::size_refusals_are_terminal_and_rate_limits_are_not ... ok
+test telemetry::tests::status_snapshot_exposes_head_tail_quarantine_and_gap_counters ... ok
+test telemetry::tests::terminal_head_is_quarantined_and_later_batches_still_upload ... ok
+test telemetry::tests::tight_disk_keeps_a_positive_adaptive_budget ... ok
+test telemetry::tests::transient_statuses_are_retryable ... ok
+test telemetry::tests::detail_still_enqueues_after_core_fills_its_budget ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 1072 filtered out; finished in 5.44s
+
+
+[exited with code 0]

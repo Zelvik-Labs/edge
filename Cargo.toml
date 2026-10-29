@@ -110,7 +110,7 @@ zstd = "0.13.3"
 chrono = "0.4.45"
 hex = "0.4.3"
 woothee = "0.13.0"
-mace-kv = "0.1.1"
+mace-kv = "=0.2.0"
 rand = "0.10.2"
 libinjectionrs = { path = "vendor/libinjectionrs" }
 libc = "0.2.189"

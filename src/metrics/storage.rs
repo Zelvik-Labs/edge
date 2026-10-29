@@ -316,8 +316,8 @@ impl MetricStorage {
             .map_err(mace_open_error)?;
         let mace = Mace::new(opts).map_err(mace_open_error)?;
         let bucket_options = mace_metrics_bucket_options();
-        let bucket = match mace.update_bucket_opt(METRICS_BUCKET, bucket_options) {
-            Ok(()) => mace.get_bucket(METRICS_BUCKET),
+        let bucket = match mace.update_bucket_opt(METRICS_BUCKET, bucket_options.clone()) {
+            Ok(()) => mace.open_bucket(METRICS_BUCKET),
             Err(OpCode::NotFound) => mace.new_bucket(METRICS_BUCKET, bucket_options),
             Err(err) => Err(err),
         }
@@ -1262,7 +1262,20 @@ impl MetricStorage {
 }
 
 fn mace_open_error(err: OpCode) -> anyhow::Error {
-    anyhow::anyhow!("Failed to open Mace storage: {err:?}")
+    anyhow::anyhow!(
+        "Failed to open Mace 0.2 storage: {err:?}; databases from Mace 0.1.x are incompatible. Stop the instance and explicitly rebuild authorized development data; startup never deletes a database"
+    )
+}
+
+pub fn initialize() -> anyhow::Result<()> {
+    anyhow::ensure!(
+        STORAGE.backend.is_some(),
+        "required Mace metrics storage is unavailable at {}; see the preceding open error",
+        crate::paths::NodePaths::current()
+            .metrics_db_dir()
+            .display()
+    );
+    Ok(())
 }
 
 pub static STORAGE: Lazy<MetricStorage> = Lazy::new(|| {
@@ -2600,6 +2613,51 @@ mod tests {
 
         drop(storage);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn mace_020_reopens_all_runtime_namespaces_without_committing_aborted_writes() {
+        let dir = std::env::temp_dir().join(format!("zelvik-mace-020-{}", uuid::Uuid::new_v4()));
+        let records = [
+            ("S7_T1700000000", b"metric".as_slice()),
+            ("NODE_T1700000000", b"node".as_slice()),
+            ("UIP_7_20261029_203.0.113.9", b"unique".as_slice()),
+            ("CAIP_IP_203.0.113.9", b"agent".as_slice()),
+            ("WAFTOK_token", b"token".as_slice()),
+            ("CTOMB_hash", b"200".as_slice()),
+            ("CMETA_hash", b"metadata".as_slice()),
+            ("FWBLK_V1_global_0_203.0.113.9", b"block".as_slice()),
+        ];
+        {
+            let storage = MetricStorage::open(&dir).unwrap();
+            assert!(
+                storage.write_raw_batch(
+                    records
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.to_vec()))
+                        .collect(),
+                    Vec::new()
+                )
+            );
+            let txn = storage.bucket().unwrap().begin().unwrap();
+            txn.upsert(b"ABORTED", b"must not survive").unwrap();
+            drop(txn);
+            storage.backend.as_ref().unwrap()._mace.sync().unwrap();
+        }
+        {
+            let storage = MetricStorage::open(&dir).unwrap();
+            for (key, expected) in records {
+                assert_eq!(
+                    storage.get_raw(key.as_bytes()).as_deref(),
+                    Some(expected),
+                    "{key}"
+                );
+            }
+            assert!(storage.get_raw(b"ABORTED").is_none());
+        }
+        let report = mace::check_database(&mace_metrics_options(&dir));
+        assert!(report.is_ok(), "{report:?}");
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

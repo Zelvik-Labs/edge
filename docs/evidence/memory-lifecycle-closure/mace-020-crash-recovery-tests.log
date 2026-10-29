@@ -1,0 +1,25 @@
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+mbx[progress]: 15s elapsed; 0 hits, 0 misses, 0 bypassed, 1 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 0 misses, 0 bypassed, 1 not looked up; ~0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 0 misses, 0 bypassed, 1 not looked up; ~0s compiler work saved
+mbx[progress]: 1m elapsed; 0 hits, 0 misses, 0 bypassed, 7 not looked up; ~0s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 12s
+     Running tests/mace_storage.rs (target/debug/deps/mace_storage-798c9c3635c45898)
+
+running 7 tests
+test fold_counter_deltas_coalesces_and_skips_zero ... ok
+test mace_crash_child ... ok
+test mace_memory_observation_labels_capacity_semantics ... ok
+test mace_tier_uses_stable_capacity_boundaries ... ok
+
+running 1 test
+test metric_storage_increment_and_server_batch_round_trip ... ok
+test packed_period_records_merge_in_memory ... ok
+test committed_wal_survives_exit_without_engine_shutdown ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+mbx[cache]: 0 hits, 0 misses, 12 not looked up; 0 B downloaded, 0 B uploaded, 1.1 GiB stored locally
+mbx[savings]: 2h 10m refunded over 207 builds. no receipt necessary.
+
+[exited with code 0]

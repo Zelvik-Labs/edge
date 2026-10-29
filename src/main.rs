@@ -3400,6 +3400,9 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         .build()?;
     let _guard = rt.enter();
 
+    zelvik_edge::metrics::storage::initialize()?;
+    zelvik_edge::telemetry::initialize()?;
+
     if let Some(port) = monitor_port {
         spawn_staggered(&rt, Duration::ZERO, async move {
             zelvik_edge::perf_monitor::start(port, monitor_clear).await;
@@ -3540,14 +3543,6 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
         hm_start.start().await;
     });
 
-    if let Err(e) = zelvik_edge::telemetry::initialize() {
-        error!("telemetry spool initialization failed: {}", e);
-        zelvik_edge::telemetry::record_gap(
-            "core",
-            zelvik_edge::utils::time::now_timestamp(),
-            &e.to_string(),
-        );
-    }
     let telemetry_core_api = api_config.clone();
     rt.spawn(zelvik_edge::telemetry::replay(telemetry_core_api, true));
     let telemetry_detail_api = api_config.clone();

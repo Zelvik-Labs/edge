@@ -255,7 +255,9 @@ struct LaneBudget {
     counter: Arc<LaneCounter>,
 }
 fn mace_error(e: OpCode) -> anyhow::Error {
-    anyhow::anyhow!("telemetry spool: {e:?}")
+    anyhow::anyhow!(
+        "telemetry Mace 0.2 spool: {e:?}; Mace 0.1.x databases require an explicit offline rebuild; startup never deletes queued data"
+    )
 }
 /// Distinguishes "the disk cannot take this batch" from every other spool
 /// failure, so operators and alerts can point straight at capacity instead of
@@ -385,7 +387,7 @@ impl Spool {
             enable_backpressure: true,
             ..Default::default()
         };
-        let bucket = match db.get_bucket("queue") {
+        let bucket = match db.open_bucket("queue") {
             Ok(b) => b,
             Err(OpCode::NotFound) => db.new_bucket("queue", options).map_err(mace_error)?,
             Err(e) => return Err(mace_error(e)),
@@ -3699,6 +3701,36 @@ mod tests {
         drop(spool);
         std::fs::remove_dir_all(path).unwrap();
     }
+    #[test]
+    fn rebuilt_spool_rejects_receipts_from_the_previous_data_generation() {
+        let path = std::env::temp_dir().join(format!("telemetry-reset-{}", uuid::Uuid::new_v4()));
+        let old_batch = {
+            let spool = Spool::open(&path, true, 1 << 20).unwrap();
+            spool.append("node_metric", vec![1], 0, false, 1).unwrap();
+            spool.front().unwrap().unwrap()
+        };
+        std::fs::remove_dir_all(&path).unwrap();
+        let spool = Spool::open(&path, true, 1 << 20).unwrap();
+        spool.append("node_metric", vec![2], 0, false, 2).unwrap();
+        let new_batch = spool.front().unwrap().unwrap();
+        assert_eq!(new_batch.sequence, old_batch.sequence);
+        assert_ne!(new_batch.boot_id, old_batch.boot_id);
+        assert_ne!(new_batch.batch_id, old_batch.batch_id);
+        assert!(
+            spool
+                .acknowledge(&pb::TelemetryReceipt {
+                    batch_id: old_batch.batch_id,
+                    sequence: old_batch.sequence,
+                    backend: "direct".into(),
+                    durable_at: 3,
+                })
+                .is_err()
+        );
+        assert_eq!(spool.front().unwrap().unwrap().payload, vec![2]);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
     #[test]
     fn no_age_expiration_and_no_overwrite_at_capacity() {
         let path = std::env::temp_dir().join(format!("telemetry-{}", uuid::Uuid::new_v4()));

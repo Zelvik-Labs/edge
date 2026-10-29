@@ -1,0 +1,421 @@
+[WARN ] managed target directories still hold 6.3 GiB after collection, over the 4.8 GiB budget; protected or untracked targets are kept
+{
+  "version": 1,
+  "byte_accounting": "logical",
+  "max_bytes": 2147483648,
+  "max_total_bytes": 9663676416,
+  "target_max_bytes": null,
+  "incremental_max_bytes": 9663676416,
+  "dry_run": false,
+  "action_store": {
+    "removed_objects": 9004,
+    "removed_action_results": 1939,
+    "removed_checkout_records": 0,
+    "removed_session_streams": 2,
+    "removed_bytes": 3814567904,
+    "remaining_bytes": 540461835
+  },
+  "targets": {
+    "removed_directories": 0,
+    "removed_bytes": 0,
+    "removed_units": 0,
+    "removed_unit_bytes": 0,
+    "remaining_directories": 1,
+    "remaining_bytes": 6746331093,
+    "kept_active_directories": 0
+  },
+  "incremental": {
+    "removed_units": 0,
+    "remaining_units": 41,
+    "skipped_active_units": 0,
+    "removed_sessions": 0,
+    "session_units": 0,
+    "kept_hot_units": 0,
+    "removed_directories": 0,
+    "removed_bytes": 0,
+    "remaining_directories": 8,
+    "remaining_bytes": 2319607734,
+    "skipped_active_directories": 0,
+    "untracked_directories": 0
+  },
+  "generated": {
+    "removed_directories": 0,
+    "removed_bytes": 0,
+    "remaining_directories": 13,
+    "remaining_bytes": 39638587
+  }
+}
+   Compiling aws-lc-sys v0.44.0
+   Compiling zstd-sys v2.1.2+zstd.1.5.7
+mbx[warning]: cc cache bypassed: compiler invocation names no output file
+mbx[progress]: 15s elapsed; 2 hits, 57 misses, 26 bypassed, 6 not looked up; ~0s compiler work saved
+    Checking security-framework-sys v2.17.0
+    Checking core-foundation v0.10.1
+   Compiling zerofrom-derive v0.1.7
+    Checking simd-adler32 v0.3.10
+   Compiling httparse v1.10.1
+   Compiling anyhow v1.0.104
+    Checking percent-encoding v2.3.2
+mbx[warning]: rustc cache bypassed: failed to read Cargo's build-script declarations: No such file or directory (os error 2)
+    Checking zerofrom v0.1.8
+    Checking security-framework v3.7.0
+    Checking getrandom v0.3.4
+   Compiling yoke-derive v0.8.2
+   Compiling crc32fast v1.5.0
+   Compiling time-core v0.1.9
+   Compiling cfg_aliases v0.2.2
+    Checking minimal-lexical v0.2.1
+   Compiling num-conv v0.2.2
+   Compiling crunchy v0.2.4
+    Checking adler2 v2.0.1
+    Checking stable_deref_trait v1.2.1
+    Checking yoke v0.8.3
+mbx[progress]: 30s elapsed; 2 hits, 120 misses, 27 bypassed, 6 not looked up; ~0s compiler work saved
+    Checking miniz_oxide v0.8.9
+   Compiling time-macros v0.2.32
+    Checking nom v7.1.3
+   Compiling libz-ng-sys v1.1.29
+    Checking cpufeatures v0.3.0
+    Checking fnv v1.0.7
+    Checking powerfmt v0.2.0
+    Checking deranged v0.5.8
+    Checking atomic-waker v1.1.2
+   Compiling tiny-keccak v2.0.2
+    Checking time v0.3.55
+    Checking h2 v0.4.16
+mbx[progress]: 45s elapsed; 3 hits, 177 misses, 30 bypassed, 6 not looked up; ~0s compiler work saved
+mbx[progress]: 1m elapsed; 3 hits, 217 misses, 30 bypassed, 6 not looked up; ~0s compiler work saved
+    Checking rusticata-macros v4.1.0
+    Checking ppv-lite86 v0.2.21
+   Compiling zerovec-derive v0.11.5
+   Compiling asn1-rs-impl v0.2.0
+    Checking const-oid v0.10.2
+    Checking httpdate v1.0.3
+   Compiling either v1.17.0
+    Checking base64 v0.22.1
+   Compiling itertools v0.14.0
+    Checking digest v0.11.3
+    Checking zerovec v0.11.7
+   Compiling getrandom v0.2.17
+    Checking http-body v1.1.0
+   Compiling thiserror v2.0.20
+   Compiling const-random-macro v0.1.16
+   Compiling prost-derive v0.14.4
+    Checking flate2 v1.1.9
+mbx[progress]: 1m 15s elapsed; 3 hits, 290 misses, 31 bypassed, 28 not looked up; ~0s compiler work saved
+   Compiling ahash v0.8.12
+    Checking aho-corasick v1.1.5
+   Compiling thiserror-impl v2.0.20
+    Checking thread_local v1.1.10
+   Compiling zstd-safe v7.2.4
+   Compiling rustversion v1.0.23
+    Checking tower-service v0.3.3
+    Checking utf8parse v0.2.2
+   Compiling bitflags v2.13.1
+    Checking regex-syntax v0.8.11
+   Compiling thiserror v1.0.69
+    Checking regex-automata v0.4.18
+    Checking anstyle-parse v1.0.0
+    Checking const-random v0.1.18
+    Checking num-integer v0.1.47
+   Compiling thiserror-impl v1.0.69
+   Compiling prettyplease v0.2.37
+    Checking colorchoice v1.0.5
+   Compiling rustix v1.1.4
+   Compiling getrandom v0.4.3
+    Checking lazy_static v1.5.0
+    Checking is_terminal_polyfill v1.70.2
+    Checking alloc-no-stdlib v2.0.4
+   Compiling pulldown-cmark v0.13.4
+    Checking anstyle v1.0.14
+    Checking hashbrown v0.14.5
+    Checking anstyle-query v1.1.5
+    Checking anstream v1.0.0
+    Checking alloc-stdlib v0.2.4
+mbx[progress]: 1m 30s elapsed; 3 hits, 358 misses, 32 bypassed, 28 not looked up; ~0s compiler work saved
+    Checking num-bigint v0.4.8
+    Checking tinystr v0.8.4
+    Checking rustls-native-certs v0.8.4
+   Compiling proc-macro2-diagnostics v0.10.1
+   Compiling generic-array v0.14.7
+    Checking rand_core v0.6.4
+    Checking tokio-stream v0.1.19
+   Compiling asn1-rs-derive v0.5.1
+   Compiling errno v0.3.14
+   Compiling async-trait v0.1.92
+    Checking num_cpus v1.17.0
+   Compiling hashbrown v0.17.1
+    Checking try-lock v0.2.5
+   Compiling memchr v2.8.3
+    Checking litemap v0.8.3
+   Compiling bytes v1.12.1
+    Checking pingora-error v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/pingora-error)
+   Compiling equivalent v1.0.2
+   Compiling unicase v2.9.0
+    Checking clap_lex v1.1.0
+    Checking seize v0.3.3
+   Compiling foldhash v0.1.5
+    Checking strsim v0.11.1
+    Checking writeable v0.6.4
+    Checking icu_locale_core v2.3.0
+    Checking clap_builder v4.6.7
+   Compiling hashbrown v0.15.5
+    Checking flurry v0.5.2
+mbx[progress]: 1m 45s elapsed; 3 hits, 433 misses, 32 bypassed, 28 not looked up; ~0s compiler work saved
+   Compiling indexmap v2.14.0
+   Compiling prost v0.14.4
+    Checking want v0.3.1
+    Checking asn1-rs v0.6.2
+    Checking rand_chacha v0.3.1
+    Checking zstd v0.13.3
+    Checking potential_utf v0.1.6
+    Checking sha2 v0.11.0
+    Checking zerotrie v0.2.5
+   Compiling clap_derive v4.6.7
+    Checking ipnet v2.12.1
+    Checking crossbeam-queue v0.3.13
+    Checking futures-executor v0.3.34
+   Compiling memoffset v0.9.1
+    Checking sync_wrapper v1.0.2
+   Compiling syn v1.0.109
+   Compiling icu_normalizer_data v2.3.0
+   Compiling fixedbitset v0.5.7
+   Compiling icu_properties_data v2.3.0
+    Checking arrayvec v0.7.8
+   Compiling yansi v1.0.1
+   Compiling oid-registry v0.7.1
+   Compiling portable-atomic v1.15.0
+   Compiling rust_decimal v1.42.1
+mbx[progress]: 2m elapsed; 3 hits, 503 misses, 32 bypassed, 28 not looked up; ~0s compiler work saved
+    Checking tower-layer v0.3.3
+   Compiling fastrand v2.5.0
+    Checking utf8_iter v1.0.4
+    Checking icu_collections v2.3.0
+   Compiling tempfile v3.27.0
+   Compiling petgraph v0.8.3
+    Checking futures v0.3.34
+    Checking clap v4.6.7
+    Checking icu_provider v2.3.0
+    Checking rand v0.8.7
+    Checking hyper v1.11.0
+   Compiling prost-types v0.14.4
+   Compiling pulldown-cmark-to-cmark v22.0.1
+   Compiling regex v1.13.1
+    Checking pingora-timeout v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/pingora-timeout)
+   Compiling nix v0.31.3
+    Checking data-encoding v2.11.1
+   Compiling multimap v0.10.1
+   Compiling log v0.4.34
+   Compiling objc2 v0.6.4
+   Compiling crossbeam-epoch v0.9.21
+    Checking parking v2.2.1
+   Compiling heck v0.4.1
+   Compiling ouroboros_macro v0.18.5
+    Checking event-listener v5.4.2
+   Compiling prost-build v0.14.4
+    Checking petgraph v0.7.1
+    Checking hyper-util v0.1.20
+    Checking tower v0.5.3
+   Compiling tonic-build v0.14.6
+    Checking der-parser v9.0.0
+    Checking pingora-http v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/pingora-http)
+   Compiling strum_macros v0.26.4
+    Checking brotli-decompressor v2.5.1
+    Checking dashmap v5.5.3
+    Checking http-body-util v0.1.5
+    Checking iana-time-zone v0.1.65
+    Checking rustls-pemfile v2.2.0
+    Checking inout v0.2.2
+    Checking lru v0.18.2
+    Checking static_assertions v1.1.0
+    Checking unsafe-libyaml v0.2.11
+   Compiling libm v0.2.16
+    Checking aliasable v0.1.3
+    Checking no_debug v3.1.0
+    Checking objc2-encode v4.1.0
+   Compiling zmij v1.0.23
+   Compiling semver v1.0.28
+    Checking ryu v1.0.23
+    Checking serde_yaml v0.9.34+deprecated
+   Compiling rustc_version v0.4.1
+    Checking ouroboros v0.18.5
+    Checking pingora-pool v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/pingora-pool)
+   Compiling aws-lc-rs v1.18.0
+   Compiling rustls v0.23.46
+    Checking chrono v0.4.45
+    Checking rustls-webpki v0.103.14
+    Checking brotli v3.5.0
+    Checking strum v0.26.3
+    Checking tokio-rustls v0.26.4
+    Checking x509-parser v0.16.0
+    Checking pingora-rustls v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/pingora-rustls)
+   Compiling tonic-prost-build v0.14.6
+    Checking sfv v0.10.4
+    Checking icu_properties v2.3.0
+    Checking icu_normalizer v2.3.0
+   Compiling derivative v2.2.0
+    Checking daggy v0.8.1
+    Checking event-listener-strategy v0.5.4
+    Checking pingora-runtime v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/pingora-runtime)
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.7
+    Checking tokio-test v0.4.5
+    Checking bstr v1.13.1
+    Checking concurrent-queue v2.5.0
+   Compiling indexmap v1.9.3
+    Checking chacha20 v0.10.1
+    Checking daemonix v0.1.0
+   Compiling serde_json v1.0.154
+    Checking mime v0.3.17
+    Checking rustc-hash v2.1.3
+    Checking axum-core v0.5.6
+    Checking pingora-core v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/pingora-core)
+    Checking rand v0.10.3
+    Checking async-channel v2.5.0
+    Checking digest v0.10.7
+    Checking idna_adapter v1.2.2
+    Checking rustls-platform-verifier v0.7.0
+   Compiling crc32c v0.6.8
+    Checking cipher v0.5.2
+   Compiling quinn-udp v0.5.15
+    Checking rand_core v0.9.5
+    Checking rmp v0.8.15
+   Compiling asn1-rs-derive v0.6.0
+   Compiling libmimalloc-sys v0.1.49
+   Compiling pin-project-internal v1.1.13
+    Checking cpubits v0.1.1
+   Compiling object v0.37.3
+    Checking siphasher v1.0.3
+   Compiling zstd-safe v8.2.0
+    Checking matchit v0.8.4
+    Checking tinyvec_macros v0.1.1
+    Checking hashbrown v0.12.3
+    Checking hex v0.4.3
+   Compiling glob v0.3.4
+   Compiling libwebp-sys v0.9.6
+    Checking tinyvec v1.12.0
+    Checking axum v0.8.9
+    Checking pin-project v1.1.13
+    Checking fastbloom v0.17.0
+    Checking asn1-rs v0.7.2
+    Checking rmp-serde v1.3.1
+    Checking rand_chacha v0.9.0
+    Checking idna v1.1.0
+    Checking blake2 v0.10.6
+    Checking pingora-lru v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/pingora-lru)
+    Checking objc2-core-foundation v0.3.2
+    Checking pingora-header-serde v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/pingora-header-serde)
+    Checking hyper-timeout v0.5.2
+   Compiling quinn v0.11.11
+    Checking form_urlencoded v1.2.2
+    Checking fdeflate v0.3.7
+    Checking universal-hash v0.6.1
+    Checking rand_pcg v0.10.2
+    Checking byteorder-lite v0.1.0
+    Checking lru-slab v0.1.2
+    Checking gimli v0.32.3
+    Checking pxfm v0.1.30
+    Checking color_quant v1.1.0
+   Compiling oid-registry v0.8.1
+    Checking quick-error v2.0.1
+    Checking zune-core v0.5.3
+    Checking weezl v0.1.12
+    Checking gif v0.14.2
+    Checking zune-jpeg v0.5.15
+    Checking image-webp v0.2.4
+    Checking moxcms v0.8.1
+    Checking addr2line v0.25.1
+    Checking quinn-proto v0.11.17
+    Checking png v0.18.1
+    Checking polyval v0.7.3
+    Checking url v2.5.8
+    Checking tonic v0.14.6
+    Checking pingora-cache v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/pingora-cache)
+    Checking rand v0.9.5
+    Checking crossbeam-skiplist v0.1.3
+   Compiling zelvik-suite v26.10.2 (https://github.com/Zelvik-Labs/protocol?tag=rust%2Fv0.0.2#f2cac932)
+    Checking objc2-foundation v0.3.2
+    Checking arc-swap v1.9.2
+    Checking dashmap v6.2.1
+    Checking memmap2 v0.9.11
+    Checking ipnetwork v0.21.1
+    Checking cty v0.2.2
+    Checking compression-core v0.4.32
+    Checking rustc-demangle v0.1.28
+   Compiling woothee v0.13.0
+mbx[progress]: 3m elapsed; 3 hits, 816 misses, 39 bypassed, 30 not looked up; ~0s compiler work saved
+    Checking bytemuck v1.25.2
+    Checking image v0.25.10
+    Checking h3 v0.0.8
+    Checking backtrace v0.3.76
+    Checking compression-codecs v0.4.38
+    Checking maxminddb v0.30.0
+    Checking tonic-prost v0.14.6
+    Checking objc2-open-directory v0.3.2
+    Checking TinyUFO v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/tinyufo)
+    Checking xattr v1.6.1
+    Checking zstd v0.14.3
+    Checking btree-store v2.1.0
+    Checking pingora-proxy v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/pingora-proxy)
+    Checking tower-http v0.6.11
+    Checking ghash v0.6.0
+    Checking objc2-io-kit v0.3.2
+    Checking der-parser v10.0.0
+    Checking aes v0.9.2
+    Checking ctr v0.10.1
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+    Checking hyper-rustls v0.27.9
+    Checking aead v0.6.1
+    Checking brotli-decompressor v5.0.3
+    Checking sharded-slab v0.1.7
+    Checking matchers v0.2.0
+    Checking hmac v0.13.0
+    Checking pingora-ketama v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/pingora-ketama)
+    Checking crossbeam-channel v0.5.16
+    Checking quanta v0.12.6
+    Checking tracing-log v0.2.0
+    Checking hashbrown v0.16.1
+    Checking uuid v1.24.1
+    Checking spinning_top v0.3.0
+   Compiling async-stream-impl v0.3.6
+    Checking filetime v0.2.29
+    Checking web-time v1.1.0
+    Checking bit-vec v0.4.4
+    Checking futures-timer v3.0.4
+    Checking base64 v0.23.1
+    Checking nu-ansi-term v0.50.3
+    Checking tagptr v0.2.0
+    Checking nonzero_ext v0.3.0
+    Checking governor v0.10.4
+    Checking moka v0.12.16
+    Checking tracing-subscriber v0.3.23
+    Checking bloom v0.3.2
+    Checking tar v0.4.46
+    Checking async-stream v0.3.6
+    Checking zelvik-geo-runtime v26.10.3 (/Users/moying/Documents/Zelvik/dns/crates/zelvik-geo-runtime)
+    Checking pingora-load-balancing v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/pingora-load-balancing)
+    Checking brotli v8.0.4
+    Checking aes-gcm v0.11.0
+    Checking reqwest v0.13.4
+    Checking x509-parser v0.18.1
+    Checking sysinfo v0.39.6
+    Checking pingora v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/pingora)
+    Checking mace-kv v0.2.0
+    Checking h3-quinn v0.0.10
+    Checking pingora-memory-cache v0.9.0 (/Users/moying/Documents/Zelvik/edge/pingora-main/pingora-memory-cache)
+    Checking mimalloc v0.1.52
+    Checking async-compression v0.4.43
+    Checking cfb-mode v0.9.1
+    Checking md-5 v0.11.0
+    Checking sha1 v0.11.0
+    Checking libinjectionrs v0.1.1 (/Users/moying/Documents/Zelvik/edge/vendor/libinjectionrs)
+    Checking hostname v0.4.2
+    Checking local-ip-address v0.6.13
+    Checking urlencoding v2.1.3
+    Checking zelvik-edge-xdp-common v0.1.0 (/Users/moying/Documents/Zelvik/edge/crates/zelvik-edge-xdp-common)
+    Checking md5 v0.8.1
+    Checking zelvik-edge-transport v0.1.0 (/Users/moying/Documents/Zelvik/edge/crates/zelvik-edge-transport)
+    Checking webp v0.3.1
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3m 59s
+mbx[cache]: 3 hits, 1017 misses, 32 not looked up, 1 incremental, 39 bypassed; 0 B downloaded, 0 B uploaded, 433.8 MiB stored locally
+mbx[savings]: 23972 compilations served. ask rustc how many it remembers doing.

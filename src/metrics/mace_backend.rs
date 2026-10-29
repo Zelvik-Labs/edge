@@ -255,7 +255,7 @@ impl DB {
 }
 
 fn open_bucket(engine: &Mace, name: &str) -> Result<Bucket, Error> {
-    match engine.get_bucket(name) {
+    match engine.open_bucket(name) {
         Ok(bucket) => Ok(bucket),
         Err(OpCode::NotFound) => engine
             .new_bucket(name, bucket_options())
