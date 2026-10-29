@@ -472,8 +472,14 @@ async def fill_cache_batch(client, tag, first, count):
 
 
 async def cache_preflight(client, cg):
-    before = (await control("stats"))["cache"]["memoryBytes"]
-    batch = await fill_cache_batch(client, "preflight", 0, 64)
+    state = await control("stats")
+    before = state["cache"]["memoryBytes"]
+    # The preflight must fit the governor's cache budget. A fixed 64x1MiB
+    # batch overruns a 256MiB cgroup, and the resulting 503s look like a
+    # cache failure instead of the intentional budget refusal.
+    budget = max(8 << 20, (state.get("governor") or {}).get("cache_budget_bytes", 0))
+    keys = max(8, min(64, budget // len(CACHE_PAYLOAD)))
+    batch = await fill_cache_batch(client, "preflight", 0, keys)
     after = before
     for _ in range(20):
         state = await control("stats")
@@ -483,7 +489,7 @@ async def cache_preflight(client, cg):
         await asyncio.sleep(0.2)
     if batch["success"] == 0 or after <= before:
         raise RuntimeError(f"production L1 cache retained no owned bytes: before={before} after={after} batch={batch}")
-    return {"before_bytes": before, "after_bytes": after, "memory_current": int((cg / "memory.current").read_text()), **batch}
+    return {"before_bytes": before, "after_bytes": after, "memory_current": int((cg / "memory.current").read_text()), "cache_budget_bytes": budget, **batch}
 
 
 async def fill_cache(client, cg, tag, max_requests, target_current=None, target_cache=None):
