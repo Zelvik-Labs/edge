@@ -211,6 +211,14 @@ API and rejects both stream halves with `H3_REQUEST_REJECTED`; dropping a bare
 resolver was not used because it skips h3's request-completion bookkeeping and
 leaks the request id. Neither protocol's new-work refusal closes the connection.
 
+The pressure-scaled H2 idle timeout treats an in-flight response as activity:
+the deadline slides while a stream task is active, so the Critical 3s idle
+value cannot close a connection under an accepted long response. The
+max-lifetime cap also does not break the transport while streams are active;
+it flags the connection and refuses each later stream with `REFUSED_STREAM`,
+then keeps polling until the accepted streams drain. GOAWAY is reserved for the
+separate sustained-churn abuse path.
+
 ### Per-connection admission tickets (`memory_ticket`)
 
 Request-scoped byte classes (`RequestBodyWaf`, `ResponseBodyWaf`,
