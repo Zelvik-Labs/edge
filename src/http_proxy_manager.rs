@@ -111,6 +111,13 @@ impl H2ConnectionDefenseState {
         self.last_activity_at = TokioInstant::now();
     }
 
+    /// Refusals after the maximum lifetime must not count as activity: a
+    /// client that keeps opening streams would otherwise slide the idle
+    /// deadline forever and hold a connection past its lifetime.
+    fn record_lifetime_reject(&mut self) {
+        self.rejected_streams = self.rejected_streams.saturating_add(1);
+    }
+
     fn record_error(&mut self) {
         self.errors = self.errors.saturating_add(1);
         self.last_activity_at = TokioInstant::now();
@@ -2669,7 +2676,7 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                         mut h2_session,
                     ))) => {
                         if lifetime_reached {
-                            h2_state.record_reject();
+                            h2_state.record_lifetime_reject();
                             manager.record_l4_event(
                                 client_addr.ip(),
                                 L4DefenseKind::H2StreamAdmissionReject,
@@ -3383,6 +3390,27 @@ mod tests {
         drop(guard);
         assert!(!state.has_active_streams());
         assert!(state.next_idle_deadline() <= TokioInstant::now());
+    }
+
+    #[test]
+    fn h2_lifetime_rejects_do_not_slide_the_idle_deadline() {
+        let mut state = H2ConnectionDefenseState::new(
+            "127.0.0.1".parse().unwrap(),
+            443,
+            crate::l4_defense::L4PressureLevel::Critical,
+        );
+        state.last_activity_at = TokioInstant::now() - Duration::from_secs(10);
+        let before = state.last_activity_at;
+
+        state.record_lifetime_reject();
+
+        assert_eq!(state.rejected_streams, 1);
+        assert_eq!(state.last_activity_at, before);
+        assert!(state.next_idle_deadline() <= TokioInstant::now());
+
+        // Rejections outside the lifetime branch still count as activity.
+        state.record_reject();
+        assert!(state.last_activity_at > before);
     }
 
     /// A least-connections pool over the given origin ids, built through the
