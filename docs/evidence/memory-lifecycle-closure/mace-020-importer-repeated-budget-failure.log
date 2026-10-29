@@ -1,0 +1,24 @@
+local-storage: waiting for the rust build slot
+   Compiling bindgen v0.72.1
+   Compiling rust-librocksdb-sys v0.46.0+11.1.1
+mbx[warning]: build-script result was not restored: cached action is missing blob 2fe317f5975c84e97f84795285e20e9a6f1e1d960f619dfb1e063914ccd55e06
+mbx[warning]: cc cache bypassed: compiler invocation names no output file
+mbx[progress]: 15s elapsed; 0 hits, 5 misses, 1 bypassed, 0 not looked up; ~0s compiler work saved
+    Checking rust-rocksdb v0.50.0
+    Checking xtask v0.1.0 (/Users/moying/Documents/Zelvik/edge/xtask)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 17.89s
+mbx[cache]: 3 hits, 5 misses, 1 bypassed; 0 B downloaded, 0 B uploaded, 1.6 GiB stored locally
+mbx[savings]: 166.7 GiB logical of old files removed while you were busy compiling other things.
+local-storage: terminating build: budget exceeded: mbx 12.51 GiB exceeds 12.00 GiB
+Traceback (most recent call last):
+  File "/Users/moying/Documents/Zelvik/scripts/local-storage.py", line 817, in <module>
+    sys.exit(main())
+  File "/Users/moying/Documents/Zelvik/scripts/local-storage.py", line 804, in main
+    return run_monitored(
+  File "/Users/moying/Documents/Zelvik/scripts/local-storage.py", line 700, in run_monitored
+    _terminate_group(
+  File "/Users/moying/Documents/Zelvik/scripts/local-storage.py", line 620, in _terminate_group
+    os.killpg(process.pid, signal.SIGTERM)
+PermissionError: [Errno 1] Operation not permitted
+
+[exited with code 1]

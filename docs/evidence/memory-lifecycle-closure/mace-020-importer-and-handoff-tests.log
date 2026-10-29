@@ -1,0 +1,16 @@
+65:running 35 tests
+85:test telemetry::tests::producer_handoff_commits_queue_and_cursor_together ... ok
+102:test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 1072 filtered out; finished in 5.36s
+174:running 10 tests
+186:test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 1097 filtered out; finished in 0.01s
+   Compiling bindgen v0.72.1
+   Compiling rust-librocksdb-sys v0.46.0+11.1.1
+mbx[warning]: cc cache bypassed: compiler invocation names no output file
+mbx[progress]: 15s elapsed; 0 hits, 4 misses, 1 bypassed, 0 not looked up; ~0s compiler work saved
+    Checking rust-rocksdb v0.50.0
+    Checking xtask v0.1.0 (/Users/moying/Documents/Zelvik/edge/xtask)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 17.65s
+mbx[cache]: 0 hits, 7 misses, 1 bypassed; 0 B downloaded, 0 B uploaded, 33.1 MiB stored locally
+mbx[savings]: 2h 10m of compiling skipped across 218 builds. rustc suspects nothing.
+
+[exited with code 0]

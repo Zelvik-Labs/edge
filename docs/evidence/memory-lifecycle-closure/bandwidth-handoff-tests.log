@@ -1,0 +1,29 @@
+   Compiling zelvik-edge v26.10.4 (/Users/moying/Documents/Zelvik/edge)
+mbx[progress]: 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+mbx[progress]: 1m 15s elapsed; 0 hits, 1 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 28s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-a82c0c7016030509)
+mbx[progress]: 1m 30s elapsed; 0 hits, 2 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+
+running 1 test
+test telemetry::tests::producer_handoff_commits_queue_and_cursor_together ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1108 filtered out; finished in 0.22s
+
+mbx[cache]: 0 hits, 2 misses; 0 B downloaded, 0 B uploaded, 181.4 MiB stored locally
+mbx[savings]: 172.8 GiB logical of old files removed while you were busy compiling other things.
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.84s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-a82c0c7016030509)
+
+running 3 tests
+test rpc::stats::tests::bandwidth_pending_backlog_is_bounded_and_overflow_is_an_explicit_gap ... ok
+test rpc::stats::tests::bandwidth_pending_stat_round_trips_storage_shape ... ok
+test rpc::stats::tests::bandwidth_handoff_state_keeps_only_undelivered_windows_and_source_identity ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 1106 filtered out; finished in 0.04s
+
+
+[exited with code 0]

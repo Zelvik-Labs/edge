@@ -498,7 +498,17 @@ impl Spool {
         };
         self.append_prepared(batch)
     }
-    pub fn append_prepared(&self, mut batch: pb::TelemetryBatch) -> anyhow::Result<String> {
+    pub fn append_prepared(&self, batch: pb::TelemetryBatch) -> anyhow::Result<String> {
+        self.append_prepared_with_state(batch, None)
+    }
+
+    /// Transfer producer ownership and its cursor in the same durable commit.
+    /// A refused append leaves both the queue and the producer state untouched.
+    fn append_prepared_with_state(
+        &self,
+        mut batch: pb::TelemetryBatch,
+        state: Option<(&str, &[u8])>,
+    ) -> anyhow::Result<String> {
         let mut meta = self.meta.lock();
         batch.schema_version = 1;
         batch.batch_id = format!("{}:{}", meta.boot, meta.tail);
@@ -554,6 +564,10 @@ impl Spool {
             .map_err(mace_error)?;
         txn.upsert(b"meta", serde_json::to_vec(&next)?)
             .map_err(mace_error)?;
+        if let Some((key, raw)) = state {
+            txn.upsert(format!("state:{key}").as_bytes(), raw)
+                .map_err(mace_error)?;
+        }
         txn.commit().map_err(mace_error)?;
         let level = capacity_level(next.bytes, available, self.budget.limit);
         *meta = next;
@@ -1684,6 +1698,20 @@ pub async fn enqueue_prepared(batch: pb::TelemetryBatch) -> anyhow::Result<()> {
     tokio::task::spawn_blocking(move || spool.append_prepared(batch)).await??;
     Ok(())
 }
+pub async fn enqueue_prepared_with_state(
+    batch: pb::TelemetryBatch,
+    key: &str,
+    raw: Vec<u8>,
+) -> anyhow::Result<()> {
+    let spool = queue(&batch.kind)?;
+    let key = key.to_owned();
+    tokio::task::spawn_blocking(move || {
+        spool.append_prepared_with_state(batch, Some((&key, &raw)))
+    })
+    .await??;
+    Ok(())
+}
+
 pub async fn save_state(key: &str, raw: Vec<u8>) -> anyhow::Result<()> {
     let spool = queue("bandwidth")?;
     let key = key.to_owned();
@@ -3701,6 +3729,66 @@ mod tests {
         drop(spool);
         std::fs::remove_dir_all(path).unwrap();
     }
+    #[test]
+    fn producer_handoff_commits_queue_and_cursor_together() {
+        let path = std::env::temp_dir().join(format!("telemetry-handoff-{}", uuid::Uuid::new_v4()));
+        {
+            let mut spool = Spool::open(&path, true, 1 << 20).unwrap();
+            spool.save_state("handoff", b"pending").unwrap();
+            let refused = pb::TelemetryBatch {
+                kind: "bandwidth".into(),
+                payload: vec![0; MAX_BATCH_ENCODED_BYTES],
+                ..Default::default()
+            };
+            assert!(
+                spool
+                    .append_prepared_with_state(refused, Some(("handoff", b"advanced")))
+                    .is_err()
+            );
+            assert!(spool.front().unwrap().is_none());
+            assert_eq!(
+                spool.load_state("handoff").unwrap().as_deref(),
+                Some(b"pending".as_slice())
+            );
+            spool.budget.limit = spool.meta.lock().bytes + 1;
+            let capacity_error = spool
+                .append_prepared_with_state(
+                    pb::TelemetryBatch {
+                        kind: "bandwidth".into(),
+                        payload: vec![41],
+                        ..Default::default()
+                    },
+                    Some(("handoff", b"advanced")),
+                )
+                .unwrap_err();
+            assert!(is_capacity_exhausted(capacity_error.as_ref()));
+            assert!(spool.front().unwrap().is_none());
+            assert_eq!(
+                spool.load_state("handoff").unwrap().as_deref(),
+                Some(b"pending".as_slice())
+            );
+            spool.budget.limit = 1 << 20;
+            spool
+                .append_prepared_with_state(
+                    pb::TelemetryBatch {
+                        kind: "bandwidth".into(),
+                        payload: vec![42],
+                        ..Default::default()
+                    },
+                    Some(("handoff", b"advanced")),
+                )
+                .unwrap();
+        }
+        let spool = Spool::open(&path, true, 1 << 20).unwrap();
+        assert_eq!(
+            spool.load_state("handoff").unwrap().as_deref(),
+            Some(b"advanced".as_slice())
+        );
+        assert_eq!(spool.front().unwrap().unwrap().payload, vec![42]);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
     #[test]
     fn rebuilt_spool_rejects_receipts_from_the_previous_data_generation() {
         let path = std::env::temp_dir().join(format!("telemetry-reset-{}", uuid::Uuid::new_v4()));

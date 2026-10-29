@@ -3,6 +3,7 @@
 状态：实施中，尚未完成整体验收，不作为生产就绪证明。
 
 基线：`feat/edge-memory-governance`，`d6e24220fdcb79a3def3cb4960fbe5b94fba3ef9`，2026-10-29。
+已落地本地提交：`9ed075c`（Mace 0.2.0 独立升级）。Bandwidth 原子交接与本轮后续切片尚未提交，最终以工作树和提交列表为准。
 本轮只在本地功能分支修改、验证和提交；不 push、不合并、不发版、不部署生产。
 原有 CI、Dockerfile、OrbStack 脚本修改和 `target.external-link` 不属于本次变更。
 
@@ -42,9 +43,9 @@ Spool 空库使用新的 UUID queue boot，sequence 从 1 开始，batch ID 是 
 - `local-rust.sh test --test mace_storage --locked -- --nocapture`：7 passed，0 ignored，0.28秒。子进程在已提交写入后直接process exit，不执行engine析构；父进程重开后读到原值。该测试不等同断电/fsync保证；Metrics仍使用relaxed WAL。
 - 新增 checksum 有效的 format-1 metadata 拒绝且不改写 manifest 回归：前两轮 8 项 integration 断言通过，但包装器随后预算超限，均保留为命令失败。最终预算内重跑为 **8 passed / 0 ignored，0.32 秒，包装器退出 0**。
 - `local-rust.sh test --lib --locked metrics::mace_backend::tests:: -- --nocapture`：**2 passed / 0 ignored，1.03 秒，包装器退出 0**，覆盖历史 adapter 多 bucket 语义和并发读。
-- `local-rust.sh check --bin Zelvik-Edge --locked` 已完成，3 分 59 秒；通过实际节点入口编译验证 fail-fast 调用。可选 importer 验证仍在进行。
-- 存储预算监控多次阻止或中止构建（mbx 最高 12.78 GiB > 当前脚本 12 GiB 限额），没有绕过。新增 check target、RocksDB 和 incremental 使占用继续增加。已按预算回收冷 action 对象，保留 target 和 incremental；不是每轮例行清缓存。失败日志完整保留。
-- 独立只读审查完成：本次依赖/API/启动/测试差异未发现已核实正确性缺陷；审查未运行测试，不替代执行证据。
+- `local-rust.sh check --bin Zelvik-Edge --locked` 已完成，3 分 59 秒；通过实际节点入口编译验证 fail-fast 调用。
+- 可选 `migrate-metrics` 使用匹配的现有 RocksDB 头和静态库、并在进程局部关闭 build-script 结果缓存后完成 **Rust API check，17.65 秒，退出 0**；避免把 1.6 GiB archive 再复制进 mbx。这只证明 importer 编译适配，未链接或执行实际 RocksDB→Mace 导入。
+- 存储预算监控多次阻止或中止构建（mbx 最高 13.69 GiB > 当前脚本 12 GiB 限额），没有绕过。已按预算回收冷 action、generated 和旧 incremental 对象，保留当前 target 与热增量；这是磁盘回收而非每轮例行清缓存，失败日志完整保留。
 
 ### 0.2.0 内存模型复核（配置推导，不是 RSS 实测）
 
@@ -80,7 +81,7 @@ WAL ring 分配后 zero 写满；LRU、NodeCache、dirty pool 是目标/门限�
 
 | 结构 / owner | 源码入口 | 增长 / 持久化关系 | 当前释放与故障边界 | 状态 |
 |---|---|---|---|---|
-| Bandwidth active / pending，reporter task | `src/rpc/stats.rs:363`、`:639` | 2 秒采样、5 分钟追加；整个 active + backlog 反复 JSON 写入 core state | enqueue 失败保留全部窗口，重启一次加载；heap 与 state 均无历史总量约束 | 待修 |
+| Bandwidth active / pending，reporter task | `src/rpc/stats.rs:271`、`:756`、`:830` | 2 秒采样、5 分钟追加；pending 窗口 12 个上限 | 已修：恢复不再按当前时钟丢弃 stale 窗口；关闭窗口入 spool 与 producer state 原子提交；恢复及持续积压均受 12 窗口约束，溢出有计数 gap 和日志，不伪装完成 | 部分修复 |
 | ServerMetrics live / retired，NodeMetrics | `src/metrics.rs:1093`、`:1285` | 请求创建 Arc；退役等待三消费者最终 fingerprint | retired cap 4096；满后旧实例留在 live，deferred/config backlog 无联合上界 | 待修 |
 | Flusher Weak baseline | `src/metrics.rs:1713` | 每实例快照，写入成功才推进 | Weak 不持有实例；清理错误与写入结果合并会使成功增量重放 | 待修 |
 | Metrics history，MetricStorage | `src/metrics/storage.rs:386`、`:448` | 每 5 分钟每站点一行；保留 1 天 | 每小时最多 1024 删除，100 站点新增已超过清理能力；cursor 从 prefix 重扫 | 待修 |
@@ -99,6 +100,11 @@ WAL ring 分配后 zero 写满；LRU、NodeCache、dirty pool 是目标/门限�
 初步契约调查：接收端以 `(node,batchId)` 和完整 envelope hash 去重；计费行按 server/node/window/source boot/assignment 取最高 revision。
 因此可按不同 server 的完整窗口行分块，不可将同一 server 的增量拆成多批并假设接收端求和。
 分块持久化交接与 pending 游标必须原子；窗口 complete 标记必须等待全部数据块真实 ACK，不能只以最后一块入队成功代替。
+
+已实施的第一部分：`append_prepared_with_state` 在同一 Mace 事务中写 payload、queue meta 和 producer state；reporter 仅在该事务成功后从 heap 释放已关闭窗口。容量拒收或编码失败都不推进 state。窗口恢复不再先按当前时钟过滤行。已知边界：单个超过 spool 编码上限的窗口仍可能造成队头阻塞（分块与 ACK 门尚未实现）；恢复仍一次解码整个 state JSON；12 窗口之外的溢出以计数 gap 表示覆盖缺失，属于明确容量策略而非无损保证。
+
+数据流（当前源码）：请求 → `ServerMetrics` 计数 → reporter 每 2 秒采样 → 5 分钟窗口聚合 → 关闭窗口 `enqueue_prepared_with_state`（payload 与 producer state 同事务）→ durable spool → 远端 `(node,batchId)` receipt（此时才 `acknowledge` 并释放该 batch）→ 本地 spool 删除。producer state 推进只表示数据已进入 spool，不表示远端确认；ACK 前重启仍会重放，接收端按 envelope hash 去重。
+
 有限磁盘、无限断网和无限计费输入不能同时保证无损和无限服务；安全策略须明确保留在途工作记录容量以及后续新工作背压。仅拒绝新连接并不能封住已有无限长连接持续产生未来窗口的增长：如果 Mace 完全不可写，必须在记录空间耗尽前暂停相关转发，或取得明确的计费覆盖降级策略；不能任意断开已有连接，也不能静默丢弃。
 
 Client-Agent 契约复核：`control-plane/internal/gcloud/services_contract.go:294` 按递增 id 分页追加，`:322` 创建新验证记录；Edge `src/client_agent.rs:126` 启动全量恢复，`:155` 增量追加，没有撤销、expiry 或全量代际替换字段。因此当前不能证明删除有效身份安全。后续可选策略是定义撤销/有效期协议，或采用异步存储查询与有界热索引并明确未命中验证行为；二者均需确定业务契约，当前保留有效身份。
@@ -107,16 +113,29 @@ Client-Agent 契约复核：`control-plane/internal/gcloud/services_contract.go:
 
 实施中，逐项补充代码和负向对照；不把此前静态审计当作当前修复证据。
 
+### 未决业务语义（没有擅自实施）
+
+1. **带宽 12 窗口之外的溢出**：当前按计数 gap 记录覆盖缺失并尝试持久化 gap，未伪装完成，也未删除已入 spool 的 batch。是否允许这种受控覆盖缺失、或改为在耗尽前暂停相关转发，需要产品/计费确认；不能同时保证无限接入与无损。
+2. **Client-Agent 有效身份**：控制面只按递增 id 追加，无撤销/有效期/代际替换。未实施 TTL、LRU 或删除。
+3. **Cache Tombstone**：没有远端事件重放水位与代际证据，未设 TTL。
+4. **Telemetry loss journal 容量例外**：审计记录存在，但保留审计意义与容量上界需要确定“缺口证据保留多久”的业务语义；本轮未用有损上限掩盖。
+5. **超大单窗口**：Mace envelope 上限以上需要分块 + 全块 ACK 后再发 complete 标记；当前未实现，仍可能造成队头阻塞。
+6. **已有无限长连接在 Mace 完全不可写时**：仅拒绝新连接不能约束其后续窗口。需要明确“暂停转发”还是“覆盖降级”的默认行为。
+7. **MetricsDB 磁盘账本**：现有 cache/pool/checkpoint 相加不是真实磁盘上限，需要按 Mace 实际文件增长口径重建；本轮未改容量策略。
+
+上述每一项在取得明确业务语义前都应视为剩余风险；报告 F 节的生产就绪结论不因本轮部分修复而改变。
+
 ## E. 测试与性能
 
-逻辑 30 天、最终 cgroup 六组、实际 soak、配对性能和最终全量门禁尚未执行。
-既有 d6e2422 验收不能代表升级后结果。
+已执行（本轮）：Mace 升级的 storage 19、telemetry 34、adapter 2、integration 8；节点二进制 `check`；可选 importer Rust API `check`；bandwidth 交接与 backlog 策略定向测试（结果以最终日志为准）。负向对照：format-1 manifest 被拒且字节不变；容量拒收与超大批次拒收不推进 producer state；恢复时超 12 窗口的 backlog 被记录为覆盖 gap。
+
+未执行：逻辑 30 天、最终 cgroup 六组、实际 soak、配对性能和最终全量门禁。既有 d6e2422 验收不能代表升级后结果；静态审计/确定性单测/模拟压力/真实持续运行必须分开陈述。
 
 ## F. 生产就绪
 
 目前不能证明 7/30 天稳定；不构成生产升级依据。以下是实施中状态，不是最终验收结论。
 
-1. **是否仍有随时间无限增长的 Rust heap？** 有：Bandwidth 历史 pending，以及 consumer 失败叠加配置 churn 时整个 ServerMetrics family；Client-Agent 历史有效身份也没有已证明的容量边界。
+1. **是否仍有随时间无限增长的 Rust heap？** 仍有：consumer 失败叠加配置 churn 时的 ServerMetrics family、Client-Agent 历史有效身份；Bandwidth pending 已从无界改为 12 窗口计数上界，但单窗口字节仍随站点基数增长。
 2. **是否仍有无清理边界的数据库历史？** 有：WAFTOK 过期行、loss journal 容量例外、未具备安全回收水位的 CTOMB 和有效身份。Metrics retention 目前在 100 站点规模已可能落后。
 3. **哪些有界结构可能超过低内存节点预算？** Mace 的三个 engine、metadata cache、epoch retired pages，叠加 aggregator、L1/L2 和解码/配置代际峰值；表格中的局部目标不能相加当作严格总上限。
 4. **0.2.0 是否改善长期高水位？** 源码推导显示两个 durable lane 的物理 WAL ring 名义减少 30 MiB，上游有 GC 修复；尚无本轮持续运行证据证明总高水位改善。PageMap 高水位仍在。

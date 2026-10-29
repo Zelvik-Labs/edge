@@ -269,6 +269,11 @@ struct StoredPendingBandwidthStat {
 }
 
 const BANDWIDTH_STATE_STORAGE_KEY: &str = "STAT_BANDWIDTH_STATE_V1";
+/// Closed windows retained in heap while the durable spool refuses them.
+/// Twelve windows is one hour of outage. Beyond it the reporter records a
+/// counted coverage gap rather than growing without bound; the receiver keeps
+/// the window incomplete, so settlement cannot treat it as full coverage.
+const MAX_PENDING_BANDWIDTH_WINDOWS: usize = 12;
 
 impl From<&pb::ServerBandwidthStat> for StoredPendingBandwidthStat {
     fn from(stat: &pb::ServerBandwidthStat) -> Self {
@@ -379,16 +384,13 @@ fn load_bandwidth_state() -> (
         }
     };
 
-    let now = crate::utils::time::now_local();
-    let today = now.format("%Y%m%d").to_string();
-    let available_time = (now - ChronoDuration::seconds(BANDWIDTH_REPORT_INTERVAL_SECS as i64))
-        .format("%H%M")
-        .to_string();
+    // `window_stats` always describes `current_window` at save time. Do not
+    // filter it by the clock here: after a restart that window is stale and
+    // `flush_stale_window` must upload it as an incomplete segment. Filtering
+    // by age would silently discard its billable rows before that handoff.
     let mut window_stats = HashMap::new();
     for stat in state.window_stats {
-        if stat.day == today && stat.time_at >= available_time {
-            window_stats.insert(stat.server_id, stat);
-        }
+        window_stats.insert(stat.server_id, stat);
     }
     let current_window = if window_stats.is_empty() {
         String::new()
@@ -398,11 +400,29 @@ fn load_bandwidth_state() -> (
 
     // Legacy `pending_stats` (pre-spool state) is dropped: its entries were
     // either already uploaded or their windows surface as incomplete.
-    let pending_windows = state
+    let mut pending_windows: Vec<PendingWindow> = state
         .pending_windows
         .into_iter()
         .map(PendingWindow::from)
         .collect();
+    if pending_windows.len() > MAX_PENDING_BANDWIDTH_WINDOWS {
+        // Restoring an unbounded backlog into heap would peak with the outage
+        // length. Keep a contiguous oldest run and report the remainder as a
+        // coverage gap; never present it as delivered or complete.
+        let first_dropped = pending_windows[MAX_PENDING_BANDWIDTH_WINDOWS].window_start;
+        warn!(
+            retained = MAX_PENDING_BANDWIDTH_WINDOWS,
+            dropped = pending_windows.len() - MAX_PENDING_BANDWIDTH_WINDOWS,
+            first_dropped,
+            "bandwidth state has more pending windows than the restore cap; recording a coverage gap"
+        );
+        crate::telemetry::record_gap(
+            "bandwidth",
+            first_dropped,
+            "restore of bandwidth backlog exceeded the 12-window heap cap",
+        );
+        pending_windows.truncate(MAX_PENDING_BANDWIDTH_WINDOWS);
+    }
 
     (
         current_window,
@@ -419,6 +439,27 @@ async fn persist_bandwidth_state(
     pending_windows: &[PendingWindow],
     segment_started_at: i64,
 ) {
+    match encode_bandwidth_state(
+        current_window,
+        window_stats,
+        pending_windows,
+        segment_started_at,
+    ) {
+        Ok(raw) => {
+            if let Err(e) = crate::telemetry::save_state(BANDWIDTH_STATE_STORAGE_KEY, raw).await {
+                warn!("bandwidth window state persist failed: {}", e);
+            }
+        }
+        Err(e) => warn!("bandwidth window state encode failed: {}", e),
+    }
+}
+
+fn encode_bandwidth_state(
+    current_window: &str,
+    window_stats: &HashMap<i64, BandwidthWindowStat>,
+    pending_windows: &[PendingWindow],
+    segment_started_at: i64,
+) -> serde_json::Result<Vec<u8>> {
     let state = StoredBandwidthState {
         current_window: current_window.to_string(),
         window_stats: window_stats.values().cloned().collect(),
@@ -430,14 +471,7 @@ async fn persist_bandwidth_state(
         segment_started_at,
         pending_stats: Vec::new(),
     };
-    match serde_json::to_vec(&state) {
-        Ok(raw) => {
-            if let Err(e) = crate::telemetry::save_state(BANDWIDTH_STATE_STORAGE_KEY, raw).await {
-                warn!("bandwidth window state persist failed: {}", e);
-            }
-        }
-        Err(e) => warn!("bandwidth window state encode failed: {}", e),
-    }
+    serde_json::to_vec(&state)
 }
 
 /// `day`(YYYYMMDD) + `time_at`(HHMM) as produced by the reporter — the same
@@ -508,7 +542,34 @@ fn drain_bandwidth_window(
     }
 }
 
-async fn enqueue_window_batch(window: &PendingWindow, complete: bool) -> anyhow::Result<()> {
+/// Offer a closed window to the bounded backlog. A full backlog drops the
+/// window as an explicitly counted coverage gap; it never silently disappears.
+/// Returns the gap to journal when the window was not retained.
+fn retain_pending_window(
+    pending: &mut Vec<PendingWindow>,
+    window: PendingWindow,
+) -> Option<PendingWindow> {
+    if pending.len() < MAX_PENDING_BANDWIDTH_WINDOWS {
+        pending.push(window);
+        None
+    } else {
+        Some(window)
+    }
+}
+
+fn drop_pending_window_gap(window: &PendingWindow) -> pb::TelemetryBatch {
+    pb::TelemetryBatch {
+        kind: "gap".into(),
+        has_gap: true,
+        gap_kind: "bandwidth".into(),
+        gap_reason: "bandwidth durable backlog at its 12-window cap; window coverage lost".into(),
+        window_start: window.window_start,
+        occurred_at: crate::utils::time::now_timestamp(),
+        ..Default::default()
+    }
+}
+
+fn window_batch(window: &PendingWindow, complete: bool) -> pb::TelemetryBatch {
     let request = pb::UploadServerBandwidthStatsRequest {
         server_bandwidth_stats: window.stats.clone(),
     };
@@ -525,7 +586,11 @@ async fn enqueue_window_batch(window: &PendingWindow, complete: bool) -> anyhow:
     if !window.source_boot.is_empty() {
         batch.source_boot_id = window.source_boot.clone();
     }
-    crate::telemetry::enqueue_prepared(batch).await
+    batch
+}
+
+async fn enqueue_window_batch(window: &PendingWindow, complete: bool) -> anyhow::Result<()> {
+    crate::telemetry::enqueue_prepared(window_batch(window, complete)).await
 }
 
 /// A window that closed while the process was down keeps partial coverage:
@@ -535,6 +600,7 @@ async fn flush_stale_window(
     config_store: &ConfigStore,
     current_window: &mut String,
     window_stats: &mut HashMap<i64, BandwidthWindowStat>,
+    pending_windows: &mut Vec<PendingWindow>,
     stored_boot: &str,
     segment_started_at: i64,
 ) {
@@ -562,14 +628,29 @@ async fn flush_stale_window(
         node_region_id,
         stored_boot.to_string(),
     );
+    if window.stats.is_empty() {
+        *current_window = String::new();
+        return;
+    }
     if let Err(e) = enqueue_window_batch(&window, false).await {
         warn!(
             "stale bandwidth window could not reach the durable queue: {}",
             e
         );
+        // The closed window still owns billable data. Keep it in the bounded
+        // backlog for retry instead of discarding it because the spool refused
+        // the first attempt.
+        if let Some(dropped) = retain_pending_window(pending_windows, window) {
+            crate::telemetry::record_gap(
+                "bandwidth",
+                dropped.window_start,
+                "stale bandwidth window exceeded the restore backlog cap",
+            );
+        }
     }
     // The downtime span is permanent loss: emit a gap batch whose range covers
-    // the stale window so settlement for it stays paused.
+    // the stale window so settlement for it stays paused. It does not replace
+    // the stale window's retained rows; those still carry their own coverage.
     let gap = pb::TelemetryBatch {
         kind: "gap".into(),
         has_gap: true,
@@ -652,6 +733,7 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
         &config_store,
         &mut current_window,
         &mut window_stats,
+        &mut pending_windows,
         &stored_boot,
         segment_started_at,
     )
@@ -681,25 +763,57 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
             // The closed window is pushed as a pending entry before draining:
             // a spool that cannot accept it keeps complete data for the next
             // rollover instead of dropping it.
-            pending_windows.push(drain_bandwidth_window(
+            let closed = drain_bandwidth_window(
                 &config_store,
                 &mut window_stats,
                 closed_start,
                 segment_started_at,
                 node_region_id,
-                String::new(),
-            ));
-            let mut sent = 0;
-            while sent < pending_windows.len() {
-                if enqueue_window_batch(&pending_windows[sent], true)
-                    .await
-                    .is_err()
+                crate::telemetry::process_boot().to_string(),
+            );
+            if let Some(dropped) = retain_pending_window(&mut pending_windows, closed) {
+                warn!(
+                    window_start = dropped.window_start,
+                    rows = dropped.stats.len(),
+                    cap = MAX_PENDING_BANDWIDTH_WINDOWS,
+                    "bandwidth backlog full; recording a coverage gap"
+                );
+                crate::telemetry::record_gap(
+                    "bandwidth",
+                    dropped.window_start,
+                    "bandwidth durable backlog at its 12-window cap",
+                );
+                if let Err(error) =
+                    crate::telemetry::enqueue_prepared(drop_pending_window_gap(&dropped)).await
                 {
+                    warn!(%error, "bandwidth backlog overflow gap could not be persisted");
+                }
+            }
+            while let Some(window) = pending_windows.first() {
+                let next_state = match encode_bandwidth_state(
+                    &window_key,
+                    &window_stats,
+                    &pending_windows[1..],
+                    window_started_at,
+                ) {
+                    Ok(raw) => raw,
+                    Err(error) => {
+                        warn!(%error, "bandwidth handoff state encode failed");
+                        break;
+                    }
+                };
+                if let Err(error) = crate::telemetry::enqueue_prepared_with_state(
+                    window_batch(window, true),
+                    BANDWIDTH_STATE_STORAGE_KEY,
+                    next_state,
+                )
+                .await
+                {
+                    warn!(%error, "bandwidth durable handoff failed; retaining window");
                     break;
                 }
-                sent += 1;
+                pending_windows.remove(0);
             }
-            pending_windows.drain(..sent);
             current_window = window_key.clone();
             segment_started_at = window_started_at;
             persist_bandwidth_state(
@@ -1923,6 +2037,59 @@ mod tests {
         assert_eq!(req.region_providers.len(), 2);
         assert_eq!(req.systems.len(), 2);
         assert_eq!(req.browsers.len(), 2);
+    }
+
+    #[test]
+    fn bandwidth_pending_backlog_is_bounded_and_overflow_is_an_explicit_gap() {
+        let window = |start| PendingWindow {
+            window_start: start,
+            segment_started_at: start,
+            source_boot: "source-generation".into(),
+            stats: vec![pb::ServerBandwidthStat {
+                server_id: 7,
+                total_bytes: 42,
+                ..Default::default()
+            }],
+            error_counts: HashMap::new(),
+        };
+        let mut pending = Vec::new();
+        for start in 0..MAX_PENDING_BANDWIDTH_WINDOWS {
+            assert!(retain_pending_window(&mut pending, window(start as i64)).is_none());
+        }
+        let dropped = retain_pending_window(&mut pending, window(99))
+            .expect("the cap must reject, not grow");
+        assert_eq!(pending.len(), MAX_PENDING_BANDWIDTH_WINDOWS);
+        let gap = drop_pending_window_gap(&dropped);
+        assert!(gap.has_gap);
+        assert_eq!(gap.gap_kind, "bandwidth");
+        assert_eq!(gap.window_start, 99);
+        assert!(gap.gap_reason.contains("12-window cap"));
+    }
+
+    #[test]
+    fn bandwidth_handoff_state_keeps_only_undelivered_windows_and_source_identity() {
+        let window = |start| PendingWindow {
+            window_start: start,
+            segment_started_at: start,
+            source_boot: "source-generation".into(),
+            stats: vec![pb::ServerBandwidthStat {
+                server_id: 7,
+                total_bytes: 42,
+                ..Default::default()
+            }],
+            error_counts: HashMap::new(),
+        };
+        let pending = [window(300), window(600)];
+        let batch = window_batch(&pending[0], true);
+        assert_eq!(batch.source_boot_id, "source-generation");
+        assert_eq!(batch.window_start, 300);
+        let raw = encode_bandwidth_state("next-window", &HashMap::new(), &pending[1..], 900).unwrap();
+        let state: StoredBandwidthState = serde_json::from_slice(&raw).unwrap();
+        assert_eq!(state.pending_windows.len(), 1);
+        assert_eq!(state.pending_windows[0].window_start, 600);
+        assert_eq!(state.pending_windows[0].source_boot, "source-generation");
+        assert_eq!(state.pending_windows[0].stats[0].total_bytes, 42);
+        assert_eq!(pending.len(), 2, "preparing state cannot release uncommitted work");
     }
 
     #[test]
