@@ -70,6 +70,7 @@ curl -fsSL https://cp.example.com/install/edge.sh | sudo bash -s -- \
 
 发布说明：
 
+- [26.10.4.9](release-notes/v26.10.4.9.md)
 - [26.10.4.8](release-notes/v26.10.4.8.md)
 - [26.10.4.6](release-notes/v26.10.4.6.md)
 - [26.10.4.4](release-notes/v26.10.4.4.md)

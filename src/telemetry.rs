@@ -1211,7 +1211,8 @@ fn emit_meta(kind: &str, gap_kind: &str, reason: &str, start: i64, end: i64) {
     }
 }
 pub fn initialize() -> anyhow::Result<()> {
-    let path = NodePaths::current().data_dir().join("telemetry");
+    let path = crate::storage_migration::store_root(&NodePaths::current().data_dir())
+        .join("telemetry");
     let core = Arc::new(Spool::open(&path.join("core"), true, 0)?);
     // Both lanes write to one filesystem, so the detail lane joins the core
     // lane's accounting: core's footprint is subtracted from detail's budget

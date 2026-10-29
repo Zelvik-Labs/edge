@@ -21,7 +21,7 @@ set -eu
 # build-release.sh may overwrite this from the release argument; the package's
 # VERSION file (read below) wins so the installer cannot claim a version the
 # binary does not report.
-VERSION="26.10.4.8"
+VERSION="26.10.4.9"
 BIN_NAME="zelvik-edge"
 SERVICE_NAME="zelvik-edge"
 SERVICE_USER="root"
@@ -618,6 +618,13 @@ _installed=$("$_bin_tmp" --version 2>/dev/null | head -n 1) || true
 [ "$_installed" = "zelvik-edge $VERSION" ] || die "staged binary reports '$_installed', expected zelvik-edge $VERSION"
 commit_file "$_bin_tmp" "$BIN_DIR/$BIN_NAME" "$BIN_DIR" || die "cannot replace $BIN_DIR/$BIN_NAME"
 log "installed binary to $BIN_DIR/$BIN_NAME (version $VERSION)"
+# Migrate durable Mace stores with the candidate while the service is stopped.
+# This keeps the old generation untouched if migration or verification fails;
+# the EXIT trap restores the previous binary. The command creates the readiness
+# marker only after every store has been reopened and verified.
+if ! ZELVIK_EDGE_HOME="$EDGE_HOME" "$BIN_DIR/$BIN_NAME" storage-migrate; then
+    die "candidate storage migration failed; installation rolled back, legacy data preserved"
+fi
 
 if [ -f "$SCRIPT_DIR/README.install" ]; then
     _readme_tmp="$EDGE_HOME/.README.install.$$"
