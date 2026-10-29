@@ -789,6 +789,13 @@ async def run_acceptance(args, clients, output, cg, pid):
             target = maximum * pct // 100
             reached = current >= (target if source == "cache" else target - (1 << 20))
             dwell = 6 if reached else 2
+            if pct in (85, 90) and source != "cache":
+                # The final-resort gate needs a 10s sustained-Critical
+                # episode with samples at least 5s apart. A 6s dwell at the
+                # 90% stage can leave only one fresh sample, and the next
+                # 1MiB ballast fill can then reach the cgroup OOM killer
+                # before the reclaim monitor gets another turn.
+                dwell = max(dwell, 12)
             await asyncio.sleep(dwell)
             state = await control("stats")
             row = {
