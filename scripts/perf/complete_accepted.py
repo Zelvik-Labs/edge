@@ -31,8 +31,15 @@ async def run(args):
         if args.acceptance_source in ("cache", "mixed"):
             output["preflight"] = await p.cache_preflight(fill, cg)
         before_bytes = {proto: s.bytes for proto, s in samples.items()}
-        output["applied"] = await p.apply_acceptance_pressure(args, args.acceptance_source, 85, cg, fill)
-        await asyncio.sleep(12)
+        output["ramp"] = []
+        for percent in (50, 70, 85):
+            applied = await p.apply_acceptance_pressure(args, args.acceptance_source, percent, cg, fill)
+            await asyncio.sleep(12 if percent == 85 else 6)
+            output["ramp"].append({
+                "target_percent": percent, "applied": applied,
+                "state": await p.control("stats"), "physical": p.observation(cg, pid),
+                "accepted_progress": {proto: p.progress(s, before_bytes[proto]) for proto, s in samples.items()},
+            })
         output["pressure"] = {
             "state": await p.control("stats"), "physical": p.observation(cg, pid),
             "held_new_requests": await p.probe_held(held, samples, 32),
