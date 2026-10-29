@@ -189,17 +189,28 @@ pub async fn sync_node_tasks(
                     return;
                 }
 
+                if !success {
+                    // A failed install must remain pending in the control plane.
+                    // Reporting `is_ok=false` marks the task done there, so a
+                    // capacity rejection would become a permanent config miss
+                    // and the next poll could never retry it.
+                    warn!(
+                        task_id = task.id,
+                        error = if task_error.is_empty() {
+                            "Task failed"
+                        } else {
+                            task_error.as_str()
+                        },
+                        "NodeTask failed; leaving it pending for a later retry"
+                    );
+                    break;
+                }
+
                 let reported = crate::rpc::track_rpc(task_service.report_node_task_done(
                     pb::ReportNodeTaskDoneRequest {
                         node_task_id: task.id,
-                        is_ok: success,
-                        error: if success {
-                            "".to_string()
-                        } else if task_error.is_empty() {
-                            "Task failed".to_string()
-                        } else {
-                            task_error.clone()
-                        },
+                        is_ok: true,
+                        error: String::new(),
                     },
                 ))
                 .await
