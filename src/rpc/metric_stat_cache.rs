@@ -974,9 +974,18 @@ fn persist_payload(
         file.sync_all()?;
     }
     std::fs::rename(&tmp_path, &final_path)?;
-    if let Ok(dir_file) = std::fs::File::open(dir) {
-        let _ = dir_file.sync_all();
-    }
+    let dir_file = std::fs::File::open(dir).map_err(|e| {
+        anyhow::anyhow!(
+            "open metric stat quarantine directory {}: {e}",
+            dir.display()
+        )
+    })?;
+    dir_file.sync_all().map_err(|e| {
+        anyhow::anyhow!(
+            "sync metric stat quarantine directory {}: {e}",
+            dir.display()
+        )
+    })?;
     Ok(final_path)
 }
 
