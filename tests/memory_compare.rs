@@ -7,7 +7,6 @@ use zelvik_edge::firewall::state::WafStateManager;
 use zelvik_edge::metrics::aggregator::{AggregationKey, MetricAggregator};
 use zelvik_edge::metrics::daily::{DailyDomainTracker, UniqueIpTracker};
 use zelvik_edge::metrics::top_ip::TopIpTracker;
-use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 
@@ -162,7 +161,6 @@ fn agg_key(tag: &str) -> AggregationKey {
         provider_id: 0,
         browser_version: Arc::from(""),
         os_version: Arc::from(""),
-        request_attrs: Arc::new(BTreeMap::new()),
     }
 }
 

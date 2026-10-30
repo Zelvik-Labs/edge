@@ -8,6 +8,7 @@ pub mod firewall;
 pub mod ip_list;
 pub mod ip_report;
 pub mod logs;
+pub mod metric_stat_cache;
 pub mod metrics;
 pub mod node;
 pub mod node_task;

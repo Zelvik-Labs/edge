@@ -1535,6 +1535,10 @@ impl ConfigStore {
             &cache_policy,
             &all_servers,
         );
+        // Build the immutable metric plan from the same snapshot that is about
+        // to become visible. In-flight events keep the generation they started
+        // with; a reload never reinterprets them under new item definitions.
+        crate::metrics::plan::publish_metric_items(&metric_items);
         let mut lock = self.inner.write();
         let previous_server_ids: HashSet<i64> = lock
             .all_servers

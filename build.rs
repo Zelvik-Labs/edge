@@ -61,12 +61,88 @@ fn sha256_hex(bytes: &[u8]) -> String {
     panic!("sha256sum/shasum is required to verify ZELVIK_EDGE_XDP_EBPF_SOURCE");
 }
 
+/// Compile the thin C bridge for mimalloc option access against the header of
+/// the exact libmimalloc-sys build this crate links. libmimalloc-sys has
+/// `links = "mimalloc"` and publishes `INCLUDE_DIR`, which Cargo exposes to
+/// this build script as `DEP_MIMALLOC_INCLUDE_DIR`. Compiling any mimalloc
+/// source here would create a second allocator; this only compiles the
+/// bridge, whose `mi_*` references resolve to that one linked archive.
+fn compile_allocator_options_bridge() -> Result<(), Box<dyn std::error::Error>> {
+    let include_dir = std::env::var("DEP_MIMALLOC_INCLUDE_DIR").map_err(|_| {
+        "DEP_MIMALLOC_INCLUDE_DIR is missing: src/allocator_options.c must compile against \
+         the header of the libmimalloc-sys build that is already linked, never a local copy"
+    })?;
+    println!("cargo:rerun-if-changed=src/allocator_options.c");
+    println!("cargo:rerun-if-env-changed=DEP_MIMALLOC_INCLUDE_DIR");
+
+    let mut build = cc::Build::new();
+    build
+        .file("src/allocator_options.c")
+        .include(&include_dir)
+        .warnings(true);
+    write_compile_commands(&include_dir, build.get_compiler().path())?;
+    build.compile("zelvik_allocator_options");
+    Ok(())
+}
+
+/// Emit a `compile_commands.json` for the C bridge at the repository root,
+/// where clangd discovers it without any machine-specific configuration.
+/// The include directory is the one Cargo resolved for the linked
+/// libmimalloc-sys build (`DEP_MIMALLOC_INCLUDE_DIR`), so the editor sees the
+/// same header as the compiler instead of reporting `mimalloc.h` missing.
+fn write_compile_commands(
+    include_dir: &str,
+    compiler: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
+    let source = manifest_dir.join("src").join("allocator_options.c");
+    let arguments = [
+        compiler.to_string_lossy().into_owned(),
+        format!("-I{include_dir}"),
+        "-c".to_string(),
+        source.to_string_lossy().into_owned(),
+    ];
+    let arguments = arguments
+        .iter()
+        .map(|argument| format!("      \"{}\"", json_escape(argument)))
+        .collect::<Vec<_>>()
+        .join(",\n");
+    let database = format!(
+        "[\n  {{\n    \"directory\": \"{}\",\n    \"file\": \"{}\",\n    \"arguments\": [\n{}\n    ]\n  }}\n]\n",
+        json_escape(&manifest_dir.to_string_lossy()),
+        json_escape(&source.to_string_lossy()),
+        arguments
+    );
+    fs::write(manifest_dir.join("compile_commands.json"), database)?;
+    Ok(())
+}
+
+fn json_escape(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for character in value.chars() {
+        match character {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            control if control < ' ' => {
+                escaped.push_str(&format!("\\u{:04x}", u32::from(control)));
+            }
+            other => escaped.push(other),
+        }
+    }
+    escaped
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=Cargo.toml");
     println!("cargo:rerun-if-changed=rust-toolchain.toml");
     println!("cargo:rerun-if-changed=src");
     println!("cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH");
+
+    compile_allocator_options_bridge()?;
 
     let build_timestamp = std::env::var("SOURCE_DATE_EPOCH")
         .ok()

@@ -68,6 +68,8 @@ struct Meta {
     #[serde(default)]
     quarantined: u64,
     #[serde(default)]
+    quarantined_bytes: u64,
+    #[serde(default)]
     retryable_failures: u64,
     #[serde(default)]
     terminal_failures: u64,
@@ -101,6 +103,7 @@ impl Default for Meta {
             acked_ahead: 0,
             acked_ahead_bytes: 0,
             quarantined: 0,
+            quarantined_bytes: 0,
             retryable_failures: 0,
             terminal_failures: 0,
             oversize_dropped: 0,
@@ -182,8 +185,8 @@ const CORE_PEER_RESERVE_DIVISOR: u64 = 8;
 /// once `available < FLOOR`, and a full disk must degrade to a closed lane
 /// rather than abort the node.
 pub fn available_bytes(total: u64, available: u64, reserved: u64) -> u64 {
-    let reserve = (total / RESERVE_RATIO)
-        .min((available / RESERVE_AVAILABLE_DIVISOR).max(RESERVE_FLOOR));
+    let reserve =
+        (total / RESERVE_RATIO).min((available / RESERVE_AVAILABLE_DIVISOR).max(RESERVE_FLOOR));
     available.saturating_sub(reserve).saturating_sub(reserved)
 }
 /// Capacity of one lane over (total, available) bytes, where `reserved_for_peer`
@@ -273,10 +276,7 @@ pub enum SpoolError {
     /// variant because the two refusals need opposite responses: a capacity
     /// refusal is worth retrying once the spool drains, a size refusal is
     /// permanent for those bytes and the producer must split or journal them.
-    BatchTooLarge {
-        bytes: usize,
-        limit: usize,
-    },
+    BatchTooLarge { bytes: usize, limit: usize },
 }
 impl std::fmt::Display for SpoolError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -404,7 +404,7 @@ impl Spool {
             "invalid telemetry spool counters"
         );
         let counter = shared.unwrap_or_else(LaneCounter::new);
-        counter.add_used(meta.bytes);
+        counter.add_used(meta.bytes.saturating_add(meta.quarantined_bytes));
         // A restart must not forget that this lane lost data: the counters, the
         // last reason and the gap bounds come back from the durable meta, and
         // the process-wide gap statics are seeded from this lane's half.
@@ -421,7 +421,11 @@ impl Spool {
             bucket,
             meta: Mutex::new(meta),
             path: path.to_owned(),
-            budget: LaneBudget { limit, core, counter },
+            budget: LaneBudget {
+                limit,
+                core,
+                counter,
+            },
             quarantined: AtomicU64::new(quarantined),
             retryable_failures: AtomicU64::new(retryable),
             terminal_failures: AtomicU64::new(terminal),
@@ -443,9 +447,7 @@ impl Spool {
             self.budget.core,
             total,
             available,
-            self.budget
-                .counter
-                .reserved_for_peer(self.budget.core),
+            self.budget.counter.reserved_for_peer(self.budget.core),
             0,
         )
     }
@@ -538,7 +540,11 @@ impl Spool {
         // accounts for the other lane, so neither lane can spend the other's
         // share.
         let over_limit = self.budget.limit > 0
-            && meta.bytes.saturating_add(required) > self.budget.limit;
+            && meta
+                .bytes
+                .saturating_add(meta.quarantined_bytes)
+                .saturating_add(required)
+                > self.budget.limit;
         if required > available || over_limit {
             // The caller decides whether the batch is dropped (record a gap)
             // or retained in memory for the next window — a full spool is not
@@ -569,7 +575,11 @@ impl Spool {
                 .map_err(mace_error)?;
         }
         txn.commit().map_err(mace_error)?;
-        let level = capacity_level(next.bytes, available, self.budget.limit);
+        let level = capacity_level(
+            next.bytes.saturating_add(next.quarantined_bytes),
+            available,
+            self.budget.limit,
+        );
         *meta = next;
         self.budget.counter.add_used(encoded.len() as u64);
         escalate_capacity(level, self.budget.core);
@@ -628,9 +638,8 @@ impl Spool {
                     let raw = view
                         .get(format!("batch:{sequence:020}").as_bytes())
                         .map_err(mace_error)?;
-                    let batch = pb::TelemetryBatch::decode(
-                        zstd::decode_all(raw.slice())?.as_slice(),
-                    )?;
+                    let batch =
+                        pb::TelemetryBatch::decode(zstd::decode_all(raw.slice())?.as_slice())?;
                     anyhow::ensure!(
                         batch.sequence == sequence
                             && batch.batch_id == format!("{}:{sequence}", meta.boot),
@@ -751,31 +760,13 @@ impl Spool {
         *meta = next;
         Ok(removed)
     }
-    /// P0-3 — drop the head batch after the API rejected it permanently.
-    ///
-    /// A batch that can never be accepted must not sit at the head of the queue
-    /// and hold every later observation hostage. Removing it is a loss, and the
-    /// loss is never silent and never half-recorded: the payload removal, the
-    /// head advance, the lane's counters, the gap bounds, the durable
-    /// [`LossRecord`] and the gap batch that reports the loss upstream all
-    /// commit in ONE Mace transaction. A crash before the commit keeps the batch
-    /// and loses nothing; a crash after it keeps the audit.
-    ///
-    /// The gap batch joins this same lane, so the audit record and the marker
-    /// carrying it share one bucket — and therefore one transaction and one
-    /// receipt. [`Self::acknowledge`] deletes the record only when the API's
-    /// durable receipt for that marker arrives, so a best-effort marker is never
-    /// mistaken for proof of delivery.
-    ///
-    /// Accounting stays consistent: the payload's bytes leave `bytes`, the head
-    /// advances, and `acked_ahead`/`acked_ahead_bytes` are untouched because the
-    /// receipts of later batches are keyed by sequence and quarantine never
-    /// renumbers. `oldest_at` follows the new head exactly as `acknowledge`
-    /// leaves it.
-    ///
-    /// Returns `false` when `sequence` is no longer the head: the batch was
-    /// confirmed (or already removed) meanwhile, so the caller must not treat it
-    /// as quarantined.
+    /// Move a permanently rejected head to durable quarantine. The original
+    /// compressed envelope, rejection audit, gap marker and head advance share
+    /// one transaction. A gap receipt only retires its pending report; the
+    /// quarantined envelope and audit remain available for offline recovery.
+    /// Archived bytes stay charged to the lane, so a full archive backpressures
+    /// producers and leaves the original head untouched if the marker cannot fit.
+    /// Returns false if the sequence is no longer the head.
     fn quarantine_head(&self, sequence: u64, reason: &str, error: &str) -> anyhow::Result<bool> {
         let mut meta = self.meta.lock();
         if sequence != meta.head || meta.head >= meta.tail {
@@ -795,10 +786,15 @@ impl Spool {
         // A marker the API refuses must not be answered with another marker:
         // otherwise one rejected audit would generate audits forever.
         let is_meta = kind == "gap" || kind == "alert";
+        // Keep the original compressed envelope in the same durable transaction.
+        // A gap receipt confirms the report, not delivery of this payload.
+        txn.upsert(format!("quarantine:{sequence:020}").as_bytes(), raw.slice())
+            .map_err(mace_error)?;
         txn.del(key.as_bytes()).map_err(mace_error)?;
         let mut next = meta.clone();
         next.head += 1;
         next.bytes -= size;
+        next.quarantined_bytes = next.quarantined_bytes.saturating_add(size);
         next.quarantined = self.quarantined.load(Ordering::Relaxed) + 1;
         next.retryable_failures = self.retryable_failures.load(Ordering::Relaxed);
         next.terminal_failures = self.terminal_failures.load(Ordering::Relaxed);
@@ -841,7 +837,28 @@ impl Spool {
                 Err(err) => return Err(mace_error(err)),
             }
         }
+        let audit = serde_json::to_vec(&loss)?;
+        txn.upsert(format!("quarantineaudit:{sequence:020}").as_bytes(), &audit)
+            .map_err(mace_error)?;
+        next.quarantined_bytes = next.quarantined_bytes.saturating_add(audit.len() as u64);
         let (gap_sequence, gap_bytes) = self.write_loss(&txn, &mut next, loss, !is_meta)?;
+        let required = next.bytes.saturating_add(next.quarantined_bytes);
+        let extra_bytes = gap_bytes.saturating_add(audit.len() as u64);
+        let available = if self.budget.limit > 0 {
+            self.budget
+                .limit
+                .saturating_sub(meta.bytes.saturating_add(meta.quarantined_bytes))
+        } else {
+            self.capacity()
+        };
+        if extra_bytes > available || (self.budget.limit > 0 && required > self.budget.limit) {
+            return Err(SpoolError::Capacity {
+                required: extra_bytes,
+                available,
+                core: self.budget.core,
+            }
+            .into());
+        }
         next.oldest_at = if next.head == next.tail {
             0
         } else if gap_sequence != 0 && next.head == gap_sequence {
@@ -857,10 +874,9 @@ impl Spool {
         txn.upsert(b"meta", serde_json::to_vec(&next)?)
             .map_err(mace_error)?;
         txn.commit().map_err(mace_error)?;
-        // Only now that the transaction is durable: the removed payload leaves
-        // the pool and the marker it was replaced by joins it.
-        self.budget.counter.sub_used(size);
-        self.budget.counter.add_used(gap_bytes);
+        // The payload remains charged in quarantine; only the archive audit
+        // and the marker add bytes after this durable ownership transfer.
+        self.budget.counter.add_used(extra_bytes);
         self.quarantined.fetch_add(1, Ordering::Relaxed);
         *self.last_loss_reason.write() = reason.to_owned();
         *meta = next;
@@ -876,9 +892,9 @@ impl Spool {
     /// batch that reports it upstream. Both join the caller's transaction, so
     /// the loss and its audit share one commit.
     ///
-    /// The marker is deliberately not capacity-checked: it is a few hundred
-    /// bytes, it replaces a payload that was just freed, and an audit that the
-    /// disk refused would be a silent loss again.
+    /// This helper writes within the caller's transaction. Quarantine checks
+    /// the additional archive and marker bytes before committing; the
+    /// oversized-record journal retains its existing audit policy.
     ///
     /// Returns the gap batch's sequence and its spool bytes (both 0 when no
     /// marker was created).
@@ -931,8 +947,7 @@ impl Spool {
             meta.gap_start
         };
         next.gap_end = meta.gap_end.max(loss.event_time);
-        next.gap_has_core =
-            meta.gap_has_core || loss.kind == "core" || loss.kind == "bandwidth";
+        next.gap_has_core = meta.gap_has_core || loss.kind == "core" || loss.kind == "bandwidth";
         let (_, gap_bytes) = self.write_loss(&txn, &mut next, loss.clone(), true)?;
         txn.upsert(b"meta", serde_json::to_vec(&next)?)
             .map_err(mace_error)?;
@@ -974,6 +989,17 @@ impl Spool {
             Err(OpCode::NotFound) => Ok(None),
             Err(err) => Err(mace_error(err)),
         }
+    }
+
+    #[cfg(test)]
+    fn quarantined_batch(&self, sequence: u64) -> anyhow::Result<pb::TelemetryBatch> {
+        let view = self.bucket.view().map_err(mace_error)?;
+        let raw = view
+            .get(format!("quarantine:{sequence:020}").as_bytes())
+            .map_err(mace_error)?;
+        Ok(pb::TelemetryBatch::decode(
+            zstd::decode_all(raw.slice())?.as_slice(),
+        )?)
     }
 
     /// This lane's durable gap bounds, `(start, end, has_core)`.
@@ -1026,8 +1052,9 @@ impl Spool {
             "pendingBatches": pending,
             "pendingBytes": meta.bytes - meta.acked_ahead_bytes,
             "retainedBytes": meta.bytes,
+            "quarantineBytes": meta.quarantined_bytes,
             "remainingBytes": available,
-            "capacityLevel": capacity_level(meta.bytes, available, self.budget.limit),
+            "capacityLevel": capacity_level(meta.bytes.saturating_add(meta.quarantined_bytes), available, self.budget.limit),
             "oldestAt": if pending > 0 { meta.oldest_at } else { 0 },
             "exhaustEtaSecs": if rate > 0 { available / rate.max(1) } else { 0 },
             "lastFailureAt": LAST_FAILURE.load(Ordering::Relaxed),
@@ -1211,8 +1238,8 @@ fn emit_meta(kind: &str, gap_kind: &str, reason: &str, start: i64, end: i64) {
     }
 }
 pub fn initialize() -> anyhow::Result<()> {
-    let path = crate::storage_migration::store_root(&NodePaths::current().data_dir())
-        .join("telemetry");
+    let path =
+        crate::storage_migration::store_root(&NodePaths::current().data_dir()).join("telemetry");
     let core = Arc::new(Spool::open(&path.join("core"), true, 0)?);
     // Both lanes write to one filesystem, so the detail lane joins the core
     // lane's accounting: core's footprint is subtracted from detail's budget
@@ -1384,7 +1411,7 @@ async fn append_probe_chunk(
 #[derive(Debug)]
 pub struct MetricEnqueueError {
     source: anyhow::Error,
-    unsent: pb::UploadMetricStatsRequest,
+    unsent: Box<pb::UploadMetricStatsRequest>,
     lost: usize,
 }
 
@@ -1392,7 +1419,7 @@ impl MetricEnqueueError {
     fn new(source: anyhow::Error, unsent: pb::UploadMetricStatsRequest, lost: usize) -> Self {
         Self {
             source,
-            unsent,
+            unsent: Box::new(unsent),
             lost,
         }
     }
@@ -1404,7 +1431,7 @@ impl MetricEnqueueError {
     }
 
     pub fn into_unsent(self) -> pb::UploadMetricStatsRequest {
-        self.unsent
+        *self.unsent
     }
 }
 
@@ -1445,6 +1472,9 @@ async fn enqueue_metric_stat_on(
         version: request.version,
         item_id: request.item_id,
         keep_keys: request.keep_keys,
+        revision: request.revision,
+        window_start: request.window_start,
+        window_end: request.window_end,
     };
     // The inner request header travels inside the telemetry payload, so it
     // must come out of the row budget; otherwise a full batch plus header
@@ -1485,6 +1515,9 @@ struct MetricRequestHeader {
     version: i32,
     item_id: i64,
     keep_keys: Vec<String>,
+    revision: u64,
+    window_start: i64,
+    window_end: i64,
 }
 
 impl MetricRequestHeader {
@@ -1498,6 +1531,9 @@ impl MetricRequestHeader {
             item_id: self.item_id,
             metric_stats,
             keep_keys: self.keep_keys.clone(),
+            revision: self.revision,
+            window_start: self.window_start,
+            window_end: self.window_end,
         }
     }
 }
@@ -1512,13 +1548,13 @@ async fn append_metric_chunk(
         let payload = request.encode_to_vec();
         match spool.append("metric_stat", payload, 0, false, at) {
             Ok(_) => Ok(()),
-            Err(error) => Err((error, request)),
+            Err(error) => Err(MetricEnqueueError::new(error, request, 0)),
         }
     })
     .await
     {
         Ok(Ok(())) => Ok(()),
-        Ok(Err((source, request))) => Err(MetricEnqueueError::new(source, request, 0)),
+        Ok(Err(error)) => Err(error),
         Err(join) => Err(MetricEnqueueError::new(
             anyhow::anyhow!("metric append task failed: {join}"),
             pb::UploadMetricStatsRequest::default(),
@@ -1584,8 +1620,10 @@ async fn enqueue_daily_stats_on(
     request: pb::UploadServerDailyStatsRequest,
 ) -> Result<(), DailyEnqueueError> {
     let budget = payload_budget("daily");
-    let (stats_batches, stats_oversize) = split_records(request.stats, budget);
-    let (domain_batches, domain_oversize) = split_records(request.domain_stats, budget);
+    let (stats_batches, stats_oversize) =
+        split_server_records(request.stats, budget, |row| row.server_id);
+    let (domain_batches, domain_oversize) =
+        split_server_records(request.domain_stats, budget, |row| row.server_id);
 
     let mut stats_oversize = stats_oversize.into_iter();
     while let Some(stat) = stats_oversize.next() {
@@ -1805,6 +1843,9 @@ const ERROR_ASSIGNMENT_BEFORE_FIRST: &str = "telemetry.assignment_before_first";
 enum TerminalReason {
     /// The batch predates this node's first telemetry assignment.
     PreAssignment,
+    DeploymentMissing,
+    AssignmentInvalid,
+    RouteInvalid,
     InvalidArgument,
     AlreadyExists,
     OutOfRange,
@@ -1819,6 +1860,9 @@ impl TerminalReason {
     fn gap_reason(self) -> &'static str {
         match self {
             Self::PreAssignment => "unattributed_pre_assignment",
+            Self::DeploymentMissing => "unattributed_deployment",
+            Self::AssignmentInvalid => "invalid_assignment",
+            Self::RouteInvalid => "invalid_route",
             Self::InvalidArgument => "terminal_invalid_argument",
             Self::AlreadyExists => "terminal_already_exists",
             Self::OutOfRange => "terminal_out_of_range",
@@ -1831,7 +1875,10 @@ impl TerminalReason {
 
 /// Read one trailer from a status, if the API sent it.
 fn trailer<'a>(status: &'a tonic::Status, key: &str) -> Option<&'a str> {
-    status.metadata().get(key).and_then(|value| value.to_str().ok())
+    status
+        .metadata()
+        .get(key)
+        .and_then(|value| value.to_str().ok())
 }
 
 /// Codes whose refusal is an authorization decision that a later credential or
@@ -1876,8 +1923,19 @@ fn classify_status(status: &tonic::Status) -> UploadClass {
         // "retry with a smaller batch"; this batch's bytes can never shrink.
         return UploadClass::Terminal(TerminalReason::ResourceExhausted);
     }
-    if code == Some(ControlCode::RateLimited.as_str()) {
+    if code == Some(ControlCode::RateLimited.as_str()) || code == Some("control.clock_skew") {
         return UploadClass::Retryable;
+    }
+    if trailer(status, TRAILER_RETRYABLE) == Some("false") {
+        let reason = match code {
+            Some("telemetry.deployment_missing") => Some(TerminalReason::DeploymentMissing),
+            Some("telemetry.assignment_invalid") => Some(TerminalReason::AssignmentInvalid),
+            Some("telemetry.route_invalid") => Some(TerminalReason::RouteInvalid),
+            _ => None,
+        };
+        if let Some(reason) = reason {
+            return UploadClass::Terminal(reason);
+        }
     }
     if let Some(retryable) = trailer(status, TRAILER_RETRYABLE) {
         // The server stated the class for a code we do not special-case.
@@ -2016,6 +2074,7 @@ async fn upload_window(spool: Arc<Spool>, uploads: Vec<Upload>) -> WindowOutcome
             // nothing to drop.
             Ok(false) => {}
             Err(err) => {
+                warn!(sequence, error=%err, "telemetry quarantine failed; original head retained");
                 if failure.is_none() {
                     failure = Some((UploadClass::Retryable, err));
                 }
@@ -2055,19 +2114,18 @@ pub async fn replay(api: ApiConfig, core: bool) {
         // Pre-fetch unconfirmed batches. A failed older batch stays on disk,
         // while later durable receipts are remembered independently.
         let read = spool.clone();
-        let (prefetched, next_cursor) = match tokio::task::spawn_blocking(move || {
-            read.replay_window(cursor)
-        })
-        .await
-        .map_err(anyhow::Error::from)
-        .and_then(|result| result)
-        {
-            Ok(window) => window,
-            Err(err) => {
-                backoff(core, &mut failures, err).await;
-                continue;
-            }
-        };
+        let (prefetched, next_cursor) =
+            match tokio::task::spawn_blocking(move || read.replay_window(cursor))
+                .await
+                .map_err(anyhow::Error::from)
+                .and_then(|result| result)
+            {
+                Ok(window) => window,
+                Err(err) => {
+                    backoff(core, &mut failures, err).await;
+                    continue;
+                }
+            };
         if prefetched.is_empty() {
             tokio::time::sleep(Duration::from_secs(1)).await;
             continue;
@@ -2089,7 +2147,8 @@ pub async fn replay(api: ApiConfig, core: bool) {
             let handle = tokio::spawn(async move {
                 let mut service = client.telemetry_service();
                 let receipt =
-                    tokio::time::timeout(Duration::from_secs(30), service.upload_batch(batch)).await;
+                    tokio::time::timeout(Duration::from_secs(30), service.upload_batch(batch))
+                        .await;
                 match receipt {
                     Ok(Ok(receipt)) => Ok(receipt.into_inner()),
                     Ok(Err(err)) => Err(anyhow::Error::from(err)),
@@ -2220,6 +2279,25 @@ fn payload_budget(kind: &str) -> usize {
 /// batch by themselves are returned separately: the caller journals each one
 /// through the loss path, so a single giant record can neither fail nor block
 /// the records that arrived with it.
+fn split_server_records<M: Message>(
+    records: Vec<M>,
+    budget: usize,
+    server_id: impl Fn(&M) -> i64,
+) -> (Vec<Vec<M>>, Vec<M>) {
+    let mut servers = std::collections::BTreeMap::<i64, Vec<M>>::new();
+    for record in records {
+        servers.entry(server_id(&record)).or_default().push(record);
+    }
+    let mut batches = Vec::new();
+    let mut oversized = Vec::new();
+    for records in servers.into_values() {
+        let (chunks, rejected) = split_records(records, budget);
+        batches.extend(chunks);
+        oversized.extend(rejected);
+    }
+    (batches, oversized)
+}
+
 fn split_records<M: Message>(records: Vec<M>, budget: usize) -> (Vec<Vec<M>>, Vec<M>) {
     let mut batches = Vec::new();
     let mut current: Vec<M> = Vec::new();
@@ -2292,7 +2370,11 @@ pub async fn access_logs(mut rx: tokio::sync::mpsc::Receiver<pb::HttpAccessLog>)
     }
 }
 async fn persist_access(buffer: &mut Vec<pb::HttpAccessLog>) {
-    let (batches, oversize) = split_records(std::mem::take(buffer), payload_budget("access_log"));
+    let (batches, oversize) = split_server_records(
+        std::mem::take(buffer),
+        payload_budget("access_log"),
+        |log| log.server_id,
+    );
     for log in &oversize {
         // A record too large for any batch is a loss; journal it durably rather
         // than failing the batch around it or emitting an empty one.
@@ -2334,7 +2416,10 @@ pub async fn node_logs(mut rx: tokio::sync::mpsc::Receiver<pb::NodeLog>) {
     }
 }
 async fn persist_node_logs(buffer: &mut Vec<pb::NodeLog>) {
-    let (batches, oversize) = split_records(std::mem::take(buffer), payload_budget("node_log"));
+    let (batches, oversize) =
+        split_server_records(std::mem::take(buffer), payload_budget("node_log"), |log| {
+            log.server_id
+        });
     for log in &oversize {
         // A record too large for any batch is a loss; journal it durably rather
         // than failing the batch around it or emitting an empty one.
@@ -2370,8 +2455,7 @@ mod tests {
     /// composes it.
     fn core_reserved_bytes(total: u64, available: u64) -> u64 {
         let declared = (available / CORE_PEER_RESERVE_DIVISOR).max(CORE_PEER_RESERVE_MIN);
-        declared
-            .min(available.saturating_sub(available_bytes(total, available, 0)))
+        declared.min(available.saturating_sub(available_bytes(total, available, 0)))
     }
 
     /// Bytes that survive zstd level 3, so `append` measures them at face
@@ -2410,7 +2494,9 @@ mod tests {
     fn out_of_order_receipts_preserve_rejected_head_across_reopen() {
         let (spool, path) = spool_with_disk(false, MIB, GIB, GIB);
         for at in [100, 200, 300] {
-            spool.append("probe_observation", vec![at as u8], 0, false, at).unwrap();
+            spool
+                .append("probe_observation", vec![at as u8], 0, false, at)
+                .unwrap();
         }
         let first = spool.at(0).unwrap().unwrap();
         let second = spool.at(1).unwrap().unwrap();
@@ -2445,15 +2531,27 @@ mod tests {
         let (spool, path) = spool_with_disk(false, MIB, GIB, GIB);
         let spool = Arc::new(spool);
         spool.append("node_log", vec![1], 0, false, 100).unwrap();
-        spool.append("probe_observation", vec![2], 0, false, 200).unwrap();
+        spool
+            .append("probe_observation", vec![2], 0, false, 200)
+            .unwrap();
         let first = spool.at(0).unwrap().unwrap();
         let second = spool.at(1).unwrap().unwrap();
         let good = receipt_for(&second);
         let uploads = vec![
-            (first.batch_id.clone(), first.sequence, tokio::spawn(async {
-                Err(anyhow::Error::from(tonic::Status::unavailable("assignment unavailable")))
-            })),
-            (second.batch_id, second.sequence, tokio::spawn(async { Ok(good) })),
+            (
+                first.batch_id.clone(),
+                first.sequence,
+                tokio::spawn(async {
+                    Err(anyhow::Error::from(tonic::Status::unavailable(
+                        "assignment unavailable",
+                    )))
+                }),
+            ),
+            (
+                second.batch_id,
+                second.sequence,
+                tokio::spawn(async { Ok(good) }),
+            ),
         ];
         let outcome = upload_window(spool.clone(), uploads).await;
         assert_eq!(outcome.confirmed, 1);
@@ -2485,6 +2583,65 @@ mod tests {
             metadata.insert(*key, value.parse().unwrap());
         }
         tonic::Status::with_metadata(code, message, metadata)
+    }
+
+    #[test]
+    fn attribution_requires_terminal_evidence_and_clock_skew_retries() {
+        for (code, reason) in [
+            (
+                "telemetry.deployment_missing",
+                TerminalReason::DeploymentMissing,
+            ),
+            (
+                "telemetry.assignment_invalid",
+                TerminalReason::AssignmentInvalid,
+            ),
+            ("telemetry.route_invalid", TerminalReason::RouteInvalid),
+        ] {
+            for retryable in ["true", "false"] {
+                let status = status_with(
+                    tonic::Code::FailedPrecondition,
+                    "attribution refused",
+                    &[(TRAILER_ERROR, code), (TRAILER_RETRYABLE, retryable)],
+                );
+                assert_eq!(
+                    classify_status(&status),
+                    if retryable == "true" {
+                        UploadClass::Retryable
+                    } else {
+                        UploadClass::Terminal(reason)
+                    }
+                );
+            }
+        }
+        let clock = status_with(
+            tonic::Code::InvalidArgument,
+            "future clock",
+            &[
+                (TRAILER_ERROR, "control.clock_skew"),
+                (TRAILER_RETRYABLE, "true"),
+            ],
+        );
+        assert_eq!(classify_status(&clock), UploadClass::Retryable);
+    }
+
+    #[test]
+    fn server_split_preserves_every_row_and_separates_sites() {
+        let rows = [1, 2, 1, 3, 2]
+            .map(|server_id| pb::HttpAccessLog {
+                server_id,
+                ..Default::default()
+            })
+            .to_vec();
+        let (batches, oversized) = split_server_records(rows, 1024, |row| row.server_id);
+        assert!(oversized.is_empty());
+        assert_eq!(batches.iter().map(Vec::len).sum::<usize>(), 5);
+        assert_eq!(batches.len(), 3);
+        assert!(
+            batches
+                .iter()
+                .all(|batch| batch.iter().all(|row| row.server_id == batch[0].server_id))
+        );
     }
 
     /// P0-2: transport and server faults keep their payload.
@@ -2583,7 +2740,11 @@ mod tests {
         // The transport credential, and the API's own assignment/route checks
         // (which carry no stable code), are revocable too.
         assert_eq!(
-            classify_status(&status_with(Code::Unauthenticated, "credential missing", &[])),
+            classify_status(&status_with(
+                Code::Unauthenticated,
+                "credential missing",
+                &[]
+            )),
             UploadClass::Retryable
         );
         assert_eq!(
@@ -2634,7 +2795,11 @@ mod tests {
         );
         // ...while a plain resource shortage is the server's problem.
         assert_eq!(
-            classify_status(&status_with(Code::ResourceExhausted, "backend overloaded", &[])),
+            classify_status(&status_with(
+                Code::ResourceExhausted,
+                "backend overloaded",
+                &[]
+            )),
             UploadClass::Retryable
         );
     }
@@ -2733,7 +2898,10 @@ mod tests {
         assert_eq!(snapshot["terminalFailures"], 1);
         assert_eq!(snapshot["retryableFailures"], 0);
         assert_eq!(snapshot["journaledLosses"], 1);
-        let loss = spool.loss_record(0).unwrap().expect("the loss is journaled");
+        let loss = spool
+            .loss_record(0)
+            .unwrap()
+            .expect("the loss is journaled");
         assert_eq!(loss.batch_id, batches[0].batch_id);
         assert_eq!(loss.sequence, batches[0].sequence);
         assert_eq!(loss.lane, "detail");
@@ -2761,20 +2929,26 @@ mod tests {
         assert_eq!(spool.snapshot()["head"], batches[0].sequence + 5);
         assert_eq!(spool.snapshot()["ackedAhead"], 0);
         assert_eq!(spool.snapshot()["retainedBytes"], 0);
-        assert_eq!(spool.budget.counter.used(), 0);
+        let archived = spool.snapshot()["quarantineBytes"].as_u64().unwrap();
+        assert!(archived > 0);
+        assert_eq!(spool.budget.counter.used(), archived);
+        assert_eq!(
+            spool.quarantined_batch(batches[0].sequence).unwrap(),
+            batches[0]
+        );
         drop(spool);
         std::fs::remove_dir_all(path).unwrap();
     }
 
-    /// P0-3: the payload removal, the head advance, the counters, the gap
-    /// bounds, the loss record and the marker that reports it are one commit.
-    /// A crash after that commit leaves a queue with no payload and a complete
-    /// audit, and a reopen restores both.
+    /// Quarantine, its audit, the gap marker and head advance are one commit.
+    /// Reopening preserves the rejected payload even after the gap is delivered.
     #[test]
     fn quarantine_is_atomic_and_survives_reopen() {
         let (spool, path) = spool_with_disk(false, MIB, GIB, GIB);
         for at in [100, 200] {
-            spool.append("access_log", vec![at as u8], 0, false, at).unwrap();
+            spool
+                .append("access_log", vec![at as u8], 0, false, at)
+                .unwrap();
         }
         let head = spool.at(0).unwrap().unwrap();
         assert!(
@@ -2786,17 +2960,23 @@ mod tests {
                 )
                 .unwrap()
         );
-        // Everything the transaction wrote is visible at once: the head moved,
-        // the payload is gone, and the audit exists.
+        // The head moves only together with the original envelope and audit.
+        assert_eq!(spool.quarantined_batch(head.sequence).unwrap(), head);
         let snapshot = spool.snapshot();
         assert_eq!(snapshot["head"], head.sequence + 1);
         assert_eq!(snapshot["tail"], head.sequence + 3);
         assert_eq!(snapshot["pendingBatches"], 2);
         assert_eq!(snapshot["quarantinedBatches"], 1);
-        assert_eq!(snapshot["lastQuarantineReason"], "terminal_invalid_argument");
+        assert_eq!(
+            snapshot["lastQuarantineReason"],
+            "terminal_invalid_argument"
+        );
         assert_eq!(snapshot["journaledLosses"], 1);
         assert_eq!(spool.gap_bounds(), (100, 100, false));
-        let loss = spool.loss_record(0).unwrap().expect("the loss is journaled");
+        let loss = spool
+            .loss_record(0)
+            .unwrap()
+            .expect("the loss is journaled");
         assert_eq!(loss.batch_id, head.batch_id);
         assert_eq!(loss.sequence, head.sequence);
         assert_eq!(loss.lane, "detail");
@@ -2814,11 +2994,18 @@ mod tests {
         assert_eq!(spool.snapshot()["head"], head.sequence + 1);
         assert_eq!(spool.snapshot()["tail"], head.sequence + 3);
         assert_eq!(spool.snapshot()["quarantinedBatches"], 1);
-        assert_eq!(spool.snapshot()["lastQuarantineReason"], "terminal_invalid_argument");
+        assert_eq!(
+            spool.snapshot()["lastQuarantineReason"],
+            "terminal_invalid_argument"
+        );
         assert_eq!(spool.snapshot()["journaledLosses"], 1);
         assert_eq!(spool.gap_bounds(), (100, 100, false));
         assert_eq!(spool.budget.counter.used(), used);
-        let loss = spool.loss_record(0).unwrap().expect("the audit survives the restart");
+        assert_eq!(spool.quarantined_batch(head.sequence).unwrap(), head);
+        let loss = spool
+            .loss_record(0)
+            .unwrap()
+            .expect("the audit survives the restart");
         assert_eq!(loss.gap_sequence, head.sequence + 2);
         assert!(!loss.delivery_failed);
         // The marker is reachable through the replay path and is the only gap.
@@ -2843,15 +3030,40 @@ mod tests {
         );
         spool.acknowledge(&receipt_for(marker)).unwrap();
         assert!(spool.loss_record(0).unwrap().is_none());
-        // Both receipts advanced the head in order, so the lane is empty and the
-        // pool holds nothing — not the lost payload, not the marker either.
+        // Both receipts empty the replay lane. The original rejected envelope
+        // and its audit remain charged and recoverable after the gap receipt.
         let snapshot = spool.snapshot();
         assert_eq!(snapshot["head"], snapshot["tail"]);
         assert_eq!(snapshot["ackedAhead"], 0);
         assert_eq!(snapshot["pendingBatches"], 0);
         assert_eq!(snapshot["retainedBytes"], 0);
         assert_eq!(spool.collapse_confirmed(256).unwrap(), 0);
-        assert_eq!(spool.budget.counter.used(), 0);
+        let archived = snapshot["quarantineBytes"].as_u64().unwrap();
+        assert!(archived > 0);
+        assert_eq!(spool.budget.counter.used(), archived);
+        assert_eq!(spool.quarantined_batch(head.sequence).unwrap(), head);
+        drop(spool);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn quarantine_capacity_failure_keeps_original_head() {
+        let (mut spool, path) = spool_with_disk(false, MIB, GIB, GIB);
+        spool
+            .append("access_log", vec![1, 2, 3], 0, false, 100)
+            .unwrap();
+        let head = spool.front().unwrap().unwrap();
+        let before = spool.snapshot();
+        spool.budget.limit = before["retainedBytes"].as_u64().unwrap();
+        let err = spool
+            .quarantine_head(head.sequence, "terminal_invalid_argument", "invalid")
+            .unwrap_err();
+        assert!(is_capacity_exhausted(err.as_ref()));
+        assert_eq!(spool.front().unwrap().unwrap(), head);
+        assert_eq!(spool.snapshot()["head"], before["head"]);
+        assert_eq!(spool.snapshot()["quarantineBytes"], 0);
+        assert!(spool.loss_record(0).unwrap().is_none());
+        assert!(spool.quarantined_batch(head.sequence).is_err());
         drop(spool);
         std::fs::remove_dir_all(path).unwrap();
     }
@@ -2862,7 +3074,9 @@ mod tests {
     fn quarantine_of_a_non_head_batch_changes_nothing() {
         let (spool, path) = spool_with_disk(false, MIB, GIB, GIB);
         for at in [100, 200] {
-            spool.append("access_log", vec![at as u8], 0, false, at).unwrap();
+            spool
+                .append("access_log", vec![at as u8], 0, false, at)
+                .unwrap();
         }
         let before = spool.snapshot();
         assert!(
@@ -2912,7 +3126,10 @@ mod tests {
             "a refused marker must not spawn another"
         );
         assert_eq!(spool.snapshot()["quarantinedBatches"], 2);
-        let carried = spool.loss_record(0).unwrap().expect("the original audit stays");
+        let carried = spool
+            .loss_record(0)
+            .unwrap()
+            .expect("the original audit stays");
         assert!(carried.delivery_failed, "the undeliverable audit is marked");
         assert_eq!(carried.reason, "terminal_invalid_argument");
         // The refusal itself is journaled, but without a marker of its own.
@@ -2976,11 +3193,17 @@ mod tests {
             ..Default::default()
         };
         let budget = payload_budget("node_log");
-        assert!(budget < MAX_BATCH_ENCODED_BYTES, "the envelope costs something");
+        assert!(
+            budget < MAX_BATCH_ENCODED_BYTES,
+            "the envelope costs something"
+        );
         let cost = record_cost(&record(MIB as usize));
         assert!((MIB as usize..2 * MIB as usize).contains(&cost));
         let per_batch = budget / cost;
-        assert!(per_batch > 1, "the case needs more than one record per batch");
+        assert!(
+            per_batch > 1,
+            "the case needs more than one record per batch"
+        );
 
         // More records than one batch may hold: the buffer must come out as
         // several batches, and each finished batch must fit the wire.
@@ -3050,10 +3273,15 @@ mod tests {
         assert_eq!(batches.len(), 1, "the records that fit still form a batch");
         assert_eq!(oversize.len(), 1);
         assert_eq!(spool.snapshot()["oversizeDropped"], 0);
-        spool.journal_oversize("node_log", record_cost(&oversize[0])).unwrap();
+        spool
+            .journal_oversize("node_log", record_cost(&oversize[0]))
+            .unwrap();
         assert_eq!(spool.snapshot()["oversizeDropped"], 1);
         assert_eq!(spool.snapshot()["journaledLosses"], 1);
-        let loss = spool.loss_record(0).unwrap().expect("the loss is journaled");
+        let loss = spool
+            .loss_record(0)
+            .unwrap()
+            .expect("the loss is journaled");
         assert_eq!(loss.batch_id, "", "an oversize record never had a batch");
         assert_eq!(loss.kind, "node_log");
         assert_eq!(loss.lane, "detail");
@@ -3092,11 +3320,19 @@ mod tests {
         }
         .encode_to_vec();
         assert!(payload.len() <= budget);
-        spool.append("probe_observation", payload, 0, false, 1).unwrap();
+        spool
+            .append("probe_observation", payload, 0, false, 1)
+            .unwrap();
         // ...and a payload the envelope can no longer absorb is refused by name,
         // for a kind no splitter knows about.
         let err = spool
-            .append("node_metric", vec![0u8; MAX_BATCH_ENCODED_BYTES], 0, false, 2)
+            .append(
+                "node_metric",
+                vec![0u8; MAX_BATCH_ENCODED_BYTES],
+                0,
+                false,
+                2,
+            )
             .expect_err("a batch over the message budget must be refused");
         assert!(is_batch_too_large(err.as_ref()), "{err}");
         assert!(err.to_string().contains("reason=batch_too_large"), "{err}");
@@ -3126,7 +3362,11 @@ mod tests {
         let records = (0..per_batch + 1).map(|_| fat(MIB as usize)).collect();
         let (batches, oversize) = split_records(records, budget);
         assert!(oversize.is_empty());
-        assert_eq!(batches.len(), 2, "the count cap alone would have shipped one");
+        assert_eq!(
+            batches.len(),
+            2,
+            "the count cap alone would have shipped one"
+        );
         for observations in &batches {
             let batch = pb::TelemetryBatch {
                 schema_version: 1,
@@ -3292,8 +3532,8 @@ mod tests {
         };
         let rows: Vec<_> = (0..60)
             .map(|index| pb::ServerDailyStat {
-                server_id: index,
-                time_from: noisy(250_000),
+                server_id: 7,
+                time_from: format!("{index}:{}", noisy(250_000)),
                 ..Default::default()
             })
             .collect();
@@ -3315,9 +3555,10 @@ mod tests {
         assert!(unsent.domain_stats.is_empty());
         assert_eq!(unsent.stats.len(), 60 - committed);
         for (offset, row) in unsent.stats.iter().enumerate() {
-            assert_eq!(
-                row.server_id,
-                (committed + offset) as i64,
+            assert_eq!(row.server_id, 7);
+            assert!(
+                row.time_from
+                    .starts_with(&format!("{}:", committed + offset)),
                 "unsent rows must be the exact tail, in order"
             );
         }
@@ -3474,10 +3715,7 @@ mod tests {
             |available: u64| (TIGHT_TOTAL / RESERVE_RATIO).min((available / 4).max(RESERVE_FLOOR));
         // Large free space: the total/50 share is the binding ceiling, so
         // 2 GiB of a 100 GiB disk stays reserved.
-        assert_eq!(
-            available_bytes(100 * GIB, 90 * GIB, 0),
-            90 * GIB - 2 * GIB
-        );
+        assert_eq!(available_bytes(100 * GIB, 90 * GIB, 0), 90 * GIB - 2 * GIB);
         // Tight free space: the ceiling is clamped to a quarter of free space.
         assert_eq!(
             available_bytes(TIGHT_TOTAL, TIGHT_AVAILABLE, 0),
@@ -3551,7 +3789,10 @@ mod tests {
 
         // Fill core to its ceiling.
         let mut appended = 0u32;
-        while core.append("node_metric", vec![7; 64 * 1024], 0, false, 1).is_ok() {
+        while core
+            .append("node_metric", vec![7; 64 * 1024], 0, false, 1)
+            .is_ok()
+        {
             appended += 1;
         }
         assert!(appended > 0);
@@ -3559,7 +3800,10 @@ mod tests {
         assert!(core.budget.counter.used() > 0);
         assert!(core.budget.counter.used() <= MIB);
         // Core is done for this window; it cannot spend detail's slice.
-        assert!(core.append("node_metric", vec![7; 64 * 1024], 0, false, 1).is_err());
+        assert!(
+            core.append("node_metric", vec![7; 64 * 1024], 0, false, 1)
+                .is_err()
+        );
 
         // Detail still lands its observation, which is the starvation the
         // inverted `core_reserve` (charged to detail instead of core) caused.
@@ -3584,14 +3828,14 @@ mod tests {
             while available > 0 {
                 let core = lane_capacity(true, total, available, 0, 0);
                 let detail = lane_capacity(false, total, available, 0, 0);
-                for (lane, capacity, is_core) in
-                    [("core", core, true), ("detail", detail, false)]
-                {
-                    assert!(capacity <= available, "{lane} over-quota: {total}/{available}");
-                    let released = available - capacity;
-                    let base = (total / RESERVE_RATIO).min(
-                        (available / RESERVE_AVAILABLE_DIVISOR).max(RESERVE_FLOOR),
+                for (lane, capacity, is_core) in [("core", core, true), ("detail", detail, false)] {
+                    assert!(
+                        capacity <= available,
+                        "{lane} over-quota: {total}/{available}"
                     );
+                    let released = available - capacity;
+                    let base = (total / RESERVE_RATIO)
+                        .min((available / RESERVE_AVAILABLE_DIVISOR).max(RESERVE_FLOOR));
                     let peer = if is_core {
                         core_reserved_bytes(total, available)
                     } else {

@@ -21,7 +21,7 @@ set -eu
 # build-release.sh may overwrite this from the release argument; the package's
 # VERSION file (read below) wins so the installer cannot claim a version the
 # binary does not report.
-VERSION="26.10.4.9"
+VERSION="26.10.4.10"
 BIN_NAME="zelvik-edge"
 SERVICE_NAME="zelvik-edge"
 SERVICE_USER="root"

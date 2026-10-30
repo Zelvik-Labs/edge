@@ -3404,10 +3404,13 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
 
     info!("Starting Zelvik Edge v{}...", zelvik_edge::RELEASE_VERSION);
 
-    // Create the runtime to spawn background tasks
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()?;
+    // Create the runtime to spawn background tasks. The worker hooks make
+    // mimalloc heap collection deterministic on the threads that actually
+    // allocate; a migrating task cannot cover every worker on its own.
+    let mut rt_builder = tokio::runtime::Builder::new_multi_thread();
+    rt_builder.enable_all();
+    zelvik_edge::worker_reclaim::install_tokio_worker_hooks(&mut rt_builder);
+    let rt = rt_builder.build()?;
     let _guard = rt.enter();
 
     zelvik_edge::storage_migration::ensure_ready(&node_paths.data_dir())?;
@@ -3700,6 +3703,10 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     // 4. Initialize Pingora Server with multi-threading
     let mut conf = pingora_core::server::configuration::ServerConf::default();
     conf.threads = zelvik_edge::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads();
+    // Pingora builds these runtimes in the vendored crate, so no collect hook
+    // can be installed on those workers. Report the count so coverage is not
+    // mistaken for complete.
+    zelvik_edge::worker_reclaim::set_unhooked_pingora_workers(conf.threads);
     conf.upstream_keepalive_pool_size =
         zelvik_edge::memory_governor::MEMORY_GOVERNOR.pingora_keepalive_pool_size(conf.threads);
     conf.grace_period_seconds = Some(5);

@@ -8,10 +8,10 @@ product = "Zelvik-Edge"
 # Single source of truth for the shipped product version, including the
 # optional CalVer patch segment that Cargo cannot express. Scripts derive it
 # via scripts/release-version.sh; never hand-write it anywhere else.
-product_version = "26.10.4.9"
+product_version = "26.10.4.10"
 # Three-segment base that must equal [package].version in Cargo.toml.
 cargo_version = "26.10.4"
-release_tag = "v26.10.4.9"
+release_tag = "v26.10.4.10"
 version_scheme = "YY.MM.PATCH[.x]"
 
 [upstream]

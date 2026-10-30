@@ -5312,6 +5312,7 @@ dependencies = [
  "brotli 8.0.4",
  "btree-store 1.0.0",
  "bytes",
+ "cc",
  "cfb-mode",
  "chrono",
  "clap",
