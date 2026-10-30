@@ -240,8 +240,8 @@ jobs:
           need(runs["short"], "--pressure-cycles 1", "short pressure cycle")
           need(
               runs["short"],
-              "--pressure-start-fraction 0.3",
-              "short pressure starts at the 90 s warm-up boundary",
+              "--pressure-start-fraction 0.1",
+              "short pressure starts at 30 s inside warm-up",
           )
           need(
               runs["short"],
@@ -346,10 +346,9 @@ jobs:
           need(runs["full-edge"], "full_edge.py soak", "full-edge soak")
           need(runs["full-edge"], "--require-node-status", "full-edge node status")
 
-          # Static schedule guard: pressure starts at the warm-up boundary and
-          # the planned block (hold + probe + clean-load handshake) leaves the
-          # required measured span. The runtime report assertion proves the
-          # actual pressure_end < measurement_start ordering.
+          # Pressure may run inside warm-up. Reserve two stabilization windows
+          # after hold/probe/clean-load before checking the required measured span.
+          # Runtime assertions still prove the actual ordering and duration.
           def soak_arg(text, name):
               match = re.search(
                   rf"--soak-arg=--{re.escape(name)}\s+--soak-arg=(\S+)", text
@@ -363,7 +362,7 @@ jobs:
               return float(match.group(1))
 
           for lane, expected_start, expected_cycles in (
-              ("short", 90.0, 1),
+              ("short", 30.0, 1),
               ("full-edge", 120.0, 2),
           ):
               text = runs[lane]
@@ -380,23 +379,20 @@ jobs:
                   raise SystemExit(
                       f"{lane} pressure starts at {start:g}s, want {expected_start:g}s"
                   )
-              if start < warmup:
-                  raise SystemExit(
-                      f"{lane} pressure starts before its {warmup:g}s warm-up"
-                  )
               if cycles != expected_cycles:
                   raise SystemExit(
                       f"{lane} has {cycles} pressure cycles, want {expected_cycles}"
                   )
-              planned_measurement = start + cycles * (hold + probe) + clean
+              clean_end = start + cycles * (hold + probe) + clean
+              planned_measurement = max(warmup, clean_end + 60.0)
               if planned_measurement + min_span > duration:
                   raise SystemExit(
                       f"{lane} planned measurement start {planned_measurement:g}s "
                       f"plus {min_span:g}s span exceeds {duration:g}s"
                   )
-              if lane == "full-edge" and planned_measurement > 200.0:
+              if lane == "full-edge" and clean_end > 200.0:
                   raise SystemExit(
-                      f"full-edge pressure block runs to {planned_measurement:g}s, "
+                      f"full-edge pressure/handshake runs to {clean_end:g}s, "
                       "outside the 120-200 s window"
                   )
           if "--pressure-long-recovery" in runs["full-edge"]:
@@ -521,8 +517,8 @@ jobs:
           # Load window: 300 s of soak, excluding image build/Rust cold build.
           # The target writes alloc-stats.json from its own 1 s loop, so the soak
           # waits for the first complete document before starting its clock.
-          # Pressure starts at the 90 s warm-up boundary and completes inside
-          # the warm-up phase (15 s hold + 10 s probe). A >=10 s clean-2xx
+          # Pressure starts at 30 s inside the 90 s warm-up (15 s hold +
+          # 10 s probe), leaving time for recovery. A >=10 s clean-2xx
           # handshake follows, then a bounded wait (<=180 s) for the released
           # cgroup's RSS refill ramp to flatten (trailing 30 s rate <=8 MiB/min
           # for two windows), so the measured window contains neither pressure
@@ -562,7 +558,7 @@ jobs:
               --screen-only \
               --max-rss-mib 1024 \
               --pressure-cycles 1 \
-              --pressure-start-fraction 0.3 \
+              --pressure-start-fraction 0.1 \
               --measurement-clean-seconds 10 \
               --pressure-bytes 1610612736 \
               --pressure-hold-seconds 15 \

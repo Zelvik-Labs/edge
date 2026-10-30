@@ -1,5 +1,7 @@
 import json
 import os
+from pathlib import Path
+import re
 import tempfile
 import unittest
 from unittest import mock
@@ -184,6 +186,28 @@ class AnalyzeTests(unittest.TestCase):
 
 
 class MeasurementWindowTests(unittest.TestCase):
+    def test_short_workflow_leaves_measurement_span_after_observed_recovery(self):
+        workflow = (Path(__file__).resolve().parents[3] / ".github/workflows/memory-soak.yml").read_text()
+        command = workflow.split("--target-kind bench-defense", 1)[1].split("--out", 1)[0]
+
+        def argument(name):
+            match = re.search(rf"--{name}\s+(\S+)", command)
+            self.assertIsNotNone(match, name)
+            return float(match.group(1))
+
+        # The failed Linux run needed 76.5 s after pressure began: release,
+        # clean-load handshake, then a stable RSS plateau. Replay that delay
+        # against the actual workflow schedule, retaining its 150 s minimum.
+        pressure_start = argument("duration") * argument("pressure-start-fraction")
+        measurement_start = soak._measurement_start(
+            0.0, argument("warmup-seconds"), pressure_start + 26.0,
+            pressure_start + 41.4, pressure_start + 76.5,
+        )
+        remaining = argument("duration") - 1.0 - measurement_start
+        self.assertGreaterEqual(remaining, argument("min-span-seconds"))
+        self.assertEqual(argument("budget-mib-per-hour"), 64.0)
+        self.assertEqual(argument("anon-budget-mib-per-hour"), 64.0)
+
     def test_pressure_must_end_before_measurement_starts(self):
         with self.assertRaises(soak.SoakError) as caught:
             soak._measurement_start(
