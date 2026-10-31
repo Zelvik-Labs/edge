@@ -16,8 +16,8 @@
 //! HTTP/TCP/UDP accept loops. Pingora builds its separate control/background
 //! runtimes internally; those threads are not covered. Tokio blocking-pool
 //! threads run start/stop hooks but never the park hook; durable storage work
-//! therefore uses [`spawn_storage_work`] to collect on completion. A worker
-//! that stays parked has no periodic callback until it wakes and parks again.
+//! therefore uses [`spawn_storage_work`] to relinquish its heap on completion.
+//! A worker that stays parked has no periodic callback until it wakes and parks again.
 //! [`WorkerReclaimSnapshot`] therefore reports the hooked worker population
 //! and the configured-but-unhooked Pingora population separately;
 //! [`WorkerReclaimSnapshot::covers_all_workers`] stays false until an actual
@@ -29,8 +29,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 /// Hard floor between two park-time collects on the same worker. A pressure
-/// generation bump can ask for a collect, but it cannot make a worker run
-/// `mi_collect` more often than this; the request is satisfied at the next
+/// generation bump can ask for collection, but it cannot make a worker
+/// relinquish its allocator heap more often than this; it runs at the next
 /// park after the interval, which bounds maintenance CPU per worker.
 const PARK_COLLECT_MIN_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -122,10 +122,9 @@ pub fn install_tokio_worker_hooks(builder: &mut tokio::runtime::Builder) {
         .on_thread_stop(on_worker_stop);
 }
 
-/// Run durable storage work on Tokio's blocking pool and collect its freed
-/// pages before that thread returns to the pool. Blocking threads never run
-/// `on_thread_park`; start/stop hooks alone leave cross-thread frees pending
-/// while the pool keeps the allocating thread alive.
+/// Run durable storage work on Tokio's blocking pool and relinquish its heap
+/// before returning to the pool. Blocking threads never run `on_thread_park`;
+/// retaining ownership would delay frees arriving after task completion.
 pub(crate) fn spawn_storage_work<F, T>(work: F) -> tokio::task::JoinHandle<T>
 where
     F: FnOnce() -> T + Send + 'static,
@@ -135,7 +134,7 @@ where
         struct CollectOnCompletion;
         impl Drop for CollectOnCompletion {
             fn drop(&mut self) {
-                crate::memory_reclaim::trim_expired_heap_pages();
+                crate::memory_reclaim::relinquish_thread_heap();
             }
         }
         let _collect = CollectOnCompletion;
@@ -210,9 +209,9 @@ fn on_worker_park() {
 
     match decision {
         ParkDecision::Collect => {
-            // Non-forced: purge only pages whose retention expired. This is
-            // the bounded maintenance collect, safe to repeat while parked.
-            crate::memory_reclaim::trim_expired_heap_pages();
+            // A collect cannot see frees that arrive after this worker parks.
+            // Relinquish ownership so those frees need not wake this worker.
+            crate::memory_reclaim::relinquish_thread_heap();
             PARK_COLLECTS.fetch_add(1, Ordering::Relaxed);
         }
         ParkDecision::RateLimited => {
@@ -361,6 +360,54 @@ mod tests {
             });
             free_thread.join().expect("freeing thread");
         }
+    }
+
+    #[test]
+    fn park_handoff_preserves_live_data_and_releases_later_cross_thread_frees() {
+        let _guard = lock_tests();
+        let (allocated_tx, allocated_rx) = mpsc::channel();
+        let (freed_tx, freed_rx) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            on_worker_start();
+            let blocks = (0..8)
+                .map(|index| {
+                    let size = (96 + index * 32) * 1024;
+                    let block = unsafe { libmimalloc_sys::mi_malloc_aligned(size, 8) };
+                    assert!(!block.is_null());
+                    unsafe { std::ptr::write_bytes(block.cast::<u8>(), 7, size) };
+                    (block as usize, size)
+                })
+                .collect::<Vec<_>>();
+            on_worker_park();
+            assert_eq!(
+                large_thread_owned_bytes(),
+                0,
+                "parked worker kept page ownership"
+            );
+            allocated_tx.send(blocks).expect("send live allocations");
+            freed_rx.recv().expect("late cross-thread frees");
+            assert_eq!(large_thread_owned_bytes(), 0);
+            for _ in 0..8 {
+                let size = 128 * 1024;
+                let block = unsafe { libmimalloc_sys::mi_malloc_aligned(size, 8) };
+                assert!(!block.is_null());
+                unsafe { std::ptr::write_bytes(block.cast::<u8>(), 9, size) };
+                reset_park_interval_for_test();
+                request_worker_collect();
+                on_worker_park();
+                let bytes = unsafe { std::slice::from_raw_parts(block.cast::<u8>(), size) };
+                assert!(bytes.iter().all(|&byte| byte == 9));
+                unsafe { libmimalloc_sys::mi_free(block) };
+            }
+            on_worker_stop();
+        });
+        for (block, size) in allocated_rx.recv().expect("worker live allocations") {
+            let bytes = unsafe { std::slice::from_raw_parts(block as *const u8, size) };
+            assert!(bytes.iter().all(|&byte| byte == 7));
+            unsafe { libmimalloc_sys::mi_free(block as *mut std::ffi::c_void) };
+        }
+        freed_tx.send(()).expect("free complete");
+        worker.join().expect("allocator handoff worker");
     }
 
     #[test]

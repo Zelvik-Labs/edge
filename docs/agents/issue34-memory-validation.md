@@ -774,5 +774,61 @@ trailing rate -44.72 MiB/min, with no usable post-stabilization span. Most
 remaining empty pages were now owned by the original async worker threads;
 blocking-thread completion does not resolve every worker lifecycle. Evidence:
 `/root/issue34/short-state-owner-pressure-mf4g39vy`. The unchanged 900-second
-full-process screen is required before this follow-up can replace failed gate
-evidence; no threshold, stabilization requirement or warmup was loosened.
+full-process screen then failed at 901.022 seconds: RSS/Anon upper95
+298.756 MiB/h against 8, over 535.288 seconds/268 measurement points.
+Stabilization timed out with a final -7.351 MiB/min trailing window and only
+one valid stable window; the requirement is consecutive windows. There were
+178,754 successful requests, 21,950 deliberate pressure errors and zero
+measurement errors. The final RSS/Anon/THP was 281.543/251.563/178.000 MiB;
+metric snapshots stayed empty, with 58 evictions and 2,563 aggregation bytes.
+The PID survived, no OOM or swap occurred, and process/home cleanup completed.
+SSH interruptions were recovered by reading this existing run, without
+restarting it. Evidence:
+`/root/issue34/storage-completion-full-screen-h5ui1ptr` and
+`/tmp/edge-storage-full-screen-recovered.txt`. No threshold, stabilization
+requirement or warmup was loosened; `14b8f0f` is not release-ready. Its normal
+Rust CI (`41216875948`) passed. The completed memory CI (`41216875816`)
+failed both lanes: component effective span 114.5 seconds <150; full-process
+RSS/Anon upper95 233.149 MiB/h >=8 with stabilization timeout. Its controller
+telemetry recovered 175 ->0 in 19.194 seconds, but that does not waive memory
+failure. Long lanes were skipped by design. Evidence:
+`/tmp/edge-storage-completion-memory-ci.log`.
+
+A further reproduction separates two cases: collection handles frees already
+queued, but cannot handle frees arriving after the owner parks. Eight live
+allocations survived an ordinary collect and later became 13.875 MiB of empty
+resident pages with 2,015,232 deferred bytes. Using the pinned allocator's
+public `mi_thread_done` at that same boundary abandoned the live pages;
+subsequent remote frees removed their owner immediately. All live payloads
+remained intact, and eight rounds of allocation/handoff/read/free/reinitialization
+completed. Evidence: `/root/issue34/parked-owner-{collect,handoff}-*.json`.
+
+The next uncommitted candidate relinquishes allocator ownership at the
+existing rate-limited worker park boundary and on durable storage completion.
+It does not add a timer, wake sleeping workers, change the collection cadence,
+or disable THP. The real-module handoff test passed, failed with 2,015,232 bytes
+still thread-owned when reverted to collect, and passed after restoration.
+All six worker tests passed in that isolated same-dependency harness. An
+independent review of the two-file delta found no concrete lifetime/TLS defect.
+Full-project worker 6 tests and memory-reclaim 22 tests passed with no skips;
+affected Clippy and the actual release-profile binary build passed. Process
+residency and matched CPU/throughput/P99 measurements still determine whether
+this candidate is retained.
+
+The handoff candidate binary SHA-256 is
+`f45870b5019b817f31cfb59e1e6fd1a2f2264214196e861365b922d73924d7a5`.
+Its matched three-round performance comparison against `14b8f0f` completed
+90,000 requests per arm without errors. Median baseline/candidate throughput
+was 6383.827/6405.757 requests/s, CPU 704.000/698.667 microseconds/request and
+P99 14.206/13.937 ms. No material regression was observed in this short localhost
+screen. Evidence: `/root/issue34/short-state-paired-p9iqzhgx/report.json`.
+
+The six-minute handoff diagnostic still failed stabilization (final trailing
+rate -29.85 MiB/min) and lacked a usable post-stabilization span. At 12/117/
+182/242/352 seconds, RSS was 226.953/213.648/240.703/253.328/275.641 MiB;
+empty-page residency was 33.516/12.531/14.527/26.371/46.773 MiB. Final rounded
+live bytes were 156.563 MiB and deferred bytes 8.062 MiB. There were 74,510
+successful requests, 22,146 deliberate pressure errors and zero measurement
+errors. The process and temporary home were removed. Evidence:
+`/root/issue34/short-state-owner-pressure-kha9vj1t`. The unchanged 900-second
+handoff screen is running separately; this diagnostic is not its replacement.

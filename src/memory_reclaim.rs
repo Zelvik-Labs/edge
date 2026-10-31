@@ -645,6 +645,16 @@ pub fn trim_expired_heap_pages() {
     }
 }
 
+/// Relinquish this thread's allocator pages before an idle boundary. Live
+/// allocations remain valid; subsequent cross-thread frees can reclaim their
+/// abandoned pages without waiting for this thread to wake. The allocator
+/// initializes a fresh thread heap automatically on the next allocation.
+pub fn relinquish_thread_heap() {
+    unsafe {
+        libmimalloc_sys::mi_thread_done();
+    }
+}
+
 fn current_process_rss_bytes() -> u64 {
     #[cfg(target_os = "linux")]
     if let Ok(status) = std::fs::read_to_string("/proc/self/status") {
