@@ -6,7 +6,7 @@ use crate::rpc::client::SharedRpcClient;
 use crate::rpc::metric_stat_cache::{
     DirtySnapshotRow, MetricStatReporterState, MetricValuesCacheStats, SnapshotKey,
 };
-use chrono::{DateTime, Duration as ChronoDuration, FixedOffset, Timelike};
+use chrono::{DateTime, FixedOffset, Timelike};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::LazyLock as Lazy;
@@ -205,7 +205,6 @@ struct BandwidthWindowStat {
     origin_total_bytes: u64,
     origin_avg_bytes: u64,
     origin_avg_bits: u64,
-    count_ips: u64,
 }
 
 /// A fully accumulated window that could not enter the durable queue yet.
@@ -512,7 +511,6 @@ fn bandwidth_stat_pb(
         origin_total_bytes: stat.origin_total_bytes as i64,
         origin_avg_bytes: stat.origin_avg_bytes as i64,
         origin_avg_bits: stat.origin_avg_bits as i64,
-        count_i_ps: crate::metrics::daily::UNIQUE_IP_TRACKER.count(stat.server_id, &stat.day),
         node_region_id,
         ..Default::default()
     }
@@ -760,7 +758,6 @@ fn snapshot_delta(
         count_websocket_connections: delta(|s| s.count_websocket_connections),
         origin_bytes_sent: delta(|s| s.origin_bytes_sent),
         origin_bytes_received: delta(|s| s.origin_bytes_received),
-        count_ips: current.count_ips,
     }
 }
 
@@ -937,7 +934,6 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
             stat.origin_total_bytes += origin_total_bytes;
             stat.origin_avg_bytes = stat.origin_total_bytes / BANDWIDTH_REPORT_INTERVAL_SECS;
             stat.origin_avg_bits = (stat.origin_total_bytes * 8) / BANDWIDTH_REPORT_INTERVAL_SECS;
-            stat.count_ips = stat.count_ips.max(delta.count_ips);
         }
         last_snapshots.retain(|_, baseline| baseline.metrics.strong_count() > 0);
         persist_bandwidth_state(
@@ -1039,9 +1035,6 @@ pub async fn start_daily_stat_reporter(config_store: ConfigStore) {
         if current_window.is_empty() {
             current_window = window_key.clone();
         } else if current_window != window_key {
-            let min_day = (now - ChronoDuration::days(2)).format("%Y%m%d").to_string();
-            crate::metrics::daily::UNIQUE_IP_TRACKER.cleanup_before(&min_day);
-
             let mut stats: Vec<_> = std::mem::take(&mut pending_stats);
             stats.extend(window_stats.drain().map(|(_, mut stat)| {
                 stat.cached_bytes = stat.cached_bytes.min(stat.bytes);
@@ -1444,7 +1437,7 @@ async fn run_metric_stat_tick<S: MetricUploadSink>(
     state: &mut MetricStatReporterState,
     _metric_items: &[crate::config_models::MetricItemConfig],
     plans: &[std::sync::Arc<crate::metrics::plan::MetricCollectionPlan>],
-    now: &DateTime<FixedOffset>,
+    _now: &DateTime<FixedOffset>,
     sink: &mut S,
 ) -> MetricStatTickOutcome {
     let (deltas, skipped) = collect_plan_deltas(plans);
@@ -1538,8 +1531,11 @@ async fn run_metric_stat_tick<S: MetricUploadSink>(
         }
     }
 
-    // Marking uploaded is not durable until this checkpoint lands. A failure
-    // here re-uploads the same full rows at the same revisions.
+    // Delivery now belongs to the durable spool/quarantine. Persist removal
+    // together with the revision high-water mark before any new incarnation
+    // can be uploaded. If this checkpoint fails, the pre-upload checkpoint
+    // replays the same rows/hashes after a restart.
+    outcome.pruned = state.release_uploaded();
     if let Err(e) = state.persist_checkpoint().await {
         warn!(
             checkpoint = %state.checkpoint_path().display(),
@@ -1547,7 +1543,6 @@ async fn run_metric_stat_tick<S: MetricUploadSink>(
         );
         state.set_backpressured(true);
     }
-    outcome.pruned = state.prune(now.timestamp());
     state.publish_stats();
     outcome
 }
@@ -1754,25 +1749,36 @@ type RequestStatRow = (
     crate::metrics::aggregator::AggregatedValue,
 );
 
-fn group_request_stat_rows_by_server(
+fn group_request_stat_rows_by_server_minute(
     rows: Vec<RequestStatRow>,
-) -> BTreeMap<i64, Vec<RequestStatRow>> {
-    let mut by_server: BTreeMap<i64, Vec<RequestStatRow>> = BTreeMap::new();
+) -> BTreeMap<(i64, i64), Vec<RequestStatRow>> {
+    let mut groups: BTreeMap<(i64, i64), Vec<RequestStatRow>> = BTreeMap::new();
     for row in rows {
-        by_server.entry(row.0.server_id).or_default().push(row);
+        groups
+            .entry((row.0.server_id, row.0.window_start))
+            .or_default()
+            .push(row);
     }
-    by_server
+    groups
 }
 
 fn build_http_request_stat_request(
     rows: &[RequestStatRow],
-    month: &str,
-    day: &str,
+    window_start: i64,
     limits: HttpRequestStatUploadLimits,
 ) -> pb::UploadServerHttpRequestStatRequest {
+    let event_time = DateTime::from_timestamp(window_start, 0)
+        .expect("request-stat event minute is a valid Unix timestamp")
+        .with_timezone(
+            &FixedOffset::east_opt(
+                crate::utils::time::LOCAL_TZ_OFFSET_SECONDS.load(Ordering::Relaxed),
+            )
+            .expect("initialized local timezone offset"),
+        );
     let mut req = pb::UploadServerHttpRequestStatRequest {
-        month: month.to_string(),
-        day: day.to_string(),
+        month: event_time.format("%Y%m").to_string(),
+        day: event_time.format("%Y%m%d").to_string(),
+        window_start,
         region_cities: vec![],
         region_providers: vec![],
         systems: vec![],
@@ -1897,6 +1903,11 @@ pub async fn start_metrics_aggregator_reporter(config_store: ConfigStore, api_co
 
     loop {
         interval.tick().await;
+        // Every protocol's request-start hook feeds this independent core stream,
+        // including requests whose access logs are sampled out.
+        if let Err(error) = crate::metrics::unique_ip::UNIQUE_IP_TRACKER.flush().await {
+            warn!(%error, "unique IP microbatch remains pending for the next tick");
+        }
         let drain = crate::metrics::aggregator::HTTP_REQUEST_STAT_AGGREGATOR.drain();
         if drain.rows.is_empty() {
             crate::metrics::aggregator::HTTP_REQUEST_STAT_AGGREGATOR
@@ -1905,26 +1916,19 @@ pub async fn start_metrics_aggregator_reporter(config_store: ConfigStore, api_co
             continue;
         }
 
-        // Known limitation (not changed this round): built-in request stats
-        // are attributed to the flush wall-clock day/month, not each row's
-        // event time. The aggregation key carries no event timestamp, so a
-        // row that crosses midnight is reported under the flush day.
-        let now = crate::utils::time::now_local();
-        let month = now.format("%Y%m").to_string();
-        let day = now.format("%Y%m%d").to_string();
         let upload_limits =
             HttpRequestStatUploadLimits::from_config(&config_store.get_global_stat_upload_sync());
 
-        let by_server = group_request_stat_rows_by_server(drain.rows);
+        let by_server = group_request_stat_rows_by_server_minute(drain.rows);
 
         // One durable enqueue per server. A server whose assignment the API
         // rejects must not take unrelated servers' billable rows with it.
-        for (server_id, rows) in by_server {
+        for ((server_id, window_start), rows) in by_server {
             let charged_bytes = rows.iter().fold(0u64, |total, (_, value)| {
                 total.saturating_add(value.estimated_bytes)
             });
-            let req = build_http_request_stat_request(&rows, &month, &day, upload_limits);
-            match crate::telemetry::enqueue("request_stat", &req, 0, false).await {
+            let req = build_http_request_stat_request(&rows, window_start, upload_limits);
+            match crate::telemetry::enqueue("request_stat", &req, window_start, false).await {
                 Ok(()) => crate::metrics::aggregator::HTTP_REQUEST_STAT_AGGREGATOR
                     .release_charge(charged_bytes),
                 Err(e) => {
@@ -2075,6 +2079,7 @@ mod tests {
             AggregationKey {
                 category: Arc::from(crate::metrics::METRIC_CATEGORY_HTTP),
                 server_id,
+                window_start: test_now(0).timestamp(),
                 country: Arc::from("United States"),
                 country_id: 1,
                 province: Arc::from("California"),
@@ -2104,10 +2109,11 @@ mod tests {
             request_stat_row(20, "San Diego", 5),
             request_stat_row(10, "San Jose", 7),
         ];
-        let grouped = group_request_stat_rows_by_server(rows);
+        let grouped = group_request_stat_rows_by_server_minute(rows);
         assert_eq!(grouped.len(), 2);
-        assert_eq!(grouped[&10].len(), 2);
-        assert_eq!(grouped[&20].len(), 1);
+        let minute = test_now(0).timestamp();
+        assert_eq!(grouped[&(10, minute)].len(), 2);
+        assert_eq!(grouped[&(20, minute)].len(), 1);
 
         let limits = HttpRequestStatUploadLimits {
             max_cities: 32,
@@ -2115,7 +2121,7 @@ mod tests {
             max_systems: 64,
             max_browsers: 64,
         };
-        let req = build_http_request_stat_request(&grouped[&10], "202610", "20261031", limits);
+        let req = build_http_request_stat_request(&grouped[&(10, minute)], minute, limits);
         assert_eq!(req.region_cities.len(), 2);
         assert!(req.region_cities.iter().all(|row| row.server_id == 10));
         assert_eq!(
@@ -2125,6 +2131,44 @@ mod tests {
                 .sum::<i64>(),
             10
         );
+    }
+
+    #[test]
+    fn request_stat_batches_keep_event_minutes_across_a_month_boundary() {
+        use chrono::TimeZone as _;
+        let tz = FixedOffset::east_opt(
+            crate::utils::time::LOCAL_TZ_OFFSET_SECONDS.load(Ordering::Relaxed),
+        )
+        .unwrap();
+        let first = tz
+            .with_ymd_and_hms(2026, 10, 31, 23, 59, 0)
+            .unwrap()
+            .timestamp();
+        let next = first + 60;
+        let mut old = request_stat_row(10, "Paris", 3);
+        old.0.window_start = first;
+        let mut fresh = request_stat_row(10, "Paris", 5);
+        fresh.0.window_start = next;
+        let groups = group_request_stat_rows_by_server_minute(vec![old, fresh]);
+        assert_eq!(groups.len(), 2);
+        let limits = HttpRequestStatUploadLimits {
+            max_cities: 32,
+            max_providers: 32,
+            max_systems: 64,
+            max_browsers: 64,
+        };
+        let old = build_http_request_stat_request(&groups[&(10, first)], first, limits);
+        let fresh = build_http_request_stat_request(&groups[&(10, next)], next, limits);
+        assert_eq!(
+            (old.month.as_str(), old.day.as_str(), old.window_start),
+            ("202610", "20261031", first)
+        );
+        assert_eq!(
+            (fresh.month.as_str(), fresh.day.as_str(), fresh.window_start),
+            ("202611", "20261101", next)
+        );
+        assert_eq!(old.region_cities[0].count_requests, 3);
+        assert_eq!(fresh.region_cities[0].count_requests, 5);
     }
 
     fn metric_item(
@@ -2608,13 +2652,16 @@ mod tests {
         assert!(sink.uploaded[0].revision > 0);
         assert_eq!(state.dirty_len(), 0);
 
-        // A restart must see the uploaded marker and the same monotonic epoch.
+        // The handoff releases the row, and its deletion is durable in this
+        // tick. A restart retains the epoch/revision watermark without values.
+        assert_eq!(outcome.pruned, 1);
+        assert_eq!(state.stats().estimated_bytes, 0);
         let epoch = state.epoch().to_string();
         drop(state);
         let resumed = MetricStatReporterState::open(&dir).unwrap();
         assert_eq!(resumed.epoch(), epoch);
         assert_eq!(resumed.dirty_len(), 0);
-        assert_eq!(resumed.row_value(&identity), Some(10.0));
+        assert_eq!(resumed.row_value(&identity), None);
         std::fs::remove_dir_all(&dir).ok();
     }
 

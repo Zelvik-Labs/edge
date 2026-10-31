@@ -12,9 +12,9 @@
 //! Crash safety:
 //! - New projections are merged into the snapshot store and the checkpoint is
 //!   fsynced before any upload is attempted.
-//! - Successful uploads only advance `uploaded_revision`; if the checkpoint
-//!   update is lost, the same full row is uploaded again with the same
-//!   revision.
+//! - Durable handoff advances `uploaded_revision` and releases those rows. The
+//!   next checkpoint records their removal and the revision high-water mark;
+//!   if that update is lost, replay uses the same hash and revision.
 //! - Each row instance has an immutable incarnation (its creation revision)
 //!   that is part of the upload hash. A row recreated by a late event after
 //!   its clean instance was pruned therefore uploads under a new hash, so the
@@ -79,7 +79,7 @@ pub struct MetricValuesCacheStats {
     pub dedup_max_estimated_bytes: u64,
     /// Checkpoint-only ceiling (dirty rows are part of the checkpoint).
     pub max_pending_bytes: u64,
-    /// Clean rows pruned because their item/window is no longer live.
+    /// Rows released after durable handoff to the spool or quarantine.
     pub evicted_entries: u64,
     /// Records that cannot fit the wire even alone and were written to durable
     /// local quarantine. Deliberately not deleted.
@@ -148,8 +148,8 @@ impl SnapshotKey {
     /// Wire identity of one accumulated row *instance*.
     ///
     /// `incarnation` is the global revision assigned when the row was created
-    /// and never changes while that row exists. A row pruned after its period
-    /// closed and later recreated by a late event gets a new incarnation, so it
+    /// and never changes while that row exists. A row released after durable
+    /// handoff and later recreated by another event gets a new incarnation, so it
     /// uploads under a different hash. The control plane therefore keeps the
     /// old instance's total and adds the new instance's deltas instead of
     /// replacing the old cumulative value with a smaller one.
@@ -559,7 +559,9 @@ impl MetricStatReporterState {
                 Ok::<(), anyhow::Error>(())
             })
             .await
-            .map_err(|e| anyhow::anyhow!("metric snapshot checkpoint directory sync task failed: {e}"))??;
+            .map_err(|e| {
+                anyhow::anyhow!("metric snapshot checkpoint directory sync task failed: {e}")
+            })??;
         }
         Ok(())
     }
@@ -643,11 +645,7 @@ impl MetricStatReporterState {
     /// backlog does not clone every row, build every protobuf record and hold
     /// them all at once. The first row is always included (it is then either
     /// quarantined or split), but later rows stop before the byte ceiling.
-    pub(crate) fn dirty_rows_page(
-        &self,
-        limit: usize,
-        max_bytes: u64,
-    ) -> Vec<DirtySnapshotRow> {
+    pub(crate) fn dirty_rows_page(&self, limit: usize, max_bytes: u64) -> Vec<DirtySnapshotRow> {
         let mut page = Vec::new();
         let mut bytes = 0u64;
         for row in self
@@ -656,9 +654,7 @@ impl MetricStatReporterState {
             .filter(|row| row.uploaded_revision < row.revision)
             .take(limit)
         {
-            if !page.is_empty()
-                && bytes.saturating_add(row.estimated_bytes) > max_bytes
-            {
+            if !page.is_empty() && bytes.saturating_add(row.estimated_bytes) > max_bytes {
                 break;
             }
             bytes = bytes.saturating_add(row.estimated_bytes);
@@ -685,41 +681,24 @@ impl MetricStatReporterState {
         }
     }
 
-    /// Drop clean snapshots after their period has been closed for the
-    /// retention window. Retention is only a memory bound, not a correctness
-    /// guarantee: a request that started before the period closed can still
-    /// complete later. If its delta arrives after this prune, the row is
-    /// recreated from zero as a new incarnation; the new incarnation has a
-    /// different upload hash, so the receiver keeps the pruned instance's total
-    /// and adds the new one. Do not treat retention as preventing late events.
-    ///
-    /// The period end is deliberately separate from the wire `window_end`: a
-    /// day bucket may report `window_end = last event + 1s` at 00:00 while its
-    /// identity stays open until 24:00. A disabled item's clean row is retained
-    /// while it is inside retention, so re-enabling continues the same instance;
-    /// once pruned, a later event starts a new incarnation that the receiver
-    /// sums with the old total.
-    pub(crate) fn prune(&mut self, now_ts: i64) -> usize {
-        let stale: Vec<SnapshotKey> = self
-            .rows
-            .values()
-            .filter(|row| row.uploaded_revision >= row.revision)
-            .filter(|row| {
-                let width = (row.key.period_end - row.key.window_start).max(60);
-                let retention = width.saturating_mul(2).max(3600);
-                row.key.period_end > 0
-                    && now_ts.saturating_sub(row.key.period_end) > retention
-            })
-            .map(|row| row.key.clone())
-            .collect();
-        for key in &stale {
-            if let Some(row) = self.rows.remove(key) {
-                self.memory_bytes = self.memory_bytes.saturating_sub(row.estimated_bytes);
-                release_charge(row.charge);
+    /// Release rows as soon as their current revision has reached the durable
+    /// spool or quarantine. The spool owns delivery until the remote ACK; this
+    /// map need not keep another copy, even during the current minute. Further
+    /// events for the same minute start a new incarnation that the receiver
+    /// sums with the previous one. Dirty rows remain available for retry.
+    pub(crate) fn release_uploaded(&mut self) -> usize {
+        let mut released = 0;
+        self.rows.retain(|_, row| {
+            if row.uploaded_revision < row.revision {
+                return true;
             }
-        }
-        self.evicted_entries = self.evicted_entries.saturating_add(stale.len() as u64);
-        stale.len()
+            self.memory_bytes = self.memory_bytes.saturating_sub(row.estimated_bytes);
+            release_charge(row.charge);
+            released += 1;
+            false
+        });
+        self.evicted_entries = self.evicted_entries.saturating_add(released as u64);
+        released
     }
 
     pub(crate) fn quarantine_dir(&self) -> &Path {
@@ -737,9 +716,11 @@ impl MetricStatReporterState {
         let dir = self.quarantine_dir.clone();
         let max_bytes = self.quarantine_max_bytes;
         let bytes = encoded.len() as u64;
-        tokio::task::spawn_blocking(move || persist_payload(&dir, "quarantine", Some(max_bytes), &encoded))
-            .await
-            .map_err(|e| anyhow::anyhow!("metric stat quarantine task failed: {e}"))??;
+        tokio::task::spawn_blocking(move || {
+            persist_payload(&dir, "quarantine", Some(max_bytes), &encoded)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("metric stat quarantine task failed: {e}"))??;
         self.quarantined_records = self.quarantined_records.saturating_add(1);
         self.quarantined_bytes = self.quarantined_bytes.saturating_add(bytes);
         Ok(bytes)
@@ -855,10 +836,9 @@ impl Drop for MetricStatReporterState {
 
 impl Default for MetricStatReporterState {
     fn default() -> Self {
-        Self::open(std::env::temp_dir().join(format!(
-            "zelvik-metric-snapshot-{}",
-            uuid::Uuid::new_v4()
-        )))
+        Self::open(
+            std::env::temp_dir().join(format!("zelvik-metric-snapshot-{}", uuid::Uuid::new_v4())),
+        )
         .expect("create temporary metric snapshot state")
     }
 }
@@ -880,8 +860,7 @@ fn snapshot_key_heap_bytes(key: &SnapshotKey) -> u64 {
 /// charge reserves this larger form before the row reaches the snapshot store.
 fn snapshot_row_cost(key: &SnapshotKey) -> u64 {
     let key_heap = snapshot_key_heap_bytes(key);
-    let structs =
-        (std::mem::size_of::<SnapshotRow>() + std::mem::size_of::<SnapshotKey>()) as u64;
+    let structs = (std::mem::size_of::<SnapshotRow>() + std::mem::size_of::<SnapshotKey>()) as u64;
     structs
         .saturating_add(key_heap.saturating_mul(2))
         .saturating_add(96)
@@ -1144,45 +1123,38 @@ mod tests {
     }
 
     #[test]
-    fn idle_within_a_day_does_not_reset_the_cumulative_total() {
-        let dir = temp_dir("idle-day");
-        let mut state = MetricStatReporterState::open(&dir).unwrap();
-        let mut identity = key(1, &["country=FR"]);
-        identity.time_key = "202610310000".into();
-        identity.window_start = 1_790_000_000;
-        identity.period_end = identity.window_start + 86_400;
-        state.merge(vec![SnapshotDelta {
-            key: identity.clone(),
-            // The wire window ends just after the last real event at 00:00.
-            window_end: identity.window_start + 1,
-            value: 10.0,
-            charge: 0,
-        }]);
-        let rev = state.row_revision(&identity).unwrap();
-        state.mark_uploaded(&[(identity.clone(), rev)]);
-        // Two hours idle: the day is still open and the row is clean.
-        assert_eq!(state.prune(identity.window_start + 2 * 3600), 0);
-        state.merge(vec![SnapshotDelta {
-            key: identity.clone(),
-            window_end: identity.window_start + 2 * 3600 + 1,
-            value: 5.0,
-            charge: 0,
-        }]);
-        assert_eq!(state.row_value(&identity), Some(15.0));
-    }
-
-    #[test]
-    fn disabled_item_same_version_re_enable_keeps_the_total() {
-        let dir = temp_dir("re-enable");
+    fn durable_handoff_releases_even_the_current_minute() {
+        let dir = temp_dir("release-current");
         let mut state = MetricStatReporterState::open(&dir).unwrap();
         let identity = key(1, &["country=FR"]);
         state.merge(vec![delta(identity.clone(), 10.0)]);
-        let rev = state.row_revision(&identity).unwrap();
-        state.mark_uploaded(&[(identity.clone(), rev)]);
-        // No config-scope eviction exists: disabling an item for a while must
-        // not reset a cumulative row that is still inside its period.
-        assert_eq!(state.prune(identity.window_start + 30), 0);
+        let revision = state.row_revision(&identity).unwrap();
+        let hash = identity.hash(state.epoch(), state.row_incarnation(&identity).unwrap());
+        state.mark_uploaded(&[(identity.clone(), revision)]);
+        assert_eq!(state.release_uploaded(), 1);
+        assert_eq!(state.stats().entries, 0);
+        assert_eq!(state.stats().estimated_bytes, 0);
+        assert_eq!(state.stats().pending_bytes, 0);
+
         state.merge(vec![delta(identity.clone(), 5.0)]);
+        assert_eq!(state.row_value(&identity), Some(5.0));
+        assert_ne!(
+            identity.hash(state.epoch(), state.row_incarnation(&identity).unwrap()),
+            hash
+        );
+    }
+
+    #[test]
+    fn acknowledging_an_older_revision_keeps_newer_data_dirty() {
+        let dir = temp_dir("older-upload");
+        let mut state = MetricStatReporterState::open(&dir).unwrap();
+        let identity = key(1, &["country=FR"]);
+        state.merge(vec![delta(identity.clone(), 10.0)]);
+        let uploaded_revision = state.row_revision(&identity).unwrap();
+        state.merge(vec![delta(identity.clone(), 5.0)]);
+        state.mark_uploaded(&[(identity.clone(), uploaded_revision)]);
+        assert_eq!(state.release_uploaded(), 0);
+        assert_eq!(state.dirty_len(), 1);
         assert_eq!(state.row_value(&identity), Some(15.0));
     }
 
@@ -1192,14 +1164,13 @@ mod tests {
         let mut state = MetricStatReporterState::open(&dir).unwrap();
         let identity = key(1, &["country=FR"]);
 
-        // The first row instance reaches 10, is uploaded, and its closed
-        // period is pruned. This is what a >1h request can outlive.
+        // The first instance reaches 10 and transfers to the durable spool.
+        // Later events must add under a new hash, never replace those 10.
         state.merge(vec![delta(identity.clone(), 10.0)]);
         let old_revision = state.row_revision(&identity).unwrap();
         let old_incarnation = state.row_incarnation(&identity).unwrap();
         state.mark_uploaded(&[(identity.clone(), old_revision)]);
-        let prune_now = identity.period_end + 4_000;
-        assert_eq!(state.prune(prune_now), 1);
+        assert_eq!(state.release_uploaded(), 1);
         assert_eq!(state.len(), 0);
 
         // A late completion for the same period recreates the cumulative row
@@ -1248,15 +1219,48 @@ mod tests {
     }
 
     #[test]
-    fn dirty_rows_survive_prune_but_clean_stale_rows_do_not() {
-        let dir = temp_dir("prune");
+    fn dirty_rows_survive_release_but_uploaded_rows_do_not() {
+        let dir = temp_dir("release");
         let mut state = MetricStatReporterState::open(&dir).unwrap();
         let identity = key(1, &[]);
         state.merge(vec![delta(identity.clone(), 1.0)]);
-        assert_eq!(state.prune(1_790_000_060 + 100_000), 0);
+        assert_eq!(state.release_uploaded(), 0);
         let rev = state.row_revision(&identity).unwrap();
         state.mark_uploaded(&[(identity.clone(), rev)]);
-        assert_eq!(state.prune(1_790_000_060 + 100_000), 1);
+        assert_eq!(state.release_uploaded(), 1);
         assert_eq!(state.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn repeated_handoffs_and_restarts_do_not_retain_history_or_reuse_hashes() {
+        let dir = temp_dir("fixed-dimensions");
+        let mut state = MetricStatReporterState::open(&dir).unwrap();
+        let mut hashes = std::collections::BTreeSet::new();
+        for minute in 0..120 {
+            let mut identity = key(1, &["country=FR"]);
+            identity.window_start += minute * 60;
+            identity.period_end += minute * 60;
+            identity.time_key = minute.to_string();
+            // Two handoffs in one minute and a restart after each. Repeating
+            // the same dimension never creates retained historical counters.
+            for _ in 0..2 {
+                state.merge(vec![delta(identity.clone(), 1.0)]);
+                let revision = state.row_revision(&identity).unwrap();
+                assert!(hashes.insert(
+                    identity.hash(state.epoch(), state.row_incarnation(&identity).unwrap())
+                ));
+                state.persist_checkpoint().await.unwrap();
+                state.mark_uploaded(&[(identity.clone(), revision)]);
+                assert_eq!(state.release_uploaded(), 1);
+                state.persist_checkpoint().await.unwrap();
+                assert_eq!(state.stats().estimated_bytes, 0);
+                drop(state);
+                state = MetricStatReporterState::open(&dir).unwrap();
+                assert_eq!(state.len(), 0);
+                assert_eq!(state.release_uploaded(), 0);
+            }
+        }
+        drop(state);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

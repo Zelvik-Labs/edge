@@ -15,6 +15,7 @@ fn key(cycle: usize, row: usize) -> AggregationKey {
     AggregationKey {
         category: Arc::from("http"),
         server_id: 1,
+        window_start: 1_793_462_400,
         country: Arc::from(""),
         country_id: 0,
         province: Arc::from(""),

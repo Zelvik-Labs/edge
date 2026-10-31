@@ -20,7 +20,6 @@ fn sample_update() -> ServerMetricUpdate {
         attack_bytes: 0,
         active_connections: 3,
         count_websocket_connections: 0,
-        count_ips: 2,
     }
 }
 
@@ -51,7 +50,14 @@ fn packed_period_records_merge_in_memory() {
     assert_eq!(u64_be(&first, 0), 10);
     assert_eq!(u64_be(&first, 8), 100);
 
-    let second = apply_server_period_update(Some(&first), &sample_update());
+    let mut historical = first;
+    historical[64..72].copy_from_slice(&19u64.to_be_bytes());
+    let second = apply_server_period_update(Some(&historical), &sample_update());
+    assert_eq!(
+        u64_be(&second, 64),
+        19,
+        "obsolete historical IP slot stays untouched"
+    );
     assert_eq!(u64_be(&second, 0), 20);
     assert_eq!(u64_be(&second, 8), 200);
     assert_eq!(&second[56..64], &3i64.to_be_bytes());
@@ -65,8 +71,7 @@ fn packed_period_records_merge_in_memory() {
 
 #[test]
 fn metric_storage_increment_and_server_batch_round_trip() {
-    let dir =
-        std::env::temp_dir().join(format!("zelvik-edge-mace-opt-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("zelvik-edge-mace-opt-{}", uuid::Uuid::new_v4()));
     let _ = std::fs::remove_dir_all(&dir);
     let storage = MetricStorage::open(&dir).expect("open mace storage");
 
@@ -98,8 +103,14 @@ fn old_metadata_format_is_rejected_without_rewriting_the_manifest() {
     // database. Payload references are never followed for an unsupported format.
     let mut manifest = vec![0u8; 8192];
     for (offset, header) in [
-        (0, "6565727462776f633d0100000000000001000000330000009100000002000000050000003c3a4833"),
-        (4096, "6565727462776f633e01000000000000010000001600000091000000030000000400000065f6a75c"),
+        (
+            0,
+            "6565727462776f633d0100000000000001000000330000009100000002000000050000003c3a4833",
+        ),
+        (
+            4096,
+            "6565727462776f633e01000000000000010000001600000091000000030000000400000065f6a75c",
+        ),
     ] {
         let header = hex::decode(header).unwrap();
         manifest[offset..offset + header.len()].copy_from_slice(&header);

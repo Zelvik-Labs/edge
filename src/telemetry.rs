@@ -1264,6 +1264,7 @@ fn queue(kind: &str) -> anyhow::Result<Arc<Spool>> {
             || kind == "gap"
             || kind == "alert"
             || kind == "daily"
+            || kind == "unique_ip"
         {
             q.core.clone()
         } else {

@@ -13,5 +13,4 @@ pub struct ServerMetricUpdate {
     pub attack_bytes: u64,
     pub active_connections: i64,
     pub count_websocket_connections: u64,
-    pub count_ips: u64,
 }

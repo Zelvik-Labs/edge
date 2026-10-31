@@ -174,9 +174,6 @@ pub fn start_pressure_updater() {
             let pressure = compute_node_pressure(&mut sys);
             CACHED_PRESSURE.store(pressure.to_bits(), Ordering::Relaxed);
 
-            // Runtime distinct-IP cardinality is strictly bounded by its
-            // governor-derived tracker; daily exact tracking remains separate.
-
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         }
     });
@@ -219,6 +216,7 @@ pub mod plan;
 pub mod projection;
 pub mod storage;
 pub mod top_ip;
+pub mod unique_ip;
 
 #[derive(Clone)]
 pub struct HttpDimensionEvent {
@@ -688,115 +686,6 @@ pub fn init_http_dimension_worker(queue_capacity: usize) {
     });
 }
 
-/// Process-wide entry budget shared by every server's distinct-IP set.
-/// Per-server capacities were derived from the server count at creation, so
-/// each new server added another slice while old slices remained, making the
-/// aggregate capacity grow with the harmonic sum of server generations.
-struct DistinctIpBudget {
-    capacity: usize,
-    used: AtomicUsize,
-}
-
-impl DistinctIpBudget {
-    fn new(capacity: usize) -> Self {
-        Self {
-            capacity,
-            used: AtomicUsize::new(0),
-        }
-    }
-
-    fn try_charge(&self) -> bool {
-        self.used
-            .try_update(Ordering::AcqRel, Ordering::Acquire, |used| {
-                (used < self.capacity).then_some(used + 1)
-            })
-            .is_ok()
-    }
-
-    fn refund(&self, count: usize) {
-        let _ = self
-            .used
-            .try_update(Ordering::AcqRel, Ordering::Acquire, |used| {
-                Some(used.saturating_sub(count))
-            });
-    }
-
-    fn used(&self) -> usize {
-        self.used.load(Ordering::Acquire)
-    }
-
-    fn capacity(&self) -> usize {
-        self.capacity
-    }
-}
-
-static DISTINCT_IP_BUDGET: LazyLock<Arc<DistinctIpBudget>> = LazyLock::new(|| {
-    Arc::new(DistinctIpBudget::new(
-        crate::memory_governor::MEMORY_GOVERNOR.metrics_distinct_ip_capacity(),
-    ))
-});
-
-/// Process-wide distinct-IP budget `(used_entries, capacity_entries)` for
-/// node status. The budget is shared by every server.
-pub fn distinct_ip_budget_status() -> (usize, usize) {
-    (DISTINCT_IP_BUDGET.used(), DISTINCT_IP_BUDGET.capacity())
-}
-
-pub struct RuntimeDistinctIpTracker {
-    ips: dashmap::DashSet<std::net::IpAddr>,
-    budget: Arc<DistinctIpBudget>,
-}
-
-impl RuntimeDistinctIpTracker {
-    fn new() -> Self {
-        Self::with_budget(DISTINCT_IP_BUDGET.clone())
-    }
-
-    fn with_budget(budget: Arc<DistinctIpBudget>) -> Self {
-        Self {
-            ips: dashmap::DashSet::new(),
-            budget,
-        }
-    }
-
-    fn insert(&self, ip: std::net::IpAddr) {
-        if self.ips.contains(&ip) {
-            return;
-        }
-        if !self.budget.try_charge() {
-            crate::pipeline_metrics::note_cardinality_drop(
-                "runtime_distinct_ip_tracker",
-                self.budget.used(),
-                self.budget.capacity(),
-            );
-            return;
-        }
-        if !self.ips.insert(ip) {
-            self.budget.refund(1);
-        }
-    }
-
-    fn len(&self) -> usize {
-        self.ips.len()
-    }
-
-    #[cfg(test)]
-    fn capacity(&self) -> usize {
-        self.budget.capacity()
-    }
-
-    #[cfg(test)]
-    fn with_capacity(capacity: usize) -> Self {
-        Self::with_budget(Arc::new(DistinctIpBudget::new(capacity)))
-    }
-}
-
-impl Drop for RuntimeDistinctIpTracker {
-    fn drop(&mut self) {
-        self.budget.refund(self.ips.len());
-    }
-}
-
 /// Fallback when the governor has not produced a memory-derived capacity
 /// yet. The admission limit covers installed, staged, retired and
 /// reader-held instances together; a failed consumer consumes slots and
@@ -884,7 +773,6 @@ pub struct ServerMetrics {
     pub origin_bytes_received: AtomicU64,
     pub active_connections: AtomicI64,
     pub count_websocket_connections: AtomicU64,
-    pub distinct_ips: RuntimeDistinctIpTracker,
 }
 
 pub struct ActiveRequestMetricsGuard {
@@ -931,10 +819,6 @@ impl Default for ServerMetrics {
 
 impl ServerMetrics {
     pub fn new() -> Self {
-        Self::with_distinct_ip_tracker(RuntimeDistinctIpTracker::new())
-    }
-
-    fn with_distinct_ip_tracker(distinct_ips: RuntimeDistinctIpTracker) -> Self {
         Self {
             instance_id: NEXT_SERVER_METRIC_INSTANCE_ID.fetch_add(1, Ordering::Relaxed),
             slot: None,
@@ -953,7 +837,6 @@ impl ServerMetrics {
             origin_bytes_received: AtomicU64::new(0),
             active_connections: AtomicI64::new(0),
             count_websocket_connections: AtomicU64::new(0),
-            distinct_ips,
         }
     }
 
@@ -976,7 +859,6 @@ impl ServerMetrics {
             origin_bytes_received: self.origin_bytes_received.load(Ordering::Relaxed),
             active_connections: self.active_connections.load(Ordering::Relaxed).max(0),
             count_websocket_connections: self.count_websocket_connections.load(Ordering::Relaxed),
-            count_ips: self.distinct_ips.len() as u64,
         }
     }
 }
@@ -1013,7 +895,6 @@ pub struct ServerStatusSnapshot {
     pub origin_bytes_received: u64,
     pub active_connections: i64,
     pub count_websocket_connections: u64,
-    pub count_ips: u64,
 }
 
 impl ServerStatusSnapshot {
@@ -1045,7 +926,6 @@ impl ServerStatusSnapshot {
             self.origin_bytes_received,
             self.active_connections as u64,
             self.count_websocket_connections,
-            self.count_ips,
         ];
         for value in values {
             hash ^= value;
@@ -1592,17 +1472,7 @@ impl<T: Clone + Default> TimeCache<T> {
     }
 }
 
-static DAY_CACHE: LazyLock<TimeCache<String>> = LazyLock::new(TimeCache::new);
 static PERIOD_CACHE: LazyLock<TimeCache<i64>> = LazyLock::new(TimeCache::new);
-
-fn get_current_day() -> String {
-    let now = crate::utils::time::now_timestamp();
-    let now_day = now / 86400;
-
-    DAY_CACHE.get_or_update(now_day, || {
-        crate::utils::time::now_local().format("%Y%m%d").to_string()
-    })
-}
 
 fn get_current_5min_ts() -> i64 {
     let now = crate::utils::time::now_timestamp();
@@ -1637,7 +1507,7 @@ pub mod record {
         user_plan_id: i64,
         plan_id: i64,
         cached_m: Option<&Arc<ServerMetrics>>,
-        ip_recorded: bool,
+        _ip_recorded: bool,
     ) -> bool {
         let m = if let Some(m) = cached_m {
             (*m).clone()
@@ -1658,14 +1528,12 @@ pub mod record {
         }
         m.total_requests.fetch_add(1, Ordering::Relaxed);
         m.active_connections.fetch_add(1, Ordering::Relaxed);
-        if !ip_recorded {
-            if let Ok(remote_ip) = remote_ip.parse::<IpAddr>() {
-                let day = get_current_day();
-                crate::metrics::daily::UNIQUE_IP_TRACKER.record(server_id, &day, remote_ip);
-                m.distinct_ips.insert(remote_ip);
-                return true;
-            }
-            return false;
+        if let Ok(remote_ip) = remote_ip.parse::<IpAddr>() {
+            return crate::metrics::unique_ip::UNIQUE_IP_TRACKER.record(
+                server_id,
+                crate::utils::time::now_timestamp(),
+                remote_ip,
+            );
         }
         false
     }
@@ -1681,7 +1549,7 @@ pub mod record {
         user_plan_id: i64,
         plan_id: i64,
         cached_m: Option<&Arc<ServerMetrics>>,
-        ip_recorded: bool,
+        _ip_recorded: bool,
     ) -> bool {
         let m = if let Some(m) = cached_m.cloned() {
             m
@@ -1701,11 +1569,12 @@ pub mod record {
             m.plan_id.store(plan_id, Ordering::Relaxed);
         }
         m.total_requests.fetch_add(1, Ordering::Relaxed);
-        if !ip_recorded && let Ok(remote_ip) = remote_ip.parse::<IpAddr>() {
-            let day = get_current_day();
-            crate::metrics::daily::UNIQUE_IP_TRACKER.record(server_id, &day, remote_ip);
-            m.distinct_ips.insert(remote_ip);
-            return true;
+        if let Ok(remote_ip) = remote_ip.parse::<IpAddr>() {
+            return crate::metrics::unique_ip::UNIQUE_IP_TRACKER.record(
+                server_id,
+                crate::utils::time::now_timestamp(),
+                remote_ip,
+            );
         }
         false
     }
@@ -2090,6 +1959,7 @@ pub mod record {
             let key = crate::metrics::aggregator::AggregationKey {
                 category: event.category.clone(),
                 server_id: event.server_id,
+                window_start: event.event_time_millis.div_euclid(60_000) * 60,
                 country,
                 country_id,
                 province,
@@ -2155,7 +2025,7 @@ pub async fn start_persistence_flusher() {
             )
             .saturating_add(crate::metrics::top_ip::TOP_IP_TRACKER.approximate_bytes())
             .saturating_add(crate::metrics::daily::DAILY_DOMAIN_TRACKER.approximate_bytes())
-            .saturating_add(crate::metrics::daily::UNIQUE_IP_TRACKER.approximate_bytes())
+            .saturating_add(crate::metrics::unique_ip::UNIQUE_IP_TRACKER.approximate_bytes())
             // METRIC_PROJECTION_POOL already owns the snapshot rows: their
             // charge transfers from the projection aggregator to the durable
             // store, so adding metric_values_cache_stats() here would count
@@ -2222,7 +2092,6 @@ pub async fn start_persistence_flusher() {
                 count_websocket_connections: flusher_delta(&current, last, |s| {
                     s.count_websocket_connections
                 }),
-                count_ips: current.count_ips,
             });
 
             if sample.retired {
@@ -2592,43 +2461,6 @@ mod tests {
         assert_eq!(ctx.resolve_key("${remoteAddr}"), "203.0.113.9");
         assert_eq!(ctx.resolve_key("${bytesSent}"), "1234");
         assert_eq!(ctx.resolve_key("${requestLength}"), "56");
-    }
-
-    #[test]
-    fn runtime_distinct_ip_tracker_fail_closed_at_capacity() {
-        let tracker = super::RuntimeDistinctIpTracker::with_capacity(512);
-        let capacity = tracker.capacity();
-
-        for i in 0..capacity.saturating_add(128) {
-            let ip = IpAddr::from([10, 0, (i / 256) as u8, (i % 256) as u8]);
-            tracker.insert(ip);
-        }
-        assert!(
-            tracker.len() <= capacity,
-            "distinct IP tracker must not grow beyond capacity ({capacity}), got {}",
-            tracker.len()
-        );
-    }
-
-    #[test]
-    fn distinct_ip_trackers_share_one_budget_and_refund_on_drop() {
-        let budget = Arc::new(super::DistinctIpBudget::new(2));
-        let first = super::RuntimeDistinctIpTracker::with_budget(budget.clone());
-        let second = super::RuntimeDistinctIpTracker::with_budget(budget.clone());
-
-        first.insert(IpAddr::from([10, 0, 0, 1]));
-        second.insert(IpAddr::from([10, 0, 0, 2]));
-        first.insert(IpAddr::from([10, 0, 0, 3]));
-        assert_eq!(budget.used(), 2);
-        assert_eq!(first.len(), 1);
-        assert_eq!(second.len(), 1);
-        assert!(budget.used() <= budget.capacity());
-
-        drop(first);
-        assert_eq!(budget.used(), 1);
-        second.insert(IpAddr::from([10, 0, 0, 3]));
-        assert_eq!(second.len(), 2);
-        assert_eq!(budget.used(), 2);
     }
 
     #[test]

@@ -74,7 +74,7 @@ class StatsTests(unittest.TestCase):
         self.assertNotIn("mimalloc.malloc_bins.peak", flat)
 
     def test_malformed_nested_v3_counter_fails(self):
-        for value in (-1, True, "missing"):
+        for value in (True, "missing"):
             with self.subTest(value=value):
                 document = {
                     "process": NATIVE["process"],
@@ -84,6 +84,31 @@ class StatsTests(unittest.TestCase):
                 }
                 with self.assertRaises(stats.StatsError):
                     stats.normalize(document)
+
+    def test_native_signed_thread_deltas_are_preserved(self):
+        document = {
+            "process": NATIVE["process"],
+            "mimalloc": {
+                "pages_abandoned": {"current": -1, "peak": 1, "total": 73},
+                "page_bins": [{"current": -1, "peak": 1, "total": 3}],
+            },
+        }
+        flat = stats.normalize(document)
+        self.assertEqual(flat["mimalloc.pages_abandoned.current"], -1)
+        self.assertEqual(flat["mimalloc.page_bins.current"], -1)
+        self.assertEqual(flat["process.commit_current"], 4096)
+
+    def test_worker_collection_progress_is_preserved(self):
+        document = {
+            "process": NATIVE["process"],
+            "worker_reclaim": {
+                "started": 4, "live": 4, "park_collects": 12, "stop_collects": 0,
+            },
+        }
+        flat = stats.normalize(document)
+        self.assertEqual(flat["worker_reclaim.started"], 4)
+        self.assertEqual(flat["worker_reclaim.park_collects"], 12)
+        self.assertEqual(flat["worker_reclaim.stop_collects"], 0)
 
     def test_flat_allocator_shape(self):
         flat = stats.normalize(

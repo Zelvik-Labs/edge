@@ -9,7 +9,7 @@
 //! nothing.
 
 use arc_swap::ArcSwap;
-use chrono::{Datelike, Duration as ChronoDuration, FixedOffset, TimeZone, Timelike, Weekday};
+use chrono::{FixedOffset, Timelike};
 use parking_lot::{Mutex, RwLock};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -57,8 +57,6 @@ pub struct CompiledMetricItem {
     pub id: i64,
     pub version: i32,
     pub category: Arc<str>,
-    pub period: i32,
-    pub period_unit: Arc<str>,
     pub value: MetricValueKind,
     pub keys: Arc<[Arc<str>]>,
 }
@@ -66,7 +64,7 @@ pub struct CompiledMetricItem {
 impl CompiledMetricItem {
     pub fn time_key(&self, event_time_millis: i64) -> (Arc<str>, i64, i64) {
         let wall = crate::utils::time::local_from_timestamp_millis(event_time_millis);
-        period_window(self.period, self.period_unit.as_ref(), wall)
+        collection_window(wall)
     }
 }
 
@@ -338,94 +336,18 @@ fn resolve_projection_key(
     })
 }
 
-/// Per-period hour/minute bucketing and the exclusive end of the identity
-/// window, using the event's own local wall clock (never flush or retry time).
-fn period_window(
-    period: i32,
-    unit: &str,
-    wall: chrono::DateTime<FixedOffset>,
-) -> (Arc<str>, i64, i64) {
-    let period = period.max(1) as u32;
-    let offset = *wall.offset();
-    let key = match unit.to_lowercase().as_str() {
-        "month" => wall.format("%Y%m").to_string(),
-        "week" => {
-            let week = wall.iso_week();
-            format!("{:04}{:02}", week.year(), week.week())
-        }
-        "day" => wall.format("%Y%m%d").to_string(),
-        "hour" if period > 1 => {
-            let hour = (wall.hour() / period) * period;
-            format!("{}{:02}", wall.format("%Y%m%d"), hour)
-        }
-        "hour" => wall.format("%Y%m%d%H").to_string(),
-        "minute" if period > 1 => {
-            let minute = (wall.minute() / period) * period;
-            format!("{}{:02}", wall.format("%Y%m%d%H"), minute)
-        }
-        "minute" => wall.format("%Y%m%d%H%M").to_string(),
-        _ => wall.format("%Y%m%d%H%M").to_string(),
-    };
-    let start = match unit.to_lowercase().as_str() {
-        "month" => {
-            let date = wall.date_naive().with_day(1).unwrap_or(wall.date_naive());
-            local_midnight(date, offset)
-        }
-        "week" => {
-            let week = wall.iso_week();
-            let monday = chrono::NaiveDate::from_isoywd_opt(week.year(), week.week(), Weekday::Mon)
-                .unwrap_or(wall.date_naive());
-            local_midnight(monday, offset)
-        }
-        "day" => local_midnight(wall.date_naive(), offset),
-        "hour" => {
-            let hour = if period > 1 {
-                (wall.hour() / period) * period
-            } else {
-                wall.hour()
-            };
-            wall.with_minute(0)
-                .and_then(|value| value.with_second(0))
-                .and_then(|value| value.with_nanosecond(0))
-                .and_then(|value| value.with_hour(hour))
-                .unwrap_or(wall)
-        }
-        _ => {
-            let minute = if period > 1 {
-                (wall.minute() / period) * period
-            } else {
-                wall.minute()
-            };
-            wall.with_second(0)
-                .and_then(|value| value.with_nanosecond(0))
-                .and_then(|value| value.with_minute(minute))
-                .unwrap_or(wall)
-        }
-    };
-    let end = match unit.to_lowercase().as_str() {
-        "month" => {
-            let (year, month) = if wall.month() == 12 {
-                (wall.year() + 1, 1)
-            } else {
-                (wall.year(), wall.month() + 1)
-            };
-            chrono::NaiveDate::from_ymd_opt(year, month, 1)
-                .map(|date| local_midnight(date, offset))
-                .unwrap_or_else(|| start + ChronoDuration::days(31))
-        }
-        "week" => start + ChronoDuration::days(7),
-        "day" => start + ChronoDuration::days(1),
-        "hour" => start + ChronoDuration::hours(period as i64),
-        _ => start + ChronoDuration::minutes(period as i64),
-    };
-    (Arc::from(key), start.timestamp(), end.timestamp())
-}
-
-fn local_midnight(date: chrono::NaiveDate, offset: FixedOffset) -> chrono::DateTime<FixedOffset> {
-    offset
-        .from_local_datetime(&date.and_hms_opt(0, 0, 0).expect("valid midnight"))
-        .single()
-        .unwrap_or_else(|| offset.from_utc_datetime(&date.and_hms_opt(0, 0, 0).unwrap()))
+/// Collection always uses one event-time minute. Configured reporting periods
+/// belong to the backend query; they must not create day/month state on Edge.
+fn collection_window(wall: chrono::DateTime<FixedOffset>) -> (Arc<str>, i64, i64) {
+    let start = wall
+        .with_second(0)
+        .and_then(|value| value.with_nanosecond(0))
+        .expect("valid minute boundary");
+    (
+        Arc::from(start.format("%Y%m%d%H%M").to_string()),
+        start.timestamp(),
+        start.timestamp() + 60,
+    )
 }
 
 fn compile_plan(
@@ -461,8 +383,6 @@ fn compile_plan(
             id: item.id,
             version: item.version,
             category,
-            period: item.period,
-            period_unit: Arc::from(item.period_unit.as_str()),
             value: MetricValueKind::compile(&item.value),
             keys: Arc::from(keys),
         });
@@ -569,7 +489,7 @@ pub fn dropped_projections() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{compile_plan, period_window, publish_metric_items};
+    use super::{collection_window, compile_plan, publish_metric_items};
     use crate::config_models::MetricItemConfig;
     use chrono::{TimeZone, Timelike};
     use std::collections::BTreeMap;
@@ -612,15 +532,24 @@ mod tests {
     }
 
     #[test]
-    fn period_zero_and_unknown_units_keep_the_old_minute_bucketing() {
+    fn reporting_periods_never_expand_the_edge_collection_window() {
         let wall = chrono::FixedOffset::east_opt(8 * 3600)
             .unwrap()
             .with_ymd_and_hms(2026, 10, 31, 12, 7, 30)
             .unwrap();
-        assert_eq!(period_window(0, "minute", wall).0.as_ref(), "202610311207");
-        assert_eq!(period_window(1, "unknown", wall).0.as_ref(), "202610311207");
-        assert_eq!(period_window(5, "minute", wall).0.as_ref(), "202610311205");
-        assert_eq!(period_window(2, "hour", wall).0.as_ref(), "2026103112");
+        for (period, unit) in [
+            (0, "minute"),
+            (5, "minute"),
+            (2, "hour"),
+            (1, "day"),
+            (1, "week"),
+            (1, "month"),
+        ] {
+            let plan = compile_plan(&[item(1, "http", period, unit, &[])], 1, 0);
+            let (key, start, end) = plan.items[0].time_key(wall.timestamp_millis());
+            assert_eq!(key.as_ref(), "202610311207", "{period} {unit}");
+            assert_eq!(end - start, 60, "{period} {unit}");
+        }
     }
 
     #[test]
@@ -709,33 +638,23 @@ mod tests {
     }
 
     #[test]
-    fn event_time_drives_hour_and_minute_windows() {
-        let wall = chrono::FixedOffset::east_opt(8 * 3600)
-            .unwrap()
-            .with_ymd_and_hms(2026, 10, 31, 12, 47, 30)
-            .unwrap();
-        let (key, start, end) = period_window(1, "hour", wall);
-        assert_eq!(key.as_ref(), "2026103112");
-        assert_eq!(
-            start,
-            wall.with_minute(0)
-                .unwrap()
-                .with_second(0)
-                .unwrap()
-                .timestamp()
-        );
-        assert_eq!(end - start, 3600);
-
-        let (key, start, end) = period_window(5, "minute", wall);
-        assert_eq!(key.as_ref(), "202610311245");
-        assert_eq!(end - start, 300);
-
-        let (key, _, _) = period_window(1, "day", wall);
-        assert_eq!(key.as_ref(), "20261031");
-        let (key, _, _) = period_window(1, "week", wall);
-        assert_eq!(key.as_ref(), "202644");
-        let (key, _, _) = period_window(1, "month", wall);
-        assert_eq!(key.as_ref(), "202610");
+    fn event_time_drives_minute_boundaries_across_calendar_rollovers() {
+        let offset = chrono::FixedOffset::east_opt(8 * 3600).unwrap();
+        for (year, month, day, hour, minute) in [
+            (2026, 10, 31, 12, 47),
+            (2026, 10, 31, 23, 59),
+            (2026, 11, 1, 0, 0),
+            (2026, 12, 31, 23, 59),
+            (2027, 1, 1, 0, 0),
+        ] {
+            let wall = offset
+                .with_ymd_and_hms(year, month, day, hour, minute, 30)
+                .unwrap();
+            let (key, start, end) = collection_window(wall);
+            assert_eq!(key.as_ref(), wall.format("%Y%m%d%H%M").to_string());
+            assert_eq!(start, wall.with_second(0).unwrap().timestamp());
+            assert_eq!(end - start, 60);
+        }
     }
 
     #[test]
@@ -746,9 +665,9 @@ mod tests {
             .unwrap();
         let event_millis = wall.timestamp_millis();
         let later = wall + chrono::Duration::minutes(3);
-        let (key, _, _) = period_window(1, "minute", later);
+        let (key, _, _) = collection_window(later);
         assert_ne!(key.as_ref(), "202610311247");
-        let (key, _, _) = period_window(1, "minute", wall);
+        let (key, _, _) = collection_window(wall);
         assert_eq!(key.as_ref(), "202610311247");
         assert!(event_millis > 0);
     }

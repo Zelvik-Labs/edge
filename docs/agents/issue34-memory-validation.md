@@ -460,7 +460,10 @@ A separate source review found that `bench-defense` builds its own Tokio
 runtime without the worker collect hooks installed by production startup.
 It also omits the production reclaim monitor and cache janitor. This is a
 component lifecycle difference, not evidence that it explains the measured
-RSS growth; no hook change or gate relaxation is included here.
+RSS growth. A subsequent component-only change installs the existing worker
+hooks and reports start/park/stop progress; it still does not claim full-Edge
+startup coverage or add the production janitor/reporters. See the paired
+THP-on results below.
 
 ### Same-process allocation census
 
@@ -502,3 +505,108 @@ Previously recorded CPU-only and healthy-telemetry 300-second samples both
 show `cacheJanitor.rebuildsApplied = 0` throughout. The observed construction
 step is therefore consistent with delayed first initialization; those samples
 do not support repeated cache rebuilds as an explanation of their failed gates.
+
+### THP-on component lifecycle and calibrated page accounting
+
+THP remains enabled. The test host uses `madvise`; no global setting was
+changed and the following runs do not set `MIMALLOC_ALLOW_THP=0`.
+The component runtime now installs the production worker hooks. Its focused
+runtime regression passed, failed when hook installation was removed, then
+passed after restoration (one test, no skip). Native v3 count objects are
+signed `int64_t`: a real `pages_abandoned.current=-1` initially stopped stats
+readiness. The reader now preserves such native values without clamping;
+process fields and kernel RSS/Anon remain nonnegative and strict. The
+old-reader negative control fails on that captured shape. Python harness
+verification ran 166 tests (164 pass, two Linux-only skips on macOS), and the
+affected Linux release Clippy check passed. Independent review found no blocker.
+
+The matched 300-second component runs used 2 GiB/no-swap, the same one pressure
+cycle, eight load workers, 90-second warmup, at least 150 measured seconds,
+and unchanged 64 MiB/h gates. Both failed: baseline RSS/Anon upper bounds
+414.222/413.628 MiB/h, peak 201.891 MiB; hooked runtime 237.983/237.400 MiB/h,
+peak 192.109 MiB. Measured requests were 26,641 and 26,511 respectively with
+zero measured errors. The hooked process reported 75 park collections and
+five stop collections. One pair is not a stable causal performance percentage
+and the component gate remains failed. Evidence:
+`/root/issue34/component-baseline-thp-3oF1LZ2J`,
+`/root/issue34/component-hooks-thp-38LmFMG6`, and the corresponding local
+`/tmp/edge-component-{baseline,hooks}-thp-result.json` files.
+
+Before further live-object diagnosis, known-allocation fixtures calibrated
+the probes: four retained 1 MiB requests totalled exactly 4 MiB in allocation
+tracking, then zero after release. The independent page metadata reader
+reported 4.25 MiB (allocator size-class rounding) then zero pages, even while
+16 MiB THP remained resident. A second fixture held 100 64-byte blocks on one
+thread and freed them from another: live bytes were exactly 6,400, 3,200, and
+zero while page `used` stayed at 6,400; subtracting the deferred free list was
+therefore necessary and verified. Calibration evidence is retained locally
+in `/tmp/edge-page-live-calibration.log` and `/tmp/edge-deferred-calibration.log`.
+
+A real Edge run then used the same THP-on 2 GiB scope for 240 seconds load
+(46,395 requests, zero errors) and 60 seconds idle. Rounded arena live bytes
+at 30/60/120/180/240/300 seconds were
+162.962/164.749/158.976/160.010/159.033/158.677 MiB. RSS was
+266.863/247.090/243.719/271.074/274.438/262.012 MiB, with THP
+194/174/158/196/190/174 MiB. Empty pages rose from 182 to 280 at load stop;
+retired pages from 122 to 174 by idle end. No deferred-list consistency
+violations occurred. Each metadata snapshot paused the fixture for 25–45 ms;
+this is diagnostic evidence, not a latency benchmark. It covers arena pages
+and size-class rounding, not native allocations or a long-term leak guarantee.
+Evidence: `/root/issue34/diag-thp-pages-FCsF1ay6` and
+`/tmp/edge-thp-pages-evidence`. Its processes and temporary home were removed.
+
+Mimalloc keeps some retired pages for 16 non-forced collection cycles. A
+30-to-five-second worker cadence trial completed another 240-second load
+(46,552 requests, zero errors) plus 60 seconds idle. Final retired pages were
+175 versus 174 in the original diagnostic; the trial did not establish a
+retirement benefit. Its h2load performance run reported zero measured requests
+in every round, so those results are invalid performance evidence despite
+exit code zero. The cadence change was withdrawn; production retains 30 seconds.
+Raw trial evidence is `/root/issue34/diag-thp-pages-1hnR698P` and
+`/root/issue34/perf-{baseline-30s-8j0zubc3,candidate-5s-vzh7z1jx}`. Processes and
+temporary homes were removed. An additional process-only `allow_thp=2`
+purge-alignment experiment failed initial HTTP2 admission before measurement;
+no valid memory result or product default was taken from it.
+
+
+### Short-window metric ownership repair (2026-10-31)
+
+An hourly RSS slope is an observation, not an expected growth rate. With fixed
+sites/dimensions and healthy delivery, retained metric history must not grow
+with uptime. The source audit identified actual long-lived owners: clean
+custom snapshots retained for at least an hour/twice the configured period,
+a day/IP set loaded from disk and retained for multiple days, and a second
+per-server IP set retained for the metric-instance lifetime. Successful upload
+released none of the latter two sets.
+
+The candidate now collects custom metrics only by event minute. Day/week/month
+are backend ClickHouse output intervals. A successful durable spool/quarantine
+handoff releases the snapshot row and charge in the same reporter tick; the
+post-handoff checkpoint persists deletion with the epoch/revision watermark.
+Further events in that minute receive a new incarnation/hash, while retrying
+an already checkpointed row preserves its old hash/revision.
+
+Exact visitor identities use bounded `(site, event minute, IpAddr)` batches,
+independent of optional/sampled access logs. Both request-start hooks record
+each request, including reused connections. Accepted identities release RAM
+on durable enqueue; refused chunks retain their charge and restore unsent
+identities. Edge no longer writes/reloads daily UIP keys or keeps a second
+lifetime IP set. Fixed map capacity may be reused; no periodic shrink or
+allocator-cadence change is used to hide growth. Existing historical local
+keys/packed slots remain untouched.
+
+Built-in request statistics also carry event minutes. The backend's new
+`server_request_stat_delta` preserves distinct batch/node/minute/dimension
+contributions and applies FINAL before sums. A one-time seed preserves
+surviving old rows with their original coarse timestamp. Historical values
+already overwritten by the old replacing key cannot be reconstructed.
+
+Validation so far: 71 affected RPC/snapshot tests passed before the built-in
+changes, including 240 durable handoff/restart cycles with zero retained rows
+and unique hashes. The Python harness ran 168 tests: 166 passed, two Linux-only
+checks skipped on macOS. Real RKE-dev ClickHouse tests passed calendar
+minute/day/week/month rollup, UTC+8 month boundaries, revision/incarnation
+replay, exact IP union across nodes/minutes/months, distinct same-minute
+request deltas and idempotent historical seed. This is ownership/storage
+correctness evidence, not a long-term full-heap leak-closure claim. Final
+Linux tests, benchmark and CI results must be recorded separately.

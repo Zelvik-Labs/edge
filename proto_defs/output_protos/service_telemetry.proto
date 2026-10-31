@@ -29,6 +29,19 @@ message TelemetryBatch {
   int64 segmentStartedAt = 17;
 }
 
+// Exact identities from short Edge microbatches. The backend unions these
+// across batches, nodes and longer periods; counts are never additive.
+message UniqueIpObservations {
+  repeated UniqueIpObservation observations = 1;
+}
+
+message UniqueIpObservation {
+  int64 serverId = 1;
+  // Request-start Unix seconds floored to a 60-second window.
+  int64 windowStart = 2;
+  string ip = 3;
+}
+
 message TelemetryReceipt {
   string batchId = 1;
   uint64 sequence = 2;

@@ -1559,8 +1559,8 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
         // The json! macro hits the recursion limit past ~50 fields; merge a
         // second object for the slower-changing observability fields.
         let shed = crate::memory_shed::shed_stats();
-        let (distinct_ip_entries, distinct_ip_budget_entries) =
-            crate::metrics::distinct_ip_budget_status();
+        let (unique_ip_pending, unique_ip_capacity, unique_ip_refused, unique_ip_enqueue_failures) =
+            crate::metrics::unique_ip::UNIQUE_IP_TRACKER.status();
         let (
             unattributed_requests,
             unattributed_bytes_sent,
@@ -1611,8 +1611,10 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             "metricsAggregatorBytes": governor_snapshot.metrics_aggregator_bytes,
             "cacheL1EstimatedBytes": governor_snapshot.cache_l1_bytes,
             "cacheL1BudgetBytes": cache_stats.memory_budget_bytes,
-            "distinctIpTrackerEntries": distinct_ip_entries,
-            "distinctIpBudgetEntries": distinct_ip_budget_entries,
+            "uniqueIpPendingObservations": unique_ip_pending,
+            "uniqueIpObservationCapacity": unique_ip_capacity,
+            "uniqueIpAdmissionRefused": unique_ip_refused,
+            "uniqueIpEnqueueFailures": unique_ip_enqueue_failures,
             "retiredServerMetricInstances": crate::metrics::METRICS.retired_server_metrics_count(),
             "metricFamilyInstances": crate::metrics::METRICS.family_instance_count(),
             "metricUnattributedRequests": unattributed_requests,

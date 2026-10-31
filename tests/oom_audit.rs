@@ -78,6 +78,7 @@ fn metric_aggregator_flush_empties_in_memory_store() {
     let key = AggregationKey {
         category: Arc::from(zelvik_edge::metrics::METRIC_CATEGORY_HTTP),
         server_id: 1,
+        window_start: 1_793_462_400,
         country: Arc::from(""),
         country_id: 0,
         province: Arc::from(""),

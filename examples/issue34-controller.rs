@@ -356,7 +356,7 @@ impl TelemetryStore {
 }
 
 fn is_core_telemetry_kind(kind: &str) -> bool {
-    matches!(kind, "bandwidth" | "node_metric" | "gap" | "alert" | "daily")
+    matches!(kind, "bandwidth" | "node_metric" | "gap" | "alert" | "daily" | "unique_ip")
 }
 
 #[derive(Default)]
@@ -1189,6 +1189,14 @@ pub fn build_snapshot(
             "clusterId": "1",
             "billingRegionId": "1",
         },
+        "metricItems": [
+            {"id": 1, "name": "fixture-day", "code": "fixture-day", "category": "http",
+             "keys": ["${country}"], "value": "${countRequest}", "period": 1,
+             "periodUnit": "day", "version": 1, "isOn": true},
+            {"id": 2, "name": "fixture-month", "code": "fixture-month", "category": "http",
+             "keys": ["${country}"], "value": "${countRequest}", "period": 1,
+             "periodUnit": "month", "version": 1, "isOn": true}
+        ],
         "servers": [{
             "id": 1,
             "isOn": true,

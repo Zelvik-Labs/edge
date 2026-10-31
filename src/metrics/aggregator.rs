@@ -16,6 +16,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 pub struct AggregationKey {
     pub category: Arc<str>,
     pub server_id: i64,
+    pub window_start: i64,
     pub country: Arc<str>,
     pub country_id: i64,
     pub province: Arc<str>,
@@ -36,6 +37,7 @@ impl PartialEq for AggregationKey {
     fn eq(&self, other: &Self) -> bool {
         self.category == other.category
             && self.server_id == other.server_id
+            && self.window_start == other.window_start
             && self.country == other.country
             && self.country_id == other.country_id
             && self.province == other.province
@@ -59,6 +61,7 @@ impl Hash for AggregationKey {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.category.hash(state);
         self.server_id.hash(state);
+        self.window_start.hash(state);
         self.country.hash(state);
         self.country_id.hash(state);
         self.province.hash(state);
@@ -424,6 +427,7 @@ mod tests {
         AggregationKey {
             category: Arc::from(crate::metrics::METRIC_CATEGORY_HTTP),
             server_id,
+            window_start: 1_793_462_400,
             country: Arc::from(""),
             country_id: 0,
             province: Arc::from(""),
@@ -449,6 +453,22 @@ mod tests {
             ..http_key.clone()
         };
         assert_ne!(http_key, tcp_key);
+    }
+
+    #[test]
+    fn event_minutes_separate_otherwise_identical_rows() {
+        let aggregator = MetricAggregator::new();
+        let first = test_key(1, "city");
+        let second = AggregationKey {
+            window_start: first.window_start + 60,
+            ..first.clone()
+        };
+        aggregator.record_with_capacity(first.clone(), 10, 0, false, 4);
+        aggregator.record_with_capacity(first, 20, 0, false, 4);
+        aggregator.record_with_capacity(second, 30, 0, false, 4);
+        let rows = aggregator.flush();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows.iter().map(|(_, value)| value.count).sum::<i64>(), 3);
     }
 
     #[test]

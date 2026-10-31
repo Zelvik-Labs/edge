@@ -28,7 +28,7 @@ class StatsError(RuntimeError):
     """The allocator stats surface is missing, unreadable or incomplete."""
 
 
-def _lookup(document: dict, dotted: str):
+def _lookup(document: dict, dotted: str, *, signed: bool = False):
     node = document
     for part in dotted.split("."):
         if not isinstance(node, dict) or part not in node:
@@ -36,7 +36,7 @@ def _lookup(document: dict, dotted: str):
         node = node[part]
     if isinstance(node, bool) or not isinstance(node, (int, float)):
         raise StatsError(f"allocator stats field {dotted!r} is not numeric: {node!r}")
-    if node < 0:
+    if node < 0 and not signed:
         raise StatsError(f"allocator stats field {dotted!r} is negative: {node!r}")
     return node
 
@@ -73,7 +73,9 @@ def normalize(document: dict, required_keys=DEFAULT_REQUIRED_KEYS) -> dict:
                 continue
             for field in ("current", "peak", "total"):
                 key = f"mimalloc.{name}.{field}"
-                flat[key] = float(_lookup(document, key))
+                # Native signed counts aggregate thread-local deltas and may
+                # be negative. Preserve the raw value; process/RSS stays strict.
+                flat[key] = float(_lookup(document, key, signed=True))
         for name in ("reset", "purged", "pages_retire", "pages_reclaim_on_free"):
             if name in native:
                 key = f"mimalloc.{name}"
@@ -90,8 +92,13 @@ def normalize(document: dict, required_keys=DEFAULT_REQUIRED_KEYS) -> dict:
             for field in ("current", "total"):
                 total = 0.0
                 for item in bins:
-                    total += float(_lookup({"bin": item}, f"bin.{field}"))
+                    total += float(_lookup({"bin": item}, f"bin.{field}", signed=True))
                 flat[f"mimalloc.{name}.{field}"] = total
+    worker = document.get("worker_reclaim")
+    if isinstance(worker, dict):
+        for name in ("started", "live", "park_collects", "stop_collects"):
+            key = f"worker_reclaim.{name}"
+            flat[key] = float(_lookup(document, key))
     # Optional allocator cache/residency counters, still strict when present.
     for name in ("reserved", "committed", "reset", "retained", "cached"):
         if name in document:

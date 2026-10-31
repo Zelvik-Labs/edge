@@ -195,13 +195,12 @@ class MeasurementWindowTests(unittest.TestCase):
             self.assertIsNotNone(match, name)
             return float(match.group(1))
 
-        # The failed Linux run needed 76.5 s after pressure began: release,
-        # clean-load handshake, then a stable RSS plateau. Replay that delay
-        # against the actual workflow schedule, retaining its 150 s minimum.
+        # Replay observed pressure/recovery plus a second complete stable
+        # window, retaining the original 150 s measurement minimum.
         pressure_start = argument("duration") * argument("pressure-start-fraction")
         measurement_start = soak._measurement_start(
             0.0, argument("warmup-seconds"), pressure_start + 26.0,
-            pressure_start + 41.4, pressure_start + 76.5,
+            pressure_start + 41.4, pressure_start + 106.5,
         )
         remaining = argument("duration") - 1.0 - measurement_start
         self.assertGreaterEqual(remaining, argument("min-span-seconds"))
@@ -399,8 +398,8 @@ class StabilizationTests(unittest.TestCase):
         # The criterion is the trailing rate, so the shallow tail of the ramp
         # already qualifies (the last ~2 MiB of a 40 MiB refill is below
         # 8 MiB/min over 30 s). Two consecutive windows are still required.
-        self.assertGreaterEqual(result["seconds"], 45.0)
-        self.assertLess(result["seconds"], 60.0)
+        self.assertGreaterEqual(result["seconds"], 75.0)
+        self.assertLess(result["seconds"], 90.0)
         self.assertLessEqual(abs(result["plateau_rate_mib_per_min"]), 8.0)
         self.assertEqual(len(captured), result["samples"])
         self.assertEqual(result["windows"], 2)
@@ -442,8 +441,21 @@ class StabilizationTests(unittest.TestCase):
         result, _, _ = self.run_wait(rss_at)
         self.assertTrue(result["plateaued"])
         # The jump only leaves the trailing 30 s window at ~61 s.
-        self.assertGreaterEqual(result["seconds"], 60.0)
-        self.assertLess(result["seconds"], 65.0)
+        self.assertGreaterEqual(result["seconds"], 90.0)
+        self.assertLess(result["seconds"], 95.0)
+
+    def test_flat_requires_two_complete_windows(self):
+        result, _, _ = self.run_wait(lambda _: 300 * MIB)
+        self.assertEqual(result["seconds"], 60.0)
+        self.assertEqual(result["windows"], 2)
+
+    def test_falling_residency_is_not_a_plateau(self):
+        result, _, _ = self.run_wait(
+            lambda now: int((300 - now) * MIB), timeout=90.0
+        )
+        self.assertFalse(result["plateaued"])
+        self.assertEqual(result["seconds"], 90.0)
+        self.assertLess(result["plateau_rate_mib_per_min"], -8.0)
 
     def test_stabilization_moves_measurement_start_and_keeps_ordering(self):
         self.assertEqual(

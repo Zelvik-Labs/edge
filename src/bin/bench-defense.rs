@@ -86,6 +86,7 @@ fn write_alloc_stats(path: &str, buffer: &mut [u8]) -> anyhow::Result<()> {
     let mimalloc: serde_json::Value = serde_json::from_str(&raw)
         .map_err(|error| anyhow::anyhow!("mi_stats_get_json is not JSON: {error}"))?;
     let mi_version = unsafe { libmimalloc_sys::mi_version() };
+    let worker_reclaim = zelvik_edge::worker_reclaim::snapshot();
 
     let document = json!({
         "schema": "issue34-allocator-stats/v1",
@@ -99,6 +100,12 @@ fn write_alloc_stats(path: &str, buffer: &mut [u8]) -> anyhow::Result<()> {
             "page_faults": page_faults,
         },
         "mimalloc": mimalloc,
+        "worker_reclaim": {
+            "started": worker_reclaim.worker_threads_started,
+            "live": worker_reclaim.worker_threads_live,
+            "park_collects": worker_reclaim.park_collects,
+            "stop_collects": worker_reclaim.stop_collects,
+        },
     });
 
     let temporary = format!("{path}.tmp.{}", std::process::id());
@@ -131,6 +138,13 @@ fn env_u32(name: &str, default: u32) -> u32 {
 }
 fn env_str(name: &str, default: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| default.to_string())
+}
+
+fn build_runtime() -> anyhow::Result<tokio::runtime::Runtime> {
+    let mut builder = tokio::runtime::Builder::new_multi_thread();
+    builder.enable_all();
+    zelvik_edge::worker_reclaim::install_tokio_worker_hooks(&mut builder);
+    builder.build().context("build bench-defense runtime")
 }
 
 fn main() -> anyhow::Result<()> {
@@ -168,10 +182,7 @@ fn main() -> anyhow::Result<()> {
     let alloc_stats_path = std::env::var("BENCH_ALLOC_STATS_PATH").ok();
 
     zelvik_edge::utils::time::init_local_timezone();
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .context("build bench-defense runtime")?;
+    let runtime = build_runtime()?;
     let _guard = runtime.enter();
 
     zelvik_edge::metrics::init_http_dimension_worker(10_000);
@@ -794,5 +805,22 @@ fn waf_block_policy() -> HTTPFirewallPolicy {
         candidate_rules: None,
         candidate_traffic_pct: 0,
         candidate_version: 0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn component_runtime_collects_on_worker_stop() {
+        let before = zelvik_edge::worker_reclaim::snapshot();
+        let runtime = super::build_runtime().expect("component runtime builds");
+        runtime.block_on(async {
+            tokio::spawn(async {}).await.expect("worker task completes");
+        });
+        drop(runtime);
+        let after = zelvik_edge::worker_reclaim::snapshot();
+        assert!(after.worker_threads_started > before.worker_threads_started);
+        assert!(after.stop_collects > before.stop_collects);
+        assert_eq!(after.worker_threads_live, before.worker_threads_live);
     }
 }

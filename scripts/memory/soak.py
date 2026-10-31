@@ -352,8 +352,9 @@ def _wait_stabilization(
     target's working set. After release the resident set ramps back to steady
     state, and a window that starts immediately would measure that refill as a
     fake leak. Stabilization is reached when the trailing ``window_seconds``
-    RSS delta rate is at or below ``max_rate_mib_per_min`` for
-    ``required_windows`` consecutive evaluations. The wait is bounded; the
+    absolute RSS delta rate is at or below ``max_rate_mib_per_min`` for
+    ``required_windows`` complete window spans. Overlapping polls do not count
+    as additional windows. The wait is bounded; the
     caller turns a non-plateau into an explicit violation, never a skip.
 
     ``on_sample`` receives every captured sample so the caller can keep one
@@ -383,6 +384,7 @@ def _wait_stabilization(
     deadline = started_at + timeout_seconds
     take()
     consecutive = 0
+    stable_since = None
     last_rate = None
     while True:
         sleep(poll_interval)
@@ -398,9 +400,12 @@ def _wait_stabilization(
         if window_start is not None:
             elapsed = newest_t - window_start[0]
             last_rate = (newest - window_start[1]) / elapsed * 60.0 / MIB
-            if last_rate <= max_rate_mib_per_min:
-                consecutive += 1
+            if abs(last_rate) <= max_rate_mib_per_min:
+                if stable_since is None:
+                    stable_since = window_start[0]
+                consecutive = int((newest_t - stable_since) / window_seconds)
             else:
+                stable_since = None
                 consecutive = 0
             if consecutive >= required_windows:
                 return {
