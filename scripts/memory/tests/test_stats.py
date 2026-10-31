@@ -45,6 +45,46 @@ class StatsTests(unittest.TestCase):
         self.assertEqual(flat["process.commit_current"], 4096.0)
         self.assertEqual(flat["process.page_faults"], 17.0)
 
+    def test_bench_nested_v3_counters_are_preserved(self):
+        document = {
+            "process": NATIVE["process"],
+            "mimalloc": {
+                "committed": {"current": 8192, "peak": 16384, "total": 32768},
+                "malloc_normal": {"current": 2048, "peak": 4096, "total": 65536},
+                "pages_abandoned": {"current": 2, "peak": 4, "total": 8},
+                "purged": 4096,
+                "pages_reclaim_on_free": 3,
+                "malloc_bins": [
+                    {"current": 2, "peak": 4, "total": 10, "block_size": 16},
+                    {"current": 3, "peak": 5, "total": 20, "block_size": 32},
+                ],
+                "page_bins": [],
+            },
+        }
+        flat = stats.normalize(document)
+        self.assertEqual(flat["process.commit_current"], 4096)
+        self.assertEqual(flat["mimalloc.committed.current"], 8192)
+        self.assertEqual(flat["mimalloc.malloc_normal.current"], 2048)
+        self.assertEqual(flat["mimalloc.pages_abandoned.current"], 2)
+        self.assertEqual(flat["mimalloc.purged"], 4096)
+        self.assertEqual(flat["mimalloc.pages_reclaim_on_free"], 3)
+        self.assertEqual(flat["mimalloc.malloc_bins.current"], 5)
+        self.assertEqual(flat["mimalloc.malloc_bins.total"], 30)
+        self.assertEqual(flat["mimalloc.page_bins.count"], 0)
+        self.assertNotIn("mimalloc.malloc_bins.peak", flat)
+
+    def test_malformed_nested_v3_counter_fails(self):
+        for value in (-1, True, "missing"):
+            with self.subTest(value=value):
+                document = {
+                    "process": NATIVE["process"],
+                    "mimalloc": {
+                        "committed": {"current": value, "peak": 2, "total": 3},
+                    },
+                }
+                with self.assertRaises(stats.StatsError):
+                    stats.normalize(document)
+
     def test_flat_allocator_shape(self):
         flat = stats.normalize(
             {

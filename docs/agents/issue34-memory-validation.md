@@ -440,3 +440,45 @@ component gate failing. Raw evidence is retained in
 `/tmp/edge-ef80a63-full-report.json`, `/tmp/edge-ef80a63-full-summary.json`,
 `/tmp/edge-cpu-monitor-screen-result.json`, and the test host's
 `/root/issue34/healthy-telemetry-koi2pgYr`. Test processes were cleaned up.
+
+### Native allocator counter ingestion
+
+The component writes `mi_stats_get_json` under `mimalloc`, while the sampler
+previously searched only root-level optional counters. The pinned v3 JSON uses
+`current`/`peak`/`total` count objects and scalar purge/reclaim counters. As a
+result, the previous component reports preserved process-info counters but
+omitted this native breakdown. The reader now retains a bounded set of native
+counters and current/total bin counts under `mimalloc.*`; bin counts are not
+labelled as bytes and per-bin peaks are not added. Required process counters
+and kernel RSS/Anon gates are unchanged. The new nested-document regression
+fails with the old reader (missing native counter) and passes with the fix;
+164 harness tests ran on macOS, 162 passed and two Linux-only tests skipped.
+Independent review found no blocker. Availability and precision of native
+counters still depend on the allocator's compiled statistics level.
+
+A separate source review found that `bench-defense` builds its own Tokio
+runtime without the worker collect hooks installed by production startup.
+It also omits the production reclaim monitor and cache janitor. This is a
+component lifecycle difference, not evidence that it explains the measured
+RSS growth; no hook change or gate relaxation is included here.
+
+### Same-process allocation census
+
+The CPU-only release binary was traced across all Rust mimalloc request sizes
+in one 255-second diagnostic: 180 seconds load (34,007 requests, zero errors)
+then 60 seconds idle, in the same 2 GiB scope with process-only THP disabled.
+At the 60-second trace sample, `TinyUfoL1::build_cache` had retained
+11,989,350 + 4,194,304 bytes (15.434 MiB), unchanged through the final sample.
+This identifies a concrete cache-metadata allocation step; it does not prove
+that the step explains the failed slopes. Source constructs TinyUFO capacity
+from the byte budget and replaces it during budget rebuilds. Mace map creation
+again retained 1,672,704 bytes. RSS at load stop was 133.441 MiB and fell to
+126.938 MiB by 240 seconds.
+
+The profiler also reported pointer-overlap detections (13 in the periodic
+samples, 406 in the final dump). Its aggregate outstanding-byte curve is
+therefore not accepted as exact live-heap accounting or evidence excluding a
+leak. Pre-attach objects and native library allocation paths are also outside
+its coverage. Raw evidence is `/root/issue34/diag-allocation-census-3TYYfyK1`
+on the test host and `/tmp/edge-allocation-census-evidence` locally. The
+processes and temporary home were cleaned up; no acceptance gate is changed.

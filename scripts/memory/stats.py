@@ -61,6 +61,37 @@ def normalize(document: dict, required_keys=DEFAULT_REQUIRED_KEYS) -> dict:
         for name in ("commit_current", "peak_commit", "rss_current", "peak_rss", "page_faults"):
             if name in process:
                 flat[f"process.{name}"] = float(_lookup(document, f"process.{name}"))
+    # bench-defense wraps the native v3 document under `mimalloc`. Keep its
+    # count objects and bin totals distinct from mi_process_info above.
+    native = document.get("mimalloc")
+    if isinstance(native, dict):
+        for name in (
+            "reserved", "committed", "page_committed", "pages",
+            "pages_abandoned", "malloc_normal", "malloc_huge", "malloc_requested",
+        ):
+            if name not in native:
+                continue
+            for field in ("current", "peak", "total"):
+                key = f"mimalloc.{name}.{field}"
+                flat[key] = float(_lookup(document, key))
+        for name in ("reset", "purged", "pages_retire", "pages_reclaim_on_free"):
+            if name in native:
+                key = f"mimalloc.{name}"
+                flat[key] = float(_lookup(document, key))
+        for name in ("malloc_bins", "page_bins", "chunk_bins"):
+            if name not in native:
+                continue
+            bins = native[name]
+            if not isinstance(bins, list):
+                raise StatsError(f"allocator stats mimalloc.{name} is not an array")
+            flat[f"mimalloc.{name}.count"] = float(len(bins))
+            # Native bins hold block/page counts, not bytes. Do not sum
+            # per-bin peaks: they can occur at different instants.
+            for field in ("current", "total"):
+                total = 0.0
+                for item in bins:
+                    total += float(_lookup({"bin": item}, f"bin.{field}"))
+                flat[f"mimalloc.{name}.{field}"] = total
     # Optional allocator cache/residency counters, still strict when present.
     for name in ("reserved", "committed", "reset", "retained", "cached"):
         if name in document:
