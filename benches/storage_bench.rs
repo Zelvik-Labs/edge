@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use zelvik_edge::metrics::storage::{CacheMetaUpsert, MetricStorage};
-use zelvik_edge::rpc::metrics::ServerMetricUpdate;
 
 fn temp_store(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
@@ -19,26 +18,6 @@ fn temp_store(tag: &str) -> PathBuf {
 
 fn open_mace(tag: &str) -> MetricStorage {
     MetricStorage::open(temp_store(tag)).expect("open mace storage")
-}
-
-fn sample_metric_updates(count: usize) -> Vec<ServerMetricUpdate> {
-    (0..count)
-        .map(|i| ServerMetricUpdate {
-            server_id: (i as i64) + 1,
-            user_id: 0,
-            user_plan_id: 0,
-            plan_id: 0,
-            total_requests: 10,
-            bytes_sent: 1024,
-            bytes_received: 512,
-            cached_bytes: 256,
-            count_cached_requests: 2,
-            count_attack_requests: 0,
-            attack_bytes: 0,
-            active_connections: 4,
-            count_websocket_connections: 0,
-        })
-        .collect()
 }
 
 fn prefill_firewall_records(storage: &MetricStorage, count: usize) {
@@ -103,21 +82,6 @@ fn bench_metrics_write_paths(c: &mut Criterion) {
                 b.iter(|| {
                     storage
                         .increment_batch(updates.clone())
-                        .expect("persist benchmark batch");
-                    black_box(())
-                });
-            },
-        );
-
-        group.bench_with_input(
-            BenchmarkId::from_parameter(format!("record_server_batch/{count}")),
-            &count,
-            |b, count| {
-                let storage = open_mace(&format!("server_batch_{count}"));
-                let updates = sample_metric_updates(*count);
-                b.iter(|| {
-                    storage
-                        .record_server_batch(1_700_000_000, updates.clone(), 4096, 2048)
                         .expect("persist benchmark batch");
                     black_box(())
                 });

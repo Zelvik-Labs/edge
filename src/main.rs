@@ -3669,7 +3669,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     });
 
     spawn_staggered(&rt, Duration::from_secs(21), async move {
-        zelvik_edge::metrics::start_persistence_flusher().await;
+        zelvik_edge::metrics::start_memory_observer().await;
     });
 
     let ac_ocsp = api_config.clone();

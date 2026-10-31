@@ -3,7 +3,7 @@ use dashmap::DashMap;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::OnceLock as OnceCell;
 use std::sync::atomic::{AtomicI64, AtomicU64, AtomicU8, AtomicUsize, Ordering};
-use std::sync::{Arc, LazyLock, Weak};
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 
@@ -935,11 +935,10 @@ impl ServerStatusSnapshot {
     }
 }
 
-/// The three consumers that report per-server counter deltas. Node and
+/// The two durable reporters that consume per-server counter deltas. Node and
 /// performance snapshots read live state only and are not retirement barriers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MetricConsumer {
-    Persistence,
     Bandwidth,
     Daily,
 }
@@ -947,14 +946,13 @@ pub enum MetricConsumer {
 impl MetricConsumer {
     fn bit(self) -> u8 {
         1 << match self {
-            Self::Persistence => 0,
-            Self::Bandwidth => 1,
-            Self::Daily => 2,
+            Self::Bandwidth => 0,
+            Self::Daily => 1,
         }
     }
 }
 
-const METRIC_CONSUMER_COUNT: usize = 3;
+const METRIC_CONSUMER_COUNT: usize = 2;
 const METRIC_ACK_ALL: u8 = (1 << METRIC_CONSUMER_COUNT) - 1;
 
 /// One sample returned to a delta consumer. `metrics` is the exact Arc the
@@ -996,7 +994,7 @@ pub struct NodeMetrics {
     unattributed_bytes_received: AtomicU64,
     unattributed_origin_bytes: AtomicU64,
     /// Entries removed from the live id map but not yet fully consumed by the
-    /// persistence, bandwidth and daily delta reporters.
+    /// bandwidth and daily delta reporters.
     retired_servers: DashMap<u64, RetiredServerMetrics>,
     retirement_deferred_total: AtomicU64,
     pub rpc: RpcMetrics,
@@ -1338,7 +1336,7 @@ impl NodeMetrics {
     }
 
     /// Record that one consumer has processed `fingerprint` from this retired
-    /// instance. The entry is released only when all three consumers have
+    /// instance. The entry is released only when both durable reporters have
     /// acknowledged the current fingerprint and no request holds the Arc.
     pub fn acknowledge_retired(
         &self,
@@ -1997,25 +1995,10 @@ pub mod record {
     }
 }
 
-struct FlusherBaseline {
-    metrics: Weak<ServerMetrics>,
-    snapshot: ServerStatusSnapshot,
-}
-
-fn flusher_delta(
-    current: &ServerStatusSnapshot,
-    last: Option<&ServerStatusSnapshot>,
-    field: fn(&ServerStatusSnapshot) -> u64,
-) -> u64 {
-    field(current).saturating_sub(last.map(field).unwrap_or(0))
-}
-
-pub async fn start_persistence_flusher() {
-    use std::collections::HashMap;
+/// Observe bounded metric state without retaining a second local history.
+/// Counter deltas are durably handed off by the bandwidth and daily reporters.
+pub async fn start_memory_observer() {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
-    let mut last_values: HashMap<u64, FlusherBaseline> = HashMap::new();
-    let mut last_node_sent = 0u64;
-    let mut last_node_recv = 0u64;
 
     loop {
         interval.tick().await;
@@ -2055,107 +2038,17 @@ pub async fn start_persistence_flusher() {
                 );
             }
         }
-        let mut updates = Vec::new();
-        // Baselines are only committed after the Mace write succeeds; on a
-        // failed write the next round recomputes the same deltas instead of
-        // silently losing them.
-        let mut new_baselines: Vec<(u64, FlusherBaseline)> = Vec::new();
-        let mut retired_acks: Vec<(u64, u64)> = Vec::new();
-        let now = crate::utils::time::now_timestamp();
-        let period = (now / 300) * 300;
-
-        for sample in METRICS.take_reporting_snapshots() {
-            let current = sample.snapshot;
-            let instance_id = current.instance_id;
-            let server_id = current.server_id;
-            let last = last_values.get(&instance_id).and_then(|baseline| {
-                baseline
-                    .metrics
-                    .upgrade()
-                    .filter(|metrics| Arc::ptr_eq(metrics, &sample.metrics))
-                    .map(|_| &baseline.snapshot)
-            });
-
-            updates.push(crate::rpc::metrics::ServerMetricUpdate {
-                server_id,
-                user_id: current.user_id,
-                user_plan_id: current.user_plan_id,
-                plan_id: current.plan_id,
-                total_requests: flusher_delta(&current, last, |s| s.total_requests),
-                bytes_sent: flusher_delta(&current, last, |s| s.bytes_sent),
-                bytes_received: flusher_delta(&current, last, |s| s.bytes_received),
-                cached_bytes: flusher_delta(&current, last, |s| s.cached_bytes),
-                count_cached_requests: flusher_delta(&current, last, |s| s.count_cached_requests),
-                count_attack_requests: flusher_delta(&current, last, |s| s.count_attack_requests),
-                attack_bytes: flusher_delta(&current, last, |s| s.attack_bytes),
-                active_connections: current.active_connections,
-                count_websocket_connections: flusher_delta(&current, last, |s| {
-                    s.count_websocket_connections
-                }),
-            });
-
-            if sample.retired {
-                retired_acks.push((instance_id, current.fingerprint()));
-            }
-            new_baselines.push((
-                instance_id,
-                FlusherBaseline {
-                    metrics: Arc::downgrade(&sample.metrics),
-                    snapshot: current,
-                },
-            ));
-        }
-
-        let node_sent = METRICS.total_bytes_sent.load(Ordering::Relaxed);
-        let node_recv = METRICS.total_bytes_received.load(Ordering::Relaxed);
-        let node_sent_delta = node_sent - last_node_sent;
-        let node_recv_delta = node_recv - last_node_recv;
-
-        let cleanup = now - 86400;
+        // Retain the existing bounded expiration only for rows written by an
+        // earlier version. No current counter is mirrored into local history.
+        let cutoff = crate::utils::time::now_timestamp() - 86_400;
+        match crate::worker_reclaim::spawn_storage_work(move || {
+            storage::STORAGE.cleanup_old_stats(cutoff)
+        })
+        .await
         {
-            let write_result = tokio::task::spawn_blocking(move || {
-                let record_result = if !updates.is_empty() {
-                    storage::STORAGE
-                        .record_server_batch(period, updates, node_sent_delta, node_recv_delta)
-                        .inspect_err(|err| {
-                            tracing::error!(?err, "metric server batch persistence failed");
-                        })
-                } else {
-                    Ok(())
-                };
-                // Cleanup has its own durable cursor and must advance even
-                // while no samples were written this tick. Its failure must
-                // not roll back the counters that were already persisted, and
-                // a record failure must not stop retention either.
-                if let Err(err) = storage::STORAGE.cleanup_old_stats(cleanup) {
-                    tracing::error!(?err, "metric history cleanup failed");
-                }
-                record_result
-            })
-            .await;
-            match write_result {
-                Ok(Ok(())) => {
-                    for (instance_id, baseline) in new_baselines {
-                        last_values.insert(instance_id, baseline);
-                    }
-                    for (instance_id, fingerprint) in retired_acks {
-                        METRICS.acknowledge_retired(
-                            MetricConsumer::Persistence,
-                            instance_id,
-                            fingerprint,
-                        );
-                    }
-                    last_values.retain(|_, baseline| baseline.metrics.strong_count() > 0);
-                    last_node_sent = node_sent;
-                    last_node_recv = node_recv;
-                }
-                Ok(Err(err)) => {
-                    tracing::error!(error = %err, "metrics persistence worker failed");
-                }
-                Err(err) => {
-                    tracing::error!(error = %err, "metrics persistence worker failed");
-                }
-            }
+            Ok(Ok(_)) => {}
+            Ok(Err(error)) => tracing::error!(?error, "obsolete metric history cleanup failed"),
+            Err(error) => tracing::error!(%error, "obsolete metric history worker failed"),
         }
     }
 }
@@ -2193,7 +2086,6 @@ mod retirement_tests {
         drop(sample);
 
         for consumer in [
-            MetricConsumer::Persistence,
             MetricConsumer::Bandwidth,
             MetricConsumer::Daily,
         ] {
@@ -2216,13 +2108,35 @@ mod retirement_tests {
         drop(samples);
 
         for consumer in [
-            MetricConsumer::Persistence,
             MetricConsumer::Bandwidth,
             MetricConsumer::Daily,
         ] {
             acknowledge_all(&node, consumer, instance_id, final_fingerprint);
         }
         assert_eq!(node.retired_server_metrics_count(), 0);
+    }
+
+    #[test]
+    fn retirement_requires_both_durable_reporters_without_local_history() {
+        let node = NodeMetrics::new();
+        let metrics = Arc::new(ServerMetrics::new());
+        let instance_id = metrics.instance_id;
+        metrics.bytes_sent.store(4_096, Ordering::Relaxed);
+        node.servers.insert(7_710_003, metrics);
+        node.retire_servers_absent_from(&HashSet::from([7_710_003]), &HashSet::new());
+
+        let sample = node.take_reporting_snapshots().pop().expect("retired sample");
+        assert_eq!(sample.snapshot.bytes_sent, 4_096);
+        let fingerprint = sample.snapshot.fingerprint();
+        drop(sample);
+
+        node.acknowledge_retired(MetricConsumer::Bandwidth, instance_id, fingerprint);
+        node.sweep_retired();
+        assert_eq!(node.retired_server_metrics_count(), 1, "daily delivery is still pending");
+
+        node.acknowledge_retired(MetricConsumer::Daily, instance_id, fingerprint);
+        assert!(node.take_reporting_snapshots().is_empty());
+        assert_eq!(node.retired_server_metrics_count(), 0, "no local history writer is required");
     }
 
     #[test]
@@ -2274,7 +2188,6 @@ mod retirement_tests {
         let fingerprint = sample.snapshot.fingerprint();
         drop(sample);
         for consumer in [
-            MetricConsumer::Persistence,
             MetricConsumer::Bandwidth,
             MetricConsumer::Daily,
         ] {

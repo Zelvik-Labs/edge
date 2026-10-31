@@ -803,7 +803,7 @@ subsequent remote frees removed their owner immediately. All live payloads
 remained intact, and eight rounds of allocation/handoff/read/free/reinitialization
 completed. Evidence: `/root/issue34/parked-owner-{collect,handoff}-*.json`.
 
-The next uncommitted candidate relinquishes allocator ownership at the
+Commit `73ec80f` relinquishes allocator ownership at the
 existing rate-limited worker park boundary and on durable storage completion.
 It does not add a timer, wake sleeping workers, change the collection cadence,
 or disable THP. The real-module handoff test passed, failed with 2,015,232 bytes
@@ -830,5 +830,74 @@ empty-page residency was 33.516/12.531/14.527/26.371/46.773 MiB. Final rounded
 live bytes were 156.563 MiB and deferred bytes 8.062 MiB. There were 74,510
 successful requests, 22,146 deliberate pressure errors and zero measurement
 errors. The process and temporary home were removed. Evidence:
-`/root/issue34/short-state-owner-pressure-kha9vj1t`. The unchanged 900-second
-handoff screen is running separately; this diagnostic is not its replacement.
+`/root/issue34/short-state-owner-pressure-kha9vj1t`.
+
+The completed unchanged 900-second handoff screen failed: RSS/Anon upper95
+341.012 MiB/h against 8, over 535.340 seconds/268 measurement points, with
+104,249 measurement requests and zero measurement errors. Stabilization timed
+out at 180.800 seconds. The final RSS/Anon/THP was 285,839,360/254,705,664/
+174,063,616 bytes. There were 179,066 successful requests and 11,552 deliberate
+pressure errors. The PID survived without OOM or swap; process/home cleanup
+completed. Normal CI `41220391569` passed, but memory CI `41220391579` failed:
+component span 114.5 seconds <150; full-process RSS/Anon upper95 230.683 MiB/h
+against 8. Long lanes remained skipped. Evidence:
+`/root/issue34/idle-handoff-full-screen-uzjja1tn`,
+`/tmp/edge-idle-full-screen-state.txt` and
+`/tmp/edge-idle-handoff-memory-ci.log`. Commit `73ec80f` is not release-ready.
+
+A second 900-second diagnostic sampled exact arena metadata, deferred-free
+links, page presence and thread register identity through the same measurement
+window. All nine snapshots had matching page/owner/category sums and no
+inflight inconsistencies. At 360/840/890 seconds, RSS was
+246.187500/266.695313/299.195313 MiB; rounded live bytes were
+160.732063/165.756126/167.501503 MiB; empty-page residency was
+26.167969/24.359375/54.085938 MiB. During 360->840 seconds the 8 KiB class added
+535 live blocks (4.179688 MiB); owner zero held 503 of those additional blocks
+(3.929688 MiB), with no deferred frees. These are live allocator blocks;
+application cache versus pending payload ownership is not yet attributed.
+During 840->890 seconds, RSS rose 32.5 MiB while live bytes rose only
+1.745377 MiB; empty-page residency rose 29.726563 MiB, mainly in the
+98,304/196,608/393,216-byte classes. This separates an actual live-state increase
+from the much larger late residency swing without asserting whole-heap closure.
+
+That diagnostic also failed: RSS/Anon upper95 292.775912 MiB/h against 8 over
+535.321 seconds, with stabilization failure, 104,151 measurement successes and
+zero measurement errors. Telemetry recovery passed: pending 172->0 in
+21.115 seconds; 1,020 durable backend writes/81,970,536 bytes, no store errors,
+core ack/max 52/52 and detail 968/968. Metadata pauses make this diagnostic,
+not performance evidence. Its PID, pidfile and temporary home were removed;
+the driver completed and the service became inactive. Evidence:
+`/root/issue34/measurement-owner-pages-rew5g9bf`. THP, thresholds and workload
+were unchanged.
+
+The next source change removes a separate unused history writer. It used to
+sample every server every 30 seconds, write `S<server>_T<five-minute>` rows
+(including zero deltas) plus `NODE_T<five-minute>`, and retain them for 24 hours.
+Runtime reader searches found only writers, expiration, tests and the offline
+namespace classifier; actual bandwidth/daily reporting uses its own durable
+telemetry state. The observer retains the same metric-memory accounting and
+rate-limited warning. Retired server metrics now wait for the actual bandwidth
+and daily reporters, not the deleted history writer. This is a concrete
+duplicate-history removal, not an attribution of the measured RSS slope.
+
+A fresh review found that removing expiration as well would leave prior
+installations' rows forever. The final change retains the existing bounded
+24-hour expiration with independent server/node cursors and reports errors.
+It never generates new history rows. The real-store regression reopens an
+existing bucket, expires 3,001 old rows over bounded passes, preserves fresh
+rows plus STAT/cache/firewall namespaces, and checks cursor wrap. The retirement
+regression retains final counters until both reporters acknowledge; restoring
+the third barrier fails the same test. No database rewrite or compatibility
+read/write path is introduced.
+
+Final affected Linux validation passed: retirement 6, configuration-retirement 1,
+reporting-baseline 1, storage 18 and real Mace integration 7 tests, with no
+failures or ignored tests. The old third-barrier negative failed as expected;
+the restored retirement suite passed. All-target Clippy passed its correctness/
+suspicious checks. It exposed an existing receipt fixture module-position
+warning; moving that unchanged test module to the end removed the warning,
+and the real Spool->fixture fsync->Spool ACK regression passed again. Other
+pre-existing advisory warnings remain in unrelated node/XDP tests. The product
+release-profile build passed in 372.846 seconds; binary SHA-256 is
+`c8a4837ae9fb476146f9bfba85077ff894267d8ea63dfcfe7b12091923fa02c2`.
+These results validate the history-removal behavior, not process memory closure.

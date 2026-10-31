@@ -2431,7 +2431,6 @@ mod tests {
         let fingerprint = sample.snapshot.fingerprint();
         drop(sample);
         for consumer in [
-            crate::metrics::MetricConsumer::Persistence,
             crate::metrics::MetricConsumer::Bandwidth,
             crate::metrics::MetricConsumer::Daily,
         ] {
