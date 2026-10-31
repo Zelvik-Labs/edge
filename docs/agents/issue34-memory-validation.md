@@ -347,14 +347,14 @@ Linux runner started by main after push.
    dedicated long lane report `scope.full_edge=true`; the workflows assert
    that distinction, and the automatic full-edge report is still
    `screen_only=true`.
-5. The integrated 26.10.4.10 branch uses the same DNS revision as the
+5. The integrated 26.10.5 branch uses the same DNS revision as the
    26.10.4.9 CI and release workflows:
    `aca0f3bb61bc498682b10900b4886709a2c248b8`. The older issue34 branch's
    Geo dependency exclusion no longer describes this integration. Access-log
    analyzer changes are part of this release; unrelated changes in other
    worktrees remain outside it.
 
-## Integrated 26.10.4.10 verification
+## Integrated 26.10.5 verification
 
 The local verification section above records the original issue34 branch,
 not the final release candidate. The integrated branch has 160 Python harness
@@ -364,3 +364,28 @@ plan lifetimes, charge transfer, durable cumulative snapshots and late events,
 telemetry quarantine, and access-log enrichment. Final Linux acceptance and
 release provenance are recorded separately; no 4 h or 48 h soak is run for
 this release. Short observations cannot close the long-term memory claim.
+
+### 2026-10-31 request ownership diagnostic
+
+The candidate version was corrected from `26.10.4.10` to `26.10.5` using
+`license/shared/calver.ts`: October 31 is week 5, and the Edge release bucket
+has no release in that week yet. This version correction does not change the
+memory verdict. The automatic component and full-Edge screens at `ad4026e`
+still fail their original RSS/Anon thresholds; no threshold was relaxed.
+
+A separate diagnostic on the 43 test host used the existing `f9f4598` release
+binary, a 2 GiB cgroup, and process-only `MIMALLOC_ALLOW_THP=0`. It does not
+validate a newly compiled `26.10.5` binary. It traced all 8–100 KiB allocation
+requests, frees, and reallocations for 165 seconds, with 60 seconds of TLS
+POST traffic followed by idle observation. There were 11,311 successful
+requests and no load or profiler errors. The tracked `BodyReader` and
+`process_http1_stream` net allocations returned to zero after traffic stopped.
+RSS was 135.629 MiB when load stopped and 134.125 MiB at 150 seconds, with
+intermediate fluctuations. The main remaining traced allocation was a
+1,672,704-byte Mace page-map allocation; its recycling pool is capped in the
+pinned Mace source. This diagnostic does not cover every allocation size or
+prove that the full process has no leak.
+
+Raw evidence: `/root/issue34/diag-request-idle-xBNMQZZl` on the test host and
+`/tmp/edge-cycle-request-idle-data.json` locally. The diagnostic processes and
+their temporary home were removed; evidence and build caches were retained.

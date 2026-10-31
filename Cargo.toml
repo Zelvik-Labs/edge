@@ -1,6 +1,6 @@
 [package]
 name = "zelvik-edge"
-version = "26.10.4"
+version = "26.10.5"
 edition = "2024"
 rust-version = "1.99.0"
 description = "Zelvik Edge CDN and global traffic data plane"

@@ -1,18 +1,16 @@
 # Product version and source provenance are deliberately separate.
-# Versioning follows the unified Zelvik scheme (docs/versioning.md):
-# component = YY.MM.PATCH, tag = v<component>. An occasional fourth
-# segment (YY.MM.PATCH.x, e.g. 26.9.0.1) is allowed as a patch of that
-# release; it appears in release tags / product_version only — the Cargo
-# version stays three-part.
+# Versioning follows Zelvik CalVer YY.M.W[.P]: the week-of-month is
+# ceil(day / 7), with an optional patch inside the component's release bucket.
+# Cargo keeps the three-part YY.M.W base; product_version owns the full version.
 product = "Zelvik-Edge"
 # Single source of truth for the shipped product version, including the
 # optional CalVer patch segment that Cargo cannot express. Scripts derive it
 # via scripts/release-version.sh; never hand-write it anywhere else.
-product_version = "26.10.4.10"
+product_version = "26.10.5"
 # Three-segment base that must equal [package].version in Cargo.toml.
-cargo_version = "26.10.4"
-release_tag = "v26.10.4.10"
-version_scheme = "YY.MM.PATCH[.x]"
+cargo_version = "26.10.5"
+release_tag = "v26.10.5"
+version_scheme = "YY.M.W[.P]"
 
 [upstream]
 project = "cloud-node-rust"
