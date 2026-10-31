@@ -610,3 +610,59 @@ replay, exact IP union across nodes/minutes/months, distinct same-minute
 request deltas and idempotent historical seed. This is ownership/storage
 correctness evidence, not a long-term full-heap leak-closure claim. Final
 Linux tests, benchmark and CI results must be recorded separately.
+
+### Short-window acceptance and receipt-fixture correction
+
+Linux affected suites completed 76 metric/storage tests and 72 RPC tests, with
+no failure or skip. Three ownership negative controls failed after removing
+snapshot release, IP charge release, or event-minute identity respectively;
+restoring the source passed both suites. The storage integration completed
+eight tests. All-target Clippy passed after updating removed APIs in the memory
+comparison/storage benchmark and fixing the new main initialization warning.
+The Python harness completed 169 tests (167 pass, two Linux-only skips on macOS).
+
+The first short component CI screen at `33c0c4b` passed its RSS/Anon bounds
+(upper95 6.919 MiB/h against 64), with 165 measurement samples over 164.659
+seconds and zero measurement errors. Its overall verdict remained failed:
+only 196 allocator samples were read against the required 200. Stabilization
+recorded RSS through its callback but omitted the allocator read. Moving that
+read into the common sample callback keeps the duration, warmup, minimum span,
+200-sample requirement and all budgets unchanged. The new clock-driven regression
+passes with 100 reads plus initial readiness; the old sampler fails with 41.
+
+The same source's full-process CI screen failed: no stable plateau within
+180 seconds, final trailing rate 21.729 MiB/min, and RSS/Anon upper95
+79.378 MiB/h against 8. It measured 534.138 seconds/267 points, 101,339
+successful requests and zero measurement errors. Snapshot entries and estimated
+bytes were zero; that does not close the independent process-residency failure.
+
+A subsequent real-process check exposed an acceptance-fixture bug: its durable
+store returned `backend=issue34-fixture-durable`, while both the real API and
+`Spool::acknowledge` require `direct`. Backend receipt counters reaching zero
+therefore did not prove that Edge had retired its local queue. `1abf37f` corrects
+the fixture and adds real Spool -> controller fsync -> Spool ACK coverage. The
+regression passed, failed with the old backend label, and passed after restoring
+the correction. Production receipt validation was not weakened.
+
+With the corrected fixture a real Edge completed 5,000 requests without errors,
+kept one PID, and released day/month-configured metric projections to zero
+checkpoint rows and zero estimated/pending bytes. Exact IP observations also
+reached zero without admission refusals or enqueue failures. Revision watermark
+remained 2. The workload used 40 HTTP/2 connections, 125 requests each, within
+the existing 200 streams/30 seconds churn limit. An earlier eight-connection
+attempt hit that limit and is a failed load check, not performance evidence.
+Evidence: `/root/issue34/short-state-process-l7e115cd`.
+
+A separate calibrated THP-on observation used 2 GiB, memory.high=1.5 GiB,
+no swap, 180 seconds load and 60 seconds idle. It completed 34,917 requests
+without errors. At 0/30/60/120/180/240 seconds rounded arena live bytes were
+162.235/162.701/158.679/158.871/158.019/157.832 MiB, while RSS was
+244.098/274.352/278.840/279.996/292.387/287.477 MiB and THP was
+196/198/184/186/224/214 MiB. Final metric rows/bytes and pending IPs were zero;
+combined metric aggregation was 304 bytes. Metadata snapshots paused this
+fixture for 21-50 ms and had no deferred-list inconsistencies. This distinguishes
+live arena state from residency in this window; it is not a latency benchmark
+or whole-heap leak guarantee. Evidence:
+`/root/issue34/short-state-live-pages-be479nvi` and
+`/tmp/edge-short-state-live-pages-evidence`. Processes and temporary homes were
+removed. Formal Edge release still requires the remaining process and CI gates.
