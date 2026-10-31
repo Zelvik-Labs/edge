@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -79,6 +80,76 @@ class StatsReadinessTests(unittest.TestCase):
             ready = soak._wait_stats_ready("alloc-stats.json", self.KEYS, 1)
         self.assertEqual(ready["process.rss_current"], 1.0)
         self.assertEqual(read.call_count, 2)
+
+
+class AllocatorSamplingTests(unittest.TestCase):
+    def test_stabilization_samples_include_allocator_stats(self):
+        clock = SimpleNamespace(now=0.0)
+
+        def sleep(seconds):
+            clock.now += seconds
+
+        def sample():
+            return SimpleNamespace(
+                monotonic_s=clock.now,
+                rss_bytes=100 * MIB,
+                anon_bytes=80 * MIB,
+                cgroup_swap_current_bytes=0,
+                cgroup_events={"oom_kill": 0},
+                starttime=1,
+                to_dict=lambda: {},
+            )
+
+        def stabilize(capture, *, on_sample, **_):
+            for _ in range(60):
+                sleep(1)
+                on_sample(capture())
+            return {
+                "end": clock.now, "seconds": 60.0, "samples": 60,
+                "plateaued": True, "plateau_rate_mib_per_min": 0.0,
+                "window_seconds": 30.0, "max_rate_mib_per_min": 8.0,
+            }
+
+        runner = mock.Mock()
+        runner.summary.return_value = {"requests_ok": 1000, "errors": 0}
+        target = mock.Mock(pid=123)
+        target.poll.return_value = None
+        cycles = dict.fromkeys([
+            "cycles", "pressure_bytes", "hold_seconds", "settle_timeout_seconds",
+            "recovery_probe_seconds", "recovery_probe_samples", "long_recovery",
+            "event_deltas", "same_pid", "initial_baseline_current_bytes",
+            "recovery_baseline_current_bytes", "recovery_slack_bytes",
+        ], 0)
+        with tempfile.TemporaryDirectory() as tmp:
+            args = soak.build_parser().parse_args([
+                "--target-cmd", "target/debug/bench-defense", "--target-kind", "bench-defense",
+                "--tls-port", "8443", "--tls-ca", "/tmp/ca.pem", "--origin", "external",
+                "--duration", "100", "--warmup-seconds", "0", "--min-span-seconds", "20",
+                "--pressure-cycles", "1", "--pressure-start-fraction", "0.1",
+                "--tls-verify-interval", "0", "--stats-source", "alloc.json",
+                "--require-allocator-stats", "--require-stats-samples", "90",
+                "--out", str(Path(tmp) / "report.json"),
+            ])
+            with (
+                mock.patch.object(soak.time, "monotonic", side_effect=lambda: clock.now),
+                mock.patch.object(soak.time, "sleep", side_effect=sleep),
+                mock.patch.object(soak.subprocess, "Popen", return_value=target),
+                mock.patch.object(soak.procfs, "Sampler", return_value=SimpleNamespace(capture=sample, starttime=1)),
+                mock.patch.object(soak, "_wait_tcp"),
+                mock.patch.object(soak.verify_tls, "verify", return_value=SimpleNamespace(to_dict=lambda: {})),
+                mock.patch.object(soak, "_wait_stats_ready", return_value={}),
+                mock.patch.object(soak, "_stats_sample", return_value={}) as read_stats,
+                mock.patch.object(soak.loadgen, "LoadRunner", return_value=SimpleNamespace(start=lambda: runner)),
+                mock.patch.object(soak.pressure, "ensure_context", return_value=SimpleNamespace(to_dict=lambda: {})),
+                mock.patch.object(soak.pressure, "run_cycles", return_value=cycles),
+                mock.patch.object(soak, "_wait_clean_load", side_effect=lambda *a, **kw: {"end": clock.now, "seconds": 10, "errors": 0}),
+                mock.patch.object(soak, "_wait_stabilization", side_effect=stabilize),
+            ):
+                self.assertEqual(soak.run(args), 0)
+            report = json.loads(Path(args.out).read_text())
+        self.assertEqual(report["samples"], 100)
+        self.assertEqual(read_stats.call_count, 100)
+        self.assertEqual(report["allocator_stats"]["samples"], 101)
 
 
 class AnalyzeTests(unittest.TestCase):

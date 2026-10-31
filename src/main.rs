@@ -3701,8 +3701,10 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     });
 
     // 4. Initialize Pingora Server with multi-threading
-    let mut conf = pingora_core::server::configuration::ServerConf::default();
-    conf.threads = zelvik_edge::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads();
+    let mut conf = pingora_core::server::configuration::ServerConf {
+        threads: zelvik_edge::memory_governor::MEMORY_GOVERNOR.pingora_worker_threads(),
+        ..Default::default()
+    };
     // Pingora builds these runtimes in the vendored crate, so no collect hook
     // can be installed on those workers. Report the count so coverage is not
     // mistaken for complete.

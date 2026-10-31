@@ -927,7 +927,7 @@ def run(args) -> int:
             Used by the main loop and by the post-pressure stabilization wait,
             so the sample series stays continuous across both.
             """
-            nonlocal peak_rss
+            nonlocal peak_rss, stats_last, stats_samples
             samples.append((sample.monotonic_s, sample.rss_bytes))
             anon_samples.append((sample.monotonic_s, sample.anon_bytes))
             if len(samples) > args.max_samples:
@@ -947,6 +947,18 @@ def run(args) -> int:
                 )
             if jsonl is not None:
                 _write_jsonl(jsonl, {"kind": "sample", **sample.to_dict()})
+            if required_keys:
+                stats_last = _stats_sample(args.stats_source, required_keys)
+                stats_samples += 1
+                if jsonl is not None:
+                    _write_jsonl(
+                        jsonl,
+                        {
+                            "kind": "allocator",
+                            "monotonic_s": sample.monotonic_s,
+                            "stats": stats_last,
+                        },
+                    )
 
         status_first = None
         status_last = None
@@ -1008,18 +1020,6 @@ def run(args) -> int:
                     )
                 sample = sampler.capture()
                 record_sample(sample)
-                if required_keys:
-                    stats_last = _stats_sample(args.stats_source, required_keys)
-                    stats_samples += 1
-                    if jsonl is not None:
-                        _write_jsonl(
-                            jsonl,
-                            {
-                                "kind": "allocator",
-                                "monotonic_s": time.monotonic(),
-                                "stats": stats_last,
-                            },
-                        )
                 if args.status_source and elapsed >= next_status_at:
                     poll_status()
                     next_status_at = elapsed + args.status_interval

@@ -1,14 +1,14 @@
-// RSS comparison bench — this file is copied verbatim onto the v1.2.7
-// baseline tree and the hardened branch, so it only uses APIs that exist in
-// both. Run: ZELVIK_EDGE_HOME=/tmp/bench-node cargo test --release \
+// RSS comparison bench using the current production tracker APIs.
+// Run: ZELVIK_EDGE_HOME=/tmp/bench-node cargo test --release \
 //   --test memory_compare -- --nocapture --test-threads 1
+use std::net::{IpAddr, Ipv4Addr};
+use std::sync::Arc;
 use zelvik_edge::firewall::persistence;
 use zelvik_edge::firewall::state::WafStateManager;
 use zelvik_edge::metrics::aggregator::{AggregationKey, MetricAggregator};
-use zelvik_edge::metrics::daily::{DailyDomainTracker, UniqueIpTracker};
+use zelvik_edge::metrics::daily::DailyDomainTracker;
 use zelvik_edge::metrics::top_ip::TopIpTracker;
-use std::net::{IpAddr, Ipv4Addr};
-use std::sync::Arc;
+use zelvik_edge::metrics::unique_ip::UNIQUE_IP_TRACKER;
 
 fn rss_bytes() -> u64 {
     #[cfg(target_os = "linux")]
@@ -112,21 +112,23 @@ fn bench_metrics_cardinality_flood() {
         &format!("n={n}"),
     );
 
-    // UniqueIpTracker persists each admitted row — keep N smaller.
     let uniq_n = env_n("BENCH_UNIQUE_N", 150_000);
-    let uniq = UniqueIpTracker::new();
+    let mut admitted = 0;
     for i in 0..uniq_n {
-        uniq.record(7, "20260917", ip_of(i));
+        admitted += usize::from(UNIQUE_IP_TRACKER.record(7, 1_793_462_400, ip_of(i)));
     }
     let after_uniq = rss_bytes();
+    let (pending, capacity, refused, _) = UNIQUE_IP_TRACKER.status();
     report(
         "unique_ip_tracker",
         after_agg,
         after_uniq,
-        &format!("n={uniq_n}"),
+        &format!(
+            "n={uniq_n} admitted={admitted} pending={pending} capacity={capacity} refused={refused}"
+        ),
     );
 
-    drop((top, daily, agg, uniq));
+    drop((top, daily, agg));
 }
 
 #[test]
