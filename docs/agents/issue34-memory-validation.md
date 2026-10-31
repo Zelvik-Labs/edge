@@ -482,3 +482,23 @@ leak. Pre-attach objects and native library allocation paths are also outside
 its coverage. Raw evidence is `/root/issue34/diag-allocation-census-3TYYfyK1`
 on the test host and `/tmp/edge-allocation-census-evidence` locally. The
 processes and temporary home were cleaned up; no acceptance gate is changed.
+
+A 195-second follow-up moved realloc's old-pointer tracking removal to entry
+and restored it on allocation failure, avoiding a known window where another
+thread could reuse an already freed address before return-time bookkeeping.
+It completed 120 seconds load (22,665 requests, zero errors) and 60 seconds
+idle. The cache-construction step again appeared near 60 seconds and stayed
+constant: 10,997,838 + 4,194,304 bytes in this run. RSS fell from 137.660 MiB
+at load stop to 127.273 MiB at 180 seconds. Pointer overlaps remained (40 in
+periodic samples, 680 in the final dump), so this follow-up still does not
+validate aggregate live-byte accounting. No further repeat is counted as
+acceptance. Evidence: `/root/issue34/diag-allocation-census-v2-QhvkZcet` and
+`/tmp/edge-allocation-census-v2-evidence`; processes and temporary home removed.
+
+The source chain is the global `LazyLock` in `src/cache_manager.rs`, accessed
+by janitor maintenance, then `HybridStorage::new` / `TinyUfoL1::build_cache`.
+TinyUFO preallocates estimator slots and its bucket table from capacity.
+Previously recorded CPU-only and healthy-telemetry 300-second samples both
+show `cacheJanitor.rebuildsApplied = 0` throughout. The observed construction
+step is therefore consistent with delayed first initialization; those samples
+do not support repeated cache rebuilds as an explanation of their failed gates.
