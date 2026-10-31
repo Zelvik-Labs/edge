@@ -413,3 +413,30 @@ local tree cache objects. This supports removing unused process enumeration
 from CPU status reporting, not a conclusion that the full memory gate passes.
 Evidence: `/root/issue34/diag-small-idle-vu1sKCKP` and
 `/tmp/edge-small-idle-data.json`. Processes and the temporary home were cleaned.
+
+### CPU-only repair acceptance and wrapper output
+
+At `ef80a63`, the normal Linux CI passed. The component screen still failed:
+RSS/Anon upper bounds were 233.292/232.706 MiB/h against 64, over 197.784
+seconds. The 15-minute full-Edge screen had a different result: its actual
+memory report passed, with RSS/Anon upper bounds -8.269 MiB/h against 8 over
+682.305 seconds, 131,703 measured requests with zero errors, and peak RSS
+374.008 MiB. Telemetry recovery passed (150 pending batches to zero in
+19.182 seconds); the controller and soak exit status passed too. The job
+then failed parsing the wrapper stdout: the child had printed its report
+before the wrapper's JSON summary. Child stdout now goes to stderr, retaining
+its logs and exit status while reserving stdout for one wrapper summary.
+The regression covers both child success and failure; restoring the old
+output routing reproduces JSONDecodeError. This does not relax a gate.
+
+The repaired release binary on the 43 host still failed the unchanged
+300-second, 2 GiB, process-THP-off comparison: RSS/Anon upper bounds
+74.333/73.364 MiB/h against 64, peak RSS 144.738 MiB, 58,431 requests without
+errors. Keeping telemetry healthy throughout another diagnostic also failed
+(84.909 MiB/h, 58,431 requests without errors). Thus an unavailable telemetry
+backlog is not necessary for the remaining short-window growth. These
+observations do not establish long-term closure or justify merging with the
+component gate failing. Raw evidence is retained in
+`/tmp/edge-ef80a63-full-report.json`, `/tmp/edge-ef80a63-full-summary.json`,
+`/tmp/edge-cpu-monitor-screen-result.json`, and the test host's
+`/root/issue34/healthy-telemetry-koi2pgYr`. Test processes were cleaned up.

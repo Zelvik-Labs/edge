@@ -979,7 +979,7 @@ def _run_soak_with_recovery(
     mode_file: Path,
     status_url: str | None,
 ) -> tuple[int, dict | None]:
-    process = subprocess.Popen(command, stdin=subprocess.DEVNULL)
+    process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=sys.stderr)
     recovery = None
     if recovery_seconds > 0:
         lead = min(10.0, max(3.0, duration * 0.2))

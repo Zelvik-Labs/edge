@@ -2,13 +2,43 @@
 
 from __future__ import annotations
 
+import json
 import os
 import stat
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 from scripts.memory import full_edge
+
+
+class SoakOutputTests(unittest.TestCase):
+    def test_child_report_does_not_pollute_wrapper_summary(self):
+        code = """
+import json, pathlib, sys
+sys.path.insert(0, sys.argv[1])
+from scripts.memory import full_edge
+status, recovery = full_edge._run_soak_with_recovery(
+    [sys.executable, '-I', '-c', 'import sys; print("child report"); sys.exit(int(sys.argv[1]))', sys.argv[2]],
+    duration=1, recovery_seconds=0,
+    mode_file=pathlib.Path('/unused'), status_url=None,
+)
+print(json.dumps({'status': status, 'recovery': recovery}))
+"""
+        for exit_code in (0, 7):
+            with self.subTest(exit_code=exit_code):
+                result = subprocess.run(
+                    [sys.executable, "-I", "-c", code,
+                     str(full_edge.REPO_ROOT), str(exit_code)],
+                    capture_output=True, text=True, check=True,
+                )
+                self.assertEqual(
+                    json.loads(result.stdout),
+                    {"status": exit_code, "recovery": None},
+                )
+                self.assertIn("child report", result.stderr)
 
 
 class ControllerReadyRewriteTests(unittest.TestCase):
