@@ -5294,7 +5294,7 @@ dependencies = [
 
 [[package]]
 name = "zelvik-edge"
-version = "26.10.4"
+version = "26.10.5"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -5312,6 +5312,7 @@ dependencies = [
  "brotli 8.0.4",
  "btree-store 1.0.0",
  "bytes",
+ "cc",
  "cfb-mode",
  "chrono",
  "clap",

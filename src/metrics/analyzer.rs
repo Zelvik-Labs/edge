@@ -20,6 +20,9 @@ pub struct GeoInfo {
     pub city: Arc<str>,
     pub city_id: i64,
     pub provider: Arc<str>,
+    /// ASN number from the same `lookup_full` record as `provider` (which
+    /// carries `asn_org`). `0` means the snapshot had no ASN for this IP.
+    pub asn: u32,
 }
 
 impl Clone for GeoInfo {
@@ -34,6 +37,7 @@ impl Clone for GeoInfo {
             city: self.city.clone(),
             city_id: self.city_id,
             provider: self.provider.clone(),
+            asn: self.asn,
         }
     }
 }
@@ -44,6 +48,10 @@ pub struct RequestStats {
     pub browser_version: Arc<str>,
     pub os: Arc<str>,
     pub os_version: Arc<str>,
+    /// woothee parser category (`pc`, `smartphone`, `mobilephone`, `crawler`,
+    /// …). `Unknown`/empty when the UA could not be classified; never a
+    /// hardware model.
+    pub device: Arc<str>,
 }
 
 impl Clone for RequestStats {
@@ -54,6 +62,7 @@ impl Clone for RequestStats {
             browser_version: self.browser_version.clone(),
             os: self.os.clone(),
             os_version: self.os_version.clone(),
+            device: self.device.clone(),
         }
     }
 }
@@ -96,8 +105,12 @@ fn active_geo_view() -> Option<Arc<dyn GeoView>> {
 }
 
 const CACHE_SHARDS: usize = 64;
-const GEO_CACHE_ENTRY_ESTIMATED_BYTES: u64 = 384;
-const UA_CACHE_ENTRY_ESTIMATED_BYTES: u64 = 768;
+// GeoInfo grew by `asn: u32` (+8 bytes after alignment) on top of the six
+// Arc<str> fields and three ids.
+const GEO_CACHE_ENTRY_ESTIMATED_BYTES: u64 = 392;
+// Five Arc<str> values per entry (browser, version, os, version, device) plus
+// the UA key; the device Arc adds one allocation header and payload.
+const UA_CACHE_ENTRY_ESTIMATED_BYTES: u64 = 800;
 
 fn cache_capacity_per_shard(estimated_entry_bytes: u64, budget_share: u64) -> usize {
     let budget = crate::memory_governor::MEMORY_GOVERNOR
@@ -167,8 +180,9 @@ impl<K: Hash + Eq, V: Clone> ShardedLru<K, V> {
 static GEO_CACHE: Lazy<ShardedLru<IpAddr, (u64, Option<GeoInfo>)>> =
     Lazy::new(|| ShardedLru::new(cache_capacity_per_shard(GEO_CACHE_ENTRY_ESTIMATED_BYTES, 4)));
 
-// Cache for User-Agent results (UA string -> (Arc<str>, Arc<str>))
-type UaCacheValue = (Arc<str>, Arc<str>, Arc<str>, Arc<str>);
+// Cache for User-Agent results. Each value is (browser, browser_version, os,
+// os_version, device category).
+type UaCacheValue = (Arc<str>, Arc<str>, Arc<str>, Arc<str>, Arc<str>);
 static UA_CACHE: Lazy<ShardedLru<String, UaCacheValue>> =
     Lazy::new(|| ShardedLru::new(cache_capacity_per_shard(UA_CACHE_ENTRY_ESTIMATED_BYTES, 4)));
 
@@ -190,43 +204,57 @@ fn cached_geo(ip: IpAddr) -> Option<GeoInfo> {
 }
 
 pub fn analyze_request(ip: IpAddr, ua: &str) -> RequestStats {
-    let geo = cached_geo(ip);
+    request_stats_from_geo(cached_geo(ip), ua)
+}
 
-    let (browser, browser_version, os, os_version) = if ua.is_empty() {
-        (Arc::from(""), Arc::from(""), Arc::from(""), Arc::from(""))
-    } else {
-        let mutex = UA_CACHE.get_shard_by(ua);
-        let mut cache = mutex.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(cached) = cache.get(ua) {
-            cached.clone()
-        } else {
-            let parsed_ua = UA_PARSER.parse(ua);
-            let res = match parsed_ua {
-                Some(p) => (
-                    Arc::from(p.name),
-                    Arc::from(p.version),
-                    Arc::from(p.os),
-                    Arc::from(p.os_version.as_ref()),
-                ),
-                None => (
-                    Arc::from("Unknown"),
-                    Arc::from(""),
-                    Arc::from("Unknown"),
-                    Arc::from(""),
-                ),
-            };
-            cache.put(ua.to_string(), res.clone());
-            res
-        }
-    };
-
+/// Combines a geo answer with UA parsing. Geo lookup happens unconditionally,
+/// so an empty User-Agent still carries city/country/ASN.
+fn request_stats_from_geo(geo: Option<GeoInfo>, ua: &str) -> RequestStats {
+    let (browser, browser_version, os, os_version, device) = analyze_ua(ua);
     RequestStats {
         geo,
         browser,
         browser_version,
         os,
         os_version,
+        device,
     }
+}
+
+fn analyze_ua(ua: &str) -> UaCacheValue {
+    if ua.is_empty() {
+        return (
+            Arc::from(""),
+            Arc::from(""),
+            Arc::from(""),
+            Arc::from(""),
+            Arc::from(""),
+        );
+    }
+
+    let mutex = UA_CACHE.get_shard_by(ua);
+    let mut cache = mutex.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(cached) = cache.get(ua) {
+        return cached.clone();
+    }
+    let res = match UA_PARSER.parse(ua) {
+        Some(p) => (
+            Arc::from(p.name),
+            Arc::from(p.version),
+            Arc::from(p.os),
+            Arc::from(p.os_version.as_ref()),
+            Arc::from(p.category),
+        ),
+        None => (
+            Arc::from("Unknown"),
+            Arc::from(""),
+            Arc::from("Unknown"),
+            Arc::from(""),
+            Arc::from("Unknown"),
+        ),
+    };
+    cache.put(ua.to_string(), res.clone());
+    res
 }
 
 fn lookup_geo_on(view: &dyn GeoView, ip: IpAddr) -> Option<GeoInfo> {
@@ -252,6 +280,7 @@ fn lookup_geo_on(view: &dyn GeoView, ip: IpAddr) -> Option<GeoInfo> {
         city: Arc::from(record.city_name.unwrap_or_default()),
         city_id: record.city_id.map(i64::from).unwrap_or(0),
         provider: Arc::from(record.asn_org.unwrap_or_else(|| "Unknown".to_string())),
+        asn: record.asn.unwrap_or(0),
     })
 }
 
@@ -319,6 +348,7 @@ pub fn reclaim_geo_ua_caches(clear_all: bool) -> (usize, usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::AtomicUsize;
 
     #[test]
     fn analyze_request_reuses_ua_cache_result_shape() {
@@ -330,13 +360,60 @@ mod tests {
 
         assert_eq!(&*first.browser, &*second.browser);
         assert_eq!(&*first.os, &*second.os);
+        assert_eq!(&*first.device, &*second.device);
+    }
+
+    #[test]
+    fn analyze_ua_maps_woothee_category_to_device() {
+        let desktop = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+        let mobile = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
+        let crawler = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
+
+        let (_, _, _, _, device) = analyze_ua(desktop);
+        assert_eq!(&*device, "pc");
+        let (_, _, _, _, device) = analyze_ua(mobile);
+        assert_eq!(&*device, "smartphone");
+        let (_, _, _, _, device) = analyze_ua(crawler);
+        assert_eq!(&*device, "crawler");
+    }
+
+    #[test]
+    fn analyze_ua_keeps_unrecognized_agent_unknown() {
+        let (browser, _, os, _, device) = analyze_ua("heki");
+        assert_eq!(&*browser, "Unknown");
+        assert_eq!(&*os, "Unknown");
+        assert_eq!(&*device, "Unknown");
+    }
+
+    #[test]
+    fn empty_user_agent_keeps_geo_and_leaves_ua_fields_unknown() {
+        let geo = GeoInfo {
+            country: Arc::from("United States"),
+            country_id: 6252001,
+            country_iso: Arc::from("US"),
+            region: Arc::from("California"),
+            region_id: 5332921,
+            region_iso: Arc::from("CA"),
+            city: Arc::from("Los Angeles"),
+            city_id: 5368361,
+            provider: Arc::from("NTT America, Inc."),
+            asn: 2914,
+        };
+
+        let stats = request_stats_from_geo(Some(geo), "");
+        assert_eq!(stats.geo.as_ref().map(|geo| &*geo.country_iso), Some("US"));
+        assert_eq!(&*stats.browser, "");
+        assert_eq!(&*stats.os, "");
+        assert_eq!(&*stats.device, "");
     }
 
     #[test]
     fn edge_geo_info_reads_names_and_ids_from_one_snapshot_record() {
+        static LOOKUP_CALLS: AtomicUsize = AtomicUsize::new(0);
         struct View;
         impl zelvik_geo_runtime::GeoView for View {
             fn lookup(&self, _addr: IpAddr) -> zelvik_geo_runtime::GeoLookup {
+                LOOKUP_CALLS.fetch_add(1, Ordering::Relaxed);
                 zelvik_geo_runtime::GeoLookup {
                     record: Some(zelvik_geo_runtime::GeoRecord {
                         country_iso: Some("CN".to_string()),
@@ -381,7 +458,9 @@ mod tests {
             }
         }
 
+        LOOKUP_CALLS.store(0, Ordering::Relaxed);
         let info = lookup_geo_on(&View, "1.2.3.4".parse().unwrap()).expect("record");
+        assert_eq!(LOOKUP_CALLS.load(Ordering::Relaxed), 1);
         assert_eq!(&*info.country, "China");
         assert_eq!(info.country_id, 1814991);
         assert_eq!(&*info.country_iso, "CN");
@@ -390,6 +469,7 @@ mod tests {
         assert_eq!(&*info.city, "Beijing");
         assert_eq!(info.city_id, 1816670);
         assert_eq!(&*info.provider, "Example Network");
+        assert_eq!(info.asn, 64500);
     }
 
     #[test]

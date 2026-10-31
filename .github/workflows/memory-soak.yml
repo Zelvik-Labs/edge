@@ -1,0 +1,1395 @@
+name: Issue 34 memory soak
+
+# Staged validation. The stated 5 min / 15 min are SOAK durations only; they
+# exclude the first Rust cold build (and eBPF build), so job wall-clock is
+# longer. rust-cache is reused between jobs. The two jobs still build
+# separately; sharing a build-once artifact is an out-of-scope optimisation for
+# another round.
+#   push / pull_request : automatic fast screens:
+#     short     : Python/procfs/allocator tests + mandatory real Zelvik-Edge
+#                 production-startup smoke (HTTP/1.1 + HTTP/2 TLS, telemetry
+#                 retry/recovery) + 5 min (300 s) bench-defense screen soak.
+#     full-edge : real Zelvik-Edge + fake control plane, same startup smoke,
+#                 then a 15 min (900 s) screen soak with the same real startup,
+#                 node status, one PID, UNAVAILABLE -> durable recovery.
+#     Both reports are screen_only and never close Issue 34.
+#   workflow_dispatch dedicated_hours=0 : fast screens only.
+#   workflow_dispatch run_long_component=true : manual 4 h bench-defense
+#                 component soak. Never scheduled.
+#   workflow_dispatch dedicated_hours>=48 : optional dedicated self-hosted
+#                 full-Edge long run with the 0.5 MiB/h gate, 1 h warm-up, and
+#                 a second-half platform/step baseline. Never scheduled.
+#
+# Only the manual 4 h / >=48 h lanes may cite the 0.5 MiB/h RSS+Anon gate.
+# The 64 MiB/h short and 8 MiB/h 15 min full-edge budgets are fast screens; they
+# never inherit or claim the long-lane leak closure. A budget above 0.5 MiB/h
+# would let the known 4.5 MiB/h tail leak pass, so it is never used for the
+# manual long lanes. Noise makes a run inconclusive/fail; it is not a reason to
+# relax a threshold.
+#
+# The harness is scripts/memory. It is runnable locally on Linux; see
+# docs/agents/issue34-memory-validation.md for the exact commands.
+on:
+  push:
+    branches: [fix/issue34-memory]
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/memory-soak.yml"
+      - "scripts/memory/**"
+      - "tests/issue34_memory*.rs"
+      - "tests/issue34_full_edge.rs"
+      - "tests/fixtures/control-plane/**"
+      - "examples/issue34-controller.rs"
+      - "src/bin/bench-defense.rs"
+      - "src/main.rs"
+      - "src/lib.rs"
+      - "src/memory_reclaim.rs"
+      - "src/memory_governor.rs"
+      - "src/memory_plan.rs"
+      - "src/worker_reclaim.rs"
+      - "src/cache_hybrid.rs"
+      - "src/allocator_options.c"
+      - "src/metrics.rs"
+      - "src/metrics/**"
+      - "src/telemetry.rs"
+      - "src/rpc/node.rs"
+      - "src/rpc/stats.rs"
+      - "src/rpc/metric_stat_cache.rs"
+      - "src/rpc/mod.rs"
+      - "build.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  workflow_dispatch:
+    inputs:
+      dedicated_hours:
+        description: "Dedicated self-hosted duration in hours (>=48); 0 runs only the fast automatic screens"
+        required: false
+        default: "0"
+        type: string
+      run_long_component:
+        description: "Manual 4 h bench-defense component soak (never scheduled)"
+        required: false
+        default: false
+        type: boolean
+      node_status_source:
+        description: "Optional fake-backend node status JSON/JSONL path or URL (never a production endpoint)"
+        required: false
+        default: ""
+        type: string
+
+
+concurrency:
+  group: issue34-memory-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # Same baseline as ci.yml: rust-cache may move target/ between runner CPUs.
+  RUSTFLAGS: "-C target-cpu=x86-64-v2"
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+  CARGO_BUILD_JOBS: "2"
+  EBPF_LINKER_VERSION: "0.11.1"
+  # Match the immutable geo runtime dependency used by CI and release.yml.
+  DNS_REF: "aca0f3bb61bc498682b10900b4886709a2c248b8"
+
+jobs:
+  short:
+    # A 5 min run cannot close a slow-leak issue: the budget is deliberately
+    # looser and the report is marked screen_only. Only the manual long lanes
+    # may claim the 0.5 MiB/h RSS+Anon gate.
+    name: Screen only - component memory gate (not a closure) - hosted ubuntu-22.04
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dedicated_hours == '0')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      # Harness-only, no Rust: fail fast on missing/zero statistics, threshold
+      # slopes, and the pressure/allocator parsers before any Linux build.
+      - name: Python harness unit tests (Linux live /proc tests required)
+        run: |
+          set -euo pipefail
+          python3 -I -m py_compile scripts/memory/*.py scripts/memory/tests/*.py
+          ISSUE34_REQUIRE_LINUX=1 python3 -I scripts/memory/tests/run_tests.py 2>&1 | tee "$RUNNER_TEMP/python-tests.log"
+          # Required tests must actually run on Linux; a skipped live test is
+          # not a pass.
+          grep -qE '^OK$' "$RUNNER_TEMP/python-tests.log"
+          grep -Eq '^test_live_proc_and_cgroup_stats_are_strict_and_present \([^)]*\) \.\.\. ok$' "$RUNNER_TEMP/python-tests.log"
+          grep -Eq '^test_pid_reuse_is_detected \([^)]*\) \.\.\. ok$' "$RUNNER_TEMP/python-tests.log"
+
+      - name: Checkout pinned geo runtime dependency
+        uses: actions/checkout@v5
+        with:
+          repository: Zelvik-Labs/dns
+          ref: ${{ env.DNS_REF }}
+          ssh-key: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
+          persist-credentials: false
+          path: .ci/dns
+
+      - name: Link sibling geo runtime path
+        run: ln -s "$GITHUB_WORKSPACE/.ci/dns" "$GITHUB_WORKSPACE/../dns"
+
+      - name: Read-only protocol deploy key
+        run: |
+          set -euo pipefail
+          if [ -z "${PROTOCOL_DEPLOY_KEY:-}" ]; then
+            echo "::error::PROTOCOL_DEPLOY_KEY is required for the private protocol dependency."
+            exit 1
+          fi
+          key="$RUNNER_TEMP/protocol_deploy_key"
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$PROTOCOL_DEPLOY_KEY" > "$key"
+          curl -fsSL https://api.github.com/meta \
+            | grep -oE '"ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+"' \
+            | tr -d '"' | sed 's/^/github.com /' > "$RUNNER_TEMP/known_hosts"
+          {
+            echo "GIT_SSH_COMMAND=ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+            echo "GIT_CONFIG_COUNT=1"
+            echo "GIT_CONFIG_KEY_0=url.git@github.com:Zelvik-Labs/protocol.insteadOf"
+            echo "GIT_CONFIG_VALUE_0=https://github.com/Zelvik-Labs/protocol"
+          } >> "$GITHUB_ENV"
+        env:
+          PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.99.1
+
+      - name: Install build dependencies
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          packages=(cmake build-essential clang pkg-config perl protobuf-compiler libclang-dev libelf-dev zlib1g-dev libzstd-dev libpcap0.8-dev m4 llvm curl openssl python3)
+          sudo rm -rf /var/lib/apt/lists/*
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y --no-install-recommends "${packages[@]}"; then
+              break
+            fi
+            [ "$attempt" = "3" ] && exit 1
+            sleep 5
+          done
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            pingora-main -> pingora-main/target
+
+      - name: Install eBPF toolchain
+        run: |
+          set -euo pipefail
+          EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/zelvik-edge-xdp-ebpf/rust-toolchain.toml | head -1)"
+          test -n "$EBPF_NIGHTLY"
+          rustup toolchain install "$EBPF_NIGHTLY" --profile minimal -c rust-src -c rustc-dev
+          SYSROOT="$(rustup run "$EBPF_NIGHTLY" rustc --print sysroot)"
+          ln -sf "$(find "$SYSROOT/lib" -name 'libLLVM.so.*' -print -quit)" "$SYSROOT/lib/libLLVM.so"
+          export LLVM_PREFIX="$SYSROOT"
+          cargo +"$EBPF_NIGHTLY" install bpf-linker --version "$EBPF_LINKER_VERSION" --locked
+
+      - name: Build eBPF object
+        run: |
+          set -euo pipefail
+          rm -f data/zelvik-edge-xdp-ebpf.o
+          cargo xtask build-ebpf
+          test -s data/zelvik-edge-xdp-ebpf.o
+          echo "ZELVIK_EDGE_XDP_EBPF_SOURCE=data/zelvik-edge-xdp-ebpf.o" >> "$GITHUB_ENV"
+          echo "ZELVIK_EDGE_XDP_EBPF_SHA256=$(sha256sum data/zelvik-edge-xdp-ebpf.o | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Validate workflow YAML and lane contract
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          import yaml
+
+          path = ".github/workflows/memory-soak.yml"
+          doc = yaml.safe_load(open(path))
+          runs = {}
+          for name, job in doc["jobs"].items():
+              chunks = []
+              for step in job.get("steps", []):
+                  # Skip this validator itself: its source necessarily contains
+                  # the forbidden literals it searches for.
+                  if step.get("name") == "Validate workflow YAML and lane contract":
+                      continue
+                  if "run" in step:
+                      chunks.append(step["run"])
+              runs[name] = "\n".join(chunks)
+
+          def need(text, needle, label):
+              if needle not in text:
+                  raise SystemExit(f"{label} is missing {needle!r}")
+
+          hosted = "\n".join(runs[name] for name in ("short", "nightly", "full-edge"))
+          if "--duration 172800" in hosted:
+              raise SystemExit("hosted job contains a hard-coded 48 h duration")
+          if "--warmup-seconds 300" in hosted:
+              raise SystemExit("hosted long lane still uses the 5 min warm-up")
+
+          # Automatic fast screens: 300 s / 900 s soak windows and loose
+          # budgets. Both must say screen_only; neither is a leak closure.
+          need(runs["short"], "--screen-only", "short screen lane")
+          need(runs["short"], "--duration 300", "short 300 s window")
+          need(runs["short"], "--warmup-seconds 90", "short warm-up")
+          need(runs["short"], "--min-span-seconds 150", "short minimum span")
+          need(runs["short"], "--budget-mib-per-hour 64", "short RSS screen budget")
+          need(runs["short"], "--anon-budget-mib-per-hour 64", "short Anon screen budget")
+          need(runs["short"], "--pressure-cycles 1", "short pressure cycle")
+          need(
+              runs["short"],
+              "--pressure-start-fraction 0.1",
+              "short pressure starts at 30 s inside warm-up",
+          )
+          need(
+              runs["short"],
+              "--measurement-clean-seconds 10",
+              "short post-pressure clean-load handshake",
+          )
+          need(
+              runs["short"],
+              'report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"]',
+              "short pressure-before-measurement report assertion",
+          )
+          need(
+              runs["short"],
+              'report["measurement"]["load_errors"]',
+              "short measurement-window load-error assertion",
+          )
+          need(
+              runs["short"],
+              'report["measurement_stabilization_end_offset_seconds"] <= report["measurement_start_offset_seconds"]',
+              "short stabilization-before-measurement report assertion",
+          )
+          need(
+              runs["short"],
+              'report["measurement"]["stabilization_plateaued"] is True',
+              "short stabilization-plateau report assertion",
+          )
+          need(runs["short"], "--stats-ready-timeout-seconds 30", "short stats readiness")
+          need(runs["short"], "--pressure-hold-seconds 15", "short pressure hold")
+          need(runs["short"], "--pressure-recovery-probe-seconds 10", "short recovery probe")
+          need(runs["short"], "full_edge.py smoke", "short full-Edge smoke")
+          need(runs["short"], "issue34-controller", "short fixture build")
+          need(
+              runs["short"],
+              "telemetry-retryable-recovery",
+              "short smoke retryable telemetry check",
+          )
+
+          need(runs["full-edge"], "--soak-arg=--screen-only", "full-edge screen marker")
+          need(runs["full-edge"], "--duration 900", "full-edge 900 s window")
+          need(
+              runs["full-edge"],
+              "--soak-arg=--warmup-seconds --soak-arg=120",
+              "full-edge warm-up",
+          )
+          need(
+              runs["full-edge"],
+              "--soak-arg=--min-span-seconds --soak-arg=300",
+              "full-edge minimum span",
+          )
+          need(
+              runs["full-edge"],
+              "--soak-arg=--budget-mib-per-hour --soak-arg=8",
+              "full-edge RSS screen budget",
+          )
+          need(
+              runs["full-edge"],
+              "--soak-arg=--anon-budget-mib-per-hour --soak-arg=8",
+              "full-edge Anon screen budget",
+          )
+          need(
+              runs["full-edge"],
+              "--soak-arg=--pressure-cycles --soak-arg=2",
+              "full-edge pressure cycles",
+          )
+          need(
+              runs["full-edge"],
+              "--soak-arg=--pressure-start-fraction --soak-arg=0.13333333333333333",
+              "full-edge pressure start at 120 s, after warm-up",
+          )
+          need(
+              runs["full-edge"],
+              "--soak-arg=--measurement-clean-seconds --soak-arg=10",
+              "full-edge post-pressure clean-load handshake",
+          )
+          need(
+              runs["full-edge"],
+              'report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"]',
+              "full-edge pressure-before-measurement report assertion",
+          )
+          need(
+              runs["full-edge"],
+              'report["measurement"]["load_errors"]',
+              "full-edge measurement-window load-error assertion",
+          )
+          need(
+              runs["full-edge"],
+              'report["measurement_stabilization_end_offset_seconds"] <= report["measurement_start_offset_seconds"]',
+              "full-edge stabilization-before-measurement report assertion",
+          )
+          need(
+              runs["full-edge"],
+              'report["measurement"]["stabilization_plateaued"] is True',
+              "full-edge stabilization-plateau report assertion",
+          )
+          if "measurement-stabilize-timeout-seconds" in "\n".join(runs.values()):
+              raise SystemExit(
+                  "lanes must use the default 180 s post-pressure stabilization bound"
+              )
+          need(runs["full-edge"], "--recovery-seconds 60", "full-edge recovery window")
+          need(runs["full-edge"], "--telemetry-mode unavailable", "full-edge retryable telemetry")
+          need(runs["full-edge"], "full_edge.py smoke", "full-edge startup smoke")
+          need(runs["full-edge"], "full_edge.py soak", "full-edge soak")
+          need(runs["full-edge"], "--require-node-status", "full-edge node status")
+
+          # Pressure may run inside warm-up. Reserve two stabilization windows
+          # after hold/probe/clean-load before checking the required measured span.
+          # Runtime assertions still prove the actual ordering and duration.
+          def soak_arg(text, name):
+              match = re.search(
+                  rf"--soak-arg=--{re.escape(name)}\s+--soak-arg=(\S+)", text
+              )
+              if match is None:
+                  match = re.search(
+                      rf"(?<![\w=-])--{re.escape(name)}\s+(\S+)", text
+                  )
+              if match is None:
+                  raise SystemExit(f"missing --{name}")
+              return float(match.group(1))
+
+          for lane, expected_start, expected_cycles in (
+              ("short", 30.0, 1),
+              ("full-edge", 120.0, 2),
+          ):
+              text = runs[lane]
+              duration = soak_arg(text, "duration")
+              warmup = soak_arg(text, "warmup-seconds")
+              fraction = soak_arg(text, "pressure-start-fraction")
+              cycles = int(soak_arg(text, "pressure-cycles"))
+              hold = soak_arg(text, "pressure-hold-seconds")
+              probe = soak_arg(text, "pressure-recovery-probe-seconds")
+              clean = soak_arg(text, "measurement-clean-seconds")
+              min_span = soak_arg(text, "min-span-seconds")
+              start = duration * fraction
+              if abs(start - expected_start) > 1.0:
+                  raise SystemExit(
+                      f"{lane} pressure starts at {start:g}s, want {expected_start:g}s"
+                  )
+              if cycles != expected_cycles:
+                  raise SystemExit(
+                      f"{lane} has {cycles} pressure cycles, want {expected_cycles}"
+                  )
+              clean_end = start + cycles * (hold + probe) + clean
+              planned_measurement = max(warmup, clean_end + 60.0)
+              if planned_measurement + min_span > duration:
+                  raise SystemExit(
+                      f"{lane} planned measurement start {planned_measurement:g}s "
+                      f"plus {min_span:g}s span exceeds {duration:g}s"
+                  )
+              if lane == "full-edge" and clean_end > 200.0:
+                  raise SystemExit(
+                      f"full-edge pressure/handshake runs to {clean_end:g}s, "
+                      "outside the 120-200 s window"
+                  )
+          if "--pressure-long-recovery" in runs["full-edge"]:
+              raise SystemExit(
+                  "full-edge fast screen must not claim the long recovery contract"
+              )
+
+          # Manual long lanes only: strict 0.5 MiB/h and 10 x 60 s pressure.
+          for lane in ("nightly", "dedicated"):
+              text = runs[lane]
+              if not (
+                  "--budget-mib-per-hour 0.5" in text
+                  or "--soak-arg=--budget-mib-per-hour --soak-arg=0.5" in text
+              ):
+                  raise SystemExit(f"{lane} does not use the strict RSS budget")
+              if not (
+                  "--anon-budget-mib-per-hour 0.5" in text
+                  or "--soak-arg=--anon-budget-mib-per-hour --soak-arg=0.5" in text
+              ):
+                  raise SystemExit(f"{lane} does not use the strict Anon budget")
+              if not (
+                  "--pressure-cycles 10" in text
+                  or "--soak-arg=--pressure-cycles --soak-arg=10" in text
+              ):
+                  raise SystemExit(f"{lane} does not run 10 pressure cycles")
+
+          need(runs["nightly"], "bench-defense", "nightly component lane")
+          need(runs["dedicated"], "full_edge.py soak", "dedicated full-Edge soak")
+          need(runs["dedicated"], "--require-node-status", "dedicated node status")
+          need(
+              runs["dedicated"],
+              "--telemetry-mode unavailable",
+              "dedicated retryable telemetry",
+          )
+          need(runs["dedicated"], "--recovery-seconds", "dedicated recovery window")
+          print("workflow lane contract ok")
+          PY
+
+      - name: Build bench-defense and issue34 test binary
+        run: |
+          set -euo pipefail
+          cargo test --test issue34_memory --no-run
+          cargo build --bin bench-defense
+
+      - name: Allocator contract and deterministic window tests
+        run: |
+          set -euo pipefail
+          cargo test --test issue34_memory -- --test-threads=2 --nocapture \
+            | tee "$RUNNER_TEMP/rust-tests.log"
+          for name in \
+            global_allocator_is_mimalloc_not_the_system_allocator \
+            production_configure_allocator_readback_matches_v3_contract \
+            deterministic_1024_windows_with_cross_worker_handoff \
+            sustained_cross_worker_handoff_frees_on_receiver \
+            stopped_workers_release_abandoned_pages_while_idle_workers_retain \
+            missing_linux_stats_fail_and_are_never_zero \
+            mimalloc_json_exposes_process_and_allocator_cache_metrics
+          do
+            grep -F "test $name ... ok" "$RUNNER_TEMP/rust-tests.log" >/dev/null \
+              || { echo "::error::test $name did not run and pass"; exit 1; }
+          done
+          grep -F "test result: ok. 7 passed; 0 failed" "$RUNNER_TEMP/rust-tests.log" >/dev/null
+
+      # Mandatory production-startup check. Unlike bench-defense, this runs the
+      # real Zelvik-Edge binary against a fake control plane and asserts the
+      # real TLS/HTTP2/SNI/health/telemetry-rejection contract before the
+      # screen soak. A missing fixture is a failure, never a skip.
+      - name: Build full-Edge startup fixture
+        run: |
+          set -euo pipefail
+          cargo build --bin Zelvik-Edge --example issue34-controller
+
+      - name: Full-Edge production-startup smoke (mandatory)
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/issue34-full-edge-smoke"
+          mkdir -p "$OUT"
+          python3 -I scripts/memory/full_edge.py preflight \
+            --edge-binary target/debug/Zelvik-Edge \
+            --controller-bin target/debug/examples/issue34-controller \
+            > "$OUT/preflight.json"
+          python3 -I scripts/memory/full_edge.py smoke \
+            --edge-binary target/debug/Zelvik-Edge \
+            --controller-bin target/debug/examples/issue34-controller \
+            --home "$OUT/home" \
+            --report "$OUT/smoke-report.json" \
+            | tee "$OUT/summary.json"
+          python3 -I - "$OUT/summary.json" <<'PY'
+          import json, sys
+          report = json.load(open(sys.argv[1]))
+          assert report["status"] == "pass", report.get("failures")
+          scope = report["scope"]
+          assert scope["full_edge"] is True, scope
+          assert scope["production_startup"] is True, scope
+          assert scope["component_lane"] is False, scope
+          assert report["node_health_observed"] is True, report
+          assert report["edge_pid"] == report["pid_at_exit"], report
+          checks = {item["name"]: item for item in report["checks"]}
+          assert checks["http1-post"]["ok"] is True, checks.get("http1-post")
+          assert checks["http2-post"]["ok"] is True, checks.get("http2-post")
+          assert checks["http1-post"]["http_version"].startswith("1."), checks
+          assert checks["http2-post"]["http_version"] == "2", checks
+          assert checks["node-status"]["ok"] is True, checks.get("node-status")
+          # The terminal rejection is not the whole telemetry contract: the
+          # smoke also drives a real UNAVAILABLE -> durable recover cycle on
+          # the same Edge PID and requires a real receipt.
+          assert checks["telemetry-retryable-recovery"]["ok"] is True, (
+              checks.get("telemetry-retryable-recovery"))
+          assert checks["telemetry-reject"]["ok"] is True, checks.get("telemetry-reject")
+          telemetry = report["telemetry"]
+          assert telemetry["mode"] == "unimplemented", telemetry
+          assert telemetry["served"] is False, telemetry
+          assert telemetry["expected_code_number"] == 12, telemetry
+          print(json.dumps({"status": report["status"], "scope": scope,
+                            "edge_pid": report["edge_pid"],
+                            "checks": sorted(checks)}, indent=2))
+          PY
+
+      - name: Short screen soak (5 min, 2 GiB/no-swap cgroup) - NOT a closure
+        run: |
+          set -euo pipefail
+          # Load window: 300 s of soak, excluding image build/Rust cold build.
+          # The target writes alloc-stats.json from its own 1 s loop, so the soak
+          # waits for the first complete document before starting its clock.
+          # Pressure starts at 30 s inside the 90 s warm-up (15 s hold +
+          # 10 s probe), leaving time for recovery. A >=10 s clean-2xx
+          # handshake follows, then a bounded wait (<=180 s) for the released
+          # cgroup's RSS refill ramp to flatten (trailing 30 s rate <=8 MiB/min
+          # for two windows), so the measured window contains neither pressure
+          # nor the refill ramp; the remaining >=150 s is the slope span.
+          # 64 MiB/h is a screen budget, never closure.
+          # --pressure-bytes is an upper bound: memory.high + 16 MiB with
+          # 256 MiB reserve below memory.max, so a 1.5 GiB request cannot
+          # livelock above high=1.5 GiB. Resident proof is bounded at 120 s
+          # independent of hold and logs a cgroup snapshot
+          # (current/peak/high/max/events) if it stalls.
+          OUT="$RUNNER_TEMP/issue34-short"
+          mkdir -p "$OUT"
+          python3 -I scripts/memory/certs.py --out-dir "$OUT/certs" > "$OUT/certs.json"
+          CERTS="$OUT/certs"
+          sudo systemd-run --scope \
+            --property=MemoryMax=2G \
+            --property=MemoryHigh=1536M \
+            --property=MemorySwapMax=0 \
+            --setenv=PATH=/usr/local/bin:/usr/bin:/bin \
+            --setenv=ISSUE34_REQUIRE_LINUX=1 \
+            --working-directory="$GITHUB_WORKSPACE" \
+            -- python3 -I scripts/memory/run_soak.py \
+              --target-cmd "$GITHUB_WORKSPACE/target/debug/bench-defense" \
+              --target-kind bench-defense \
+              --target-env "BENCH_TLS_CERT=$CERTS/server.pem" \
+              --target-env "BENCH_TLS_KEY=$CERTS/server.key" \
+              --target-env "BENCH_ALLOC_STATS_PATH=$OUT/alloc-stats.json" \
+              --tls-port 8443 \
+              --tls-host localhost \
+              --tls-ca "$CERTS/ca.pem" \
+              --duration 300 \
+              --warmup-seconds 90 \
+              --min-span-seconds 150 \
+              --sample-interval 1 \
+              --budget-mib-per-hour 64 \
+              --anon-budget-mib-per-hour 64 \
+              --screen-only \
+              --max-rss-mib 1024 \
+              --pressure-cycles 1 \
+              --pressure-start-fraction 0.1 \
+              --measurement-clean-seconds 10 \
+              --pressure-bytes 1610612736 \
+              --pressure-hold-seconds 15 \
+              --pressure-settle-seconds 30 \
+              --pressure-recovery-probe-seconds 10 \
+              --stats-source "$OUT/alloc-stats.json" \
+              --require-allocator-stats \
+              --stats-ready-timeout-seconds 30 \
+              --require-stats-samples 200 \
+              --min-requests 100 \
+              --max-load-errors 10 \
+              --samples-jsonl "$OUT/samples.jsonl" \
+              --progress-file "$OUT/progress.txt" \
+              --target-log "$OUT/target.log" \
+              --out "$OUT/report.json"
+          python3 -I - "$OUT/report.json" <<'PY'
+          import json, sys
+          report = json.load(open(sys.argv[1]))
+          assert report["verdict"] == "pass", report["violations"]
+          # bench-defense is a component lane, never full-Edge coverage.
+          assert report["scope"]["component_lane"] is True, report["scope"]
+          assert report["scope"]["full_edge"] is False, report["scope"]
+          assert report["scope"]["production_startup"] is False, report["scope"]
+          assert report["duration_seconds"] >= 290, report["duration_seconds"]
+          # Pressure and the clean-load handshake are inside the warm-up phase;
+          # the measured window contains neither. Pressure-window 503s are
+          # reported separately and are not charged to the load-error budget.
+          assert report["pressure_before_measurement"] is True, report["pressure"]
+          assert report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"], report["pressure"]
+          assert report["measurement"]["handshake_seconds"] >= 10, report["measurement"]
+          # The RSS refill ramp after pressure is excluded: stabilization must
+          # reach the plateau before the measured window starts.
+          assert report["measurement_stabilization_end_offset_seconds"] <= report["measurement_start_offset_seconds"], report["measurement"]
+          assert report["measurement"]["stabilization_plateaued"] is True, report["measurement"]
+          assert report["measurement"]["plateau_rate_mib_per_min"] <= report["measurement"]["stabilization_max_rate_mib_per_min"], report["measurement"]
+          assert report["measurement"]["load_errors"] <= 10, report["measurement"]
+          assert report["expected_samples"] > 0, report
+          assert report["measurement_samples"] >= report["expected_samples"] * 0.9, (
+              report["measurement_samples"], report["expected_samples"])
+          assert report["target"]["same_pid"] is True
+          assert report["tls_verification"]["periodic_count"] >= 1
+          assert report["tls_verification"]["errors"] == [], report["tls_verification"]
+          assert report["pressure"]["cycles"] == 1
+          # This lane is a screen. It must say so and must never be cited as
+          # the Issue 34 memory closure.
+          assert report["screen_only"] is True
+          assert "SCREEN ONLY" in report["screen_note"]
+          assert report["slope"]["ok"] is True, report["slope"]
+          assert report["anon_slope"]["ok"] is True, report["anon_slope"]
+          assert report["slope"]["budget_mib_per_hour"] <= 64, report["slope"]
+          assert report["slope"]["span_seconds"] >= 150, report["slope"]
+          assert report["pressure"]["result"]["hold_seconds"] >= 15
+          assert report["pressure"]["result"]["recovery_probe_seconds"] >= 10
+          print(json.dumps({
+              "verdict": report["verdict"],
+              "scope": report["scope"],
+              "slope": report["slope"],
+              "peak_rss_mib": report["peak_rss_mib"],
+              "tls": report["tls_verification"]["contract"],
+              "load_requests_ok": report["load"]["requests_ok"],
+          }, indent=2))
+          PY
+          for phase in cycle_start high_or_max_entered release recovered; do
+            grep -F "$phase" "$OUT/progress.txt" >/dev/null \
+              || { echo "::error::pressure phase $phase missing"; exit 1; }
+          done
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/issue34-short"
+          [ -f "$OUT/report.json" ] && cat "$OUT/report.json" || true
+          [ -f "$OUT/target.log" ] && tail -n 120 "$OUT/target.log" || true
+          [ -f "$OUT/progress.txt" ] && tail -n 40 "$OUT/progress.txt" || true
+
+  nightly:
+    name: 4 h component soak - manual workflow_dispatch only
+    # Never scheduled. Select the long tier explicitly with run_long_component.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_long_component == 'true' && github.event.inputs.dedicated_hours == '0'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 330
+    env:
+      NODE_STATUS_SOURCE: ${{ github.event.inputs.node_status_source }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Python harness unit tests
+        run: |
+          set -euo pipefail
+          ISSUE34_REQUIRE_LINUX=1 python3 -I scripts/memory/tests/run_tests.py 2>&1 | tee "$RUNNER_TEMP/python-tests.log"
+          grep -qE '^OK$' "$RUNNER_TEMP/python-tests.log"
+
+      - name: Checkout pinned geo runtime dependency
+        uses: actions/checkout@v5
+        with:
+          repository: Zelvik-Labs/dns
+          ref: ${{ env.DNS_REF }}
+          ssh-key: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
+          persist-credentials: false
+          path: .ci/dns
+
+      - name: Link sibling geo runtime path
+        run: ln -s "$GITHUB_WORKSPACE/.ci/dns" "$GITHUB_WORKSPACE/../dns"
+
+      - name: Read-only protocol deploy key
+        run: |
+          set -euo pipefail
+          if [ -z "${PROTOCOL_DEPLOY_KEY:-}" ]; then
+            echo "::error::PROTOCOL_DEPLOY_KEY is required for the private protocol dependency."
+            exit 1
+          fi
+          key="$RUNNER_TEMP/protocol_deploy_key"
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$PROTOCOL_DEPLOY_KEY" > "$key"
+          curl -fsSL https://api.github.com/meta \
+            | grep -oE '"ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+"' \
+            | tr -d '"' | sed 's/^/github.com /' > "$RUNNER_TEMP/known_hosts"
+          {
+            echo "GIT_SSH_COMMAND=ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+            echo "GIT_CONFIG_COUNT=1"
+            echo "GIT_CONFIG_KEY_0=url.git@github.com:Zelvik-Labs/protocol.insteadOf"
+            echo "GIT_CONFIG_VALUE_0=https://github.com/Zelvik-Labs/protocol"
+          } >> "$GITHUB_ENV"
+        env:
+          PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.99.1
+
+      - name: Install build dependencies
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          packages=(cmake build-essential clang pkg-config perl protobuf-compiler libclang-dev libelf-dev zlib1g-dev libzstd-dev libpcap0.8-dev m4 llvm curl openssl python3)
+          sudo rm -rf /var/lib/apt/lists/*
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y --no-install-recommends "${packages[@]}"; then break; fi
+            [ "$attempt" = "3" ] && exit 1
+            sleep 5
+          done
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            pingora-main -> pingora-main/target
+
+      - name: Install eBPF toolchain
+        run: |
+          set -euo pipefail
+          EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/zelvik-edge-xdp-ebpf/rust-toolchain.toml | head -1)"
+          test -n "$EBPF_NIGHTLY"
+          rustup toolchain install "$EBPF_NIGHTLY" --profile minimal -c rust-src -c rustc-dev
+          SYSROOT="$(rustup run "$EBPF_NIGHTLY" rustc --print sysroot)"
+          ln -sf "$(find "$SYSROOT/lib" -name 'libLLVM.so.*' -print -quit)" "$SYSROOT/lib/libLLVM.so"
+          export LLVM_PREFIX="$SYSROOT"
+          cargo +"$EBPF_NIGHTLY" install bpf-linker --version "$EBPF_LINKER_VERSION" --locked
+
+      - name: Build eBPF object
+        run: |
+          set -euo pipefail
+          rm -f data/zelvik-edge-xdp-ebpf.o
+          cargo xtask build-ebpf
+          test -s data/zelvik-edge-xdp-ebpf.o
+          echo "ZELVIK_EDGE_XDP_EBPF_SOURCE=data/zelvik-edge-xdp-ebpf.o" >> "$GITHUB_ENV"
+          echo "ZELVIK_EDGE_XDP_EBPF_SHA256=$(sha256sum data/zelvik-edge-xdp-ebpf.o | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Build bench-defense
+        run: cargo build --bin bench-defense
+
+      - name: 4 h continuous soak (nightly only)
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/issue34-nightly"
+          mkdir -p "$OUT"
+          python3 -I scripts/memory/certs.py --out-dir "$OUT/certs" > "$OUT/certs.json"
+          CERTS="$OUT/certs"
+          STATUS_ARGS=()
+          if [ -n "${NODE_STATUS_SOURCE:-}" ]; then
+            STATUS_ARGS=(--status-source "$NODE_STATUS_SOURCE" --require-node-status --require-status-samples 10)
+          fi
+          sudo systemd-run --scope \
+            --property=MemoryMax=2G \
+            --property=MemoryHigh=1536M \
+            --property=MemorySwapMax=0 \
+            --setenv=PATH=/usr/local/bin:/usr/bin:/bin \
+            --setenv=ISSUE34_REQUIRE_LINUX=1 \
+            --working-directory="$GITHUB_WORKSPACE" \
+            -- python3 -I scripts/memory/run_soak.py \
+              --target-cmd "$GITHUB_WORKSPACE/target/debug/bench-defense" \
+              --target-kind bench-defense \
+              --target-env "BENCH_TLS_CERT=$CERTS/server.pem" \
+              --target-env "BENCH_TLS_KEY=$CERTS/server.key" \
+              --target-env "BENCH_ALLOC_STATS_PATH=$OUT/alloc-stats.json" \
+              --tls-port 8443 --tls-host localhost --tls-ca "$CERTS/ca.pem" \
+              --duration 14400 \
+              --warmup-seconds 1800 \
+              --min-span-seconds 10800 \
+              --sample-interval 2 \
+              --budget-mib-per-hour 0.5 \
+              --anon-budget-mib-per-hour 0.5 \
+              --max-rss-mib 1536 \
+              --pressure-cycles 10 \
+              --pressure-start-fraction 0.01 \
+              --pressure-bytes 1610612736 \
+              --pressure-hold-seconds 60 \
+              --pressure-settle-seconds 60 \
+              --pressure-recovery-probe-seconds 30 \
+              --pressure-long-recovery \
+              --stats-source "$OUT/alloc-stats.json" \
+              --require-allocator-stats \
+              --require-stats-samples 5000 \
+              --min-requests 1000 \
+              --max-load-errors 10 \
+              --samples-jsonl "$OUT/samples.jsonl" \
+              --progress-file "$OUT/progress.txt" \
+              --target-log "$OUT/target.log" \
+              --out "$OUT/report.json" \
+              "${STATUS_ARGS[@]}"
+          python3 -I - "$OUT/report.json" <<'PY'
+          import json, sys
+          report = json.load(open(sys.argv[1]))
+          assert report["verdict"] == "pass", report["violations"]
+          assert report["scope"]["component_lane"] is True, report["scope"]
+          assert report["scope"]["full_edge"] is False, report["scope"]
+          # 4 h means 4 h, not a short integration run labelled nightly.
+          assert report["duration_seconds"] >= 14000, report["duration_seconds"]
+          # Pressure cycles block the synchronous sampling loop, so the
+          # expected count is derived from the tracked active sampling window,
+          # not from total uptime.
+          assert report["expected_samples"] > 0, report
+          assert report["pressure_before_measurement"] is True, report["pressure"]
+          assert report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"], report["pressure"]
+          assert report["measurement_stabilization_end_offset_seconds"] <= report["measurement_start_offset_seconds"], report["measurement"]
+          assert report["measurement"]["stabilization_plateaued"] is True, report["measurement"]
+          assert report["measurement"]["load_errors"] <= 10, report["measurement"]
+          assert report["measurement_samples"] >= report["expected_samples"] * 0.9, (
+              report["measurement_samples"], report["expected_samples"])
+          assert report["target"]["same_pid"] is True
+          # Strict Issue 34 budget: 0.5 MiB/h => 24 MiB over 48 h. The gate is
+          # the upper 95% bound and the robust slope, separately for total RSS
+          # and anonymous RSS. CI noise is not a reason to relax this.
+          assert report["screen_only"] is False
+          assert report["slope"]["ok"] is True, report["slope"]
+          assert report["anon_slope"]["ok"] is True, report["anon_slope"]
+          assert report["slope"]["effective_warmup_seconds"] >= 1800
+          assert report["slope"]["samples"] >= 5000, report["slope"]
+          for name in ("slope", "anon_slope"):
+              assert report[name]["budget_mib_per_hour"] <= 0.5, report[name]
+              assert report[name]["upper95_mib_per_hour"] < 0.5, report[name]
+              assert report[name]["theil_sen_mib_per_hour"] < 0.5, report[name]
+          # Long recovery: 10 cycles, 60 s hold, 30 s sustained probe.
+          assert report["pressure"]["cycles"] == 10
+          probe = report["pressure"]["result"]
+          assert probe["long_recovery"] is True
+          assert probe["hold_seconds"] >= 60
+          assert probe["recovery_probe_seconds"] >= 30
+          assert probe["recovery_probe_samples"] >= 10, probe
+          print(json.dumps({
+              "verdict": report["verdict"],
+              "scope": report["scope"],
+              "slope": report["slope"],
+              "anon_slope": report["anon_slope"],
+              "peak_rss_mib": report["peak_rss_mib"],
+              "load_requests_ok": report["load"]["requests_ok"],
+              "node_status_samples": report["node_status"]["samples"],
+          }, indent=2))
+          PY
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/issue34-nightly"
+          [ -f "$OUT/report.json" ] && cat "$OUT/report.json" || true
+          [ -f "$OUT/target.log" ] && tail -n 120 "$OUT/target.log" || true
+          [ -f "$OUT/progress.txt" ] && tail -n 60 "$OUT/progress.txt" || true
+
+  # Mandatory production-startup soak. This is the lane that may close Issue 34
+  # for the real startup path; the component bench-defense job is separate and
+  # never substitutes for it. Same strict 0.5 MiB/h RSS+Anon gate as nightly.
+  full-edge:
+    name: 15 min full-Edge production-startup screen - hosted ubuntu-22.04
+    # Automatic fast screen. 900 s is soak time only; Rust/eBPF builds are
+    # outside it. The manual long tiers are `nightly` and `dedicated`.
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dedicated_hours == '0')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Python harness unit tests
+        run: |
+          set -euo pipefail
+          ISSUE34_REQUIRE_LINUX=1 python3 -I scripts/memory/tests/run_tests.py 2>&1 | tee "$RUNNER_TEMP/python-tests.log"
+          grep -qE '^OK$' "$RUNNER_TEMP/python-tests.log"
+
+      - name: Checkout pinned geo runtime dependency
+        uses: actions/checkout@v5
+        with:
+          repository: Zelvik-Labs/dns
+          ref: ${{ env.DNS_REF }}
+          ssh-key: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
+          persist-credentials: false
+          path: .ci/dns
+
+      - name: Link sibling geo runtime path
+        run: ln -s "$GITHUB_WORKSPACE/.ci/dns" "$GITHUB_WORKSPACE/../dns"
+
+      - name: Read-only protocol deploy key
+        run: |
+          set -euo pipefail
+          if [ -z "${PROTOCOL_DEPLOY_KEY:-}" ]; then
+            echo "::error::PROTOCOL_DEPLOY_KEY is required for the private protocol dependency."
+            exit 1
+          fi
+          key="$RUNNER_TEMP/protocol_deploy_key"
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$PROTOCOL_DEPLOY_KEY" > "$key"
+          curl -fsSL https://api.github.com/meta \
+            | grep -oE '"ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+"' \
+            | tr -d '"' | sed 's/^/github.com /' > "$RUNNER_TEMP/known_hosts"
+          {
+            echo "GIT_SSH_COMMAND=ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+            echo "GIT_CONFIG_COUNT=1"
+            echo "GIT_CONFIG_KEY_0=url.git@github.com:Zelvik-Labs/protocol.insteadOf"
+            echo "GIT_CONFIG_VALUE_0=https://github.com/Zelvik-Labs/protocol"
+          } >> "$GITHUB_ENV"
+        env:
+          PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.99.1
+
+      - name: Install build dependencies
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          packages=(cmake build-essential clang pkg-config perl protobuf-compiler libclang-dev libelf-dev zlib1g-dev libzstd-dev libpcap0.8-dev m4 llvm curl openssl python3)
+          sudo rm -rf /var/lib/apt/lists/*
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y --no-install-recommends "${packages[@]}"; then break; fi
+            [ "$attempt" = "3" ] && exit 1
+            sleep 5
+          done
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            pingora-main -> pingora-main/target
+
+      - name: Install eBPF toolchain
+        run: |
+          set -euo pipefail
+          EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/zelvik-edge-xdp-ebpf/rust-toolchain.toml | head -1)"
+          test -n "$EBPF_NIGHTLY"
+          rustup toolchain install "$EBPF_NIGHTLY" --profile minimal -c rust-src -c rustc-dev
+          SYSROOT="$(rustup run "$EBPF_NIGHTLY" rustc --print sysroot)"
+          ln -sf "$(find "$SYSROOT/lib" -name 'libLLVM.so.*' -print -quit)" "$SYSROOT/lib/libLLVM.so"
+          LLVM_PREFIX="$SYSROOT" cargo +"$EBPF_NIGHTLY" install bpf-linker --version "$EBPF_LINKER_VERSION" --locked
+          rm -f data/zelvik-edge-xdp-ebpf.o
+          cargo xtask build-ebpf
+          test -s data/zelvik-edge-xdp-ebpf.o
+          echo "ZELVIK_EDGE_XDP_EBPF_SOURCE=data/zelvik-edge-xdp-ebpf.o" >> "$GITHUB_ENV"
+          echo "ZELVIK_EDGE_XDP_EBPF_SHA256=$(sha256sum data/zelvik-edge-xdp-ebpf.o | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Build real Edge and fake control-plane fixture
+        run: |
+          set -euo pipefail
+          cargo build --bin Zelvik-Edge --example issue34-controller
+
+      - name: Full-Edge fixture preflight
+        run: |
+          set -euo pipefail
+          python3 -I scripts/memory/full_edge.py preflight \
+            --edge-binary target/debug/Zelvik-Edge \
+            --controller-bin target/debug/examples/issue34-controller
+
+      - name: Full-Edge production-startup smoke (mandatory)
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/issue34-full-edge-smoke"
+          mkdir -p "$OUT"
+          python3 -I scripts/memory/full_edge.py smoke \
+            --edge-binary target/debug/Zelvik-Edge \
+            --controller-bin target/debug/examples/issue34-controller \
+            --home "$OUT/home" \
+            --report "$OUT/smoke-report.json" \
+            | tee "$OUT/summary.json"
+          python3 -I - "$OUT/summary.json" <<'PY'
+          import json, sys
+          report = json.load(open(sys.argv[1]))
+          assert report["status"] == "pass", report.get("failures")
+          scope = report["scope"]
+          assert scope["full_edge"] is True, scope
+          assert scope["production_startup"] is True, scope
+          assert scope["component_lane"] is False, scope
+          assert report["node_health_observed"] is True, report
+          assert report["edge_pid"] == report["pid_at_exit"], report
+          checks = {item["name"]: item for item in report["checks"]}
+          assert checks["http1-post"]["ok"] is True, checks.get("http1-post")
+          assert checks["http2-post"]["ok"] is True, checks.get("http2-post")
+          assert checks["http1-post"]["http_version"].startswith("1."), checks
+          assert checks["http2-post"]["http_version"] == "2", checks
+          assert checks["node-status"]["ok"] is True, checks.get("node-status")
+          assert checks["telemetry-retryable-recovery"]["ok"] is True, (
+              checks.get("telemetry-retryable-recovery"))
+          assert checks["telemetry-reject"]["ok"] is True, checks.get("telemetry-reject")
+          telemetry = report["telemetry"]
+          assert telemetry["mode"] == "unimplemented", telemetry
+          assert telemetry["served"] is False, telemetry
+          assert telemetry["expected_code_number"] == 12, telemetry
+          print(json.dumps({"status": report["status"], "scope": scope,
+                            "edge_pid": report["edge_pid"],
+                            "checks": sorted(checks)}, indent=2))
+          PY
+
+      # Telemetry closure on this lane: the fixture starts in `unavailable`
+      # (retryable UNAVAILABLE), so the real Edge must retain complete
+      # batches in its bounded on-disk store. `--recovery-seconds 60` switches
+      # the fixture to the durable success backend near the end and requires
+      # the retained backlog to be acknowledged with a real receipt. The store
+      # is under $RUNNER_TEMP for this run only; a fake or unbounded ack fails
+      # the assertions below. Terminal UNIMPLEMENTED is covered by the smoke.
+      - name: 15 min full-Edge screen soak (automatic)
+        run: |
+          set -euo pipefail
+          # 900 s of soak, excluding image/Rust/eBPF build time. 120 s warm-up;
+          # pressure starts at 120 s (steady-state baseline, not 18 s during
+          # Edge startup) and two cycles of 15 s hold + 10 s recovery probe
+          # finish by ~200 s. A >=10 s clean-2xx handshake follows, then a
+          # bounded wait (<=180 s) for the released cgroup's RSS refill ramp to
+          # flatten (trailing 30 s rate <=8 MiB/min for two windows). The
+          # measurement window therefore contains no pressure, settle, 503 tail
+          # or refill ramp; the remaining span is >=300 s.
+          # 8 MiB/h is a fast screen, never the 0.5 MiB/h long-lane closure.
+          # Allocator pages are MAP_PRIVATE|MAP_ANONYMOUS, so with swap=0 they
+          # cannot be reclaimed and readiness is a real resident proof.
+          # --pressure-bytes is an upper bound: pressure.py caps each cycle at
+          # memory.high + 16 MiB with 256 MiB reserve below memory.max, so a
+          # 1.5 GiB request cannot livelock above high=1.5 GiB (CI run
+          # 40089866696). Resident proof is bounded at 120 s independent of hold
+          # and logs cgroup snapshots.
+          OUT="$RUNNER_TEMP/issue34-full-edge-nightly"
+          mkdir -p "$OUT"
+          sudo systemd-run --scope \
+            --property=MemoryMax=2G \
+            --property=MemoryHigh=1536M \
+            --property=MemorySwapMax=0 \
+            --setenv=PATH=/usr/local/bin:/usr/bin:/bin \
+            --setenv=ISSUE34_REQUIRE_LINUX=1 \
+            --working-directory="$GITHUB_WORKSPACE" \
+            -- python3 -I scripts/memory/full_edge.py soak \
+              --edge-binary "$GITHUB_WORKSPACE/target/debug/Zelvik-Edge" \
+              --controller-bin "$GITHUB_WORKSPACE/target/debug/examples/issue34-controller" \
+              --home "$OUT/home" \
+              --run-dir "$OUT/run" \
+              --duration 900 \
+              --out "$OUT/report.json" \
+              --require-node-status \
+              --telemetry-mode unavailable \
+              --recovery-seconds 60 \
+              --soak-arg=--screen-only \
+              --soak-arg=--warmup-seconds --soak-arg=120 \
+              --soak-arg=--min-span-seconds --soak-arg=300 \
+              --soak-arg=--sample-interval --soak-arg=2 \
+              --soak-arg=--budget-mib-per-hour --soak-arg=8 \
+              --soak-arg=--anon-budget-mib-per-hour --soak-arg=8 \
+              --soak-arg=--max-rss-mib --soak-arg=1536 \
+              --soak-arg=--pressure-cycles --soak-arg=2 \
+              --soak-arg=--pressure-start-fraction --soak-arg=0.13333333333333333 \
+              --soak-arg=--measurement-clean-seconds --soak-arg=10 \
+              --soak-arg=--pressure-bytes --soak-arg=1610612736 \
+              --soak-arg=--pressure-hold-seconds --soak-arg=15 \
+              --soak-arg=--pressure-settle-seconds --soak-arg=30 \
+              --soak-arg=--pressure-recovery-probe-seconds --soak-arg=10 \
+              --soak-arg=--min-requests --soak-arg=1000 \
+              --soak-arg=--max-load-errors --soak-arg=10 \
+            | tee "$OUT/summary.json"
+          python3 -I - "$OUT/summary.json" "$OUT/report.json" <<'PY'
+          import json, os, sys
+          summary = json.load(open(sys.argv[1]))
+          report = json.load(open(sys.argv[2]))
+          assert summary["status"] == "pass", summary
+          assert summary["soak_exit_code"] == 0, summary
+          # The fixture starts unavailable, so the Edge must retain batches,
+          # then recover and acknowledge them with a real receipt once the
+          # backend returns. The durable store is a bounded file under
+          # $RUNNER_TEMP, never a production path and never a fake ack.
+          recovery = summary["telemetry_recovery"]
+          assert recovery is not None, summary
+          assert recovery["status"] == "pass", recovery
+          assert recovery["mode"] == "unavailable->success", recovery
+          assert recovery["pending_before"] >= 1, recovery
+          assert recovery["pending_after"] == 0, recovery
+          assert recovery["acked_sequence"] >= recovery["max_sequence"], recovery
+          assert 0 < recovery["max_batch_bytes"] <= 8 * 1024 * 1024, recovery
+          assert recovery["bounded_status"] is True, recovery
+          assert summary["telemetry_mode"] == "unavailable", summary
+          assert summary["telemetry_store"].startswith(os.environ["RUNNER_TEMP"] + "/"), summary
+          assert report["verdict"] == "pass", report["violations"]
+          scope = report["scope"]
+          assert scope["full_edge"] is True, scope
+          assert scope["production_startup"] is True, scope
+          assert scope["component_lane"] is False, scope
+          assert report["screen_only"] is True
+          assert "SCREEN ONLY" in report["screen_note"]
+          assert report["duration_seconds"] >= 880, report["duration_seconds"]
+          # Pressure and the clean-load handshake are before measurement_start.
+          # Expected samples are therefore the contiguous measured-window
+          # count, not total uptime minus a guessed blocked interval.
+          assert report["pressure_before_measurement"] is True, report["pressure"]
+          assert report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"], report["pressure"]
+          assert report["pressure_end_offset_seconds"] <= 200, report["pressure"]
+          assert report["measurement"]["handshake_seconds"] >= 10, report["measurement"]
+          # Pressure's RSS refill ramp must have flattened before measurement.
+          assert report["measurement_stabilization_end_offset_seconds"] <= report["measurement_start_offset_seconds"], report["measurement"]
+          assert report["measurement"]["stabilization_plateaued"] is True, report["measurement"]
+          assert report["measurement"]["plateau_rate_mib_per_min"] <= report["measurement"]["stabilization_max_rate_mib_per_min"], report["measurement"]
+          assert report["measurement"]["load_errors"] <= 10, report["measurement"]
+          assert report["pressure"]["pressure_load_errors"] >= 0, report["pressure"]
+          assert report["expected_samples"] > 0, report
+          assert report["measurement_samples"] >= report["expected_samples"] * 0.9, (
+              report["measurement_samples"], report["expected_samples"])
+          assert report["target"]["same_pid"] is True
+          # Real TLS/HTTP2 startup was asserted by the smoke above; the soak
+          # also re-verifies CA/SNI/ALPN/payload on a periodic cadence.
+          assert report["tls_verification"]["periodic_count"] >= 1
+          assert report["tls_verification"]["errors"] == [], report["tls_verification"]
+          assert report["slope"]["ok"] is True, report["slope"]
+          assert report["anon_slope"]["ok"] is True, report["anon_slope"]
+          for name in ("slope", "anon_slope"):
+              assert report[name]["budget_mib_per_hour"] <= 8, report[name]
+              assert report[name]["upper95_mib_per_hour"] < 8, report[name]
+              assert report[name]["theil_sen_mib_per_hour"] < 8, report[name]
+          assert report["slope"]["span_seconds"] >= 300, report["slope"]
+          assert report["slope"]["samples"] >= 200, report["slope"]
+          # Required node counters must be present and live. The real Edge
+          # honestly reports unhooked Pingora workers, so the coverage gap is
+          # reported explicitly; it is not skipped and not treated as full
+          # worker coverage.
+          assert report["node_status"]["required"] is True
+          assert report["node_status"]["samples"] >= 10, report["node_status"]
+          last = report["node_status"]["last"]
+          assert last is not None
+          # Presence and monotonicity are checked on every sample; zero is a
+          # valid value when no reclaim/janitor cycle has happened yet.
+          assert last["workerReclaim.generation"] >= 0
+          assert last["cacheJanitor.cycles"] >= 0
+          # Actual allocator-cache accounting must be present and consistent.
+          assert last["metricValuesCache.estimatedBytes"] >= 0
+          assert last["metricsAggregatorBytes"] >= last["metricValuesCache.estimatedBytes"]
+          assert last["workerReclaim.coversAllWorkers"] is False
+          gap = report["node_status"]["coverage_gap"]
+          assert gap is not None, report["node_status"]
+          assert gap["value"] is False
+          assert gap["unhookedPingoraWorkers"] >= 1, gap
+          # OOM is enforced by the soak's cgroup event check and `verdict`;
+          # this is a fast screen, so it uses 2 early pressure cycles instead
+          # of the long-lane 10 x 60 s contract.
+          assert report["pressure"]["cycles"] == 2
+          probe = report["pressure"]["result"]
+          assert probe["long_recovery"] is False
+          assert probe["hold_seconds"] >= 15
+          assert probe["recovery_probe_seconds"] >= 10
+          assert probe["recovery_probe_samples"] >= 5, probe
+          print(json.dumps({"status": summary["status"], "scope": scope,
+                            "slope": report["slope"], "anon_slope": report["anon_slope"],
+                            "edge_pid": report["target"]["pid"]}, indent=2))
+          PY
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/issue34-full-edge-nightly"
+          [ -f "$OUT/report.json" ] && cat "$OUT/report.json" || true
+          [ -f "$OUT/summary.json" ] && cat "$OUT/summary.json" || true
+          [ -f "$OUT/run/edge.log" ] && tail -n 120 "$OUT/run/edge.log" || true
+          [ -f "$OUT/run/controller.log" ] && tail -n 120 "$OUT/run/controller.log" || true
+
+  dedicated:
+    name: Dedicated full-Edge soak (>=48 h, explicit input)
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.dedicated_hours != '0'
+    # The label must map to a host dedicated to this job; preflight below
+    # refuses GitHub-hosted runners and any host running production Edge.
+    runs-on: [self-hosted, issue34-dedicated]
+    timeout-minutes: 4380
+    steps:
+      - name: Preflight dedicated runner (not production, not hosted)
+        run: |
+          set -euo pipefail
+          if [ "${RUNNER_ENVIRONMENT:-}" != "self-hosted" ]; then
+            echo "::error::dedicated soak requires a self-hosted runner; RUNNER_ENVIRONMENT=${RUNNER_ENVIRONMENT:-unset}"
+            exit 1
+          fi
+          if [ ! -f /etc/zelvik/issue34-dedicated-runner ]; then
+            echo "::error::missing /etc/zelvik/issue34-dedicated-runner marker; refusing to treat this host as dedicated"
+            exit 1
+          fi
+          if pgrep -x 'Zelvik-Edge' >/dev/null || pgrep -x 'zelvik-edge' >/dev/null; then
+            echo "::error::production Edge process is running on this host; refusing dedicated soak"
+            exit 1
+          fi
+          if systemctl is-active --quiet zelvik-edge 2>/dev/null; then
+            echo "::error::zelvik-edge service is active; refusing dedicated soak"
+            exit 1
+          fi
+          for tool in systemd-run python3 openssl curl cmake protoc clang; do
+            command -v "$tool" >/dev/null || { echo "::error::dedicated host is missing $tool"; exit 1; }
+          done
+          systemctl is-system-running >/dev/null 2>&1 || systemctl --version >/dev/null
+          hours='${{ github.event.inputs.dedicated_hours }}'
+          case "$hours" in (*[!0-9]*|'') echo "::error::dedicated_hours must be an integer"; exit 1;; esac
+          if [ "$hours" -lt 48 ]; then
+            echo "::error::dedicated_hours must be >= 48 (got $hours)"
+            exit 1
+          fi
+          echo "ISSUE34_DEDICATED_HOURS=$hours" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v5
+
+      - name: Checkout pinned geo runtime dependency
+        uses: actions/checkout@v5
+        with:
+          repository: Zelvik-Labs/dns
+          ref: ${{ env.DNS_REF }}
+          ssh-key: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
+          persist-credentials: false
+          path: .ci/dns
+
+      - name: Link sibling geo runtime path
+        run: ln -s "$GITHUB_WORKSPACE/.ci/dns" "$GITHUB_WORKSPACE/../dns"
+
+      - name: Read-only protocol deploy key
+        run: |
+          set -euo pipefail
+          if [ -z "${PROTOCOL_DEPLOY_KEY:-}" ]; then
+            echo "::error::PROTOCOL_DEPLOY_KEY is required for the private protocol dependency."
+            exit 1
+          fi
+          key="$RUNNER_TEMP/protocol_deploy_key"
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$PROTOCOL_DEPLOY_KEY" > "$key"
+          curl -fsSL https://api.github.com/meta \
+            | grep -oE '"ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+"' \
+            | tr -d '"' | sed 's/^/github.com /' > "$RUNNER_TEMP/known_hosts"
+          {
+            echo "GIT_SSH_COMMAND=ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+            echo "GIT_CONFIG_COUNT=1"
+            echo "GIT_CONFIG_KEY_0=url.git@github.com:Zelvik-Labs/protocol.insteadOf"
+            echo "GIT_CONFIG_VALUE_0=https://github.com/Zelvik-Labs/protocol"
+          } >> "$GITHUB_ENV"
+        env:
+          PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.99.1
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            pingora-main -> pingora-main/target
+
+      - name: Build eBPF object
+        run: |
+          set -euo pipefail
+          EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/zelvik-edge-xdp-ebpf/rust-toolchain.toml | head -1)"
+          test -n "$EBPF_NIGHTLY"
+          rustup toolchain install "$EBPF_NIGHTLY" --profile minimal -c rust-src -c rustc-dev
+          SYSROOT="$(rustup run "$EBPF_NIGHTLY" rustc --print sysroot)"
+          ln -sf "$(find "$SYSROOT/lib" -name 'libLLVM.so.*' -print -quit)" "$SYSROOT/lib/libLLVM.so"
+          LLVM_PREFIX="$SYSROOT" cargo +"$EBPF_NIGHTLY" install bpf-linker --version "$EBPF_LINKER_VERSION" --locked
+          rm -f data/zelvik-edge-xdp-ebpf.o
+          cargo xtask build-ebpf
+          test -s data/zelvik-edge-xdp-ebpf.o
+          echo "ZELVIK_EDGE_XDP_EBPF_SOURCE=data/zelvik-edge-xdp-ebpf.o" >> "$GITHUB_ENV"
+          echo "ZELVIK_EDGE_XDP_EBPF_SHA256=$(sha256sum data/zelvik-edge-xdp-ebpf.o | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Build real Edge and fake control-plane fixture
+        run: |
+          set -euo pipefail
+          cargo build --bin Zelvik-Edge --example issue34-controller
+
+      - name: Full-Edge fixture preflight
+        run: |
+          set -euo pipefail
+          python3 -I scripts/memory/full_edge.py preflight \
+            --edge-binary target/debug/Zelvik-Edge \
+            --controller-bin target/debug/examples/issue34-controller
+
+      - name: Dedicated full-Edge continuous soak
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/issue34-dedicated"
+          mkdir -p "$OUT"
+          DURATION=$(( ISSUE34_DEDICATED_HOURS * 3600 ))
+          sudo systemd-run --scope \
+            --property=MemoryMax=2G \
+            --property=MemoryHigh=1536M \
+            --property=MemorySwapMax=0 \
+            --setenv=PATH=/usr/local/bin:/usr/bin:/bin \
+            --setenv=ISSUE34_REQUIRE_LINUX=1 \
+            --working-directory="$GITHUB_WORKSPACE" \
+            -- python3 -I scripts/memory/full_edge.py soak \
+              --edge-binary "$GITHUB_WORKSPACE/target/debug/Zelvik-Edge" \
+              --controller-bin "$GITHUB_WORKSPACE/target/debug/examples/issue34-controller" \
+              --home "$OUT/home" \
+              --run-dir "$OUT/run" \
+              --duration "$DURATION" \
+              --out "$OUT/report.json" \
+              --require-node-status \
+              --telemetry-mode unavailable \
+              --recovery-seconds 600 \
+              --soak-arg=--warmup-seconds --soak-arg=3600 \
+              --soak-arg=--min-span-seconds --soak-arg=7200 \
+              --soak-arg=--sample-interval --soak-arg=5 \
+              --soak-arg=--budget-mib-per-hour --soak-arg=0.5 \
+              --soak-arg=--anon-budget-mib-per-hour --soak-arg=0.5 \
+              --soak-arg=--split-baseline \
+              --soak-arg=--max-rss-mib --soak-arg=1536 \
+              --soak-arg=--pressure-cycles --soak-arg=10 \
+              --soak-arg=--pressure-start-fraction --soak-arg=0.005 \
+              --soak-arg=--pressure-bytes --soak-arg=1610612736 \
+              --soak-arg=--pressure-hold-seconds --soak-arg=60 \
+              --soak-arg=--pressure-settle-seconds --soak-arg=60 \
+              --soak-arg=--pressure-recovery-probe-seconds --soak-arg=30 \
+              --soak-arg=--pressure-long-recovery \
+              --soak-arg=--min-requests --soak-arg=1000 \
+              --soak-arg=--max-load-errors --soak-arg=10 \
+            | tee "$OUT/summary.json"
+          python3 -I - "$OUT/summary.json" "$OUT/report.json" <<'PY'
+          import json, sys
+          import os
+          hours = int(os.environ["ISSUE34_DEDICATED_HOURS"])
+          summary = json.load(open(sys.argv[1]))
+          report = json.load(open(sys.argv[2]))
+          assert summary["status"] == "pass", summary
+          assert summary["soak_exit_code"] == 0, summary
+          assert report["verdict"] == "pass", report["violations"]
+          # Retryable telemetry closure: unavailable backend first, retained
+          # batches, then a real durable receipt after recovery. The store is
+          # a bounded file under $RUNNER_TEMP, not a production path and not a
+          # fabricated acknowledgement.
+          recovery = summary["telemetry_recovery"]
+          assert recovery is not None, summary
+          assert recovery["status"] == "pass", recovery
+          assert recovery["mode"] == "unavailable->success", recovery
+          assert recovery["pending_before"] >= 1, recovery
+          assert recovery["pending_after"] == 0, recovery
+          assert recovery["acked_sequence"] >= recovery["max_sequence"], recovery
+          assert 0 < recovery["max_batch_bytes"] <= 8 * 1024 * 1024, recovery
+          assert recovery["bounded_status"] is True, recovery
+          assert summary["telemetry_mode"] == "unavailable", summary
+          assert summary["telemetry_store"].startswith(os.environ["RUNNER_TEMP"] + "/"), summary
+          # This is the production-startup lane, not the bench-defense
+          # component surrogate.
+          assert report["scope"]["full_edge"] is True, report["scope"]
+          assert report["scope"]["production_startup"] is True, report["scope"]
+          assert report["scope"]["component_lane"] is False, report["scope"]
+          # A >=48 h claim must be backed by >=48 h of wall clock and samples;
+          # a seconds-level integration run can never satisfy this.
+          assert hours >= 48
+          assert report["duration_seconds"] >= hours * 3600 * 0.95, report["duration_seconds"]
+          # Expected samples come from the tracked active sampling window, not
+          # from requested wall clock; pressure cycles block the loop.
+          assert report["expected_samples"] > 0, report
+          assert report["pressure_before_measurement"] is True, report["pressure"]
+          assert report["pressure_end_offset_seconds"] < report["measurement_start_offset_seconds"], report["pressure"]
+          assert report["measurement_stabilization_end_offset_seconds"] <= report["measurement_start_offset_seconds"], report["measurement"]
+          assert report["measurement"]["stabilization_plateaued"] is True, report["measurement"]
+          assert report["measurement"]["load_errors"] <= 10, report["measurement"]
+          assert report["measurement_samples"] >= report["expected_samples"] * 0.9, (
+              report["measurement_samples"], report["expected_samples"])
+          assert report["target"]["same_pid"] is True
+          assert report["node_status"]["required"] is True
+          last = report["node_status"]["last"]
+          assert last is not None
+          # Presence and monotonicity are checked on every sample; zero is a
+          # valid value when no reclaim/janitor cycle has happened yet.
+          assert last["workerReclaim.generation"] >= 0
+          assert last["cacheJanitor.cycles"] >= 0
+          # Actual allocator-cache accounting must be present and consistent.
+          assert last["metricValuesCache.estimatedBytes"] >= 0
+          assert last["metricsAggregatorBytes"] >= last["metricValuesCache.estimatedBytes"]
+          assert last["workerReclaim.coversAllWorkers"] is False
+          gap = report["node_status"]["coverage_gap"]
+          assert gap is not None, report["node_status"]
+          assert gap["value"] is False
+          assert gap["unhookedPingoraWorkers"] >= 1, gap
+          # Strict 0.5 MiB/h budget on total RSS and anonymous RSS, plus the
+          # second-half platform comparison and half-to-half step baseline.
+          assert report["screen_only"] is False
+          assert report["slope"]["ok"] is True, report["slope"]
+          assert report["anon_slope"]["ok"] is True, report["anon_slope"]
+          for name in ("slope", "anon_slope"):
+              assert report[name]["upper95_mib_per_hour"] < 0.5, report[name]
+              assert report[name]["theil_sen_mib_per_hour"] < 0.5, report[name]
+          split = report["split_baseline"]
+          assert split is not None
+          for name in ("rss", "anon"):
+              assert split[name]["ok"] is True, split[name]
+              assert split[name]["second"]["upper95_mib_per_hour"] < 0.5, split[name]
+              assert split[name]["second"]["theil_sen_mib_per_hour"] < 0.5, split[name]
+              assert split[name]["step_mib"] <= split[name]["step_allowed_mib"], split[name]
+          assert report["pressure"]["cycles"] == 10
+          probe = report["pressure"]["result"]
+          assert probe["long_recovery"] is True
+          assert probe["hold_seconds"] >= 60
+          assert probe["recovery_probe_seconds"] >= 30
+          assert probe["recovery_probe_samples"] >= 10, probe
+          print(json.dumps({
+              "verdict": report["verdict"],
+              "slope": report["slope"],
+              "anon_slope": report["anon_slope"],
+              "split_baseline": report["split_baseline"],
+          }, indent=2))
+          PY
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/issue34-dedicated"
+          [ -f "$OUT/report.json" ] && cat "$OUT/report.json" || true
+          [ -f "$OUT/summary.json" ] && cat "$OUT/summary.json" || true
+          [ -f "$OUT/run/edge.log" ] && tail -n 120 "$OUT/run/edge.log" || true
+          [ -f "$OUT/run/controller.log" ] && tail -n 120 "$OUT/run/controller.log" || true

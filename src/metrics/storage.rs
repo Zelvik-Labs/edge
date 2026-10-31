@@ -18,9 +18,6 @@ use tracing::{error, warn};
 const METRICS_BUCKET: &str = "metrics";
 pub const SERVER_PERIOD_BYTES: usize = 72;
 pub const NODE_PERIOD_BYTES: usize = 16;
-/// Mace treats empty values as tombstones, so unique-IP presence keys need a
-/// non-empty sentinel (RocksDB previously allowed empty values).
-const UNIQUE_IP_MARKER: &[u8] = b"1";
 const CACHE_META_MAX_ENTRIES: usize = 1_000_000;
 const CACHE_META_MAX_ENTRY_BYTES: u64 = 256 * 1024;
 const CACHE_META_TOMBSTONE_PREFIX: &str = "CTOMB_";
@@ -254,7 +251,8 @@ pub fn apply_server_period_update(
     add_u64_be(&mut buf, 40, update.count_attack_requests);
     add_u64_be(&mut buf, 48, update.attack_bytes);
     buf[56..64].copy_from_slice(&update.active_connections.to_be_bytes());
-    buf[64..72].copy_from_slice(&update.count_ips.to_be_bytes());
+    // Bytes 64..72 belonged to the obsolete runtime IP count. Leave existing
+    // historical bytes untouched; current exact uniqueness lives in telemetry.
     buf
 }
 
@@ -545,73 +543,6 @@ impl MetricStorage {
     pub fn get_json<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
         self.get_raw(key.as_bytes())
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-    }
-
-    pub fn record_unique_ip(&self, server_id: i64, day: &str, ip: IpAddr) {
-        if server_id <= 0 || day.is_empty() {
-            return;
-        }
-        let _ = self.put_raw(
-            unique_ip_key(server_id, day, ip).as_bytes(),
-            UNIQUE_IP_MARKER,
-        );
-    }
-
-    pub fn load_unique_ips(&self, min_day: &str) -> Vec<(i64, String, IpAddr)> {
-        let Some(bucket) = self.bucket() else {
-            return Vec::new();
-        };
-        let Ok(view) = bucket.view() else {
-            return Vec::new();
-        };
-
-        let mut rows = Vec::new();
-        for item in view.seek("UIP_") {
-            let key_str = match std::str::from_utf8(item.key()) {
-                Ok(key_str) => key_str,
-                Err(_) => continue,
-            };
-            if !key_str.starts_with("UIP_") {
-                break;
-            }
-            if let Some((server_id, day, ip)) = parse_unique_ip_key(key_str)
-                && day.as_str() >= min_day
-            {
-                rows.push((server_id, day, ip));
-            }
-        }
-        rows
-    }
-
-    pub fn cleanup_unique_ips_before(&self, min_day: &str) {
-        let Some(bucket) = self.bucket() else {
-            return;
-        };
-        let Ok(view) = bucket.view() else {
-            return;
-        };
-        let Ok(txn) = bucket.begin() else {
-            return;
-        };
-
-        for item in view.seek("UIP_") {
-            let key = item.key();
-            let key_str = match std::str::from_utf8(key) {
-                Ok(key_str) => key_str,
-                Err(_) => continue,
-            };
-            if !key_str.starts_with("UIP_") {
-                break;
-            }
-            if let Some((_, day, _)) = parse_unique_ip_key(key_str)
-                && day.as_str() < min_day
-                && txn.del(key).is_err()
-            {
-                return;
-            }
-        }
-
-        let _ = txn.commit();
     }
 
     /// Cache Metadata Management
@@ -1946,19 +1877,6 @@ fn client_agent_ip_record_from_slice(
     })
 }
 
-fn unique_ip_key(server_id: i64, day: &str, ip: IpAddr) -> String {
-    format!("UIP_{day}_{server_id}_{ip}")
-}
-
-fn parse_unique_ip_key(key: &str) -> Option<(i64, String, IpAddr)> {
-    let rest = key.strip_prefix("UIP_")?;
-    let mut parts = rest.splitn(3, '_');
-    let day = parts.next()?.to_string();
-    let server_id = parts.next()?.parse::<i64>().ok()?;
-    let ip = parts.next()?.parse::<IpAddr>().ok()?;
-    Some((server_id, day, ip))
-}
-
 pub fn get_cache_meta_memory(hash: &str) -> Option<Arc<CacheMetaEntry>> {
     get_cache_meta_memory_fenced(hash, cache_meta_broad_purge_version())
 }
@@ -2424,7 +2342,6 @@ pub fn lookup_region_provider_id(ip: IpAddr) -> i64 {
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::net::IpAddr;
     use std::sync::atomic::{AtomicI64, AtomicU64};
 
     #[test]
@@ -2517,17 +2434,6 @@ mod tests {
     }
 
     #[test]
-    fn unique_ip_key_round_trips_ipv4_and_ipv6() {
-        for ip in ["203.0.113.1", "2001:db8::1"] {
-            let parsed = parse_unique_ip_key(&unique_ip_key(7, "20260621", ip.parse().unwrap()))
-                .expect("unique ip key should parse");
-            assert_eq!(parsed.0, 7);
-            assert_eq!(parsed.1, "20260621");
-            assert_eq!(parsed.2.to_string(), ip);
-        }
-    }
-
-    #[test]
     fn mace_storage_round_trip_and_prefix_scan() {
         let dir = std::env::temp_dir().join(format!(
             "zelvik-edge-mace-test-{}",
@@ -2561,7 +2467,6 @@ mod tests {
             attack_bytes: 0,
             active_connections: 3,
             count_websocket_connections: 0,
-            count_ips: 2,
         };
         storage
             .record_server_batch(1_700_000_000, vec![update.clone()], 50, 25)
@@ -2618,11 +2523,6 @@ mod tests {
         assert!(storage.get_cache_meta(&cache_hash).is_some());
 
         super::delete_cache_meta_for_test(&cache_hash);
-
-        storage.record_unique_ip(1, "20260818", "203.0.113.9".parse::<IpAddr>().unwrap());
-        let ips = storage.load_unique_ips("20260818");
-        assert_eq!(ips.len(), 1);
-        assert_eq!(ips[0].0, 1);
 
         drop(storage);
         let _ = std::fs::remove_dir_all(&dir);
@@ -2695,7 +2595,6 @@ mod tests {
             attack_bytes: 0,
             active_connections: 0,
             count_websocket_connections: 0,
-            count_ips: 0,
         };
 
         for server_id in 1..=3_000i64 {
@@ -2772,7 +2671,6 @@ mod tests {
                     attack_bytes: 0,
                     active_connections: 0,
                     count_websocket_connections: 0,
-                    count_ips: 0,
                 }],
                 1,
                 1,
@@ -2795,7 +2693,6 @@ mod tests {
                     attack_bytes: 0,
                     active_connections: 0,
                     count_websocket_connections: 0,
-                    count_ips: 0,
                 }],
                 2,
                 2,

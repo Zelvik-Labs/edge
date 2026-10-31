@@ -1351,6 +1351,16 @@ mod shared_account_status_tests {
     use crate::memory_governor::MemoryGovernor;
 
     #[test]
+    fn cpu_monitor_reports_cpus_without_retaining_processes() {
+        let mut sys = super::new_cpu_monitor();
+        assert!(!sys.cpus().is_empty());
+        assert!(sys.processes().is_empty());
+        sys.refresh_cpu_all();
+        assert!(!sys.cpus().is_empty());
+        assert!(sys.processes().is_empty());
+    }
+
+    #[test]
     fn status_matches_snapshot_and_reports_scoped_reserves() {
         let governor = MemoryGovernor::new();
         let snapshot = governor.snapshot(1);
@@ -1412,10 +1422,14 @@ mod shared_account_status_tests {
     }
 }
 
+pub(super) fn new_cpu_monitor() -> sysinfo::System {
+    sysinfo::System::new_with_specifics(
+        sysinfo::RefreshKind::nothing().with_cpu(sysinfo::CpuRefreshKind::everything()),
+    )
+}
+
 pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: ApiConfig) {
-    let mut sys = sysinfo::System::new_all();
-    // Initial refresh to populate CPU baseline
-    sys.refresh_all();
+    let mut sys = new_cpu_monitor();
 
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
 
@@ -1426,7 +1440,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             continue;
         }
 
-        sys.refresh_all(); // Refresh everything
+        sys.refresh_cpu_all();
         let (traffic_out, traffic_in, connections) = crate::metrics::METRICS.get_node_totals();
         let rpc_snap = crate::metrics::METRICS.rpc.snapshot();
         let rpc_total_requests = rpc_snap.total_requests;
@@ -1545,20 +1559,62 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
         // The json! macro hits the recursion limit past ~50 fields; merge a
         // second object for the slower-changing observability fields.
         let shed = crate::memory_shed::shed_stats();
-        let (distinct_ip_entries, distinct_ip_budget_entries) =
-            crate::metrics::distinct_ip_budget_status();
+        let (unique_ip_pending, unique_ip_capacity, unique_ip_refused, unique_ip_enqueue_failures) =
+            crate::metrics::unique_ip::UNIQUE_IP_TRACKER.status();
         let (
             unattributed_requests,
             unattributed_bytes_sent,
             unattributed_bytes_received,
             unattributed_origin_bytes,
         ) = crate::metrics::METRICS.unattributed_totals();
+        let values_cache = crate::rpc::stats::metric_values_cache_stats();
+        let worker_reclaim = crate::worker_reclaim::snapshot();
+        let janitor = crate::cache_hybrid::cache_janitor_activity();
         let resource_governor_extra = serde_json::json!({
+            "metricValuesCache": {
+                "entries": values_cache.entries,
+                "estimatedBytes": values_cache.estimated_bytes,
+                "maxEntries": values_cache.max_entries,
+                "maxEstimatedBytes": values_cache.max_estimated_bytes,
+                "evictedEntries": values_cache.evicted_entries,
+                "pendingPayloads": values_cache.pending_payloads,
+                "pendingBytes": values_cache.pending_bytes,
+                "dedupMaxEstimatedBytes": values_cache.dedup_max_estimated_bytes,
+                "maxPendingBytes": values_cache.max_pending_bytes,
+                "backpressured": values_cache.backpressured,
+                "quarantinedBytes": values_cache.quarantined_bytes,
+                "quarantinedOversizeRecords": values_cache.terminal_oversize_records,
+                "retainedUploadFailures": values_cache.terminal_failed_uploads
+            },
+            "workerReclaim": {
+                "generation": worker_reclaim.collect_generation,
+                "requests": worker_reclaim.collect_requests,
+                "started": worker_reclaim.worker_threads_started,
+                "live": worker_reclaim.worker_threads_live,
+                "stopped": worker_reclaim.worker_threads_stopped,
+                "parkCollects": worker_reclaim.park_collects,
+                "rateLimited": worker_reclaim.park_collects_rate_limited,
+                "stopCollects": worker_reclaim.stop_collects,
+                "unhookedPingoraWorkers": worker_reclaim.unhooked_pingora_workers,
+                "coversAllWorkers": worker_reclaim.covers_all_workers()
+            },
+            "cacheJanitor": {
+                "cycles": janitor.cycles,
+                "maintenanceCycles": janitor.maintenance_cycles,
+                "admissionSkips": janitor.admission_skips,
+                "budgetPublishes": janitor.budget_publishes,
+                "rebuildsDeferred": janitor.rebuilds_deferred,
+                "rebuildsApplied": janitor.rebuilds_applied,
+                "negativeEntriesRemoved": janitor.negative_entries_removed,
+                "workerCollectRequests": janitor.worker_collect_requests
+            },
             "metricsAggregatorBytes": governor_snapshot.metrics_aggregator_bytes,
             "cacheL1EstimatedBytes": governor_snapshot.cache_l1_bytes,
             "cacheL1BudgetBytes": cache_stats.memory_budget_bytes,
-            "distinctIpTrackerEntries": distinct_ip_entries,
-            "distinctIpBudgetEntries": distinct_ip_budget_entries,
+            "uniqueIpPendingObservations": unique_ip_pending,
+            "uniqueIpObservationCapacity": unique_ip_capacity,
+            "uniqueIpAdmissionRefused": unique_ip_refused,
+            "uniqueIpEnqueueFailures": unique_ip_enqueue_failures,
             "retiredServerMetricInstances": crate::metrics::METRICS.retired_server_metrics_count(),
             "metricFamilyInstances": crate::metrics::METRICS.family_instance_count(),
             "metricUnattributedRequests": unattributed_requests,
@@ -1751,8 +1807,7 @@ pub async fn report_node_online_once(
         anyhow::bail!("node id is not available");
     }
 
-    let mut sys = sysinfo::System::new_all();
-    sys.refresh_all();
+    let sys = new_cpu_monitor();
     let (traffic_out, traffic_in, connections) = crate::metrics::METRICS.get_node_totals();
     let rpc_snap = crate::metrics::METRICS.rpc.snapshot();
     let rpc_total_requests = rpc_snap.total_requests;
@@ -1848,8 +1903,7 @@ fn is_unsupported_node_type_error(err: &tonic::Status) -> bool {
 
 pub async fn start_node_value_reporter(config_store: Arc<ConfigStore>) {
     info!("Node Value Reporter service started. Interval: 60s");
-    let mut sys = sysinfo::System::new_all();
-    sys.refresh_all();
+    let mut sys = new_cpu_monitor();
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
     let mut last_traffic_out = 0u64;
     let mut last_traffic_in = 0u64;
@@ -1864,7 +1918,7 @@ pub async fn start_node_value_reporter(config_store: Arc<ConfigStore>) {
             continue;
         }
 
-        sys.refresh_all();
+        sys.refresh_cpu_all();
         // ... (rest of the logic)
 
         let (traffic_out, traffic_in, connections) = crate::metrics::METRICS.get_node_totals();

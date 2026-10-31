@@ -12,9 +12,16 @@ use std::sync::atomic::AtomicU32;
 static CACHED_PRESSURE: AtomicU32 = AtomicU32::new(0);
 static HTTP_DIMENSION_HANDLE: OnceCell<HttpDimensionHandle> = OnceCell::new();
 static HTTP_DIMENSION_DROPPED: AtomicU64 = AtomicU64::new(0);
+static HTTP_DIMENSION_QUEUED_BYTES: AtomicU64 = AtomicU64::new(0);
+static HTTP_DIMENSION_DROPPED_BYTES: AtomicU64 = AtomicU64::new(0);
+static HTTP_DIMENSION_DROPPED_ENTRIES: AtomicU64 = AtomicU64::new(0);
 static EMPTY_ARC_STR: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from(""));
 static UNKNOWN_ARC_STR: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from("Unknown"));
+static EMPTY_ATTRS: LazyLock<BTreeMap<String, String>> = LazyLock::new(BTreeMap::new);
 static HTTP_DIMENSION_WARNING_INTERVAL_MS: u64 = 5_000;
+/// Matches the governor's per-event queue estimate; the byte ledger below is
+/// derived from the same queue capacity so both bounds move together.
+const HTTP_DIMENSION_EVENT_ESTIMATED_BYTES: u64 = 512;
 
 pub const METRIC_CATEGORY_HTTP: &str = "http";
 pub const METRIC_CATEGORY_TCP: &str = "tcp";
@@ -167,9 +174,6 @@ pub fn start_pressure_updater() {
             let pressure = compute_node_pressure(&mut sys);
             CACHED_PRESSURE.store(pressure.to_bits(), Ordering::Relaxed);
 
-            // Runtime distinct-IP cardinality is strictly bounded by its
-            // governor-derived tracker; daily exact tracking remains separate.
-
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         }
     });
@@ -208,8 +212,11 @@ pub mod analyzer;
 pub mod daily;
 #[cfg(test)]
 mod mace_backend;
+pub mod plan;
+pub mod projection;
 pub mod storage;
 pub mod top_ip;
+pub mod unique_ip;
 
 #[derive(Clone)]
 pub struct HttpDimensionEvent {
@@ -224,7 +231,15 @@ pub struct HttpDimensionEvent {
     pub waf_group_id: i64,
     pub waf_action: Option<Arc<str>>,
     pub analyzed: Option<crate::metrics::analyzer::RequestStats>,
-    pub request_context: Arc<MetricRequestContext>,
+    /// Minimal request context containing only variables referenced by the
+    /// plan generation captured with this event. `None` when no enabled item
+    /// needs a request attribute.
+    pub request_context: Option<Arc<MetricRequestContext>>,
+    /// The immutable plan this event was accepted under. Events from an older
+    /// generation never see a later configuration.
+    pub plan: Arc<crate::metrics::plan::MetricCollectionPlan>,
+    /// Request completion time used for event-time window attribution.
+    pub event_time_millis: i64,
     pub created_at: i64,
 }
 
@@ -240,6 +255,8 @@ pub struct HttpDimensionsArgs<'a> {
     pub waf_action: Option<&'a str>,
     pub cached_analyzed: Option<&'a crate::metrics::analyzer::RequestStats>,
     pub request_context: Option<MetricRequestContext>,
+    pub plan: Arc<crate::metrics::plan::MetricCollectionPlan>,
+    pub event_time_millis: i64,
 }
 
 pub struct NetworkDimensionsArgs<'a> {
@@ -266,6 +283,8 @@ struct DimensionsArgs<'a> {
     waf_action: Option<&'a str>,
     cached_analyzed: Option<&'a crate::metrics::analyzer::RequestStats>,
     request_context: Option<MetricRequestContext>,
+    plan: Arc<crate::metrics::plan::MetricCollectionPlan>,
+    event_time_millis: i64,
 }
 
 #[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
@@ -449,14 +468,118 @@ fn lookup_case_insensitive(values: &BTreeMap<String, String>, key: &str) -> Stri
 
 #[derive(Clone)]
 struct HttpDimensionHandle {
-    sender: mpsc::Sender<HttpDimensionEvent>,
+    sender: mpsc::Sender<QueuedDimensionEvent>,
     queue_capacity: usize,
     dropped_since_warning: Arc<AtomicU64>,
     last_warning_at_ms: Arc<AtomicI64>,
 }
 
+/// One queued event plus the byte charge it holds. The charge follows the
+/// envelope through the channel and the receiver's batch buffer and is
+/// refunded only when the envelope is dropped after processing, so a queued
+/// buffer cannot be uncharged while it still occupies memory.
+struct QueuedDimensionEvent {
+    event: Option<HttpDimensionEvent>,
+    charge: u64,
+}
+
+impl QueuedDimensionEvent {
+    fn new(event: HttpDimensionEvent, charge: u64) -> Self {
+        Self {
+            event: Some(event),
+            charge,
+        }
+    }
+
+    fn take_event(&mut self) -> HttpDimensionEvent {
+        self.event.take().expect("queued metric event")
+    }
+}
+
+impl Drop for QueuedDimensionEvent {
+    fn drop(&mut self) {
+        if self.charge > 0 {
+            HTTP_DIMENSION_QUEUED_BYTES.fetch_sub(self.charge, Ordering::AcqRel);
+        }
+    }
+}
+
+fn http_dimension_byte_budget() -> u64 {
+    (crate::memory_governor::MEMORY_GOVERNOR.metrics_queue_capacity() as u64)
+        .saturating_mul(HTTP_DIMENSION_EVENT_ESTIMATED_BYTES)
+}
+
+fn try_reserve_dimension_bytes(charge: u64, budget: u64) -> bool {
+    if charge == 0 {
+        return true;
+    }
+    let mut used = HTTP_DIMENSION_QUEUED_BYTES.load(Ordering::Acquire);
+    loop {
+        if used.saturating_add(charge) > budget.max(1) {
+            return false;
+        }
+        match HTTP_DIMENSION_QUEUED_BYTES.compare_exchange_weak(
+            used,
+            used.saturating_add(charge),
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => return true,
+            Err(current) => used = current,
+        }
+    }
+}
+
+/// Estimated heap held by one event, including the Arc-backed strings and the
+/// minimal request context (never the full request attributes).
+fn estimated_dimension_event_bytes(event: &HttpDimensionEvent) -> u64 {
+    fn arc_len(value: &Arc<str>) -> u64 {
+        value.len() as u64
+    }
+
+    let mut bytes = (std::mem::size_of::<HttpDimensionEvent>()
+        + std::mem::size_of::<QueuedDimensionEvent>()
+        + 64) as u64;
+    bytes = bytes.saturating_add(arc_len(&event.category));
+    bytes = bytes.saturating_add(arc_len(&event.domain));
+    bytes = bytes.saturating_add(arc_len(&event.user_agent));
+    if let Some(action) = &event.waf_action {
+        bytes = bytes.saturating_add(arc_len(action));
+    }
+    if let Some(analyzed) = &event.analyzed {
+        bytes = bytes.saturating_add(std::mem::size_of::<crate::metrics::analyzer::RequestStats>() as u64);
+        bytes = bytes.saturating_add(arc_len(&analyzed.browser));
+        bytes = bytes.saturating_add(arc_len(&analyzed.browser_version));
+        bytes = bytes.saturating_add(arc_len(&analyzed.os));
+        bytes = bytes.saturating_add(arc_len(&analyzed.os_version));
+        bytes = bytes.saturating_add(arc_len(&analyzed.device));
+        if let Some(geo) = &analyzed.geo {
+            bytes = bytes.saturating_add(std::mem::size_of::<crate::metrics::analyzer::GeoInfo>() as u64);
+            for value in [
+                &geo.country,
+                &geo.country_iso,
+                &geo.region,
+                &geo.region_iso,
+                &geo.city,
+                &geo.provider,
+            ] {
+                bytes = bytes.saturating_add(arc_len(value));
+            }
+        }
+    }
+    if let Some(context) = &event.request_context {
+        bytes = bytes.saturating_add(std::mem::size_of::<MetricRequestContext>() as u64);
+        for (name, value) in &context.values {
+            bytes = bytes.saturating_add(name.capacity() as u64);
+            bytes = bytes.saturating_add(value.capacity() as u64);
+            bytes = bytes.saturating_add(32);
+        }
+    }
+    bytes
+}
+
 impl HttpDimensionHandle {
-    fn new(sender: mpsc::Sender<HttpDimensionEvent>, queue_capacity: usize) -> Self {
+    fn new(sender: mpsc::Sender<QueuedDimensionEvent>, queue_capacity: usize) -> Self {
         Self {
             sender,
             queue_capacity,
@@ -465,14 +588,31 @@ impl HttpDimensionHandle {
         }
     }
 
-    fn try_enqueue(&self, event: HttpDimensionEvent) {
-        match self.sender.try_send(event) {
-            Ok(()) => {}
-            Err(mpsc::error::TrySendError::Full(_)) => {
+    fn try_enqueue(&self, event: HttpDimensionEvent) -> bool {
+        self.try_enqueue_with_budget(event, http_dimension_byte_budget())
+    }
+
+    fn try_enqueue_with_budget(&self, event: HttpDimensionEvent, budget: u64) -> bool {
+        let charge = estimated_dimension_event_bytes(&event);
+        if !try_reserve_dimension_bytes(charge, budget) {
+            HTTP_DIMENSION_DROPPED_BYTES.fetch_add(1, Ordering::Relaxed);
+            self.record_drop("queued_bytes");
+            return false;
+        }
+        let envelope = QueuedDimensionEvent::new(event, charge);
+        match self.sender.try_send(envelope) {
+            Ok(()) => true,
+            Err(mpsc::error::TrySendError::Full(dropped)) => {
+                drop(dropped);
+                HTTP_DIMENSION_DROPPED_ENTRIES.fetch_add(1, Ordering::Relaxed);
                 self.record_drop("saturated");
+                false
             }
-            Err(mpsc::error::TrySendError::Closed(_)) => {
+            Err(mpsc::error::TrySendError::Closed(dropped)) => {
+                drop(dropped);
+                HTTP_DIMENSION_DROPPED_ENTRIES.fetch_add(1, Ordering::Relaxed);
                 self.record_drop("closed");
+                false
             }
         }
     }
@@ -493,12 +633,16 @@ impl HttpDimensionHandle {
         {
             let dropped = self.dropped_since_warning.swap(0, Ordering::Relaxed);
             tracing::warn!(
-                "METRICS: http dimension queue {} dropped={} total_dropped={} queue_capacity={} available_capacity={}",
+                "METRICS: http dimension queue {} dropped={} dropped_bytes={} dropped_entries={} total_dropped={} queue_capacity={} available_capacity={} queued_bytes={} byte_budget={}",
                 reason,
                 dropped,
+                HTTP_DIMENSION_DROPPED_BYTES.load(Ordering::Relaxed),
+                HTTP_DIMENSION_DROPPED_ENTRIES.load(Ordering::Relaxed),
                 HTTP_DIMENSION_DROPPED.load(Ordering::Relaxed),
                 self.queue_capacity,
-                self.sender.capacity()
+                self.sender.capacity(),
+                HTTP_DIMENSION_QUEUED_BYTES.load(Ordering::Relaxed),
+                http_dimension_byte_budget()
             );
         }
     }
@@ -513,136 +657,33 @@ fn unix_epoch_millis_now() -> i64 {
 
 pub fn init_http_dimension_worker(queue_capacity: usize) {
     let capacity = queue_capacity.max(1);
-    let (sender, mut receiver) = mpsc::channel::<HttpDimensionEvent>(capacity);
+    let (sender, mut receiver) = mpsc::channel::<QueuedDimensionEvent>(capacity);
     let handle = HttpDimensionHandle::new(sender, capacity);
     let _ = HTTP_DIMENSION_HANDLE.set(handle);
     tokio::spawn(async move {
         let mut buffer = Vec::with_capacity(1024);
         loop {
-            let Some(event) = receiver.recv().await else {
+            let Some(mut first) = receiver.recv().await else {
                 return;
             };
+            let event = first.take_event();
             record::record_http_dimension_event(event);
+            drop(first);
             while buffer.len() < 1024 {
                 match receiver.try_recv() {
-                    Ok(event) => buffer.push(event),
+                    Ok(envelope) => buffer.push(envelope),
                     Err(_) => break,
                 }
             }
-            for event in buffer.drain(..) {
+            for mut envelope in buffer.drain(..) {
+                let event = envelope.take_event();
                 record::record_http_dimension_event(event);
+                // Refund after the event has been processed, not while a
+                // batch buffer still holds it.
+                drop(envelope);
             }
         }
     });
-}
-
-/// Process-wide entry budget shared by every server's distinct-IP set.
-/// Per-server capacities were derived from the server count at creation, so
-/// each new server added another slice while old slices remained, making the
-/// aggregate capacity grow with the harmonic sum of server generations.
-struct DistinctIpBudget {
-    capacity: usize,
-    used: AtomicUsize,
-}
-
-impl DistinctIpBudget {
-    fn new(capacity: usize) -> Self {
-        Self {
-            capacity,
-            used: AtomicUsize::new(0),
-        }
-    }
-
-    fn try_charge(&self) -> bool {
-        self.used
-            .try_update(Ordering::AcqRel, Ordering::Acquire, |used| {
-                (used < self.capacity).then_some(used + 1)
-            })
-            .is_ok()
-    }
-
-    fn refund(&self, count: usize) {
-        let _ = self
-            .used
-            .try_update(Ordering::AcqRel, Ordering::Acquire, |used| {
-                Some(used.saturating_sub(count))
-            });
-    }
-
-    fn used(&self) -> usize {
-        self.used.load(Ordering::Acquire)
-    }
-
-    fn capacity(&self) -> usize {
-        self.capacity
-    }
-}
-
-static DISTINCT_IP_BUDGET: LazyLock<Arc<DistinctIpBudget>> = LazyLock::new(|| {
-    Arc::new(DistinctIpBudget::new(
-        crate::memory_governor::MEMORY_GOVERNOR.metrics_distinct_ip_capacity(),
-    ))
-});
-
-/// Process-wide distinct-IP budget `(used_entries, capacity_entries)` for
-/// node status. The budget is shared by every server.
-pub fn distinct_ip_budget_status() -> (usize, usize) {
-    (DISTINCT_IP_BUDGET.used(), DISTINCT_IP_BUDGET.capacity())
-}
-
-pub struct RuntimeDistinctIpTracker {
-    ips: dashmap::DashSet<std::net::IpAddr>,
-    budget: Arc<DistinctIpBudget>,
-}
-
-impl RuntimeDistinctIpTracker {
-    fn new() -> Self {
-        Self::with_budget(DISTINCT_IP_BUDGET.clone())
-    }
-
-    fn with_budget(budget: Arc<DistinctIpBudget>) -> Self {
-        Self {
-            ips: dashmap::DashSet::new(),
-            budget,
-        }
-    }
-
-    fn insert(&self, ip: std::net::IpAddr) {
-        if self.ips.contains(&ip) {
-            return;
-        }
-        if !self.budget.try_charge() {
-            crate::pipeline_metrics::note_cardinality_drop(
-                "runtime_distinct_ip_tracker",
-                self.budget.used(),
-                self.budget.capacity(),
-            );
-            return;
-        }
-        if !self.ips.insert(ip) {
-            self.budget.refund(1);
-        }
-    }
-
-    fn len(&self) -> usize {
-        self.ips.len()
-    }
-
-    #[cfg(test)]
-    fn capacity(&self) -> usize {
-        self.budget.capacity()
-    }
-
-    #[cfg(test)]
-    fn with_capacity(capacity: usize) -> Self {
-        Self::with_budget(Arc::new(DistinctIpBudget::new(capacity)))
-    }
-}
-
-impl Drop for RuntimeDistinctIpTracker {
-    fn drop(&mut self) {
-        self.budget.refund(self.ips.len());
-    }
 }
 
 /// Fallback when the governor has not produced a memory-derived capacity
@@ -732,7 +773,6 @@ pub struct ServerMetrics {
     pub origin_bytes_received: AtomicU64,
     pub active_connections: AtomicI64,
     pub count_websocket_connections: AtomicU64,
-    pub distinct_ips: RuntimeDistinctIpTracker,
 }
 
 pub struct ActiveRequestMetricsGuard {
@@ -779,10 +819,6 @@ impl Default for ServerMetrics {
 
 impl ServerMetrics {
     pub fn new() -> Self {
-        Self::with_distinct_ip_tracker(RuntimeDistinctIpTracker::new())
-    }
-
-    fn with_distinct_ip_tracker(distinct_ips: RuntimeDistinctIpTracker) -> Self {
         Self {
             instance_id: NEXT_SERVER_METRIC_INSTANCE_ID.fetch_add(1, Ordering::Relaxed),
             slot: None,
@@ -801,7 +837,6 @@ impl ServerMetrics {
             origin_bytes_received: AtomicU64::new(0),
             active_connections: AtomicI64::new(0),
             count_websocket_connections: AtomicU64::new(0),
-            distinct_ips,
         }
     }
 
@@ -824,7 +859,6 @@ impl ServerMetrics {
             origin_bytes_received: self.origin_bytes_received.load(Ordering::Relaxed),
             active_connections: self.active_connections.load(Ordering::Relaxed).max(0),
             count_websocket_connections: self.count_websocket_connections.load(Ordering::Relaxed),
-            count_ips: self.distinct_ips.len() as u64,
         }
     }
 }
@@ -861,7 +895,6 @@ pub struct ServerStatusSnapshot {
     pub origin_bytes_received: u64,
     pub active_connections: i64,
     pub count_websocket_connections: u64,
-    pub count_ips: u64,
 }
 
 impl ServerStatusSnapshot {
@@ -893,7 +926,6 @@ impl ServerStatusSnapshot {
             self.origin_bytes_received,
             self.active_connections as u64,
             self.count_websocket_connections,
-            self.count_ips,
         ];
         for value in values {
             hash ^= value;
@@ -1440,17 +1472,7 @@ impl<T: Clone + Default> TimeCache<T> {
     }
 }
 
-static DAY_CACHE: LazyLock<TimeCache<String>> = LazyLock::new(TimeCache::new);
 static PERIOD_CACHE: LazyLock<TimeCache<i64>> = LazyLock::new(TimeCache::new);
-
-fn get_current_day() -> String {
-    let now = crate::utils::time::now_timestamp();
-    let now_day = now / 86400;
-
-    DAY_CACHE.get_or_update(now_day, || {
-        crate::utils::time::now_local().format("%Y%m%d").to_string()
-    })
-}
 
 fn get_current_5min_ts() -> i64 {
     let now = crate::utils::time::now_timestamp();
@@ -1485,7 +1507,7 @@ pub mod record {
         user_plan_id: i64,
         plan_id: i64,
         cached_m: Option<&Arc<ServerMetrics>>,
-        ip_recorded: bool,
+        _ip_recorded: bool,
     ) -> bool {
         let m = if let Some(m) = cached_m {
             (*m).clone()
@@ -1506,14 +1528,12 @@ pub mod record {
         }
         m.total_requests.fetch_add(1, Ordering::Relaxed);
         m.active_connections.fetch_add(1, Ordering::Relaxed);
-        if !ip_recorded {
-            if let Ok(remote_ip) = remote_ip.parse::<IpAddr>() {
-                let day = get_current_day();
-                crate::metrics::daily::UNIQUE_IP_TRACKER.record(server_id, &day, remote_ip);
-                m.distinct_ips.insert(remote_ip);
-                return true;
-            }
-            return false;
+        if let Ok(remote_ip) = remote_ip.parse::<IpAddr>() {
+            return crate::metrics::unique_ip::UNIQUE_IP_TRACKER.record(
+                server_id,
+                crate::utils::time::now_timestamp(),
+                remote_ip,
+            );
         }
         false
     }
@@ -1529,7 +1549,7 @@ pub mod record {
         user_plan_id: i64,
         plan_id: i64,
         cached_m: Option<&Arc<ServerMetrics>>,
-        ip_recorded: bool,
+        _ip_recorded: bool,
     ) -> bool {
         let m = if let Some(m) = cached_m.cloned() {
             m
@@ -1549,11 +1569,12 @@ pub mod record {
             m.plan_id.store(plan_id, Ordering::Relaxed);
         }
         m.total_requests.fetch_add(1, Ordering::Relaxed);
-        if !ip_recorded && let Ok(remote_ip) = remote_ip.parse::<IpAddr>() {
-            let day = get_current_day();
-            crate::metrics::daily::UNIQUE_IP_TRACKER.record(server_id, &day, remote_ip);
-            m.distinct_ips.insert(remote_ip);
-            return true;
+        if let Ok(remote_ip) = remote_ip.parse::<IpAddr>() {
+            return crate::metrics::unique_ip::UNIQUE_IP_TRACKER.record(
+                server_id,
+                crate::utils::time::now_timestamp(),
+                remote_ip,
+            );
         }
         false
     }
@@ -1736,10 +1757,29 @@ pub mod record {
             waf_action: args.waf_action,
             cached_analyzed: args.cached_analyzed,
             request_context: args.request_context,
+            plan: args.plan,
+            event_time_millis: args.event_time_millis,
         });
     }
 
     pub fn record_network_dimensions(args: NetworkDimensionsArgs<'_>) {
+        // Hold a lease until the event is enqueued, so a concurrent publish
+        // cannot retire the generation between capture and enqueue.
+        let plan_lease = crate::metrics::plan::current_metric_plan_leased();
+        let plan = std::sync::Arc::clone(plan_lease.plan());
+        let category = crate::metrics::normalize_metric_category(args.category);
+        let request_context = plan
+            .request_vars_for(&category)
+            .map(|_| {
+                MetricRequestContext::network(
+                    args.domain,
+                    args.client_ip,
+                    args.user_agent,
+                    args.bytes_sent,
+                    args.bytes_received,
+                    args.status,
+                )
+            });
         record_dimensions(DimensionsArgs {
             category: args.category,
             server_id: args.server_id,
@@ -1752,14 +1792,9 @@ pub mod record {
             waf_group_id: 0,
             waf_action: None,
             cached_analyzed: None,
-            request_context: Some(MetricRequestContext::network(
-                args.domain,
-                args.client_ip,
-                args.user_agent,
-                args.bytes_sent,
-                args.bytes_received,
-                args.status,
-            )),
+            request_context,
+            plan,
+            event_time_millis: crate::utils::time::now_timestamp_millis(),
         });
     }
 
@@ -1777,6 +1812,8 @@ pub mod record {
             waf_action,
             cached_analyzed,
             request_context,
+            plan,
+            event_time_millis,
         } = args;
         if server_id <= 0 {
             return;
@@ -1809,12 +1846,17 @@ pub mod record {
                 }
             }),
             analyzed: cached_analyzed.cloned(),
-            request_context: Arc::new(request_context.unwrap_or_default()),
+            request_context: request_context.map(Arc::new),
+            plan: Arc::clone(&plan),
+            event_time_millis,
             created_at: get_current_5min_ts(),
         };
 
         if let Some(handle) = HTTP_DIMENSION_HANDLE.get() {
-            handle.try_enqueue(event);
+            plan.acquire_event();
+            if !handle.try_enqueue(event) {
+                plan.release_event();
+            }
         } else {
             HTTP_DIMENSION_DROPPED.fetch_add(1, Ordering::Relaxed);
         }
@@ -1822,6 +1864,7 @@ pub mod record {
 
     pub(crate) fn record_http_dimension_event(event: HttpDimensionEvent) {
         if event.server_id <= 0 {
+            event.plan.release_event();
             return;
         }
 
@@ -1862,39 +1905,76 @@ pub mod record {
                 },
             );
         let provider_id = crate::metrics::storage::lookup_region_provider_id(event.client_ip);
-        let key = crate::metrics::aggregator::AggregationKey {
-            category: event.category.clone(),
-            server_id: event.server_id,
-            country,
+        let dimensions = crate::metrics::projection::ResolvedDimensions {
+            country: Arc::clone(&country),
             country_id,
-            province,
+            province: Arc::clone(&province),
             province_id,
-            city,
+            city: Arc::clone(&city),
             city_id,
-            provider,
+            provider: Arc::clone(&provider),
+            provider_id,
             browser: analyzed.browser.clone(),
+            browser_version: analyzed.browser_version.clone(),
             os: analyzed.os.clone(),
+            os_version: analyzed.os_version.clone(),
             waf_group_id: event.waf_group_id,
             waf_action: event
                 .waf_action
                 .clone()
                 .unwrap_or_else(|| Arc::clone(&EMPTY_ARC_STR)),
-            provider_id,
-            browser_version: analyzed.browser_version.clone(),
-            os_version: analyzed.os_version.clone(),
-            request_attrs: Arc::new(event.request_context.values.clone()),
         };
         let is_attack = event.waf_action.is_some();
 
-        crate::metrics::aggregator::METRIC_STAT_AGGREGATOR.record(
-            key.clone(),
-            event.bytes_sent,
-            event.bytes_received,
-            is_attack,
-        );
+        // Custom metric projections: only enabled items of this category, only
+        // variables the item actually references, and captured under the plan
+        // generation that accepted the event.
+        let attrs = event
+            .request_context
+            .as_ref()
+            .map(|context| &context.values)
+            .unwrap_or(&*EMPTY_ATTRS);
+        let dropped = event
+            .plan
+            .record_event(crate::metrics::plan::ProjectionEvent {
+                category: event.category.as_ref(),
+                server_id: event.server_id,
+                event_time_millis: event.event_time_millis,
+                attrs,
+                dimensions: &dimensions,
+                bytes_sent: event.bytes_sent,
+                bytes_received: event.bytes_received,
+                is_attack,
+            });
+        if dropped > 0 {
+            crate::pipeline_metrics::increment(
+                crate::pipeline_metrics::PipelineCounter::HttpDimensionDropped,
+            );
+        }
+        event.plan.release_event();
+
         crate::metrics::top_ip::TOP_IP_TRACKER.record_addr(event.server_id, event.client_ip);
 
         if event.category.as_ref() == crate::metrics::METRIC_CATEGORY_HTTP {
+            let key = crate::metrics::aggregator::AggregationKey {
+                category: event.category.clone(),
+                server_id: event.server_id,
+                window_start: event.event_time_millis.div_euclid(60_000) * 60,
+                country,
+                country_id,
+                province,
+                province_id,
+                city,
+                city_id,
+                provider,
+                browser: dimensions.browser,
+                os: dimensions.os,
+                waf_group_id: event.waf_group_id,
+                waf_action: dimensions.waf_action,
+                provider_id,
+                browser_version: dimensions.browser_version,
+                os_version: dimensions.os_version,
+            };
             crate::metrics::aggregator::HTTP_REQUEST_STAT_AGGREGATOR.record(
                 key,
                 event.bytes_sent,
@@ -1939,19 +2019,24 @@ pub async fn start_persistence_flusher() {
 
     loop {
         interval.tick().await;
-        let metrics_state_bytes = crate::metrics::aggregator::METRIC_STAT_AGGREGATOR
-            .approximate_bytes()
+        let metrics_state_bytes = crate::metrics::plan::aggregator_bytes()
             .saturating_add(
                 crate::metrics::aggregator::HTTP_REQUEST_STAT_AGGREGATOR.approximate_bytes(),
             )
             .saturating_add(crate::metrics::top_ip::TOP_IP_TRACKER.approximate_bytes())
             .saturating_add(crate::metrics::daily::DAILY_DOMAIN_TRACKER.approximate_bytes())
-            .saturating_add(crate::metrics::daily::UNIQUE_IP_TRACKER.approximate_bytes());
+            .saturating_add(crate::metrics::unique_ip::UNIQUE_IP_TRACKER.approximate_bytes())
+            // METRIC_PROJECTION_POOL already owns the snapshot rows: their
+            // charge transfers from the projection aggregator to the durable
+            // store, so adding metric_values_cache_stats() here would count
+            // the same rows twice. The dimension queue envelope is the one
+            // live consumer that is not part of those maps.
+            .saturating_add(HTTP_DIMENSION_QUEUED_BYTES.load(Ordering::Acquire));
         crate::memory_governor::MEMORY_GOVERNOR.set_metrics_aggregator_bytes(metrics_state_bytes);
-        // Observability-only guard: the metrics maps are unbounded by design
-        // today, so surface a rate-limited warning when their estimated
-        // footprint becomes a material share of the node budget. No samples
-        // are dropped here — capping requires an explicit policy decision.
+        // Observability-only guard: every map in this sum has its own
+        // cardinality/byte cap, so surface a rate-limited warning when the
+        // estimated footprint becomes a material share of the node budget.
+        // No samples are dropped here — admission caps do the dropping.
         {
             static LAST_METRICS_WARN: AtomicI64 = AtomicI64::new(0);
             let snap = crate::memory_governor::MEMORY_GOVERNOR
@@ -2007,7 +2092,6 @@ pub async fn start_persistence_flusher() {
                 count_websocket_connections: flusher_delta(&current, last, |s| {
                     s.count_websocket_connections
                 }),
-                count_ips: current.count_ips,
             });
 
             if sample.retired {
@@ -2255,6 +2339,64 @@ mod tests {
     use std::net::IpAddr;
     use std::sync::Arc;
 
+    static QUEUE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn test_dimension_event(user_agent: String) -> super::HttpDimensionEvent {
+        super::HttpDimensionEvent {
+            category: Arc::from(super::METRIC_CATEGORY_HTTP),
+            server_id: 1,
+            client_ip: "203.0.113.9".parse::<IpAddr>().expect("ip"),
+            domain: Arc::from("edge.example.com"),
+            user_agent: Arc::from(user_agent),
+            bytes_sent: 1,
+            bytes_received: 0,
+            cached_bytes: 0,
+            waf_group_id: 0,
+            waf_action: None,
+            analyzed: None,
+            request_context: None,
+            plan: crate::metrics::plan::current_metric_plan(),
+            event_time_millis: 0,
+            created_at: 0,
+        }
+    }
+
+    #[test]
+    fn dimension_queue_rejects_an_event_above_its_byte_budget() {
+        let _guard = QUEUE_TEST_LOCK.lock().expect("queue test lock");
+        let (sender, _receiver) = tokio::sync::mpsc::channel(4);
+        let handle = super::HttpDimensionHandle::new(sender, 4);
+        let event = test_dimension_event("x".repeat(4096));
+        let charge = super::estimated_dimension_event_bytes(&event);
+        assert!(charge > 4096);
+        let before = super::HTTP_DIMENSION_QUEUED_BYTES.load(std::sync::atomic::Ordering::Acquire);
+        assert!(!handle.try_enqueue_with_budget(event, charge - 1));
+        assert_eq!(
+            super::HTTP_DIMENSION_QUEUED_BYTES.load(std::sync::atomic::Ordering::Acquire),
+            before
+        );
+    }
+
+    #[test]
+    fn dimension_queue_charge_is_refunded_only_after_the_envelope_drops() {
+        let _guard = QUEUE_TEST_LOCK.lock().expect("queue test lock");
+        let (sender, receiver) = tokio::sync::mpsc::channel(4);
+        let handle = super::HttpDimensionHandle::new(sender, 4);
+        let event = test_dimension_event("y".repeat(2048));
+        let charge = super::estimated_dimension_event_bytes(&event);
+        let before = super::HTTP_DIMENSION_QUEUED_BYTES.load(std::sync::atomic::Ordering::Acquire);
+        assert!(handle.try_enqueue_with_budget(event, charge));
+        assert_eq!(
+            super::HTTP_DIMENSION_QUEUED_BYTES.load(std::sync::atomic::Ordering::Acquire),
+            before.saturating_add(charge)
+        );
+        drop(receiver);
+        assert_eq!(
+            super::HTTP_DIMENSION_QUEUED_BYTES.load(std::sync::atomic::Ordering::Acquire),
+            before
+        );
+    }
+
     #[test]
     fn metric_request_context_resolves_go_style_keys() {
         let mut ctx = MetricRequestContext::default();
@@ -2319,43 +2461,6 @@ mod tests {
         assert_eq!(ctx.resolve_key("${remoteAddr}"), "203.0.113.9");
         assert_eq!(ctx.resolve_key("${bytesSent}"), "1234");
         assert_eq!(ctx.resolve_key("${requestLength}"), "56");
-    }
-
-    #[test]
-    fn runtime_distinct_ip_tracker_fail_closed_at_capacity() {
-        let tracker = super::RuntimeDistinctIpTracker::with_capacity(512);
-        let capacity = tracker.capacity();
-
-        for i in 0..capacity.saturating_add(128) {
-            let ip = IpAddr::from([10, 0, (i / 256) as u8, (i % 256) as u8]);
-            tracker.insert(ip);
-        }
-        assert!(
-            tracker.len() <= capacity,
-            "distinct IP tracker must not grow beyond capacity ({capacity}), got {}",
-            tracker.len()
-        );
-    }
-
-    #[test]
-    fn distinct_ip_trackers_share_one_budget_and_refund_on_drop() {
-        let budget = Arc::new(super::DistinctIpBudget::new(2));
-        let first = super::RuntimeDistinctIpTracker::with_budget(budget.clone());
-        let second = super::RuntimeDistinctIpTracker::with_budget(budget.clone());
-
-        first.insert(IpAddr::from([10, 0, 0, 1]));
-        second.insert(IpAddr::from([10, 0, 0, 2]));
-        first.insert(IpAddr::from([10, 0, 0, 3]));
-        assert_eq!(budget.used(), 2);
-        assert_eq!(first.len(), 1);
-        assert_eq!(second.len(), 1);
-        assert!(budget.used() <= budget.capacity());
-
-        drop(first);
-        assert_eq!(budget.used(), 1);
-        second.insert(IpAddr::from([10, 0, 0, 3]));
-        assert_eq!(second.len(), 2);
-        assert_eq!(budget.used(), 2);
     }
 
     #[test]

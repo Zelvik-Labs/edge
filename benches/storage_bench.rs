@@ -1,11 +1,11 @@
-use zelvik_edge::metrics::storage::{CacheMetaUpsert, MetricStorage};
-use zelvik_edge::rpc::metrics::ServerMetricUpdate;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use std::hint::black_box;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+use zelvik_edge::metrics::storage::{CacheMetaUpsert, MetricStorage};
+use zelvik_edge::rpc::metrics::ServerMetricUpdate;
 
 fn temp_store(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
@@ -37,7 +37,6 @@ fn sample_metric_updates(count: usize) -> Vec<ServerMetricUpdate> {
             attack_bytes: 0,
             active_connections: 4,
             count_websocket_connections: 0,
-            count_ips: 3,
         })
         .collect()
 }

@@ -219,6 +219,12 @@ impl std::ops::DerefMut for LazyResponseHeaders {
 pub struct ProxyCTX {
     pub start_time: std::time::Instant,
     pub start_timestamp_millis: i64,
+    /// Immutable metric plan captured when the request starts. A config reload
+    /// while the request is in flight cannot reinterpret its completion under
+    /// a newer item generation. The lease keeps the generation alive for the
+    /// whole request so a reload cannot retire a plan this request will still
+    /// record into.
+    pub metric_plan: crate::metrics::plan::MetricPlanLease,
     pub request_id: String,
     pub server: Option<Arc<ServerConfig>>,
     pub matched_location: Option<Arc<crate::config_models::LocationConfig>>,
@@ -389,6 +395,7 @@ impl Default for ProxyCTX {
         Self {
             start_time: std::time::Instant::now(),
             start_timestamp_millis: crate::utils::time::now_timestamp_millis(),
+            metric_plan: crate::metrics::plan::current_metric_plan_leased(),
             request_id: String::new(),
             server: None,
             matched_location: None,
@@ -1829,6 +1836,10 @@ impl EdgeProxy {
         }
     }
 
+    /// Build only the request variables that the plan generation actually
+    /// references. A country-only or city-only configuration therefore does
+    /// not copy headers, cookies, query arguments or the full URI; an empty
+    /// plan never reaches this function.
     fn metric_request_context(
         &self,
         session: &Session,
@@ -1836,7 +1847,30 @@ impl EdgeProxy {
         bytes_sent: u64,
         bytes_received: u64,
         user_agent: &str,
+        plan: &crate::metrics::plan::MetricCollectionPlan,
     ) -> crate::metrics::MetricRequestContext {
+        let vars = plan
+            .request_vars_for(crate::metrics::METRIC_CATEGORY_HTTP)
+            .expect("caller only builds a context when the plan needs one");
+        let want = |name: &str| vars.contains(name);
+        let wants_any = |names: &[&str]| names.iter().any(|name| want(name));
+        let wants_header = want("headers")
+            || vars
+                .iter()
+                .any(|name| name.starts_with("header.") || name.starts_with("http."));
+        let wants_response_header = vars.iter().any(|name| {
+            name.starts_with("response.header.") || name.as_ref() == "response.contentType"
+        });
+        let wants_cookie = vars.iter().any(|name| name.starts_with("cookie."));
+        let wants_arg = vars.iter().any(|name| name.starts_with("arg."));
+        let wants_host_parts = vars.iter().any(|name| {
+            name.starts_with("host.")
+                || matches!(
+                    name.as_ref(),
+                    "host" | "serverName" | "cname" | "requestURL"
+                )
+        });
+
         let req = session.req_header();
         let mut values = BTreeMap::new();
         let scheme = Self::forwarded_proto(session, ctx);
@@ -1863,318 +1897,445 @@ impl EdgeProxy {
             }
         };
         let status = ctx.response_status;
-        let started = crate::utils::time::local_from_timestamp_millis(ctx.start_timestamp_millis);
-        let remote_user = req
-            .headers
-            .get("authorization")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|auth| {
-                auth.get(..6)
-                    .filter(|prefix| prefix.eq_ignore_ascii_case("basic "))
-                    .and_then(|_| {
-                        let encoded = auth[6..].trim();
-                        general_purpose::STANDARD
-                            .decode(encoded.as_bytes())
-                            .ok()
-                            .and_then(|decoded| String::from_utf8(decoded).ok())
-                            .and_then(|creds| {
-                                creds.split_once(':').map(|(user, _)| user.to_string())
-                            })
-                    })
-            })
-            .unwrap_or_default();
 
-        values.insert(
-            "edgeVersion".to_string(),
-            crate::RELEASE_VERSION.to_string(),
-        );
-        values.insert("remoteAddr".to_string(), ctx.client_ip_str.clone());
-        values.insert("remoteAddrValue".to_string(), ctx.client_ip_str.clone());
-        values.insert(
-            "rawRemoteAddr".to_string(),
-            crate::client_ip::format_raw_remote_addr(&ctx.raw_remote_addr, ctx.client_ip),
-        );
-        values.insert("remotePort".to_string(), ctx.client_port.to_string());
-        values.insert("remoteUser".to_string(), remote_user);
-        values.insert("requestId".to_string(), ctx.request_id.clone());
-        values.insert("requestURI".to_string(), request_uri.to_string());
-        values.insert("requestUri".to_string(), request_uri.to_string());
-        values.insert(
-            "requestURL".to_string(),
-            format!("{}://{}{}", scheme, host, request_uri),
-        );
-        values.insert("requestPath".to_string(), req.uri.path().to_string());
-        let extension = std::path::Path::new(req.uri.path())
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .map(|ext| format!(".{ext}"))
-            .unwrap_or_default();
-        values.insert("requestPathExtension".to_string(), extension.clone());
-        values.insert(
-            "requestPathLowerExtension".to_string(),
-            extension.to_ascii_lowercase(),
-        );
-        values.insert("requestLength".to_string(), bytes_received.to_string());
-        values.insert(
-            "requestTime".to_string(),
-            format!("{:.6}", ctx.start_time.elapsed().as_secs_f64()),
-        );
-        values.insert(
-            "requestMethod".to_string(),
-            crate::metrics::normalize_metric_http_method(req.method.as_str()),
-        );
-        values.insert(
-            "requestFilename".to_string(),
-            ctx.cache_key
-                .clone()
-                .unwrap_or_else(|| req.uri.path().to_string()),
-        );
-        values.insert("scheme".to_string(), scheme.to_string());
-        values.insert("serverProtocol".to_string(), proto.to_string());
-        values.insert("proto".to_string(), proto.to_string());
-        values.insert("bytesSent".to_string(), bytes_sent.to_string());
-        values.insert(
-            "bodyBytesSent".to_string(),
-            session.body_bytes_sent().to_string(),
-        );
-        values.insert("status".to_string(), status.to_string());
-        values.insert("statusMessage".to_string(), Self::status_message(status));
-        values.insert(
-            "timeISO8601".to_string(),
-            started.format("%Y-%m-%dT%H:%M:%S%.3f%:z").to_string(),
-        );
-        values.insert(
-            "timeLocal".to_string(),
-            started.format("%d/%b/%Y:%H:%M:%S %z").to_string(),
-        );
-        values.insert(
-            "msec".to_string(),
-            format!("{:.6}", ctx.start_timestamp_millis as f64 / 1000.0),
-        );
-        values.insert(
-            "timestamp".to_string(),
-            (ctx.start_timestamp_millis / 1000).to_string(),
-        );
-        values.insert("host".to_string(), host.to_string());
-        values.insert(
-            "cname".to_string(),
-            ctx.server
-                .as_ref()
-                .and_then(|server| {
-                    server
-                        .server_names
-                        .iter()
-                        .find(|name| {
-                            name.r#type
-                                .as_deref()
-                                .is_some_and(|kind| kind.eq_ignore_ascii_case("cname"))
-                        })
-                        .map(|name| name.name.clone())
-                })
-                .unwrap_or_default(),
-        );
-        let referer = session
-            .get_header("referer")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("");
-        values.insert("referer".to_string(), referer.to_string());
-        values.insert(
-            "referer.host".to_string(),
-            referer
-                .split_once("://")
-                .map(|(_, rest)| rest.split('/').next().unwrap_or(""))
-                .unwrap_or("")
-                .to_string(),
-        );
-        values.insert("userAgent".to_string(), user_agent.to_string());
-        values.insert(
-            "contentType".to_string(),
-            session
-                .get_header("content-type")
+        if want("edgeVersion") {
+            values.insert(
+                "edgeVersion".to_string(),
+                crate::RELEASE_VERSION.to_string(),
+            );
+        }
+        if wants_any(&["remoteAddr", "remoteAddrValue"]) {
+            values.insert("remoteAddr".to_string(), ctx.client_ip_str.clone());
+            values.insert("remoteAddrValue".to_string(), ctx.client_ip_str.clone());
+        }
+        if want("rawRemoteAddr") {
+            values.insert(
+                "rawRemoteAddr".to_string(),
+                crate::client_ip::format_raw_remote_addr(&ctx.raw_remote_addr, ctx.client_ip),
+            );
+        }
+        if want("remotePort") {
+            values.insert("remotePort".to_string(), ctx.client_port.to_string());
+        }
+        if want("remoteUser") {
+            let remote_user = req
+                .headers
+                .get("authorization")
                 .and_then(|v| v.to_str().ok())
-                .unwrap_or("")
-                .to_string(),
-        );
-        values.insert(
-            "request".to_string(),
-            format!("{} {} {}", req.method, request_uri, proto),
-        );
-        let cookies_header = merged_session_cookie_header(session).unwrap_or_default();
-        values.insert("cookies".to_string(), cookies_header.clone());
-        values.insert(
-            "isArgs".to_string(),
-            if req.uri.query().is_some() { "?" } else { "" }.to_string(),
-        );
+                .and_then(|auth| {
+                    auth.get(..6)
+                        .filter(|prefix| prefix.eq_ignore_ascii_case("basic "))
+                        .and_then(|_| {
+                            let encoded = auth[6..].trim();
+                            general_purpose::STANDARD
+                                .decode(encoded.as_bytes())
+                                .ok()
+                                .and_then(|decoded| String::from_utf8(decoded).ok())
+                                .and_then(|creds| {
+                                    creds.split_once(':').map(|(user, _)| user.to_string())
+                                })
+                        })
+                })
+                .unwrap_or_default();
+            values.insert("remoteUser".to_string(), remote_user);
+        }
+        if want("requestId") {
+            values.insert("requestId".to_string(), ctx.request_id.clone());
+        }
+        if wants_any(&[
+            "requestURI",
+            "requestUri",
+            "uri",
+            "request.uri",
+            "request.URI",
+        ]) {
+            values.insert("requestURI".to_string(), request_uri.to_string());
+            values.insert("requestUri".to_string(), request_uri.to_string());
+        }
+        if want("requestURL") {
+            values.insert(
+                "requestURL".to_string(),
+                format!("{}://{}{}", scheme, host, request_uri),
+            );
+        }
+        if wants_any(&["requestPath", "path", "request.path"]) {
+            values.insert("requestPath".to_string(), req.uri.path().to_string());
+        }
+        if wants_any(&["requestPathExtension", "requestPathLowerExtension"]) {
+            let extension = std::path::Path::new(req.uri.path())
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| format!(".{ext}"))
+                .unwrap_or_default();
+            values.insert("requestPathExtension".to_string(), extension.clone());
+            values.insert(
+                "requestPathLowerExtension".to_string(),
+                extension.to_ascii_lowercase(),
+            );
+        }
+        if wants_any(&["requestLength", "bodyBytesSentBytes", "bytesReceived"]) {
+            values.insert("requestLength".to_string(), bytes_received.to_string());
+        }
+        if want("requestTime") {
+            values.insert(
+                "requestTime".to_string(),
+                format!("{:.6}", ctx.start_time.elapsed().as_secs_f64()),
+            );
+        }
+        if wants_any(&["requestMethod", "method", "request.method"]) {
+            values.insert(
+                "requestMethod".to_string(),
+                crate::metrics::normalize_metric_http_method(req.method.as_str()),
+            );
+        }
+        if want("requestFilename") {
+            values.insert(
+                "requestFilename".to_string(),
+                ctx.cache_key
+                    .clone()
+                    .unwrap_or_else(|| req.uri.path().to_string()),
+            );
+        }
+        if want("scheme") {
+            values.insert("scheme".to_string(), scheme.to_string());
+        }
+        if wants_any(&["serverProtocol", "proto"]) {
+            values.insert("serverProtocol".to_string(), proto.to_string());
+            values.insert("proto".to_string(), proto.to_string());
+        }
+        if want("bytesSent") {
+            values.insert("bytesSent".to_string(), bytes_sent.to_string());
+        }
+        if want("bodyBytesSent") {
+            values.insert(
+                "bodyBytesSent".to_string(),
+                session.body_bytes_sent().to_string(),
+            );
+        }
+        if want("status") {
+            values.insert("status".to_string(), status.to_string());
+        }
+        if want("statusMessage") {
+            values.insert("statusMessage".to_string(), Self::status_message(status));
+        }
+        if wants_any(&["timeISO8601", "timeLocal", "msec", "timestamp"]) {
+            let started =
+                crate::utils::time::local_from_timestamp_millis(ctx.start_timestamp_millis);
+            if want("timeISO8601") {
+                values.insert(
+                    "timeISO8601".to_string(),
+                    started.format("%Y-%m-%dT%H:%M:%S%.3f%:z").to_string(),
+                );
+            }
+            if want("timeLocal") {
+                values.insert(
+                    "timeLocal".to_string(),
+                    started.format("%d/%b/%Y:%H:%M:%S %z").to_string(),
+                );
+            }
+            if want("msec") {
+                values.insert(
+                    "msec".to_string(),
+                    format!("{:.6}", ctx.start_timestamp_millis as f64 / 1000.0),
+                );
+            }
+            if want("timestamp") {
+                values.insert(
+                    "timestamp".to_string(),
+                    (ctx.start_timestamp_millis / 1000).to_string(),
+                );
+            }
+        }
+        if want("host") {
+            values.insert("host".to_string(), host.to_string());
+        }
+        if want("cname") {
+            values.insert(
+                "cname".to_string(),
+                ctx.server
+                    .as_ref()
+                    .and_then(|server| {
+                        server
+                            .server_names
+                            .iter()
+                            .find(|name| {
+                                name.r#type
+                                    .as_deref()
+                                    .is_some_and(|kind| kind.eq_ignore_ascii_case("cname"))
+                            })
+                            .map(|name| name.name.clone())
+                    })
+                    .unwrap_or_default(),
+            );
+        }
+        if wants_any(&["referer", "referer.host"]) {
+            let referer = session
+                .get_header("referer")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("");
+            if want("referer") {
+                values.insert("referer".to_string(), referer.to_string());
+            }
+            if want("referer.host") {
+                values.insert(
+                    "referer.host".to_string(),
+                    referer
+                        .split_once("://")
+                        .map(|(_, rest)| rest.split('/').next().unwrap_or(""))
+                        .unwrap_or("")
+                        .to_string(),
+                );
+            }
+        }
+        if want("userAgent") {
+            values.insert("userAgent".to_string(), user_agent.to_string());
+        }
+        if want("contentType") {
+            values.insert(
+                "contentType".to_string(),
+                session
+                    .get_header("content-type")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("")
+                    .to_string(),
+            );
+        }
+        if want("request") {
+            values.insert(
+                "request".to_string(),
+                format!("{} {} {}", req.method, request_uri, proto),
+            );
+        }
+        let cookies_header = if want("cookies") || wants_cookie {
+            merged_session_cookie_header(session).unwrap_or_default()
+        } else {
+            String::new()
+        };
+        if want("cookies") {
+            values.insert("cookies".to_string(), cookies_header.clone());
+        }
         let query = req.uri.query().unwrap_or("");
-        values.insert("args".to_string(), query.to_string());
-        values.insert("queryString".to_string(), query.to_string());
-        values.insert("serverName".to_string(), {
-            ctx.server
-                .as_ref()
-                .and_then(|server| server.server_names.first())
-                .map(|name| name.name.clone())
-                .unwrap_or_else(|| host.to_string())
-        });
-        values.insert(
-            "serverAddr".to_string(),
-            if ctx
-                .global_http_config
-                .as_ref()
-                .map(|config| config.enable_server_addr_variable)
-                .unwrap_or_else(|| {
-                    self.config
-                        .get_global_http_config_sync()
-                        .enable_server_addr_variable
-                })
-            {
-                Self::downstream_local_ip(session).unwrap_or_default()
-            } else {
-                String::new()
-            },
-        );
-        values.insert(
-            "serverPort".to_string(),
-            Self::downstream_local_port(session)
-                .map(|port| port.to_string())
-                .unwrap_or_default(),
-        );
-        values.insert("hostname".to_string(), HOSTNAME.clone());
-        values.insert(
-            "documentRoot".to_string(),
-            Self::web_document_root(ctx.server.as_deref()),
-        );
-        values.insert("node.id".to_string(), self.api_config.instance_id.clone());
-        values.insert("node.name".to_string(), HOSTNAME.clone());
-        values.insert("node.role".to_string(), String::new());
-        values.insert("product.name".to_string(), self.product_name(ctx));
-        values.insert(
-            "product.version".to_string(),
-            crate::RELEASE_VERSION.to_string(),
-        );
-        values.insert("origin.address".to_string(), ctx.origin_address.clone());
-        values.insert("origin.addr".to_string(), ctx.origin_address.clone());
-        values.insert(
-            "origin.host".to_string(),
-            ctx.origin_address
-                .split(':')
-                .next()
-                .unwrap_or("")
+        if want("isArgs") {
+            values.insert(
+                "isArgs".to_string(),
+                if req.uri.query().is_some() { "?" } else { "" }.to_string(),
+            );
+        }
+        if wants_any(&["args", "queryString"]) {
+            values.insert("args".to_string(), query.to_string());
+            values.insert("queryString".to_string(), query.to_string());
+        }
+        if want("serverName") {
+            values.insert("serverName".to_string(), {
+                ctx.server
+                    .as_ref()
+                    .and_then(|server| server.server_names.first())
+                    .map(|name| name.name.clone())
+                    .unwrap_or_else(|| host.to_string())
+            });
+        }
+        if want("serverAddr") {
+            values.insert(
+                "serverAddr".to_string(),
+                if ctx
+                    .global_http_config
+                    .as_ref()
+                    .map(|config| config.enable_server_addr_variable)
+                    .unwrap_or_else(|| {
+                        self.config
+                            .get_global_http_config_sync()
+                            .enable_server_addr_variable
+                    })
+                {
+                    Self::downstream_local_ip(session).unwrap_or_default()
+                } else {
+                    String::new()
+                },
+            );
+        }
+        if want("serverPort") {
+            values.insert(
+                "serverPort".to_string(),
+                Self::downstream_local_port(session)
+                    .map(|port| port.to_string())
+                    .unwrap_or_default(),
+            );
+        }
+        if want("hostname") {
+            values.insert("hostname".to_string(), HOSTNAME.clone());
+        }
+        if want("documentRoot") {
+            values.insert(
+                "documentRoot".to_string(),
+                Self::web_document_root(ctx.server.as_deref()),
+            );
+        }
+        if wants_any(&["node.id", "node.name", "node.role"]) {
+            values.insert("node.id".to_string(), self.api_config.instance_id.clone());
+            values.insert("node.name".to_string(), HOSTNAME.clone());
+            values.insert("node.role".to_string(), String::new());
+        }
+        if wants_any(&["product.name", "product.version"]) {
+            values.insert("product.name".to_string(), self.product_name(ctx));
+            values.insert(
+                "product.version".to_string(),
+                crate::RELEASE_VERSION.to_string(),
+            );
+        }
+        if vars.iter().any(|name| name.starts_with("origin.")) {
+            let origin_protocol = Self::infer_origin_protocol(&ctx.origin_address, scheme);
+            if want("origin.address") {
+                values.insert("origin.address".to_string(), ctx.origin_address.clone());
+            }
+            if want("origin.addr") {
+                values.insert("origin.addr".to_string(), ctx.origin_address.clone());
+            }
+            if want("origin.host") {
+                values.insert(
+                    "origin.host".to_string(),
+                    ctx.origin_address
+                        .split(':')
+                        .next()
+                        .unwrap_or("")
+                        .to_string(),
+                );
+            }
+            if want("origin.id") {
+                values.insert("origin.id".to_string(), ctx.origin_id.to_string());
+            }
+            if want("origin.scheme") {
+                values.insert("origin.scheme".to_string(), origin_protocol.clone());
+            }
+            if want("origin.protocol") {
+                values.insert("origin.protocol".to_string(), origin_protocol);
+            }
+            if want("origin.code") {
+                values.insert("origin.code".to_string(), String::new());
+            }
+        }
+        if wants_header {
+            // Insert only the header names the templates reference. The
+            // resolver's case-insensitive fallback still matches the wire
+            // spelling, so `${header.User-Agent}` sees `user-agent`.
+            let mut requested: Vec<(&str, &str)> = Vec::new();
+            for name in vars.iter() {
+                if let Some(suffix) = name.strip_prefix("header.") {
+                    requested.push((suffix, "header."));
+                }
+                if let Some(suffix) = name.strip_prefix("http.") {
+                    requested.push((suffix, "http."));
+                }
+            }
+            for (name, value) in req.headers.iter() {
+                let Ok(value) = value.to_str() else {
+                    continue;
+                };
+                let header_name = name.as_str();
+                for (suffix, prefix) in &requested {
+                    if suffix.eq_ignore_ascii_case(header_name) {
+                        values
+                            .entry(format!("{prefix}{header_name}"))
+                            .or_insert_with(|| value.to_string());
+                    }
+                }
+            }
+            if want("headers") {
+                values.insert(
+                    "headers".to_string(),
+                    req.headers
+                        .iter()
+                        .filter_map(|(name, value)| {
+                            value
+                                .to_str()
+                                .ok()
+                                .map(|value| format!("{}: {}", name.as_str(), value))
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                );
+            }
+        }
+        if wants_cookie {
+            for cookie in cookies_header.split(';').map(str::trim) {
+                if let Some((name, value)) = cookie.split_once('=') {
+                    let key = format!("cookie.{}", name.trim());
+                    if want(&key) {
+                        values.insert(key, value.trim().to_string());
+                    }
+                }
+            }
+        }
+        if wants_arg {
+            for pair in query.split('&').filter(|pair| !pair.is_empty()) {
+                if let Some((name, value)) = pair.split_once('=') {
+                    let key = format!("arg.{name}");
+                    if !want(&key) {
+                        continue;
+                    }
+                    let decoded = urlencoding::decode(value)
+                        .map(|value| value.into_owned())
+                        .unwrap_or_else(|_| value.to_string());
+                    values.insert(key, decoded);
+                }
+            }
+        }
+        if wants_response_header {
+            for (name, value) in ctx.response_headers.iter() {
+                if want("response.contentType") && name.eq_ignore_ascii_case("content-type") {
+                    values.insert("response.contentType".to_string(), value.clone());
+                }
+                let key = format!("response.header.{name}");
+                if vars
+                    .iter()
+                    .any(|variable| variable.eq_ignore_ascii_case(&key))
+                {
+                    values.insert(key, value.clone());
+                }
+            }
+        }
+        if want("browser.isMobile") {
+            values.insert(
+                "browser.isMobile".to_string(),
+                if Self::is_mobile_user_agent(user_agent) {
+                    "1"
+                } else {
+                    "0"
+                }
                 .to_string(),
-        );
-        values.insert("origin.id".to_string(), ctx.origin_id.to_string());
-        let origin_protocol = Self::infer_origin_protocol(&ctx.origin_address, scheme);
-        values.insert("origin.scheme".to_string(), origin_protocol.clone());
-        values.insert("origin.protocol".to_string(), origin_protocol);
-        values.insert("origin.code".to_string(), String::new());
-
-        for (name, value) in req.headers.iter() {
-            if let Ok(value) = value.to_str() {
-                values
-                    .entry(format!("header.{}", name.as_str()))
-                    .or_insert_with(|| value.to_string());
-                values
-                    .entry(format!("http.{}", name.as_str()))
-                    .or_insert_with(|| value.to_string());
-            }
-        }
-        values.insert(
-            "headers".to_string(),
-            req.headers
-                .iter()
-                .filter_map(|(name, value)| {
-                    value
-                        .to_str()
-                        .ok()
-                        .map(|value| format!("{}: {}", name.as_str(), value))
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
-        );
-        for cookie in cookies_header.split(';').map(str::trim) {
-            if let Some((name, value)) = cookie.split_once('=') {
-                values.insert(format!("cookie.{}", name.trim()), value.trim().to_string());
-            }
-        }
-        for pair in query.split('&').filter(|pair| !pair.is_empty()) {
-            if let Some((name, value)) = pair.split_once('=') {
-                let decoded = urlencoding::decode(value)
-                    .map(|value| value.into_owned())
-                    .unwrap_or_else(|_| value.to_string());
-                values.insert(format!("arg.{name}"), decoded);
-            }
-        }
-        for (name, value) in ctx.response_headers.iter() {
-            values.insert(format!("response.header.{name}"), value.clone());
-            if name.eq_ignore_ascii_case("content-type") {
-                values.insert("response.contentType".to_string(), value.clone());
-            }
-        }
-        values.insert(
-            "browser.isMobile".to_string(),
-            if Self::is_mobile_user_agent(user_agent) {
-                "1"
-            } else {
-                "0"
-            }
-            .to_string(),
-        );
-
-        if let Some(analyzed) = ctx.analyzed.as_ref() {
-            values.insert("browser.name".to_string(), analyzed.browser.to_string());
-            values.insert(
-                "browser.version".to_string(),
-                analyzed.browser_version.to_string(),
             );
-            values.insert("browser.os.name".to_string(), analyzed.os.to_string());
-            values.insert(
-                "browser.os.version".to_string(),
-                analyzed.os_version.to_string(),
-            );
-            if let Some(geo) = analyzed.geo.as_ref() {
-                values.insert("geo.country.name".to_string(), geo.country.to_string());
-                values.insert("geo.country.id".to_string(), geo.country_id.to_string());
-                values.insert("geo.province.name".to_string(), geo.region.to_string());
-                values.insert("geo.province.id".to_string(), geo.region_id.to_string());
-                values.insert("geo.city.name".to_string(), geo.city.to_string());
-                values.insert("geo.city.id".to_string(), geo.city_id.to_string());
-                values.insert("isp.name".to_string(), geo.provider.to_string());
-            }
         }
-        values
-            .entry("geo.country.id".to_string())
-            .or_insert_with(|| "0".to_string());
-        values
-            .entry("geo.province.id".to_string())
-            .or_insert_with(|| "0".to_string());
-        values
-            .entry("geo.city.id".to_string())
-            .or_insert_with(|| "0".to_string());
-        values.entry("geo.town.name".to_string()).or_default();
-        values
-            .entry("geo.town.id".to_string())
-            .or_insert_with(|| "0".to_string());
-        values.entry("isp.id".to_string()).or_insert_with(|| {
-            crate::metrics::storage::lookup_region_provider_id(ctx.client_ip).to_string()
-        });
 
-        let host_parts = host.split('.').collect::<Vec<_>>();
+        let host_parts = if wants_host_parts {
+            host.split('.').collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
         if let Some(first) = host_parts.first() {
-            values.insert("host.first".to_string(), (*first).to_string());
-            values.insert("host.0".to_string(), (*first).to_string());
+            if want("host.first") {
+                values.insert("host.first".to_string(), (*first).to_string());
+            }
+            if want("host.0") {
+                values.insert("host.0".to_string(), (*first).to_string());
+            }
         }
         if let Some(last) = host_parts.last() {
-            values.insert("host.last".to_string(), (*last).to_string());
-            values.insert("host.-1".to_string(), (*last).to_string());
+            if want("host.last") {
+                values.insert("host.last".to_string(), (*last).to_string());
+            }
+            if want("host.-1") {
+                values.insert("host.-1".to_string(), (*last).to_string());
+            }
         }
         for idx in 1..=4 {
-            if let Some(part) = host_parts.get(idx) {
-                values.insert(format!("host.{idx}"), (*part).to_string());
+            let forward = format!("host.{idx}");
+            let backward = format!("host.-{}", idx + 1);
+            if let Some(part) = host_parts.get(idx)
+                && want(&forward)
+            {
+                values.insert(forward, (*part).to_string());
             }
-            if host_parts.len() > idx {
-                values.insert(
-                    format!("host.-{}", idx + 1),
-                    host_parts[host_parts.len() - idx - 1].to_string(),
-                );
+            if host_parts.len() > idx && want(&backward) {
+                values.insert(backward, host_parts[host_parts.len() - idx - 1].to_string());
             }
         }
 
@@ -5806,7 +5967,13 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
         };
 
         if ctx.server_metrics.is_none() {
-            ctx.server_metrics = Some(ctx.server.as_ref().expect("selected server").runtime_metrics.get());
+            ctx.server_metrics = Some(
+                ctx.server
+                    .as_ref()
+                    .expect("selected server")
+                    .runtime_metrics
+                    .get(),
+            );
         }
         let plan_id = if user_plan_id > 0 {
             self.config.get_user_plan_id_sync(user_plan_id).unwrap_or(0)
@@ -9450,13 +9617,25 @@ impl ProxyHttp for EdgeProxy {
                     );
                 }
 
-                let metric_context = self.metric_request_context(
-                    session,
-                    ctx,
-                    bytes_sent,
-                    bytes_received,
-                    user_agent,
-                );
+                // One immutable plan per config generation: the event carries the
+                // generation that was live when the request started, so a reload
+                // can never mix item definitions inside a single event.
+                let metric_plan = std::sync::Arc::clone(ctx.metric_plan.plan());
+                let metric_context = if metric_plan
+                    .request_vars_for(crate::metrics::METRIC_CATEGORY_HTTP)
+                    .is_some()
+                {
+                    Some(self.metric_request_context(
+                        session,
+                        ctx,
+                        bytes_sent,
+                        bytes_received,
+                        user_agent,
+                        &metric_plan,
+                    ))
+                } else {
+                    None
+                };
 
                 crate::metrics::record::record_http_dimensions(
                     crate::metrics::HttpDimensionsArgs {
@@ -9474,7 +9653,9 @@ impl ProxyHttp for EdgeProxy {
                         waf_group_id: ctx.waf_group_id,
                         waf_action: ctx.waf_action.as_deref(),
                         cached_analyzed: ctx.analyzed.as_ref(),
-                        request_context: Some(metric_context),
+                        request_context: metric_context,
+                        plan: metric_plan,
+                        event_time_millis: ctx.start_timestamp_millis,
                     },
                 );
             }
@@ -11715,6 +11896,69 @@ mod tests {
     use super::EdgeProxy;
     use pingora_core::{Error, ErrorType};
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn metric_context_materializes_only_referenced_headers_and_cookies() {
+        use std::sync::Arc;
+        use tokio::io::AsyncWriteExt;
+
+        let (mut client, downstream) = tokio::net::UnixStream::pair().unwrap();
+        client
+            .write_all(b"GET / HTTP/1.1\r\nHost: example.test\r\nCookie: session=abc\r\nX-Test: selected\r\n\r\n")
+            .await
+            .unwrap();
+        let mut session = pingora::proxy::Session::new_h1(Box::new(
+            pingora::protocols::l4::stream::Stream::from(downstream),
+        ));
+        session.downstream_session.read_request().await.unwrap();
+        let proxy = EdgeProxy {
+            config: Arc::new(crate::config::ConfigStore::new()),
+            waf_state: Arc::new(crate::firewall::state::WafStateManager::new()),
+            api_config: Arc::new(
+                serde_json::from_value(serde_json::json!({
+                    "instanceId": "nd_metric_test", "secret": "test"
+                }))
+                .unwrap(),
+            ),
+            challenge_key: [0; 32],
+            cert_selector: Arc::new(crate::ssl::DynamicCertSelector::new()),
+            waf_verifier: Arc::new(crate::firewall::verifier::WafVerifier::new(&[0; 32])),
+            tls_downstream: false,
+        };
+        let mut ctx = super::ProxyCTX::default();
+        ctx.response_headers
+            .insert("content-type".into(), "text/plain".into());
+        let mut failures = Vec::new();
+        for (variable, expected) in [
+            ("headers", "x-test: selected"),
+            ("cookies", "session=abc"),
+            ("response.header.Content-Type", "text/plain"),
+            ("header.X-Test", "selected"),
+        ] {
+            let item = serde_json::from_value(serde_json::json!({
+                "id": 1, "isOn": true, "category": "http", "version": 1,
+                "period": 1, "periodUnit": "minute",
+                "keys": [format!("${{{variable}}}")], "value": "${countRequest}"
+            }))
+            .unwrap();
+            let plan = crate::metrics::plan::MetricCollectionPlan::for_test(&[item]);
+            let context = proxy.metric_request_context(&session, &ctx, 0, 0, "", &plan);
+            let resolved = context.resolve_variable(variable);
+            let matches = if variable == "headers" {
+                resolved.contains(expected)
+            } else {
+                resolved == expected
+            };
+            if !matches || context.values.len() != 1 {
+                failures.push(format!(
+                    "{variable}: resolved={resolved:?}, values={:?}",
+                    context.values
+                ));
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
     #[test]
     fn firewall_ref_parses_real_default_captcha_type_field() {
         let server: crate::config_models::ServerConfig =
@@ -12475,8 +12719,7 @@ mod tests {
             rpc_endpoints: vec!["http://127.0.0.1:1".to_string()],
             rpc_disable_update: true,
             instance_id: "nd_0123456789".to_string(),
-            secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
-                .to_string(),
+            secret: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff".to_string(),
             comm_mode: String::new(),
             gcloud_node_id: "1".to_string(),
             access_log_pipeline: crate::api_config::AccessLogPipelineConfig::default(),
@@ -12493,9 +12736,9 @@ mod tests {
             api_config,
             challenge_key,
             cert_selector: std::sync::Arc::new(crate::ssl::DynamicCertSelector::new()),
-            waf_verifier: std::sync::Arc::new(
-                crate::firewall::verifier::WafVerifier::new(&challenge_key),
-            ),
+            waf_verifier: std::sync::Arc::new(crate::firewall::verifier::WafVerifier::new(
+                &challenge_key,
+            )),
             tls_downstream: false,
         }
     }

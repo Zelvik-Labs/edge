@@ -19,6 +19,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
+use pingora_core::server::configuration::ServerConf;
+use serde_json::{Value, json};
+use tracing::{error, info};
+use tracing_subscriber::EnvFilter;
 use zelvik_edge::api_config::{AccessLogPipelineConfig, ApiConfig};
 use zelvik_edge::config::ConfigStore;
 use zelvik_edge::config_models::*;
@@ -27,13 +31,92 @@ use zelvik_edge::firewall::verifier::WafVerifier;
 use zelvik_edge::lb_factory;
 use zelvik_edge::proxy::EdgeProxy;
 use zelvik_edge::ssl::DynamicCertSelector;
-use pingora_core::server::configuration::ServerConf;
-use serde_json::{Value, json};
-use tracing::{error, info};
-use tracing_subscriber::EnvFilter;
+
+// Issue 34 memory soak: the bench target must exercise the same allocator
+// contract as the production binary. This bin is test-only; production's
+// global allocator lives in src/main.rs.
+#[global_allocator]
+static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 const CLUSTER_ID: i64 = 1;
 const DEFENSE_POLICY_ID: i64 = 9001;
+
+/// Write the allocator view of the process for the Issue 34 soak.
+///
+/// ``mi_process_info`` is deliberately reported alongside the raw
+/// ``mi_stats_get_json`` document, but the soak's RSS slope gate reads kernel
+/// ``/proc`` numbers; this file never substitutes for them. The write is
+/// atomic (tmp + rename) because the sampler polls it while the target runs.
+fn write_alloc_stats(path: &str, buffer: &mut [u8]) -> anyhow::Result<()> {
+    use std::io::Write as _;
+
+    let mut current_rss = 0usize;
+    let mut peak_rss = 0usize;
+    let mut current_commit = 0usize;
+    let mut peak_commit = 0usize;
+    let mut page_faults = 0usize;
+    unsafe {
+        libmimalloc_sys::mi_process_info(
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut current_rss,
+            &mut peak_rss,
+            &mut current_commit,
+            &mut peak_commit,
+            &mut page_faults,
+        );
+    }
+
+    // Same bound as tests/issue34_memory.rs; a larger document means the
+    // stats surface changed and the soak must be told instead of truncating.
+    // The caller owns the buffer so a 1 s cadence does not churn 512 KiB/s
+    // through the allocator under test.
+    let pointer = unsafe {
+        libmimalloc_sys::mi_stats_get_json(
+            buffer.len(),
+            buffer.as_mut_ptr().cast::<std::ffi::c_char>(),
+        )
+    };
+    anyhow::ensure!(
+        !pointer.is_null(),
+        "mi_stats_get_json returned null (buffer too small or stats unavailable)"
+    );
+    let raw = unsafe { std::ffi::CStr::from_ptr(pointer) }.to_string_lossy();
+    let mimalloc: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|error| anyhow::anyhow!("mi_stats_get_json is not JSON: {error}"))?;
+    let mi_version = unsafe { libmimalloc_sys::mi_version() };
+    let worker_reclaim = zelvik_edge::worker_reclaim::snapshot();
+
+    let document = json!({
+        "schema": "issue34-allocator-stats/v1",
+        "source": "bench-defense",
+        "mi_version": mi_version,
+        "process": {
+            "rss_current": current_rss,
+            "peak_rss": peak_rss,
+            "commit_current": current_commit,
+            "peak_commit": peak_commit,
+            "page_faults": page_faults,
+        },
+        "mimalloc": mimalloc,
+        "worker_reclaim": {
+            "started": worker_reclaim.worker_threads_started,
+            "live": worker_reclaim.worker_threads_live,
+            "park_collects": worker_reclaim.park_collects,
+            "stop_collects": worker_reclaim.stop_collects,
+        },
+    });
+
+    let temporary = format!("{path}.tmp.{}", std::process::id());
+    {
+        let mut file = std::fs::File::create(&temporary)?;
+        file.write_all(&serde_json::to_vec(&document)?)?;
+        file.sync_all()?;
+    }
+    std::fs::rename(&temporary, path)?;
+    Ok(())
+}
 
 fn env_u16(name: &str, default: u16) -> u16 {
     std::env::var(name)
@@ -57,7 +140,18 @@ fn env_str(name: &str, default: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| default.to_string())
 }
 
+fn build_runtime() -> anyhow::Result<tokio::runtime::Runtime> {
+    let mut builder = tokio::runtime::Builder::new_multi_thread();
+    builder.enable_all();
+    zelvik_edge::worker_reclaim::install_tokio_worker_hooks(&mut builder);
+    builder.build().context("build bench-defense runtime")
+}
+
 fn main() -> anyhow::Result<()> {
+    // Must happen before any worker thread (or allocation-heavy init) runs so
+    // the soak exercises the same page-reclaim contract as production.
+    zelvik_edge::memory_reclaim::configure_allocator();
+
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -84,12 +178,11 @@ fn main() -> anyhow::Result<()> {
     // Kernel offload dataplane selection: auto (production behavior),
     // xdp / nftables / iptables to force a specific backend, off to disable.
     let kernel_filter_mode = env_str("BENCH_KERNEL_FILTER", "auto");
+    // Issue 34 soak: optional allocator stats file (see write_alloc_stats).
+    let alloc_stats_path = std::env::var("BENCH_ALLOC_STATS_PATH").ok();
 
     zelvik_edge::utils::time::init_local_timezone();
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .context("build bench-defense runtime")?;
+    let runtime = build_runtime()?;
     let _guard = runtime.enter();
 
     zelvik_edge::metrics::init_http_dimension_worker(10_000);
@@ -245,58 +338,59 @@ fn main() -> anyhow::Result<()> {
         candidate_version: 0,
     };
 
-    runtime.block_on(config_store.update_config(
-        1,
-        1,
-        0,
-        CLUSTER_ID,
-        all_servers,
-        servers,
-        routes,
-        id_to_lb,
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-        None,
-        0,
-        1,
-        true,
-        true,
-        HashMap::new(),
-        false,
-        false,
-        "random".to_string(),
-        HashMap::new(),
-        None,
-        true,
-        false,
-        "bench-defense".to_string(),
-        false,
-        false,
-        0,
-        true,
-        false,
-        false,
-        String::new(),
-        None,
-        Some(GlobalHTTPAllConfig {
-            allow_lan_ip: true,
-            server_name: "bench-defense".to_string(),
-            ..Default::default()
-        }),
-        Vec::new(),
-        vec![cluster_policy],
-        Vec::new(),
-        HashMap::new(),
-        HashMap::new(),
-        HashMap::new(),
-        HashMap::new(),
-        HashMap::new(),
-        None,
-        None,
-    ))
-    .expect("benchmark fixture configuration installs");
+    runtime
+        .block_on(config_store.update_config(
+            1,
+            1,
+            0,
+            CLUSTER_ID,
+            all_servers,
+            servers,
+            routes,
+            id_to_lb,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            None,
+            0,
+            1,
+            true,
+            true,
+            HashMap::new(),
+            false,
+            false,
+            "random".to_string(),
+            HashMap::new(),
+            None,
+            true,
+            false,
+            "bench-defense".to_string(),
+            false,
+            false,
+            0,
+            true,
+            false,
+            false,
+            String::new(),
+            None,
+            Some(GlobalHTTPAllConfig {
+                allow_lan_ip: true,
+                server_name: "bench-defense".to_string(),
+                ..Default::default()
+            }),
+            Vec::new(),
+            vec![cluster_policy],
+            Vec::new(),
+            HashMap::new(),
+            HashMap::new(),
+            HashMap::new(),
+            HashMap::new(),
+            HashMap::new(),
+            None,
+            None,
+        ))
+        .expect("benchmark fixture configuration installs");
 
     let challenge_key = api_config
         .challenge_key()
@@ -334,15 +428,13 @@ fn main() -> anyhow::Result<()> {
     );
     runtime.spawn(async move { tcp_manager.start_listeners().await });
 
-    let udp_manager = zelvik_edge::udp_proxy::UdpProxyManager::new(
-        (*config_store).clone(),
-        waf_state.clone(),
-        1,
-    );
+    let udp_manager =
+        zelvik_edge::udp_proxy::UdpProxyManager::new((*config_store).clone(), waf_state.clone(), 1);
     runtime.spawn(async move { udp_manager.start_listeners().await });
 
     // Periodic defense-metrics dump: parsed by run_defense_matrix.sh.
     runtime.spawn(async move {
+        let mut alloc_stats_buffer = vec![0u8; 512 * 1024];
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;
             let l4 = zelvik_edge::l4_defense::metrics_snapshot();
@@ -398,6 +490,11 @@ fn main() -> anyhow::Result<()> {
                     },
                 })
             );
+            if let Some(path) = &alloc_stats_path
+                && let Err(error) = write_alloc_stats(path, &mut alloc_stats_buffer)
+            {
+                eprintln!("ALLOCSTATS error: {error:#}");
+            }
         }
     });
 
@@ -408,7 +505,10 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[expect(clippy::too_many_arguments, reason = "benchmark fixture constructor takes explicit CLI knobs")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "benchmark fixture constructor takes explicit CLI knobs"
+)]
 fn build_servers(
     http_port: u16,
     tls_port: u16,
@@ -705,5 +805,22 @@ fn waf_block_policy() -> HTTPFirewallPolicy {
         candidate_rules: None,
         candidate_traffic_pct: 0,
         candidate_version: 0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn component_runtime_collects_on_worker_stop() {
+        let before = zelvik_edge::worker_reclaim::snapshot();
+        let runtime = super::build_runtime().expect("component runtime builds");
+        runtime.block_on(async {
+            tokio::spawn(async {}).await.expect("worker task completes");
+        });
+        drop(runtime);
+        let after = zelvik_edge::worker_reclaim::snapshot();
+        assert!(after.worker_threads_started > before.worker_threads_started);
+        assert!(after.stop_collects > before.stop_collects);
+        assert_eq!(after.worker_threads_live, before.worker_threads_live);
     }
 }

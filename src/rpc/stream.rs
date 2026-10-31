@@ -770,7 +770,7 @@ async fn handle_message(
                     );
                     return;
                 };
-                let mut sys = sysinfo::System::new_all();
+                let mut sys = super::node::new_cpu_monitor();
                 sys.refresh_cpu_all();
                 let load = sysinfo::System::load_average();
                 let (total_memory, used_memory) = crate::memory_governor::reported_memory_totals();
