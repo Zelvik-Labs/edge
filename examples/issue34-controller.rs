@@ -849,7 +849,7 @@ impl Controller {
                         Ok(Response::new(TelemetryReceipt {
                             batch_id: batch.batch_id,
                             sequence: batch.sequence,
-                            backend: "issue34-fixture-durable".into(),
+                            backend: "direct".into(),
                             durable_at: now_secs() as i64,
                         }))
                     }
@@ -1877,6 +1877,49 @@ fn publish_fixture_ready(
     use std::io::Write;
     std::io::stdout().flush().ok();
     Ok(())
+}
+
+#[cfg(test)]
+mod receipt_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn durable_fixture_receipt_retires_the_real_edge_spool() -> anyhow::Result<()> {
+        let home = std::env::temp_dir().join(format!("issue34-receipt-{}", uuid::Uuid::new_v4()));
+        let spool = zelvik_edge::telemetry::Spool::open(&home.join("spool"), true, 4 << 20)?;
+        spool.append("unique_ip", vec![], 120, false, 180)?;
+        let batch = spool.at(0)?.expect("pending batch");
+        let controller = Controller {
+            home: home.clone(),
+            pid_file: home.join("edge.pid"),
+            secret: String::new(),
+            version: 1,
+            snapshot: vec![],
+            tls: Value::Null,
+            status_file: None,
+            counters: Counters::default(),
+            telemetry_mode: Mutex::new(TelemetryMode::Success),
+            telemetry_mode_file: None,
+            telemetry_store: Some(Arc::new(TelemetryStore::new(
+                home.join("accepted.bin"),
+                4 << 20,
+            ))),
+            telemetry_counters: TelemetryCounters::default(),
+            health: Mutex::new(None),
+            errors: Mutex::new(VecDeque::new()),
+        };
+        let receipt = controller
+            .upload_batch(Request::new(batch))
+            .await?
+            .into_inner();
+        assert!(home.join("accepted.bin").metadata()?.len() > 0);
+        spool.acknowledge(&receipt)?;
+        assert_eq!(spool.snapshot()["pendingBatches"], 0);
+        assert_eq!(spool.snapshot()["pendingBytes"], 0);
+        drop(spool);
+        fs::remove_dir_all(home)?;
+        Ok(())
+    }
 }
 
 pub async fn run(opts: Options) -> anyhow::Result<Value> {
