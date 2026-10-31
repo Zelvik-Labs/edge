@@ -5328,6 +5328,7 @@ dependencies = [
  "hmac",
  "hostname",
  "http",
+ "hyper",
  "image",
  "ipnet",
  "libc",

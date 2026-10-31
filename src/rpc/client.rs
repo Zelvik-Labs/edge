@@ -1,5 +1,3 @@
-#![allow(clippy::type_complexity, clippy::result_large_err)]
-
 use crate::api_config::ApiConfig;
 use crate::pb;
 use tonic::codec::CompressionEncoding;
@@ -343,6 +341,7 @@ impl RpcClient {
 
     fn configure_endpoint(endpoint: Endpoint, profile: RpcConnectionProfile) -> Endpoint {
         let endpoint = endpoint
+            .executor(crate::worker_reclaim::ReclaimExecutor)
             .connect_timeout(profile.connect_timeout())
             .tcp_keepalive(Some(RPC_TCP_KEEPALIVE));
 
@@ -1100,7 +1099,10 @@ impl SharedRpcClient {
         }
 
         // Slow path: build new balance_channel with all endpoints
-        let (channel, endpoint_tx) = Channel::balance_channel::<String>(1024);
+        let (channel, endpoint_tx) = Channel::balance_channel_with_executor::<String, _>(
+            1024,
+            crate::worker_reclaim::ReclaimExecutor,
+        );
         Self::apply_endpoint_changes_with_config(api_config, &endpoint_tx, &[], &endpoints)?;
 
         let registration = Arc::new(RegistrationGate::new());
@@ -1467,8 +1469,8 @@ mod tests {
     async fn ensure_registered_activates_the_edge_instance_once() {
         use std::sync::Arc as StdArc;
         use zelvik_suite::pb::control::v1::{
-            HeartbeatRequest, HeartbeatResponse, RegisterInstanceRequest,
-            RegisterInstanceResponse, RotateCredentialRequest, RotateCredentialResponse,
+            HeartbeatRequest, HeartbeatResponse, RegisterInstanceRequest, RegisterInstanceResponse,
+            RotateCredentialRequest, RotateCredentialResponse,
             control_channel_server::{ControlChannel, ControlChannelServer},
         };
 
@@ -1507,9 +1509,10 @@ mod tests {
         let server_seen = seen.clone();
         tokio::spawn(async move {
             let _ = tonic::transport::Server::builder()
-                .add_service(ControlChannelServer::new(Fake(server_seen)).max_decoding_message_size(
-                    super::RPC_MAX_MESSAGE_BYTES,
-                ))
+                .add_service(
+                    ControlChannelServer::new(Fake(server_seen))
+                        .max_decoding_message_size(super::RPC_MAX_MESSAGE_BYTES),
+                )
                 .serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(listener))
                 .await;
         });
@@ -1520,7 +1523,9 @@ mod tests {
         let unreachable = test_api_config(vec!["http://127.0.0.1:1".to_string()]);
         crate::api_config::ApiConfig::set_runtime_rpc_endpoints(unreachable.rpc_endpoints.clone())
             .unwrap();
-        let dead = SharedRpcClient::get(&unreachable).await.expect("shared client");
+        let dead = SharedRpcClient::get(&unreachable)
+            .await
+            .expect("shared client");
         assert!(
             dead.ensure_registered().await.is_err(),
             "an unreachable control plane must not report success"
@@ -1535,7 +1540,10 @@ mod tests {
         crate::api_config::ApiConfig::set_runtime_rpc_endpoints(api.rpc_endpoints.clone()).unwrap();
         let shared = SharedRpcClient::get(&api).await.expect("shared client");
 
-        shared.ensure_registered().await.expect("registration accepted");
+        shared
+            .ensure_registered()
+            .await
+            .expect("registration accepted");
         // Idempotent: the second call is a no-op, not a second RPC.
         shared
             .ensure_registered()
@@ -1565,7 +1573,9 @@ mod tests {
         );
         assert_eq!(
             request.comm_mode,
-            zelvik_suite::CommMode::parse("plaintext").unwrap().to_proto() as i32
+            zelvik_suite::CommMode::parse("plaintext")
+                .unwrap()
+                .to_proto() as i32
         );
         assert_eq!(request.software_version, crate::RELEASE_VERSION);
         assert_eq!(request.suite_version, zelvik_suite::PROTOCOL_VERSION);

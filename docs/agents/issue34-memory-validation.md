@@ -983,6 +983,73 @@ correctness/suspicious checks in 173.459 seconds; five pre-existing advisory
 warnings remain in node/XDP tests. The product build passed in 379.789 seconds;
 SHA-256 `5a0990eed516ad878bb077e63a68f3772715264fc62a8d382549decfb66cc30e`.
 All five product source hashes match the validated Linux files. Independent
-review of the full product delta found no concrete new defect. Matched
-performance and the original 900-second process screen are pending, using
-this exact binary and the existing `e60af37` binary as the performance baseline.
+review of the full product delta found no concrete new defect. The fix was
+committed as `407be09`; ordinary CI 41234561854 passed both jobs.
+
+Matched performance uses this exact binary and the existing `e60af37` binary:
+three alternating rounds / 90,000 requests per arm, zero errors. Median
+throughput was 6319.713->6289.695 req/s (-0.47%), CPU 705->715 us/request
+(+1.42%), P99 14.396->14.110 ms (-1.99%). These short localhost observations
+do not establish a statistically significant change. Evidence:
+`/root/issue34/short-state-paired-x0yl1efk`.
+
+The original 900-second screen still failed: RSS and Anon upper95
+288.622824 MiB/h against 8 (point 252.035, robust 70.108), 535.285 seconds /
+268 measurement samples, 104,263 successful measurement requests, zero
+measurement errors. Stabilization again failed its unchanged 180-second
+limit. The process kept the same PID, had zero OOM/swap, and telemetry pending
+173->0 in 19.358 seconds (ack/max 808/808). Final `pollCollects=11` proves the
+new boundary ran; metric-cache entries/estimated/pending bytes were zero,
+aggregator bytes 4,822. PID 377493 and its temporary home are absent. Evidence:
+`/root/issue34/busy-poll-screen-n69nni7u`.
+
+The temporary summary reader incorrectly called `.get` on JSON scalar lines
+inside pretty-printed output, after the actual screen and cleanup completed.
+A dictionary type check fixes the helper; recovering the existing final JSON
+confirms the memory failure above without rerunning it. RSS rises most sharply
+near the telemetry recovery phase, then falls: sampled RSS at roughly
+800/830/840/850/890 seconds was 237.207/251.863/318.102/315.449/286.340 MiB.
+This does not establish a steady-state leak rate. The full unchanged gate
+remains failed; separate short recovery ownership diagnostics are ongoing.
+Memory CI 41234561905 also failed: full-Edge RSS/Anon upper95 258.435 MiB/h
+against 8, stabilization timeout; the component's valid span was 114.5 seconds
+below its 150-second minimum. No failed check is waived.
+
+A 360-second recovery diagnostic on the same binary, with no pressure injection,
+records allocator pages at 115/270/295/310/330/350 seconds. At 270->310 seconds,
+RSS rises 243.727->279.957 MiB, live bytes 159.812->161.244 MiB and empty-page
+residency 25.867->60.305 MiB. It still fails its diagnostic slope; this shorter
+no-pressure run is attribution evidence, not a replacement gate. Allocation
+call probes report no warnings/lost events, but count requests rather than
+exact live bytes. In the recovery interval, flate2 zalloc requests total about
+121.952 MiB versus 40.762 MiB over the much longer preceding 240 seconds;
+application buffer allocation requests also surge. Those gzip allocations
+occur on the eight Tokio workers, while HTTP handoffs continue on those
+threads. The public Tonic endpoint/channel defaults spawn their own RPC driver
+and balance tasks; the upload tasks are separately spawned as well. The HTTP
+future wrapper does not cover those independently scheduled futures. Evidence:
+`/root/issue34/recovery-owners-ggnlirub`; all capture processes and the home
+were cleaned up.
+
+The next candidate installs an application executor through Tonic's public
+`Endpoint::executor` and `Channel::balance_channel_with_executor` APIs, and
+wraps the telemetry replay/upload futures with the same generation checks.
+It adds the already locked hyper 1.11.0 as a direct dependency only to name
+its public executor trait. No dependency source, compression, concurrency,
+timeout, retry or collection cadence is changed.
+
+The actual executor is exercised in a standalone one-worker regression using
+the exact candidate module. Positive: zero retained bytes, zero parks,
+3,268,911 polls and one poll collection. Removing only the executor wrapper
+retains 2,015,232 bytes and fails the zero assertion; restoring it again yields
+zero bytes with zero parks and one poll collection. Each run takes roughly
+half a second, without repeating full Rust compilation for negative controls.
+The restored affected suite passed: worker 8, telemetry 38 and RPC client 7
+(53 total, zero failures or ignored tests). All-target Clippy passed its
+correctness/suspicious checks in 179.416 seconds; the same five pre-existing
+node/XDP advisory warnings remain. The removed RPC module lint suppressions
+introduced no new warnings. The product build passed in 373.485 seconds,
+SHA-256 `3dd5e36331be1458770b440f236f7c22e16ab2d7254da6c214c0f45999bb29ee`.
+All five source hashes match the validated Linux files. An independent review
+of this new delta found no concrete correctness regression. Matched performance
+and a repeat of the six-minute recovery diagnostic are pending.

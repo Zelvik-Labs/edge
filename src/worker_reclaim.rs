@@ -204,6 +204,20 @@ pub(crate) async fn with_worker_reclaim<F: std::future::Future>(future: F) -> F:
     .await
 }
 
+/// Executor for RPC driver and balance tasks spawned through Tonic's public API.
+#[derive(Clone, Copy)]
+pub(crate) struct ReclaimExecutor;
+
+impl<F> hyper::rt::Executor<F> for ReclaimExecutor
+where
+    F: std::future::Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    fn execute(&self, future: F) {
+        tokio::spawn(with_worker_reclaim(future));
+    }
+}
+
 fn collect_decision(include_idle: bool) -> ParkDecision {
     let generation = COLLECT_GENERATION.load(Ordering::Acquire);
     WORKER_COLLECT_STATE.with(|cell| {
@@ -392,6 +406,15 @@ mod tests {
 
     #[test]
     fn requested_handoff_runs_while_transport_task_stays_runnable() {
+        assert_busy_task_handoff(false);
+    }
+
+    #[test]
+    fn rpc_executor_honors_requested_handoff_on_a_runnable_task() {
+        assert_busy_task_handoff(true);
+    }
+
+    fn assert_busy_task_handoff(use_executor: bool) {
         let _guard = lock_tests();
         let mut builder = tokio::runtime::Builder::new_multi_thread();
         builder.worker_threads(1).enable_all();
@@ -400,7 +423,7 @@ mod tests {
         let (blocks_tx, blocks_rx) = mpsc::channel();
         let freed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let worker_freed = freed.clone();
-        let task = runtime.spawn(with_worker_reclaim(async move {
+        let work = async move {
             reset_park_interval_for_test();
             let before = snapshot();
             let blocks = (0..8)
@@ -431,7 +454,20 @@ mod tests {
                 std::task::Poll::Pending
             })
             .await;
-        }));
+        };
+        let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+        let _runtime_guard = runtime.enter();
+        if use_executor {
+            hyper::rt::Executor::execute(&ReclaimExecutor, async move {
+                work.await;
+                done_tx.send(()).expect("signal RPC driver completion");
+            });
+        } else {
+            runtime.spawn(with_worker_reclaim(async move {
+                work.await;
+                done_tx.send(()).expect("signal transport completion");
+            }));
+        }
         for block in blocks_rx
             .recv_timeout(Duration::from_secs(2))
             .expect("worker blocks")
@@ -440,7 +476,7 @@ mod tests {
         }
         freed.store(true, Ordering::Release);
         request_worker_collect();
-        runtime.block_on(task).expect("busy worker task");
+        runtime.block_on(done_rx).expect("busy worker task");
     }
 
     #[test]
