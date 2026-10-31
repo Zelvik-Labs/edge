@@ -389,3 +389,27 @@ prove that the full process has no leak.
 Raw evidence: `/root/issue34/diag-request-idle-xBNMQZZl` on the test host and
 `/tmp/edge-cycle-request-idle-data.json` locally. The diagnostic processes and
 their temporary home were removed; evidence and build caches were retained.
+
+### Large-allocation follow-up
+
+A 195-second diagnostic on the same binary and test host traced allocation
+requests above 100 KiB across 60 seconds load, 60 seconds idle, and 60 seconds
+load again. Both load phases completed without errors (11,329 and 11,326
+requests). The large transient allocation net returned to zero between load
+phases. A retained 418,848-byte table resolved to sysinfo's process HashMap.
+The second load ended at 139.891 MiB RSS versus 135.590 MiB for the first;
+this remaining increase is unexplained by the traced large live allocations.
+No leak-closure or slope-gate pass is claimed. Raw evidence is
+`/root/issue34/diag-large-cycle-VqZLR4nT` on the test host and
+`/tmp/edge-large-cycle-data.json` locally. Processes and the temporary home
+were cleaned up.
+
+A separate 135-second trace covered allocation requests below 8 KiB, with
+60 seconds of load (11,316 requests, zero errors) followed by idle. It reported
+no profiler errors. RSS fell from 139.672 MiB at load end to 129.898 MiB at
+120 seconds. Remaining traced small allocations included roughly 402 KiB of
+sysinfo process strings in addition to the process table above, plus Mace and
+local tree cache objects. This supports removing unused process enumeration
+from CPU status reporting, not a conclusion that the full memory gate passes.
+Evidence: `/root/issue34/diag-small-idle-vu1sKCKP` and
+`/tmp/edge-small-idle-data.json`. Processes and the temporary home were cleaned.

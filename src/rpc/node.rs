@@ -1351,6 +1351,16 @@ mod shared_account_status_tests {
     use crate::memory_governor::MemoryGovernor;
 
     #[test]
+    fn cpu_monitor_reports_cpus_without_retaining_processes() {
+        let mut sys = super::new_cpu_monitor();
+        assert!(!sys.cpus().is_empty());
+        assert!(sys.processes().is_empty());
+        sys.refresh_cpu_all();
+        assert!(!sys.cpus().is_empty());
+        assert!(sys.processes().is_empty());
+    }
+
+    #[test]
     fn status_matches_snapshot_and_reports_scoped_reserves() {
         let governor = MemoryGovernor::new();
         let snapshot = governor.snapshot(1);
@@ -1412,10 +1422,14 @@ mod shared_account_status_tests {
     }
 }
 
+pub(super) fn new_cpu_monitor() -> sysinfo::System {
+    sysinfo::System::new_with_specifics(
+        sysinfo::RefreshKind::nothing().with_cpu(sysinfo::CpuRefreshKind::everything()),
+    )
+}
+
 pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: ApiConfig) {
-    let mut sys = sysinfo::System::new_all();
-    // Initial refresh to populate CPU baseline
-    sys.refresh_all();
+    let mut sys = new_cpu_monitor();
 
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
 
@@ -1426,7 +1440,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             continue;
         }
 
-        sys.refresh_all(); // Refresh everything
+        sys.refresh_cpu_all();
         let (traffic_out, traffic_in, connections) = crate::metrics::METRICS.get_node_totals();
         let rpc_snap = crate::metrics::METRICS.rpc.snapshot();
         let rpc_total_requests = rpc_snap.total_requests;
@@ -1791,8 +1805,7 @@ pub async fn report_node_online_once(
         anyhow::bail!("node id is not available");
     }
 
-    let mut sys = sysinfo::System::new_all();
-    sys.refresh_all();
+    let sys = new_cpu_monitor();
     let (traffic_out, traffic_in, connections) = crate::metrics::METRICS.get_node_totals();
     let rpc_snap = crate::metrics::METRICS.rpc.snapshot();
     let rpc_total_requests = rpc_snap.total_requests;
@@ -1888,8 +1901,7 @@ fn is_unsupported_node_type_error(err: &tonic::Status) -> bool {
 
 pub async fn start_node_value_reporter(config_store: Arc<ConfigStore>) {
     info!("Node Value Reporter service started. Interval: 60s");
-    let mut sys = sysinfo::System::new_all();
-    sys.refresh_all();
+    let mut sys = new_cpu_monitor();
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
     let mut last_traffic_out = 0u64;
     let mut last_traffic_in = 0u64;
@@ -1904,7 +1916,7 @@ pub async fn start_node_value_reporter(config_store: Arc<ConfigStore>) {
             continue;
         }
 
-        sys.refresh_all();
+        sys.refresh_cpu_all();
         // ... (rest of the logic)
 
         let (traffic_out, traffic_in, connections) = crate::metrics::METRICS.get_node_totals();
