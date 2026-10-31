@@ -1285,8 +1285,10 @@ pub async fn enqueue<M: Message>(
     let spool = queue(kind)?;
     let kind = kind.to_owned();
     let at = crate::utils::time::now_timestamp();
-    tokio::task::spawn_blocking(move || spool.append(&kind, payload, window, complete, at))
-        .await??;
+    crate::worker_reclaim::spawn_storage_work(move || {
+        spool.append(&kind, payload, window, complete, at)
+    })
+    .await??;
     Ok(())
 }
 
@@ -1389,7 +1391,7 @@ async fn append_probe_chunk(
     let count = observations.len();
     let at = crate::utils::time::now_timestamp();
     let batch = pb::ProbeObservationBatch { observations };
-    match tokio::task::spawn_blocking(move || {
+    match crate::worker_reclaim::spawn_storage_work(move || {
         let payload = batch.encode_to_vec();
         match spool.append("probe_observation", payload, window, false, at) {
             Ok(_) => Ok(()),
@@ -1545,7 +1547,7 @@ async fn append_metric_chunk(
 ) -> Result<(), MetricEnqueueError> {
     let count = request.metric_stats.len();
     let at = crate::utils::time::now_timestamp();
-    match tokio::task::spawn_blocking(move || {
+    match crate::worker_reclaim::spawn_storage_work(move || {
         let payload = request.encode_to_vec();
         match spool.append("metric_stat", payload, 0, false, at) {
             Ok(_) => Ok(()),
@@ -1714,7 +1716,7 @@ async fn append_daily_chunk(
 ) -> Result<(), DailyEnqueueError> {
     let count = request.stats.len() + request.domain_stats.len();
     let at = crate::utils::time::now_timestamp();
-    match tokio::task::spawn_blocking(move || {
+    match crate::worker_reclaim::spawn_storage_work(move || {
         let payload = request.encode_to_vec();
         match spool.append("daily", payload, 0, false, at) {
             Ok(_) => Ok(()),
@@ -1735,7 +1737,7 @@ async fn append_daily_chunk(
 
 pub async fn enqueue_prepared(batch: pb::TelemetryBatch) -> anyhow::Result<()> {
     let spool = queue(&batch.kind)?;
-    tokio::task::spawn_blocking(move || spool.append_prepared(batch)).await??;
+    crate::worker_reclaim::spawn_storage_work(move || spool.append_prepared(batch)).await??;
     Ok(())
 }
 pub async fn enqueue_prepared_with_state(
@@ -1745,7 +1747,7 @@ pub async fn enqueue_prepared_with_state(
 ) -> anyhow::Result<()> {
     let spool = queue(&batch.kind)?;
     let key = key.to_owned();
-    tokio::task::spawn_blocking(move || {
+    crate::worker_reclaim::spawn_storage_work(move || {
         spool.append_prepared_with_state(batch, Some((&key, &raw)))
     })
     .await??;
@@ -1755,7 +1757,7 @@ pub async fn enqueue_prepared_with_state(
 pub async fn save_state(key: &str, raw: Vec<u8>) -> anyhow::Result<()> {
     let spool = queue("bandwidth")?;
     let key = key.to_owned();
-    tokio::task::spawn_blocking(move || spool.save_state(&key, &raw)).await??;
+    crate::worker_reclaim::spawn_storage_work(move || spool.save_state(&key, &raw)).await??;
     Ok(())
 }
 pub fn load_state(key: &str) -> anyhow::Result<Option<Vec<u8>>> {
@@ -2037,7 +2039,7 @@ async fn upload_window(spool: Arc<Spool>, uploads: Vec<Upload>) -> WindowOutcome
                 "telemetry response does not match the uploaded batch"
             );
             let ack = spool.clone();
-            tokio::task::spawn_blocking(move || ack.acknowledge(&receipt)).await??;
+            crate::worker_reclaim::spawn_storage_work(move || ack.acknowledge(&receipt)).await??;
             Ok::<_, anyhow::Error>(())
         }
         .await;
@@ -2064,11 +2066,12 @@ async fn upload_window(spool: Arc<Spool>, uploads: Vec<Upload>) -> WindowOutcome
     let mut quarantined = None;
     if let Some((sequence, reason, error)) = rejected_head {
         let head = spool.clone();
-        let removed =
-            tokio::task::spawn_blocking(move || head.quarantine_head(sequence, reason, &error))
-                .await
-                .map_err(anyhow::Error::from)
-                .and_then(|result| result);
+        let removed = crate::worker_reclaim::spawn_storage_work(move || {
+            head.quarantine_head(sequence, reason, &error)
+        })
+        .await
+        .map_err(anyhow::Error::from)
+        .and_then(|result| result);
         match removed {
             Ok(true) => quarantined = Some(sequence),
             // Not the head any more: it was confirmed meanwhile, so there is
@@ -2104,10 +2107,11 @@ pub async fn replay(api: ApiConfig, core: bool) {
     let mut cursor = 0;
     loop {
         let compact = spool.clone();
-        if let Err(err) = tokio::task::spawn_blocking(move || compact.collapse_confirmed(256))
-            .await
-            .map_err(anyhow::Error::from)
-            .and_then(|result| result)
+        if let Err(err) =
+            crate::worker_reclaim::spawn_storage_work(move || compact.collapse_confirmed(256))
+                .await
+                .map_err(anyhow::Error::from)
+                .and_then(|result| result)
         {
             backoff(core, &mut failures, err).await;
             continue;
@@ -2116,7 +2120,7 @@ pub async fn replay(api: ApiConfig, core: bool) {
         // while later durable receipts are remembered independently.
         let read = spool.clone();
         let (prefetched, next_cursor) =
-            match tokio::task::spawn_blocking(move || read.replay_window(cursor))
+            match crate::worker_reclaim::spawn_storage_work(move || read.replay_window(cursor))
                 .await
                 .map_err(anyhow::Error::from)
                 .and_then(|result| result)
@@ -2339,7 +2343,8 @@ async fn journal_oversize_on(
     encoded_bytes: usize,
 ) -> anyhow::Result<()> {
     let kind = kind.to_owned();
-    tokio::task::spawn_blocking(move || spool.journal_oversize(&kind, encoded_bytes)).await??;
+    crate::worker_reclaim::spawn_storage_work(move || spool.journal_oversize(&kind, encoded_bytes))
+        .await??;
     Ok(())
 }
 

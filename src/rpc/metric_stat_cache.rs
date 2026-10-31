@@ -543,7 +543,7 @@ impl MetricStatReporterState {
         }
         if let Some(parent) = self.checkpoint_path.parent() {
             let parent = parent.to_path_buf();
-            tokio::task::spawn_blocking(move || {
+            crate::worker_reclaim::spawn_storage_work(move || {
                 let dir = std::fs::File::open(&parent).map_err(|e| {
                     anyhow::anyhow!(
                         "open metric snapshot checkpoint directory {}: {e}",
@@ -716,7 +716,7 @@ impl MetricStatReporterState {
         let dir = self.quarantine_dir.clone();
         let max_bytes = self.quarantine_max_bytes;
         let bytes = encoded.len() as u64;
-        tokio::task::spawn_blocking(move || {
+        crate::worker_reclaim::spawn_storage_work(move || {
             persist_payload(&dir, "quarantine", Some(max_bytes), &encoded)
         })
         .await

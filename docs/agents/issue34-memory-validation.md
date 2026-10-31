@@ -666,3 +666,113 @@ or whole-heap leak guarantee. Evidence:
 `/root/issue34/short-state-live-pages-be479nvi` and
 `/tmp/edge-short-state-live-pages-evidence`. Processes and temporary homes were
 removed. Formal Edge release still requires the remaining process and CI gates.
+
+The corrected receipt source `1abf37f` passed the normal PR Rust test/Clippy
+workflow (`41186523783`). Its memory workflow (`41186523841`) still failed:
+component allocator samples reached 261, but effective measurement span was
+119.379 seconds against 150. Full Edge RSS/Anon upper95 was 234.205 MiB/h
+against 8, over 535.897 seconds/268 points with 103,099 successful measurement
+requests and zero measurement errors. The 180-second stabilization timed out;
+its final trailing rate was -12.978 MiB/min, whose absolute value exceeds 8.
+Metric snapshots remained empty. A negative slope during recovery is not a
+stable plateau and does not waive this failure.
+
+A matched three-round, alternating performance screen compared `34c29d1` to
+`1abf37f`, using the same host/toolchain/dependencies and release profile
+(LTO off, 16 codegen units, jobs=2). Both arms completed 90,000 requests without
+errors. Median baseline/candidate throughput was 6374.685/6389.880 requests/s,
+CPU 705.333/707.000 microseconds/request, and P99 14.002/13.795 ms. Each arm
+used 30 fresh h2load batches of 1,000 requests/eight connections, within the
+existing HTTP/2 churn policy. This short localhost screen found no material
+regression; the sub-percent throughput/CPU differences are not evidence of
+statistically significant improvement. Evidence:
+`/root/issue34/short-state-paired-1tgeyshg/report.json` and
+`/tmp/edge-short-state-paired-performance.json`.
+
+A completed process-only `MIMALLOC_ALLOW_THP=2` experiment retained THP and
+used the calibrated 180-second load/60-second idle workload. It completed
+34,908 requests without errors. Final live bytes were 157.834 MiB, RSS
+295.184 MiB and THP 254 MiB, compared with default 157.832/287.477/214 MiB.
+It did not establish a residency benefit and was not adopted. Evidence:
+`/root/issue34/short-state-live-pages-um2p5uc8`.
+
+The next bounded diagnostic used two pressure cycles and a real unavailable
+telemetry period followed by recovery. At 12/62/117/182/242/302/352 seconds,
+rounded arena live bytes were 162.527/164.602/165.585/161.246/160.396/161.839/
+163.361 MiB; RSS was 254.219/246.332/246.809/271.262/310.047/299.902/315.852
+MiB. Capacity rose from 170.744 to 188.949 MiB, deferred-free bytes from 2.610
+to 9.563 MiB, empty pages from 164 to 257 and retired pages from 125 to 163.
+There were no deferred-list inconsistencies. The same PID survived, with no
+cgroup max/oom/oom_kill events and no swap. The controller's pending telemetry
+count recovered from 71 to zero in 19.608 seconds. Metric snapshots stayed at
+zero; the final one pending IP is an active minute's observation, not a
+retained historical set. This report still failed stabilization and had no
+usable post-stabilization measurement span; 21,872 errors during deliberate
+pressure are recorded, with zero measurement errors. Neither the script's
+successful evidence capture nor its six-minute duration constitutes a passed
+memory gate. Evidence:
+`/root/issue34/short-state-pressure-pages-3pznr76x` and
+`/tmp/edge-short-state-pressure-evidence-20261031`. Its Edge process and
+temporary home were removed.
+
+A calibrated page-presence/owner diagnostic then attributed RSS using arena
+bitmaps, `/proc/pagemap` and each thread's FS-base identity. Its known-allocation
+fixture reported exactly 6,400/3,200/0 live bytes across cross-thread frees and
+matched all owned pages to the allocating thread. In the real two-cycle run,
+RSS rose 250.891 -> 296.758 MiB, rounded live bytes stayed 162.525 -> 162.242
+MiB, and resident completely empty pages rose 39.215 -> 69.930 MiB. The four
+largest final empty-page owners were Tokio threads created after startup,
+retaining 14.477/10.781/9.699/7.629 MiB of empty resident pages. The separate
+Pingora Server/background threads had negligible page ownership. HTTP/TCP/UDP
+accept loops actually execute on the application's hooked Tokio runtime;
+configured Pingora thread counts cannot identify the source of this RSS.
+Snapshots paused this diagnostic for 115-176 ms and are not latency evidence.
+Its workload still failed stabilization and had no usable measurement span;
+74,785 requests succeeded, with 15,557 deliberate pressure errors and zero
+measurement errors. Evidence:
+`/root/issue34/short-state-owner-pressure-uusru5gi`. Process and temporary home
+were removed.
+
+The blocking pool has start/stop hooks but no park hook. Telemetry replay,
+append, receipt, quarantine and snapshot persistence use this pool, keeping
+allocating threads alive after other threads have freed their objects. A
+separate known-allocation reproduction retained 13.875 MiB of completely
+empty resident pages with 1.922 MiB deferred frees. A non-forced collect on
+the allocating thread moved these pages to pending purge; a forced collect
+then returned their residency to zero. This supplies a concrete lifecycle
+failure rather than a reason to change global purge frequency or disable THP.
+Evidence: `/root/issue34/blocking-calibration-{DEFERRED,NORMAL_COLLECT,FORCED_COLLECT}.json`.
+
+The follow-up source routes durable storage tasks through one blocking-work
+helper that non-forcibly collects after the closure drops its local state,
+including error and unwind exits. It preserves results and Tokio JoinError
+semantics and leaves the request path unchanged. The real allocator regression
+uses a one-thread blocking pool, cross-thread frees and an uncollected probe on
+the same live thread. All five worker tests passed, including success/error/
+panic cleanup. An isolated harness compiled the actual worker module against
+the same linked dependencies: positive/restored passed, removing completion
+collection failed with 2,015,232 retained bytes versus zero. Affected telemetry
+38 tests and snapshot 11 tests passed without skips; affected Clippy passed.
+The independent review of this small follow-up found no concrete defect in
+result/error propagation or drop order.
+
+A second matched performance screen compared the preserved `1abf37f` binary
+with this completion helper (candidate binary SHA-256
+`a32478ef716d69e3306c864f820115b18142d513dc02ed1b144395211b0dded0`).
+Both arms completed 90,000 requests without errors. Median baseline/candidate
+throughput was 6381.428/6424.012 requests/s, CPU 708.000/697.000 microseconds/
+request, and P99 13.887/13.826 ms. This bounded localhost screen found no
+material regression. Evidence: `/root/issue34/short-state-paired-m2mxjqgx` and
+`/tmp/edge-storage-completion-paired-performance.json`.
+
+With the same two-cycle six-minute diagnostic, candidate RSS at 12/117/182/
+242/352 seconds was 228.484/224.277/231.402/241.129/270.430 MiB; rounded live
+bytes were 150.775/153.917/155.413/154.548/157.492 MiB and empty-page residency
+28.965/19.699/21.172/25.969/52.266 MiB. This is lower residency than the prior
+diagnostic but not a passed memory gate: stabilization still timed out, final
+trailing rate -44.72 MiB/min, with no usable post-stabilization span. Most
+remaining empty pages were now owned by the original async worker threads;
+blocking-thread completion does not resolve every worker lifecycle. Evidence:
+`/root/issue34/short-state-owner-pressure-mf4g39vy`. The unchanged 900-second
+full-process screen is required before this follow-up can replace failed gate
+evidence; no threshold, stabilization requirement or warmup was loosened.

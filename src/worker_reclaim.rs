@@ -12,11 +12,12 @@
 //! # Coverage boundary
 //!
 //! These hooks are installed only on the runtime this process builds itself in
-//! `main` (`tokio::runtime::Builder::new_multi_thread`). Pingora builds its
-//! service runtimes inside the vendored crate, which must not be modified, so
-//! Pingora worker threads are **not** covered. Tokio blocking-pool threads do
-//! run the start/stop hooks (so a retiring blocking thread collects its heap)
-//! but never the park hook; runtimes built elsewhere have no hook at all.
+//! `main` (`tokio::runtime::Builder::new_multi_thread`), including the custom
+//! HTTP/TCP/UDP accept loops. Pingora builds its separate control/background
+//! runtimes internally; those threads are not covered. Tokio blocking-pool
+//! threads run start/stop hooks but never the park hook; durable storage work
+//! therefore uses [`spawn_storage_work`] to collect on completion. A worker
+//! that stays parked has no periodic callback until it wakes and parks again.
 //! [`WorkerReclaimSnapshot`] therefore reports the hooked worker population
 //! and the configured-but-unhooked Pingora population separately;
 //! [`WorkerReclaimSnapshot::covers_all_workers`] stays false until an actual
@@ -33,9 +34,8 @@ use std::time::{Duration, Instant};
 /// park after the interval, which bounds maintenance CPU per worker.
 const PARK_COLLECT_MIN_INTERVAL: Duration = Duration::from_millis(250);
 
-/// An idle worker that keeps parking re-collects after this interval even
-/// without a new generation request, so retained pages do not wait for a
-/// pressure event that may never come.
+/// A worker that parks again after this interval collects even without a new
+/// generation request. A continuously parked worker does not run this check.
 const PARK_COLLECT_IDLE_INTERVAL: Duration = Duration::from_secs(30);
 
 static COLLECT_GENERATION: AtomicU64 = AtomicU64::new(1);
@@ -120,6 +120,27 @@ pub fn install_tokio_worker_hooks(builder: &mut tokio::runtime::Builder) {
         .on_thread_start(on_worker_start)
         .on_thread_park(on_worker_park)
         .on_thread_stop(on_worker_stop);
+}
+
+/// Run durable storage work on Tokio's blocking pool and collect its freed
+/// pages before that thread returns to the pool. Blocking threads never run
+/// `on_thread_park`; start/stop hooks alone leave cross-thread frees pending
+/// while the pool keeps the allocating thread alive.
+pub(crate) fn spawn_storage_work<F, T>(work: F) -> tokio::task::JoinHandle<T>
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(move || {
+        struct CollectOnCompletion;
+        impl Drop for CollectOnCompletion {
+            fn drop(&mut self) {
+                crate::memory_reclaim::trim_expired_heap_pages();
+            }
+        }
+        let _collect = CollectOnCompletion;
+        work()
+    })
 }
 
 /// Record the configured Pingora service-worker population that has no
@@ -231,6 +252,115 @@ mod tests {
             state.last_collect = None;
             cell.set(state);
         });
+    }
+
+    #[repr(C)]
+    struct AllocatorAreaPrefix {
+        blocks: *mut std::ffi::c_void,
+        reserved: usize,
+        committed: usize,
+        used: usize,
+        block_size: usize,
+    }
+
+    unsafe extern "C" {
+        fn mi_theap_get_default() -> *mut std::ffi::c_void;
+        fn mi_theap_visit_blocks(
+            theap: *mut std::ffi::c_void,
+            visit_blocks: bool,
+            visitor: unsafe extern "C" fn(
+                *const std::ffi::c_void,
+                *const AllocatorAreaPrefix,
+                *mut std::ffi::c_void,
+                usize,
+                *mut std::ffi::c_void,
+            ) -> bool,
+            arg: *mut std::ffi::c_void,
+        ) -> bool;
+    }
+
+    fn large_thread_owned_bytes() -> usize {
+        // Read only the stable public mi_heap_area_t prefix, without visiting
+        // allocation contents or collecting the deferred free list first.
+        unsafe extern "C" fn count(
+            _heap: *const std::ffi::c_void,
+            area: *const AllocatorAreaPrefix,
+            _block: *mut std::ffi::c_void,
+            _block_size: usize,
+            arg: *mut std::ffi::c_void,
+        ) -> bool {
+            let area = unsafe { &*area };
+            if area.block_size >= 96 * 1024 {
+                unsafe { *(arg as *mut usize) += area.used * area.block_size };
+            }
+            true
+        }
+        let mut bytes = 0;
+        unsafe {
+            // The allocator also returns false for an empty thread heap.
+            mi_theap_visit_blocks(
+                mi_theap_get_default(),
+                false,
+                count,
+                (&mut bytes as *mut usize).cast(),
+            );
+        }
+        bytes
+    }
+
+    #[test]
+    fn storage_completion_collects_cross_thread_frees_on_success_error_and_panic() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .max_blocking_threads(1)
+            .build()
+            .expect("storage test runtime");
+        for outcome in 0..3 {
+            let (blocks_tx, blocks_rx) = mpsc::channel::<Vec<usize>>();
+            let (freed_tx, freed_rx) = mpsc::channel();
+            let free_thread = std::thread::spawn(move || {
+                for block in blocks_rx.recv().expect("allocated blocks") {
+                    unsafe { libmimalloc_sys::mi_free(block as *mut std::ffi::c_void) };
+                }
+                freed_tx.send(()).expect("signal cross-thread free");
+            });
+            runtime.block_on(async {
+                let task = spawn_storage_work(move || {
+                    let blocks = (0..8)
+                        .map(|index| {
+                            let size = (96 + index * 32) * 1024;
+                            let block = unsafe { libmimalloc_sys::mi_malloc_aligned(size, 8) };
+                            assert!(!block.is_null());
+                            unsafe { std::ptr::write_bytes(block.cast::<u8>(), 7, size) };
+                            block as usize
+                        })
+                        .collect();
+                    blocks_tx.send(blocks).expect("send allocations");
+                    freed_rx.recv().expect("cross-thread frees completed");
+                    assert!(large_thread_owned_bytes() >= 1024 * 1024);
+                    match outcome {
+                        0 => Ok(7),
+                        1 => Err("durable write failed"),
+                        _ => panic!("injected storage panic"),
+                    }
+                });
+                match outcome {
+                    0 => assert_eq!(task.await.unwrap(), Ok(7)),
+                    1 => assert_eq!(task.await.unwrap(), Err("durable write failed")),
+                    _ => assert!(task.await.unwrap_err().is_panic()),
+                }
+                // One blocking thread forces the probe onto the same live
+                // heap. A raw task must inspect it without invoking the fix.
+                let retained = tokio::task::spawn_blocking(large_thread_owned_bytes)
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    retained, 0,
+                    "completed storage task retained deferred frees"
+                );
+            });
+            free_thread.join().expect("freeing thread");
+        }
     }
 
     #[test]
