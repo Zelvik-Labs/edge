@@ -571,8 +571,7 @@ where
                     // maps, health registrations, XDP or runtime API effects.
                     // The binding persists on each config through the
                     // materialization await, so the install below reuses it.
-                    if let Err(err) =
-                        crate::metrics::METRICS.admit_configs(payload_servers.iter())
+                    if let Err(err) = crate::metrics::METRICS.admit_configs(payload_servers.iter())
                     {
                         warn!(
                             "RPC_NODE: server metric family capacity exhausted ({}/{}); keeping current configuration",
@@ -1593,6 +1592,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
                 "live": worker_reclaim.worker_threads_live,
                 "stopped": worker_reclaim.worker_threads_stopped,
                 "parkCollects": worker_reclaim.park_collects,
+                "pollCollects": worker_reclaim.poll_collects,
                 "rateLimited": worker_reclaim.park_collects_rate_limited,
                 "stopCollects": worker_reclaim.stop_collects,
                 "unhookedPingoraWorkers": worker_reclaim.unhooked_pingora_workers,

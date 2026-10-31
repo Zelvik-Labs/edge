@@ -104,6 +104,7 @@ fn write_alloc_stats(path: &str, buffer: &mut [u8]) -> anyhow::Result<()> {
             "started": worker_reclaim.worker_threads_started,
             "live": worker_reclaim.worker_threads_live,
             "park_collects": worker_reclaim.park_collects,
+            "poll_collects": worker_reclaim.poll_collects,
             "stop_collects": worker_reclaim.stop_collects,
         },
     });

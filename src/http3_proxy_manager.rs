@@ -692,7 +692,9 @@ impl Http3ProxyManager {
         crate::memory_ticket::CONNECTION_TICKET
             .scope(
                 ticket_owner,
-                proxy.process_new_http(server_session, &shutdown_rx),
+                crate::worker_reclaim::with_worker_reclaim(
+                    proxy.process_new_http(server_session, &shutdown_rx),
+                ),
             )
             .await;
         Ok(())

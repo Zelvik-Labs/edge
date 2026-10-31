@@ -17,6 +17,8 @@
 //! runtimes internally; those threads are not covered. Tokio blocking-pool
 //! threads run start/stop hooks but never the park hook; durable storage work
 //! therefore uses [`spawn_storage_work`] to relinquish its heap on completion.
+//! Application-owned transport tasks also check requested generations after each
+//! poll: a continuously runnable worker need not enter Tokio's park callback.
 //! A worker that stays parked has no periodic callback until it wakes and parks again.
 //! [`WorkerReclaimSnapshot`] therefore reports the hooked worker population
 //! and the configured-but-unhooked Pingora population separately;
@@ -44,6 +46,7 @@ static WORKER_THREADS_STARTED: AtomicU64 = AtomicU64::new(0);
 static WORKER_THREADS_LIVE: AtomicU64 = AtomicU64::new(0);
 static WORKER_THREADS_STOPPED: AtomicU64 = AtomicU64::new(0);
 static PARK_COLLECTS: AtomicU64 = AtomicU64::new(0);
+static POLL_COLLECTS: AtomicU64 = AtomicU64::new(0);
 static PARK_COLLECTS_RATE_LIMITED: AtomicU64 = AtomicU64::new(0);
 static STOP_COLLECTS: AtomicU64 = AtomicU64::new(0);
 static UNHOOKED_PINGORA_WORKERS: AtomicU64 = AtomicU64::new(0);
@@ -80,6 +83,7 @@ pub struct WorkerReclaimSnapshot {
     pub worker_threads_live: u64,
     pub worker_threads_stopped: u64,
     pub park_collects: u64,
+    pub poll_collects: u64,
     pub park_collects_rate_limited: u64,
     pub stop_collects: u64,
     pub unhooked_pingora_workers: u64,
@@ -104,6 +108,7 @@ pub fn snapshot() -> WorkerReclaimSnapshot {
         worker_threads_live: WORKER_THREADS_LIVE.load(Ordering::Relaxed),
         worker_threads_stopped: WORKER_THREADS_STOPPED.load(Ordering::Relaxed),
         park_collects: PARK_COLLECTS.load(Ordering::Relaxed),
+        poll_collects: POLL_COLLECTS.load(Ordering::Relaxed),
         park_collects_rate_limited: PARK_COLLECTS_RATE_LIMITED.load(Ordering::Relaxed),
         stop_collects: STOP_COLLECTS.load(Ordering::Relaxed),
         unhooked_pingora_workers: UNHOOKED_PINGORA_WORKERS.load(Ordering::Relaxed),
@@ -182,15 +187,36 @@ fn on_worker_start() {
     });
 }
 
-fn on_worker_park() {
-    let now = Instant::now();
+/// Check requested collection after polling an application-owned transport task.
+/// Busy Tokio workers can keep polling runnable tasks without entering `park`,
+/// so the park callback alone cannot acknowledge a requested generation.
+/// The pinned future stays in place and the existing per-worker rate limit applies.
+pub(crate) async fn with_worker_reclaim<F: std::future::Future>(future: F) -> F::Output {
+    let mut future = std::pin::pin!(future);
+    std::future::poll_fn(move |cx| {
+        let result = future.as_mut().poll(cx);
+        if matches!(collect_decision(false), ParkDecision::Collect) {
+            crate::memory_reclaim::relinquish_thread_heap();
+            POLL_COLLECTS.fetch_add(1, Ordering::Relaxed);
+        }
+        result
+    })
+    .await
+}
+
+fn collect_decision(include_idle: bool) -> ParkDecision {
     let generation = COLLECT_GENERATION.load(Ordering::Acquire);
-    let decision = WORKER_COLLECT_STATE.with(|cell| {
+    WORKER_COLLECT_STATE.with(|cell| {
         let state = cell.get();
+        if !include_idle && state.generation == generation {
+            return ParkDecision::NotDue;
+        }
+        let now = Instant::now();
         let generation_due = state.generation != generation;
-        let idle_due = state
-            .last_collect
-            .is_none_or(|last| now.duration_since(last) >= PARK_COLLECT_IDLE_INTERVAL);
+        let idle_due = include_idle
+            && state
+                .last_collect
+                .is_none_or(|last| now.duration_since(last) >= PARK_COLLECT_IDLE_INTERVAL);
         if !generation_due && !idle_due {
             return ParkDecision::NotDue;
         }
@@ -205,9 +231,11 @@ fn on_worker_park() {
             last_collect: Some(now),
         });
         ParkDecision::Collect
-    });
+    })
+}
 
-    match decision {
+fn on_worker_park() {
+    match collect_decision(true) {
         ParkDecision::Collect => {
             // A collect cannot see frees that arrive after this worker parks.
             // Relinquish ownership so those frees need not wake this worker.
@@ -360,6 +388,59 @@ mod tests {
             });
             free_thread.join().expect("freeing thread");
         }
+    }
+
+    #[test]
+    fn requested_handoff_runs_while_transport_task_stays_runnable() {
+        let _guard = lock_tests();
+        let mut builder = tokio::runtime::Builder::new_multi_thread();
+        builder.worker_threads(1).enable_all();
+        install_tokio_worker_hooks(&mut builder);
+        let runtime = builder.build().expect("busy worker runtime");
+        let (blocks_tx, blocks_rx) = mpsc::channel();
+        let freed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let worker_freed = freed.clone();
+        let task = runtime.spawn(with_worker_reclaim(async move {
+            reset_park_interval_for_test();
+            let before = snapshot();
+            let blocks = (0..8)
+                .map(|index| {
+                    let size = (96 + index * 32) * 1024;
+                    let block = unsafe { libmimalloc_sys::mi_malloc_aligned(size, 8) };
+                    assert!(!block.is_null());
+                    unsafe { std::ptr::write_bytes(block.cast::<u8>(), 7, size) };
+                    block as usize
+                })
+                .collect::<Vec<_>>();
+            blocks_tx.send(blocks).expect("send live blocks");
+            let deadline = Instant::now() + Duration::from_secs(2);
+            std::future::poll_fn(move |cx| {
+                let after = snapshot();
+                if worker_freed.load(Ordering::Acquire)
+                    && after.poll_collects > before.poll_collects
+                {
+                    assert_eq!(after.park_collects, before.park_collects);
+                    assert_eq!(large_thread_owned_bytes(), 0);
+                    return std::task::Poll::Ready(());
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "busy worker ignored reclaim request"
+                );
+                cx.waker().wake_by_ref();
+                std::task::Poll::Pending
+            })
+            .await;
+        }));
+        for block in blocks_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("worker blocks")
+        {
+            unsafe { libmimalloc_sys::mi_free(block as *mut std::ffi::c_void) };
+        }
+        freed.store(true, Ordering::Release);
+        request_worker_collect();
+        runtime.block_on(task).expect("busy worker task");
     }
 
     #[test]

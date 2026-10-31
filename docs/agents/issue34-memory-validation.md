@@ -901,3 +901,88 @@ pre-existing advisory warnings remain in unrelated node/XDP tests. The product
 release-profile build passed in 372.846 seconds; binary SHA-256 is
 `c8a4837ae9fb476146f9bfba85077ff894267d8ea63dfcfe7b12091923fa02c2`.
 These results validate the history-removal behavior, not process memory closure.
+
+The `e60af37` 900-second diagnostic also failed. With that exact binary, THP on,
+2 GiB memory.max, 1.5 GiB memory.high and zero swap, RSS upper95 was
+383.287081 MiB/h (point 352.469, robust 258.514); Anon upper95 was
+382.806 MiB/h. The measurement span was 535.355 seconds / 268 samples, with
+101,466 successful measurement requests and zero measurement errors. Pressure
+stabilization failed within the existing 180-second limit. Telemetry recovery
+passed: pending 173->0 in 21.125 seconds, with ack sequence 784 reaching the
+observed maximum. There were no OOM events or swap bytes. PID 365125 and the
+throwaway home no longer exist; the capture service is inactive. Evidence:
+`/root/issue34/no-local-history-provenance-bp9d5e_z`.
+
+At 360/840/890 seconds, rounded live allocations were
+152.470215/157.647697/159.098953 MiB; empty-page residency was
+18.410156/24.125000/64.406250 MiB. Most of the late empty-page increase belonged
+to the eight application Tokio worker heaps. This is distinct from live Mace
+objects and does not establish an unbounded application leak by itself.
+Normal PR CI passed, but memory CI run 41226846622 failed: the component's
+post-warm-up span was 93.3 seconds below its unchanged 150-second minimum;
+the full-Edge RSS/Anon upper95 was 203.842 MiB/h against 8. Neither failure
+is waived.
+
+The narrow 7,169..8,192-byte allocation probe was calibrated with known
+1,024,000 retained bytes followed by zero. The full-process trace nevertheless
+reported one pointer overlap near recovery, and its periodic size/caller maps
+are not an atomic snapshot. Its final totals are attribution clues, not an
+exact whole-heap census. The dominant increasing caller resolves to current
+Mace 0.2.0 `BoxRef::alloc_exact` at binary-relative 0x1dec54f. The separate
+`BoxRef::alloc` caller at 0x1dec982 rises and falls. A parent probe on `alloc`
+identified `Pool::alloc_in`; that does not attribute `alloc_exact` growth to
+the write pool. The linked symbol fingerprint and its rlib depfile distinguish
+current Mace 0.2.0 from the separately linked offline legacy reader 0.1.1.
+
+Short isolated fixtures reproduce a specific bounded owner: after reopening
+512 persisted 7,500-byte values, reading and deleting them leaves 3,877,376
+requested bytes in Mace's shared file-object LRU until eviction or database
+close. A point query inserts blobs directly. An exact-range iterator does not
+cache its own value loads, but tree consolidation still inserts the same
+blobs: the probe observed 512 uncached loads plus 1,280 cached loads and
+512 LRU inserts. At 32 values, below consolidation thresholds, point reads
+retain 242,336 bytes while exact-range reads retain zero. The existing spool
+LRU is capped at 8 MiB per lane; cache fill alone is not proof of unlimited
+growth. Evidence: `/root/issue34/mace-read-retention-gbzxbzl5`,
+`mace-read-callers-acm0xx_i`, `mace-read-retention-kyj23aj8`, and
+`mace-read-retention-pok2bmsf` under the same directory.
+
+An experimental one-byte LRU budget plus range reads removed all those blob
+allocations, leaving only 15,424 bytes of file-reader vectors, but took
+124.821 ms versus 41.533 ms for the point-query arm under tracing. This is
+not a matched production performance result. No cache-size or iterator change
+has been adopted from that experiment, and no dependency source was modified.
+Evidence: `/root/issue34/mace-read-retention-jqnny2cn`.
+
+A separate half-second reproducer includes the exact current
+`src/worker_reclaim.rs` hooks in a one-worker Tokio runtime. A self-waking
+future stays runnable while another thread frees eight 96..320 KiB allocations
+and requests collection. After 3,270,706 polls, park collects remain zero and
+2,015,232 bytes remain charged to the worker heap. Tokio's scheduler maintenance
+uses `park_yield`, which bypasses `on_thread_park`; a generation request alone
+does not cause that callback. Evidence:
+`/root/issue34/busy-worker-5gqo65y6`. This proves a missing collection boundary,
+not that this one defect accounts for the full process slope.
+
+The next candidate checks requested generations after polling application-owned
+HTTP/TLS/H2/H3 transport tasks. It preserves future pinning, uses the same
+per-thread generation and 250 ms minimum as the park hook, and performs no
+clock read when the generation is already current. It adds a separate
+`pollCollects` counter rather than calling a busy poll a park. Allocator options,
+THP, cache budgets, warmup and RSS/Anon gates remain unchanged. The regression
+keeps the task continuously runnable while testing the real cross-thread frees.
+The positive regression passed (1 passed, 0 failed/ignored, 0.01 seconds).
+Removing only the heap handoff failed the same assertion with exactly
+2,015,232 retained bytes instead of zero (exit 101); the original source was
+restored before the remaining affected suite. The first compile attempt hit an
+undersized 4 GiB build cgroup before running tests; the retry uses the existing
+6 GiB compile budget, independently of the unchanged 2 GiB runtime screen.
+After restoration, worker tests passed 7/7, HTTP manager tests 16/16 and HTTP/3
+manager tests 7/7, with zero failures or ignored tests. All-target Clippy passed
+correctness/suspicious checks in 173.459 seconds; five pre-existing advisory
+warnings remain in node/XDP tests. The product build passed in 379.789 seconds;
+SHA-256 `5a0990eed516ad878bb077e63a68f3772715264fc62a8d382549decfb66cc30e`.
+All five product source hashes match the validated Linux files. Independent
+review of the full product delta found no concrete new defect. Matched
+performance and the original 900-second process screen are pending, using
+this exact binary and the existing `e60af37` binary as the performance baseline.
