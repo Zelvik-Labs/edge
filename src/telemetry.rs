@@ -2153,7 +2153,7 @@ async fn replay_lane(api: ApiConfig, core: bool) {
             let client = client.clone();
             let batch_id = batch.batch_id.clone();
             let sequence = batch.sequence;
-            let handle = tokio::spawn(crate::worker_reclaim::with_worker_reclaim(async move {
+            let handle = tokio::spawn(crate::worker_reclaim::with_rpc_worker_reclaim(async move {
                 let mut service = client.telemetry_service();
                 let receipt =
                     tokio::time::timeout(Duration::from_secs(30), service.upload_batch(batch))

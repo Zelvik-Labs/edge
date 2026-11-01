@@ -1,19 +1,15 @@
 name: Issue 34 memory soak
 
-# Staged validation. The stated 5 min / 15 min are SOAK durations only; they
-# exclude the first Rust cold build (and eBPF build), so job wall-clock is
-# longer. rust-cache is reused between jobs. The two jobs still build
-# separately; sharing a build-once artifact is an out-of-scope optimisation for
-# another round.
-#   push / pull_request : automatic fast screens:
-#     short     : Python/procfs/allocator tests + mandatory real Zelvik-Edge
-#                 production-startup smoke (HTTP/1.1 + HTTP/2 TLS, telemetry
-#                 retry/recovery) + 5 min (300 s) bench-defense screen soak.
-#     full-edge : real Zelvik-Edge + fake control plane, same startup smoke,
-#                 then a 15 min (900 s) screen soak with the same real startup,
-#                 node status, one PID, UNAVAILABLE -> durable recovery.
-#     Both reports are screen_only and never close Issue 34.
-#   workflow_dispatch dedicated_hours=0 : fast screens only.
+# Automatic acceptance follows the bounded-state contract clarified 2026-11-01:
+#   push / pull_request : Python/procfs/allocator tests, repeated metric/IP
+#     handoff and restart tests, capacity/refusal/retry tests, worker ownership
+#     regressions, and mandatory real Zelvik-Edge production-startup smoke
+#     (HTTP/1.1 + HTTP/2 TLS, telemetry UNAVAILABLE -> durable recovery).
+#   workflow_dispatch run_slope_screen=true, dedicated_hours=0 : additionally
+#     run the original 5 min component and 15 min full-Edge RSS/Anon screens.
+#     Their thresholds, stabilization and failure semantics remain unchanged;
+#     historical failures remain failures. They do not establish a state bound
+#     or close Issue 34. Durations exclude Rust and eBPF compilation.
 #   workflow_dispatch run_long_component=true : manual 4 h bench-defense
 #                 component soak. Never scheduled.
 #   workflow_dispatch dedicated_hours>=48 : optional dedicated self-hosted
@@ -67,6 +63,11 @@ on:
         required: false
         default: "0"
         type: string
+      run_slope_screen:
+        description: "Run the original 5/15 min RSS slope diagnostics with unchanged thresholds"
+        required: false
+        default: false
+        type: boolean
       run_long_component:
         description: "Manual 4 h bench-defense component soak (never scheduled)"
         required: false
@@ -97,10 +98,9 @@ env:
 
 jobs:
   short:
-    # A 5 min run cannot close a slow-leak issue: the budget is deliberately
-    # looser and the report is marked screen_only. Only the manual long lanes
-    # may claim the 0.5 MiB/h RSS+Anon gate.
-    name: Screen only - component memory gate (not a closure) - hosted ubuntu-22.04
+    # The automatic gate checks state lifetime and real durable recovery.
+    # Optional slope diagnostics below keep their original failure semantics.
+    name: Bounded state and durable recovery - hosted ubuntu-22.04
     if: github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dedicated_hours == '0')
     runs-on: ubuntu-22.04
     timeout-minutes: 60
@@ -229,8 +229,27 @@ jobs:
           if "--warmup-seconds 300" in hosted:
               raise SystemExit("hosted long lane still uses the 5 min warm-up")
 
-          # Automatic fast screens: 300 s / 900 s soak windows and loose
-          # budgets. Both must say screen_only; neither is a leak closure.
+          # State/recovery tests gate automatic runs. Slope diagnostics are an
+          # explicit manual opt-in, retaining the original limits and verdicts.
+          short_steps = doc["jobs"]["short"]["steps"]
+          state_step = next(s for s in short_steps if s.get("name") ==
+                            "Bounded metric state and durable handoff regressions")
+          assert "if" not in state_step, "state acceptance must not be optional"
+          for module in ("rpc::metric_stat_cache::tests", "metrics::unique_ip::tests",
+                         "metrics::aggregator::tests", "metrics::projection::tests",
+                         "worker_reclaim::tests", "telemetry::tests"):
+              need(state_step["run"], module, "bounded state regression module")
+          smoke_step = next(s for s in short_steps if s.get("name") ==
+                            "Full-Edge production-startup smoke (mandatory)")
+          assert "if" not in smoke_step, "startup/recovery smoke must be mandatory"
+          slope_step = next(s for s in short_steps if s.get("name", "").startswith(
+                            "Short screen soak"))
+          for condition in (slope_step["if"], doc["jobs"]["full-edge"]["if"]):
+              assert "github.event_name == 'workflow_dispatch'" in condition, condition
+              assert "github.event.inputs.run_slope_screen == 'true'" in condition, condition
+              assert "||" not in condition, condition
+          # Original 300 s / 900 s diagnostics remain screen_only; neither is
+          # a leak closure. No slope threshold is relaxed.
           need(runs["short"], "--screen-only", "short screen lane")
           need(runs["short"], "--duration 300", "short 300 s window")
           need(runs["short"], "--warmup-seconds 90", "short warm-up")
@@ -456,6 +475,62 @@ jobs:
           done
           grep -F "test result: ok. 7 passed; 0 failed" "$RUNNER_TEMP/rust-tests.log" >/dev/null
 
+      - name: Bounded metric state and durable handoff regressions
+        run: |
+          set -euo pipefail
+          for module in \
+            rpc::metric_stat_cache::tests \
+            metrics::unique_ip::tests \
+            metrics::aggregator::tests \
+            metrics::projection::tests \
+            worker_reclaim::tests \
+            telemetry::tests
+          do
+            cargo test --locked --lib "$module" -- --test-threads=2 \
+              | tee "$RUNNER_TEMP/state-${module//::/-}.log"
+          done
+          python3 -I - "$RUNNER_TEMP" <<'PY'
+          import pathlib, re, sys
+          root = pathlib.Path(sys.argv[1])
+          required = {
+              "rpc::metric_stat_cache::tests": [
+                  "repeated_handoffs_and_restarts_do_not_retain_history_or_reuse_hashes",
+                  "durable_handoff_releases_even_the_current_minute",
+                  "acknowledging_an_older_revision_keeps_newer_data_dirty",
+              ],
+              "metrics::unique_ip::tests": [
+                  "repeated_new_ip_batches_release_all_state_after_durable_append",
+                  "enqueue_refusal_restores_all_rows_and_keeps_the_budget_charged",
+                  "partial_enqueue_restores_only_unsent_identities_then_releases_on_retry",
+              ],
+              "metrics::aggregator::tests": [
+                  "repeated_flush_and_restore_keeps_count_and_charge_constant",
+                  "byte_budget_rejects_a_new_key_whole_entry",
+                  "shrinking_budget_stops_growth_until_release",
+              ],
+              "metrics::projection::tests": [
+                  "varying_request_ids_are_bounded_by_the_entry_cap",
+              ],
+              "worker_reclaim::tests": [
+                  "busy_worker_honors_idle_deadline_without_a_new_generation",
+                  "rpc_completion_releases_late_frees_on_success_error_panic_and_cancel",
+              ],
+              "telemetry::tests": [
+                  "out_of_order_receipts_preserve_rejected_head_across_reopen",
+                  "retryable_head_failure_backs_off_and_retains_the_batch",
+                  "restart_preserves_batch_until_matching_receipt",
+                  "no_age_expiration_and_no_overwrite_at_capacity",
+              ],
+          }
+          for module, names in required.items():
+              log = (root / ("state-" + module.replace("::", "-") + ".log")).read_text()
+              result = re.search(r"test result: ok\. (\d+) passed; 0 failed; 0 ignored;", log)
+              assert result and int(result.group(1)) >= len(names), (module, log)
+              for name in names:
+                  assert f"test {module}::{name} ... ok" in log, (module, name)
+          print("bounded-state, ownership, capacity and retry contracts passed")
+          PY
+
       # Mandatory production-startup check. Unlike bench-defense, this runs the
       # real Zelvik-Edge binary against a fake control plane and asserts the
       # real TLS/HTTP2/SNI/health/telemetry-rejection contract before the
@@ -512,6 +587,7 @@ jobs:
           PY
 
       - name: Short screen soak (5 min, 2 GiB/no-swap cgroup) - NOT a closure
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_slope_screen == 'true'
         run: |
           set -euo pipefail
           # Load window: 300 s of soak, excluding image build/Rust cold build.
@@ -844,9 +920,9 @@ jobs:
   # never substitutes for it. Same strict 0.5 MiB/h RSS+Anon gate as nightly.
   full-edge:
     name: 15 min full-Edge production-startup screen - hosted ubuntu-22.04
-    # Automatic fast screen. 900 s is soak time only; Rust/eBPF builds are
-    # outside it. The manual long tiers are `nightly` and `dedicated`.
-    if: github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dedicated_hours == '0')
+    # Optional diagnostic with the original slope and pressure contract.
+    # 900 s is soak time only; Rust/eBPF builds are outside it.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_slope_screen == 'true' && github.event.inputs.dedicated_hours == '0'
     runs-on: ubuntu-22.04
     timeout-minutes: 90
     steps:

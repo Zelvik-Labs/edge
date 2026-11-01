@@ -1593,6 +1593,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
                 "stopped": worker_reclaim.worker_threads_stopped,
                 "parkCollects": worker_reclaim.park_collects,
                 "pollCollects": worker_reclaim.poll_collects,
+                "rpcCompletionCollects": worker_reclaim.rpc_completion_collects,
                 "rateLimited": worker_reclaim.park_collects_rate_limited,
                 "stopCollects": worker_reclaim.stop_collects,
                 "unhookedPingoraWorkers": worker_reclaim.unhooked_pingora_workers,

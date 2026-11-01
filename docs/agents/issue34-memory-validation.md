@@ -1051,5 +1051,171 @@ node/XDP advisory warnings remain. The removed RPC module lint suppressions
 introduced no new warnings. The product build passed in 373.485 seconds,
 SHA-256 `3dd5e36331be1458770b440f236f7c22e16ab2d7254da6c214c0f45999bb29ee`.
 All five source hashes match the validated Linux files. An independent review
-of this new delta found no concrete correctness regression. Matched performance
-and a repeat of the six-minute recovery diagnostic are pending.
+of this new delta found no concrete correctness regression. Normal CI
+41238819676 passed Test and Check/Clippy. Memory CI 41238819681 failed: full
+Edge RSS/Anon upper95 259.280 MiB/h against 8, stabilization timeout (trailing
+16.35 MiB/min against 8); component valid span 104.4 seconds below 150. No
+failure is waived.
+
+Matched localhost performance against 407be09 used three alternating rounds,
+90,000 requests per arm and zero errors. Median throughput was
+6362.254->6300.858 requests/s (-0.97%), CPU 709.333->716.333 us/request (+0.99%),
+and P99 13.939->14.345 ms (+2.91%). These short comparisons do not establish a
+statistically significant change. Evidence:
+`/root/issue34/short-state-paired-7ib6nya5/report.json`.
+
+The repeat six-minute, no-pressure recovery diagnostic still failed: RSS/Anon
+upper95 342.548/342.537 MiB/h against 8. At 270/310/350 seconds, RSS was
+218.508/266.434/259.305 MiB, size-class-rounded live bytes
+151.567/152.826/153.727 MiB, and empty-page residency
+12.734/47.727/46.957 MiB. In-flight metadata inconsistencies and probe warnings
+were both empty. Telemetry drained 68->0 batches in 19.612 seconds, ACK/max
+sequence 340/340. All 69,249 requests succeeded, including 46,101 during
+measurement; same PID, zero OOM/swap. Independent checks confirmed Edge,
+controller and temporary home were absent afterward. Evidence:
+`/root/issue34/rpc-recovery-owners-qw6ffgf8`.
+
+At 310 seconds, empty pages of at least 64 KiB included 31.109 MiB with remote
+frees not yet collected and 7.789 MiB retired locally. One worker kept exactly
+the same large empty pages at 310/330/350 seconds (about 9.926 MiB overall);
+its handoff bins were 270, 300 and 350 seconds, with no intervening handoff.
+The probe bins are ten seconds wide, so they do not establish the ordering
+within a bin. Allocation-call totals are requested bytes, not live bytes.
+The RPC coverage fix alone has not closed memory validation.
+
+A subsequent subsecond regression isolates the idle deadline: acknowledge the
+current generation, allocate the known eight blocks, free them on another
+thread, advance only the worker's saved timestamp past the existing 30-second
+deadline, and keep the actual executor task continuously runnable. The old
+poll path performed 3,246,298 polls, zero parks and zero new requests but kept
+2,015,232 bytes because equal generations bypassed the idle check. The new
+candidate applies the same existing deadline to polls and parks, with the same
+250 ms minimum interval. It adds no new timer or allocator option. The actual
+executor fixture returned 0 retained bytes, removing only the idle poll check
+retained 2,015,232 bytes and failed, restoring it returned 0 again. Each arm ran
+about half a second with zero parks and zero new requests. The product worker
+suite passed all 9 tests (zero failures/ignored), including the no-generation
+regression. All-target Clippy passed correctness/suspicious in 175.963 seconds.
+The source delta's independent review found no concrete defect. Product build
+passed in 376.961 seconds, SHA-256
+`b070bbed46f9b4558eb66abc5c40f5c15a7949a2b8c402fe7fa23e0793895cb6`.
+Matched performance completed under a shared 200% CPU cgroup limit for both
+arms (earlier pairs had no CPU quota, so their absolute rates are not comparable).
+Each arm completed 90,000 requests with zero errors over three alternating
+rounds. Median throughput 2420.749->2419.170 requests/s (-0.07%), CPU
+539.333->543.667 us/request (+0.80%), P99 59.650->60.291 ms (+1.07%). No
+material regression was observed in this short run; no significance claim.
+THP policy remained `always [madvise] never`. Evidence:
+`/root/issue34/short-state-paired-hfut3y8u/report.json`.
+Six-minute process recovery still failed: RSS/Anon upper95
+192.405/192.397 MiB/h against 8. Telemetry drained 71->0 in 19.633 seconds,
+ACK/max 340/340; all 69,421 requests succeeded, zero OOM/swap, same PID and
+independent cleanup checks passed. At 270/310/350 seconds RSS was
+202.414/212.492/207.645 MiB, live 152.324/153.988/154.132 MiB and empty pages
+5.816/11.727/8.121 MiB. Probe warnings and metadata inconsistencies were empty.
+Evidence: `/root/issue34/idle-recovery-owners-jgkfc8qv`.
+
+The shared CPU quota also changed Edge's auto-selected worker count to two
+(previous recovery run: eight), so this diagnostic cannot attribute the lower
+absolute residency or slope to the code change. The matched performance arms
+both use the same quota and remain comparable to each other. The deadline
+regression is proven; process memory remains unvalidated. Do not advance to a
+new full gate from this result.
+
+A separate 0.7-second real-runtime fixture confirms the final-park boundary:
+after an initial poll handoff, a second task allocates the same eight blocks
+inside the 250 ms floor; it finishes and the worker parks. Remote frees then
+leave 2,015,232 bytes thread-owned for the entire bounded hold. No new requests,
+parks or poll collections occur before the raw inspection task. This is a
+concrete consequence of retaining ownership across a rate-limited final park,
+not evidence of surviving application payload. Evidence:
+`/root/issue34/final-park-fixture.log`.
+
+Unconditionally handing off on every park was rejected after a bounded
+10,000-round allocation/free fixture measured 433-447 ms baseline versus
+531-542 ms with handoff on nearly all 10,000 parks (about 20% slower).
+The next candidate instead relinquishes at RPC driver/upload completion,
+including cancellation and unwinding. HTTP transport tasks retain the same
+rate-limited checks. The inner future is dropped before the completion guard;
+returned live allocations remain valid. `rpcCompletionCollects` reports this
+separate boundary without counting it as a park or timed poll.
+
+An exact-module test covers success, error, panic and cancellation, with frees
+arriving only after the RPC task ended. Positive passes; removing only the
+completion handoff keeps accounting unchanged but fails with 2,015,232 retained
+bytes; restoring passes all 10 worker tests. The first standalone compilation
+selected abort-profile dependencies and failed before running; the driver now
+uses existing, explicitly link-verified unwind libraries. No product setting
+was changed for that repair. Independent review of the completion delta found
+no concrete defect. Product worker 10 and telemetry 38 tests passed (zero
+failures or ignored tests); all-target Clippy passed correctness/suspicious in
+175.825 seconds. Product build passed in 381.105 seconds, SHA-256
+`b887122073923ef2c433c2fc53d4725098aae476061dca2d63724cabdd59fa83`.
+Matched performance completed with 90,000 requests per arm and zero errors
+across three alternating rounds. Median throughput was
+2443.901->2418.585 requests/s (-1.04%), CPU 537.667->545.333 us/request (+1.43%),
+and P99 60.583->60.850 ms (+0.44%). No material regression was observed in this
+short run; no significance claim. THP stayed `always [madvise] never`.
+Evidence: `/root/issue34/short-state-paired-81pshgre/report.json`.
+Both arms inherit the same CPU quota and auto-selected worker count; the
+earlier eight-worker run is not a causal baseline. The six-minute recovery
+diagnostic still failed the old slope screen: RSS/Anon upper95
+234.835/234.827 MiB/h against 8. At 115/270/310/350 seconds, RSS was
+190.824/204.480/207.227/210.703 MiB, rounded live bytes
+151.212/152.275/152.472/153.208 MiB, and empty-page residency
+3.887/6.945/8.945/8.773 MiB. RPC completion collections reached 1,453;
+no probe warnings or in-flight metadata inconsistencies occurred. Telemetry
+drained 71->0 batches in 19.661 seconds, ACK/max 340/340. All 69,317 requests
+succeeded, zero OOM/swap, same PID. Independent checks confirmed both processes
+and the temporary home were removed. Evidence:
+`/root/issue34/rpc-completion-owners-kbwnwh_c`.
+
+### Acceptance clarification — 2026-11-01
+
+The user explicitly clarified that the product goal is bounded state without
+uncontrolled sustained growth, rather than minimizing every short-window RSS
+slope. Fixed allocator/container caches may remain for reuse. The previous
+slope failures above remain recorded as measured; they do not by themselves
+establish an unbounded object leak or justify more allocator tuning. No more
+hours-long tests or speculative reclamation changes are required. Acceptance
+must instead connect repeated fixed-dimension cycles to state bounds, durable
+handoff/retry correctness, and matching performance. Existing correctness CI
+remains required; any change to the automatic memory job must explicitly
+implement this revised contract rather than relabeling failed reports as pass.
+The metric ownership evidence includes 240 handoff/restart cycles with zero
+retained rows, exact-IP durable enqueue returning tracked state to zero, and
+no-input flushes producing no rows. These checks address the clarified goal;
+short process snapshots alone cannot prove every heap owner is bounded.
+
+Automatic CI now explicitly runs six state-lifecycle suites (metric checkpoint,
+exact IP, built-in aggregator, custom projection, worker ownership and telemetry),
+requiring named regressions to pass with nonzero test counts and zero ignored
+tests. The real Edge HTTP/1.1 + HTTP/2/TLS/startup and UNAVAILABLE -> durable
+recovery smoke remains mandatory. The existing 300/900-second slope diagnostics
+are retained under explicit `workflow_dispatch run_slope_screen=true`; their
+commands, thresholds, stabilization and failure propagation are unchanged. The
+manual 4h/48h lanes are unchanged and were not run. This is a revised acceptance
+contract, not a pass for the earlier failed slope reports.
+
+The exact final product test executable passed 81 tests: checkpoint 11, exact IP
+7, aggregator 12, projection 3, worker 10, telemetry 38; zero failures or ignored
+tests. The named-test log validator passed, failed when a required completion
+regression was marked ignored, and passed again after restoration. The real
+candidate smoke passed in 21.286 seconds; its retained backlog went 4->0 in
+9.882 seconds, 11 durable writes, zero storage errors. HTTP/1.1 and HTTP/2 POST
+payloads, CA/SNI/ALPN, node status and terminal rejection all passed, with one
+PID. The initial local summary reader treated the nested report checks object
+as a list and failed after the successful smoke; reading the original
+`checks.checks` recovered the result without rerunning load. Independent checks
+confirmed the Edge process and temporary home were removed. Evidence:
+`/root/issue34/bounded-acceptance-mvgr81td/acceptance.json` and
+`smoke-report.json`. The workflow delta passed actionlint, its lane validator,
+and independent review with no concrete defect. Correctness CI on the final
+commit is still required.
+
+Release metadata is advanced to Edge 26.11.1: the read-only license catalog
+query on 2026-11-01 found latest Edge 26.10.4.9 and no existing 26.11 bucket
+version. API/Gateway 26.10.5.1 is already released; no backend release is repeated.
+This metadata change does not alter the validated product behavior. Formal
+packages still come only from tag-driven Actions, and no production deployment
+is included.
