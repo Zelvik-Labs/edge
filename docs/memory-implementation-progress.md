@@ -19,7 +19,7 @@
 | `b18ca2e` | L1 正文缓存估算字节进入 governor gauge 与 RSS 归因，node status 暴露估算/预算；不改 resident ledger | L1 归因用例、`clippy --lib` 通过；把 gauge 从 tracked RSS 移除的负向对照失败（64MiB 计为 0） | 只改进归因；L1 仍是固定 512MiB 默认，未与 governor cache budget 对账，未做 Linux RSS 验证 |
 | `1261361` | L1 初始预算改为 `min(512MiB, governor cache budget)`；大机器不放大，小机器不超过整个 cache 预算 | L1 预算用例、`clippy --lib` 通过；总是返回 512MiB 的负向对照使 128MiB cache budget 用例失败 | 仍不是动态 resize；运行时 cache budget 变化不会自动缩小 L1，Linux RSS/压力验证未做 |
 
-所有本机 Rust 测试通过工作区 `scripts/local-rust.sh`、mbx、单编译槽运行。未清缓存。未发布、部署或修改 tag。
+所有本机 Rust 测试通过工作区 `docs/scripts/workspace/local-rust.sh`、mbx、单编译槽运行。未清缓存。未发布、部署或修改 tag。
 
 验证环境已增加专用 Ubuntu 24 主机 `zelvik-dev-43`（8 核 / 15 GiB），源码位于 `/root/zelvik-dev/edge`，复用 debug 缓存。当前低优先级准入工作树：Linux 全量库测试 **1137 通过 / 2 手动 UDP 用例忽略**；macOS 受影响 cache 47、governor 76 通过，`clippy --lib -D clippy::correctness -D clippy::suspicious` 通过。Linux `memory_governance` 10、`oom_audit` 11、`memory_reclaim` 4、`config_sync_memory` 3 在新准入切片上重新通过。没有构建 release 或部署生产。
 

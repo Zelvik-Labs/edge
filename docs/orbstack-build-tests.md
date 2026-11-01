@@ -133,7 +133,7 @@ mbx 管理的符号链接通过 `mbx clean <workspace>` 处理，普通 target
 
 ## 输出与验证范围
 
-日志默认保存在工作区外的 `../artifacts/edge-orb-tests/<时间>-<架构>/`，
+日志默认保存在工作区外的 `.local/test-results/orbstack/<时间>-<架构>/`，
 可通过 `ZELVIK_EDGE_TEST_RESULTS` 指定其他目录。包含各阶段日志、
 清理日志、mbx 诊断/统计、GC JSON、eBPF 哈希和最终退出状态。
 `check` 阶段清理 target 后再运行一次，便于观察共享编译对象的实际复用。

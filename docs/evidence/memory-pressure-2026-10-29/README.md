@@ -18,7 +18,7 @@
 
 复现需要专用 Linux cgroup v2 + systemd 主机（至少六个 CPU 用于 native CPU 隔离）。
 用同一 Cargo.lock/fixture/编译参数分别构建基线与候选；编译参数见 metadata，
-Rust 本机验证仍走工作区 `scripts/local-rust.sh`。
+Rust 本机验证仍走工作区 `docs/scripts/workspace/local-rust.sh`。
 
 ```sh
 python -I scripts/perf/run_memory_pressure.py \

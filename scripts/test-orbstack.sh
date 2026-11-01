@@ -15,7 +15,7 @@ source "$ROOT/scripts/orbstack-protocol.sh"
 KEEP_CACHE="${ZELVIK_EDGE_TEST_KEEP_CACHE:-0}"
 case "$KEEP_CACHE" in 0|1) ;; *) printf 'ZELVIK_EDGE_TEST_KEEP_CACHE must be 0 or 1\n' >&2; exit 2 ;; esac
 
-RESULTS="${ZELVIK_EDGE_TEST_RESULTS:-$ROOT/../artifacts/edge-orb-tests/$(date +%Y%m%d-%H%M%S)-$ARCH}"
+RESULTS="${ZELVIK_EDGE_TEST_RESULTS:-$ROOT/.local/test-results/orbstack/$(date +%Y%m%d-%H%M%S)-$ARCH}"
 mkdir -p "$RESULTS"
 RESULTS="$(cd "$RESULTS" && pwd)"
 TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/zelvik-edge-orb-test.XXXXXX")"
