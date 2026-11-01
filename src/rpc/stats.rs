@@ -3,9 +3,12 @@ use crate::config::ConfigStore;
 use crate::metrics::{MetricConsumer, ServerMetrics, ServerStatusSnapshot};
 use crate::pb;
 use crate::rpc::client::SharedRpcClient;
-use chrono::{Datelike, Duration as ChronoDuration, Timelike};
+use crate::rpc::metric_stat_cache::{
+    DirtySnapshotRow, MetricStatReporterState, MetricValuesCacheStats, SnapshotKey,
+};
+use chrono::{DateTime, FixedOffset, Timelike};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::LazyLock as Lazy;
 use std::sync::atomic::{AtomicI64, AtomicU8, Ordering};
 use std::sync::{Arc, Weak};
@@ -202,7 +205,6 @@ struct BandwidthWindowStat {
     origin_total_bytes: u64,
     origin_avg_bytes: u64,
     origin_avg_bits: u64,
-    count_ips: u64,
 }
 
 /// A fully accumulated window that could not enter the durable queue yet.
@@ -509,7 +511,6 @@ fn bandwidth_stat_pb(
         origin_total_bytes: stat.origin_total_bytes as i64,
         origin_avg_bytes: stat.origin_avg_bytes as i64,
         origin_avg_bits: stat.origin_avg_bits as i64,
-        count_i_ps: crate::metrics::daily::UNIQUE_IP_TRACKER.count(stat.server_id, &stat.day),
         node_region_id,
         ..Default::default()
     }
@@ -569,28 +570,72 @@ fn drop_pending_window_gap(window: &PendingWindow) -> pb::TelemetryBatch {
     }
 }
 
-fn window_batch(window: &PendingWindow, complete: bool) -> pb::TelemetryBatch {
-    let request = pb::UploadServerBandwidthStatsRequest {
-        server_bandwidth_stats: window.stats.clone(),
-    };
-    let mut batch = pb::TelemetryBatch {
-        kind: "bandwidth".into(),
-        payload: prost::Message::encode_to_vec(&request),
-        occurred_at: crate::utils::time::now_timestamp(),
-        window_start: window.window_start,
-        window_complete: complete,
-        error_counts: window.error_counts.clone(),
-        segment_started_at: window.segment_started_at,
-        ..Default::default()
-    };
-    if !window.source_boot.is_empty() {
-        batch.source_boot_id = window.source_boot.clone();
+/// Split one closed window by server. The API validates every row in a batch,
+/// so a single server with a stale assignment must not reject unrelated
+/// servers' billable rows. The window key and event attribution stay unchanged;
+/// only the wire grouping is narrowed.
+fn window_batches(window: &PendingWindow, complete: bool) -> Vec<pb::TelemetryBatch> {
+    let mut by_server: BTreeMap<i64, Vec<pb::ServerBandwidthStat>> = BTreeMap::new();
+    for stat in &window.stats {
+        by_server
+            .entry(stat.server_id)
+            .or_default()
+            .push(stat.clone());
     }
-    batch
+    by_server
+        .into_iter()
+        .map(|(server_id, stats)| {
+            let request = pb::UploadServerBandwidthStatsRequest {
+                server_bandwidth_stats: stats,
+            };
+            let mut batch = pb::TelemetryBatch {
+                kind: "bandwidth".into(),
+                payload: prost::Message::encode_to_vec(&request),
+                occurred_at: crate::utils::time::now_timestamp(),
+                window_start: window.window_start,
+                window_complete: complete,
+                error_counts: window
+                    .error_counts
+                    .get(&server_id)
+                    .copied()
+                    .map(|count| [(server_id, count)].into_iter().collect())
+                    .unwrap_or_default(),
+                segment_started_at: window.segment_started_at,
+                ..Default::default()
+            };
+            if !window.source_boot.is_empty() {
+                batch.source_boot_id = window.source_boot.clone();
+            }
+            batch
+        })
+        .collect()
 }
 
-async fn enqueue_window_batch(window: &PendingWindow, complete: bool) -> anyhow::Result<()> {
-    crate::telemetry::enqueue_prepared(window_batch(window, complete)).await
+async fn enqueue_window_batches(window: &PendingWindow, complete: bool) -> anyhow::Result<()> {
+    for batch in window_batches(window, complete) {
+        crate::telemetry::enqueue_prepared(batch).await?;
+    }
+    Ok(())
+}
+
+/// Durable handoff for a split window: enqueue every server batch, then commit
+/// the next backlog state with the last one. A crash before the state commit
+/// replays already-enqueued server batches idempotently.
+async fn enqueue_window_batches_with_state(
+    window: &PendingWindow,
+    complete: bool,
+    state_key: &str,
+    next_state: Vec<u8>,
+) -> anyhow::Result<()> {
+    let mut batches = window_batches(window, complete);
+    let Some(last) = batches.pop() else {
+        crate::telemetry::save_state(state_key, next_state).await?;
+        return Ok(());
+    };
+    for batch in batches {
+        crate::telemetry::enqueue_prepared(batch).await?;
+    }
+    crate::telemetry::enqueue_prepared_with_state(last, state_key, next_state).await
 }
 
 /// A window that closed while the process was down keeps partial coverage:
@@ -632,7 +677,7 @@ async fn flush_stale_window(
         *current_window = String::new();
         return;
     }
-    if let Err(e) = enqueue_window_batch(&window, false).await {
+    if let Err(e) = enqueue_window_batches(&window, false).await {
         warn!(
             "stale bandwidth window could not reach the durable queue: {}",
             e
@@ -713,7 +758,6 @@ fn snapshot_delta(
         count_websocket_connections: delta(|s| s.count_websocket_connections),
         origin_bytes_sent: delta(|s| s.origin_bytes_sent),
         origin_bytes_received: delta(|s| s.origin_bytes_received),
-        count_ips: current.count_ips,
     }
 }
 
@@ -802,8 +846,9 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
                         break;
                     }
                 };
-                if let Err(error) = crate::telemetry::enqueue_prepared_with_state(
-                    window_batch(window, true),
+                if let Err(error) = enqueue_window_batches_with_state(
+                    window,
+                    true,
                     BANDWIDTH_STATE_STORAGE_KEY,
                     next_state,
                 )
@@ -889,7 +934,6 @@ pub async fn start_bandwidth_reporter(config_store: ConfigStore) {
             stat.origin_total_bytes += origin_total_bytes;
             stat.origin_avg_bytes = stat.origin_total_bytes / BANDWIDTH_REPORT_INTERVAL_SECS;
             stat.origin_avg_bits = (stat.origin_total_bytes * 8) / BANDWIDTH_REPORT_INTERVAL_SECS;
-            stat.count_ips = stat.count_ips.max(delta.count_ips);
         }
         last_snapshots.retain(|_, baseline| baseline.metrics.strong_count() > 0);
         persist_bandwidth_state(
@@ -991,9 +1035,6 @@ pub async fn start_daily_stat_reporter(config_store: ConfigStore) {
         if current_window.is_empty() {
             current_window = window_key.clone();
         } else if current_window != window_key {
-            let min_day = (now - ChronoDuration::days(2)).format("%Y%m%d").to_string();
-            crate::metrics::daily::UNIQUE_IP_TRACKER.cleanup_before(&min_day);
-
             let mut stats: Vec<_> = std::mem::take(&mut pending_stats);
             stats.extend(window_stats.drain().map(|(_, mut stat)| {
                 stat.cached_bytes = stat.cached_bytes.min(stat.bytes);
@@ -1135,318 +1176,456 @@ pub async fn start_daily_stat_reporter(config_store: ConfigStore) {
     }
 }
 
-fn get_period_time(period: i32, unit: &str) -> String {
-    let now = crate::utils::time::now_local();
-    match unit.to_lowercase().as_str() {
-        "month" => now.format("%Y%m").to_string(),
-        "week" => {
-            let week = now.iso_week();
-            format!("{:04}{:02}", week.year(), week.week())
-        }
-        "day" => now.format("%Y%m%d").to_string(),
-        "hour" => {
-            if period > 1 {
-                let hour = (now.hour() as i32 / period) * period;
-                format!("{}{:02}", now.format("%Y%m%d"), hour)
-            } else {
-                now.format("%Y%m%d%H").to_string()
-            }
-        }
-        "minute" => {
-            if period > 1 {
-                let minute = (now.minute() as i32 / period) * period;
-                format!("{}{:02}", now.format("%Y%m%d%H"), minute)
-            } else {
-                now.format("%Y%m%d%H%M").to_string()
-            }
-        }
-        _ => now.format("%Y%m%d%H%M").to_string(),
+// Cumulative snapshot rows carry only the frozen item's selected value; the
+// old incremental sample type is gone.
+
+/// One request plus the exact snapshot identities it carries, so a successful
+/// durable append can advance only those rows' uploaded revisions.
+struct SnapshotChunk {
+    request: pb::UploadMetricStatsRequest,
+    rows: Vec<(SnapshotKey, u64)>,
+}
+
+/// Enqueue seam. The reporter and its tests both drive the same
+/// build/split/retry logic; only the durable sink differs.
+trait MetricUploadSink {
+    async fn send(&mut self, request: &pb::UploadMetricStatsRequest) -> anyhow::Result<()>;
+}
+
+struct TelemetryMetricUploadSink;
+
+impl MetricUploadSink for TelemetryMetricUploadSink {
+    async fn send(&mut self, request: &pb::UploadMetricStatsRequest) -> anyhow::Result<()> {
+        crate::telemetry::enqueue("metric_stat", request, 0, false).await
     }
 }
 
-fn metric_item_category(item: &crate::config_models::MetricItemConfig) -> String {
-    crate::metrics::normalize_metric_category(&item.category)
+/// Wire budget for the serialized `UploadMetricStatsRequest` payload.
+///
+/// Telemetry caps the finished `TelemetryBatch` at its private
+/// `MAX_BATCH_ENCODED_BYTES` (3/4 of `RPC_NODE_STREAM_MESSAGE_BYTES`). Until
+/// telemetry exposes its per-kind budget, this mirrors both the cap and the
+/// worst-case envelope measurement (`encoded_len`, no encoding) so a chunk that
+/// fits here also fits the spool's check.
+fn metric_stat_payload_budget() -> usize {
+    const MAX_BATCH_ENCODED_BYTES: usize =
+        crate::rpc::client::RPC_NODE_STREAM_MESSAGE_BYTES / 4 * 3;
+    const PAYLOAD_FIELD_OVERHEAD: usize = 1 + 5;
+
+    let binding = crate::telemetry::binding();
+    let envelope = pb::TelemetryBatch {
+        schema_version: 1,
+        batch_id: format!("{}:{:020}", "0".repeat(36), u64::MAX),
+        boot_id: "0".repeat(36),
+        sequence: u64::MAX,
+        kind: "metric_stat".into(),
+        occurred_at: i64::MIN,
+        window_start: i64::MIN,
+        source_boot_id: "0".repeat(36),
+        assignment_version: binding.assignment_version,
+        route_version: binding.route_version,
+        ..Default::default()
+    };
+    MAX_BATCH_ENCODED_BYTES
+        .saturating_sub(prost::Message::encoded_len(&envelope))
+        .saturating_sub(PAYLOAD_FIELD_OVERHEAD)
 }
 
-fn sample_matches_metric_category(
-    sample: &(
-        crate::metrics::aggregator::AggregationKey,
-        crate::metrics::aggregator::AggregatedValue,
-    ),
-    category: &str,
-) -> bool {
-    sample.0.category.as_ref() == category
-}
-
-fn metric_sample_value(
-    item_value: &serde_json::Value,
-    value: &crate::metrics::aggregator::AggregatedRequestValue,
-) -> f32 {
-    match item_value.as_str() {
-        Some("${bytesSent}") | Some("${countTrafficOut}") => value.bytes_sent as f32,
-        Some("${countTrafficIn}") => value.bytes_received as f32,
-        Some("${countRequest}") => value.count as f32,
-        Some("${countConnection}") => value.count as f32,
-        Some("${countAttackRequest}") => value.count_attack as f32,
-        _ => value.count as f32,
+fn snapshot_window_end(period_end: i64, window_start: i64, last_event_millis: i64) -> i64 {
+    if last_event_millis <= 0 {
+        return period_end.max(window_start);
     }
+    let actual = (last_event_millis / 1000).saturating_add(1);
+    period_end.min(actual).max(window_start.saturating_add(1))
 }
 
-fn build_metric_uploads_for_item(
-    item: &crate::config_models::MetricItemConfig,
-    time_key: &str,
-    samples: &[(
-        crate::metrics::aggregator::AggregationKey,
-        crate::metrics::aggregator::AggregatedValue,
-    )],
-) -> Vec<pb::UploadMetricStatsRequest> {
-    let item_category = metric_item_category(item);
-    let mut grouped: HashMap<(i64, Vec<String>), (i64, f32)> = HashMap::new();
-
-    for (key, value) in samples
-        .iter()
-        .filter(|sample| sample_matches_metric_category(sample, &item_category))
-    {
-        if value.request_samples.is_empty() {
-            let aggregate_value = crate::metrics::aggregator::AggregatedRequestValue {
-                count: value.count,
-                count_attack: value.count_attack,
-                bytes_sent: value.bytes_sent,
-                bytes_received: value.bytes_received,
-                attack_bytes: value.attack_bytes,
-            };
-            let keys = item
-                .keys
-                .iter()
-                .map(|configured_key| key.resolve_metric_key(configured_key))
-                .collect::<Vec<_>>();
-            let entry = grouped.entry((key.server_id, keys)).or_default();
-            entry.0 += aggregate_value.count;
-            entry.1 += metric_sample_value(&item.value, &aggregate_value);
+/// Turn one drained plan row into a cumulative delta. The plan's frozen item
+/// definition chooses the uploaded value; a retired plan cannot be reinterpreted
+/// by a newer configuration.
+fn collect_plan_deltas(
+    plans: &[std::sync::Arc<crate::metrics::plan::MetricCollectionPlan>],
+) -> (Vec<crate::rpc::metric_stat_cache::SnapshotDelta>, usize) {
+    let mut deltas = Vec::new();
+    let mut skipped = 0usize;
+    for plan in plans {
+        let Some(aggregator) = plan.aggregator() else {
             continue;
-        }
-
-        for (request_attrs, request_value) in &value.request_samples {
-            let keys = item
-                .keys
-                .iter()
-                .map(|configured_key| {
-                    key.resolve_metric_key_with_attrs(configured_key, request_attrs.as_ref())
-                })
-                .collect::<Vec<_>>();
-            let entry = grouped.entry((key.server_id, keys)).or_default();
-            entry.0 += request_value.count;
-            entry.1 += metric_sample_value(&item.value, request_value);
-        }
-    }
-
-    let mut by_server: HashMap<i64, Vec<(Vec<String>, i64, f32)>> = HashMap::new();
-    for ((server_id, keys), (count, value)) in grouped {
-        by_server
-            .entry(server_id)
-            .or_default()
-            .push((keys, count, value));
-    }
-
-    let mut requests = Vec::with_capacity(by_server.len());
-    for (server_id, mut rows) in by_server {
-        rows.sort_by(|a, b| a.0.cmp(&b.0));
-
-        let mut metric_stats = Vec::with_capacity(rows.len());
-        let mut count = 0i64;
-        let mut total = 0f32;
-
-        for (keys, row_count, value) in rows {
-            count += row_count;
-            total += value;
-
-            // GO ALGORITHM: hashString(serverId + "@" + keys.join("$EDGE$") + "@" + time + "@" + version + "@" + itemId)
-            let keys_data = keys.join("$EDGE$");
-            let hash_raw = format!(
-                "{}@{}@{}@{}@{}",
-                server_id, keys_data, time_key, item.version, item.id
-            );
-            let hash = crate::utils::fnv_hash64(&hash_raw).to_string();
-
-            metric_stats.push(pb::UploadingMetricStat {
-                id: 0,
-                hash,
-                keys,
-                value,
+        };
+        let drain = aggregator.drain();
+        for (key, entry) in drain.rows {
+            let Some(item) = plan.item(key.item_id, key.version) else {
+                crate::metrics::projection::METRIC_PROJECTION_POOL.refund(entry.charge);
+                skipped += 1;
+                continue;
+            };
+            deltas.push(crate::rpc::metric_stat_cache::SnapshotDelta {
+                key: SnapshotKey {
+                    item_id: key.item_id,
+                    version: key.version,
+                    time_key: key.time_key.to_string(),
+                    window_start: key.window_start,
+                    period_end: key.window_end,
+                    server_id: key.server_id,
+                    keys: key.keys.to_vec(),
+                },
+                window_end: snapshot_window_end(
+                    key.window_end,
+                    key.window_start,
+                    entry.last_event_time_millis,
+                ),
+                value: item.value.select(&entry.counters),
+                charge: entry.charge,
             });
         }
+    }
+    (deltas, skipped)
+}
 
-        requests.push(pb::UploadMetricStatsRequest {
-            server_id,
-            time: time_key.to_string(),
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct SnapshotHeader {
+    server_id: i64,
+    item_id: i64,
+    version: i32,
+    time_key: String,
+    window_start: i64,
+    /// One request-level revision must not cover rows with different row
+    /// revisions: a delayed group could then arrive with the same revision as a
+    /// newer value and ReplacingMergeTree would choose arbitrarily. Rows with
+    /// different revisions are separate wire groups.
+    revision: u64,
+}
+
+/// Group dirty rows by wire header. Rows keep their own revision for checkpoint
+/// bookkeeping; the request carries the maximum revision in the group, which is
+/// safe because every payload is a full cumulative value at that identity.
+fn build_snapshot_chunks(
+    rows: Vec<DirtySnapshotRow>,
+    epoch: &str,
+    budget: usize,
+) -> (Vec<SnapshotChunk>, Vec<SnapshotChunk>) {
+    let mut grouped: BTreeMap<SnapshotHeader, Vec<DirtySnapshotRow>> = BTreeMap::new();
+    for row in rows {
+        grouped
+            .entry(SnapshotHeader {
+                server_id: row.key.server_id,
+                item_id: row.key.item_id,
+                version: row.key.version,
+                time_key: row.key.time_key.clone(),
+                window_start: row.key.window_start,
+                revision: row.revision,
+            })
+            .or_default()
+            .push(row);
+    }
+
+    let mut chunks = Vec::new();
+    let mut quarantine = Vec::new();
+    for (header, group) in grouped {
+        let window_end = group.iter().map(|row| row.window_end).max().unwrap_or(0);
+        let request_revision = header.revision;
+        let count = group.len() as i64;
+        let total = group.iter().map(|row| row.value).sum::<f32>();
+        let mut records = Vec::with_capacity(group.len());
+        for row in &group {
+            let hash = row.key.hash(epoch, row.incarnation);
+            records.push((
+                pb::UploadingMetricStat {
+                    id: 0,
+                    hash,
+                    keys: row.key.keys.clone(),
+                    value: row.value,
+                },
+                (row.key.clone(), row.revision),
+            ));
+        }
+
+        let make_request = |stats: Vec<pb::UploadingMetricStat>| pb::UploadMetricStatsRequest {
+            server_id: header.server_id,
+            time: header.time_key.clone(),
             count,
             total,
-            version: item.version,
-            item_id: item.id,
-            metric_stats,
+            version: header.version,
+            item_id: header.item_id,
+            metric_stats: stats,
             keep_keys: Vec::new(),
-        });
-    }
-
-    requests
-}
-
-const METRIC_PENDING_MAX_REQUESTS: usize = 4_096;
-const METRIC_PENDING_MAX_BYTES: u64 = 16 * 1024 * 1024;
-
-/// Metric uploads that failed to persist, retained in memory until the spool
-/// accepts them. The queue is bounded: metric rows are analytics and may be
-/// dropped under sustained local storage failure, but every drop is counted and
-/// reported through the telemetry gap path.
-#[derive(Default)]
-struct MetricPendingUploads {
-    requests: Vec<pb::UploadMetricStatsRequest>,
-    bytes: u64,
-    dropped_rows: u64,
-}
-
-impl MetricPendingUploads {
-    fn estimated_bytes(request: &pb::UploadMetricStatsRequest) -> u64 {
-        prost::Message::encoded_len(request) as u64
-            + std::mem::size_of::<pb::UploadMetricStatsRequest>() as u64
-    }
-
-    fn push(&mut self, request: pb::UploadMetricStatsRequest) {
-        let bytes = Self::estimated_bytes(&request);
-        if self.requests.len() >= METRIC_PENDING_MAX_REQUESTS
-            || self.bytes.saturating_add(bytes) > METRIC_PENDING_MAX_BYTES
-        {
-            self.dropped_rows += request.metric_stats.len().max(1) as u64;
-            return;
+            revision: request_revision,
+            window_start: header.window_start,
+            window_end,
+        };
+        let header_cost = prost::Message::encoded_len(&make_request(Vec::new()));
+        let mut current = Vec::new();
+        let mut current_rows = Vec::new();
+        let mut used = header_cost;
+        for (stat, identity) in records {
+            let cost = prost::encoding::message::encoded_len(7, &stat);
+            if header_cost.saturating_add(cost) > budget {
+                quarantine.push(SnapshotChunk {
+                    request: make_request(vec![stat]),
+                    rows: vec![identity],
+                });
+                continue;
+            }
+            if used.saturating_add(cost) > budget && !current.is_empty() {
+                chunks.push(SnapshotChunk {
+                    request: make_request(std::mem::take(&mut current)),
+                    rows: std::mem::take(&mut current_rows),
+                });
+                used = header_cost;
+            }
+            used = used.saturating_add(cost);
+            current.push(stat);
+            current_rows.push(identity);
         }
-        self.bytes = self.bytes.saturating_add(bytes);
-        self.requests.push(request);
+        if !current.is_empty() {
+            chunks.push(SnapshotChunk {
+                request: make_request(current),
+                rows: current_rows,
+            });
+        }
     }
-
-    fn record_lost(&mut self, rows: usize) {
-        self.dropped_rows += rows as u64;
-    }
-
-    fn drain(&mut self) -> std::vec::IntoIter<pb::UploadMetricStatsRequest> {
-        self.bytes = 0;
-        std::mem::take(&mut self.requests).into_iter()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.requests.is_empty()
-    }
+    (chunks, quarantine)
 }
 
-pub async fn start_metric_stat_reporter(config_store: Arc<crate::config::ConfigStore>) {
-    let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
-    let mut pending = MetricPendingUploads::default();
-    let mut reported_drops = 0u64;
+#[derive(Default)]
+struct MetricStatTickOutcome {
+    merged: usize,
+    dropped: usize,
+    pruned: usize,
+    enqueued: usize,
+    quarantined: usize,
+    deferred: usize,
+}
 
-    loop {
-        interval.tick().await;
-        if pending.dropped_rows > reported_drops {
+async fn quarantine_snapshot_chunk(
+    state: &mut MetricStatReporterState,
+    chunk: SnapshotChunk,
+) -> bool {
+    match state.quarantine(&chunk.request).await {
+        Ok(bytes) => {
             crate::telemetry::record_gap(
                 "metric_stat",
                 crate::utils::time::now_timestamp(),
-                "metric_pending_capacity",
+                "metric_stat_record_over_batch_cap",
             );
-            reported_drops = pending.dropped_rows;
+            warn!(
+                server_id = chunk.request.server_id,
+                item_id = chunk.request.item_id,
+                bytes,
+                dir = %state.quarantine_dir().display(),
+                "metric stat snapshot record durably quarantined locally"
+            );
+            state.mark_uploaded(&chunk.rows);
+            true
         }
+        Err(e) => {
+            state.record_retry_refusal();
+            warn!(
+                server_id = chunk.request.server_id,
+                item_id = chunk.request.item_id,
+                "local metric stat quarantine refused the snapshot record; row retained dirty: {e}"
+            );
+            false
+        }
+    }
+}
 
-        // Retry older requests first. A failure stops the retry loop and keeps
-        // the failed request plus everything behind it in the bounded queue;
-        // nothing that already reached the spool is replayed.
-        let mut retry_failed = false;
-        for request in pending.drain() {
-            if retry_failed {
-                pending.push(request);
-                continue;
+/// Reporter tick: drain every plan generation into the cumulative snapshot
+/// store, fsync the checkpoint, then upload dirty rows. A checkpoint failure or
+/// a spool failure leaves rows dirty and observable; no accepted projection is
+/// dropped.
+async fn run_metric_stat_tick<S: MetricUploadSink>(
+    state: &mut MetricStatReporterState,
+    _metric_items: &[crate::config_models::MetricItemConfig],
+    plans: &[std::sync::Arc<crate::metrics::plan::MetricCollectionPlan>],
+    _now: &DateTime<FixedOffset>,
+    sink: &mut S,
+) -> MetricStatTickOutcome {
+    let (deltas, skipped) = collect_plan_deltas(plans);
+    let merge = state.merge(deltas);
+    let mut outcome = MetricStatTickOutcome {
+        merged: merge.created.saturating_add(merge.updated),
+        dropped: merge.dropped.saturating_add(skipped),
+        ..Default::default()
+    };
+    let _ = merge.released_bytes;
+
+    // Checkpoint before upload: a crash after a successful append but before
+    // the uploaded marker is a same-revision replay, never new data. A crash
+    // before this checkpoint can lose projections accepted since the previous
+    // checkpoint (they are in memory only); it never sends a partial snapshot.
+    state.set_backpressured(false);
+    if let Err(e) = state.persist_checkpoint().await {
+        warn!(
+            checkpoint = %state.checkpoint_path().display(),
+            "metric snapshot checkpoint refused; no upload attempted and dirty rows retained: {e}"
+        );
+        state.set_backpressured(true);
+        outcome.deferred = state.dirty_len();
+        state.publish_stats();
+        return outcome;
+    }
+
+    const SNAPSHOT_UPLOAD_PAGE: usize = 1024;
+    let budget = metric_stat_payload_budget();
+    let mut upload_failed = false;
+    loop {
+        let page = state.dirty_rows_page(
+            SNAPSHOT_UPLOAD_PAGE,
+            crate::rpc::metric_stat_cache::DEFAULT_DIRTY_PAGE_BYTES,
+        );
+        if page.is_empty() {
+            break;
+        }
+        let dirty_before = state.dirty_len();
+        let (chunks, quarantine) = build_snapshot_chunks(page, state.epoch(), budget);
+        for chunk in quarantine {
+            if quarantine_snapshot_chunk(state, chunk).await {
+                outcome.quarantined += 1;
+            } else {
+                outcome.deferred += 1;
+                upload_failed = true;
             }
-            match crate::telemetry::enqueue_metric_stat(request).await {
-                Ok(()) => {}
-                Err(error) => {
-                    let source = error.to_string();
-                    let lost = error.lost();
-                    let unsent = error.into_unsent();
-                    warn!(
-                        server_id = unsent.server_id,
-                        item_id = unsent.item_id,
-                        unsent_rows = unsent.metric_stats.len(),
-                        lost,
-                        error = %source,
-                        "failed to persist pending metric stats; retained"
-                    );
-                    if lost > 0 {
-                        pending.record_lost(lost);
-                    }
-                    if !unsent.metric_stats.is_empty() {
-                        pending.push(unsent);
-                    }
-                    retry_failed = true;
+        }
+        if upload_failed {
+            break;
+        }
+        for chunk in chunks {
+            match sink.send(&chunk.request).await {
+                Ok(()) => {
+                    state.mark_uploaded(&chunk.rows);
+                    outcome.enqueued += 1;
                 }
-            }
-        }
-
-        let metric_items = config_store.get_metric_items().await;
-        if metric_items.is_empty() {
-            continue;
-        }
-
-        let samples = crate::metrics::aggregator::METRIC_STAT_AGGREGATOR.flush();
-        if samples.is_empty() {
-            continue;
-        }
-
-        let mut uploads = Vec::new();
-        for item in metric_items {
-            if !item.is_on {
-                continue;
-            }
-            let item_category = metric_item_category(&item);
-            let time_key = get_period_time(item.period, &item.period_unit);
-            if !samples
-                .iter()
-                .any(|sample| sample_matches_metric_category(sample, &item_category))
-            {
-                continue;
-            }
-            uploads.extend(build_metric_uploads_for_item(&item, &time_key, &samples));
-        }
-
-        if !pending.is_empty() {
-            for request in uploads {
-                pending.push(request);
-            }
-            continue;
-        }
-        let mut uploads = uploads.into_iter();
-        while let Some(request) = uploads.next() {
-            match crate::telemetry::enqueue_metric_stat(request).await {
-                Ok(()) => {}
-                Err(error) => {
-                    let source = error.to_string();
-                    let lost = error.lost();
-                    let unsent = error.into_unsent();
+                Err(e) if crate::telemetry::is_batch_too_large(e.as_ref()) => {
                     warn!(
-                        server_id = unsent.server_id,
-                        item_id = unsent.item_id,
-                        unsent_rows = unsent.metric_stats.len(),
-                        lost,
-                        error = %source,
-                        "failed to persist metric stats; retained"
+                        server_id = chunk.request.server_id,
+                        item_id = chunk.request.item_id,
+                        "metric snapshot chunk exceeded the wire at the spool; retaining in durable quarantine: {e}"
                     );
-                    if lost > 0 {
-                        pending.record_lost(lost);
+                    if quarantine_snapshot_chunk(state, chunk).await {
+                        outcome.quarantined += 1;
+                    } else {
+                        outcome.deferred += 1;
+                        upload_failed = true;
+                        break;
                     }
-                    if !unsent.metric_stats.is_empty() {
-                        pending.push(unsent);
+                }
+                Err(e) => {
+                    if !crate::telemetry::is_capacity_exhausted(e.as_ref()) {
+                        state.record_retry_refusal();
                     }
-                    for remaining in uploads {
-                        pending.push(remaining);
-                    }
+                    warn!(
+                        server_id = chunk.request.server_id,
+                        item_id = chunk.request.item_id,
+                        "metric snapshot upload failed; dirty rows retained: {e}"
+                    );
+                    outcome.deferred += 1;
+                    upload_failed = true;
                     break;
                 }
             }
+        }
+        if upload_failed || state.dirty_len() >= dirty_before {
+            // No progress: leave the remaining pages for the next tick rather
+            // than spinning on a spool that is refusing every chunk.
+            break;
+        }
+    }
+
+    // Delivery now belongs to the durable spool/quarantine. Persist removal
+    // together with the revision high-water mark before any new incarnation
+    // can be uploaded. If this checkpoint fails, the pre-upload checkpoint
+    // replays the same rows/hashes after a restart.
+    outcome.pruned = state.release_uploaded();
+    if let Err(e) = state.persist_checkpoint().await {
+        warn!(
+            checkpoint = %state.checkpoint_path().display(),
+            "metric snapshot post-upload checkpoint failed; same-revision replay expected: {e}"
+        );
+        state.set_backpressured(true);
+    }
+    state.publish_stats();
+    outcome
+}
+
+/// Current size of the metric snapshot state. Exposed for memory governance and
+/// node observability; values are the reporter's own counters.
+pub fn metric_values_cache_stats() -> MetricValuesCacheStats {
+    crate::rpc::metric_stat_cache::metric_values_cache_stats()
+}
+
+pub async fn start_metric_stat_reporter(config_store: Arc<crate::config::ConfigStore>) {
+    let dir = crate::paths::NodePaths::current()
+        .data_dir()
+        .join("metric_snapshot");
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+    let mut sink = TelemetryMetricUploadSink;
+    let mut state: Option<MetricStatReporterState> = None;
+
+    loop {
+        interval.tick().await;
+        if state.is_none() {
+            match MetricStatReporterState::open(&dir) {
+                Ok(opened) => {
+                    info!(
+                        dir = %dir.display(),
+                        "metric snapshot store opened; projection admission resumed"
+                    );
+                    state = Some(opened);
+                }
+                Err(e) => {
+                    // Keep the checkpoint and retry without a process restart.
+                    // Plan admission of new identities is paused so the shared
+                    // pool cannot fill while nothing drains it.
+                    crate::rpc::metric_stat_cache::set_metric_snapshot_store_unavailable(true);
+                    warn!(
+                        dir = %dir.display(),
+                        "metric snapshot store unavailable; checkpoint retained, new projection admission paused, retrying next tick: {e}"
+                    );
+                    continue;
+                }
+            }
+        }
+        let state = state.as_mut().expect("opened above");
+        let now = crate::utils::time::now_local();
+        let metric_items = config_store.get_metric_items().await;
+        let plans = crate::metrics::plan::plans_for_drain();
+        let outcome = run_metric_stat_tick(state, &metric_items, &plans, &now, &mut sink).await;
+        crate::metrics::plan::retain_drained();
+
+        debug!(
+            merged = outcome.merged,
+            enqueued = outcome.enqueued,
+            pending = state.dirty_len(),
+            "metric snapshot tick completed"
+        );
+
+        if outcome.dropped > 0 {
+            warn!(
+                dropped = outcome.dropped,
+                entries = state.len(),
+                "metric snapshot dropped new keys at the cardinality/byte cap"
+            );
+        }
+        if outcome.deferred > 0 {
+            warn!(
+                deferred = outcome.deferred,
+                pending = state.dirty_len(),
+                checkpoint = %state.checkpoint_path().display(),
+                "metric snapshot rows remain dirty; checkpoint retained"
+            );
+        }
+        if outcome.quarantined > 0 {
+            warn!(
+                quarantined = outcome.quarantined,
+                dir = %state.quarantine_dir().display(),
+                "metric snapshot records retained in local quarantine"
+            );
+        }
+        if outcome.pruned > 0 {
+            debug!(
+                pruned = outcome.pruned,
+                "metric snapshot pruned closed windows"
+            );
         }
     }
 }
@@ -1522,187 +1701,266 @@ fn trim_http_request_stat_rows_with_limits(
     });
 }
 
+/// Node level/parent topology is diagnostic logging only. It runs after the
+/// local request-stat rows have been handed to the durable spool, so an
+/// unreachable API can never delay or drop accepted request-stat counters.
+async fn report_node_level_info(api_config: &ApiConfig) {
+    let client = match SharedRpcClient::get(api_config).await {
+        Ok(shared) => shared.as_rpc_client(),
+        Err(e) => {
+            warn!("Node level info unavailable: {}", e);
+            return;
+        }
+    };
+    let mut node_service = client.node_service();
+
+    match node_service
+        .find_node_level_info(pb::FindNodeLevelInfoRequest {})
+        .await
+    {
+        Ok(resp) => {
+            let info = resp.into_inner();
+            let has_parents = !info.parent_nodes_map_json.is_empty();
+
+            if info.level != LAST_NODE_LEVEL.load(Ordering::Relaxed)
+                || has_parents != LAST_HAS_PARENTS.load(Ordering::Relaxed)
+            {
+                LAST_NODE_LEVEL.store(info.level, Ordering::Relaxed);
+                LAST_HAS_PARENTS.store(has_parents, Ordering::Relaxed);
+                info!(
+                    "Node Level identified: {}, Parents: {}",
+                    info.level, has_parents
+                );
+            } else {
+                debug!(
+                    "Node Level verified: {}, Parents: {}",
+                    info.level, has_parents
+                );
+            }
+        }
+        Err(e) => {
+            warn!("Failed to fetch node level info: {}", e);
+        }
+    }
+}
+
+type RequestStatRow = (
+    crate::metrics::aggregator::AggregationKey,
+    crate::metrics::aggregator::AggregatedValue,
+);
+
+fn group_request_stat_rows_by_server_minute(
+    rows: Vec<RequestStatRow>,
+) -> BTreeMap<(i64, i64), Vec<RequestStatRow>> {
+    let mut groups: BTreeMap<(i64, i64), Vec<RequestStatRow>> = BTreeMap::new();
+    for row in rows {
+        groups
+            .entry((row.0.server_id, row.0.window_start))
+            .or_default()
+            .push(row);
+    }
+    groups
+}
+
+fn build_http_request_stat_request(
+    rows: &[RequestStatRow],
+    window_start: i64,
+    limits: HttpRequestStatUploadLimits,
+) -> pb::UploadServerHttpRequestStatRequest {
+    let event_time = DateTime::from_timestamp(window_start, 0)
+        .expect("request-stat event minute is a valid Unix timestamp")
+        .with_timezone(
+            &FixedOffset::east_opt(
+                crate::utils::time::LOCAL_TZ_OFFSET_SECONDS.load(Ordering::Relaxed),
+            )
+            .expect("initialized local timezone offset"),
+        );
+    let mut req = pb::UploadServerHttpRequestStatRequest {
+        month: event_time.format("%Y%m").to_string(),
+        day: event_time.format("%Y%m%d").to_string(),
+        window_start,
+        region_cities: vec![],
+        region_providers: vec![],
+        systems: vec![],
+        browsers: vec![],
+        http_firewall_rule_groups: vec![],
+    };
+
+    type CityStatKey = (i64, i64, i64, i64);
+    type CityStatValue = (i64, i64, i64, i64);
+    type CityStatMap = HashMap<CityStatKey, CityStatValue>;
+    let mut city_map: CityStatMap = HashMap::new();
+    let mut provider_map: HashMap<(i64, i64), i64> = HashMap::new();
+    let mut system_map: HashMap<(i64, String, String), i64> = HashMap::new();
+    let mut browser_map: HashMap<(i64, String, String), i64> = HashMap::new();
+    let mut waf_map: HashMap<(i64, i64, String), i64> = HashMap::new();
+
+    for (key, val) in rows {
+        if key.country_id > 0 {
+            let entry = city_map
+                .entry((key.server_id, key.country_id, key.province_id, key.city_id))
+                .or_default();
+            entry.0 += val.count;
+            entry.1 += val.bytes_sent;
+            entry.2 += val.count_attack;
+            entry.3 += val.attack_bytes;
+        }
+
+        if key.provider_id > 0 {
+            *provider_map
+                .entry((key.server_id, key.provider_id))
+                .or_default() += val.count;
+        }
+
+        if !key.os.is_empty() {
+            *system_map
+                .entry((
+                    key.server_id,
+                    key.os.to_string(),
+                    key.os_version.to_string(),
+                ))
+                .or_default() += val.count;
+        }
+
+        if !key.browser.is_empty() {
+            *browser_map
+                .entry((
+                    key.server_id,
+                    key.browser.to_string(),
+                    key.browser_version.to_string(),
+                ))
+                .or_default() += val.count;
+        }
+
+        if key.waf_group_id > 0 && val.count_attack > 0 {
+            *waf_map
+                .entry((key.server_id, key.waf_group_id, key.waf_action.to_string()))
+                .or_default() += val.count_attack;
+        }
+    }
+
+    for ((server_id, country_id, province_id, city_id), value) in city_map {
+        req.region_cities
+            .push(pb::upload_server_http_request_stat_request::RegionCity {
+                server_id,
+                count_requests: value.0,
+                bytes: value.1,
+                count_attack_requests: value.2,
+                attack_bytes: value.3,
+                region_country_id: country_id,
+                region_province_id: province_id,
+                region_city_id: city_id,
+            });
+    }
+
+    for ((server_id, provider_id), count) in provider_map {
+        req.region_providers.push(
+            pb::upload_server_http_request_stat_request::RegionProvider {
+                server_id,
+                count,
+                region_provider_id: provider_id,
+            },
+        );
+    }
+
+    for ((server_id, name, version), count) in system_map {
+        req.systems
+            .push(pb::upload_server_http_request_stat_request::System {
+                server_id,
+                name,
+                version,
+                count,
+            });
+    }
+
+    for ((server_id, name, version), count) in browser_map {
+        req.browsers
+            .push(pb::upload_server_http_request_stat_request::Browser {
+                server_id,
+                name,
+                version,
+                count,
+            });
+    }
+
+    for ((server_id, waf_group_id, action), count) in waf_map {
+        req.http_firewall_rule_groups.push(
+            pb::upload_server_http_request_stat_request::HttpFirewallRuleGroup {
+                server_id,
+                http_firewall_rule_group_id: waf_group_id,
+                action,
+                count,
+            },
+        );
+    }
+
+    trim_http_request_stat_rows_with_limits(&mut req, limits);
+    req
+}
+
 pub async fn start_metrics_aggregator_reporter(config_store: ConfigStore, api_config: ApiConfig) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
 
     loop {
         interval.tick().await;
-
-        let client = match SharedRpcClient::get(&api_config).await {
-            Ok(shared) => shared.as_rpc_client(),
-            Err(e) => {
-                warn!("Metrics aggregator reporter failed to connect: {}", e);
-                continue;
-            }
-        };
-        let mut node_service = client.node_service();
-
-        match node_service
-            .find_node_level_info(pb::FindNodeLevelInfoRequest {})
-            .await
-        {
-            Ok(resp) => {
-                let info = resp.into_inner();
-                let has_parents = !info.parent_nodes_map_json.is_empty();
-
-                if info.level != LAST_NODE_LEVEL.load(Ordering::Relaxed)
-                    || has_parents != LAST_HAS_PARENTS.load(Ordering::Relaxed)
-                {
-                    LAST_NODE_LEVEL.store(info.level, Ordering::Relaxed);
-                    LAST_HAS_PARENTS.store(has_parents, Ordering::Relaxed);
-                    info!(
-                        "Node Level identified: {}, Parents: {}",
-                        info.level, has_parents
-                    );
-                } else {
-                    debug!(
-                        "Node Level verified: {}, Parents: {}",
-                        info.level, has_parents
-                    );
-                }
-            }
-            Err(e) => {
-                warn!("Failed to fetch node level info: {}", e);
-            }
+        // Every protocol's request-start hook feeds this independent core stream,
+        // including requests whose access logs are sampled out.
+        if let Err(error) = crate::metrics::unique_ip::UNIQUE_IP_TRACKER.flush().await {
+            warn!(%error, "unique IP microbatch remains pending for the next tick");
         }
-
-        let samples = crate::metrics::aggregator::HTTP_REQUEST_STAT_AGGREGATOR.flush();
-
-        if samples.is_empty() {
+        let drain = crate::metrics::aggregator::HTTP_REQUEST_STAT_AGGREGATOR.drain();
+        if drain.rows.is_empty() {
+            crate::metrics::aggregator::HTTP_REQUEST_STAT_AGGREGATOR
+                .release_charge(drain.charged_bytes);
+            report_node_level_info(&api_config).await;
             continue;
-        }
-
-        let now = crate::utils::time::now_local();
-        let month = now.format("%Y%m").to_string();
-        let day = now.format("%Y%m%d").to_string();
-
-        let mut req = pb::UploadServerHttpRequestStatRequest {
-            month,
-            day,
-            region_cities: vec![],
-            region_providers: vec![],
-            systems: vec![],
-            browsers: vec![],
-            http_firewall_rule_groups: vec![],
-        };
-
-        type CityStatKey = (i64, i64, i64, i64);
-        type CityStatValue = (i64, i64, i64, i64);
-        type CityStatMap = HashMap<CityStatKey, CityStatValue>;
-        let mut city_map: CityStatMap = HashMap::new();
-        let mut provider_map: HashMap<(i64, i64), i64> = HashMap::new();
-        let mut system_map: HashMap<(i64, String, String), i64> = HashMap::new();
-        let mut browser_map: HashMap<(i64, String, String), i64> = HashMap::new();
-        let mut waf_map: HashMap<(i64, i64, String), i64> = HashMap::new();
-
-        for (key, val) in &samples {
-            if key.country_id > 0 {
-                let entry = city_map
-                    .entry((key.server_id, key.country_id, key.province_id, key.city_id))
-                    .or_default();
-                entry.0 += val.count;
-                entry.1 += val.bytes_sent;
-                entry.2 += val.count_attack;
-                entry.3 += val.attack_bytes;
-            }
-
-            if key.provider_id > 0 {
-                *provider_map
-                    .entry((key.server_id, key.provider_id))
-                    .or_default() += val.count;
-            }
-
-            if !key.os.is_empty() {
-                *system_map
-                    .entry((
-                        key.server_id,
-                        key.os.to_string(),
-                        key.os_version.to_string(),
-                    ))
-                    .or_default() += val.count;
-            }
-
-            if !key.browser.is_empty() {
-                *browser_map
-                    .entry((
-                        key.server_id,
-                        key.browser.to_string(),
-                        key.browser_version.to_string(),
-                    ))
-                    .or_default() += val.count;
-            }
-
-            if key.waf_group_id > 0 && val.count_attack > 0 {
-                *waf_map
-                    .entry((key.server_id, key.waf_group_id, key.waf_action.to_string()))
-                    .or_default() += val.count_attack;
-            }
-        }
-
-        for ((server_id, country_id, province_id, city_id), value) in city_map {
-            req.region_cities
-                .push(pb::upload_server_http_request_stat_request::RegionCity {
-                    server_id,
-                    count_requests: value.0,
-                    bytes: value.1,
-                    count_attack_requests: value.2,
-                    attack_bytes: value.3,
-                    region_country_id: country_id,
-                    region_province_id: province_id,
-                    region_city_id: city_id,
-                });
-        }
-
-        for ((server_id, provider_id), count) in provider_map {
-            req.region_providers.push(
-                pb::upload_server_http_request_stat_request::RegionProvider {
-                    server_id,
-                    count,
-                    region_provider_id: provider_id,
-                },
-            );
-        }
-
-        for ((server_id, name, version), count) in system_map {
-            req.systems
-                .push(pb::upload_server_http_request_stat_request::System {
-                    server_id,
-                    name,
-                    version,
-                    count,
-                });
-        }
-
-        for ((server_id, name, version), count) in browser_map {
-            req.browsers
-                .push(pb::upload_server_http_request_stat_request::Browser {
-                    server_id,
-                    name,
-                    version,
-                    count,
-                });
-        }
-
-        for ((server_id, waf_group_id, action), count) in waf_map {
-            req.http_firewall_rule_groups.push(
-                pb::upload_server_http_request_stat_request::HttpFirewallRuleGroup {
-                    server_id,
-                    http_firewall_rule_group_id: waf_group_id,
-                    action,
-                    count,
-                },
-            );
         }
 
         let upload_limits =
             HttpRequestStatUploadLimits::from_config(&config_store.get_global_stat_upload_sync());
-        trim_http_request_stat_rows_with_limits(&mut req, upload_limits);
 
-        if let Err(e) = crate::telemetry::enqueue("request_stat", &req, 0, false).await {
-            warn!("Failed to persist HTTP request stats: {}", e);
-            crate::metrics::aggregator::HTTP_REQUEST_STAT_AGGREGATOR.restore(samples);
+        let by_server = group_request_stat_rows_by_server_minute(drain.rows);
+
+        // One durable enqueue per server. A server whose assignment the API
+        // rejects must not take unrelated servers' billable rows with it.
+        for ((server_id, window_start), rows) in by_server {
+            let charged_bytes = rows.iter().fold(0u64, |total, (_, value)| {
+                total.saturating_add(value.estimated_bytes)
+            });
+            let req = build_http_request_stat_request(&rows, window_start, upload_limits);
+            match crate::telemetry::enqueue("request_stat", &req, window_start, false).await {
+                Ok(()) => crate::metrics::aggregator::HTTP_REQUEST_STAT_AGGREGATOR
+                    .release_charge(charged_bytes),
+                Err(e) => {
+                    warn!(
+                        server_id,
+                        error = %e,
+                        "Failed to persist HTTP request stats for server; rows retained"
+                    );
+                    // Only this server's rows go back, and their charge was
+                    // never refunded, so they are restored without recharging.
+                    crate::metrics::aggregator::HTTP_REQUEST_STAT_AGGREGATOR.restore_drained(
+                        crate::metrics::aggregator::AggregatorDrain {
+                            rows,
+                            charged_bytes,
+                        },
+                    );
+                }
+            }
         }
+
+        report_node_level_info(&api_config).await;
     }
+}
+
+fn group_top_ip_rows_by_server(
+    rows: Vec<(i64, String, u64)>,
+) -> BTreeMap<i64, Vec<(i64, String, u64)>> {
+    let mut by_server = BTreeMap::new();
+    for row in rows {
+        by_server.entry(row.0).or_insert_with(Vec::new).push(row);
+    }
+    by_server
 }
 
 pub async fn start_top_ip_stat_reporter() {
@@ -1720,31 +1978,33 @@ pub async fn start_top_ip_stat_reporter() {
         let minute_floor = (now.minute() / 5) * 5;
         let time_at = format!("{:02}{:02}", now.hour(), minute_floor);
 
-        let stats = rows
-            .iter()
-            .map(|(server_id, ip, count_requests)| {
-                pb::upload_server_top_ip_stats_request::Stat {
-                    server_id: *server_id as u64,
-                    ip: ip.clone(),
-                    // u64 → u32 silent wraparound at 4.3B would mask runaway IPs;
-                    // saturate to u32::MAX so the upper bound stays visible.
-                    count_requests: u32::try_from(*count_requests).unwrap_or(u32::MAX),
-                    day: day.clone(),
-                    time_at: time_at.clone(),
-                }
-            })
-            .collect();
+        for (server_id, rows) in group_top_ip_rows_by_server(rows) {
+            let stats = rows
+                .iter()
+                .map(|(server_id, ip, count_requests)| {
+                    pb::upload_server_top_ip_stats_request::Stat {
+                        server_id: *server_id as u64,
+                        ip: ip.clone(),
+                        // u64 → u32 silent wraparound at 4.3B would mask runaway IPs;
+                        // saturate to u32::MAX so the upper bound stays visible.
+                        count_requests: u32::try_from(*count_requests).unwrap_or(u32::MAX),
+                        day: day.clone(),
+                        time_at: time_at.clone(),
+                    }
+                })
+                .collect();
 
-        if let Err(e) = crate::telemetry::enqueue(
-            "top_ip",
-            &pb::UploadServerTopIpStatsRequest { stats },
-            0,
-            false,
-        )
-        .await
-        {
-            warn!("Failed to persist top IP stats: {}", e);
-            crate::metrics::top_ip::TOP_IP_TRACKER.restore(&rows);
+            if let Err(e) = crate::telemetry::enqueue(
+                "top_ip",
+                &pb::UploadServerTopIpStatsRequest { stats },
+                0,
+                false,
+            )
+            .await
+            {
+                warn!(server_id, error = %e, "Failed to persist top IP stats; server rows retained");
+                crate::metrics::top_ip::TOP_IP_TRACKER.restore(&rows);
+            }
         }
     }
 }
@@ -1776,28 +2036,139 @@ mod reporting_baseline_tests {
 mod tests {
     use super::*;
 
-    fn metric_key_with_attrs(
-        request_attrs: std::collections::BTreeMap<String, String>,
-    ) -> crate::metrics::aggregator::AggregationKey {
-        crate::metrics::aggregator::AggregationKey {
-            category: std::sync::Arc::from(crate::metrics::METRIC_CATEGORY_HTTP),
-            server_id: 1,
-            country: std::sync::Arc::from(""),
-            country_id: 0,
-            province: std::sync::Arc::from(""),
-            province_id: 0,
-            city: std::sync::Arc::from(""),
-            city_id: 0,
-            provider: std::sync::Arc::from("Unknown"),
-            browser: std::sync::Arc::from(""),
-            os: std::sync::Arc::from(""),
-            waf_group_id: 0,
-            waf_action: std::sync::Arc::from(""),
-            provider_id: 0,
-            browser_version: std::sync::Arc::from(""),
-            os_version: std::sync::Arc::from(""),
-            request_attrs: std::sync::Arc::new(request_attrs),
+    #[test]
+    fn top_ip_batches_preserve_rows_and_separate_servers() {
+        let rows = vec![
+            (1, "192.0.2.1".into(), 10),
+            (2, "192.0.2.2".into(), 20),
+            (1, "192.0.2.3".into(), 30),
+        ];
+        let groups = group_top_ip_rows_by_server(rows.clone());
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[&1], vec![rows[0].clone(), rows[2].clone()]);
+        assert_eq!(groups[&2], vec![rows[1].clone()]);
+        assert_eq!(groups.values().flatten().map(|row| row.2).sum::<u64>(), 60);
+    }
+
+    fn snapshot_key(item_id: i64, server_id: i64, keys: &[&str]) -> SnapshotKey {
+        SnapshotKey {
+            item_id,
+            version: 1,
+            time_key: "202610311200".into(),
+            window_start: 1_790_000_000,
+            period_end: 1_790_000_060,
+            server_id,
+            keys: keys.iter().map(|key| (*key).to_string()).collect(),
         }
+    }
+
+    fn dirty(row: SnapshotKey, value: f32, revision: u64) -> DirtySnapshotRow {
+        DirtySnapshotRow {
+            key: row,
+            window_end: 1_790_000_030,
+            value,
+            revision,
+            incarnation: revision,
+        }
+    }
+
+    fn request_stat_row(server_id: i64, city: &str, count: i64) -> RequestStatRow {
+        use crate::metrics::aggregator::{AggregatedValue, AggregationKey};
+        let empty = Arc::<str>::from("");
+        (
+            AggregationKey {
+                category: Arc::from(crate::metrics::METRIC_CATEGORY_HTTP),
+                server_id,
+                window_start: test_now(0).timestamp(),
+                country: Arc::from("United States"),
+                country_id: 1,
+                province: Arc::from("California"),
+                province_id: 2,
+                city: Arc::from(city),
+                city_id: city.len() as i64,
+                provider: empty.clone(),
+                browser: empty.clone(),
+                os: empty.clone(),
+                waf_group_id: 0,
+                waf_action: empty.clone(),
+                provider_id: 0,
+                browser_version: empty.clone(),
+                os_version: empty,
+            },
+            AggregatedValue {
+                count,
+                ..Default::default()
+            },
+        )
+    }
+
+    #[test]
+    fn request_stat_batches_are_split_per_server() {
+        let rows = vec![
+            request_stat_row(10, "Los Angeles", 3),
+            request_stat_row(20, "San Diego", 5),
+            request_stat_row(10, "San Jose", 7),
+        ];
+        let grouped = group_request_stat_rows_by_server_minute(rows);
+        assert_eq!(grouped.len(), 2);
+        let minute = test_now(0).timestamp();
+        assert_eq!(grouped[&(10, minute)].len(), 2);
+        assert_eq!(grouped[&(20, minute)].len(), 1);
+
+        let limits = HttpRequestStatUploadLimits {
+            max_cities: 32,
+            max_providers: 32,
+            max_systems: 64,
+            max_browsers: 64,
+        };
+        let req = build_http_request_stat_request(&grouped[&(10, minute)], minute, limits);
+        assert_eq!(req.region_cities.len(), 2);
+        assert!(req.region_cities.iter().all(|row| row.server_id == 10));
+        assert_eq!(
+            req.region_cities
+                .iter()
+                .map(|row| row.count_requests)
+                .sum::<i64>(),
+            10
+        );
+    }
+
+    #[test]
+    fn request_stat_batches_keep_event_minutes_across_a_month_boundary() {
+        use chrono::TimeZone as _;
+        let tz = FixedOffset::east_opt(
+            crate::utils::time::LOCAL_TZ_OFFSET_SECONDS.load(Ordering::Relaxed),
+        )
+        .unwrap();
+        let first = tz
+            .with_ymd_and_hms(2026, 10, 31, 23, 59, 0)
+            .unwrap()
+            .timestamp();
+        let next = first + 60;
+        let mut old = request_stat_row(10, "Paris", 3);
+        old.0.window_start = first;
+        let mut fresh = request_stat_row(10, "Paris", 5);
+        fresh.0.window_start = next;
+        let groups = group_request_stat_rows_by_server_minute(vec![old, fresh]);
+        assert_eq!(groups.len(), 2);
+        let limits = HttpRequestStatUploadLimits {
+            max_cities: 32,
+            max_providers: 32,
+            max_systems: 64,
+            max_browsers: 64,
+        };
+        let old = build_http_request_stat_request(&groups[&(10, first)], first, limits);
+        let fresh = build_http_request_stat_request(&groups[&(10, next)], next, limits);
+        assert_eq!(
+            (old.month.as_str(), old.day.as_str(), old.window_start),
+            ("202610", "20261031", first)
+        );
+        assert_eq!(
+            (fresh.month.as_str(), fresh.day.as_str(), fresh.window_start),
+            ("202611", "20261101", next)
+        );
+        assert_eq!(old.region_cities[0].count_requests, 3);
+        assert_eq!(fresh.region_cities[0].count_requests, 5);
     }
 
     fn metric_item(
@@ -1855,117 +2226,6 @@ mod tests {
         );
         assert!(stats.is_empty());
         assert!(domains.is_empty());
-    }
-
-    #[test]
-    fn metric_pending_uploads_are_bounded_and_drain_resets_accounting() {
-        let request = |index: usize| pb::UploadMetricStatsRequest {
-            server_id: index as i64,
-            metric_stats: vec![pb::UploadingMetricStat {
-                keys: vec![format!("k_{index}")],
-                value: 1.0,
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-        let mut pending = MetricPendingUploads::default();
-        for index in 0..METRIC_PENDING_MAX_REQUESTS + 10 {
-            pending.push(request(index));
-        }
-        assert_eq!(pending.requests.len(), METRIC_PENDING_MAX_REQUESTS);
-        assert_eq!(pending.dropped_rows, 10);
-        assert!(pending.bytes > 0);
-
-        let drained: Vec<_> = pending.drain().collect();
-        assert_eq!(drained.len(), METRIC_PENDING_MAX_REQUESTS);
-        assert_eq!(drained[0].server_id, 0);
-        assert_eq!(
-            drained.last().unwrap().server_id as usize,
-            METRIC_PENDING_MAX_REQUESTS - 1
-        );
-        assert_eq!(pending.bytes, 0);
-        assert!(pending.is_empty());
-    }
-
-    #[test]
-    fn metric_stat_upload_groups_request_count_by_resolved_ip() {
-        let aggregator = crate::metrics::aggregator::MetricAggregator::with_request_samples(true);
-        for request_id in ["a", "b"] {
-            let mut attrs = std::collections::BTreeMap::new();
-            attrs.insert("remoteAddr".to_string(), "203.0.113.9".to_string());
-            attrs.insert("requestId".to_string(), request_id.to_string());
-            attrs.insert(
-                "requestURI".to_string(),
-                format!("/index.html?rid={request_id}"),
-            );
-            aggregator.record(metric_key_with_attrs(attrs), 100, 10, false);
-        }
-
-        let samples = aggregator.flush();
-        assert_eq!(samples.len(), 1);
-
-        let item = metric_item(10, vec!["${remoteAddr}"], "${countRequest}");
-        let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples);
-
-        assert_eq!(uploads.len(), 1);
-        assert_eq!(uploads[0].count, 2);
-        assert_eq!(uploads[0].total, 2.0);
-        assert_eq!(uploads[0].metric_stats.len(), 1);
-        assert_eq!(uploads[0].metric_stats[0].keys, vec!["203.0.113.9"]);
-        assert_eq!(uploads[0].metric_stats[0].value, 2.0);
-        assert!(uploads[0].keep_keys.is_empty());
-    }
-
-    #[test]
-    fn metric_stat_upload_groups_paths_and_sums_bytes() {
-        let aggregator = crate::metrics::aggregator::MetricAggregator::with_request_samples(true);
-        for (request_id, bytes_sent) in [("a", 123), ("b", 456)] {
-            let mut attrs = std::collections::BTreeMap::new();
-            attrs.insert("remoteAddr".to_string(), "203.0.113.9".to_string());
-            attrs.insert("requestId".to_string(), request_id.to_string());
-            attrs.insert(
-                "requestURI".to_string(),
-                format!("/assets/app.js?rid={request_id}"),
-            );
-            attrs.insert("requestPath".to_string(), "/assets/app.js".to_string());
-            aggregator.record(metric_key_with_attrs(attrs), bytes_sent, 10, false);
-        }
-
-        let samples = aggregator.flush();
-        let item = metric_item(11, vec!["${requestPath}"], "${countTrafficOut}");
-        let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples);
-
-        assert_eq!(uploads.len(), 1);
-        assert_eq!(uploads[0].count, 2);
-        assert_eq!(uploads[0].total, 579.0);
-        assert_eq!(uploads[0].metric_stats.len(), 1);
-        assert_eq!(uploads[0].metric_stats[0].keys, vec!["/assets/app.js"]);
-        assert_eq!(uploads[0].metric_stats[0].value, 579.0);
-    }
-
-    #[test]
-    fn metric_stat_upload_resolves_method_aliases() {
-        let aggregator = crate::metrics::aggregator::MetricAggregator::with_request_samples(true);
-        let mut attrs = std::collections::BTreeMap::new();
-        attrs.insert("requestMethod".to_string(), "POST".to_string());
-        attrs.insert("requestPath".to_string(), "/submit".to_string());
-        attrs.insert("requestURI".to_string(), "/submit?x=1".to_string());
-        aggregator.record(metric_key_with_attrs(attrs), 10, 100, false);
-
-        let samples = aggregator.flush();
-        let item = metric_item(
-            12,
-            vec!["${requestMethod}", "${method}", "${request.method}"],
-            "${countRequest}",
-        );
-        let uploads = build_metric_uploads_for_item(&item, "202606221200", &samples);
-
-        assert_eq!(uploads.len(), 1);
-        assert_eq!(
-            uploads[0].metric_stats[0].keys,
-            vec!["POST", "POST", "POST"]
-        );
-        assert_eq!(uploads[0].metric_stats[0].value, 1.0);
     }
 
     #[test]
@@ -2056,8 +2316,8 @@ mod tests {
         for start in 0..MAX_PENDING_BANDWIDTH_WINDOWS {
             assert!(retain_pending_window(&mut pending, window(start as i64)).is_none());
         }
-        let dropped = retain_pending_window(&mut pending, window(99))
-            .expect("the cap must reject, not grow");
+        let dropped =
+            retain_pending_window(&mut pending, window(99)).expect("the cap must reject, not grow");
         assert_eq!(pending.len(), MAX_PENDING_BANDWIDTH_WINDOWS);
         let gap = drop_pending_window_gap(&dropped);
         assert!(gap.has_gap);
@@ -2080,16 +2340,21 @@ mod tests {
             error_counts: HashMap::new(),
         };
         let pending = [window(300), window(600)];
-        let batch = window_batch(&pending[0], true);
+        let batch = window_batches(&pending[0], true).remove(0);
         assert_eq!(batch.source_boot_id, "source-generation");
         assert_eq!(batch.window_start, 300);
-        let raw = encode_bandwidth_state("next-window", &HashMap::new(), &pending[1..], 900).unwrap();
+        let raw =
+            encode_bandwidth_state("next-window", &HashMap::new(), &pending[1..], 900).unwrap();
         let state: StoredBandwidthState = serde_json::from_slice(&raw).unwrap();
         assert_eq!(state.pending_windows.len(), 1);
         assert_eq!(state.pending_windows[0].window_start, 600);
         assert_eq!(state.pending_windows[0].source_boot, "source-generation");
         assert_eq!(state.pending_windows[0].stats[0].total_bytes, 42);
-        assert_eq!(pending.len(), 2, "preparing state cannot release uncommitted work");
+        assert_eq!(
+            pending.len(),
+            2,
+            "preparing state cannot release uncommitted work"
+        );
     }
 
     #[test]
@@ -2123,57 +2388,6 @@ mod tests {
         assert_eq!(restored.total_bytes, stat.total_bytes);
         assert_eq!(restored.count_i_ps, stat.count_i_ps);
         assert_eq!(restored.node_region_id, stat.node_region_id);
-    }
-
-    #[test]
-    fn metric_stat_category_filter_excludes_tcp_rows_from_http_items() {
-        fn sample(
-            category: &str,
-        ) -> (
-            crate::metrics::aggregator::AggregationKey,
-            crate::metrics::aggregator::AggregatedValue,
-        ) {
-            (
-                crate::metrics::aggregator::AggregationKey {
-                    category: std::sync::Arc::from(category),
-                    server_id: 1,
-                    country: std::sync::Arc::from(""),
-                    country_id: 0,
-                    province: std::sync::Arc::from(""),
-                    province_id: 0,
-                    city: std::sync::Arc::from(""),
-                    city_id: 0,
-                    provider: std::sync::Arc::from("Unknown"),
-                    browser: std::sync::Arc::from(""),
-                    os: std::sync::Arc::from(""),
-                    waf_group_id: 0,
-                    waf_action: std::sync::Arc::from(""),
-                    provider_id: 0,
-                    browser_version: std::sync::Arc::from(""),
-                    os_version: std::sync::Arc::from(""),
-                    request_attrs: std::sync::Arc::new(std::collections::BTreeMap::new()),
-                },
-                crate::metrics::aggregator::AggregatedValue {
-                    count: 1,
-                    ..Default::default()
-                },
-            )
-        }
-
-        let samples = [
-            sample(crate::metrics::METRIC_CATEGORY_HTTP),
-            sample(crate::metrics::METRIC_CATEGORY_TCP),
-        ];
-        let http_category = crate::metrics::METRIC_CATEGORY_HTTP.to_string();
-
-        let matching = samples
-            .iter()
-            .filter(|sample| sample_matches_metric_category(sample, &http_category))
-            .count();
-
-        assert_eq!(matching, 1);
-        assert!(sample_matches_metric_category(&samples[0], &http_category));
-        assert!(!sample_matches_metric_category(&samples[1], &http_category));
     }
 
     #[test]
@@ -2224,5 +2438,280 @@ mod tests {
         drop(entry);
         ORIGIN_HEALTH_MAP.remove(&id_a);
         ORIGIN_HEALTH_MAP.remove(&id_c);
+    }
+
+    fn test_now(minute: u32) -> DateTime<FixedOffset> {
+        use chrono::TimeZone as _;
+        FixedOffset::east_opt(8 * 3600)
+            .unwrap()
+            .with_ymd_and_hms(2026, 10, 31, 12, minute, 0)
+            .unwrap()
+    }
+
+    struct RecordingMetricSink {
+        uploaded: Vec<pb::UploadMetricStatsRequest>,
+    }
+
+    impl MetricUploadSink for RecordingMetricSink {
+        async fn send(&mut self, request: &pb::UploadMetricStatsRequest) -> anyhow::Result<()> {
+            self.uploaded.push(request.clone());
+            Ok(())
+        }
+    }
+
+    struct RefusingMetricSink {
+        calls: usize,
+    }
+
+    impl MetricUploadSink for RefusingMetricSink {
+        async fn send(&mut self, _request: &pb::UploadMetricStatsRequest) -> anyhow::Result<()> {
+            self.calls += 1;
+            Err(anyhow::anyhow!("spool unavailable"))
+        }
+    }
+
+    #[test]
+    fn snapshot_window_end_uses_the_last_real_event_not_the_future_period() {
+        assert_eq!(
+            snapshot_window_end(1_790_000_060, 1_790_000_000, 0),
+            1_790_000_060
+        );
+        assert_eq!(
+            snapshot_window_end(1_790_000_060, 1_790_000_000, 1_790_000_012_900),
+            1_790_000_013
+        );
+        // A period end in the past still bounds the window.
+        assert_eq!(
+            snapshot_window_end(1_790_000_060, 1_790_000_000, 1_790_000_090_000),
+            1_790_000_060
+        );
+    }
+
+    #[test]
+    fn cumulative_snapshot_values_add_deltas_and_never_use_keep_keys() {
+        let dir =
+            std::env::temp_dir().join(format!("zelvik-stats-snapshot-{}", uuid::Uuid::new_v4()));
+        let mut state = MetricStatReporterState::open(&dir).unwrap();
+        let identity = snapshot_key(1, 7, &["country=FR"]);
+        let merge = state.merge(vec![
+            crate::rpc::metric_stat_cache::SnapshotDelta {
+                key: identity.clone(),
+                window_end: 1_790_000_030,
+                value: 10.0,
+                charge: 0,
+            },
+            crate::rpc::metric_stat_cache::SnapshotDelta {
+                key: identity.clone(),
+                window_end: 1_790_000_031,
+                value: 50.0,
+                charge: 0,
+            },
+        ]);
+        assert_eq!(merge.updated, 1);
+        assert_eq!(state.row_value(&identity), Some(60.0));
+        let rows = state.dirty_rows();
+        let (chunks, quarantine) =
+            build_snapshot_chunks(rows, state.epoch(), metric_stat_payload_budget());
+        assert!(quarantine.is_empty());
+        assert_eq!(chunks.len(), 1);
+        let request = &chunks[0].request;
+        assert_eq!(request.metric_stats.len(), 1);
+        assert_eq!(request.metric_stats[0].value, 60.0);
+        assert!(request.keep_keys.is_empty());
+        assert!(request.revision > 0);
+        assert_eq!(request.window_start, 1_790_000_000);
+        assert_eq!(request.window_end, 1_790_000_031);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn snapshot_rows_for_two_servers_stay_separate_before_the_receiver_sums_them() {
+        let dir =
+            std::env::temp_dir().join(format!("zelvik-stats-servers-{}", uuid::Uuid::new_v4()));
+        let mut state = MetricStatReporterState::open(&dir).unwrap();
+        let first = snapshot_key(1, 10, &["country=FR"]);
+        let second = snapshot_key(1, 20, &["country=FR"]);
+        state.merge(vec![
+            crate::rpc::metric_stat_cache::SnapshotDelta {
+                key: first,
+                window_end: 1_790_000_030,
+                value: 10.0,
+                charge: 0,
+            },
+            crate::rpc::metric_stat_cache::SnapshotDelta {
+                key: second,
+                window_end: 1_790_000_030,
+                value: 20.0,
+                charge: 0,
+            },
+        ]);
+        let (chunks, _) = build_snapshot_chunks(
+            state.dirty_rows(),
+            state.epoch(),
+            metric_stat_payload_budget(),
+        );
+        assert_eq!(chunks.len(), 2);
+        assert_ne!(chunks[0].request.server_id, chunks[1].request.server_id);
+        let total: f32 = chunks.iter().map(|chunk| chunk.request.total).sum();
+        assert_eq!(total, 30.0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn snapshot_hash_uses_the_row_incarnation_not_the_request_revision() {
+        let identity = snapshot_key(1, 7, &["country=FR"]);
+        // Same key and same request revision, different row instance: the wire
+        // hash must differ so the CP keeps both cumulative instances.
+        let mut old_instance = dirty(identity.clone(), 10.0, 1);
+        old_instance.incarnation = 1;
+        let mut new_instance = dirty(identity.clone(), 5.0, 1);
+        new_instance.incarnation = 2;
+
+        let hash = |row: DirtySnapshotRow| {
+            build_snapshot_chunks(vec![row], "epoch", usize::MAX).0[0]
+                .request
+                .metric_stats[0]
+                .hash
+                .clone()
+        };
+        let old_hash = hash(old_instance.clone());
+        assert_eq!(hash(old_instance), old_hash);
+        assert_ne!(hash(new_instance), old_hash);
+    }
+
+    #[test]
+    fn oversized_snapshot_records_are_quarantined_not_dropped() {
+        let identity = snapshot_key(1, 7, &["key=very-long"]);
+        let rows = vec![dirty(identity, 1.0, 1)];
+        // A header plus one record cannot fit this budget, so the exact row is
+        // returned for the durable quarantine path.
+        let budget = 1;
+        let (chunks, quarantine) = build_snapshot_chunks(rows, "epoch", budget);
+        assert!(chunks.is_empty());
+        assert_eq!(quarantine.len(), 1);
+        assert_eq!(quarantine[0].request.metric_stats.len(), 1);
+        assert_eq!(quarantine[0].rows.len(), 1);
+    }
+
+    #[test]
+    fn snapshot_split_preserves_every_row_and_header() {
+        let rows: Vec<_> = (0..40)
+            .map(|index| {
+                dirty(
+                    snapshot_key(1, 7, &[&format!("city=Paris-{index}")]),
+                    index as f32,
+                    1,
+                )
+            })
+            .collect();
+        let total_rows = rows.len();
+        let header = build_snapshot_chunks(vec![rows[0].clone()], "epoch", usize::MAX)
+            .0
+            .pop()
+            .unwrap()
+            .request;
+        let budget = prost::Message::encoded_len(&header) + 300;
+        let (chunks, quarantine) = build_snapshot_chunks(rows, "epoch", budget);
+        assert!(quarantine.is_empty());
+        assert!(chunks.len() > 1);
+        let uploaded: usize = chunks
+            .iter()
+            .map(|chunk| chunk.request.metric_stats.len())
+            .sum();
+        assert_eq!(uploaded, total_rows);
+        for chunk in &chunks {
+            assert_eq!(chunk.request.revision, 1);
+            assert_eq!(chunk.request.window_start, 1_790_000_000);
+            assert_eq!(chunk.request.window_end, 1_790_000_030);
+            assert!(chunk.request.keep_keys.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn tick_uploads_dirty_snapshots_and_checkpoints_uploaded_revision() {
+        let dir = std::env::temp_dir().join(format!("zelvik-stats-tick-{}", uuid::Uuid::new_v4()));
+        let mut state = MetricStatReporterState::open(&dir).unwrap();
+        let identity = snapshot_key(1, 7, &["country=FR"]);
+        state.merge(vec![crate::rpc::metric_stat_cache::SnapshotDelta {
+            key: identity.clone(),
+            window_end: 1_790_000_030,
+            value: 10.0,
+            charge: 0,
+        }]);
+        let mut sink = RecordingMetricSink { uploaded: vec![] };
+        let outcome = run_metric_stat_tick(
+            &mut state,
+            &[metric_item(1, vec!["${country}"], "${countRequest}")],
+            &[],
+            &test_now(30),
+            &mut sink,
+        )
+        .await;
+        assert_eq!(outcome.enqueued, 1);
+        assert_eq!(sink.uploaded.len(), 1);
+        assert!(sink.uploaded[0].revision > 0);
+        assert_eq!(state.dirty_len(), 0);
+
+        // The handoff releases the row, and its deletion is durable in this
+        // tick. A restart retains the epoch/revision watermark without values.
+        assert_eq!(outcome.pruned, 1);
+        assert_eq!(state.stats().estimated_bytes, 0);
+        let epoch = state.epoch().to_string();
+        drop(state);
+        let resumed = MetricStatReporterState::open(&dir).unwrap();
+        assert_eq!(resumed.epoch(), epoch);
+        assert_eq!(resumed.dirty_len(), 0);
+        assert_eq!(resumed.row_value(&identity), None);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn failed_spool_keeps_snapshot_dirty_for_a_same_revision_retry() {
+        let dir = std::env::temp_dir().join(format!("zelvik-stats-retry-{}", uuid::Uuid::new_v4()));
+        let mut state = MetricStatReporterState::open(&dir).unwrap();
+        let identity = snapshot_key(1, 7, &["country=FR"]);
+        state.merge(vec![crate::rpc::metric_stat_cache::SnapshotDelta {
+            key: identity.clone(),
+            window_end: 1_790_000_030,
+            value: 10.0,
+            charge: 0,
+        }]);
+        let revision = state.row_revision(&identity).unwrap();
+        let mut refusing = RefusingMetricSink { calls: 0 };
+        let first = run_metric_stat_tick(&mut state, &[], &[], &test_now(30), &mut refusing).await;
+        assert_eq!(first.deferred, 1);
+        assert_eq!(state.dirty_len(), 1);
+
+        let mut recording = RecordingMetricSink { uploaded: vec![] };
+        let second =
+            run_metric_stat_tick(&mut state, &[], &[], &test_now(30), &mut recording).await;
+        assert_eq!(second.enqueued, 1);
+        assert_eq!(recording.uploaded[0].revision, revision);
+        assert_eq!(state.dirty_len(), 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn checkpoint_failure_blocks_upload_and_keeps_rows_dirty() {
+        let dir = std::env::temp_dir().join(format!(
+            "zelvik-stats-checkpoint-fail-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let mut state = MetricStatReporterState::open(&dir).unwrap();
+        state.merge(vec![crate::rpc::metric_stat_cache::SnapshotDelta {
+            key: snapshot_key(1, 7, &["country=FR"]),
+            window_end: 1_790_000_030,
+            value: 10.0,
+            charge: 0,
+        }]);
+        // Force the encoded checkpoint above its cap.
+        state.set_max_checkpoint_bytes(1);
+        let mut sink = RecordingMetricSink { uploaded: vec![] };
+        let outcome = run_metric_stat_tick(&mut state, &[], &[], &test_now(30), &mut sink).await;
+        assert!(sink.uploaded.is_empty());
+        assert_eq!(outcome.deferred, 1);
+        assert!(state.stats().backpressured);
+        assert_eq!(state.dirty_len(), 1);
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

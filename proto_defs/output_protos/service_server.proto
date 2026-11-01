@@ -448,6 +448,8 @@ message UpdateEnabledUserServerBasicRequest {
 message UploadServerHTTPRequestStatRequest {
     string month = 1;
     string day = 2;
+    // Request-completion Unix seconds floored to the event minute.
+    int64 windowStart = 8;
     
     repeated RegionCity regionCities = 3;
     message RegionCity {

@@ -1,4 +1,3 @@
-use crate::rpc::metrics::ServerMetricUpdate;
 use dashmap::DashMap;
 use mace::{Bucket, BucketOptions, Mace, OpCode, Options};
 use parking_lot::Mutex as ParkingMutex;
@@ -16,11 +15,6 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::{error, warn};
 
 const METRICS_BUCKET: &str = "metrics";
-pub const SERVER_PERIOD_BYTES: usize = 72;
-pub const NODE_PERIOD_BYTES: usize = 16;
-/// Mace treats empty values as tombstones, so unique-IP presence keys need a
-/// non-empty sentinel (RocksDB previously allowed empty values).
-const UNIQUE_IP_MARKER: &[u8] = b"1";
 const CACHE_META_MAX_ENTRIES: usize = 1_000_000;
 const CACHE_META_MAX_ENTRY_BYTES: u64 = 256 * 1024;
 const CACHE_META_TOMBSTONE_PREFIX: &str = "CTOMB_";
@@ -205,18 +199,10 @@ pub fn mace_memory_observation() -> MaceMemoryObservation {
     }
 }
 
-pub fn server_period_key(server_id: i64, period: i64) -> String {
-    format!("S{server_id}_T{period}")
-}
-
 fn parse_server_period_key(key: &str) -> Option<(i64, i64)> {
     let rest = key.strip_prefix('S')?;
     let (server_id, period) = rest.split_once("_T")?;
     Some((server_id.parse().ok()?, period.parse().ok()?))
-}
-
-pub fn node_period_key(period: i64) -> String {
-    format!("NODE_T{period}")
 }
 
 pub fn fold_counter_deltas(updates: Vec<(String, u64)>) -> Vec<(String, u64)> {
@@ -229,47 +215,6 @@ pub fn fold_counter_deltas(updates: Vec<(String, u64)>) -> Vec<(String, u64)> {
         *entry = (*entry).saturating_add(delta);
     }
     merged.into_iter().collect()
-}
-
-fn add_u64_be(buf: &mut [u8], offset: usize, delta: u64) {
-    let current = parse_u64_be(&buf[offset..offset + 8]);
-    buf[offset..offset + 8].copy_from_slice(&current.saturating_add(delta).to_be_bytes());
-}
-
-/// Packs one server's 5-minute counters into a single value so Mace does one
-/// get+upsert per server instead of nine merge-style RMW operations.
-pub fn apply_server_period_update(
-    existing: Option<&[u8]>,
-    update: &ServerMetricUpdate,
-) -> [u8; SERVER_PERIOD_BYTES] {
-    let mut buf = [0u8; SERVER_PERIOD_BYTES];
-    if let Some(existing) = existing.filter(|value| value.len() == SERVER_PERIOD_BYTES) {
-        buf.copy_from_slice(existing);
-    }
-    add_u64_be(&mut buf, 0, update.total_requests);
-    add_u64_be(&mut buf, 8, update.bytes_sent);
-    add_u64_be(&mut buf, 16, update.bytes_received);
-    add_u64_be(&mut buf, 24, update.cached_bytes);
-    add_u64_be(&mut buf, 32, update.count_cached_requests);
-    add_u64_be(&mut buf, 40, update.count_attack_requests);
-    add_u64_be(&mut buf, 48, update.attack_bytes);
-    buf[56..64].copy_from_slice(&update.active_connections.to_be_bytes());
-    buf[64..72].copy_from_slice(&update.count_ips.to_be_bytes());
-    buf
-}
-
-pub fn apply_node_period_deltas(
-    existing: Option<&[u8]>,
-    sent: u64,
-    received: u64,
-) -> [u8; NODE_PERIOD_BYTES] {
-    let mut buf = [0u8; NODE_PERIOD_BYTES];
-    if let Some(existing) = existing.filter(|value| value.len() == NODE_PERIOD_BYTES) {
-        buf.copy_from_slice(existing);
-    }
-    add_u64_be(&mut buf, 0, sent);
-    add_u64_be(&mut buf, 8, received);
-    buf
 }
 
 /// Scan one period namespace from a cursor with bounded inspections.
@@ -430,35 +375,6 @@ impl MetricStorage {
         })
     }
 
-    pub fn record_server_batch(
-        &self,
-        period: i64,
-        updates: Vec<crate::rpc::metrics::ServerMetricUpdate>,
-        node_sent: u64,
-        node_received: u64,
-    ) -> Result<(), OpCode> {
-        let Some(backend) = self.backend.as_ref() else {
-            return Err(OpCode::IoError);
-        };
-        let txn = backend.bucket.begin()?;
-
-        for u in updates {
-            let key = server_period_key(u.server_id, period);
-            let existing = txn_get_slice(&txn, key.as_bytes())?;
-            let packed = apply_server_period_update(existing.as_deref(), &u);
-            txn.upsert(key.as_bytes(), packed)?;
-        }
-
-        if node_sent != 0 || node_received != 0 {
-            let key = node_period_key(period);
-            let existing = txn_get_slice(&txn, key.as_bytes())?;
-            let packed = apply_node_period_deltas(existing.as_deref(), node_sent, node_received);
-            txn.upsert(key.as_bytes(), packed)?;
-        }
-
-        txn.commit()
-    }
-
     /// Increments multiple counters in a single atomic batch.
     pub fn increment_batch(&self, updates: Vec<(String, u64)>) -> Result<(), OpCode> {
         let Some(backend) = self.backend.as_ref() else {
@@ -491,7 +407,8 @@ impl MetricStorage {
         Ok(())
     }
 
-    /// Deletes all data older than a specific timestamp.
+    /// Expire duplicate period rows left by earlier runs. Current reporters
+    /// never write these namespaces; they only persist pending delivery.
     pub fn cleanup_old_stats(&self, older_than_timestamp: i64) -> Result<usize, OpCode> {
         let Some(bucket) = self.bucket() else {
             return Err(OpCode::IoError);
@@ -545,73 +462,6 @@ impl MetricStorage {
     pub fn get_json<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
         self.get_raw(key.as_bytes())
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-    }
-
-    pub fn record_unique_ip(&self, server_id: i64, day: &str, ip: IpAddr) {
-        if server_id <= 0 || day.is_empty() {
-            return;
-        }
-        let _ = self.put_raw(
-            unique_ip_key(server_id, day, ip).as_bytes(),
-            UNIQUE_IP_MARKER,
-        );
-    }
-
-    pub fn load_unique_ips(&self, min_day: &str) -> Vec<(i64, String, IpAddr)> {
-        let Some(bucket) = self.bucket() else {
-            return Vec::new();
-        };
-        let Ok(view) = bucket.view() else {
-            return Vec::new();
-        };
-
-        let mut rows = Vec::new();
-        for item in view.seek("UIP_") {
-            let key_str = match std::str::from_utf8(item.key()) {
-                Ok(key_str) => key_str,
-                Err(_) => continue,
-            };
-            if !key_str.starts_with("UIP_") {
-                break;
-            }
-            if let Some((server_id, day, ip)) = parse_unique_ip_key(key_str)
-                && day.as_str() >= min_day
-            {
-                rows.push((server_id, day, ip));
-            }
-        }
-        rows
-    }
-
-    pub fn cleanup_unique_ips_before(&self, min_day: &str) {
-        let Some(bucket) = self.bucket() else {
-            return;
-        };
-        let Ok(view) = bucket.view() else {
-            return;
-        };
-        let Ok(txn) = bucket.begin() else {
-            return;
-        };
-
-        for item in view.seek("UIP_") {
-            let key = item.key();
-            let key_str = match std::str::from_utf8(key) {
-                Ok(key_str) => key_str,
-                Err(_) => continue,
-            };
-            if !key_str.starts_with("UIP_") {
-                break;
-            }
-            if let Some((_, day, _)) = parse_unique_ip_key(key_str)
-                && day.as_str() < min_day
-                && txn.del(key).is_err()
-            {
-                return;
-            }
-        }
-
-        let _ = txn.commit();
     }
 
     /// Cache Metadata Management
@@ -1946,19 +1796,6 @@ fn client_agent_ip_record_from_slice(
     })
 }
 
-fn unique_ip_key(server_id: i64, day: &str, ip: IpAddr) -> String {
-    format!("UIP_{day}_{server_id}_{ip}")
-}
-
-fn parse_unique_ip_key(key: &str) -> Option<(i64, String, IpAddr)> {
-    let rest = key.strip_prefix("UIP_")?;
-    let mut parts = rest.splitn(3, '_');
-    let day = parts.next()?.to_string();
-    let server_id = parts.next()?.parse::<i64>().ok()?;
-    let ip = parts.next()?.parse::<IpAddr>().ok()?;
-    Some((server_id, day, ip))
-}
-
 pub fn get_cache_meta_memory(hash: &str) -> Option<Arc<CacheMetaEntry>> {
     get_cache_meta_memory_fenced(hash, cache_meta_broad_purge_version())
 }
@@ -2424,7 +2261,6 @@ pub fn lookup_region_provider_id(ip: IpAddr) -> i64 {
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::net::IpAddr;
     use std::sync::atomic::{AtomicI64, AtomicU64};
 
     #[test]
@@ -2517,17 +2353,6 @@ mod tests {
     }
 
     #[test]
-    fn unique_ip_key_round_trips_ipv4_and_ipv6() {
-        for ip in ["203.0.113.1", "2001:db8::1"] {
-            let parsed = parse_unique_ip_key(&unique_ip_key(7, "20260621", ip.parse().unwrap()))
-                .expect("unique ip key should parse");
-            assert_eq!(parsed.0, 7);
-            assert_eq!(parsed.1, "20260621");
-            assert_eq!(parsed.2.to_string(), ip);
-        }
-    }
-
-    #[test]
     fn mace_storage_round_trip_and_prefix_scan() {
         let dir = std::env::temp_dir().join(format!(
             "zelvik-edge-mace-test-{}",
@@ -2546,40 +2371,6 @@ mod tests {
             ])
             .expect("persist counter batch");
         assert_eq!(storage.get_value("counter_a"), 15);
-
-        let update = crate::rpc::metrics::ServerMetricUpdate {
-            server_id: 7,
-            user_id: 0,
-            user_plan_id: 0,
-            plan_id: 0,
-            total_requests: 10,
-            bytes_sent: 100,
-            bytes_received: 20,
-            cached_bytes: 4,
-            count_cached_requests: 1,
-            count_attack_requests: 0,
-            attack_bytes: 0,
-            active_connections: 3,
-            count_websocket_connections: 0,
-            count_ips: 2,
-        };
-        storage
-            .record_server_batch(1_700_000_000, vec![update.clone()], 50, 25)
-            .expect("persist first server batch");
-        storage
-            .record_server_batch(1_700_000_000, vec![update], 10, 5)
-            .expect("persist second server batch");
-        let packed = storage
-            .get_raw(super::server_period_key(7, 1_700_000_000).as_bytes())
-            .expect("packed server period");
-        assert_eq!(packed.len(), super::SERVER_PERIOD_BYTES);
-        assert_eq!(super::parse_u64_be(&packed[0..8]), 20);
-        assert_eq!(super::parse_u64_be(&packed[8..16]), 200);
-        let node = storage
-            .get_raw(super::node_period_key(1_700_000_000).as_bytes())
-            .expect("packed node period");
-        assert_eq!(super::parse_u64_be(&node[0..8]), 60);
-        assert_eq!(super::parse_u64_be(&node[8..16]), 30);
 
         storage.write_raw_batch(
             vec![(
@@ -2618,11 +2409,6 @@ mod tests {
         assert!(storage.get_cache_meta(&cache_hash).is_some());
 
         super::delete_cache_meta_for_test(&cache_hash);
-
-        storage.record_unique_ip(1, "20260818", "203.0.113.9".parse::<IpAddr>().unwrap());
-        let ips = storage.load_unique_ips("20260818");
-        assert_eq!(ips.len(), 1);
-        assert_eq!(ips[0].0, 1);
 
         drop(storage);
         let _ = std::fs::remove_dir_all(&dir);
@@ -2674,154 +2460,42 @@ mod tests {
     }
 
     #[test]
-    fn history_cleanup_advances_by_inspected_keys_and_wraps_to_newly_expired_low_keys() {
-        let dir = std::env::temp_dir().join(format!(
-            "zelvik-edge-mace-retention-{}",
-            uuid::Uuid::new_v4()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        let storage = MetricStorage::open(&dir).expect("open mace storage");
-        let update = |server_id| crate::rpc::metrics::ServerMetricUpdate {
-            server_id,
-            user_id: 0,
-            user_plan_id: 0,
-            plan_id: 0,
-            total_requests: 1,
-            bytes_sent: 0,
-            bytes_received: 0,
-            cached_bytes: 0,
-            count_cached_requests: 0,
-            count_attack_requests: 0,
-            attack_bytes: 0,
-            active_connections: 0,
-            count_websocket_connections: 0,
-            count_ips: 0,
-        };
-
-        for server_id in 1..=3_000i64 {
-            storage
-                .record_server_batch(100, vec![update(server_id)], 0, 0)
-                .expect("write expired row");
+    fn obsolete_history_cleanup_is_bounded_and_preserves_other_namespaces() {
+        let dir = std::env::temp_dir().join(format!("zelvik-obsolete-history-{}", uuid::Uuid::new_v4()));
+        let storage = MetricStorage::open(&dir).expect("open storage");
+        let mut rows: Vec<_> = (1..=3_000)
+            .map(|id| (format!("S{id}_T100"), vec![0; 72]))
+            .collect();
+        rows.extend([
+            ("NODE_T100".to_string(), vec![0; 16]),
+            ("S10000_T200000".to_string(), vec![0; 72]),
+            ("NODE_T200000".to_string(), vec![0; 16]),
+            ("STAT_KEEP".to_string(), vec![1]),
+            ("CMETA_keep".to_string(), vec![2]),
+            ("FWBLK_keep".to_string(), vec![3]),
+        ]);
+        assert!(storage.write_raw_batch(rows, Vec::new()));
+        drop(storage);
+        let storage = MetricStorage::open(&dir).expect("reopen existing installation");
+        let first = storage.cleanup_old_stats(150).expect("first bounded pass");
+        assert!(first > 0 && first <= 2_049, "one pass must be bounded: {first}");
+        let second = storage.cleanup_old_stats(150).expect("remaining expired rows");
+        assert_eq!(first + second, 3_001);
+        assert!(storage.get_raw(b"S1_T100").is_none());
+        assert!(storage.get_raw(b"NODE_T100").is_none());
+        for key in ["S10000_T200000", "NODE_T200000", "STAT_KEEP", "CMETA_keep", "FWBLK_keep"] {
+            assert!(storage.get_raw(key.as_bytes()).is_some(), "{key}");
         }
-        storage
-            .record_server_batch(200_000, vec![update(10_000)], 0, 0)
-            .expect("write fresh row");
-
-        let first = storage.cleanup_old_stats(150).expect("first bounded scan");
-        assert!(first > 0 && first < 3_000, "one tick must be bounded: {first}");
-        let second = storage.cleanup_old_stats(150).expect("second scan");
-        assert_eq!(first + second, 3_000, "all expired rows must be removed");
-        assert!(
-            storage
-                .get_raw(server_period_key(10_000, 200_000).as_bytes())
-                .is_some(),
-            "fresh row must survive"
-        );
-
-        // The range end wraps the cursor; a key written later but sorting
-        // before the old cursor must still be found.
-        storage
-            .record_server_batch(50, vec![update(0)], 0, 0)
-            .expect("write low-key expired row");
-        assert_eq!(storage.cleanup_old_stats(150).expect("post-wrap scan"), 1);
-        assert!(
-            storage
-                .get_raw(server_period_key(0, 50).as_bytes())
-                .is_none(),
-            "newly expired low key must be removed after the wrap"
-        );
-
+        assert!(storage.write_raw_batch(vec![("S0_T50".to_string(), vec![0; 72])], Vec::new()));
+        assert_eq!(storage.cleanup_old_stats(150).expect("wrapped pass"), 1);
+        assert!(storage.get_raw(b"S0_T50").is_none());
         drop(storage);
-        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
-    fn unavailable_metric_storage_reports_persistence_failure() {
-        let storage = MetricStorage::unavailable();
-        assert!(
-            storage
-                .record_server_batch(1_700_000_000, Vec::new(), 0, 0)
-                .is_err()
-        );
-        assert!(storage.cleanup_old_stats(1_700_000_000).is_err());
-    }
-
-    #[test]
-    fn history_cleanup_removes_only_expired_metric_namespaces() {
-        let dir = std::env::temp_dir().join(format!(
-            "zelvik-edge-mace-cleanup-{}",
-            uuid::Uuid::new_v4()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        let storage = MetricStorage::open(&dir).expect("open mace storage");
-
-        storage
-            .record_server_batch(
-                100,
-                vec![crate::rpc::metrics::ServerMetricUpdate {
-                    server_id: 9,
-                    user_id: 0,
-                    user_plan_id: 0,
-                    plan_id: 0,
-                    total_requests: 1,
-                    bytes_sent: 0,
-                    bytes_received: 0,
-                    cached_bytes: 0,
-                    count_cached_requests: 0,
-                    count_attack_requests: 0,
-                    attack_bytes: 0,
-                    active_connections: 0,
-                    count_websocket_connections: 0,
-                    count_ips: 0,
-                }],
-                1,
-                1,
-            )
-            .expect("write expired server period");
-        storage
-            .record_server_batch(
-                200,
-                vec![crate::rpc::metrics::ServerMetricUpdate {
-                    server_id: 12345,
-                    user_id: 0,
-                    user_plan_id: 0,
-                    plan_id: 0,
-                    total_requests: 2,
-                    bytes_sent: 0,
-                    bytes_received: 0,
-                    cached_bytes: 0,
-                    count_cached_requests: 0,
-                    count_attack_requests: 0,
-                    attack_bytes: 0,
-                    active_connections: 0,
-                    count_websocket_connections: 0,
-                    count_ips: 0,
-                }],
-                2,
-                2,
-            )
-            .expect("write current server period");
-        assert!(storage.put_json("STAT_KEEP", &true));
-
-        let removed = storage
-            .cleanup_old_stats(150)
-            .expect("cleanup expired history");
-        assert_eq!(removed, 2);
-        assert!(
-            storage
-                .get_raw(server_period_key(9, 100).as_bytes())
-                .is_none()
-        );
-        assert!(storage.get_raw(node_period_key(100).as_bytes()).is_none());
-        assert!(
-            storage
-                .get_raw(server_period_key(12345, 200).as_bytes())
-                .is_some()
-        );
-        assert!(storage.get_raw(b"STAT_KEEP").is_some());
-
-        drop(storage);
-        let _ = std::fs::remove_dir_all(&dir);
+    fn unavailable_storage_does_not_report_obsolete_cleanup_success() {
+        assert!(MetricStorage::unavailable().cleanup_old_stats(150).is_err());
     }
 
     #[test]

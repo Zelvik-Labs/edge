@@ -2,7 +2,6 @@
 //! it records physical observations separately from logical structure bytes.
 #![cfg(target_os = "linux")]
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 use zelvik_edge::memory_governor::{AdmissionClass, MEMORY_GOVERNOR, MemoryPressureLevel};
@@ -16,11 +15,12 @@ fn key(cycle: usize, row: usize) -> AggregationKey {
     AggregationKey {
         category: Arc::from("http"),
         server_id: 1,
+        window_start: 1_793_462_400,
         country: Arc::from(""),
         country_id: 0,
         province: Arc::from(""),
         province_id: 0,
-        city: Arc::from(format!("cycle-{cycle}-city-{row}")),
+        city: Arc::from(format!("/audit/{cycle}/{row}/{}", "x".repeat(128))),
         city_id: 0,
         provider: Arc::from("Unknown"),
         browser: Arc::from(""),
@@ -30,10 +30,6 @@ fn key(cycle: usize, row: usize) -> AggregationKey {
         provider_id: 0,
         browser_version: Arc::from(""),
         os_version: Arc::from(""),
-        request_attrs: Arc::new(BTreeMap::from([(
-            "path".to_string(),
-            format!("/audit/{cycle}/{row}/{}", "x".repeat(128)),
-        )])),
     }
 }
 
@@ -55,7 +51,7 @@ fn repeated_aggregation_and_reclaim_converge_with_held_admissions() {
                 .expect("initial connections fit")
         })
         .collect();
-    let aggregator = MetricAggregator::with_request_samples(true);
+    let aggregator = MetricAggregator::new();
     let baseline = MEMORY_GOVERNOR.snapshot(1);
     assert!(
         baseline.process_rss_bytes > 0,

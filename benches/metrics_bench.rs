@@ -1,6 +1,7 @@
-use zelvik_edge::metrics::record;
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
+use std::sync::Arc;
+use zelvik_edge::metrics::{ServerMetrics, record};
 
 fn bench_metrics_recording(c: &mut Criterion) {
     let server_id = 123;
@@ -36,6 +37,28 @@ fn bench_metrics_recording(c: &mut Criterion) {
         })
     });
 
+    // Reused connections still record each event minute. Pass a real admitted
+    // metric instance so this benchmark exercises IP collection rather than
+    // returning early through the missing-server path.
+    let metrics = Arc::new(ServerMetrics::new());
+    for (name, ip_recorded) in [
+        ("request_start_admitted_first_request", false),
+        ("request_start_admitted_reused_connection", true),
+    ] {
+        group.bench_function(name, |b| {
+            b.iter(|| {
+                record::request_start_without_active(
+                    black_box(server_id),
+                    black_box(client_ip),
+                    0,
+                    0,
+                    0,
+                    Some(&metrics),
+                    black_box(ip_recorded),
+                )
+            })
+        });
+    }
     group.finish();
 }
 

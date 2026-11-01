@@ -10,10 +10,11 @@ use pingora_core::{Error, ErrorType, Result};
 use pingora_http::ResponseHeader;
 use std::any::Any;
 use std::cell::Cell;
+use std::collections::BTreeSet;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock as Lazy;
-use std::sync::{Arc, RwLock as StdRwLock};
+use std::sync::{Arc, Mutex as StdMutex, RwLock as StdRwLock};
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncSeek, BufReader};
 use tokio::sync::{Mutex, OwnedMutexGuard};
@@ -2983,8 +2984,45 @@ pub(crate) struct TinyUfoL1 {
     keys: DashSet<String>,
     auto_budget: AtomicBool,
     auto_budget_cap: AtomicU64,
+    /// Published policy target. Admission and stats read this value even when
+    /// hysteresis has not resized the physical cache yet.
     max_bytes: AtomicU64,
+    /// Physical capacity installed by the last rebuild. Hysteresis compares
+    /// against this value so successive small steps accumulate instead of
+    /// being measured against a target that was never applied.
+    applied_max_bytes: AtomicU64,
     current_weight: AtomicU64,
+    /// Budget resolved by the janitor's bounded maintenance pass but not yet
+    /// applied to the TinyUFO capacity. Applying it rebuilds the cache, which
+    /// allocates proportionally to the cache, so that step waits for a
+    /// `BackgroundWork` permit instead of running unconditionally.
+    pending_auto_rebuild: AtomicU64,
+    /// Epoch of the policy that produced `pending_auto_rebuild`. A permit
+    /// holder that observed an older epoch must not apply a stale target over
+    /// a manual capacity switch that landed in between.
+    pending_auto_epoch: AtomicU64,
+    /// Serializes manual capacity switches against deferred auto-budget
+    /// publication/application. The epoch alone cannot close the window
+    /// between checking the pending target and starting the rebuild.
+    budget_transition: StdMutex<()>,
+    /// Policy epoch: bumped by every manual switch and every resolved-budget
+    /// change. Stale in-flight rebuild attempts compare against this.
+    budget_epoch: AtomicU64,
+    /// Last budget a rebuild was actually applied for. Test-only: lets the
+    /// bounded-publication tests prove that no rebuild ran without a permit
+    /// without relying on allocator address reuse.
+    #[cfg(test)]
+    last_rebuild_bytes: AtomicU64,
+}
+
+/// Outcome of the janitor's bounded auto-budget publication.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct AutoBudgetRefresh {
+    /// The resolved limit differed from the published one.
+    published: bool,
+    /// A cache rebuild is required and is waiting for a `BackgroundWork`
+    /// permit.
+    pending_rebuild: bool,
 }
 
 impl TinyUfoL1 {
@@ -3002,7 +3040,14 @@ impl TinyUfoL1 {
             auto_budget: AtomicBool::new(auto_budget),
             auto_budget_cap: AtomicU64::new(u64::MAX),
             max_bytes: AtomicU64::new(resolved_max_bytes),
+            applied_max_bytes: AtomicU64::new(resolved_max_bytes),
             current_weight: AtomicU64::new(0),
+            pending_auto_rebuild: AtomicU64::new(0),
+            pending_auto_epoch: AtomicU64::new(0),
+            budget_transition: StdMutex::new(()),
+            budget_epoch: AtomicU64::new(0),
+            #[cfg(test)]
+            last_rebuild_bytes: AtomicU64::new(0),
         }
     }
 
@@ -3154,8 +3199,22 @@ impl TinyUfoL1 {
     }
 
     fn set_max_bytes(&self, bytes: u64) {
+        // Hold the transition lock so a janitor rebuild that captured the
+        // previous auto target cannot complete after this policy switch. The
+        // epoch bump invalidates any permit holder that read the old policy
+        // but has not yet entered this critical section.
+        let _transition = self
+            .budget_transition
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let auto_budget = bytes == 0;
         self.auto_budget.store(auto_budget, Ordering::Relaxed);
+        // A manual capacity (or a switch back to auto) supersedes any
+        // deferred auto target: otherwise a later janitor pass would apply
+        // the stale auto value over the configured policy.
+        self.pending_auto_rebuild.store(0, Ordering::Release);
+        self.pending_auto_epoch.store(0, Ordering::Release);
+        self.budget_epoch.fetch_add(1, Ordering::AcqRel);
         let resolved = if auto_budget {
             crate::memory_governor::MEMORY_GOVERNOR
                 .cache_budget_bytes()
@@ -3163,14 +3222,20 @@ impl TinyUfoL1 {
         } else {
             bytes
         };
+        // The configured value is policy the moment it lands: admission sees
+        // it immediately and any deferred auto target is gone. The physical
+        // resize still follows hysteresis, measured against the applied
+        // capacity.
+        self.max_bytes.store(resolved, Ordering::Relaxed);
         self.apply_budget(resolved);
     }
 
     fn apply_budget(&self, resolved: u64) {
-        let old = self.max_bytes.load(Ordering::Relaxed);
-        if Self::should_rebuild_for_budget_change(old, resolved) {
-            // Keep the old applied value until hysteresis actually resizes;
-            // otherwise small steps would never accumulate into a resize.
+        // Compare with the capacity the last rebuild actually installed, not
+        // with the published target: small consecutive steps must accumulate
+        // against the physical cache or they are never applied.
+        let applied = self.applied_max_bytes.load(Ordering::Relaxed);
+        if Self::should_rebuild_for_budget_change(applied, resolved) {
             self.force_rebuild_with_limit(resolved);
         }
     }
@@ -3178,21 +3243,120 @@ impl TinyUfoL1 {
     pub(crate) fn use_governor_budget(&self, cap: u64) {
         self.auto_budget_cap.store(cap, Ordering::Relaxed);
         self.auto_budget.store(true, Ordering::Relaxed);
-        self.refresh_auto_budget();
+        self.publish_auto_budget_bounded();
     }
 
-    fn refresh_auto_budget(&self) {
-        self.refresh_auto_budget_from(HybridStorage::compute_memory_budget());
+    /// Bounded half of the janitor's budget refresh: publish the freshly
+    /// resolved limit so admission and eviction decisions see current memory
+    /// without rebuilding the cache. The rebuild allocates proportionally to
+    /// the number of cached keys, so it is deferred to
+    /// [`Self::apply_pending_auto_budget_rebuild`], which the janitor only
+    /// calls while holding a `BackgroundWork` permit.
+    fn publish_auto_budget_bounded(&self) -> AutoBudgetRefresh {
+        if !self.auto_budget.load(Ordering::Relaxed) {
+            return AutoBudgetRefresh {
+                published: false,
+                pending_rebuild: self.pending_auto_rebuild.load(Ordering::Acquire) != 0,
+            };
+        }
+        self.publish_resolved_budget(
+            crate::memory_governor::MEMORY_GOVERNOR
+                .cache_budget_bytes()
+                .min(self.auto_budget_cap.load(Ordering::Relaxed)),
+        )
     }
 
+    /// Test-only injection point: the governor budget is a process singleton,
+    /// so tests resolve it directly through the same clamped transition the
+    /// janitor uses.
+    #[cfg(test)]
     fn refresh_auto_budget_from(&self, budget: u64) {
         if self.auto_budget.load(Ordering::Relaxed) {
-            self.apply_budget(budget.min(self.auto_budget_cap.load(Ordering::Relaxed)));
+            self.publish_resolved_budget(budget.min(self.auto_budget_cap.load(Ordering::Relaxed)));
         }
+    }
+
+    fn publish_resolved_budget(&self, resolved: u64) -> AutoBudgetRefresh {
+        let _transition = self
+            .budget_transition
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        // Re-check the policy under the lock: a manual switch that landed
+        // after the caller resolved this value must win.
+        if !self.auto_budget.load(Ordering::Relaxed) {
+            self.pending_auto_rebuild.store(0, Ordering::Release);
+            self.pending_auto_epoch.store(0, Ordering::Release);
+            return AutoBudgetRefresh::default();
+        }
+        let applied = self.applied_max_bytes.load(Ordering::Relaxed);
+        let old = self.max_bytes.swap(resolved, Ordering::Relaxed);
+        if old != resolved {
+            // A new resolved value retargets any rebuild that is still
+            // waiting for a permit. Keeping a pending value matters because
+            // the physical TinyUFO capacity may still be the pre-deferral
+            // size even when this particular delta no longer crosses the
+            // rebuild threshold on its own.
+            let already_pending = self.pending_auto_rebuild.load(Ordering::Acquire) != 0;
+            let pending = if resolved == applied {
+                // The target returned to the installed capacity, so any
+                // deferred rebuild is obsolete.
+                0
+            } else if already_pending || Self::should_rebuild_for_budget_change(applied, resolved) {
+                resolved
+            } else {
+                0
+            };
+            let epoch = self
+                .budget_epoch
+                .fetch_add(1, Ordering::AcqRel)
+                .saturating_add(1);
+            self.pending_auto_rebuild.store(pending, Ordering::Release);
+            self.pending_auto_epoch
+                .store(if pending == 0 { 0 } else { epoch }, Ordering::Release);
+        }
+        AutoBudgetRefresh {
+            published: old != resolved,
+            pending_rebuild: self.pending_auto_rebuild.load(Ordering::Acquire) != 0,
+        }
+    }
+
+    /// Apply the budget rebuild deferred by bounded maintenance. Returns true
+    /// only when a rebuild actually ran; callers must hold a `BackgroundWork`
+    /// permit because the rebuild allocates a new cache and a key snapshot.
+    fn apply_pending_auto_budget_rebuild(&self) -> bool {
+        let observed_epoch = self.budget_epoch.load(Ordering::Acquire);
+        self.apply_pending_auto_budget_rebuild_at_epoch(observed_epoch)
+    }
+
+    /// Apply a deferred rebuild only if `observed_epoch` is still current.
+    ///
+    /// A permit holder may wait before rebuilding; a manual capacity switch
+    /// in that window bumps the epoch and clears the auto target. Rejecting
+    /// the stale attempt is what keeps the manual policy from being
+    /// overwritten by an older 8 MiB auto target.
+    fn apply_pending_auto_budget_rebuild_at_epoch(&self, observed_epoch: u64) -> bool {
+        let _transition = self
+            .budget_transition
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if !self.auto_budget.load(Ordering::Relaxed)
+            || self.budget_epoch.load(Ordering::Acquire) != observed_epoch
+        {
+            return false;
+        }
+        let pending = self.pending_auto_rebuild.swap(0, Ordering::AcqRel);
+        let pending_epoch = self.pending_auto_epoch.swap(0, Ordering::AcqRel);
+        if pending == 0 || pending_epoch != observed_epoch {
+            return false;
+        }
+        self.force_rebuild_with_limit(pending);
+        true
     }
 
     fn force_rebuild_with_limit(&self, bytes: u64) {
         let resolved = bytes.max(1024);
+        #[cfg(test)]
+        self.last_rebuild_bytes.store(resolved, Ordering::Relaxed);
         let target_weight = Self::weight_limit_for_bytes(resolved);
         let now = crate::utils::time::now_timestamp();
         // Salvage live entries newest-first until the smaller budget is
@@ -3229,6 +3393,7 @@ impl TinyUfoL1 {
             weight += entry_weight;
         }
         self.max_bytes.store(resolved, Ordering::Relaxed);
+        self.applied_max_bytes.store(resolved, Ordering::Relaxed);
         self.current_weight.store(0, Ordering::Relaxed);
         {
             let mut guard = self.inner.write().expect("TinyUfoL1 lock poisoned");
@@ -3719,9 +3884,42 @@ fn warm_bloom_from_cache_meta() {
     });
 }
 
+/// Serializes unit tests that mutate process-global cache or worker state
+/// (negative cache, worker collect generation). Test modules in this crate
+/// share this one lock instead of keeping per-module guards that do not
+/// exclude each other.
+#[cfg(test)]
+pub(crate) static CACHE_GLOBAL_STATE_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
 /// Negative cache: tracks keys confirmed to not exist in the local cache set.
 /// This mainly absorbs stale Bloom positives after purge/expiry.
-static NEGATIVE_CACHE: Lazy<DashMap<String, i64>> = Lazy::new(DashMap::new);
+static NEGATIVE_CACHE: Lazy<DashMap<Arc<str>, i64>> = Lazy::new(DashMap::new);
+/// Expiry index for [`NEGATIVE_CACHE`]: exactly one `(expiry, key)` entry per
+/// live map entry, ordered by expiry so the janitor retires due entries from
+/// the front in O(log n). The `Arc` is shared with the map key, so the index
+/// costs no second key buffer; the resident estimate charged at admission
+/// includes the index node.
+struct NegativeCacheExpiryIndex {
+    entries: BTreeSet<(i64, Arc<str>)>,
+}
+
+static NEGATIVE_CACHE_EXPIRY: Lazy<StdMutex<NegativeCacheExpiryIndex>> = Lazy::new(|| {
+    StdMutex::new(NegativeCacheExpiryIndex {
+        entries: BTreeSet::new(),
+    })
+});
+/// Per-entry charge covering the index node and its pointers. The key buffer
+/// is shared with the map entry, so only the node itself is added.
+const NEGATIVE_CACHE_INDEX_SLOT_BYTES: u64 = 64;
+
+/// Resident-ledger charge for one negative-cache map entry, including its
+/// expiry-index node.
+fn negative_cache_resident_bytes(key: &str) -> u64 {
+    160u64
+        .saturating_add(key.len() as u64)
+        .saturating_add(NEGATIVE_CACHE_INDEX_SLOT_BYTES)
+}
+
 const NEGATIVE_CACHE_TTL_SECS: i64 = 60;
 const NEGATIVE_CACHE_MIN_ENTRIES: usize = 1_000_000;
 const NEGATIVE_CACHE_MAX_ENTRIES: usize = 16_000_000;
@@ -3749,11 +3947,13 @@ fn negative_cache_check(key: &str, now: i64) -> bool {
     }
     drop(entry);
     // The entry exists but is expired: remove it (only if still expired) and
-    // refund its residency.
-    if NEGATIVE_CACHE
-        .remove_if(key, |_, expiry| *expiry <= now)
-        .is_some()
-    {
+    // drop its index entry in the same critical section, then refund.
+    let mut index = NEGATIVE_CACHE_EXPIRY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some((removed_key, expiry)) = NEGATIVE_CACHE.remove_if(key, |_, expiry| *expiry <= now) {
+        index.entries.remove(&(expiry, removed_key));
+        drop(index);
         let _ = crate::memory_governor::MEMORY_GOVERNOR.resident_memory_replace_owned(
             crate::memory_governor::ResidentCategory::NegativeCache,
             key,
@@ -3784,18 +3984,34 @@ fn negative_cache_insert_with_capacity(key: &str, now: i64, capacity: usize) {
     if !crate::memory_governor::MEMORY_GOVERNOR.resident_memory_replace_owned(
         crate::memory_governor::ResidentCategory::NegativeCache,
         key,
-        160 + key.len() as u64,
+        negative_cache_resident_bytes(key),
     ) {
         crate::pipeline_metrics::increment(
             crate::pipeline_metrics::PipelineCounter::NegativeCacheAdmissionRejected,
         );
         return;
     }
-    NEGATIVE_CACHE.insert(key.to_string(), now + NEGATIVE_CACHE_TTL_SECS);
+    let expiry = now + NEGATIVE_CACHE_TTL_SECS;
+    let key: Arc<str> = Arc::from(key);
+    // Replace any previous expiry index entry so refresh keeps exactly one
+    // index slot per map entry.
+    let mut index = NEGATIVE_CACHE_EXPIRY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(previous_expiry) = NEGATIVE_CACHE.insert(key.clone(), expiry) {
+        index.entries.remove(&(previous_expiry, key.clone()));
+    }
+    index.entries.insert((expiry, key));
 }
 
 fn negative_cache_remove(key: &str) {
-    NEGATIVE_CACHE.remove(key);
+    let mut index = NEGATIVE_CACHE_EXPIRY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some((removed_key, expiry)) = NEGATIVE_CACHE.remove(key) {
+        index.entries.remove(&(expiry, removed_key));
+    }
+    drop(index);
     let _ = crate::memory_governor::MEMORY_GOVERNOR.resident_memory_replace_owned(
         crate::memory_governor::ResidentCategory::NegativeCache,
         key,
@@ -3807,37 +4023,127 @@ fn negative_cache_stats() -> (usize, usize) {
     (NEGATIVE_CACHE.len(), negative_cache_capacity_limit())
 }
 
-fn negative_cache_cleanup(now: i64) {
-    // Refund each expired key's resident charge — a bare `retain` would drop
-    // the entry while its owner entry in the ledger stays charged forever.
-    let expired: Vec<String> = NEGATIVE_CACHE
-        .iter()
-        .filter_map(|entry| (*entry.value() <= now).then(|| entry.key().clone()))
-        .collect();
-    for key in expired {
-        // Re-check expiry under remove_if: the entry may have been refreshed
-        // between the scan and the removal.
-        if NEGATIVE_CACHE
-            .remove_if(&key, |_, expiry| *expiry <= now)
-            .is_some()
+/// How many due index entries the janitor retires per maintenance pass.
+const NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP: usize = 256;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct NegativeCacheCleanupStats {
+    /// Due index entries retired this pass.
+    examined: usize,
+    /// Expired entries actually removed and refunded this pass.
+    removed: usize,
+}
+
+/// Retire up to `cap` due index entries, earliest expiry first.
+///
+/// The index is sorted by expiry, so the first entry that is not due ends the
+/// pass: no live entry is rotated or skipped. Each retired slot is removed
+/// from the map in the same critical section, keeping the "one index entry
+/// per map entry" invariant, and its resident charge is refunded only when
+/// the map entry was still expired when removed.
+fn negative_cache_retire_due(now: i64, cap: usize) -> NegativeCacheCleanupStats {
+    let mut index = NEGATIVE_CACHE_EXPIRY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut examined = 0;
+    let mut removed = 0;
+    while examined < cap {
+        let Some((expiry, key)) = index.entries.pop_first() else {
+            break;
+        };
+        if expiry > now {
+            // Every remaining entry is later; put this one back and stop.
+            index.entries.insert((expiry, key));
+            break;
+        }
+        examined += 1;
+        if let Some((removed_key, _)) =
+            NEGATIVE_CACHE.remove_if(key.as_ref(), |_, current| *current <= now)
         {
+            removed += 1;
             let _ = crate::memory_governor::MEMORY_GOVERNOR.resident_memory_replace_owned(
                 crate::memory_governor::ResidentCategory::NegativeCache,
-                &key,
+                removed_key.as_ref(),
                 0,
             );
         }
     }
+    NegativeCacheCleanupStats { examined, removed }
+}
+
+/// Bounded variant of [`negative_cache_cleanup`] for the janitor's
+/// unconditional maintenance pass: at most
+/// [`NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP`] due entries are retired, so a
+/// burst of expirations cannot monopolize the janitor thread.
+fn negative_cache_cleanup_bounded(now: i64) -> NegativeCacheCleanupStats {
+    negative_cache_retire_due(now, NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP)
+}
+
+/// Seed an entry with an arbitrary expiry and register its index entry.
+/// Tests bypass admission so they do not depend on host pressure.
+#[cfg(test)]
+fn negative_cache_seed_for_test(key: &str, expiry: i64) {
+    let key: Arc<str> = Arc::from(key);
+    let _ = crate::memory_governor::MEMORY_GOVERNOR.resident_memory_replace_owned(
+        crate::memory_governor::ResidentCategory::NegativeCache,
+        &key,
+        negative_cache_resident_bytes(&key),
+    );
+    let mut index = NEGATIVE_CACHE_EXPIRY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(previous_expiry) = NEGATIVE_CACHE.insert(key.clone(), expiry) {
+        index.entries.remove(&(previous_expiry, key.clone()));
+    }
+    index.entries.insert((expiry, key));
+}
+
+/// Drop every test-owned key, including its expiry-index slot and resident
+/// charge. Leaving a live index slot behind would put a future expiry ahead
+/// of a later test's expired entries and stall the front-driven retirement.
+#[cfg(test)]
+fn negative_cache_retain_test_prefix(prefix: &str) {
+    let removed: Vec<Arc<str>> = NEGATIVE_CACHE
+        .iter()
+        .filter_map(|entry| entry.key().starts_with(prefix).then(|| entry.key().clone()))
+        .collect();
+    NEGATIVE_CACHE.retain(|key, _| !key.starts_with(prefix));
+    let mut index = NEGATIVE_CACHE_EXPIRY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    index.entries.retain(|(_, key)| !key.starts_with(prefix));
+    drop(index);
+    for key in removed {
+        let _ = crate::memory_governor::MEMORY_GOVERNOR.resident_memory_replace_owned(
+            crate::memory_governor::ResidentCategory::NegativeCache,
+            key.as_ref(),
+            0,
+        );
+    }
+}
+
+fn negative_cache_cleanup(now: i64) {
+    // Retire every due index entry; each removal refunds its resident charge
+    // in `negative_cache_retire_due`.
+    negative_cache_retire_due(now, usize::MAX);
 }
 
 /// Remove every negative-cache entry and refund each resident charge.
 fn negative_cache_drain() {
-    let keys: Vec<String> = NEGATIVE_CACHE
+    // Clear the expiry index before snapshotting the map: an insert that
+    // lands after this point registers itself again, while one that landed
+    // before is in the snapshot and removed below.
+    NEGATIVE_CACHE_EXPIRY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .entries
+        .clear();
+    let keys: Vec<Arc<str>> = NEGATIVE_CACHE
         .iter()
         .map(|entry| entry.key().clone())
         .collect();
     for key in keys {
-        negative_cache_remove(&key);
+        negative_cache_remove(key.as_ref());
     }
 }
 
@@ -5528,39 +5834,199 @@ pub fn start_cache_profiler() {
     });
 }
 
+/// Janitor cadence. Maintenance is bounded (see
+/// [`run_cache_janitor_cycle`]), so a missed permit delays only the expensive
+/// rebuild, never the freeing work.
+const CACHE_JANITOR_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+
+static JANITOR_CYCLES: AtomicU64 = AtomicU64::new(0);
+static JANITOR_MAINTENANCE_CYCLES: AtomicU64 = AtomicU64::new(0);
+static JANITOR_ADMISSION_SKIPS: AtomicU64 = AtomicU64::new(0);
+static JANITOR_BUDGET_PUBLISHES: AtomicU64 = AtomicU64::new(0);
+static JANITOR_REBUILDS_DEFERRED: AtomicU64 = AtomicU64::new(0);
+static JANITOR_REBUILDS_APPLIED: AtomicU64 = AtomicU64::new(0);
+static JANITOR_NEGATIVE_EXAMINED: AtomicU64 = AtomicU64::new(0);
+static JANITOR_NEGATIVE_REMOVED: AtomicU64 = AtomicU64::new(0);
+static JANITOR_WORKER_COLLECT_REQUESTS: AtomicU64 = AtomicU64::new(0);
+
+/// Observable janitor progress. `maintenance_cycles` must keep advancing
+/// while `admission_skips` advances; a stalled `maintenance_cycles` under
+/// memory pressure is the admission-gap regression this instrumentation
+/// exists to catch.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CacheJanitorActivity {
+    pub cycles: u64,
+    pub maintenance_cycles: u64,
+    pub admission_skips: u64,
+    pub budget_publishes: u64,
+    pub rebuilds_deferred: u64,
+    pub rebuilds_applied: u64,
+    pub negative_entries_examined: u64,
+    pub negative_entries_removed: u64,
+    pub worker_collect_requests: u64,
+}
+
+pub fn cache_janitor_activity() -> CacheJanitorActivity {
+    CacheJanitorActivity {
+        cycles: JANITOR_CYCLES.load(Ordering::Relaxed),
+        maintenance_cycles: JANITOR_MAINTENANCE_CYCLES.load(Ordering::Relaxed),
+        admission_skips: JANITOR_ADMISSION_SKIPS.load(Ordering::Relaxed),
+        budget_publishes: JANITOR_BUDGET_PUBLISHES.load(Ordering::Relaxed),
+        rebuilds_deferred: JANITOR_REBUILDS_DEFERRED.load(Ordering::Relaxed),
+        rebuilds_applied: JANITOR_REBUILDS_APPLIED.load(Ordering::Relaxed),
+        negative_entries_examined: JANITOR_NEGATIVE_EXAMINED.load(Ordering::Relaxed),
+        negative_entries_removed: JANITOR_NEGATIVE_REMOVED.load(Ordering::Relaxed),
+        worker_collect_requests: JANITOR_WORKER_COLLECT_REQUESTS.load(Ordering::Relaxed),
+    }
+}
+
+/// One janitor pass, split by cost.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CacheJanitorCycleOutcome {
+    pub disk_refreshed: bool,
+    pub budget_published: bool,
+    pub budget_rebuild_pending: bool,
+    pub budget_rebuild_applied: bool,
+    pub negative_entries_examined: usize,
+    pub negative_entries_removed: usize,
+    /// The reclaim monitor was signalled; this maintenance pass never runs
+    /// the reclaim coordinator itself.
+    pub reclaim_signaled: bool,
+    pub worker_collect_requested: bool,
+    pub admission_skipped: bool,
+}
+
+/// Run one janitor pass.
+///
+/// The maintenance half is bounded and runs unconditionally, even when
+/// `BackgroundWork` admission is exhausted:
+///
+/// * refresh cached disk availability (one sysinfo snapshot);
+/// * publish the resolved auto budget without rebuilding the cache;
+/// * signal the existing reclaim monitor via `notify_pressure_async` (an
+///   allocation-free atomic + unpark) instead of running the coordinator —
+///   reclaim itself may clone a whole negative-cache vec, so it must not run
+///   on this maintenance path;
+/// * retire at most [`NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP`] due
+///   negative-cache index entries, removing them from the map and refunding
+///   their resident charges; live entries are never touched;
+/// * request a worker-generation collect (the actual `mi_collect` runs on
+///   parked worker threads under their own rate limit).
+///
+/// Only the budget rebuild — the step that allocates a new cache and a key
+/// snapshot — requires the permit. Skipping it cannot lose freeing work: the
+/// resolved limit is already published, so admission and eviction see the
+/// pressure-reduced budget, and the rebuild stays pending for the next pass
+/// that gets a permit. This is deliberately not an admission bypass: no
+/// expensive, unbounded work runs without a permit.
+fn run_cache_janitor_cycle(
+    now: i64,
+    disk_root: &Path,
+    permit: Option<StaticAdmissionPermit>,
+) -> CacheJanitorCycleOutcome {
+    JANITOR_CYCLES.fetch_add(1, Ordering::Relaxed);
+    let admission_skipped = permit.is_none();
+    if admission_skipped {
+        JANITOR_ADMISSION_SKIPS.fetch_add(1, Ordering::Relaxed);
+    }
+
+    // Bounded maintenance: these steps free or republish state and never
+    // allocate proportionally to the cache or the negative-cache backlog.
+    let disks = sysinfo::Disks::new_with_refreshed_list();
+    let available = disks
+        .iter()
+        .find(|d| disk_root.starts_with(d.mount_point()))
+        .map(|d| d.available_space())
+        .unwrap_or(u64::MAX);
+    CACHED_DISK_AVAILABLE.store(available, Ordering::Relaxed);
+
+    let budget = crate::cache_manager::CACHE
+        .storage
+        .l1
+        .publish_auto_budget_bounded();
+    if budget.published {
+        JANITOR_BUDGET_PUBLISHES.fetch_add(1, Ordering::Relaxed);
+    }
+
+    // Signal-only: the reclaim monitor owns the (potentially large) reclaim
+    // pass. This path must stay allocation-free under zero admission.
+    crate::memory_reclaim::notify_pressure_async(
+        crate::memory_governor::MEMORY_GOVERNOR.current_memory_pressure_level(),
+    );
+
+    let negative = negative_cache_cleanup_bounded(now);
+    JANITOR_NEGATIVE_EXAMINED.fetch_add(negative.examined as u64, Ordering::Relaxed);
+    JANITOR_NEGATIVE_REMOVED.fetch_add(negative.removed as u64, Ordering::Relaxed);
+
+    // The request is a generation bump, not collection work: each worker
+    // collects its own heap at its next park under its TLS rate limit.
+    crate::worker_reclaim::request_worker_collect();
+    JANITOR_WORKER_COLLECT_REQUESTS.fetch_add(1, Ordering::Relaxed);
+    JANITOR_MAINTENANCE_CYCLES.fetch_add(1, Ordering::Relaxed);
+
+    // Expensive, admissible half: only a cache rebuild waits for a permit.
+    let budget_rebuild_applied = if permit.is_some() {
+        let applied = crate::cache_manager::CACHE
+            .storage
+            .l1
+            .apply_pending_auto_budget_rebuild();
+        if applied {
+            JANITOR_REBUILDS_APPLIED.fetch_add(1, Ordering::Relaxed);
+        }
+        applied
+    } else {
+        if budget.pending_rebuild {
+            JANITOR_REBUILDS_DEFERRED.fetch_add(1, Ordering::Relaxed);
+        }
+        false
+    };
+
+    CacheJanitorCycleOutcome {
+        disk_refreshed: true,
+        budget_published: budget.published,
+        budget_rebuild_pending: budget.pending_rebuild && !budget_rebuild_applied,
+        budget_rebuild_applied,
+        negative_entries_examined: negative.examined,
+        negative_entries_removed: negative.removed,
+        reclaim_signaled: true,
+        worker_collect_requested: true,
+        admission_skipped,
+    }
+}
+
 /// Periodically refresh disk space and memory budget.
 /// TinyUFO handles eviction internally via S3-FIFO.
 pub fn start_cache_janitor() {
     tokio::spawn(async {
         let disk_root = crate::paths::NodePaths::current().cache_dir();
         loop {
-            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-            let Some(_permit) = crate::memory_governor::MEMORY_GOVERNOR
-                .try_admit(crate::memory_governor::AdmissionClass::BackgroundWork)
-            else {
-                tracing::warn!(
-                    "CACHE_JANITOR: skipping cycle because background memory admission is full"
-                );
-                continue;
-            };
-
-            // Refresh cached disk available space
-            let disks = sysinfo::Disks::new_with_refreshed_list();
-            let available = disks
-                .iter()
-                .find(|d| disk_root.starts_with(d.mount_point()))
-                .map(|d| d.available_space())
-                .unwrap_or(u64::MAX);
-            CACHED_DISK_AVAILABLE.store(available, Ordering::Relaxed);
-
-            crate::cache_manager::CACHE.storage.l1.refresh_auto_budget();
-            crate::memory_reclaim::periodic_reclaim_check();
-
-            // Clean expired negative cache entries — must go through the
-            // refunding cleanup, not a bare retain, or the resident ledger
-            // keeps charges for entries that no longer exist.
+            tokio::time::sleep(CACHE_JANITOR_INTERVAL).await;
             let now = crate::utils::time::now_timestamp();
-            negative_cache_cleanup(now);
+            // Admission is an accounting gate for the expensive half, not a
+            // precondition for maintenance: the previous implementation
+            // `continue`d here, so pressure (exactly when the budget refresh,
+            // reclaim check, and negative-cache cleanup matter most) stopped
+            // all of it.
+            let permit = crate::memory_governor::MEMORY_GOVERNOR
+                .try_admit(crate::memory_governor::AdmissionClass::BackgroundWork);
+            if permit.is_none() {
+                tracing::warn!(
+                    "CACHE_JANITOR: background memory admission unavailable; bounded maintenance continues, expensive rebuild deferred"
+                );
+            }
+            let outcome = run_cache_janitor_cycle(now, &disk_root, permit);
+            if outcome.budget_rebuild_pending {
+                tracing::debug!(
+                    negative_removed = outcome.negative_entries_removed,
+                    "CACHE_JANITOR: maintenance pass defers the auto-budget rebuild"
+                );
+            } else {
+                tracing::debug!(
+                    negative_removed = outcome.negative_entries_removed,
+                    rebuild_applied = outcome.budget_rebuild_applied,
+                    "CACHE_JANITOR: maintenance pass completed"
+                );
+            }
         }
     });
 }
@@ -5573,13 +6039,9 @@ pub fn fast_l1_lookup(key: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::LazyLock as TestLazyLock;
     use std::sync::atomic::{AtomicU64 as TestAtomicU64, Ordering as TestOrdering};
-    use tokio::sync::Mutex as TestMutex;
 
     static TEST_UNIQUE_COUNTER: TestAtomicU64 = TestAtomicU64::new(0);
-    static CACHE_GLOBAL_STATE_LOCK: TestLazyLock<TestMutex<()>> =
-        TestLazyLock::new(|| TestMutex::new(()));
 
     fn unique_test_suffix(prefix: &str) -> String {
         let seq = TEST_UNIQUE_COUNTER.fetch_add(1, TestOrdering::Relaxed);
@@ -6634,7 +7096,7 @@ mod tests {
             .await;
         assert!(crate::metrics::storage::get_cache_meta_memory(&hash).is_none());
 
-        NEGATIVE_CACHE.remove(&key);
+        negative_cache_retain_test_prefix(&key);
         crate::metrics::storage::delete_cache_meta_for_test(&hash);
     }
 
@@ -7615,30 +8077,33 @@ mod tests {
 
     #[test]
     fn negative_cache_expires_stale_entries() {
+        let _state_guard = CACHE_GLOBAL_STATE_LOCK.blocking_lock();
         let key = unique_test_suffix("neg-expire");
         let now = crate::utils::time::now_timestamp();
-        NEGATIVE_CACHE.insert(key.clone(), now - 1);
+        negative_cache_seed_for_test(&key, now - 1);
         assert!(!negative_cache_check(&key, now));
-        assert!(!NEGATIVE_CACHE.contains_key(&key));
+        assert!(!NEGATIVE_CACHE.contains_key(key.as_str()));
     }
 
     #[test]
     fn negative_cache_refuses_insert_when_capacity_remains_full() {
+        let _state_guard = CACHE_GLOBAL_STATE_LOCK.blocking_lock();
         let now = crate::utils::time::now_timestamp();
         let prefix = format!("{}-", unique_test_suffix("neg-full"));
         for i in 0..3 {
-            NEGATIVE_CACHE.insert(format!("{prefix}{i}"), now + NEGATIVE_CACHE_TTL_SECS);
+            negative_cache_seed_for_test(&format!("{prefix}{i}"), now + NEGATIVE_CACHE_TTL_SECS);
         }
 
         let extra = format!("{prefix}extra");
         negative_cache_insert_with_capacity(&extra, now, 3);
-        assert!(!NEGATIVE_CACHE.contains_key(&extra));
+        assert!(!NEGATIVE_CACHE.contains_key(extra.as_str()));
 
-        NEGATIVE_CACHE.retain(|key, _| !key.starts_with(&prefix));
+        negative_cache_retain_test_prefix(&prefix);
     }
 
     #[test]
     fn negative_cache_cleanup_and_drain_refund_resident_ledger() {
+        let _state_guard = CACHE_GLOBAL_STATE_LOCK.blocking_lock();
         let now = crate::utils::time::now_timestamp();
         let unique = unique_test_suffix("neg-refund");
         let gov = &crate::memory_governor::MEMORY_GOVERNOR;
@@ -7648,16 +8113,10 @@ mod tests {
             gov.resident_owner_bytes(crate::memory_governor::ResidentCategory::NegativeCache, key)
         };
         let charged_keys: Vec<String> = (0..8).map(|i| format!("{unique}-charged-{i}")).collect();
-        // Charge exactly like negative_cache_insert_with_capacity, but
-        // bypass its pressure gate so the test does not depend on the host's
-        // live memory level.
+        // Seed exactly like an admission, but bypass the pressure gate so the
+        // test does not depend on the host's live memory level.
         let charge_insert = |key: &String| {
-            NEGATIVE_CACHE.insert(key.clone(), now + NEGATIVE_CACHE_TTL_SECS);
-            let _ = gov.resident_memory_replace_owned(
-                crate::memory_governor::ResidentCategory::NegativeCache,
-                key,
-                160 + key.len() as u64,
-            );
+            negative_cache_seed_for_test(key, now + NEGATIVE_CACHE_TTL_SECS);
         };
         for key in &charged_keys {
             charge_insert(key);
@@ -7689,11 +8148,388 @@ mod tests {
                 "reclaim drain must refund the resident charge for {key}"
             );
         }
-        NEGATIVE_CACHE.retain(|key, _| !key.starts_with(&unique));
+        negative_cache_retain_test_prefix(&unique);
+    }
+
+    #[test]
+    fn negative_cache_cleanup_bounded_limits_each_pass_and_drains() {
+        let _state_guard = CACHE_GLOBAL_STATE_LOCK.blocking_lock();
+        let now = crate::utils::time::now_timestamp();
+        let unique = unique_test_suffix("neg-bounded");
+        let expired: Vec<String> = (0..400).map(|i| format!("{unique}-expired-{i}")).collect();
+        let live: Vec<String> = (0..3).map(|i| format!("{unique}-live-{i}")).collect();
+        for key in &expired {
+            negative_cache_seed_for_test(key, now - 1);
+        }
+        for key in &live {
+            negative_cache_seed_for_test(key, now + NEGATIVE_CACHE_TTL_SECS);
+        }
+
+        let remaining = |keys: &[String]| {
+            keys.iter()
+                .filter(|key| NEGATIVE_CACHE.contains_key(key.as_str()))
+                .count()
+        };
+        // Each pass retires at most the cap, so a large map (all live, or a
+        // big expired backlog) cannot turn maintenance into a full scan or an
+        // unbounded temporary allocation. Due entries sort to the front of
+        // the expiry index, so repeated passes drain the backlog.
+        assert_eq!(remaining(&expired), 400);
+        let mut passes = 0;
+        loop {
+            let stats = negative_cache_cleanup_bounded(now);
+            assert!(
+                stats.examined <= NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP,
+                "one pass examined {} entries, above the cap {}",
+                stats.examined,
+                NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP
+            );
+            assert!(
+                stats.removed <= stats.examined,
+                "cannot remove more entries than were examined"
+            );
+            passes += 1;
+            if remaining(&expired) == 0 {
+                break;
+            }
+            assert!(
+                passes < 5_000,
+                "the expiry index must eventually reach the backlog"
+            );
+        }
+        assert_eq!(
+            remaining(&live),
+            3,
+            "bounded cleanup must not remove unexpired entries"
+        );
+
+        negative_cache_retain_test_prefix(&unique);
+    }
+
+    #[test]
+    fn negative_cache_bounded_sweep_caps_examined_without_expired_entries() {
+        let _state_guard = CACHE_GLOBAL_STATE_LOCK.blocking_lock();
+        let now = crate::utils::time::now_timestamp();
+        let unique = unique_test_suffix("neg-no-expired");
+        for i in 0..1_000 {
+            negative_cache_seed_for_test(
+                &format!("{unique}-live-{i}"),
+                now + NEGATIVE_CACHE_TTL_SECS,
+            );
+        }
+
+        // Every entry is live, so the sweep must not remove any of them and
+        // must still bound each pass instead of scanning the whole index.
+        for _ in 0..8 {
+            let stats = negative_cache_cleanup_bounded(now);
+            assert!(
+                stats.examined <= NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP,
+                "an index with no due entries must not be scanned in full"
+            );
+            assert_eq!(stats.removed, 0, "live entries must never be removed");
+        }
+        for i in 0..1_000 {
+            let key = format!("{unique}-live-{i}");
+            assert!(
+                NEGATIVE_CACHE.contains_key(key.as_str()),
+                "live entry {i} must survive maintenance"
+            );
+        }
+
+        negative_cache_retain_test_prefix(&unique);
+    }
+
+    #[test]
+    fn negative_cache_expiry_index_is_bounded_and_accounted() {
+        let _state_guard = CACHE_GLOBAL_STATE_LOCK.blocking_lock();
+        let now = crate::utils::time::now_timestamp();
+        let unique = unique_test_suffix("neg-index-bound");
+        let index_len = |prefix: &str| {
+            let index = NEGATIVE_CACHE_EXPIRY
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            index
+                .entries
+                .iter()
+                .filter(|(_, key)| key.starts_with(prefix))
+                .count()
+        };
+
+        // Insert+remove churn: one entry live at a time. The index must track
+        // the map, not retain one slot per insert for the whole TTL. Seeding
+        // bypasses the host pressure gate so the churn itself is
+        // deterministic; index bookkeeping is the same as admission.
+        for i in 0..100_000 {
+            let key = format!("{unique}-churn-{i}");
+            negative_cache_seed_for_test(&key, now + NEGATIVE_CACHE_TTL_SECS);
+            assert!(NEGATIVE_CACHE.contains_key(key.as_str()));
+            negative_cache_remove(&key);
+            assert!(!NEGATIVE_CACHE.contains_key(key.as_str()));
+        }
+        assert_eq!(
+            index_len(&format!("{unique}-churn-")),
+            0,
+            "removed keys must not leave expiry-index slots behind"
+        );
+
+        // Repeated refresh of one key must keep exactly one slot.
+        let refreshed = format!("{unique}-refresh");
+        for _ in 0..10_000 {
+            negative_cache_seed_for_test(&refreshed, now + NEGATIVE_CACHE_TTL_SECS);
+        }
+        assert_eq!(
+            index_len(&refreshed),
+            1,
+            "a refreshed key must keep exactly one expiry-index slot"
+        );
+        let gov = &crate::memory_governor::MEMORY_GOVERNOR;
+        assert_eq!(
+            gov.resident_owner_bytes(
+                crate::memory_governor::ResidentCategory::NegativeCache,
+                &refreshed,
+            ),
+            negative_cache_resident_bytes(&refreshed),
+            "the resident estimate must include the expiry-index slot"
+        );
+
+        // A due entry that is never checked by a request must still be
+        // reachable by the janitor: sorted expiry, not a sliding/rotating
+        // queue that can strand untracked slots.
+        let due = format!("{unique}-due");
+        negative_cache_seed_for_test(&due, now - 1);
+        let stats = negative_cache_cleanup_bounded(now);
+        assert!(stats.removed >= 1, "the janitor must retire due entries");
+        assert!(!NEGATIVE_CACHE.contains_key(due.as_str()));
+
+        negative_cache_remove(&refreshed);
+        assert_eq!(index_len(&refreshed), 0);
+        assert_eq!(
+            gov.resident_owner_bytes(
+                crate::memory_governor::ResidentCategory::NegativeCache,
+                &refreshed,
+            ),
+            0,
+            "removal must refund the per-entry charge"
+        );
+        negative_cache_retain_test_prefix(&unique);
+    }
+
+    fn auto_budget_l1_for_test(max_bytes: u64) -> TinyUfoL1 {
+        TinyUfoL1 {
+            inner: StdRwLock::new(Arc::new(TinyUfoL1::build_cache(max_bytes))),
+            keys: DashSet::new(),
+            auto_budget: AtomicBool::new(true),
+            auto_budget_cap: AtomicU64::new(u64::MAX),
+            max_bytes: AtomicU64::new(max_bytes),
+            applied_max_bytes: AtomicU64::new(max_bytes),
+            current_weight: AtomicU64::new(0),
+            pending_auto_rebuild: AtomicU64::new(0),
+            pending_auto_epoch: AtomicU64::new(0),
+            budget_transition: StdMutex::new(()),
+            budget_epoch: AtomicU64::new(0),
+            last_rebuild_bytes: AtomicU64::new(0),
+        }
+    }
+
+    #[test]
+    fn budget_publication_is_bounded_and_rebuild_waits_for_admission() {
+        let l1 = auto_budget_l1_for_test(64 * 1024 * 1024);
+
+        let refresh = l1.publish_resolved_budget(8 * 1024 * 1024);
+        assert!(refresh.published, "the resolved limit must be published");
+        assert!(
+            refresh.pending_rebuild,
+            "a shrink past the rebuild threshold must be deferred"
+        );
+        assert_eq!(l1.max_bytes(), 8 * 1024 * 1024);
+        assert_eq!(
+            l1.last_rebuild_bytes.load(Ordering::Relaxed),
+            0,
+            "bounded publication must not allocate a replacement cache"
+        );
+        assert_eq!(
+            l1.pending_auto_rebuild.load(Ordering::Acquire),
+            8 * 1024 * 1024,
+            "the pending rebuild must still be waiting"
+        );
+
+        assert!(
+            l1.apply_pending_auto_budget_rebuild(),
+            "the admissible half applies the deferred rebuild"
+        );
+        assert_eq!(
+            l1.last_rebuild_bytes.load(Ordering::Relaxed),
+            8 * 1024 * 1024,
+            "applying the deferred rebuild replaces the cache"
+        );
+        assert!(
+            !l1.apply_pending_auto_budget_rebuild(),
+            "the pending target is consumed exactly once"
+        );
+    }
+
+    #[test]
+    fn manual_capacity_switch_invalidates_deferred_auto_rebuild() {
+        let l1 = auto_budget_l1_for_test(64 * 1024 * 1024);
+        assert!(l1.publish_resolved_budget(8 * 1024 * 1024).pending_rebuild);
+        let in_flight_epoch = l1.budget_epoch.load(Ordering::Acquire);
+        assert_eq!(
+            l1.pending_auto_rebuild.load(Ordering::Acquire),
+            8 * 1024 * 1024
+        );
+
+        // A manual policy lands while a janitor permit holder is still
+        // waiting to apply the 8 MiB auto target.
+        l1.set_max_bytes(32 * 1024 * 1024);
+        assert!(!l1.auto_budget.load(Ordering::Relaxed));
+        assert_eq!(l1.max_bytes(), 32 * 1024 * 1024);
+        assert_eq!(
+            l1.pending_auto_rebuild.load(Ordering::Acquire),
+            0,
+            "manual capacity must clear the deferred auto target"
+        );
+        assert_eq!(l1.pending_auto_epoch.load(Ordering::Acquire), 0);
+        assert!(
+            !l1.apply_pending_auto_budget_rebuild_at_epoch(in_flight_epoch),
+            "a stale in-flight auto rebuild must not overwrite the manual policy"
+        );
+        assert!(!l1.apply_pending_auto_budget_rebuild());
+
+        // The next janitor pass must not resurrect the old auto target.
+        let later = l1.publish_auto_budget_bounded();
+        assert!(!later.published);
+        assert!(!later.pending_rebuild);
+        assert!(!l1.apply_pending_auto_budget_rebuild());
+        assert_eq!(
+            l1.max_bytes(),
+            32 * 1024 * 1024,
+            "the manual capacity must remain in force"
+        );
+    }
+
+    #[test]
+    fn janitor_maintenance_progresses_when_background_admission_is_zero() {
+        let _state_guard = CACHE_GLOBAL_STATE_LOCK.blocking_lock();
+        let now = crate::utils::time::now_timestamp();
+        let unique = unique_test_suffix("janitor-zero-admission");
+        let expired: Vec<String> = (0..4).map(|i| format!("{unique}-{i}")).collect();
+        for key in &expired {
+            negative_cache_seed_for_test(key, now - 1);
+        }
+        let before = cache_janitor_activity();
+        let disk_root = crate::paths::NodePaths::current().cache_dir();
+
+        // `None` is exactly what `try_admit(BackgroundWork)` returns when the
+        // class account is at capacity. Maintenance must keep freeing state
+        // across passes; the bounded sweep deliberately retires only a slice
+        // per pass, so drive passes until all expired keys are gone.
+        let mut cycles = 0u64;
+        loop {
+            let outcome = run_cache_janitor_cycle(now, &disk_root, None);
+            assert!(outcome.admission_skipped);
+            assert!(outcome.disk_refreshed);
+            assert!(outcome.reclaim_signaled);
+            assert!(outcome.worker_collect_requested);
+            assert!(outcome.negative_entries_examined <= NEGATIVE_CACHE_MAINTENANCE_EXAMINE_CAP);
+            assert!(
+                !outcome.budget_rebuild_applied,
+                "the expensive rebuild must never run without a permit"
+            );
+            cycles += 1;
+            if expired
+                .iter()
+                .all(|key| !NEGATIVE_CACHE.contains_key(key.as_str()))
+            {
+                break;
+            }
+            assert!(
+                cycles < 500,
+                "zero-admission maintenance must keep draining expired entries"
+            );
+        }
+
+        let after = cache_janitor_activity();
+        assert_eq!(after.cycles, before.cycles + cycles);
+        assert_eq!(after.maintenance_cycles, before.maintenance_cycles + cycles);
+        assert_eq!(after.admission_skips, before.admission_skips + cycles);
+        assert_eq!(
+            after.worker_collect_requests,
+            before.worker_collect_requests + cycles
+        );
+
+        negative_cache_retain_test_prefix(&unique);
+    }
+
+    #[test]
+    fn pressure_release_same_process_applies_deferred_rebuild() {
+        let _state_guard = CACHE_GLOBAL_STATE_LOCK.blocking_lock();
+        let unique = unique_test_suffix("janitor-recover");
+        let now = crate::utils::time::now_timestamp();
+        let first: Vec<String> = (0..2).map(|i| format!("{unique}-a-{i}")).collect();
+        for key in &first {
+            negative_cache_seed_for_test(key, now - 1);
+        }
+        let disk_root = crate::paths::NodePaths::current().cache_dir();
+        let mut skipped_cycles = 0u32;
+        loop {
+            let skipped = run_cache_janitor_cycle(now, &disk_root, None);
+            assert!(skipped.admission_skipped);
+            skipped_cycles += 1;
+            if first
+                .iter()
+                .all(|key| !NEGATIVE_CACHE.contains_key(key.as_str()))
+            {
+                break;
+            }
+            assert!(
+                skipped_cycles < 500,
+                "the skipped passes must still make cleanup progress"
+            );
+        }
+
+        // Release: the same process performs work again without restarting
+        // the janitor. The bounded budget target survived the skipped passes.
+        let l1 = auto_budget_l1_for_test(64 * 1024 * 1024);
+        let refresh = l1.publish_resolved_budget(8 * 1024 * 1024);
+        assert!(refresh.pending_rebuild);
+        assert_ne!(
+            l1.pending_auto_rebuild.load(Ordering::Acquire),
+            0,
+            "still deferred before release"
+        );
+
+        let second: Vec<String> = (0..2).map(|i| format!("{unique}-b-{i}")).collect();
+        for key in &second {
+            negative_cache_seed_for_test(key, now - 1);
+        }
+        let mut recovered_cycles = 0u32;
+        loop {
+            let recovered = run_cache_janitor_cycle(now, &disk_root, None);
+            assert!(recovered.admission_skipped);
+            recovered_cycles += 1;
+            if second
+                .iter()
+                .all(|key| !NEGATIVE_CACHE.contains_key(key.as_str()))
+            {
+                break;
+            }
+            assert!(
+                recovered_cycles < 500,
+                "maintenance keeps progressing in the same process"
+            );
+        }
+        assert!(
+            l1.apply_pending_auto_budget_rebuild(),
+            "the admissible half applies the budget rebuild once pressure is released"
+        );
+        assert!(!l1.apply_pending_auto_budget_rebuild());
+
+        negative_cache_retain_test_prefix(&unique);
     }
 
     #[test]
     fn negative_cache_does_not_pollute_positive_bloom() {
+        let _state_guard = CACHE_GLOBAL_STATE_LOCK.blocking_lock();
         let now = crate::utils::time::now_timestamp();
         let unique = unique_test_suffix("neg-no-bloom");
         let key = (0..10_000)
@@ -7704,7 +8540,7 @@ mod tests {
         negative_cache_insert_with_capacity(&key, now, NEGATIVE_CACHE.len().saturating_add(1));
 
         assert!(!bloom_may_exist(&key));
-        NEGATIVE_CACHE.remove(&key);
+        negative_cache_retain_test_prefix(&key);
     }
 
     #[test]
@@ -7983,14 +8819,14 @@ mod tests {
         // The production admission path intentionally refuses new negative
         // entries during pressure. Seed the test entry directly so this test
         // exercises the critical reclaim operation itself.
-        NEGATIVE_CACHE.insert(key.clone(), now + NEGATIVE_CACHE_TTL_SECS);
+        negative_cache_seed_for_test(&key, now + NEGATIVE_CACHE_TTL_SECS);
         let (count_before, _) = storage.l1.stats();
         assert!(count_before >= 1);
 
         let stats = super::reclaim_caches_critical();
         let (count_after, _) = storage.l1.stats();
         assert!(stats.l1_entries_removed >= 1 || count_after < count_before);
-        assert!(!NEGATIVE_CACHE.contains_key(&key));
+        assert!(!NEGATIVE_CACHE.contains_key(key.as_str()));
     }
 
     #[test]
@@ -8009,7 +8845,7 @@ mod tests {
         let key = unique_test_suffix("reconcile-neg");
         let now = crate::utils::time::now_timestamp();
         negative_cache_insert(&key, now);
-        if !NEGATIVE_CACHE.contains_key(&key) {
+        if !NEGATIVE_CACHE.contains_key(key.as_str()) {
             // Insert was refused under a pressure snapshot — nothing to
             // reconcile for this key.
             return;
@@ -8017,7 +8853,8 @@ mod tests {
         // Simulate a leaked charge: remove the map entry directly instead of
         // via negative_cache_remove, so the ledger owner stays charged with
         // nothing backing it.
-        NEGATIVE_CACHE.remove(&key);
+        NEGATIVE_CACHE.remove(key.as_str());
+        negative_cache_retain_test_prefix(&key);
         let stats = super::reconcile_resident_ledgers();
         assert!(
             stats.stale_owners_removed >= 1,

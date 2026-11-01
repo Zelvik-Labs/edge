@@ -1,4 +1,5 @@
 use crate::config_models::ServerConfig;
+use crate::metrics::analyzer::RequestStats;
 use crate::pb;
 use crate::proxy::ProxyCTX;
 use base64::Engine as _;
@@ -349,6 +350,47 @@ pub fn access_log_needs_attrs(ctx: &ProxyCTX) -> bool {
         .unwrap_or(true)
 }
 
+/// Produces the analyzer answer for an access-log entry. This deliberately
+/// does not look at `metrics_started`/`metrics_recorded`: attrs are enabled by
+/// log policy, not by whether metric accounting ran. A value already computed
+/// for the request (e.g. by the metrics path) is reused instead of re-parsed.
+fn access_log_analysis<'a>(
+    ctx: &'a ProxyCTX,
+    user_agent: &str,
+    owned: &'a mut Option<RequestStats>,
+) -> Option<&'a RequestStats> {
+    if !access_log_needs_attrs(ctx) {
+        return None;
+    }
+    if let Some(analyzed) = ctx.analyzed.as_ref() {
+        return Some(analyzed);
+    }
+    Some(&*owned.get_or_insert_with(|| {
+        crate::metrics::analyzer::analyze_request(ctx.client_ip, user_agent)
+    }))
+}
+
+fn insert_analyzed_access_log_attrs(
+    attrs: &mut std::collections::HashMap<String, String>,
+    analyzed: &RequestStats,
+) {
+    if let Some(geo) = &analyzed.geo {
+        attrs.insert("region".to_string(), geo.region.to_string());
+        attrs.insert("city".to_string(), geo.city.to_string());
+        attrs.insert("isp".to_string(), geo.provider.to_string());
+        attrs.insert("country".to_string(), geo.country.to_string());
+        if !geo.country_iso.is_empty() {
+            attrs.insert("countryCode".to_string(), geo.country_iso.to_string());
+        }
+        if geo.asn > 0 {
+            attrs.insert("asn".to_string(), format!("AS{}", geo.asn));
+        }
+    }
+    attrs.insert("browser".to_string(), analyzed.browser.to_string());
+    attrs.insert("os".to_string(), analyzed.os.to_string());
+    attrs.insert("device".to_string(), analyzed.device.to_string());
+}
+
 pub fn log_access(session: &Session, ctx: &ProxyCTX) {
     if !ctx.access_log_module_enabled {
         debug!("ACCESS_LOG: blocked by access_log_module_enabled=false");
@@ -440,6 +482,11 @@ pub fn log_access(session: &Session, ctx: &ProxyCTX) {
     let log_tags = access_log_field_enabled(fields, 50);
 
     let req = session.req_header();
+    let analysis_user_agent = req
+        .headers
+        .get("user-agent")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("");
     let server_id = ctx.server.as_ref().and_then(|s| s.id).unwrap_or(0);
 
     let host = req
@@ -787,19 +834,9 @@ pub fn log_access(session: &Session, ctx: &ProxyCTX) {
             },
         );
 
-        if let Some(analyzed) = &ctx.analyzed {
-            if let Some(geo) = &analyzed.geo {
-                log.attrs
-                    .insert("region".to_string(), geo.region.to_string());
-                log.attrs.insert("city".to_string(), geo.city.to_string());
-                log.attrs
-                    .insert("isp".to_string(), geo.provider.to_string());
-                log.attrs
-                    .insert("country".to_string(), geo.country.to_string());
-            }
-            log.attrs
-                .insert("browser".to_string(), analyzed.browser.to_string());
-            log.attrs.insert("os".to_string(), analyzed.os.to_string());
+        let mut analyzed_owned = None;
+        if let Some(analyzed) = access_log_analysis(ctx, analysis_user_agent, &mut analyzed_owned) {
+            insert_analyzed_access_log_attrs(&mut log.attrs, analyzed);
         }
     }
 
@@ -1217,5 +1254,125 @@ mod tests {
             node_log_throttle_interval_ms(None),
             NODE_LOG_THROTTLE_INTERVAL_MS
         );
+    }
+
+    use crate::config_models::HTTPAccessLogRef;
+    use crate::metrics::analyzer::GeoInfo;
+
+    fn ctx_with_access_log(fields: Vec<i32>) -> ProxyCTX {
+        let mut ctx = ProxyCTX::default();
+        ctx.access_log_ref = Some(HTTPAccessLogRef {
+            is_on: true,
+            fields,
+        });
+        ctx
+    }
+
+    fn analyzed_fixture(asn: u32, country_iso: &str) -> RequestStats {
+        RequestStats {
+            geo: Some(GeoInfo {
+                country: Arc::from("United States"),
+                country_id: 6252001,
+                country_iso: Arc::from(country_iso),
+                region: Arc::from("California"),
+                region_id: 5332921,
+                region_iso: Arc::from("CA"),
+                city: Arc::from("Los Angeles"),
+                city_id: 5368361,
+                provider: Arc::from("NTT America, Inc."),
+                asn,
+            }),
+            browser: Arc::from("Chrome"),
+            browser_version: Arc::from("120.0.0.0"),
+            os: Arc::from("Android"),
+            os_version: Arc::from("13"),
+            device: Arc::from("smartphone"),
+        }
+    }
+
+    #[test]
+    fn access_log_needs_attrs_respects_log_policy_and_field_mask() {
+        assert!(access_log_needs_attrs(&ctx_with_access_log(Vec::new())));
+        assert!(access_log_needs_attrs(&ctx_with_access_log(vec![43])));
+        assert!(!access_log_needs_attrs(&ctx_with_access_log(vec![1])));
+
+        let mut ctx = ctx_with_access_log(vec![43]);
+        ctx.access_log_ref.as_mut().expect("ref").is_on = false;
+        assert!(!access_log_needs_attrs(&ctx));
+
+        let mut ctx = ctx_with_access_log(vec![43]);
+        ctx.no_log = true;
+        assert!(!access_log_needs_attrs(&ctx));
+
+        let mut ctx = ctx_with_access_log(vec![43]);
+        ctx.global_access_log_on = false;
+        assert!(!access_log_needs_attrs(&ctx));
+
+        let mut ctx = ctx_with_access_log(vec![43]);
+        ctx.access_log_module_enabled = false;
+        assert!(!access_log_needs_attrs(&ctx));
+    }
+
+    #[test]
+    fn access_log_analysis_ignores_metrics_lifecycle_and_reuses_cached_stats() {
+        let mut ctx = ctx_with_access_log(vec![43]);
+        assert!(!ctx.metrics_started);
+        assert!(!ctx.metrics_recorded);
+
+        // Metrics never started: the log path must still classify the UA.
+        let mut owned = None;
+        let analyzed = access_log_analysis(&ctx, "heki", &mut owned).expect("analysis");
+        assert_eq!(&*analyzed.browser, "Unknown");
+        assert_eq!(&*analyzed.os, "Unknown");
+        assert_eq!(&*analyzed.device, "Unknown");
+
+        // Metrics already finished: no effect on the log path.
+        ctx.metrics_started = true;
+        ctx.metrics_recorded = true;
+        let mut owned = None;
+        assert!(access_log_analysis(&ctx, "heki", &mut owned).is_some());
+
+        // An answer computed by the metrics path is reused, not re-parsed.
+        ctx.analyzed = Some(analyzed_fixture(2914, "US"));
+        let mut owned = None;
+        let analyzed = access_log_analysis(&ctx, "heki", &mut owned).expect("cached");
+        assert!(std::ptr::eq(
+            analyzed,
+            ctx.analyzed.as_ref().expect("cached stats")
+        ));
+        assert_eq!(&*analyzed.device, "smartphone");
+    }
+
+    #[test]
+    fn access_log_attrs_carry_asn_country_code_and_device() {
+        let analyzed = analyzed_fixture(2914, "US");
+        let mut attrs = std::collections::HashMap::new();
+
+        insert_analyzed_access_log_attrs(&mut attrs, &analyzed);
+
+        assert_eq!(attrs.get("asn").map(String::as_str), Some("AS2914"));
+        assert_eq!(attrs.get("countryCode").map(String::as_str), Some("US"));
+        assert_eq!(
+            attrs.get("country").map(String::as_str),
+            Some("United States")
+        );
+        assert_eq!(
+            attrs.get("isp").map(String::as_str),
+            Some("NTT America, Inc.")
+        );
+        assert_eq!(attrs.get("device").map(String::as_str), Some("smartphone"));
+        assert_eq!(attrs.get("browser").map(String::as_str), Some("Chrome"));
+        assert_eq!(attrs.get("os").map(String::as_str), Some("Android"));
+    }
+
+    #[test]
+    fn access_log_attrs_omit_unknown_asn_and_country_code() {
+        let analyzed = analyzed_fixture(0, "");
+        let mut attrs = std::collections::HashMap::new();
+
+        insert_analyzed_access_log_attrs(&mut attrs, &analyzed);
+
+        assert!(!attrs.contains_key("asn"));
+        assert!(!attrs.contains_key("countryCode"));
     }
 }

@@ -7,15 +7,16 @@
 
 | 对象 | 方案 | 例子 | 说明 |
 | --- | --- | --- | --- |
-| **组件（本产品）** | `YY.MM.PATCH`，允许偶发第四段 `YY.MM.PATCH.x` | `26.9.0`、补丁 `26.9.0.1` | 年份、发布月份、补丁号；第四段仅作为该版本的补丁版本偶发使用。release tag 为 `v<组件版本>`，如 `v26.9.0` / `v26.9.0.1`。 |
+| **组件（本产品）** | CalVer `YY.M.W[.P]` | `26.10.5`、同周期补丁 `26.10.5.1` | 年份、月份、月内周次 `ceil(日 / 7)`；第四段是同周期补丁号。release tag 为 `v<组件版本>`。 |
 | **协议** | `api-major.api-minor` + schema | `node.v1`、`event.schema.1` | reader/writer 字段兼容，不跟随组件补丁号。 |
 | **来源 provenance** | 项目 + 版本 + commit | `cloud-node-rust 1.3.1 @ b3cdc37` | 审计、迁移和回归追踪，不参与产品版本比较。 |
 
 ## 规则
 
-- 补丁号只修复 bug、安全问题和不改变契约的行为。
-- 月份变化表示同一代内的发布月份，不自动表示破坏性变化。
-- Cargo `version` 与产品版本一致（`YY.MM.PATCH` 本身即为合法 SemVer）。第四段补丁号不是合法 SemVer，只出现在 release tag 与 `VERSION-MANIFEST.toml` 中，Cargo `version` 始终保持三段。
+- 发行日期的周期由 `license/shared/calver.ts` 计算；1–7 日为第 1 周，8–14 日为第 2 周，依此类推，29 日起为第 5 周。正式发行前按实际日期重算。
+- API/Admin 等组件属于 `suite` 桶，Edge 属于 `Zelvik-Edge` 桶；各桶独立使用本周期基础版本，已占用时递增第四段补丁号。API 发布 `26.10.5` 不会占用 Edge 的 `26.10.5`。
+- 日期和补丁号不表示协议兼容性；契约切换与真实迁移要求单独记录在升级说明和兼容矩阵中。
+- Cargo `version` 保持三段 `YY.M.W`，与 `VERSION-MANIFEST.toml` 的 `cargo_version` 一致；可选第四段只出现在产品版本、release tag 和安装器中。
 - `.github/workflows/release.yml` 由 `v*` tag 与 `workflow_dispatch` 触发，main 分支 push 不触发构建；产物命名为 `Zelvik-Edge-<target>.tar.gz`。
 - 每次套件发布生成 API/Edge/Agent/Admin/User/Portal 兼容矩阵。
 

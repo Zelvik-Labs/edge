@@ -47,6 +47,7 @@ pub mod memory_plan;
 pub mod memory_reclaim;
 pub mod memory_shed;
 pub mod memory_ticket;
+pub mod worker_reclaim;
 pub mod metrics;
 pub mod net_bind;
 #[cfg(feature = "node-control")]

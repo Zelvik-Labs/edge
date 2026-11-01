@@ -7,7 +7,6 @@ use zelvik_edge::memory_governor::MEMORY_GOVERNOR;
 use zelvik_edge::metrics::aggregator::{AggregationKey, MetricAggregator};
 use zelvik_edge::metrics::daily::DailyDomainTracker;
 use zelvik_edge::metrics::top_ip::TopIpTracker;
-use std::collections::BTreeMap;
 use std::net::IpAddr;
 use std::sync::Arc;
 
@@ -79,6 +78,7 @@ fn metric_aggregator_flush_empties_in_memory_store() {
     let key = AggregationKey {
         category: Arc::from(zelvik_edge::metrics::METRIC_CATEGORY_HTTP),
         server_id: 1,
+        window_start: 1_793_462_400,
         country: Arc::from(""),
         country_id: 0,
         province: Arc::from(""),
@@ -93,7 +93,6 @@ fn metric_aggregator_flush_empties_in_memory_store() {
         provider_id: 0,
         browser_version: Arc::from(""),
         os_version: Arc::from(""),
-        request_attrs: Arc::new(BTreeMap::new()),
     };
 
     aggregator.record(key, 100, 10, false);
@@ -105,39 +104,6 @@ fn metric_aggregator_flush_empties_in_memory_store() {
         aggregator.data.is_empty(),
         "flush must drain aggregator keys"
     );
-}
-
-#[test]
-fn metric_stat_aggregator_with_samples_flush_drains_all_state() {
-    let aggregator = MetricAggregator::with_request_samples(true);
-    let mut attrs = BTreeMap::new();
-    attrs.insert("requestId".to_string(), "1".to_string());
-    let key = AggregationKey {
-        category: Arc::from(zelvik_edge::metrics::METRIC_CATEGORY_HTTP),
-        server_id: 42,
-        country: Arc::from(""),
-        country_id: 0,
-        province: Arc::from(""),
-        province_id: 0,
-        city: Arc::from(""),
-        city_id: 0,
-        provider: Arc::from("Unknown"),
-        browser: Arc::from(""),
-        os: Arc::from(""),
-        waf_group_id: 0,
-        waf_action: Arc::from(""),
-        provider_id: 0,
-        browser_version: Arc::from(""),
-        os_version: Arc::from(""),
-        request_attrs: Arc::new(attrs),
-    };
-
-    aggregator.record(key, 1, 1, false);
-    assert_eq!(aggregator.data.len(), 1);
-    let rows = aggregator.flush();
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].1.request_samples.len(), 1);
-    assert!(aggregator.data.is_empty());
 }
 
 #[test]

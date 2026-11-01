@@ -1026,7 +1026,7 @@ impl HttpProxyManager {
                     manager.downstream_read_timeout(),
                     crate::l4_defense::current_pressure_level(),
                 );
-                tokio::spawn(async move {
+                tokio::spawn(crate::worker_reclaim::with_worker_reclaim(async move {
                     let _client_permit = client_permit;
                     let _connection_permit = connection_permit;
                     let _listener_permit = listener_permit;
@@ -1068,7 +1068,7 @@ impl HttpProxyManager {
                             port,
                         ) => {}
                     }
-                });
+                }));
                 continue;
             }
 
@@ -1086,7 +1086,7 @@ impl HttpProxyManager {
             );
             let http2_handshake_timeout = manager.http2_handshake_timeout();
 
-            tokio::spawn(async move {
+            tokio::spawn(crate::worker_reclaim::with_worker_reclaim(async move {
                 let _client_permit = client_permit;
                 let connection_permit = connection_permit;
                 let _listener_permit = listener_permit;
@@ -1272,7 +1272,7 @@ impl HttpProxyManager {
                         }) => {}
                     }
                 }
-            });
+            }));
         }
     }
 
@@ -2809,7 +2809,7 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                             );
                         };
                         let active_stream = h2_state.stream_guard();
-                        tokio::spawn(async move {
+                        tokio::spawn(crate::worker_reclaim::with_worker_reclaim(async move {
                             let _active_stream = active_stream;
                             let _stream_permit = stream_permit;
                             let _global_stream_permit = global_stream_permit;
@@ -2817,7 +2817,7 @@ async fn process_h2_stream(args: ProcessH2StreamArgs) {
                             proxy_inner_h2
                                 .process_new_http(server_session, &shutdown_inner_h2)
                                 .await;
-                        });
+                        }));
                     }
                     Ok(Some(pingora_core::protocols::http::v2::server::H2Accept::Rejected)) => {
                         h2_state.record_reject();
@@ -3533,7 +3533,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
         let manager = HttpProxyManager::new(
             store,
             Arc::new(DynamicCertSelector::new()),
@@ -3611,7 +3612,8 @@ mod tests {
         }
         store
             .replace_all_servers(servers, HashMap::new(), HashMap::new(), lbs)
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
         let certs = Arc::new(DynamicCertSelector::new());
         crate::ssl::sync_certs(
             &certs,
@@ -3681,7 +3683,8 @@ mod tests {
         .await;
         store
             .replace_all_servers(Vec::new(), HashMap::new(), HashMap::new(), HashMap::new())
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
         tokio::time::timeout(Duration::from_secs(3), async {
             while !http.handled_ports.is_empty() {
                 tokio::time::sleep(Duration::from_millis(20)).await;
@@ -4000,9 +4003,9 @@ mod tests {
                 digest.clone(),
                 &mut malformed,
             )
-                .await
-                .unwrap()
-                .unwrap()
+            .await
+            .unwrap()
+            .unwrap()
             {
                 H2Accept::Session(mut session) => {
                     let response = pingora_http::ResponseHeader::build(200, None).unwrap();

@@ -21,7 +21,17 @@ message UploadMetricStatsRequest {
     int32 version = 5;
     int64 itemId = 6;
     repeated UploadingMetricStat metricStats = 7;
+    // Retained for wire compatibility with the old incremental contract. The
+    // snapshot reporter always sends an empty list; the control plane only
+    // accepts revision > 0 snapshot rows.
     repeated string keepKeys = 8;
+    // Cumulative snapshot revision. 0 means a legacy incremental payload and
+    // is rejected with a stable retryable version-required error.
+    uint64 revision = 9;
+    // Actual covered event window, unix seconds. The identity remains `time`;
+    // windowEnd advances only to the last real event (+1s) in the period.
+    int64 windowStart = 10;
+    int64 windowEnd = 11;
 }
 
 message CountMetricStatsRequest {
