@@ -14,7 +14,21 @@
 
 C 源码已使用缓存的 libxdp 1.6.0 / libbpf 1.5.1 以 `-Wall -Wextra -Werror` 编译通过，workflow 和脚本的 Bash/YAML 语法检查通过。本地真实 user/network namespace 尝试在 `umem-create` 返回 EAFNOSUPPORT(97)，程序与接口均成功清理；这与第 4 轮能力结果一致，不能写成实际 ring 功能测试通过。
 
-新增默认关闭的 `xdp_wake_probe=true` 输入，启用现有独立 XDP job 的真实 ring 探针。此 job 使用 Ubuntu 24.04 的 libbpf >= 1.0 API（发行版自带 1.3），库版本、源码摘要、namespace 身份、每轮结果及失败日志随产物保存。Rust correctness 与 splice 计时仍使用 Ubuntu 22.04 基线。真实 run 和结果执行后补充；不以本地不支持为理由跳过并报告成功。
+新增默认关闭的 `xdp_wake_probe=true` 输入，启用现有独立 XDP job 的真实 ring 探针。此 job 使用 Ubuntu 24.04 的 libbpf >= 1.0 API（发行版自带 1.3），库版本、源码摘要、namespace 身份、每轮结果及失败日志随产物保存。Rust correctness 与 splice 计时仍使用 Ubuntu 22.04 基线。
+
+## 实际原生内核结果
+
+提交 `81f970c5580140fd89ab248a4ea2b031b551b1d5` 的 [Actions 41531098471](https://github.com/Zelvik-Labs/edge/actions/runs/41531098471) 三个 job 全部成功：原生 XDP 行为探针、all-targets check / Clippy，以及常规 Rust 单元/集成与 vendored Pingora 检查/测试和 eBPF 构建。[实际 job 与 step 记录](evidence/af-xdp-wake-2026-11-02/ci-validation.json)。
+
+原生 XDP job `125571192972` 的运行时内核为 `7.0.0-1017-azure`，libxdp 1.4.2 / libbpf 1.3.0。三个独立进程都完成 65 帧 RX、1 帧 TX 的完整正文和 CQ 地址校验，每轮 fill starvation 产生 1 个可观察丢弃，补充 descriptor 后恢复收包。每轮程序/socket/UMEM 的清理 errno 均为 0，脚本接口清理成功。
+
+三轮都观察到 RW+edge-triggered 注册的初始事件为 `EPOLLOUT(4)`，后续空闲事件为 0。这不支持“永久可写本身就会让 edge-triggered 等待持续唤醒”的推论；也没有重现或解释旧 Tokio 注册的完整行为，现有代码注释中的归因需要独立核对。
+
+8 帧突发中只排空一帧后，三轮的第二次 edge 事件均为 0；直接继续读取 ring 才取出余下 7 帧。这给后续 Tokio 实现留下明确约束：不能在刚取得就绪通知时就清除 readiness，必须持有它，直至在该 guard 创建之后实际观察到 RX 为空。Tokio 1.53.1 的 `AsyncFdReadyGuard::clear_ready` 文档也要求仅在观察到 WouldBlock 时清除，不能把一次成功读取当作已无就绪数据。
+
+EPOLLIN-only 的 200 ms 空闲等待消耗约 36.4～40.9 µs 进程 CPU，这是短时诊断；三轮 `fill_kicks` 都为 0，恢复成功没有覆盖硬件 RX NEED_WAKEUP。完整 ring 功能结果只适用于本次 7.0 内核；6.8 内核在第 4 轮仅验证了 BPF 加载和 socket 创建。
+
+产物 `13182066873` 为 3,194 字节、14 个原始文件，SHA256 `333e19df411857b2dfd269e18294aa7a5c777af40492e40c1a7546fc79cc9aea` 与 GitHub 元数据核对成功，C/脚本源码摘要也与测试提交匹配。[原始 ZIP](evidence/af-xdp-wake-2026-11-02/ci-raw.zip)、[逐文件校验](evidence/af-xdp-wake-2026-11-02/ci-archive-manifest.json)、[结果与库/内核信息](evidence/af-xdp-wake-2026-11-02/results.json)、[本地不支持与清理结果](evidence/af-xdp-wake-2026-11-02/local-unsupported.json)。
 
 ## 解释边界
 

@@ -1,0 +1,18 @@
+{
+  "returncode": 1,
+  "stdout": "",
+  "stderr": "",
+  "cycle_result": {
+    "passed": false,
+    "failure_stage": "umem-create",
+    "errno": 97,
+    "cleanup_errno": 0,
+    "received_frames": 0,
+    "transmitted_frames": 0,
+    "mode": "veth-skb-copy",
+    "fill_kicks": 0
+  },
+  "cleanup": {
+    "interface_cleanup": true
+  }
+}
