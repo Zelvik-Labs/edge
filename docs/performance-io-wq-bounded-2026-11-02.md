@@ -45,8 +45,33 @@
 
 新增独立 C 探针只加载并关闭两条指令的 XDP_PASS 程序、创建并关闭 AF_XDP socket，不附加接口、不发送数据。当前源码以 `-Wall -Wextra -Werror` 编译通过；实测普通用户和 user/network namespace 的 BPF 加载为 EPERM，隔离 Docker 中使用 BPF/NET_ADMIN/NET_RAW 能力可加载，三处 AF_XDP socket 均为 EAFNOSUPPORT(97)。关闭 FD 无错误，任务临时容器已移除。[原始结果](evidence/io-wq-bounded-2026-11-02/kernel-capabilities.json)。这说明本地不能承接真实 AF_XDP 收包测试，不是 AF_XDP 数据路径通过。
 
-CI 新增默认关闭的 `xdp_kernel_probe=true` 输入，在 GitHub 官方 runner 的独立 network namespace 中执行同一探针，保留失败和元数据。与 io_uring 的 72 个配对场景在一次实际源码提交中验证：其中 36 个比较 readiness/限额候选，另 36 个比较相同 CPU 范围下默认/限制线程数量。CI 的实际 run、结论和产物待执行后补齐，不移用上一轮 CI 结果。
+CI 新增默认关闭的 `xdp_kernel_probe=true` 输入，在 GitHub 官方 runner 的独立 network namespace 中执行同一探针，保留失败和元数据。与 io_uring 的 72 个配对场景在同一实际源码提交中验证：其中 36 个比较 readiness/限额候选，另 36 个比较相同 CPU 范围下默认/限制线程数量。
+
+## GitHub Actions 结果
+
+提交 `112815b891ea26e6d0e132e7a2d1487b9d6d8f9a` 的 [Actions 41529553377](https://github.com/Zelvik-Labs/edge/actions/runs/41529553377) 三个 job 全部成功：全目标 check / Clippy、单元/集成与 vendored Pingora 检查/测试、eBPF 构建、16 项实验 I/O 测试与 Clippy、72 个组件场景，以及隔离内核能力探针。16 项 I/O 测试 0 失败、0 忽略；没有关闭验证或更换基线。
+
+计时内核 `6.8.0-1070-azure`，同一 release 二进制 `40027ecaada4ba106aacb6f3a940b7c8b86bbb1e4d27713364682be240b882d2`。四个 cohort 各三轮交错，所有用户态和 io-wq 线程的观测 CPU 掩码均在 0/1 内，24 个独立进程的 CPU steal 都为 0%。正文、计数、资源、源码和二进制一致性检查全部成功，测试提交 tracked dirty 为 false。
+
+下表分别为 `限额候选 / readiness - 1` 与 `限额候选 / 相同 CPU 下内核默认数量 - 1` 的三轮配对耗时中位数，正数表示变慢；两列来自独立交错 cohort。
+
+| 连接 | 正文 | 相比 readiness | 相比默认线程数量 |
+| --- | --- | ---: | ---: |
+| 1 | 1 KiB | +163.02% | +6.05% |
+| 1 | 64 KiB | +71.54% | +4.92% |
+| 1 | 1 MiB | +12.13% | -3.66% |
+| 16 | 1 KiB | +64.15% | +15.61% |
+| 16 | 64 KiB | +25.85% | +0.65% |
+| 16 | 1 MiB | +8.53% | -1.65% |
+
+限额候选的 36 档正文快照都是 2 个 io-wq 线程，读回 `[2,2]`。默认数量对照单连接为 2～310 个，16 连接为 11～394 个，读回 `[16,63801]`；这些都是结束快照，不是峰值。即便默认数量的线程更多，限制到 2 仍使小包耗时增加，不能将线程数量与性能作简单因果等同。1 MiB 的限额消融在三个配对中包含相反方向变化，也不据其中位数宣称稳定收益。相比 readiness 的全部 18 个配对都更慢。
+
+原生内核能力 job 在 Ubuntu 22.04 / 6.8 上确认最小 BPF 加载和 AF_XDP socket 创建成功，关闭 FD 无错误。这仅建立后续真实 ring 测试的环境条件，不是 AF_XDP 收发或硬件零复制通过。
+
+计时产物 `13182607633` 为 358,615 字节、664 个原始文件，SHA256 `9b8149455398b82db184818a57cdfb2b926a87f5333ee8714d2571a9be9a6a6b`；内核探针产物 `13181111913` 为 939 字节，SHA256 `f8906c8ac2756a73955a1352c77e4d9da4abff0629dad2e352f53eb93f24e5ce`。均已与 GitHub 元数据核对并保留原始 ZIP。[实际 job/step/提交](evidence/io-wq-bounded-2026-11-02/ci-validation.json)、[计时原始 ZIP](evidence/io-wq-bounded-2026-11-02/ci-raw.zip)、[资源与 CPU 范围](evidence/io-wq-bounded-2026-11-02/ci-resource-summary.json)、[CPU 快照](evidence/io-wq-bounded-2026-11-02/ci-cpu-summary.json)、[单连接/readiness](evidence/io-wq-bounded-2026-11-02/ci-comparison-c1-summary.json)、[16 连接/readiness](evidence/io-wq-bounded-2026-11-02/ci-comparison-c16-summary.json)、[单连接/限额消融](evidence/io-wq-bounded-2026-11-02/ci-workers-c1-summary.json)、[16 连接/限额消融](evidence/io-wq-bounded-2026-11-02/ci-workers-c16-summary.json)、[原生能力 ZIP](evidence/io-wq-bounded-2026-11-02/ci-kernel-raw.zip)。所有单轮数据与离群值均保留。
 
 ## 当前结论与剩余工作
 
-已修复实验后端缺少明确资源约束和观测的问题；本地尚未证明稳定变快。`[2,2]` 是本轮候选，未证明所有连接数和 CPU 预算下的最佳限额。SPLICE 强制 io-wq 的调度成本仍存在，节点默认路径继续保持 readiness，后续按 CI 数据决定是否继续该路线。AF_XDP 的真实 RX、NEED_WAKEUP 恢复、唤醒线程对照和硬件零复制尚未验证；RKE 继续暂缓。没有批准或实施生产功能降级，也没有整体超过 Nginx/OpenResty 的结论。
+已补齐实验后端的显式资源约束和观测，但 CI 没有证明性能提升，`[2,2]` 也不是本轮小包场景的更快候选。共享 io_uring SPLICE 在已测档位仍慢于 readiness，不接入默认 TCP/SNI；不再凭线程减少就推荐这一候选。该结论只涵盖本轮请求/响应组件，不能外推到所有 io_uring opcode、长流或更大连接数。后续优先验证 AF_XDP 的 Tokio readiness、批量与完整 HTTP/缓存路径。
+
+本提交尚未验证 AF_XDP 真实 RX、硬件 NEED_WAKEUP、唤醒线程对照或硬件零复制；隔离 ring 探针已在后续独立分支推进。RKE 继续暂缓。没有批准或实施生产功能降级，也没有整体超过 Nginx/OpenResty 的结论。

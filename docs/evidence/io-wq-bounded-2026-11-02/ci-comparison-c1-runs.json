@@ -1,0 +1,1133 @@
+[
+  {
+    "round": 1,
+    "engine": "readiness",
+    "command": [
+      "/home/runner/work/edge/edge/target/release/deps/splice-66176a96fc8eeb89",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 1162636000\nuser_usec 1035589000\nsystem_usec 127047000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          103250,
+          308,
+          12363,
+          178091,
+          23694,
+          0,
+          341,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          22582,
+          7,
+          3151,
+          47586,
+          6044,
+          0,
+          175,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          28119,
+          1,
+          3106,
+          42362,
+          5864,
+          0,
+          104,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 0.216752,
+      "child_system_seconds": 0.052969999999999996
+    },
+    "started_unix": 1793655958.5876973,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 1176474000\nuser_usec 1040557000\nsystem_usec 135917000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          103747,
+          308,
+          13015,
+          181967,
+          23722,
+          0,
+          576,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          22896,
+          7,
+          3493,
+          48099,
+          6044,
+          0,
+          290,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          28294,
+          1,
+          3412,
+          43072,
+          5864,
+          0,
+          214,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 5.214008,
+      "child_system_seconds": 9.010719
+    },
+    "finished_unix": 1793655972.0777063,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 22492.13525582717,
+        "mean_per_roundtrip_ns": 22492.13525582717,
+        "roundtrips_per_second": 44459.98517374753,
+        "median_ns": 22490.60541950113,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 22438.09479184022,
+          "upper_bound": 22545.88442093473
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 543636.7634601819,
+        "mean_per_roundtrip_ns": 543636.7634601819,
+        "roundtrips_per_second": 1839.4635300878506,
+        "median_ns": 544191.5120879121,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 541261.6681112956,
+          "upper_bound": 546226.2435184839
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 54946.90486779454,
+        "mean_per_roundtrip_ns": 54946.90486779454,
+        "roundtrips_per_second": 18199.38725222209,
+        "median_ns": 54989.33517060368,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 54681.988879095006,
+          "upper_bound": 55217.619033863
+        }
+      }
+    ],
+    "resource_checks": {
+      "passed": true,
+      "affinities": [
+        {
+          "threads": [
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        }
+      ],
+      "io_wq_reports": []
+    },
+    "passed": true
+  },
+  {
+    "round": 1,
+    "engine": "uring",
+    "command": [
+      "/home/runner/work/edge/edge/target/release/deps/splice-66176a96fc8eeb89",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 1176475000\nuser_usec 1040558000\nsystem_usec 135917000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          103747,
+          308,
+          13015,
+          181967,
+          23722,
+          0,
+          576,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          22896,
+          7,
+          3493,
+          48099,
+          6044,
+          0,
+          290,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          28294,
+          1,
+          3412,
+          43072,
+          5864,
+          0,
+          214,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 5.214008,
+      "child_system_seconds": 9.010719
+    },
+    "started_unix": 1793655972.078832,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 1191663000\nuser_usec 1044359000\nsystem_usec 147304000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          104127,
+          308,
+          13926,
+          185175,
+          24274,
+          0,
+          803,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          23126,
+          7,
+          3887,
+          48258,
+          6423,
+          0,
+          356,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          28441,
+          1,
+          3928,
+          43362,
+          6034,
+          0,
+          367,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 9.192488,
+      "child_system_seconds": 20.931187
+    },
+    "finished_unix": 1793655985.9253669,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 59159.67622734874,
+        "mean_per_roundtrip_ns": 59159.67622734874,
+        "roundtrips_per_second": 16903.40555883085,
+        "median_ns": 59208.62426035503,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 58903.791129558995,
+          "upper_bound": 59423.36050299016
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 609588.7235269602,
+        "mean_per_roundtrip_ns": 609588.7235269602,
+        "roundtrips_per_second": 1640.4502928042978,
+        "median_ns": 611042.6607142857,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 604589.3196950459,
+          "upper_bound": 614356.2038024073
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 95011.46152923677,
+        "mean_per_roundtrip_ns": 95011.46152923677,
+        "roundtrips_per_second": 10525.045967136099,
+        "median_ns": 94479.59477124183,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 94155.04688422107,
+          "upper_bound": 96208.88408110898
+        }
+      }
+    ],
+    "resource_checks": {
+      "passed": true,
+      "affinities": [
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-29959:0-1",
+            "iou-wrk-29959:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-29964:0-1",
+            "iou-wrk-29964:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-29967:0-1",
+            "iou-wrk-29967:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        }
+      ],
+      "io_wq_reports": [
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        }
+      ]
+    },
+    "passed": true
+  },
+  {
+    "round": 2,
+    "engine": "uring",
+    "command": [
+      "/home/runner/work/edge/edge/target/release/deps/splice-66176a96fc8eeb89",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 1191664000\nuser_usec 1044359000\nsystem_usec 147305000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          104127,
+          308,
+          13926,
+          185175,
+          24274,
+          0,
+          803,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          23126,
+          7,
+          3887,
+          48258,
+          6423,
+          0,
+          356,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          28441,
+          1,
+          3928,
+          43362,
+          6034,
+          0,
+          367,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 9.192488,
+      "child_system_seconds": 20.931187
+    },
+    "started_unix": 1793655985.9265625,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 1206745000\nuser_usec 1048337000\nsystem_usec 158408000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          104525,
+          308,
+          14810,
+          188474,
+          24757,
+          0,
+          1030,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          23310,
+          7,
+          4270,
+          48551,
+          6712,
+          0,
+          442,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          28652,
+          1,
+          4427,
+          43598,
+          6227,
+          0,
+          498,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 13.367025,
+      "child_system_seconds": 32.553671
+    },
+    "finished_unix": 1793655999.819711,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 57125.739520009476,
+        "mean_per_roundtrip_ns": 57125.739520009476,
+        "roundtrips_per_second": 17505.243842834265,
+        "median_ns": 57052.12827260459,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 56546.65906724541,
+          "upper_bound": 57752.4542779938
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 657192.8135632,
+        "mean_per_roundtrip_ns": 657192.8135632,
+        "roundtrips_per_second": 1521.6234556463749,
+        "median_ns": 651127.6406926407,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 645125.8556464599,
+          "upper_bound": 670672.8890717451
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 95612.83300868841,
+        "mean_per_roundtrip_ns": 95612.83300868841,
+        "roundtrips_per_second": 10458.84708707595,
+        "median_ns": 95544.5238883633,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 95052.42895473597,
+          "upper_bound": 96124.32307951059
+        }
+      }
+    ],
+    "resource_checks": {
+      "passed": true,
+      "affinities": [
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-29975:0-1",
+            "iou-wrk-29975:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-29982:0-1",
+            "iou-wrk-29982:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-29985:0-1",
+            "iou-wrk-29985:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        }
+      ],
+      "io_wq_reports": [
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        }
+      ]
+    },
+    "passed": true
+  },
+  {
+    "round": 2,
+    "engine": "readiness",
+    "command": [
+      "/home/runner/work/edge/edge/target/release/deps/splice-66176a96fc8eeb89",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 1206746000\nuser_usec 1048337000\nsystem_usec 158409000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          104525,
+          308,
+          14810,
+          188475,
+          24757,
+          0,
+          1030,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          23310,
+          7,
+          4270,
+          48551,
+          6712,
+          0,
+          442,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          28652,
+          1,
+          4427,
+          43598,
+          6227,
+          0,
+          498,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 13.367025,
+      "child_system_seconds": 32.553671
+    },
+    "started_unix": 1793655999.8210847,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 1220704000\nuser_usec 1053386000\nsystem_usec 167318000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          105030,
+          308,
+          15458,
+          192448,
+          24757,
+          0,
+          1273,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          23564,
+          7,
+          4587,
+          49168,
+          6712,
+          0,
+          553,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          28900,
+          1,
+          4756,
+          44223,
+          6227,
+          0,
+          620,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 18.499569,
+      "child_system_seconds": 41.564964
+    },
+    "finished_unix": 1793656013.5138204,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 22586.93760013642,
+        "mean_per_roundtrip_ns": 22586.93760013642,
+        "roundtrips_per_second": 44273.37683856532,
+        "median_ns": 22564.618277865822,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 22511.643437637926,
+          "upper_bound": 22680.052800280337
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 558697.5325279866,
+        "mean_per_roundtrip_ns": 558697.5325279866,
+        "roundtrips_per_second": 1789.87724444605,
+        "median_ns": 542748.1770880192,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 542180.2421658533,
+          "upper_bound": 586505.285965271
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 55736.813966472415,
+        "mean_per_roundtrip_ns": 55736.813966472415,
+        "roundtrips_per_second": 17941.463259839966,
+        "median_ns": 55116.334858387796,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 55144.39082820078,
+          "upper_bound": 56638.583495217244
+        }
+      }
+    ],
+    "resource_checks": {
+      "passed": true,
+      "affinities": [
+        {
+          "threads": [
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        }
+      ],
+      "io_wq_reports": []
+    },
+    "passed": true
+  },
+  {
+    "round": 3,
+    "engine": "readiness",
+    "command": [
+      "/home/runner/work/edge/edge/target/release/deps/splice-66176a96fc8eeb89",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 1220705000\nuser_usec 1053387000\nsystem_usec 167318000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          105030,
+          308,
+          15458,
+          192448,
+          24757,
+          0,
+          1273,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          23564,
+          7,
+          4587,
+          49168,
+          6712,
+          0,
+          553,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          28900,
+          1,
+          4756,
+          44223,
+          6227,
+          0,
+          620,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 18.499569,
+      "child_system_seconds": 41.564964
+    },
+    "started_unix": 1793656013.5152574,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 1234719000\nuser_usec 1058429000\nsystem_usec 176290000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          105534,
+          308,
+          16120,
+          196424,
+          24758,
+          0,
+          1508,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          23734,
+          7,
+          4878,
+          49927,
+          6712,
+          0,
+          662,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          29232,
+          1,
+          5125,
+          44710,
+          6227,
+          0,
+          734,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 23.616083,
+      "child_system_seconds": 50.590932
+    },
+    "finished_unix": 1793656027.2086844,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 22633.942618797202,
+        "mean_per_roundtrip_ns": 22633.942618797202,
+        "roundtrips_per_second": 44181.432145609164,
+        "median_ns": 22593.406649361023,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 22545.69525403071,
+          "upper_bound": 22724.613440850553
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 542863.2081656882,
+        "mean_per_roundtrip_ns": 542863.2081656882,
+        "roundtrips_per_second": 1842.0846816621772,
+        "median_ns": 543100.913580247,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 540084.5403268138,
+          "upper_bound": 545487.4311060515
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 57259.12998826305,
+        "mean_per_roundtrip_ns": 57259.12998826305,
+        "roundtrips_per_second": 17464.463749361534,
+        "median_ns": 56454.243100097185,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 56125.0926089072,
+          "upper_bound": 58813.34477960111
+        }
+      }
+    ],
+    "resource_checks": {
+      "passed": true,
+      "affinities": [
+        {
+          "threads": [
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        }
+      ],
+      "io_wq_reports": []
+    },
+    "passed": true
+  },
+  {
+    "round": 3,
+    "engine": "uring",
+    "command": [
+      "/home/runner/work/edge/edge/target/release/deps/splice-66176a96fc8eeb89",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 1234720000\nuser_usec 1058429000\nsystem_usec 176291000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          105534,
+          308,
+          16120,
+          196425,
+          24758,
+          0,
+          1508,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          23734,
+          7,
+          4878,
+          49927,
+          6712,
+          0,
+          662,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          29232,
+          1,
+          5125,
+          44710,
+          6227,
+          0,
+          734,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 23.616083,
+      "child_system_seconds": 50.590932
+    },
+    "started_unix": 1793656027.2102344,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 1249943000\nuser_usec 1062417000\nsystem_usec 187526000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          105933,
+          308,
+          17005,
+          199630,
+          25336,
+          0,
+          1746,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          23914,
+          7,
+          5312,
+          50192,
+          6976,
+          0,
+          779,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          29446,
+          1,
+          5575,
+          44880,
+          6541,
+          0,
+          846,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 27.781685,
+      "child_system_seconds": 62.375133
+    },
+    "finished_unix": 1793656041.1097543,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 60613.34872070161,
+        "mean_per_roundtrip_ns": 60613.34872070161,
+        "roundtrips_per_second": 16498.01604936677,
+        "median_ns": 60478.85829831933,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 60284.67955594795,
+          "upper_bound": 61003.74821566264
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 589807.2582264083,
+        "mean_per_roundtrip_ns": 589807.2582264083,
+        "roundtrips_per_second": 1695.4691317415625,
+        "median_ns": 584712.0569142513,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 584832.1319840109,
+          "upper_bound": 595397.7763963381
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 96593.18813197101,
+        "mean_per_roundtrip_ns": 96593.18813197101,
+        "roundtrips_per_second": 10352.696906884823,
+        "median_ns": 96277.60490105132,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 96186.01886685961,
+          "upper_bound": 97024.77403489273
+        }
+      }
+    ],
+    "resource_checks": {
+      "passed": true,
+      "affinities": [
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-30006:0-1",
+            "iou-wrk-30006:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-30012:0-1",
+            "iou-wrk-30012:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-30015:0-1",
+            "iou-wrk-30015:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "splice-66176a96:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        }
+      ],
+      "io_wq_reports": [
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        }
+      ]
+    },
+    "passed": true
+  }
+]

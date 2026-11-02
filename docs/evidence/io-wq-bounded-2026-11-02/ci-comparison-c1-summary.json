@@ -1,0 +1,77 @@
+{
+  "all_passed": true,
+  "comparisons": [
+    {
+      "bytes": 1024,
+      "pairs": [
+        {
+          "round": 1,
+          "readiness": 22492.13525582717,
+          "uring": 59159.67622734874,
+          "change_percent": 163.02383279516292
+        },
+        {
+          "round": 2,
+          "uring": 57125.739520009476,
+          "readiness": 22586.93760013642,
+          "change_percent": 152.91493929511032
+        },
+        {
+          "round": 3,
+          "readiness": 22633.942618797202,
+          "uring": 60613.34872070161,
+          "change_percent": 167.79845536218244
+        }
+      ],
+      "median_percent": 163.02383279516292
+    },
+    {
+      "bytes": 65536,
+      "pairs": [
+        {
+          "round": 1,
+          "readiness": 54946.90486779454,
+          "uring": 95011.46152923677,
+          "change_percent": 72.91503817701815
+        },
+        {
+          "round": 2,
+          "uring": 95612.83300868841,
+          "readiness": 55736.813966472415,
+          "change_percent": 71.54341305945972
+        },
+        {
+          "round": 3,
+          "readiness": 57259.12998826305,
+          "uring": 96593.18813197101,
+          "change_percent": 68.69482325660665
+        }
+      ],
+      "median_percent": 71.54341305945972
+    },
+    {
+      "bytes": 1048576,
+      "pairs": [
+        {
+          "round": 1,
+          "readiness": 543636.7634601819,
+          "uring": 609588.7235269602,
+          "change_percent": 12.1316225280649
+        },
+        {
+          "round": 2,
+          "uring": 657192.8135632,
+          "readiness": 558697.5325279866,
+          "change_percent": 17.629446221024693
+        },
+        {
+          "round": 3,
+          "readiness": 542863.2081656882,
+          "uring": 589807.2582264083,
+          "change_percent": 8.64749155120348
+        }
+      ],
+      "median_percent": 12.1316225280649
+    }
+  ]
+}
