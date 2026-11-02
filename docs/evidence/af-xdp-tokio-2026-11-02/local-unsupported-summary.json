@@ -1,0 +1,15 @@
+{
+  "all_passed": false,
+  "comparisons": [
+    {
+      "engine": "readable",
+      "pairs": [],
+      "median_percent": null
+    },
+    {
+      "engine": "read-write",
+      "pairs": [],
+      "median_percent": null
+    }
+  ]
+}

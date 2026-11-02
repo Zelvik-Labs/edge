@@ -21,6 +21,10 @@ on:
         description: Exercise real AF_XDP copy-mode RX, readiness, fill recovery, TX and teardown on isolated veths
         type: boolean
         default: false
+      xdp_tokio_benchmark:
+        description: Compare the owned XSK poll worker with Tokio readable and read/write registrations
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.head_ref || github.ref }}
@@ -29,11 +33,16 @@ concurrency:
 jobs:
   xdp-kernel:
     name: Isolated BPF / AF_XDP capability
-    if: github.event_name == 'workflow_dispatch' && (inputs.xdp_kernel_probe || inputs.xdp_wake_probe)
+    if: github.event_name == 'workflow_dispatch' && (inputs.xdp_kernel_probe || inputs.xdp_wake_probe || inputs.xdp_tokio_benchmark)
     # The standalone ring fixture uses libbpf >= 1.0 APIs; noble ships 1.3.
     # Rust correctness and timed splice comparisons keep their 22.04 baseline.
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      RUSTFLAGS: "-C target-cpu=x86-64-v2"
+      CARGO_BUILD_JOBS: "2"
+      RUST_TEST_THREADS: "2"
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.local/afxdp-cargo-target
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -52,7 +61,7 @@ jobs:
           sudo unshare --net -- .local/xdp-kernel-ci/probe > .local/xdp-kernel-ci/result.json 2> .local/xdp-kernel-ci/probe.log
           cat .local/xdp-kernel-ci/result.json
       - name: Install real AF_XDP probe dependencies
-        if: inputs.xdp_wake_probe
+        if: inputs.xdp_wake_probe || inputs.xdp_tokio_benchmark
         run: |
           set -euo pipefail
           sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
@@ -73,14 +82,54 @@ jobs:
           cc -std=gnu11 -O2 -Wall -Wextra -Werror scripts/perf/afxdp-wake.c -o .local/xdp-kernel-ci/wake-probe "${native_flags[@]}" > .local/xdp-kernel-ci/wake-build.log 2>&1
           parent_net=$(readlink /proc/self/ns/net)
           sudo unshare --net -- bash scripts/perf/afxdp-wake.sh "$GITHUB_WORKSPACE/.local/xdp-kernel-ci/wake-probe" "$GITHUB_WORKSPACE/.local/xdp-kernel-ci" "$parent_net"
+      - name: Install Rust for isolated Tokio comparison
+        if: inputs.xdp_tokio_benchmark
+        uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: clippy
+      - name: Cache standalone Tokio probe dependencies
+        if: inputs.xdp_tokio_benchmark
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: scripts/perf/afxdp-tokio -> ../../../.local/afxdp-cargo-target
+          key: afxdp-tokio
+          cache-on-failure: true
+      - name: Test, lint and build the real Tokio wake comparison
+        if: inputs.xdp_tokio_benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked --manifest-path scripts/perf/afxdp-tokio/Cargo.toml > .local/xdp-kernel-ci/tokio-tests.log 2>&1
+          cargo clippy --locked --manifest-path scripts/perf/afxdp-tokio/Cargo.toml --all-targets -- -D clippy::correctness -D clippy::suspicious > .local/xdp-kernel-ci/tokio-clippy.log 2>&1
+          cargo build --locked --release --manifest-path scripts/perf/afxdp-tokio/Cargo.toml --bench wake --message-format=json > .local/xdp-kernel-ci/tokio-build.jsonl 2> .local/xdp-kernel-ci/tokio-build.log
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          records = [json.loads(line) for line in pathlib.Path('.local/xdp-kernel-ci/tokio-build.jsonl').read_text().splitlines() if line.startswith('{')]
+          binaries = [r['executable'] for r in records if r.get('reason') == 'compiler-artifact' and r['target']['name'] == 'wake' and r.get('executable')]
+          generated = [str(pathlib.Path(r['out_dir']) / 'legacy_worker.rs') for r in records if r.get('reason') == 'build-script-executed' and r['package_id'].rsplit('#', 1)[-1].split('@', 1)[0] == 'edge-afxdp-wake-bench']
+          assert len(binaries) == len(generated) == 1
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write(f'EDGE_XDP_WAKE_BENCH_BINARY={binaries[0]}\nEDGE_XDP_WAKE_GENERATED_WORKER={generated[0]}\n')
+          libraries = subprocess.check_output(['pkg-config', '--modversion', 'libxdp', 'libbpf'], text=True).splitlines()
+          metadata = {'libxdp': libraries[0], 'libbpf': libraries[1], 'rustc': subprocess.check_output(['rustc', '--version'], text=True).strip(), 'scope': 'forced-copy veth wake component; no complete Edge or hardware zero-copy claim'}
+          pathlib.Path('.local/xdp-kernel-ci/tokio-native-metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
+          PY
+      - name: Compare XSK wake variants after all compilation finishes
+        if: inputs.xdp_tokio_benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          parent_net=$(readlink /proc/self/ns/net)
+          sudo unshare --net -- bash scripts/perf/afxdp-tokio/run.sh "$EDGE_XDP_WAKE_BENCH_BINARY" "$EDGE_XDP_WAKE_GENERATED_WORKER" "$GITHUB_WORKSPACE/.local/xdp-kernel-ci/tokio" "$parent_net"
       - name: Upload kernel capability and failures
         if: always() && hashFiles('.local/xdp-kernel-ci/**') != ''
         uses: actions/upload-artifact@v4
         with:
           name: xdp-kernel-${{ github.sha }}
           path: |
-            .local/xdp-kernel-ci/*.json
-            .local/xdp-kernel-ci/*.log
+            .local/xdp-kernel-ci/**/*.json
+            .local/xdp-kernel-ci/**/*.log
+            .local/xdp-kernel-ci/**/*.jsonl
           if-no-files-found: error
 
   check:

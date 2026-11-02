@@ -46,3 +46,7 @@
 新增隔离 veth 的显式 SKB/copy 探针，核对 RX 突发、部分排空、fill starvation/恢复、TX 正文和完成队列，以及三次完整销毁后重绑。提交 `81f970c5580140fd89ab248a4ea2b031b551b1d5` 的 [Actions 41531098471](https://github.com/Zelvik-Labs/edge/actions/runs/41531098471) 三个 job 全部成功，含既有全仓门禁。原生 7.0 内核三轮各完成 65 RX / 1 TX 帧，主动耗尽 fill 时各有 1 个可观察丢弃，恢复和清理均成功。
 
 RW+edge-triggered 初始 EPOLLOUT 后没有继续空闲唤醒，不能仅凭永久可写认定 Tokio 的自旋根因；部分排空 RX 后也没有第二个事件，后续 AsyncFd 必须持有 guard 到实际观察空 RX 后再清除。fill kick 为 0，因此未验证硬件 NEED_WAKEUP 或零复制。本轮建立功能验证，未改变节点唤醒后端，也不是性能提升或 Tokio 对照结论。所有原始结果和限制见[第 5 轮报告](performance-af-xdp-wake-2026-11-02.md)。
+
+## 第 6 轮：Tokio 与 owned poll worker 对照
+
+独立原生基准复用节点 worker 源码和上一轮 C ring fixture，对照 worker/channel、READABLE-only 和 RW Tokio 注册。保留 RX 空观察后的 guard 清除、驱动 poll/kick、完整正文、序号与 TX 完成检查；冻结并核对实际编译的基线，记录计时阶段唤醒次数以防忙路径绕过。8 项本地测试与 Clippy/release 构建通过；本地 11 项原生尝试均因 EAFNOSUPPORT 失败，已清理并保留空耗时，没有性能结论。下一步在同一实际提交的 GitHub Actions 中运行控制与三轮独立比较。节点默认后端没有变更。细节见[第 6 轮报告](performance-af-xdp-tokio-2026-11-02.md)。
