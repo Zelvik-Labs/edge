@@ -147,4 +147,3 @@ H3 实现、修复范围与测量见 [`performance-h3-2026-11-02.md`](../../docs
 
 `minimal_engine_baseline.py` 加 `examples/minimal-http-proxy.rs` 只测同依赖、allocator、Tokio H1 循环的最小转发探针；它没有完整 Edge 功能。
 `benches/support/request_filter_layout.py` 从生产 ELF 提取 future 的 vtable 布局和 poll 代码长度，只能用于布局诊断，不能当成分配数或吞吐收益。
-
