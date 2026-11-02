@@ -1,0 +1,205 @@
+--- a/src/quic_udp_demux.rs
++++ b/src/quic_udp_demux.rs
+@@ -125,18 +125,14 @@
+ }
+ 
+ struct SharedQuinnState {
+-    rx: mpsc::Receiver<H3Datagram>,
+-    // A later slot can fail after earlier slots were copied successfully.
+-    // Deliver the completed prefix first, then return this error on the next
+-    // poll instead of losing either the prefix or the error.
+-    pending_error: Option<io::Error>,
++    rx: Mutex<mpsc::Receiver<H3Datagram>>,
+ }
+ 
+ #[derive(Clone)]
+ struct SharedQuinnUdpSocket {
+     downstream_sender: UdpDownstreamSender,
+     local_addr: SocketAddr,
+-    state: Arc<Mutex<SharedQuinnState>>,
++    state: Arc<SharedQuinnState>,
+ }
+ 
+ impl fmt::Debug for SharedQuinnUdpSocket {
+@@ -156,10 +152,7 @@
+         Self {
+             downstream_sender,
+             local_addr,
+-            state: Arc::new(Mutex::new(SharedQuinnState {
+-                rx,
+-                pending_error: None,
+-            })),
++            state: Arc::new(SharedQuinnState { rx: Mutex::new(rx) }),
+         }
+     }
+ }
+@@ -200,38 +193,27 @@
+             return Poll::Ready(Ok(0));
+         }
+ 
+-        let mut state = self
++        let mut rx = self
+             .state
++            .rx
+             .lock()
+             .map_err(|_| io::Error::other("HTTP/3 UDP receive queue lock poisoned"))?;
+-        if let Some(error) = state.pending_error.take() {
+-            return Poll::Ready(Err(error));
+-        }
+-        let mut received = 0;
+-        // Quinn supplies multiple buffers. Drain only immediately available
+-        // datagrams into that bounded slice, with one receive-queue lock.
+-        for (buf, metadata) in bufs.iter_mut().zip(meta.iter_mut()) {
+-            let datagram = match Pin::new(&mut state.rx).poll_recv(cx) {
+-                Poll::Ready(Some(datagram)) => datagram,
+-                Poll::Ready(None) => break,
+-                Poll::Pending if received == 0 => return Poll::Pending,
+-                Poll::Pending => break,
+-            };
+-            debug!(
+-                "HTTP/3 shared UDP socket received {} bytes from {}",
+-                datagram.data.len(),
+-                datagram.from
+-            );
+-            if let Err(error) = copy_datagram(datagram, self.local_addr.ip(), buf, metadata) {
+-                if received == 0 {
+-                    return Poll::Ready(Err(error));
+-                }
+-                state.pending_error = Some(error);
+-                break;
++
++        match Pin::new(&mut *rx).poll_recv(cx) {
++            Poll::Ready(Some(datagram)) => {
++                debug!(
++                    "HTTP/3 shared UDP socket received {} bytes from {}",
++                    datagram.data.len(),
++                    datagram.from
++                );
++                Poll::Ready(
++                    copy_datagram(datagram, self.local_addr.ip(), &mut bufs[0], &mut meta[0])
++                        .map(|_| 1),
++                )
+             }
+-            received += 1;
++            Poll::Ready(None) => Poll::Ready(Ok(0)),
++            Poll::Pending => Poll::Pending,
+         }
+-        Poll::Ready(Ok(received))
+     }
+ 
+     fn local_addr(&self) -> io::Result<SocketAddr> {
+@@ -2610,114 +2592,6 @@
+     }
+ 
+     #[tokio::test]
+-    async fn shared_quinn_udp_socket_batches_with_metadata_and_queue_refunds() {
+-        let listen_addr = "127.0.0.1:443".parse().unwrap();
+-        let (downstream_tx, _downstream_rx) = mpsc::channel(1);
+-        let (h3_tx, h3_rx) = mpsc::channel(3);
+-        let queued_bytes = Arc::new(AtomicUsize::new(6));
+-        for (index, data) in [b"a".as_slice(), b"bb", b"ccc"].into_iter().enumerate() {
+-            h3_tx
+-                .send(H3Datagram {
+-                    from: SocketAddr::from(([127, 0, 0, 1], 53000 + index as u16)),
+-                    data: Bytes::copy_from_slice(data),
+-                    queued_bytes: Some(queued_bytes.clone()),
+-                    ecn: Some(3),
+-                })
+-                .await
+-                .unwrap();
+-        }
+-        drop(h3_tx);
+-        let socket = SharedQuinnUdpSocket::new(
+-            UdpDownstreamSender::channel(listen_addr, downstream_tx),
+-            listen_addr,
+-            h3_rx,
+-        );
+-        let mut buffers = [[0u8; 8]; 2];
+-        let mut meta = [quinn::udp::RecvMeta::default(); 2];
+-        // One metadata slot must not dequeue the next packet even though
+-        // two payload buffers are available.
+-        let count = {
+-            let mut bufs = buffers.each_mut().map(|b| IoSliceMut::new(&mut b[..]));
+-            std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta[..1]))
+-                .await
+-                .unwrap()
+-        };
+-        assert_eq!(count, 1);
+-        assert_eq!(&buffers[0][..meta[0].len], b"a");
+-        assert_eq!(queued_bytes.load(Ordering::Acquire), 5);
+-        let count = {
+-            let mut bufs = buffers.each_mut().map(|b| IoSliceMut::new(&mut b[..]));
+-            std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta))
+-                .await
+-                .unwrap()
+-        };
+-        assert_eq!(count, 2);
+-        for (index, expected) in [b"bb".as_slice(), b"ccc"].into_iter().enumerate() {
+-            assert_eq!(&buffers[index][..meta[index].len], expected);
+-            assert_eq!(meta[index].addr.port(), 53001 + index as u16);
+-            assert_eq!(meta[index].ecn, Some(quinn::udp::EcnCodepoint::Ce));
+-            assert_eq!(meta[index].dst_ip, Some(listen_addr.ip()));
+-            assert_eq!(meta[index].stride, expected.len());
+-        }
+-        assert_eq!(queued_bytes.load(Ordering::Acquire), 0);
+-        let mut bufs = buffers.each_mut().map(|b| IoSliceMut::new(&mut b[..]));
+-        assert_eq!(
+-            std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta))
+-                .await
+-                .unwrap(),
+-            0
+-        );
+-    }
+-
+-    #[tokio::test]
+-    async fn shared_quinn_udp_socket_preserves_error_after_a_partial_batch() {
+-        let listen_addr = "127.0.0.1:443".parse().unwrap();
+-        let (downstream_tx, _downstream_rx) = mpsc::channel(1);
+-        let (h3_tx, h3_rx) = mpsc::channel(3);
+-        let queued_bytes = Arc::new(AtomicUsize::new(14));
+-        for data in [b"ok".as_slice(), b"oversize", b"tail"] {
+-            h3_tx
+-                .send(H3Datagram {
+-                    from: "127.0.0.1:53000".parse().unwrap(),
+-                    data: Bytes::copy_from_slice(data),
+-                    queued_bytes: Some(queued_bytes.clone()),
+-                    ecn: None,
+-                })
+-                .await
+-                .unwrap();
+-        }
+-        drop(h3_tx);
+-        let socket = SharedQuinnUdpSocket::new(
+-            UdpDownstreamSender::channel(listen_addr, downstream_tx),
+-            listen_addr,
+-            h3_rx,
+-        );
+-        let mut buffers = [[0u8; 4]; 3];
+-        let mut meta = [quinn::udp::RecvMeta::default(); 3];
+-        let count = {
+-            let mut bufs = buffers.each_mut().map(|b| IoSliceMut::new(&mut b[..]));
+-            std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta))
+-                .await
+-                .unwrap()
+-        };
+-        assert_eq!(count, 1);
+-        assert_eq!(&buffers[0][..meta[0].len], b"ok");
+-        assert_eq!(queued_bytes.load(Ordering::Acquire), 4);
+-        let mut bufs = buffers.each_mut().map(|b| IoSliceMut::new(&mut b[..]));
+-        let error = std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta))
+-            .await
+-            .unwrap_err();
+-        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+-        assert_eq!(queued_bytes.load(Ordering::Acquire), 4);
+-        let count = std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta))
+-            .await
+-            .unwrap();
+-        assert_eq!(count, 1);
+-        assert_eq!(queued_bytes.load(Ordering::Acquire), 0);
+-        assert_eq!(&bufs[0][..meta[0].len], b"tail");
+-    }
+-
+-    #[tokio::test]
+     async fn shared_quinn_udp_socket_receives_h3_datagram_and_releases_budget() {
+         let listen_addr: SocketAddr = "127.0.0.1:443".parse().unwrap();
+         let peer_addr: SocketAddr = "127.0.0.1:53000".parse().unwrap();

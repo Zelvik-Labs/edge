@@ -1,0 +1,186 @@
+      ┌─────────┐  mr boxington
+     ╱ ═══════ ╱│
+    ╱─────────╱ │
+    │ •    (◉)│≡│
+    │  ◟▄▄▄◞  │ ╱
+    │   ◀◆▶   │╱
+    └─────────┘
+   Compiling zelvik-edge v26.11.1 (/workspace/edge/.worktrees/perf-next)
+mbx[warning]: cc cache bypassed: compiler invocation names no output file
+mbx[progress]: 15s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+error[E0716]: temporary value dropped while borrowed
+   --> src/h3_downstream.rs:615:13
+    |
+614 |           let (server_h3, client_h3) = tokio::join!(
+    |  ______________________________________-
+615 | |             h3::server::builder().build(h3_quinn::Connection::new(server_conn)),
+    | |             ^^^^^^^^^^^^^^^^^^^^^ creates a temporary value which is freed while still in use
+616 | |             h3::client::new(h3_quinn::Connection::new(client_conn))
+617 | |         );
+    | |         -
+    | |         |
+    | |_________temporary value is freed at the end of this statement
+    |           borrow later used here
+    |
+    = note: consider using a `let` binding to create a longer lived value
+
+mbx[progress]: 45s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 60s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 75s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 90s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 105s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 120s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+error[E0080]: compilation was interrupted
+    --> src/xdp/af_xdp/tcp_reactor.rs:2722:13
+     |
+2722 | /             tracing::debug!(
+2723 | |                 "AF_XDP session {} -> {} received non-PTB ICMP error; session continues",
+2724 | |                 flow.local_addr,
+2725 | |                 flow.peer_addr
+2726 | |             );
+     | |_____________^ evaluation of `xdp::af_xdp::tcp_reactor::AfXdpTcpReactor::apply_pmtu` failed here
+     |
+     = note: this error originates in the macro `tracing::debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0080]: compilation was interrupted
+    --> src/xdp/af_xdp/tcp_reactor.rs:2722:13
+     |
+2722 | /             tracing::debug!(
+2723 | |                 "AF_XDP session {} -> {} received non-PTB ICMP error; session continues",
+2724 | |                 flow.local_addr,
+2725 | |                 flow.peer_addr
+2726 | |             );
+     | |_____________^ evaluation of `xdp::af_xdp::tcp_reactor::AfXdpTcpReactor::apply_pmtu` failed here
+     |
+     = note: this error originates in the macro `$crate::level_enabled` which comes from the expansion of the macro `tracing::debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0080]: compilation was interrupted
+    --> src/xdp/af_xdp/tcp_reactor.rs:2722:13
+     |
+2722 | /             tracing::debug!(
+2723 | |                 "AF_XDP session {} -> {} received non-PTB ICMP error; session continues",
+2724 | |                 flow.local_addr,
+2725 | |                 flow.peer_addr
+2726 | |             );
+     | |_____________^ evaluation of `xdp::af_xdp::tcp_reactor::AfXdpTcpReactor::apply_pmtu` failed here
+     |
+     = note: this error originates in the macro `$crate::event` which comes from the expansion of the macro `tracing::debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0080]: compilation was interrupted
+    --> src/xdp/af_xdp/tcp_reactor.rs:2722:13
+     |
+2722 | /             tracing::debug!(
+2723 | |                 "AF_XDP session {} -> {} received non-PTB ICMP error; session continues",
+2724 | |                 flow.local_addr,
+2725 | |                 flow.peer_addr
+2726 | |             );
+     | |_____________^ evaluation of `xdp::af_xdp::tcp_reactor::AfXdpTcpReactor::apply_pmtu` failed here
+     |
+     = note: this error originates in the macro `$crate::if_log_enabled` which comes from the expansion of the macro `tracing::debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0080]: compilation was interrupted
+    --> src/xdp/af_xdp/tcp_reactor.rs:2730:13
+     |
+2730 | /             tracing::debug!(
+2731 | |                 "AF_XDP PMTU update {} -> {} arrived after session teardown; ignored",
+2732 | |                 flow.local_addr,
+2733 | |                 flow.peer_addr
+2734 | |             );
+     | |_____________^ evaluation of `xdp::af_xdp::tcp_reactor::AfXdpTcpReactor::apply_pmtu` failed here
+     |
+     = note: this error originates in the macro `tracing::debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0080]: compilation was interrupted
+    --> src/xdp/af_xdp/tcp_reactor.rs:2730:13
+     |
+2730 | /             tracing::debug!(
+2731 | |                 "AF_XDP PMTU update {} -> {} arrived after session teardown; ignored",
+2732 | |                 flow.local_addr,
+2733 | |                 flow.peer_addr
+2734 | |             );
+     | |_____________^ evaluation of `xdp::af_xdp::tcp_reactor::AfXdpTcpReactor::apply_pmtu` failed here
+     |
+     = note: this error originates in the macro `$crate::level_enabled` which comes from the expansion of the macro `tracing::debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0080]: compilation was interrupted
+    --> src/xdp/af_xdp/tcp_reactor.rs:2730:13
+     |
+2730 | /             tracing::debug!(
+2731 | |                 "AF_XDP PMTU update {} -> {} arrived after session teardown; ignored",
+2732 | |                 flow.local_addr,
+2733 | |                 flow.peer_addr
+2734 | |             );
+     | |_____________^ evaluation of `xdp::af_xdp::tcp_reactor::AfXdpTcpReactor::apply_pmtu` failed here
+     |
+     = note: this error originates in the macro `$crate::event` which comes from the expansion of the macro `tracing::debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0080]: compilation was interrupted
+    --> src/xdp/af_xdp/tcp_reactor.rs:2730:13
+     |
+2730 | /             tracing::debug!(
+2731 | |                 "AF_XDP PMTU update {} -> {} arrived after session teardown; ignored",
+2732 | |                 flow.local_addr,
+2733 | |                 flow.peer_addr
+2734 | |             );
+     | |_____________^ evaluation of `xdp::af_xdp::tcp_reactor::AfXdpTcpReactor::apply_pmtu` failed here
+     |
+     = note: this error originates in the macro `$crate::if_log_enabled` which comes from the expansion of the macro `tracing::debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0080]: compilation was interrupted
+    --> src/xdp/af_xdp/tcp_reactor.rs:2741:9
+     |
+2741 | /         tracing::debug!(
+2742 | |             "AF_XDP session {} -> {} path MTU clamped to {mtu}",
+2743 | |             flow.local_addr,
+2744 | |             flow.peer_addr
+2745 | |         );
+     | |_________^ evaluation of `xdp::af_xdp::tcp_reactor::AfXdpTcpReactor::apply_pmtu` failed here
+     |
+     = note: this error originates in the macro `tracing::debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0080]: compilation was interrupted
+    --> src/xdp/af_xdp/tcp_reactor.rs:2741:9
+     |
+2741 | /         tracing::debug!(
+2742 | |             "AF_XDP session {} -> {} path MTU clamped to {mtu}",
+2743 | |             flow.local_addr,
+2744 | |             flow.peer_addr
+2745 | |         );
+     | |_________^ evaluation of `xdp::af_xdp::tcp_reactor::AfXdpTcpReactor::apply_pmtu` failed here
+     |
+     = note: this error originates in the macro `$crate::level_enabled` which comes from the expansion of the macro `tracing::debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0080]: compilation was interrupted
+    --> src/xdp/af_xdp/tcp_reactor.rs:2741:9
+     |
+2741 | /         tracing::debug!(
+2742 | |             "AF_XDP session {} -> {} path MTU clamped to {mtu}",
+2743 | |             flow.local_addr,
+2744 | |             flow.peer_addr
+2745 | |         );
+     | |_________^ evaluation of `xdp::af_xdp::tcp_reactor::AfXdpTcpReactor::apply_pmtu` failed here
+     |
+     = note: this error originates in the macro `$crate::event` which comes from the expansion of the macro `tracing::debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0080]: compilation was interrupted
+    --> src/xdp/af_xdp/tcp_reactor.rs:2741:9
+     |
+2741 | /         tracing::debug!(
+2742 | |             "AF_XDP session {} -> {} path MTU clamped to {mtu}",
+2743 | |             flow.local_addr,
+2744 | |             flow.peer_addr
+2745 | |         );
+     | |_________^ evaluation of `xdp::af_xdp::tcp_reactor::AfXdpTcpReactor::apply_pmtu` failed here
+     |
+     = note: this error originates in the macro `$crate::if_log_enabled` which comes from the expansion of the macro `tracing::debug` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0080]: compilation was interrupted
+    --> src/xdp/af_xdp/tcp_reactor.rs:2792:76
+     |
+2792 |         if !self.sweep_active && session_idle_for(now, self.last_sweep) >= AF_XDP_TCP_SWEEP_INTERVAL
+     |                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `xdp::af_xdp::tcp_reactor::AfXdpTcpReactor::pump_sessions` failed here
+
+error: could not compile `zelvik-edge` (lib test) due to 14 previous errors
+mbx[cache]: 0 hits, 0 misses, 3 bypassed; 0 B downloaded, 0 B uploaded, 6.1 KiB stored locally
+mbx[savings]: disposed of 10.3 GiB logical without being asked. that is rather the point.

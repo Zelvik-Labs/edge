@@ -264,8 +264,8 @@ mod tests {
 
     #[test]
     fn stop_requested_classification() {
-        assert_eq!(stop_requested(libc::POLLHUP).unwrap(), true);
-        assert_eq!(stop_requested(0).unwrap(), false);
+        assert!(stop_requested(libc::POLLHUP).unwrap());
+        assert!(!stop_requested(0).unwrap());
         for bad in [
             libc::POLLERR | libc::POLLHUP,
             libc::POLLNVAL | libc::POLLHUP,

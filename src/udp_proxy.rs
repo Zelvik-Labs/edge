@@ -2482,20 +2482,15 @@ mod tests {
                 })
             })
             .collect();
-        let cfg: crate::config_models::ReverseProxyConfig = serde_json::from_value(serde_json::json!({
-            "isOn": true,
-            "primaryOrigins": origins,
-            "scheduling": { "code": "least_conn", "options": {} },
-        }))
-        .unwrap();
-        let (lb, _hc) = crate::lb_factory::build_lb(
-            0,
-            &cfg,
-            2,
-            &std::collections::HashMap::new(),
-            false,
-            true,
-        );
+        let cfg: crate::config_models::ReverseProxyConfig =
+            serde_json::from_value(serde_json::json!({
+                "isOn": true,
+                "primaryOrigins": origins,
+                "scheduling": { "code": "least_conn", "options": {} },
+            }))
+            .unwrap();
+        let (lb, _hc) =
+            crate::lb_factory::build_lb(0, &cfg, 2, &std::collections::HashMap::new(), false, true);
         lb
     }
 
@@ -2553,7 +2548,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
     }
 
     /// Regression for Zelvik-Labs/edge#11: a UDP session counts as one unit of
@@ -3209,9 +3205,9 @@ mod tests {
             quic_cid_tx: None,
             downstream_sender: UdpDownstreamSender::socket(listen_socket),
             rx,
-            metrics_guard: crate::metrics::ActiveRequestMetricsGuard::new(
-                crate::metrics::record::get_or_create(1).expect("metric instance"),
-            ),
+            metrics_guard: crate::metrics::ActiveRequestMetricsGuard::new(Arc::new(
+                crate::metrics::ServerMetrics::new(),
+            )),
             recent_upstream_ports: Arc::new(DashMap::new()),
             preferred_backend_bind: None,
         }));
@@ -3269,9 +3265,9 @@ mod tests {
             quic_cid_tx: None,
             downstream_sender: UdpDownstreamSender::channel(listen_addr, downstream_tx),
             rx,
-            metrics_guard: crate::metrics::ActiveRequestMetricsGuard::new(
-                crate::metrics::record::get_or_create(1).expect("metric instance"),
-            ),
+            metrics_guard: crate::metrics::ActiveRequestMetricsGuard::new(Arc::new(
+                crate::metrics::ServerMetrics::new(),
+            )),
             recent_upstream_ports: Arc::new(DashMap::new()),
             preferred_backend_bind: None,
         }));
@@ -3336,9 +3332,9 @@ mod tests {
             quic_cid_tx: None,
             downstream_sender: UdpDownstreamSender::channel(listen_addr, downstream_tx),
             rx,
-            metrics_guard: crate::metrics::ActiveRequestMetricsGuard::new(
-                crate::metrics::record::get_or_create(1).expect("metric instance"),
-            ),
+            metrics_guard: crate::metrics::ActiveRequestMetricsGuard::new(Arc::new(
+                crate::metrics::ServerMetrics::new(),
+            )),
             recent_upstream_ports,
             preferred_backend_bind: None,
         }));
@@ -3865,7 +3861,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         let manager = UdpProxyManager::new(store, Arc::new(WafStateManager::new()), 1);
         let server = manager
@@ -3989,7 +3986,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         let manager = UdpProxyManager::new(store, Arc::new(WafStateManager::new()), 1);
         let (downstream_tx, _downstream_rx) = mpsc::channel(8);

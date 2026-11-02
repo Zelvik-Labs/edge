@@ -806,6 +806,14 @@ impl ConfigStore {
         lock.unique_quic_passthrough_by_port.contains_key(&port)
     }
 
+    /// A single configuration snapshot must exclude both kinds of forwarding
+    /// before a native H3 listener can delegate protocol validation to Quinn.
+    pub(crate) fn udp_port_has_no_forwarding_sync(&self, port: u16) -> bool {
+        let lock = self.inner.read();
+        !lock.unique_quic_passthrough_by_port.contains_key(&port)
+            && !lock.udp_server_by_port.contains_key(&port)
+    }
+
     pub fn quic_passthrough_ports_sync(&self) -> HashSet<u16> {
         let lock = self.inner.read();
         lock.unique_quic_passthrough_by_port
@@ -1130,7 +1138,10 @@ impl ConfigStore {
         )
     }
 
-    #[expect(clippy::too_many_arguments, reason = "configuration snapshot carries explicit global settings")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "configuration snapshot carries explicit global settings"
+    )]
     pub fn set_enabled_features(
         &self,
         has_dns: bool,
@@ -1467,7 +1478,10 @@ impl ConfigStore {
         lock.deleted_contents.clone()
     }
 
-    #[expect(clippy::too_many_arguments, reason = "configuration snapshot carries explicit global settings")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "configuration snapshot carries explicit global settings"
+    )]
     pub async fn update_config(
         &self,
         id: i64,
@@ -1835,7 +1849,10 @@ impl ConfigStore {
             .await
     }
 
-    pub async fn remove_user_servers(&self, user_id: i64) -> Result<(), crate::metrics::MetricCapacityError> {
+    pub async fn remove_user_servers(
+        &self,
+        user_id: i64,
+    ) -> Result<(), crate::metrics::MetricCapacityError> {
         let stale_ids = {
             let lock = self.inner.read();
             lock.all_servers
@@ -1855,7 +1872,10 @@ impl ConfigStore {
         Ok(())
     }
 
-    pub async fn remove_server(&self, server_id: i64) -> Result<(), crate::metrics::MetricCapacityError> {
+    pub async fn remove_server(
+        &self,
+        server_id: i64,
+    ) -> Result<(), crate::metrics::MetricCapacityError> {
         self.replace_servers_snapshot(
             std::iter::once(server_id).collect(),
             Vec::new(),
@@ -2417,9 +2437,13 @@ mod tests {
 
         assert!(!crate::metrics::METRICS.servers.contains_key(&removed_id));
         assert!(crate::metrics::METRICS.servers.contains_key(&readded_id));
-        let removed = crate::metrics::METRICS.find_server(removed_id).expect("installed instance");
+        let removed = crate::metrics::METRICS
+            .find_server(removed_id)
+            .expect("installed instance");
         let removed_instance = removed.instance_id;
-        let readded = crate::metrics::METRICS.find_server(readded_id).expect("installed instance");
+        let readded = crate::metrics::METRICS
+            .find_server(readded_id)
+            .expect("installed instance");
         drop(removed);
 
         let sample = crate::metrics::METRICS
@@ -2588,7 +2612,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
     }
 
     #[tokio::test]
@@ -2806,7 +2831,8 @@ mod tests {
                     sample_rate: 1.0,
                 }),
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         let snapshot = store.get_hot_path_snapshot_sync();
         assert!(snapshot.is_on);
@@ -2882,7 +2908,8 @@ mod tests {
 
         store
             .cache_server_route("*.example.com".to_string(), server, lb)
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         for host in ["example.com", "www.example.com", "a.b.example.com"] {
             assert_eq!(
@@ -2915,7 +2942,8 @@ mod tests {
 
         store
             .cache_server_route("*.example.com".to_string(), server, lb)
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         for host in ["example.com", "www.example.com", "a.b.example.com"] {
             assert_eq!(
@@ -3022,7 +3050,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         assert_eq!(
             store
@@ -3136,7 +3165,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         let route = store
             .inspect_tls_route_sync("rancher.mymya.cn", 443)
@@ -3231,7 +3261,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         assert!(store.has_any_sni_passthrough_sync());
         let route = store
@@ -3316,7 +3347,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         assert!(store.has_any_quic_passthrough_sync());
         assert_eq!(
@@ -3411,7 +3443,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         assert!(store.has_any_quic_passthrough_sync());
         assert_eq!(
@@ -3502,7 +3535,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         assert_eq!(
             store
@@ -3613,7 +3647,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         assert_eq!(
             store
@@ -3698,7 +3733,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         assert_eq!(
             store

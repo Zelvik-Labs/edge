@@ -1,0 +1,11 @@
+{
+  "frozen_files": 177,
+  "source_root": "/workspace/edge/.worktrees/perf-next/.local/h3-stage2/measured-source",
+  "binary_hashes": 4,
+  "all_new_contracts_passed": true,
+  "all_failures_retained": true,
+  "raw_hashes_match": true,
+  "portable_summaries_recompute": true,
+  "report_links_resolve": true,
+  "runtime_secrets_excluded": true
+}

@@ -1,0 +1,12 @@
+      ┌─────────┐  mr boxington
+     ╱ ═══════ ╱│
+    ╱─────────╱ │
+    │ •    (◉)│≡│
+    │  ◟▄▄▄◞  │ ╱
+    │   ◀◆▶   │╱
+    └─────────┘
+   Compiling zelvik-edge v26.11.1 (/workspace/edge/.worktrees/perf-next)
+mbx[warning]: cc cache bypassed: compiler invocation names no output file
+mbx[progress]: 15s elapsed; 0 hits, 0 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 0 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+local-storage: terminating build: budget exceeded: mbx 12.05 GiB exceeds 12.00 GiB

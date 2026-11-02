@@ -1,0 +1,84 @@
+{
+  "baseline": "01a2156882789f876f3c40c01bc6a0ee0bc5fa2b",
+  "source_sha256": {
+    "src/metrics.rs": "de99fb61172382335d00aaaaab1e305b937e26778ea7f593961947162d45e906",
+    "src/metrics/plan.rs": "d62398bce9d09ff3b2277e7ebba5877fb68b4534b7129397640e14a25371eff3",
+    "src/metrics/projection.rs": "de09c34b3be835409943defef5c3adf4df61481650ee63c48845052a6c5b5e8e",
+    "src/metrics/request_fields.rs": "5e6f4ef27dec0df1ff3c870c4507bc4d8bb4d2a7aed13b102c098b749e71d85d",
+    "src/metrics/template.rs": "79a0f4fabcc11787b619dfb8eeb4b37a162541ef188d39f9bdbcf2d718b273c9",
+    "src/proxy.rs": "4e3f3aca609aa1fb570eab189236ee7e5dca9570d16fcc108f8750ad00ef1f3f",
+    "src/main.rs": "f9bf1bdfbe8aa86700e58c8d12977c2a39180acad18f9cb66089882d0e66ac39",
+    "src/http_proxy_manager.rs": "d335330621a00a647489b87ecda460beac057f45f08530b72f7c2340317f348a",
+    "examples/issue34-controller.rs": "1159289cd92b7d2defc68d91270c40523ed8ddfc110d1d66f148fb164e8b758b",
+    "benches/support/protocol_state_client.c": "528394d1d89ee1830e483a20afae2d244742cf48828845ffffcac429c9185e3b",
+    "scripts/perf/protocol_state_matrix.py": "e597f12f4580d7e228b9dccaf8a61c7745e728098a5a791774cbe0b651d8204f",
+    "Cargo.toml": "98f94af47c9ad28278025539319bebe054e4c5a445b2d207de49502b9a4a9bf6",
+    "Cargo.lock": "b3d62f9d4d9bf5efcf600240838eed5e84f9c23edde51bd51437f0aba7a6f072",
+    "rust-toolchain.toml": "bf08ca0b30f474bfab755059f62539f571c53bb2bf490d2ce35e516f6ec83359",
+    "scripts/perf/summarize_protocol_state.py": "0487d22ffc4a6efabd2e81e3a54c28093004aca7368da71df5dfb94f318e1bd8",
+    "scripts/perf/test_summarize_protocol_state.py": "1edfe82484976834dd7074a4c10e37aa8b379c2c2a13e2a978b394caf0735c9a",
+    "scripts/perf/test_protocol_state_matrix.py": "c9bbc94a15c8beca42b3ca5b4b26a66dd168b48cda2c4ab47b078c14d604f68b",
+    "scripts/perf/compare_h2_churn.py": "d93150debe941ddb1b2ff5c65a9b34611d347704ce27277f5e29742b8b76cc87"
+  },
+  "production_binary_sha256": "94e8026636a67c69c6abb2f70f5c5259ee54a1eee44353640f547a55a068f645",
+  "controller_sha256": "cb54275745f28e237822717e17f10a601f13724f41cace7dbb193c38c037299e",
+  "client_sha256": "368312b058eb6a98373260a6b4977beb1655744418406c7c1c1bcedce92b3c1b",
+  "rust_version": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "compiler_flags": {
+    "RUSTFLAGS": "-C target-cpu=x86-64-v2",
+    "CARGO_BUILD_JOBS": "2",
+    "RUST_TEST_THREADS": "2",
+    "SOURCE_DATE_EPOCH": "1793566871"
+  },
+  "release_profile": {
+    "opt_level": 3,
+    "lto": "fat",
+    "codegen_units": 1,
+    "panic": "abort"
+  },
+  "rust_build_command": "CARGO_TARGET_DIR=/workspace/edge/target local-rust.sh build --locked --release --bin Zelvik-Edge --example issue34-controller",
+  "client_build_command": "local-storage.py run -- cc -O3 -Wall -Wextra -Werror benches/support/protocol_state_client.c -lcurl -o .local/protocol-state-matrix/protocol-state-client",
+  "path_dependency": {
+    "repository": "dns",
+    "revision": "605bc0ea30bb32ab9b38fe282121569dc3f156b6",
+    "geo_runtime_worktree_clean": true,
+    "geo_runtime_sha256": {
+      "crates/zelvik-geo-runtime/Cargo.toml": "ad803b9ec991f62147fb361579d6ba8bd2c46a421f4f979ca55ac69606882caa",
+      "crates/zelvik-geo-runtime/src/bundle.rs": "6220de0ce4ebecfc1293aae1aec1b04bc76cd257409204c88f8e678932e67d66",
+      "crates/zelvik-geo-runtime/src/container.rs": "745738eede02b345ca3a8fe3b25ccc90a6e376561381f5990ef3f57785051265",
+      "crates/zelvik-geo-runtime/src/lib.rs": "f8c08ab1b20421fa19f4bdfddf7d73b513635c7031fc5bad377de8c0ea788db8",
+      "crates/zelvik-geo-runtime/src/manifest.rs": "3d1f6137bddbbaa74d69253840918e3e694c9c4c9f87431c2c8d305122037a65",
+      "crates/zelvik-geo-runtime/src/snapshot.rs": "28a6ffe91a8ac65ca971e7e4262238e19d6bcf87a8c140cdf1fe8f85f2214560",
+      "crates/zelvik-geo-runtime/src/store.rs": "9e973e902176bd970a22ca80cbbf47414ddbae66258e9d87c34eff4c86e5dcbe",
+      "crates/zelvik-geo-runtime/src/view.rs": "cb0b9a180aea3c96df2529fa5a6ab9af5f734d1fa6d300915a087f65aecb69fc",
+      "crates/zelvik-geo-runtime/tests/bundle.rs": "cc4951af5afcb66e1f8137424d6e38ddda69b5a7241602ecc0eb01e4199d9f13",
+      "crates/zelvik-geo-runtime/tests/unified_mmdb.rs": "afe0bbb91c133b357ed25b2a4642ac4556c523baf8e09499aa9f9c7f6e0effe3"
+    }
+  },
+  "ebpf_input": {
+    "sha256": "546412dffe356055210c7d19d228bf41e0174f383d0a4f03e49b17105da052a0",
+    "source": "existing original-worktree zelvik-edge-xdp-ebpf release artifact; build input explicitly pinned"
+  },
+  "validated_metrics_source_unchanged": true,
+  "known_findings": {
+    "h3_cache_bypass": "src/proxy.rs:9668; ProtocolBodyNotProvenEmpty guard for H3",
+    "h2_stream_churn": "src/http_proxy_manager.rs:60; 200 accepted streams per connection per 30 sec; relation to receive errors to be investigated"
+  },
+  "logs": {
+    "build.log": "273f9eda42c88d2c4a7f7eb1df0a409b92924ed06ee33d93bf65477be958bde3",
+    "build.jsonl": "19e6e87d2ae232f9a86acd1572278f396f8e6b8e0e3a1182f227ab26eba5054a",
+    "controller-tests.log": "d38e570cfed77b837330ff06ed13808eb14d90d22e48ce233d63f9347f31bc66",
+    "controller-clippy.log": "2d96f21f022ee7c006d6ebcf1a65efd877e21ada5d5bd9c038ce12ac1f41b2aa",
+    "controller-final-build.log": "465d41fdef6006ee71b36c6eb5f9300cedf07d0b71b8b47482f11ebbafa66948",
+    "python-tests.log": "d094b1bd2c8318c96097f80c50da282add5b2972970a77046de8db6c8935f6ca",
+    "client-build-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "config-check-final.log": "14440e9201aaa0c4e2d0f7e33d47e6d9d6b83364cf235e82a49bb9604c953fcd",
+    "python-tests-isolated.log": "feabb4add9e2ca3374e538560634d1ec97dc4f4ce89aab12f3d726e36ea9b2f6",
+    "report-calculation-tests.log": "3dd0d70c5673157feb83016d43c8456381f26c0565f4ef0246154ba31427a00d"
+  },
+  "measurement_started_at": 1793589651.9051716,
+  "case_isolation": "restart target and fresh tmpfs for EVERY case",
+  "fresh_requests": 2048,
+  "exploratory_evidence": "edge-1024/manifest.json; 90 mixed-state samples, later samples affected by 512 MiB data filesystem exhaustion and Mace ENOSPC fatal; nginx-1024 run interrupted for methodology correction; excluded from isolated capacity medians",
+  "deployed": false
+}

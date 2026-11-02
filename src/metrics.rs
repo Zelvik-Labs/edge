@@ -2,7 +2,7 @@ use chrono::Timelike;
 use dashmap::DashMap;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::OnceLock as OnceCell;
-use std::sync::atomic::{AtomicI64, AtomicU64, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU8, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
@@ -17,6 +17,9 @@ static HTTP_DIMENSION_DROPPED_BYTES: AtomicU64 = AtomicU64::new(0);
 static HTTP_DIMENSION_DROPPED_ENTRIES: AtomicU64 = AtomicU64::new(0);
 static EMPTY_ARC_STR: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from(""));
 static UNKNOWN_ARC_STR: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from("Unknown"));
+static HTTP_CATEGORY: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from(METRIC_CATEGORY_HTTP));
+static TCP_CATEGORY: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from(METRIC_CATEGORY_TCP));
+static UDP_CATEGORY: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from(METRIC_CATEGORY_UDP));
 static EMPTY_ATTRS: LazyLock<BTreeMap<String, String>> = LazyLock::new(BTreeMap::new);
 static HTTP_DIMENSION_WARNING_INTERVAL_MS: u64 = 5_000;
 /// Matches the governor's per-event queue estimate; the byte ledger below is
@@ -167,6 +170,19 @@ pub fn normalize_metric_category(category: &str) -> String {
     }
 }
 
+fn shared_metric_category(category: &str) -> Arc<str> {
+    let category = category.trim();
+    if category.is_empty() || category.eq_ignore_ascii_case(METRIC_CATEGORY_HTTP) {
+        Arc::clone(&HTTP_CATEGORY)
+    } else if category.eq_ignore_ascii_case(METRIC_CATEGORY_TCP) {
+        Arc::clone(&TCP_CATEGORY)
+    } else if category.eq_ignore_ascii_case(METRIC_CATEGORY_UDP) {
+        Arc::clone(&UDP_CATEGORY)
+    } else {
+        Arc::from(normalize_metric_category(category))
+    }
+}
+
 pub fn start_pressure_updater() {
     tokio::spawn(async {
         let mut sys = sysinfo::System::new();
@@ -214,7 +230,9 @@ pub mod daily;
 mod mace_backend;
 pub mod plan;
 pub mod projection;
+pub mod request_fields;
 pub mod storage;
+pub mod template;
 pub mod top_ip;
 pub mod unique_ip;
 
@@ -547,14 +565,16 @@ fn estimated_dimension_event_bytes(event: &HttpDimensionEvent) -> u64 {
         bytes = bytes.saturating_add(arc_len(action));
     }
     if let Some(analyzed) = &event.analyzed {
-        bytes = bytes.saturating_add(std::mem::size_of::<crate::metrics::analyzer::RequestStats>() as u64);
+        bytes = bytes
+            .saturating_add(std::mem::size_of::<crate::metrics::analyzer::RequestStats>() as u64);
         bytes = bytes.saturating_add(arc_len(&analyzed.browser));
         bytes = bytes.saturating_add(arc_len(&analyzed.browser_version));
         bytes = bytes.saturating_add(arc_len(&analyzed.os));
         bytes = bytes.saturating_add(arc_len(&analyzed.os_version));
         bytes = bytes.saturating_add(arc_len(&analyzed.device));
         if let Some(geo) = &analyzed.geo {
-            bytes = bytes.saturating_add(std::mem::size_of::<crate::metrics::analyzer::GeoInfo>() as u64);
+            bytes = bytes
+                .saturating_add(std::mem::size_of::<crate::metrics::analyzer::GeoInfo>() as u64);
             for value in [
                 &geo.country,
                 &geo.country_iso,
@@ -1154,7 +1174,10 @@ impl NodeMetrics {
     ) -> Result<MetricReservation, MetricCapacityError> {
         let _gate = self.family_gate.lock();
         let ids: std::collections::BTreeSet<_> = ids.into_iter().filter(|id| *id > 0).collect();
-        let missing = ids.iter().filter(|id| !self.servers.contains_key(id)).count();
+        let missing = ids
+            .iter()
+            .filter(|id| !self.servers.contains_key(id))
+            .count();
         let used = self.family_slots.load(Ordering::Acquire);
         let limit = self.family_limit_value();
         if missing > limit.saturating_sub(used) {
@@ -1182,9 +1205,12 @@ impl NodeMetrics {
         servers: impl IntoIterator<Item = &'a crate::config_models::ServerConfig>,
     ) -> Result<(), MetricCapacityError> {
         let servers: Vec<_> = servers.into_iter().collect();
-        let reservation = self.reserve_servers(servers.iter()
-            .filter(|server| server.runtime_metrics.0.get().is_none())
-            .map(|server| server.numeric_id()))?;
+        let reservation = self.reserve_servers(
+            servers
+                .iter()
+                .filter(|server| server.runtime_metrics.0.get().is_none())
+                .map(|server| server.numeric_id()),
+        )?;
         for server in servers {
             reservation.bind(server);
         }
@@ -1197,13 +1223,17 @@ impl NodeMetrics {
         let _gate = self.family_gate.lock();
         for server in servers {
             let id = server.numeric_id();
-            if id <= 0 { continue; }
+            if id <= 0 {
+                continue;
+            }
             let metrics = server.runtime_metrics.get();
             if let Some(previous) = self.servers.insert(id, Arc::clone(&metrics))
                 && !Arc::ptr_eq(&previous, &metrics)
             {
-                self.retired_servers.insert(previous.instance_id,
-                    RetiredServerMetrics::new(id, previous));
+                self.retired_servers.insert(
+                    previous.instance_id,
+                    RetiredServerMetrics::new(id, previous),
+                );
             }
         }
     }
@@ -1385,7 +1415,9 @@ impl NodeMetrics {
             let mut snapshot = entry.metrics.snapshot();
             snapshot.server_id = entry.server_id;
             let current = snapshot.fingerprint();
-            !entry.acknowledged_fingerprints.iter()
+            !entry
+                .acknowledged_fingerprints
+                .iter()
                 .all(|value| value.load(Ordering::Acquire) == current)
         });
     }
@@ -1512,7 +1544,9 @@ pub mod record {
         } else if let Some(m) = get_or_create(server_id) {
             m
         } else {
-            METRICS.unattributed_requests.fetch_add(1, Ordering::Relaxed);
+            METRICS
+                .unattributed_requests
+                .fetch_add(1, Ordering::Relaxed);
             return false;
         };
         if user_id > 0 {
@@ -1554,7 +1588,9 @@ pub mod record {
         } else if let Some(m) = get_or_create(server_id) {
             m
         } else {
-            METRICS.unattributed_requests.fetch_add(1, Ordering::Relaxed);
+            METRICS
+                .unattributed_requests
+                .fetch_add(1, Ordering::Relaxed);
             return false;
         };
         if user_id > 0 {
@@ -1584,7 +1620,9 @@ pub mod record {
         if let Some(metrics) = cached_m.cloned().or_else(|| get_or_create(server_id)) {
             return ActiveRequestMetricsGuard::new(metrics);
         }
-        METRICS.unattributed_requests.fetch_add(1, Ordering::Relaxed);
+        METRICS
+            .unattributed_requests
+            .fetch_add(1, Ordering::Relaxed);
         ActiveRequestMetricsGuard::new(Arc::new(ServerMetrics::new()))
     }
 
@@ -1649,7 +1687,9 @@ pub mod record {
         } else if let Some(m) = get_or_create(server_id) {
             m
         } else {
-            METRICS.unattributed_requests.fetch_add(1, Ordering::Relaxed);
+            METRICS
+                .unattributed_requests
+                .fetch_add(1, Ordering::Relaxed);
             return;
         };
         if release_active {
@@ -1694,8 +1734,12 @@ pub mod record {
         } else if let Some(m) = get_or_create(server_id) {
             m
         } else {
-            METRICS.unattributed_bytes_sent.fetch_add(bytes_sent, Ordering::Relaxed);
-            METRICS.unattributed_bytes_received.fetch_add(bytes_received, Ordering::Relaxed);
+            METRICS
+                .unattributed_bytes_sent
+                .fetch_add(bytes_sent, Ordering::Relaxed);
+            METRICS
+                .unattributed_bytes_received
+                .fetch_add(bytes_received, Ordering::Relaxed);
             return;
         };
         m.bytes_sent.fetch_add(bytes_sent, Ordering::Relaxed);
@@ -1722,7 +1766,9 @@ pub mod record {
         } else if let Some(m) = get_or_create(server_id) {
             m
         } else {
-            METRICS.unattributed_origin_bytes.fetch_add(sent.saturating_add(received), Ordering::Relaxed);
+            METRICS
+                .unattributed_origin_bytes
+                .fetch_add(sent.saturating_add(received), Ordering::Relaxed);
             return;
         };
         m.origin_bytes_sent.fetch_add(sent, Ordering::Relaxed);
@@ -1765,19 +1811,17 @@ pub mod record {
         // cannot retire the generation between capture and enqueue.
         let plan_lease = crate::metrics::plan::current_metric_plan_leased();
         let plan = std::sync::Arc::clone(plan_lease.plan());
-        let category = crate::metrics::normalize_metric_category(args.category);
-        let request_context = plan
-            .request_vars_for(&category)
-            .map(|_| {
-                MetricRequestContext::network(
-                    args.domain,
-                    args.client_ip,
-                    args.user_agent,
-                    args.bytes_sent,
-                    args.bytes_received,
-                    args.status,
-                )
-            });
+        let category = shared_metric_category(args.category);
+        let request_context = plan.request_vars_for(&category).map(|_| {
+            MetricRequestContext::network(
+                args.domain,
+                args.client_ip,
+                args.user_agent,
+                args.bytes_sent,
+                args.bytes_received,
+                args.status,
+            )
+        });
         record_dimensions(DimensionsArgs {
             category: args.category,
             server_id: args.server_id,
@@ -1817,9 +1861,13 @@ pub mod record {
             return;
         }
 
-        let category = crate::metrics::normalize_metric_category(category);
+        let Some(handle) = HTTP_DIMENSION_HANDLE.get() else {
+            HTTP_DIMENSION_DROPPED.fetch_add(1, Ordering::Relaxed);
+            return;
+        };
+        let category = shared_metric_category(category);
         let event = HttpDimensionEvent {
-            category: Arc::from(category),
+            category,
             server_id,
             client_ip,
             domain: if domain.is_empty() {
@@ -1850,13 +1898,9 @@ pub mod record {
             created_at: get_current_5min_ts(),
         };
 
-        if let Some(handle) = HTTP_DIMENSION_HANDLE.get() {
-            plan.acquire_event();
-            if !handle.try_enqueue(event) {
-                plan.release_event();
-            }
-        } else {
-            HTTP_DIMENSION_DROPPED.fetch_add(1, Ordering::Relaxed);
+        plan.acquire_event();
+        if !handle.try_enqueue(event) {
+            plan.release_event();
         }
     }
 
@@ -1870,10 +1914,16 @@ pub mod record {
         let analyzed = if let Some(ref analyzed) = event.analyzed {
             analyzed
         } else {
-            analyzed_owned = crate::metrics::analyzer::analyze_request(
-                event.client_ip,
-                event.user_agent.as_ref(),
-            );
+            analyzed_owned = if event.category.as_ref() == METRIC_CATEGORY_HTTP
+                || event.plan.needs_analysis_for(&event.category)
+            {
+                crate::metrics::analyzer::analyze_request(
+                    event.client_ip,
+                    event.user_agent.as_ref(),
+                )
+            } else {
+                crate::metrics::analyzer::without_analysis()
+            };
             &analyzed_owned
         };
 
@@ -1902,7 +1952,13 @@ pub mod record {
                     )
                 },
             );
-        let provider_id = crate::metrics::storage::lookup_region_provider_id(event.client_ip);
+        let provider_id = if event.category.as_ref() == METRIC_CATEGORY_HTTP
+            || event.plan.needs_provider_id_for(&event.category)
+        {
+            crate::metrics::storage::lookup_region_provider_id(event.client_ip)
+        } else {
+            0
+        };
         let dimensions = crate::metrics::projection::ResolvedDimensions {
             country: Arc::clone(&country),
             country_id,
@@ -2085,10 +2141,7 @@ mod retirement_tests {
         let in_flight = Arc::clone(&sample.metrics);
         drop(sample);
 
-        for consumer in [
-            MetricConsumer::Bandwidth,
-            MetricConsumer::Daily,
-        ] {
+        for consumer in [MetricConsumer::Bandwidth, MetricConsumer::Daily] {
             acknowledge_all(&node, consumer, instance_id, stale_fingerprint);
         }
         assert_eq!(
@@ -2107,10 +2160,7 @@ mod retirement_tests {
         assert_ne!(final_fingerprint, stale_fingerprint);
         drop(samples);
 
-        for consumer in [
-            MetricConsumer::Bandwidth,
-            MetricConsumer::Daily,
-        ] {
+        for consumer in [MetricConsumer::Bandwidth, MetricConsumer::Daily] {
             acknowledge_all(&node, consumer, instance_id, final_fingerprint);
         }
         assert_eq!(node.retired_server_metrics_count(), 0);
@@ -2125,18 +2175,29 @@ mod retirement_tests {
         node.servers.insert(7_710_003, metrics);
         node.retire_servers_absent_from(&HashSet::from([7_710_003]), &HashSet::new());
 
-        let sample = node.take_reporting_snapshots().pop().expect("retired sample");
+        let sample = node
+            .take_reporting_snapshots()
+            .pop()
+            .expect("retired sample");
         assert_eq!(sample.snapshot.bytes_sent, 4_096);
         let fingerprint = sample.snapshot.fingerprint();
         drop(sample);
 
         node.acknowledge_retired(MetricConsumer::Bandwidth, instance_id, fingerprint);
         node.sweep_retired();
-        assert_eq!(node.retired_server_metrics_count(), 1, "daily delivery is still pending");
+        assert_eq!(
+            node.retired_server_metrics_count(),
+            1,
+            "daily delivery is still pending"
+        );
 
         node.acknowledge_retired(MetricConsumer::Daily, instance_id, fingerprint);
         assert!(node.take_reporting_snapshots().is_empty());
-        assert_eq!(node.retired_server_metrics_count(), 0, "no local history writer is required");
+        assert_eq!(
+            node.retired_server_metrics_count(),
+            0,
+            "no local history writer is required"
+        );
     }
 
     #[test]
@@ -2177,23 +2238,29 @@ mod retirement_tests {
             id: Some(7_730_001),
             ..Default::default()
         });
-        node.admit_configs(std::iter::once(server.as_ref())).expect("family has room");
+        node.admit_configs(std::iter::once(server.as_ref()))
+            .expect("family has room");
         node.publish_configs(&[Arc::clone(&server)]);
         let held = node.find_server(7_730_001).expect("published instance");
         let instance_id = held.instance_id;
-        let deferred = node.retire_servers_absent_from(&HashSet::from([7_730_001]), &HashSet::new());
+        let deferred =
+            node.retire_servers_absent_from(&HashSet::from([7_730_001]), &HashSet::new());
         assert!(deferred.is_empty());
 
-        let sample = node.take_reporting_snapshots().pop().expect("retired sample");
+        let sample = node
+            .take_reporting_snapshots()
+            .pop()
+            .expect("retired sample");
         let fingerprint = sample.snapshot.fingerprint();
         drop(sample);
-        for consumer in [
-            MetricConsumer::Bandwidth,
-            MetricConsumer::Daily,
-        ] {
+        for consumer in [MetricConsumer::Bandwidth, MetricConsumer::Daily] {
             node.acknowledge_retired(consumer, instance_id, fingerprint);
         }
-        assert_eq!(node.retired_server_metrics_count(), 1, "the held request keeps it reportable");
+        assert_eq!(
+            node.retired_server_metrics_count(),
+            1,
+            "the held request keeps it reportable"
+        );
 
         drop(held);
         drop(server);
@@ -2209,9 +2276,12 @@ mod retirement_tests {
         let mut held = Vec::new();
         for offset in 0..8_200 {
             let id = 8_000_000 + offset;
-            let reservation = node.reserve_servers([id]).expect("capacity below the bound");
+            let reservation = node
+                .reserve_servers([id])
+                .expect("capacity below the bound");
             let server = Arc::new(crate::config_models::ServerConfig {
-                id: Some(id), ..Default::default()
+                id: Some(id),
+                ..Default::default()
             });
             reservation.bind(&server);
             held.push((reservation, server.clone()));
@@ -2220,14 +2290,20 @@ mod retirement_tests {
         }
         assert_eq!(node.family_instance_count(), 8_200);
         let overflow = node.reserve_servers([8_999_999]);
-        assert!(overflow.is_err(),
-            "a failed consumer must backpressure new IDs before the whole family grows");
+        assert!(
+            overflow.is_err(),
+            "a failed consumer must backpressure new IDs before the whole family grows"
+        );
         held.clear();
         for id in 8_000_000..8_008_200 {
             node.servers.remove(&id);
         }
         node.sweep_retired();
-        assert_eq!(node.family_instance_count(), 8_200, "released objects are bounded by consumers");
+        assert_eq!(
+            node.family_instance_count(),
+            8_200,
+            "released objects are bounded by consumers"
+        );
     }
 
     #[test]
@@ -2235,12 +2311,21 @@ mod retirement_tests {
         let node = NodeMetrics::with_family_limit(2);
         let ids: HashSet<i64> = HashSet::from([7_720_001, 7_720_002]);
         for id in &ids {
-            let server = Arc::new(crate::config_models::ServerConfig { id: Some(*id), ..Default::default() });
-            node.admit_configs(std::iter::once(server.as_ref())).expect("two slots");
+            let server = Arc::new(crate::config_models::ServerConfig {
+                id: Some(*id),
+                ..Default::default()
+            });
+            node.admit_configs(std::iter::once(server.as_ref()))
+                .expect("two slots");
             node.publish_configs(&[server]);
         }
-        let third = crate::config_models::ServerConfig { id: Some(7_720_003), ..Default::default() };
-        let err = node.admit_configs(std::iter::once(&third)).expect_err("cap refuses admission");
+        let third = crate::config_models::ServerConfig {
+            id: Some(7_720_003),
+            ..Default::default()
+        };
+        let err = node
+            .admit_configs(std::iter::once(&third))
+            .expect_err("cap refuses admission");
         assert_eq!((err.used, err.limit), (2, 2));
         assert!(!node.servers.contains_key(&7_720_003));
     }
@@ -2253,6 +2338,16 @@ mod tests {
     use std::sync::Arc;
 
     static QUEUE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn shared_categories_preserve_legacy_normalization() {
+        for input in ["", "  ", "HTTP", " Tcp ", "udp", "custom.TYPE", "未知分类"] {
+            assert_eq!(
+                super::shared_metric_category(input).as_ref(),
+                super::normalize_metric_category(input)
+            );
+        }
+    }
 
     fn test_dimension_event(user_agent: String) -> super::HttpDimensionEvent {
         super::HttpDimensionEvent {

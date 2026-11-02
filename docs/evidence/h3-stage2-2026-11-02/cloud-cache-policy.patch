@@ -1,0 +1,165 @@
+diff --git a/docs/operations/agent-rules.md b/docs/operations/agent-rules.md
+index 35f7a57..0957333 100644
+--- a/docs/operations/agent-rules.md
++++ b/docs/operations/agent-rules.md
+@@ -40,6 +40,7 @@ Before adding complexity for a speculative or vanishingly unlikely race or secur
+ - 前端开发预览固定监听 `0.0.0.0:5173`（`strictPort`，占用时不漂移端口）；使用 Vite HMR，不逐次重建发行 bundle。
+ - macOS 连接 RKE 使用 `docs/scripts/workspace/rke-direct.py`，通过物理网卡绑定与重连保持 iWAN/VPN 并行；不修改全局路由、不关闭 VPN。网络切换会重建连接，不自动重放业务写请求。见 `docs/docs/operations/production-access.md`。
+ - 本机 Rust `check/test/clippy/build` 必须使用 `docs/scripts/workspace/local-rust.sh`（内部经 mbx）；缓存固定内置盘 `~/Library/Caches/mbx`，单编译槽、jobs=2/test threads=2。存储预算见 `docs/docs/operations/workspace.md` 与工具实际常量：mbx 12GiB、Go build/npm/pnpm/未受管输出各1GiB、Go modules 4GiB、Cargo 下载/Rust 工具链各2GiB，总计24GiB。其他构建经 `docs/scripts/workspace/local-storage.py run -- ...`；启动至少6GiB可用，运行低于5GiB或超预算则中止。预算检查不等同于文件系统硬配额。
++- Codex 云环境经用户于 2026-11-02 授权，可设置 `ZELVIK_LOCAL_STORAGE_PROFILE=cloud`，缓存类别和总预算随文件系统容量扩展；保留启动 6GiB / 运行 5GiB 的可用空间底线，不套用上述笔记本固定上限。mbx 自身缓存预算同步放宽，自动 GC 关闭；不因此改变编译并发或性能测试资源条件。
+ - `control-plane/deploy/dev/` 与 `scripts/dev-rke.sh` 提供按需 RKE 测试环境；数据仅限可丢弃测试数据，使用独立凭据。数据库改动运行对应集成验证，纯逻辑/前端改动不启动数据库。
+ - 原本机联调目录已归位 `control-plane/.local/orb-deploy/`，其 `zelvik-deploy` 仅保留为可选的完整联调方式，不自动启动、不复制第二套。若明确需要容器联调，记录实际源码 SHA 与健康状态；仅 compose build 不能证明源码已重新编译。不要自动删除其数据卷。现存容器凭据从 `docker inspect` 读取。
+ - **worktree 里为验证起的容器，收尾必须销毁**：compose 起的用
+diff --git a/docs/operations/workspace.md b/docs/operations/workspace.md
+index 96c6608..c2af013 100644
+--- a/docs/operations/workspace.md
++++ b/docs/operations/workspace.md
+@@ -52,6 +52,10 @@ control-plane/scripts/dev-rke.sh run-pg -- go -C control-plane test ./internal/i
+ 
+ 存储上限以 `docs/scripts/workspace/local-storage.py` 的实际常量为准：mbx 12 GiB，总预算24 GiB；启动前至少6 GiB可用，运行中低于5 GiB中止。Go build/npm/pnpm/未受管构建输出各1 GiB，Go modules4 GiB，Cargo下载与Rust工具链各2 GiB。它是进程监视，不是文件系统硬配额；预算内不例行清理。
+ 
++以上是默认 `local` 配置。Codex 云环境可设置 `ZELVIK_LOCAL_STORAGE_PROFILE=cloud`：各类别及总额按当前文件系统容量计，不再使用笔记本的固定配额；仍要求启动至少 6 GiB、运行至少 5 GiB 可用空间。云环境同时提高 mbx 自身的对象、target 和 learned 缓存上限，并关闭自动 GC；只在真实磁盘空间不足时回收。此云端放宽由用户于 2026-11-02 明确授权，Rust jobs=2、测试线程=2和单编译槽保持不变。构建缓存预算不改变性能测试服务进程的内存、CPU或业务缓存配置。
++
++当前云工作区在 `.local/storage-profile` 保存 `cloud`，新进程不必重复设置环境变量；显式设置 `ZELVIK_LOCAL_STORAGE_PROFILE=local` 可覆盖它。存储包装器将 mbx 的缓存上限和自动 GC 设置传给子构建进程。此机器配置不进入仓库，普通本地工作区没有该文件时仍用 `local`。
++
+ ## 文档与产物的归属
+ 
+ - 跨仓规则、连接、发布和恢复：本目录。
+diff --git a/scripts/workspace/local-storage.py b/scripts/workspace/local-storage.py
+index 8382ae6..fdcae7d 100755
+--- a/scripts/workspace/local-storage.py
++++ b/scripts/workspace/local-storage.py
+@@ -50,6 +50,35 @@ CATEGORY_BUDGETS = {
+     "rust-toolchains": RUST_TOOLCHAIN_BUDGET,
+ }
+ CATEGORY_NAMES = tuple(CATEGORY_BUDGETS)
++DEFAULT_CATEGORY_BUDGETS = dict(CATEGORY_BUDGETS)
++DEFAULT_TOTAL_CAP = TOTAL_CAP
++BUDGET_PROFILE = "local"
++
++
++def selected_budget_profile(workspace: Path) -> str:
++    explicit = os.environ.get("ZELVIK_LOCAL_STORAGE_PROFILE")
++    if explicit is not None:
++        return explicit
++    selector = workspace / ".local/storage-profile"
++    return selector.read_text().strip() if selector.exists() else "local"
++
++
++def configure_budget_profile(profile: str, workspace: Path) -> None:
++    """Cloud caches use available disk capacity instead of laptop quotas."""
++    global TOTAL_CAP, BUDGET_PROFILE
++    if profile not in {"local", "cloud"}:
++        raise ValueError("ZELVIK_LOCAL_STORAGE_PROFILE must be local or cloud")
++    if profile == "cloud":
++        capacity = shutil.disk_usage(workspace).total
++        budgets = {name: capacity for name in CATEGORY_NAMES}
++        total = capacity
++    else:
++        budgets = DEFAULT_CATEGORY_BUDGETS
++        total = DEFAULT_TOTAL_CAP
++    CATEGORY_BUDGETS.clear()
++    CATEGORY_BUDGETS.update(budgets)
++    TOTAL_CAP = total
++    BUDGET_PROFILE = profile
+ 
+ # node_modules is measured in build-outputs but must never be deleted.
+ OUTPUT_NAMES = {"node_modules", "dist", "target"}
+@@ -334,6 +363,7 @@ def report_dict(state: StorageState) -> dict[str, object]:
+     reasons = check_state(state)
+     return {
+         "workspace": str(state.workspace),
++        "budget_profile": BUDGET_PROFILE,
+         "free_bytes": state.free,
+         "min_free_bytes": MIN_FREE,
+         "start_margin_bytes": START_MARGIN,
+@@ -359,7 +389,7 @@ def report_dict(state: StorageState) -> dict[str, object]:
+ 
+ 
+ def print_report(state: StorageState) -> None:
+-    print(f"Local storage report for {state.workspace}")
++    print(f"Storage report for {state.workspace} ({BUDGET_PROFILE} profile)")
+     print(
+         f"free {fmt_bytes(state.free)}   minimum {fmt_bytes(MIN_FREE)}"
+         f"   build start needs {fmt_bytes(MIN_FREE + START_MARGIN)}"
+@@ -754,6 +784,18 @@ def main(argv: list[str] | None = None) -> int:
+     parser = build_parser()
+     args = parser.parse_args(argv)
+     workspace = workspace_root()
++    try:
++        configure_budget_profile(selected_budget_profile(workspace), workspace)
++    except ValueError as exc:
++        parser.error(str(exc))
++    if BUDGET_PROFILE == "cloud":
++        cache_limit = f"{(TOTAL_CAP + GIB - 1) // GIB}GiB"
++        os.environ["MBX_GC_AUTO"] = "false"
++        for name in (
++            "MBX_GC_MAX_SIZE", "MBX_TARGET_MAX_SIZE", "MBX_GC_INCREMENTAL_MAX_SIZE",
++            "MBX_GC_MAX_TOTAL_SIZE", "MBX_LEARNED_INCREMENTAL_MAX_SIZE",
++        ):
++            os.environ[name] = cache_limit
+ 
+     if args.command_name == "report":
+         state = collect_state(workspace, include_unmanaged=True)
+diff --git a/scripts/workspace/test-local-storage.py b/scripts/workspace/test-local-storage.py
+index aedc3e5..a594ede 100755
+--- a/scripts/workspace/test-local-storage.py
++++ b/scripts/workspace/test-local-storage.py
+@@ -10,6 +10,7 @@ import sys
+ import tempfile
+ import unittest
+ from pathlib import Path
++from unittest import mock
+ 
+ sys.dont_write_bytecode = True
+ MODULE_PATH = Path(__file__).resolve().with_name("local-storage.py")
+@@ -93,6 +94,49 @@ class BudgetEvaluationTest(unittest.TestCase):
+         self.assertEqual(report["managed_total_bytes"], 0)
+ 
+ 
++class CloudBudgetProfileTest(unittest.TestCase):
++    def tearDown(self) -> None:
++        storage.configure_budget_profile("local", Path("/tmp"))
++
++    def test_cloud_keeps_large_caches_until_disk_headroom_is_exhausted(self) -> None:
++        capacity = 128 * storage.GIB
++        disk = mock.Mock(total=capacity)
++        with mock.patch.object(storage.shutil, "disk_usage", return_value=disk):
++            storage.configure_budget_profile("cloud", Path("/tmp"))
++        sizes = {name: 0 for name in storage.CATEGORY_NAMES}
++        sizes["mbx"] = 64 * storage.GIB
++        self.assertEqual(storage.budget_reasons(sizes), [])
++        self.assertEqual(storage.TOTAL_CAP, capacity)
++        self.assertEqual(storage.CATEGORY_BUDGETS["mbx"], capacity)
++        self.assertIsNotNone(storage.free_reason(storage.MIN_FREE - 1))
++        self.assertIsNotNone(storage.free_reason(storage.MIN_FREE + storage.START_MARGIN - 1, True))
++
++    def test_local_profile_restores_laptop_quotas(self) -> None:
++        with mock.patch.object(storage.shutil, "disk_usage", return_value=mock.Mock(total=128 * storage.GIB)):
++            storage.configure_budget_profile("cloud", Path("/tmp"))
++        storage.configure_budget_profile("local", Path("/tmp"))
++        self.assertEqual(storage.CATEGORY_BUDGETS, storage.DEFAULT_CATEGORY_BUDGETS)
++        self.assertEqual(storage.TOTAL_CAP, 24 * storage.GIB)
++        self.assertTrue(storage.budget_reasons({"mbx": 13 * storage.GIB}))
++
++    def test_invalid_profile_is_rejected_without_changing_budgets(self) -> None:
++        before = dict(storage.CATEGORY_BUDGETS)
++        with self.assertRaises(ValueError):
++            storage.configure_budget_profile("unknown", Path("/tmp"))
++        self.assertEqual(storage.CATEGORY_BUDGETS, before)
++
++    def test_workspace_cloud_selection_persists_but_explicit_local_wins(self) -> None:
++        with tempfile.TemporaryDirectory() as directory, mock.patch.dict(os.environ):
++            workspace = Path(directory)
++            os.environ.pop("ZELVIK_LOCAL_STORAGE_PROFILE", None)
++            self.assertEqual(storage.selected_budget_profile(workspace), "local")
++            (workspace / ".local").mkdir()
++            (workspace / ".local/storage-profile").write_text("cloud\n")
++            self.assertEqual(storage.selected_budget_profile(workspace), "cloud")
++            os.environ["ZELVIK_LOCAL_STORAGE_PROFILE"] = "local"
++            self.assertEqual(storage.selected_budget_profile(workspace), "local")
++
++
+ class MeasurementTest(unittest.TestCase):
+     def test_measure_file(self) -> None:
+         with tempfile.TemporaryDirectory() as directory:

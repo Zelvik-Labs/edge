@@ -14,7 +14,7 @@ use std::collections::BTreeSet;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock as Lazy;
-use std::sync::{Arc, Mutex as StdMutex, RwLock as StdRwLock};
+use std::sync::{Arc, Mutex as StdMutex};
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncSeek, BufReader};
 use tokio::sync::{Mutex, OwnedMutexGuard};
@@ -198,7 +198,7 @@ pub(crate) fn parse_stale_directive_from_headers(
     // normal Pingora CacheControl parser applies the same rule; keep the
     // custom cache metadata path in lockstep with it.
     let forbids_stale = headers
-        .get_all("cache-control")
+        .get_all(http::header::CACHE_CONTROL)
         .iter()
         .filter_map(|value| value.to_str().ok())
         .flat_map(|value| value.split(','))
@@ -221,7 +221,7 @@ pub(crate) fn parse_stale_directive_from_headers(
 
 fn cache_control_delta_from_headers(headers: &http::HeaderMap, directive: &str) -> Option<u64> {
     headers
-        .get_all("cache-control")
+        .get_all(http::header::CACHE_CONTROL)
         .iter()
         .filter_map(|value| value.to_str().ok())
         .find_map(|value| parse_cache_control_delta(value, directive))
@@ -314,7 +314,30 @@ pub struct CacheShard {
     pub weight: u32,
 }
 
+async fn create_cache_temp_file(path: &Path) -> std::io::Result<tokio::fs::File> {
+    let path = path.to_path_buf();
+    // Directory preparation and open belong to one operation. Tokio's two
+    // filesystem calls otherwise schedule two separate blocking-pool tasks.
+    let file = tokio::task::spawn_blocking(move || {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::File::create(path)
+    })
+    .await
+    .map_err(std::io::Error::other)??;
+    Ok(tokio::fs::File::from_std(file))
+}
+
 impl FileStorage {
+    fn process_lock_roots(&self) -> Vec<PathBuf> {
+        if crate::cache::process_lock::process_locks_enabled() {
+            self.inner.load().all_roots()
+        } else {
+            Vec::new()
+        }
+    }
+
     pub fn new(root: impl Into<PathBuf>) -> Self {
         let main_root = root.into();
         let _ = std::fs::create_dir_all(&main_root);
@@ -644,7 +667,9 @@ fn status_allows_content_length(status: u16) -> bool {
 }
 
 fn restore_content_length(header: &mut ResponseHeader, status: u16, size: u64) {
-    if status_allows_content_length(status) && !header.headers.contains_key("content-length") {
+    if status_allows_content_length(status)
+        && !header.headers.contains_key(http::header::CONTENT_LENGTH)
+    {
         let _ = header.insert_header("content-length", size.to_string());
     }
 }
@@ -756,7 +781,7 @@ impl Storage for FileStorage {
         let write_lock = cache_write_lock_for_key(key_str);
         let _write_guard = write_lock.lock().await;
         let hash = self.get_hash(key);
-        let process_roots = self.inner.load().all_roots();
+        let process_roots = self.process_lock_roots();
         let process_lock = match acquire_cache_process_read_lock_hashed(&hash, &process_roots).await
         {
             Ok(lock) => lock,
@@ -1162,7 +1187,7 @@ impl Storage for FileStorage {
             if !crate::cache::partial::content_range_matches_cache_key(k_str, &content_range)
                 || resp_headers
                     .headers
-                    .get("content-length")
+                    .get(http::header::CONTENT_LENGTH)
                     .and_then(|value| value.to_str().ok())
                     .is_some_and(|value| {
                         let expected = content_range
@@ -1191,12 +1216,12 @@ impl Storage for FileStorage {
                 headers: crate::cache::partial::response_headers_to_store(&resp_headers.headers),
                 etag: resp_headers
                     .headers
-                    .get("etag")
+                    .get(http::header::ETAG)
                     .and_then(|value| value.to_str().ok())
                     .map(str::to_string),
                 last_modified: resp_headers
                     .headers
-                    .get("last-modified")
+                    .get(http::header::LAST_MODIFIED)
                     .and_then(|value| value.to_str().ok())
                     .map(str::to_string),
                 created_at: timestamp_from_system_time(meta.created()),
@@ -1289,7 +1314,7 @@ impl Storage for FileStorage {
         let purge_guard = acquire_cache_purge_read_guard().await;
         let write_lock = cache_write_lock_for_key(&k_str);
         let write_guard = write_lock.lock_owned().await;
-        let process_roots = self.inner.load().all_roots();
+        let process_roots = self.process_lock_roots();
         let process_lock = match acquire_cache_process_fill_lock(&k_str, &process_roots).await {
             Ok(lock) => lock,
             Err(err) => {
@@ -1337,20 +1362,9 @@ impl Storage for FileStorage {
             .with_file_name(&versioned_name)
             .to_string_lossy()
             .into_owned();
-        if let Some(parent) = path.parent()
-            && let Err(err) = tokio::fs::create_dir_all(parent).await
-        {
-            warn!(
-                path = %parent.display(),
-                error = %err,
-                "CACHE_MISS: unable to create cache directory; bypassing fill"
-            );
-            return Ok(Box::new(NoopMissHandler));
-        }
-
         let temp_path = path.with_extension(format!("tmp.{}.{}", std::process::id(), unique_id));
 
-        let std_file = match tokio::fs::File::create(&temp_path).await {
+        let std_file = match create_cache_temp_file(&temp_path).await {
             Ok(file) => file,
             Err(err) => {
                 warn!(
@@ -1386,20 +1400,20 @@ impl Storage for FileStorage {
         // Smart Compression Decision (Synchronized with HIT path via metadata)
         let content_type = resp_headers
             .headers
-            .get("content-type")
+            .get(http::header::CONTENT_TYPE)
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
         let content_encoding = resp_headers
             .headers
-            .get("content-encoding")
+            .get(http::header::CONTENT_ENCODING)
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
 
-        let should_compress = (content_type.contains("text/")
-            || content_type.contains("json")
-            || content_type.contains("javascript")
-            || content_type.contains("xml"))
-            && content_encoding.is_empty();
+        let should_compress = crate::cache::storage_encoding::should_compress(
+            content_type,
+            content_encoding,
+            expected_body_len,
+        );
 
         // Parse stale-while-revalidate from Cache-Control header
         let swr_secs =
@@ -1459,7 +1473,7 @@ impl Storage for FileStorage {
 
         let key_str = key.user_tag.as_ref();
         let _purge_guard = acquire_cache_purge_write_guard().await;
-        let process_roots = self.inner.load().all_roots();
+        let process_roots = self.process_lock_roots();
         let _process_lock = match acquire_cache_process_barrier_write_lock(&process_roots).await {
             Ok(lock) => lock,
             Err(err) => {
@@ -1506,7 +1520,7 @@ impl Storage for FileStorage {
         let _purge_guard = acquire_cache_purge_read_guard().await;
         let write_lock = cache_write_lock_for_key(&k_str);
         let _write_guard = write_lock.lock().await;
-        let process_roots = self.inner.load().all_roots();
+        let process_roots = self.process_lock_roots();
         let _process_lock = match acquire_cache_process_fill_lock(&k_str, &process_roots).await {
             Ok(lock) => lock,
             Err(err) => {
@@ -2971,12 +2985,37 @@ pub(crate) struct TinyUfoL1Entry {
     metadata_required: bool,
 }
 
+impl TinyUfoL1Entry {
+    // These facts depend only on the immutable representation, not the lookup
+    // time or current purge state. Validate at the sole insertion boundary.
+    fn immutable_representation_valid(&self) -> bool {
+        if !crate::cache::status_allows_full_cache_with_error_policy(
+            self.response_header.status.as_u16(),
+            self.error_status_allowed,
+        ) || !crate::cache::response_headers_allow_shared_cache(&self.response_header.headers)
+            || !crate::cache::response_encoding_matches_cache_key(
+                &self.cache_key,
+                &self.response_header.headers,
+            )
+        {
+            return false;
+        }
+        match crate::cache::response_content_length(&self.response_header.headers) {
+            Ok(_) if cache_key_is_head_variant(&self.cache_key) => self.data.is_empty(),
+            Ok(length) => {
+                length.is_none_or(|length| u64::try_from(self.data.len()).ok() == Some(length))
+            }
+            Err(()) => false,
+        }
+    }
+}
+
 /// Lock-free L1 cache backed by TinyUFO (S3-FIFO + TinyLFU admission).
 /// Replaces the old FAST_L1 (DashMap + BinaryHeap).
 pub(crate) struct TinyUfoL1 {
     // Entries are Arc-shared so a hit clones one refcount instead of the
     // response HeaderMap, cache key, and body handle stored in the entry.
-    inner: StdRwLock<Arc<MemoryCache<String, Arc<TinyUfoL1Entry>>>>,
+    inner: ArcSwap<MemoryCache<String, Arc<TinyUfoL1Entry>>>,
     // MemoryCache intentionally has no iterator. Keep a bounded best-effort
     // key index so prefix/tag purge can also invalidate memory-only entries.
     // Stale index members are pruned whenever the index grows past twice the
@@ -3035,7 +3074,7 @@ impl TinyUfoL1 {
         };
         let cache = Arc::new(Self::build_cache(resolved_max_bytes));
         Self {
-            inner: StdRwLock::new(cache),
+            inner: ArcSwap::from(cache),
             keys: DashSet::new(),
             auto_budget: AtomicBool::new(auto_budget),
             auto_budget_cap: AtomicU64::new(u64::MAX),
@@ -3061,7 +3100,7 @@ impl TinyUfoL1 {
     }
 
     fn read_inner(&self) -> Arc<MemoryCache<String, Arc<TinyUfoL1Entry>>> {
-        self.inner.read().expect("TinyUfoL1 lock poisoned").clone()
+        self.inner.load_full()
     }
 
     fn get(&self, key: &str) -> Option<Arc<TinyUfoL1Entry>> {
@@ -3108,6 +3147,12 @@ impl TinyUfoL1 {
     }
 
     fn put(&self, key: &str, entry: TinyUfoL1Entry, ttl: std::time::Duration) {
+        if entry.cache_key != key || !entry.immutable_representation_valid() {
+            // An invalid replacement must not leave an older representation
+            // serving from L1. Previously lookup rejected that replacement.
+            self.remove(key);
+            return;
+        }
         let stale_window = entry
             .stale_while_revalidate_secs
             .max(entry.stale_if_error_secs);
@@ -3395,10 +3440,7 @@ impl TinyUfoL1 {
         self.max_bytes.store(resolved, Ordering::Relaxed);
         self.applied_max_bytes.store(resolved, Ordering::Relaxed);
         self.current_weight.store(0, Ordering::Relaxed);
-        {
-            let mut guard = self.inner.write().expect("TinyUfoL1 lock poisoned");
-            *guard = new_cache.clone();
-        }
+        self.inner.store(Arc::clone(&new_cache));
         // Sync the key index against the NEW cache instead of clear+reinsert:
         // a `put` landing between the swap and a plain `keys.clear()` would
         // have its index entry wiped while the value stays live in the new
@@ -4810,7 +4852,7 @@ impl HybridStorage {
         // key lock after this function has deleted the known variants and
         // publish the pre-purge response again.
         let _purge_guard = acquire_cache_purge_write_guard().await;
-        let process_roots = self.l2.inner.load().all_roots();
+        let process_roots = self.l2.process_lock_roots();
         let _process_lock = match acquire_cache_process_barrier_write_lock(&process_roots).await {
             Ok(lock) => lock,
             Err(err) => {
@@ -4857,7 +4899,7 @@ impl HybridStorage {
         requested_version: Option<u64>,
     ) -> bool {
         let _purge_guard = acquire_cache_purge_write_guard().await;
-        let process_roots = self.l2.inner.load().all_roots();
+        let process_roots = self.l2.process_lock_roots();
         let _process_lock = match acquire_cache_process_barrier_write_lock(&process_roots).await {
             Ok(lock) => lock,
             Err(err) => {
@@ -4958,7 +5000,7 @@ impl HybridStorage {
             return false;
         }
         let _purge_guard = acquire_cache_purge_write_guard().await;
-        let process_roots = self.l2.inner.load().all_roots();
+        let process_roots = self.l2.process_lock_roots();
         let _process_lock = match acquire_cache_process_barrier_write_lock(&process_roots).await {
             Ok(lock) => lock,
             Err(err) => {
@@ -5074,28 +5116,9 @@ impl HybridStorage {
             .max(entry.stale_if_error_secs);
         let stale_age = u64::try_from(now.saturating_sub(entry.fresh_until)).unwrap_or(0);
         if entry.cache_key != key
-            || !crate::cache::status_allows_full_cache_with_error_policy(
-                entry.response_header.status.as_u16(),
-                entry.error_status_allowed,
-            )
             || entry.purge_generation != current_cache_purge_generation()
             || (entry.fresh_until < now && stale_age > stale_window)
-            || !crate::cache::response_headers_allow_shared_cache(&entry.response_header.headers)
-            || !crate::cache::response_encoding_matches_cache_key(
-                key,
-                &entry.response_header.headers,
-            )
         {
-            return false;
-        }
-        let body_length_is_valid =
-            match crate::cache::response_content_length(&entry.response_header.headers) {
-                Ok(_content_length) if cache_key_is_head_variant(key) => entry.data.is_empty(),
-                Ok(content_length) => content_length
-                    .is_none_or(|length| u64::try_from(entry.data.len()).ok() == Some(length)),
-                Err(()) => false,
-            };
-        if !body_length_is_valid {
             return false;
         }
         if policy_type == POLICY_MEMORY {
@@ -5195,7 +5218,7 @@ impl Storage for HybridStorage {
             // no metadata callback yet. The lock is shared and refcounted, so
             // concurrent readers of one key no longer serialize on it.
             let l1_process_lock = if let Some(key_hash) = key_hash {
-                let process_roots = self.l2.inner.load().all_roots();
+                let process_roots = self.l2.process_lock_roots();
                 match acquire_cache_process_read_lock_hashed(key_hash, &process_roots).await {
                     Ok(lock) => Some(lock),
                     Err(err) => {
@@ -5219,15 +5242,18 @@ impl Storage for HybridStorage {
                     // hit path shares it with the returned meta via Arc. The
                     // fallback copy only covers entries built before the
                     // invariant existed (e.g. test fixtures).
-                    let response_header =
-                        if entry.response_header.headers.contains_key("content-length") {
-                            entry.response_header.clone()
-                        } else {
-                            let mut header = entry.response_header.as_ref().clone();
-                            let status = header.status.as_u16();
-                            restore_content_length(&mut header, status, entry.data.len() as u64);
-                            Arc::new(header)
-                        };
+                    let response_header = if entry
+                        .response_header
+                        .headers
+                        .contains_key(http::header::CONTENT_LENGTH)
+                    {
+                        entry.response_header.clone()
+                    } else {
+                        let mut header = entry.response_header.as_ref().clone();
+                        let status = header.status.as_u16();
+                        restore_content_length(&mut header, status, entry.data.len() as u64);
+                        Arc::new(header)
+                    };
                     let mut meta = CacheMeta::new_shared(
                         system_time_from_timestamp(entry.fresh_until),
                         system_time_from_timestamp(entry.created_at),
@@ -5425,7 +5451,7 @@ impl Storage for HybridStorage {
 
         let key_str = key.user_tag.as_ref();
         let _purge_guard = acquire_cache_purge_write_guard().await;
-        let process_roots = self.l2.inner.load().all_roots();
+        let process_roots = self.l2.process_lock_roots();
         let _process_lock = match acquire_cache_process_barrier_write_lock(&process_roots).await {
             Ok(lock) => lock,
             Err(err) => {
@@ -5588,7 +5614,7 @@ async fn evict_full_cache_entry_if_current(
     let _purge_guard = acquire_cache_purge_read_guard().await;
     let write_lock = cache_write_lock_for_key(cache_key);
     let _write_guard = write_lock.lock().await;
-    let process_roots = storage.l2.inner.load().all_roots();
+    let process_roots = storage.l2.process_lock_roots();
     let _process_lock = match acquire_cache_process_fill_lock(cache_key, &process_roots).await {
         Ok(lock) => lock,
         Err(err) => {
@@ -6488,7 +6514,7 @@ mod tests {
         assert_eq!(
             meta.response_header()
                 .headers
-                .get("content-length")
+                .get(http::header::CONTENT_LENGTH)
                 .and_then(|value| value.to_str().ok()),
             Some("10")
         );
@@ -6566,7 +6592,7 @@ mod tests {
         assert_eq!(
             meta.response_header()
                 .headers
-                .get("content-length")
+                .get(http::header::CONTENT_LENGTH)
                 .and_then(|value| value.to_str().ok()),
             Some(expected_len.as_str())
         );
@@ -7143,7 +7169,7 @@ mod tests {
         assert_eq!(
             meta.response_header()
                 .headers
-                .get("content-length")
+                .get(http::header::CONTENT_LENGTH)
                 .and_then(|value| value.to_str().ok()),
             Some(expected_len.as_str())
         );
@@ -8316,7 +8342,7 @@ mod tests {
 
     fn auto_budget_l1_for_test(max_bytes: u64) -> TinyUfoL1 {
         TinyUfoL1 {
-            inner: StdRwLock::new(Arc::new(TinyUfoL1::build_cache(max_bytes))),
+            inner: ArcSwap::from_pointee(TinyUfoL1::build_cache(max_bytes)),
             keys: DashSet::new(),
             auto_budget: AtomicBool::new(true),
             auto_budget_cap: AtomicU64::new(u64::MAX),
@@ -8704,6 +8730,50 @@ mod tests {
         assert!(l1.get("salvage-oldest").is_none());
         assert!(l1.get("salvage-older").is_none());
         assert_eq!(l1.max_bytes.load(Ordering::Relaxed), 5 * 1024);
+    }
+
+    #[test]
+    fn l1_insertion_rejects_invalid_replacements_before_they_can_be_served() {
+        let l1 = TinyUfoL1::new(64 * 1024);
+        let now = crate::utils::time::now_timestamp();
+        let entry = TinyUfoL1Entry {
+            cache_key: "validated".to_string(),
+            data: bytes::Bytes::from_static(b"ok"),
+            response_header: Arc::new(ResponseHeader::build(200, None).unwrap()),
+            fresh_until: now + 60,
+            created_at: now,
+            stale_while_revalidate_secs: 0,
+            stale_if_error_secs: 0,
+            error_status_allowed: false,
+            metadata_updated_at: now,
+            cache_state_version: 0,
+            purge_generation: 0,
+            metadata_required: false,
+        };
+        let ttl = std::time::Duration::from_secs(60);
+        for (name, value) in [
+            ("content-length", "3"),
+            ("cache-control", "private"),
+            ("set-cookie", "session=secret"),
+            ("content-encoding", "gzip"),
+        ] {
+            l1.put("validated", entry.clone(), ttl);
+            assert!(l1.get("validated").is_some());
+            let mut invalid = entry.clone();
+            Arc::make_mut(&mut invalid.response_header)
+                .insert_header(name, value)
+                .unwrap();
+            l1.put("validated", invalid, ttl);
+            assert!(
+                l1.get("validated").is_none(),
+                "invalid {name} replacement retained an old entry"
+            );
+        }
+        l1.put("validated", entry.clone(), ttl);
+        let mut invalid = entry;
+        invalid.cache_key = "different-key".to_string();
+        l1.put("validated", invalid, ttl);
+        assert!(l1.get("validated").is_none());
     }
 
     #[test]

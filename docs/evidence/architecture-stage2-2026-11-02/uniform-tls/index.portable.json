@@ -1,0 +1,71 @@
+{
+  "status": "completed",
+  "started_at": 1793614068.301093,
+  "runs": [
+    {
+      "label": "baseline",
+      "repeat": 0,
+      "manifest": "manifests/00-baseline.json",
+      "returncode": 0,
+      "status": "completed",
+      "case_statuses": [
+        "passed",
+        "passed",
+        "passed",
+        "passed",
+        "passed",
+        "passed"
+      ]
+    },
+    {
+      "label": "candidate",
+      "repeat": 0,
+      "manifest": "manifests/00-candidate.json",
+      "returncode": 0,
+      "status": "completed",
+      "case_statuses": [
+        "passed",
+        "passed",
+        "passed",
+        "passed",
+        "passed",
+        "passed"
+      ]
+    },
+    {
+      "label": "nginx",
+      "repeat": 0,
+      "manifest": "manifests/00-nginx.json",
+      "returncode": 0,
+      "status": "completed",
+      "case_statuses": [
+        "passed",
+        "passed",
+        "passed",
+        "passed",
+        "passed",
+        "passed"
+      ]
+    },
+    {
+      "label": "openresty",
+      "repeat": 0,
+      "manifest": "manifests/00-openresty.json",
+      "returncode": 0,
+      "status": "completed",
+      "case_statuses": [
+        "passed",
+        "passed",
+        "passed",
+        "passed",
+        "passed",
+        "passed"
+      ]
+    }
+  ],
+  "client_tls_profile": "TLSv1.3 / TLS_AES_256_GCM_SHA384 / X25519; RSA-2048 fixture",
+  "openssl_conf_sha256": "9596b67743652a21a2895d7cab744dc32b28d50530a0b8b90327162b81893f30",
+  "ended_at": 1793614467.6344354,
+  "all_cases_passed": true,
+  "original_index_sha256": "d57ffabe3a5a822ff82159c77a7a69580ed43274a26b21820bdf962e262e5237"
+}

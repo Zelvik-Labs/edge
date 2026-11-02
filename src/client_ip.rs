@@ -7,6 +7,23 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::LazyLock as Lazy;
 
 static RE_VAR: Lazy<Regex> = Lazy::new(|| Regex::new(r"\$\{[^}]+\}").expect("valid regex"));
+static FALLBACK_IP_HEADERS: Lazy<[http::HeaderName; 12]> = Lazy::new(|| {
+    [
+        "x-cloud-real-ip",
+        "x-real-ip",
+        "cf-connecting-ip",
+        "true-client-ip",
+        "x-forwarded-for",
+        "x-client-ip",
+        "x-original-forwarded-for",
+        "x-cluster-client-ip",
+        "fastly-client-ip",
+        "ali-cdn-real-ip",
+        "cdn-src-ip",
+        "forwarded",
+    ]
+    .map(http::HeaderName::from_static)
+});
 static HOSTNAME: Lazy<String> = Lazy::new(|| {
     hostname::get()
         .unwrap_or_default()
@@ -155,21 +172,14 @@ pub fn fallback_client_ip(session: &Session, raw_ip: IpAddr) -> IpAddr {
     if !is_local_ip(&raw_ip) {
         return raw_ip;
     }
-    for header in [
-        "x-cloud-real-ip",
-        "x-real-ip",
-        "cf-connecting-ip",
-        "true-client-ip",
-        "x-forwarded-for",
-        "x-client-ip",
-        "x-original-forwarded-for",
-        "x-cluster-client-ip",
-        "fastly-client-ip",
-        "ali-cdn-real-ip",
-        "cdn-src-ip",
-        "forwarded",
-    ] {
-        if let Some(value) = header_value_ci(session, header)
+    for header in FALLBACK_IP_HEADERS.iter() {
+        if let Some(value) = session
+            .req_header()
+            .headers
+            .get(header)
+            .and_then(|value| value.to_str().ok())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
             && let Some(ip) = parse_candidate_ip(value)
         {
             return canonicalize_ip(ip);
@@ -421,6 +431,26 @@ mod tests {
         assert_eq!(
             parse_candidate_ip("203.0.113.10, 198.51.100.2").unwrap(),
             IpAddr::from([203, 0, 113, 10])
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn fallback_headers_keep_precedence_and_public_peer_trust_boundary() {
+        use tokio::io::AsyncWriteExt;
+        let (mut client, downstream) = tokio::net::UnixStream::pair().unwrap();
+        client.write_all(b"GET / HTTP/1.1\r\nHost: example.test\r\nX-Cloud-Real-IP: invalid\r\nX-Real-IP: 203.0.113.7\r\nX-Forwarded-For: 203.0.113.8\r\n\r\n").await.unwrap();
+        let mut session = Session::new_h1(Box::new(
+            pingora_core::protocols::l4::stream::Stream::from(downstream),
+        ));
+        session.downstream_session.read_request().await.unwrap();
+        assert_eq!(
+            fallback_client_ip(&session, "10.0.0.1".parse().unwrap()),
+            "203.0.113.7".parse::<IpAddr>().unwrap()
+        );
+        assert_eq!(
+            fallback_client_ip(&session, "198.51.100.1".parse().unwrap()),
+            "198.51.100.1".parse::<IpAddr>().unwrap()
         );
     }
 

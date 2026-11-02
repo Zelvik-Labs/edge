@@ -1,0 +1,50 @@
+[
+  {
+    "path": "src/core/ngx_palloc.c",
+    "url": "https://raw.githubusercontent.com/nginx/nginx/release-1.28.0/src/core/ngx_palloc.c",
+    "sha256": "90b5102326963fc75a9d9a204ee5852115934f2cddbeedc44b64eb3ec78f422b",
+    "bytes": 8225
+  },
+  {
+    "path": "src/http/ngx_http_request.c",
+    "url": "https://raw.githubusercontent.com/nginx/nginx/release-1.28.0/src/http/ngx_http_request.c",
+    "sha256": "ccf1181f1320ab244501739fd98e9002be50bb05c28d51a2307a2d682533290f",
+    "bytes": 101007
+  },
+  {
+    "path": "src/http/ngx_http_upstream.c",
+    "url": "https://raw.githubusercontent.com/nginx/nginx/release-1.28.0/src/http/ngx_http_upstream.c",
+    "sha256": "5e49b63c36361f736e73f4df0f06f0bf8702070d61d50f45d137c47a315539bd",
+    "bytes": 181077
+  },
+  {
+    "path": "src/http/ngx_http_file_cache.c",
+    "url": "https://raw.githubusercontent.com/nginx/nginx/release-1.28.0/src/http/ngx_http_file_cache.c",
+    "sha256": "982b3dac0da79b28b2cf516dd2b9b04b96d5aed33b6177b5ee3aa758e61abfc1",
+    "bytes": 71956
+  },
+  {
+    "path": "src/http/modules/ngx_http_proxy_module.c",
+    "url": "https://raw.githubusercontent.com/nginx/nginx/release-1.28.0/src/http/modules/ngx_http_proxy_module.c",
+    "sha256": "5b62934a54b713aacb46c58882148f3b520b9e1f9db1fa85793b049ce0cf3f46",
+    "bytes": 152546
+  },
+  {
+    "path": "src/event/ngx_event.c",
+    "url": "https://raw.githubusercontent.com/nginx/nginx/release-1.28.0/src/event/ngx_event.c",
+    "sha256": "973fe3f1e8ca5bdd3bda617ebff89ad7656704402a6b2ec3eb18a55795f1f80d",
+    "bytes": 34051
+  },
+  {
+    "path": "ngx_http_core_module.c",
+    "url": "https://raw.githubusercontent.com/nginx/nginx/release-1.28.0/src/http/ngx_http_core_module.c",
+    "sha256": "c58ebede93aa6c790858ce7e14e01f80f3480466ceb9f7d784c1051321cec3fe",
+    "bytes": 147410
+  },
+  {
+    "path": "ngx_http_lua_module.c",
+    "url": "https://raw.githubusercontent.com/openresty/lua-nginx-module/v0.10.28/src/ngx_http_lua_module.c",
+    "sha256": "b7a8ef1b4e2f9d6bb443099ebb9319264bbcdb0c96fdc3c8c7ef5026b8db8c05",
+    "bytes": 56775
+  }
+]

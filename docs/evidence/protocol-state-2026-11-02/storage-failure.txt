@@ -1,0 +1,21 @@
+Exploratory mixed-state run, excluded from formal capacity medians.
+A 512 MiB /node tmpfs filled during unique-key cache loads. Cache fill logged ENOSPC, then telemetry Mace aborted.
+fatal invariant failure
+check=must_ok
+target=statement
+caller=/workspace/.cloudsidra-setup/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mace-kv-0.2.0/src/utils/data.rs:250
+context=path: "/node/data/mace-v2/telemetry/core/log/group_wal_1"
+arg=self.path="/node/data/mace-v2/telemetry/core/log/group_wal_1"
+error=No space left on device (os error 28)
+backtrace:
+   0: <mace[b84d3b0ec4758975]::utils::data::GatherWriter>::write
+             at /workspace/.cloudsidra-setup/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mace-kv-0.2.0/src/utils/data.rs:250:9
+   1: <mace[b84d3b0ec4758975]::cc::context::Context>::drive_sync
+   2: <mace[b84d3b0ec4758975]::index::txn::TxnKV>::commit
+   3: tokio[5a3e025647519da8]::runtime::task::raw::poll::<tokio[5a3e025647519da8]::runtime::blocking::task::BlockingTask<zelvik_edge[12085ffa3b514138]::worker_reclaim::spawn_storage_work<zelvik_edge[12085ffa3b514138]::telemetry::save_state::{closure#0}::{closure#0}, core[efd5e57aef94d71e]::result::Result<(), anyhow[1e5b8be2e3763f36]::Error>>::{closure#0}>, tokio[5a3e025647519da8]::runtime::blocking::schedule::BlockingSchedule>
+   4: std[68c81ae915296b05]::sys::backtrace::__rust_begin_short_backtrace::<<tokio[5a3e025647519da8]::runtime::blocking::pool::Spawner>::spawn_thread::{closure#0}, ()>
+   5: <std[68c81ae915296b05]::thread::lifecycle::spawn_unchecked<<tokio[5a3e025647519da8]::runtime::blocking::pool::Spawner>::spawn_thread::{closure#0}, ()>::{closure#1} as core[efd5e57aef94d71e]::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+   6: <std[68c81ae915296b05]::sys::thread::unix::Thread>::new::thread_start
+   7: clone
+fatal: must_ok failed: path: "/node/data/mace-v2/telemetry/core/log/group_wal_1"
+

@@ -1,0 +1,3010 @@
+[
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 152979,
+    "cpu_usec_per_200": {
+      "usage_usec": 87.5912576235954,
+      "user_usec": 59.590087528353564,
+      "system_usec": 28.001170095241832
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 61235,
+    "cpu_usec_per_200": {
+      "usage_usec": 220.71550583816446,
+      "user_usec": 145.14784028741732,
+      "system_usec": 75.56766555074712
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 470.640380859375,
+      "user_usec": 237.9111328125,
+      "system_usec": 232.729248046875
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 167301,
+    "cpu_usec_per_200": {
+      "usage_usec": 78.25929313034591,
+      "user_usec": 54.829480995331764,
+      "system_usec": 23.429812135014135
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 53432,
+    "cpu_usec_per_200": {
+      "usage_usec": 272.6979712531816,
+      "user_usec": 169.25875879622697,
+      "system_usec": 103.43919374157808
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 676.634521484375,
+      "user_usec": 310.0576171875,
+      "system_usec": 366.57666015625
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 208985,
+    "cpu_usec_per_200": {
+      "usage_usec": 37.01270426107137,
+      "user_usec": 11.875148934134028,
+      "system_usec": 25.13755532693734
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 106104,
+    "cpu_usec_per_200": {
+      "usage_usec": 55.71515682726382,
+      "user_usec": 14.65456533212697,
+      "system_usec": 41.06059149513685
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 287.17626953125,
+      "user_usec": 39.581787109375,
+      "system_usec": 247.594482421875
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 243030,
+    "cpu_usec_per_200": {
+      "usage_usec": 37.69120684689133,
+      "user_usec": 11.439015759371271,
+      "system_usec": 26.25219108752006
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 169348,
+    "cpu_usec_per_200": {
+      "usage_usec": 40.92300470038028,
+      "user_usec": 11.63143349788601,
+      "system_usec": 29.29157120249427
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 259.031005859375,
+      "user_usec": 49.66650390625,
+      "system_usec": 209.3642578125
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 181992,
+    "cpu_usec_per_200": {
+      "usage_usec": 71.91291375445074,
+      "user_usec": 48.488032440986416,
+      "system_usec": 23.42488131346433
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 95403,
+    "cpu_usec_per_200": {
+      "usage_usec": 146.50990010796306,
+      "user_usec": 96.08273324738215,
+      "system_usec": 50.42717734243158
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 465.469482421875,
+      "user_usec": 231.1650390625,
+      "system_usec": 234.30419921875
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 144558,
+    "cpu_usec_per_200": {
+      "usage_usec": 87.55718120062535,
+      "user_usec": 59.928215664300836,
+      "system_usec": 27.628972453963115
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 84194,
+    "cpu_usec_per_200": {
+      "usage_usec": 168.20398128132646,
+      "user_usec": 108.29512791885408,
+      "system_usec": 59.90886523980331
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 613.947509765625,
+      "user_usec": 294.93896484375,
+      "system_usec": 319.00830078125
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 287682,
+    "cpu_usec_per_200": {
+      "usage_usec": 27.51230872977802,
+      "user_usec": 8.858771143137213,
+      "system_usec": 18.653541062701176
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 93411,
+    "cpu_usec_per_200": {
+      "usage_usec": 70.55185149500595,
+      "user_usec": 21.780978685593773,
+      "system_usec": 48.770862104034855
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 510.8720703125,
+      "user_usec": 45.183837890625,
+      "system_usec": 465.688232421875
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 280263,
+    "cpu_usec_per_200": {
+      "usage_usec": 28.830070326800183,
+      "user_usec": 9.312399424825967,
+      "system_usec": 19.517670901974217
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 111363,
+    "cpu_usec_per_200": {
+      "usage_usec": 57.42290527374442,
+      "user_usec": 15.033107944290293,
+      "system_usec": 42.38978834981098
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 427.593994140625,
+      "user_usec": 57.0849609375,
+      "system_usec": 370.50927734375
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 150716,
+    "cpu_usec_per_200": {
+      "usage_usec": 79.43049178587542,
+      "user_usec": 53.44729159478755,
+      "system_usec": 25.983193556092253
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 77824,
+    "cpu_usec_per_200": {
+      "usage_usec": 158.87785259046052,
+      "user_usec": 100.70835474917763,
+      "system_usec": 58.16951069078947
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 524.875732421875,
+      "user_usec": 276.607666015625,
+      "system_usec": 248.26806640625
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 111111,
+    "cpu_usec_per_200": {
+      "usage_usec": 106.96104796104797,
+      "user_usec": 72.66998766998768,
+      "system_usec": 34.29106029106029
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 80204,
+    "cpu_usec_per_200": {
+      "usage_usec": 180.28699316742308,
+      "user_usec": 116.7601740561568,
+      "system_usec": 63.52681911126627
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 496.04296875,
+      "user_usec": 275.074462890625,
+      "system_usec": 220.968505859375
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 201275,
+    "cpu_usec_per_200": {
+      "usage_usec": 37.25265929698174,
+      "user_usec": 12.464255372003478,
+      "system_usec": 24.78839895665135
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 113118,
+    "cpu_usec_per_200": {
+      "usage_usec": 63.406867165261055,
+      "user_usec": 16.62110362630174,
+      "system_usec": 46.785763538959316
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 307.47900390625,
+      "user_usec": 43.569091796875,
+      "system_usec": 263.909912109375
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 257091,
+    "cpu_usec_per_200": {
+      "usage_usec": 30.349658292200036,
+      "user_usec": 10.256115538855891,
+      "system_usec": 20.093542753344146
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 156752,
+    "cpu_usec_per_200": {
+      "usage_usec": 43.77678115749719,
+      "user_usec": 11.434559048688374,
+      "system_usec": 32.34222210880882
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "h1",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 550.410400390625,
+      "user_usec": 125.478271484375,
+      "system_usec": 424.931884765625
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 888.64501953125,
+      "user_usec": 464.255859375,
+      "system_usec": 424.389404296875
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 57445,
+    "cpu_usec_per_200": {
+      "usage_usec": 255.5093741840021,
+      "user_usec": 189.31228131255983,
+      "system_usec": 66.19709287144225
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 86508,
+    "cpu_usec_per_200": {
+      "usage_usec": 162.16538354834236,
+      "user_usec": 125.81310399038239,
+      "system_usec": 36.35227955795996
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 48740,
+    "cpu_usec_per_200": {
+      "usage_usec": 243.35500615510875,
+      "user_usec": 160.43286828067295,
+      "system_usec": 82.92215839146492
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 578.329833984375,
+      "user_usec": 326.05029296875,
+      "system_usec": 252.27978515625
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "hit",
+    "successful": 101072,
+    "cpu_usec_per_200": {
+      "usage_usec": 127.48889900269116,
+      "user_usec": 101.60418315656166,
+      "system_usec": 25.884705952192498
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 663.36962890625,
+      "user_usec": 392.23583984375,
+      "system_usec": 271.1337890625
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "off",
+    "successful": 69671,
+    "cpu_usec_per_200": {
+      "usage_usec": 206.65947094199882,
+      "user_usec": 158.82694377861665,
+      "system_usec": 47.83251281020798
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 136685,
+    "cpu_usec_per_200": {
+      "usage_usec": 93.70360317518382,
+      "user_usec": 63.64363317115997,
+      "system_usec": 30.059977320115593
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 628.171875,
+      "user_usec": 316.35986328125,
+      "system_usec": 311.81201171875
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 52945,
+    "cpu_usec_per_200": {
+      "usage_usec": 276.17586174331853,
+      "user_usec": 208.77174426291435,
+      "system_usec": 67.4041174804042
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 94668,
+    "cpu_usec_per_200": {
+      "usage_usec": 151.481884057971,
+      "user_usec": 120.56289348037352,
+      "system_usec": 30.918990577597498
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 66420,
+    "cpu_usec_per_200": {
+      "usage_usec": 206.5144534778681,
+      "user_usec": 135.52261367058114,
+      "system_usec": 70.99182475158085
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 811.7392578125,
+      "user_usec": 430.717529296875,
+      "system_usec": 381.021728515625
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "hit",
+    "successful": 53559,
+    "cpu_usec_per_200": {
+      "usage_usec": 206.5891820235628,
+      "user_usec": 157.60555648910548,
+      "system_usec": 48.983625534457325
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 1348.0400390625,
+      "user_usec": 645.05078125,
+      "system_usec": 702.989501953125
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "off",
+    "successful": 29405,
+    "cpu_usec_per_200": {
+      "usage_usec": 419.17408603978913,
+      "user_usec": 292.1282094881823,
+      "system_usec": 127.04584254378507
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 135609,
+    "cpu_usec_per_200": {
+      "usage_usec": 94.44337027778393,
+      "user_usec": 63.525540340242905,
+      "system_usec": 30.917837311682852
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 424.29296875,
+      "user_usec": 81.12109375,
+      "system_usec": 343.171875
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 41004,
+    "cpu_usec_per_200": {
+      "usage_usec": 191.092161740318,
+      "user_usec": 78.94046922251488,
+      "system_usec": 112.15166812993854
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 151024,
+    "cpu_usec_per_200": {
+      "usage_usec": 58.84187281491683,
+      "user_usec": 30.153505403114735,
+      "system_usec": 28.68836079033796
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 93358,
+    "cpu_usec_per_200": {
+      "usage_usec": 85.0634546584117,
+      "user_usec": 31.472010968529744,
+      "system_usec": 53.59144368988196
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 274.338134765625,
+      "user_usec": 57.57958984375,
+      "system_usec": 216.758544921875
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "hit",
+    "successful": 81067,
+    "cpu_usec_per_200": {
+      "usage_usec": 46.29677920732234,
+      "user_usec": 20.48588204818237,
+      "system_usec": 25.81089715913997
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 692.7294921875,
+      "user_usec": 209.346435546875,
+      "system_usec": 483.3828125
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "off",
+    "successful": 83737,
+    "cpu_usec_per_200": {
+      "usage_usec": 68.72172396909372,
+      "user_usec": 25.8985036483275,
+      "system_usec": 42.823232262918424
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 162152,
+    "cpu_usec_per_200": {
+      "usage_usec": 46.1705930238295,
+      "user_usec": 22.39637500616705,
+      "system_usec": 23.774224184715575
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 465.044677734375,
+      "user_usec": 113.97607421875,
+      "system_usec": 351.068603515625
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 103554,
+    "cpu_usec_per_200": {
+      "usage_usec": 72.73051741120575,
+      "user_usec": 27.562537420090003,
+      "system_usec": 45.167970334318326
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 158711,
+    "cpu_usec_per_200": {
+      "usage_usec": 45.948384169969316,
+      "user_usec": 22.33563521116999,
+      "system_usec": 23.61275525955983
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 114780,
+    "cpu_usec_per_200": {
+      "usage_usec": 68.33471859208922,
+      "user_usec": 24.009487715629902,
+      "system_usec": 44.32523958877853
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 303.84130859375,
+      "user_usec": 75.674560546875,
+      "system_usec": 228.166748046875
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "hit",
+    "successful": 152000,
+    "cpu_usec_per_200": {
+      "usage_usec": 40.09594078947369,
+      "user_usec": 18.29767105263158,
+      "system_usec": 21.798276315789472
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 326.819580078125,
+      "user_usec": 70.304931640625,
+      "system_usec": 256.5146484375
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "off",
+    "successful": 89042,
+    "cpu_usec_per_200": {
+      "usage_usec": 75.68637272298466,
+      "user_usec": 28.03944206104984,
+      "system_usec": 47.64691943127962
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "tls-h2",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 218045,
+    "cpu_usec_per_200": {
+      "usage_usec": 39.32885413561421,
+      "user_usec": 18.890857391822788,
+      "system_usec": 20.43799674379142
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 767.763671875,
+      "user_usec": 369.7978515625,
+      "system_usec": 397.96630859375
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2228.78076171875,
+      "user_usec": 1755.73193359375,
+      "system_usec": 473.04931640625
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1744.6689453125,
+      "user_usec": 1402.482421875,
+      "system_usec": 342.1865234375
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 357.68896484375,
+      "user_usec": 267.03955078125,
+      "system_usec": 90.64892578125
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2857.7177734375,
+      "user_usec": 2135.259765625,
+      "system_usec": 722.45751953125
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2009.30859375,
+      "user_usec": 1556.087890625,
+      "system_usec": 453.22021484375
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2383.650390625,
+      "user_usec": 1700.1123046875,
+      "system_usec": 683.53759765625
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2136.73193359375,
+      "user_usec": 1706.74951171875,
+      "system_usec": 429.98193359375
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 361.28759765625,
+      "user_usec": 244.8828125,
+      "system_usec": 116.4052734375
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 804.01416015625,
+      "user_usec": 428.1552734375,
+      "system_usec": 375.85888671875
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2054.82763671875,
+      "user_usec": 1610.5751953125,
+      "system_usec": 444.25244140625
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1750.3291015625,
+      "user_usec": 1407.87744140625,
+      "system_usec": 342.451171875
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 639.80859375,
+      "user_usec": 419.00537109375,
+      "system_usec": 220.80322265625
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 6482.88720703125,
+      "user_usec": 4445.26708984375,
+      "system_usec": 2037.6201171875
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1993.66259765625,
+      "user_usec": 1609.22802734375,
+      "system_usec": 384.43505859375
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2436.22021484375,
+      "user_usec": 1743.13623046875,
+      "system_usec": 693.08349609375
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2277.9755859375,
+      "user_usec": 1752.455078125,
+      "system_usec": 525.52099609375
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 293.98681640625,
+      "user_usec": 223.2685546875,
+      "system_usec": 70.71875
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 747.39501953125,
+      "user_usec": 117.35498046875,
+      "system_usec": 630.0400390625
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1914.29931640625,
+      "user_usec": 1577.6708984375,
+      "system_usec": 336.62841796875
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2073.337890625,
+      "user_usec": 1783.80419921875,
+      "system_usec": 289.533203125
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 146.86279296875,
+      "user_usec": 60.87109375,
+      "system_usec": 85.9912109375
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 3885.97998046875,
+      "user_usec": 2802.63427734375,
+      "system_usec": 1083.345703125
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2664.728515625,
+      "user_usec": 2232.2392578125,
+      "system_usec": 432.48876953125
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2340.79736328125,
+      "user_usec": 1755.77099609375,
+      "system_usec": 585.0263671875
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2813.48486328125,
+      "user_usec": 2362.09619140625,
+      "system_usec": 451.388671875
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 106.591796875,
+      "user_usec": 31.60107421875,
+      "system_usec": 74.990234375
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 902.35986328125,
+      "user_usec": 185.2685546875,
+      "system_usec": 717.0908203125
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1802.640625,
+      "user_usec": 1474.94384765625,
+      "system_usec": 327.697265625
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1610.8916015625,
+      "user_usec": 1345.54150390625,
+      "system_usec": 265.35009765625
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 141.9658203125,
+      "user_usec": 56.07763671875,
+      "system_usec": 85.8876953125
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2273.75341796875,
+      "user_usec": 1626.10400390625,
+      "system_usec": 647.64990234375
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1741.111328125,
+      "user_usec": 1436.74658203125,
+      "system_usec": 304.36474609375
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1972.50341796875,
+      "user_usec": 1485.15966796875,
+      "system_usec": 487.34375
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2073.45751953125,
+      "user_usec": 1669.16455078125,
+      "system_usec": 404.29345703125
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "fresh",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 98.41552734375,
+      "user_usec": 20.4873046875,
+      "system_usec": 77.927734375
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "cold-long",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 32768,
+    "cpu_usec_per_200": {
+      "usage_usec": 866.5589904785156,
+      "user_usec": 413.7980651855469,
+      "system_usec": 452.76092529296875
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "cold-long",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 32768,
+    "cpu_usec_per_200": {
+      "usage_usec": 617.2808227539062,
+      "user_usec": 324.1999816894531,
+      "system_usec": 293.0808410644531
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "cold-long",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 32768,
+    "cpu_usec_per_200": {
+      "usage_usec": 231.39999389648438,
+      "user_usec": 33.688720703125,
+      "system_usec": 197.71124267578125
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "cold-long",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 32768,
+    "cpu_usec_per_200": {
+      "usage_usec": 638.007080078125,
+      "user_usec": 62.703125,
+      "system_usec": 575.3039855957031
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "cold-long",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 32768,
+    "cpu_usec_per_200": {
+      "usage_usec": 557.8985290527344,
+      "user_usec": 282.2284240722656,
+      "system_usec": 275.6700744628906
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "cold-long",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 32768,
+    "cpu_usec_per_200": {
+      "usage_usec": 475.7835998535156,
+      "user_usec": 252.87869262695312,
+      "system_usec": 222.9049072265625
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "cold-long",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 32768,
+    "cpu_usec_per_200": {
+      "usage_usec": 677.9116516113281,
+      "user_usec": 63.74761962890625,
+      "system_usec": 614.1640319824219
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "cold-long",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 32768,
+    "cpu_usec_per_200": {
+      "usage_usec": 325.17816162109375,
+      "user_usec": 48.7825927734375,
+      "system_usec": 276.39556884765625
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "cold-long",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 32768,
+    "cpu_usec_per_200": {
+      "usage_usec": 527.1980285644531,
+      "user_usec": 280.06268310546875,
+      "system_usec": 247.13531494140625
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "cold-long",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 32768,
+    "cpu_usec_per_200": {
+      "usage_usec": 595.9281616210938,
+      "user_usec": 307.2650451660156,
+      "system_usec": 288.6631164550781
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "cold-long",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 32768,
+    "cpu_usec_per_200": {
+      "usage_usec": 325.00225830078125,
+      "user_usec": 48.28167724609375,
+      "system_usec": 276.7205810546875
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "cold-long",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 32768,
+    "cpu_usec_per_200": {
+      "usage_usec": 238.69558715820312,
+      "user_usec": 36.481719970703125,
+      "system_usec": 202.2138671875
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "32k",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 49630,
+    "cpu_usec_per_200": {
+      "usage_usec": 133.70886560548055,
+      "user_usec": 84.22282893411243,
+      "system_usec": 49.486036671368126
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "32k",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 23975,
+    "cpu_usec_per_200": {
+      "usage_usec": 344.2849217935349,
+      "user_usec": 192.64984358706985,
+      "system_usec": 151.63507820646507
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "32k",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 512,
+    "cpu_usec_per_200": {
+      "usage_usec": 719.388671875,
+      "user_usec": 353.4765625,
+      "system_usec": 365.912109375
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "32k",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 81334,
+    "cpu_usec_per_200": {
+      "usage_usec": 99.95432414488405,
+      "user_usec": 62.43588167310104,
+      "system_usec": 37.51844247178302
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "32k",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 47165,
+    "cpu_usec_per_200": {
+      "usage_usec": 187.61592282412806,
+      "user_usec": 114.50189759355455,
+      "system_usec": 73.11402523057352
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "32k",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 512,
+    "cpu_usec_per_200": {
+      "usage_usec": 824.404296875,
+      "user_usec": 335.576171875,
+      "system_usec": 488.826171875
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "32k",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 121404,
+    "cpu_usec_per_200": {
+      "usage_usec": 41.48065137886725,
+      "user_usec": 12.336537511119896,
+      "system_usec": 29.144113867747357
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "32k",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 68160,
+    "cpu_usec_per_200": {
+      "usage_usec": 80.49476232394366,
+      "user_usec": 18.697036384976524,
+      "system_usec": 61.79774061032864
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "32k",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 512,
+    "cpu_usec_per_200": {
+      "usage_usec": 774.859375,
+      "user_usec": 121.6484375,
+      "system_usec": 653.2109375
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "32k",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 116020,
+    "cpu_usec_per_200": {
+      "usage_usec": 41.880132735735216,
+      "user_usec": 12.86162730563696,
+      "system_usec": 29.01850543009826
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "32k",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 45288,
+    "cpu_usec_per_200": {
+      "usage_usec": 123.64911234764176,
+      "user_usec": 29.70835541423777,
+      "system_usec": 93.94075693340399
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "32k",
+    "round": 0,
+    "protocol": "h1",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 512,
+    "cpu_usec_per_200": {
+      "usage_usec": 1024.197265625,
+      "user_usec": 119.044921875,
+      "system_usec": 905.150390625
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 94430,
+    "cpu_usec_per_200": {
+      "usage_usec": 153.28340569734195,
+      "user_usec": 121.4793074234883,
+      "system_usec": 31.80408768399873
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 585.76513671875,
+      "user_usec": 328.227294921875,
+      "system_usec": 257.537841796875
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 697.499755859375,
+      "user_usec": 399.63427734375,
+      "system_usec": 297.865234375
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "off",
+    "successful": 55994,
+    "cpu_usec_per_200": {
+      "usage_usec": 246.05589884630496,
+      "user_usec": 181.50912597778333,
+      "system_usec": 64.54677286852163
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 53156,
+    "cpu_usec_per_200": {
+      "usage_usec": 277.68402438106705,
+      "user_usec": 201.3380239295658,
+      "system_usec": 76.34601926405297
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "hit",
+    "successful": 97796,
+    "cpu_usec_per_200": {
+      "usage_usec": 128.5223731031944,
+      "user_usec": 99.02605423534705,
+      "system_usec": 29.496318867847357
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 4129.70263671875,
+      "user_usec": 2909.81689453125,
+      "system_usec": 1219.88623046875
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 339.25,
+      "user_usec": 216.3095703125,
+      "system_usec": 122.9404296875
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 57266,
+    "cpu_usec_per_200": {
+      "usage_usec": 225.414399469144,
+      "user_usec": 171.28379841441694,
+      "system_usec": 54.130618517095655
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 614.58447265625,
+      "user_usec": 323.686767578125,
+      "system_usec": 290.89794921875
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 843.250244140625,
+      "user_usec": 420.64013671875,
+      "system_usec": 422.610107421875
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "off",
+    "successful": 62668,
+    "cpu_usec_per_200": {
+      "usage_usec": 216.4714527350482,
+      "user_usec": 157.19269802770154,
+      "system_usec": 59.278738750239356
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 30442,
+    "cpu_usec_per_200": {
+      "usage_usec": 460.2975165889232,
+      "user_usec": 332.7071808685369,
+      "system_usec": 127.5903357203863
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "hit",
+    "successful": 56835,
+    "cpu_usec_per_200": {
+      "usage_usec": 194.95270519926103,
+      "user_usec": 149.53621887921176,
+      "system_usec": 45.41650391484121
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 4934.07373046875,
+      "user_usec": 3393.6337890625,
+      "system_usec": 1540.439453125
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 1,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 469.74072265625,
+      "user_usec": 293.42529296875,
+      "system_usec": 176.31591796875
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 94899,
+    "cpu_usec_per_200": {
+      "usage_usec": 147.4454209211899,
+      "user_usec": 117.48626434419752,
+      "system_usec": 29.95915657699238
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 541.91259765625,
+      "user_usec": 306.57763671875,
+      "system_usec": 235.3349609375
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 713.040771484375,
+      "user_usec": 352.45166015625,
+      "system_usec": 360.58935546875
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "off",
+    "successful": 68834,
+    "cpu_usec_per_200": {
+      "usage_usec": 204.56457564575646,
+      "user_usec": 151.94203445971468,
+      "system_usec": 52.62254118604178
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 50292,
+    "cpu_usec_per_200": {
+      "usage_usec": 280.41897319653225,
+      "user_usec": 201.3490415970731,
+      "system_usec": 79.06993159945915
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "hit",
+    "successful": 99199,
+    "cpu_usec_per_200": {
+      "usage_usec": 128.43641568967428,
+      "user_usec": 99.97898164296011,
+      "system_usec": 28.45743404671418
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2568.4951171875,
+      "user_usec": 1848.279296875,
+      "system_usec": 720.21533203125
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 470.55419921875,
+      "user_usec": 329.05908203125,
+      "system_usec": 141.4951171875
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "hit",
+    "successful": 93649,
+    "cpu_usec_per_200": {
+      "usage_usec": 149.69825625473842,
+      "user_usec": 118.49904430372989,
+      "system_usec": 31.199201272837936
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 792.3896484375,
+      "user_usec": 384.59423828125,
+      "system_usec": 407.795166015625
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "miss",
+    "successful": 4096,
+    "cpu_usec_per_200": {
+      "usage_usec": 672.70068359375,
+      "user_usec": 383.268310546875,
+      "system_usec": 289.4326171875
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "off",
+    "successful": 61447,
+    "cpu_usec_per_200": {
+      "usage_usec": 224.39251712858237,
+      "user_usec": 166.1618630689863,
+      "system_usec": 58.23065405959608
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h2",
+    "connection": "reuse",
+    "cache": "off",
+    "successful": 29349,
+    "cpu_usec_per_200": {
+      "usage_usec": 471.10801049439505,
+      "user_usec": 329.24293843061093,
+      "system_usec": 141.86510613649529
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h2",
+    "connection": "multiplex",
+    "cache": "hit",
+    "successful": 87845,
+    "cpu_usec_per_200": {
+      "usage_usec": 145.281370595936,
+      "user_usec": 113.52832830553817,
+      "system_usec": 31.75304229039786
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 3008.4775390625,
+      "user_usec": 2068.07568359375,
+      "system_usec": 940.4013671875
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "regression-recheck",
+    "round": 2,
+    "protocol": "h1",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 415.8193359375,
+      "user_usec": 249.21142578125,
+      "system_usec": 166.6083984375
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2426.54931640625,
+      "user_usec": 1878.39306640625,
+      "system_usec": 548.15625
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2415.28271484375,
+      "user_usec": 1827.95068359375,
+      "system_usec": 587.33251953125
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 5671.3671875,
+      "user_usec": 3930.6708984375,
+      "system_usec": 1740.6962890625
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2601.19482421875,
+      "user_usec": 2034.267578125,
+      "system_usec": 566.9267578125
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1874.30126953125,
+      "user_usec": 1555.0625,
+      "system_usec": 319.23876953125
+    }
+  },
+  {
+    "label": "baseline",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1787.24365234375,
+      "user_usec": 1433.75732421875,
+      "system_usec": 353.486328125
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1526.86669921875,
+      "user_usec": 1271.07763671875,
+      "system_usec": 255.7890625
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 3064.8076171875,
+      "user_usec": 2189.970703125,
+      "system_usec": 874.8369140625
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2456.43994140625,
+      "user_usec": 1722.85546875,
+      "system_usec": 733.583984375
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2006.560546875,
+      "user_usec": 1555.79345703125,
+      "system_usec": 450.76708984375
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1798.5732421875,
+      "user_usec": 1435.61572265625,
+      "system_usec": 362.95751953125
+    }
+  },
+  {
+    "label": "candidate",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2005.06005859375,
+      "user_usec": 1647.693359375,
+      "system_usec": 357.3662109375
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1805.06787109375,
+      "user_usec": 1542.4052734375,
+      "system_usec": 262.66259765625
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2511.4404296875,
+      "user_usec": 1593.72705078125,
+      "system_usec": 917.71337890625
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 4770.37255859375,
+      "user_usec": 3234.1064453125,
+      "system_usec": 1536.2666015625
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1993.2236328125,
+      "user_usec": 1648.64892578125,
+      "system_usec": 344.57421875
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 2843.74560546875,
+      "user_usec": 2350.2490234375,
+      "system_usec": 493.49658203125
+    }
+  },
+  {
+    "label": "nginx",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1832.00244140625,
+      "user_usec": 1560.42431640625,
+      "system_usec": 271.578125
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1603.0087890625,
+      "user_usec": 1336.73486328125,
+      "system_usec": 266.27392578125
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1924.7939453125,
+      "user_usec": 1423.91748046875,
+      "system_usec": 500.8759765625
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "miss",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1950.98193359375,
+      "user_usec": 1401.28125,
+      "system_usec": 549.70068359375
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1730.873046875,
+      "user_usec": 1427.1708984375,
+      "system_usec": 303.7021484375
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h1-tls",
+    "connection": "fresh",
+    "cache": "off",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1608.20263671875,
+      "user_usec": 1332.05126953125,
+      "system_usec": 276.15087890625
+    }
+  },
+  {
+    "label": "openresty",
+    "status": "passed",
+    "failed": 0,
+    "group": "uniform-tls",
+    "round": 0,
+    "protocol": "h2",
+    "connection": "fresh",
+    "cache": "hit",
+    "successful": 2048,
+    "cpu_usec_per_200": {
+      "usage_usec": 1857.32861328125,
+      "user_usec": 1553.0556640625,
+      "system_usec": 304.2724609375
+    }
+  }
+]

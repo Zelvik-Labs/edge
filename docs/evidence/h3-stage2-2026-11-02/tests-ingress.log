@@ -1,0 +1,103 @@
+      ┌─────────┐  mr boxington
+     ╱ ═══════ ╱│
+    ╱─────────╱ │
+    │ •    (◉)│≡│
+    │  ◟▄▄▄◞  │ ╱
+    │   ◀◆▶   │╱
+    └─────────┘
+   Compiling pingora-error v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-error)
+   Compiling pingora-timeout v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-timeout)
+   Compiling pingora-http v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-http)
+   Compiling pingora-rustls v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-rustls)
+   Compiling pingora-pool v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-pool)
+   Compiling pingora-runtime v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-runtime)
+   Compiling pingora-core v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-core)
+mbx[progress]: 15s elapsed; 0 hits, 5 misses, 0 bypassed, 0 not looked up; ~0.0s compiler work saved
+   Compiling pingora-lru v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-lru)
+   Compiling pingora-header-serde v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-header-serde)
+   Compiling tonic v0.14.6
+mbx[progress]: 30s elapsed; 0 hits, 8 misses, 0 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 8 misses, 0 bypassed, 0 not looked up; ~0.0s compiler work saved
+   Compiling pingora-cache v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-cache)
+mbx[progress]: 60s elapsed; 0 hits, 9 misses, 0 bypassed, 0 not looked up; ~0.0s compiler work saved
+   Compiling smoltcp v0.14.0 (/workspace/edge/.worktrees/perf-next/vendor/smoltcp-edge)
+   Compiling tonic-prost v0.14.6
+   Compiling TinyUFO v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/tinyufo)
+   Compiling pingora-proxy v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-proxy)
+mbx[progress]: 75s elapsed; 0 hits, 12 misses, 0 bypassed, 0 not looked up; ~0.0s compiler work saved
+   Compiling zelvik-edge v26.11.1 (/workspace/edge/.worktrees/perf-next)
+   Compiling hyper-rustls v0.27.9
+   Compiling pingora-ketama v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-ketama)
+   Compiling zelvik-edge-transport v0.1.0 (/workspace/edge/.worktrees/perf-next/crates/zelvik-edge-transport)
+mbx[progress]: 90s elapsed; 0 hits, 15 misses, 0 bypassed, 0 not looked up; ~0.0s compiler work saved
+   Compiling pingora v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora)
+   Compiling zelvik-suite v26.10.2 (https://github.com/Zelvik-Labs/protocol?tag=rust%2Fv0.0.2#f2cac932)
+   Compiling pingora-load-balancing v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-load-balancing)
+   Compiling reqwest v0.13.4
+mbx[progress]: 105s elapsed; 0 hits, 18 misses, 0 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 120s elapsed; 0 hits, 18 misses, 0 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[warning]: cc cache bypassed: compiler invocation names no output file
+   Compiling pingora-memory-cache v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-memory-cache)
+   Compiling zelvik-geo-runtime v26.10.3 (/workspace/edge/.worktrees/dns/crates/zelvik-geo-runtime)
+mbx[warning]: prediction was not restored: absolute path has no stable cache mapping: /workspace/edge/.worktrees/dns/crates/zelvik-geo-runtime/src/lib.rs
+mbx[progress]: 135s elapsed; 0 hits, 19 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+   Compiling zelvik-edge-xdp-common v0.1.0 (/workspace/edge/.worktrees/perf-next/crates/zelvik-edge-xdp-common)
+   Compiling libinjectionrs v0.1.1 (/workspace/edge/.worktrees/perf-next/vendor/libinjectionrs)
+mbx[warning]: result was not stored: absolute path has no stable cache mapping: /workspace/edge/.worktrees/dns/crates/zelvik-geo-runtime/src/lib.rs
+mbx[progress]: 150s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 165s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 180s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 195s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 210s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 225s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 240s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 255s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 270s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 285s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 300s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 315s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 330s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 345s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 360s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 375s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 390s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 405s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 420s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 435s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 450s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 465s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 480s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 495s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 510s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 525s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 540s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 555s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 570s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 585s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 600s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 615s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 630s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 645s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 660s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 675s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 690s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 705s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 720s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 735s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 750s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 765s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 780s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 795s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 810s elapsed; 0 hits, 22 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+    Finished `test` profile [optimized] target(s) in 13m 43s
+     Running unittests src/lib.rs (/workspace/edge/target/debug/deps/zelvik_edge-3fcf64dffcf344d8)
+
+running 3 tests
+test memory_governor::tests::quic_ingress_sees_live_usage_without_a_budget_generation_change ... ok
+test memory_governor::tests::quic_ingress_does_not_wait_for_diagnostic_owner_accounting ... ok
+test memory_governor::tests::quic_ingress_tracks_pressure_and_budget_changes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 1283 filtered out; finished in 0.00s
+
+mbx[cache]: 0 hits, 22 misses, 8 incremental, 3 bypassed; 0 B downloaded, 0 B uploaded, 50.1 MiB stored locally
+mbx[savings]: swept up 10.9 GiB logical so far. the broom is content-addressed.

@@ -1,0 +1,3331 @@
+{
+  "target": "openresty",
+  "started_at": 1793611258.6662266,
+  "cases": [
+    {
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "connection": "reuse",
+      "repeat": 0,
+      "stem": "0000-h1-tls-miss-reuse",
+      "ports": {
+        "19080/tcp": 34233,
+        "19443/tcp": 34234,
+        "19443/udp": 33318
+      },
+      "fresh_instance": true,
+      "integrity_before": {
+        "protocol": "1.1",
+        "tls_verified": true,
+        "cache_status": "MISS",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0000-h1-tls-miss-reuse-before.headers"
+      },
+      "idle_reference": {
+        "seconds": 2.216456379988813,
+        "cpu_usec": 169257,
+        "cpu_cores": 0.07636378569329404
+      },
+      "native": {
+        "client": "native-libcurl-multi",
+        "request_limit": 4096,
+        "successful": 4096,
+        "failed": 0,
+        "error_distribution": {},
+        "first_failures": [],
+        "new_connections": 32,
+        "good_rps": 3442.5503731247163,
+        "p99_ms": 120.14
+      },
+      "elapsed": 1.1898155599919846,
+      "origin_requests": 4096,
+      "proxy_before": {
+        "cpu.stat": {
+          "usage_usec": 524543,
+          "user_usec": 301755,
+          "system_usec": 222788,
+          "nice_usec": 0,
+          "nr_periods": 21,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 20738048
+        },
+        "memory.peak": {
+          "bytes": 22507520
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "proxy_after": {
+        "cpu.stat": {
+          "usage_usec": 2429366,
+          "user_usec": 768601,
+          "system_usec": 1660765,
+          "nice_usec": 0,
+          "nr_periods": 36,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 47742976
+        },
+        "memory.peak": {
+          "bytes": 49061888
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "host_cpu_before": {
+        "cpu": [
+          2488008,
+          0,
+          1179141,
+          34090834,
+          6544,
+          0,
+          310178,
+          2814217,
+          0,
+          0
+        ],
+        "cpu0": [
+          417273,
+          0,
+          236667,
+          6902586,
+          1663,
+          0,
+          67385,
+          579505,
+          0,
+          0
+        ],
+        "cpu1": [
+          576528,
+          0,
+          226124,
+          6663356,
+          1478,
+          0,
+          65725,
+          664256,
+          0,
+          0
+        ],
+        "cpu2": [
+          580990,
+          0,
+          220252,
+          6691865,
+          1284,
+          0,
+          47333,
+          637279,
+          0,
+          0
+        ],
+        "cpu3": [
+          551106,
+          0,
+          246608,
+          6810695,
+          1155,
+          0,
+          65652,
+          483257,
+          0,
+          0
+        ],
+        "cpu4": [
+          362108,
+          0,
+          249488,
+          7022330,
+          962,
+          0,
+          64082,
+          449919,
+          0,
+          0
+        ]
+      },
+      "host_cpu_after": {
+        "cpu": [
+          2488072,
+          0,
+          1179241,
+          34091024,
+          6544,
+          0,
+          310203,
+          2814514,
+          0,
+          0
+        ],
+        "cpu0": [
+          417283,
+          0,
+          236691,
+          6902612,
+          1663,
+          0,
+          67389,
+          579571,
+          0,
+          0
+        ],
+        "cpu1": [
+          576537,
+          0,
+          226156,
+          6663371,
+          1478,
+          0,
+          65728,
+          664317,
+          0,
+          0
+        ],
+        "cpu2": [
+          581009,
+          0,
+          220265,
+          6691908,
+          1284,
+          0,
+          47336,
+          637336,
+          0,
+          0
+        ],
+        "cpu3": [
+          551127,
+          0,
+          246621,
+          6810734,
+          1155,
+          0,
+          65657,
+          483312,
+          0,
+          0
+        ],
+        "cpu4": [
+          362113,
+          0,
+          249505,
+          7022396,
+          962,
+          0,
+          64091,
+          449975,
+          0,
+          0
+        ]
+      },
+      "origin_before": {
+        "cpu.stat": {
+          "usage_usec": 7140758,
+          "user_usec": 1579060,
+          "system_usec": 5561697,
+          "nice_usec": 0,
+          "nr_periods": 89,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6762496
+        },
+        "memory.peak": {
+          "bytes": 8273920
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "origin_after": {
+        "cpu.stat": {
+          "usage_usec": 7481274,
+          "user_usec": 1655954,
+          "system_usec": 5825320,
+          "nice_usec": 0,
+          "nr_periods": 104,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 7028736
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "filesystem_before": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 4,
+          "available_kib": 524284,
+          "used_percent": 1
+        }
+      },
+      "filesystem_after": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 16388,
+          "available_kib": 507900,
+          "used_percent": 4
+        }
+      },
+      "client_cpu_seconds": 1.1816379999999977,
+      "proxy_cpu_usec_per_200": 465.044677734375,
+      "integrity_after": {
+        "protocol": "1.1",
+        "tls_verified": true,
+        "cache_status": "HIT",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0000-h1-tls-miss-reuse-after.headers"
+      },
+      "status": "passed"
+    },
+    {
+      "protocol": "h2",
+      "cache": "off",
+      "connection": "reuse",
+      "repeat": 0,
+      "stem": "0001-h2-off-reuse",
+      "ports": {
+        "19080/tcp": 34235,
+        "19443/tcp": 34236,
+        "19443/udp": 33319
+      },
+      "fresh_instance": true,
+      "integrity_before": {
+        "protocol": "2",
+        "tls_verified": true,
+        "cache_status": "BYPASS",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0001-h2-off-reuse-before.headers"
+      },
+      "idle_reference": {
+        "seconds": 2.0001418220053893,
+        "cpu_usec": 33360,
+        "cpu_cores": 0.016678817288342324
+      },
+      "native": {
+        "client": "native-libcurl-multi",
+        "request_limit": null,
+        "successful": 103554,
+        "failed": 0,
+        "error_distribution": {},
+        "first_failures": [],
+        "new_connections": 32,
+        "good_rps": 12854.54983770496,
+        "p99_ms": 7.724
+      },
+      "elapsed": 8.055824693001341,
+      "origin_requests": 103554,
+      "proxy_before": {
+        "cpu.stat": {
+          "usage_usec": 231914,
+          "user_usec": 151554,
+          "system_usec": 80360,
+          "nice_usec": 0,
+          "nr_periods": 11,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 20385792
+        },
+        "memory.peak": {
+          "bytes": 22069248
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "proxy_after": {
+        "cpu.stat": {
+          "usage_usec": 7763450,
+          "user_usec": 3005765,
+          "system_usec": 4757684,
+          "nice_usec": 0,
+          "nr_periods": 96,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 22831104
+        },
+        "memory.peak": {
+          "bytes": 23883776
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "host_cpu_before": {
+        "cpu": [
+          2488164,
+          0,
+          1179322,
+          34093251,
+          6548,
+          0,
+          310209,
+          2814841,
+          0,
+          0
+        ],
+        "cpu0": [
+          417307,
+          0,
+          236708,
+          6903019,
+          1663,
+          0,
+          67390,
+          579657,
+          0,
+          0
+        ],
+        "cpu1": [
+          576555,
+          0,
+          226171,
+          6663819,
+          1479,
+          0,
+          65730,
+          664370,
+          0,
+          0
+        ],
+        "cpu2": [
+          581024,
+          0,
+          220281,
+          6692368,
+          1284,
+          0,
+          47337,
+          637386,
+          0,
+          0
+        ],
+        "cpu3": [
+          551145,
+          0,
+          246636,
+          6811189,
+          1157,
+          0,
+          65658,
+          483381,
+          0,
+          0
+        ],
+        "cpu4": [
+          362129,
+          0,
+          249524,
+          7022853,
+          963,
+          0,
+          64091,
+          450045,
+          0,
+          0
+        ]
+      },
+      "host_cpu_after": {
+        "cpu": [
+          2489134,
+          0,
+          1180058,
+          34094252,
+          6548,
+          0,
+          310587,
+          2815926,
+          0,
+          0
+        ],
+        "cpu0": [
+          417410,
+          0,
+          236854,
+          6903275,
+          1663,
+          0,
+          67473,
+          579893,
+          0,
+          0
+        ],
+        "cpu1": [
+          576685,
+          0,
+          226321,
+          6664037,
+          1479,
+          0,
+          65824,
+          664596,
+          0,
+          0
+        ],
+        "cpu2": [
+          581343,
+          0,
+          220382,
+          6692512,
+          1284,
+          0,
+          47375,
+          637612,
+          0,
+          0
+        ],
+        "cpu3": [
+          551471,
+          0,
+          246755,
+          6811332,
+          1157,
+          0,
+          65696,
+          483584,
+          0,
+          0
+        ],
+        "cpu4": [
+          362224,
+          0,
+          249744,
+          7023094,
+          963,
+          0,
+          64215,
+          450239,
+          0,
+          0
+        ]
+      },
+      "origin_before": {
+        "cpu.stat": {
+          "usage_usec": 7534180,
+          "user_usec": 1683940,
+          "system_usec": 5850239,
+          "nice_usec": 0,
+          "nr_periods": 108,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6316032
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "origin_after": {
+        "cpu.stat": {
+          "usage_usec": 11890441,
+          "user_usec": 2608377,
+          "system_usec": 9282064,
+          "nice_usec": 0,
+          "nr_periods": 191,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6561792
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "filesystem_before": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        }
+      },
+      "filesystem_after": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        }
+      },
+      "client_cpu_seconds": 11.378446000000004,
+      "proxy_cpu_usec_per_200": 72.73051741120575,
+      "integrity_after": {
+        "protocol": "2",
+        "tls_verified": true,
+        "cache_status": "BYPASS",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0001-h2-off-reuse-after.headers"
+      },
+      "status": "passed"
+    },
+    {
+      "protocol": "h2",
+      "cache": "hit",
+      "connection": "reuse",
+      "repeat": 0,
+      "stem": "0002-h2-hit-reuse",
+      "ports": {
+        "19080/tcp": 34237,
+        "19443/tcp": 34238,
+        "19443/udp": 33320
+      },
+      "fresh_instance": true,
+      "integrity_before": {
+        "protocol": "2",
+        "tls_verified": true,
+        "cache_status": "MISS",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0002-h2-hit-reuse-before.headers"
+      },
+      "idle_reference": {
+        "seconds": 2.0001356249995297,
+        "cpu_usec": 42376,
+        "cpu_cores": 0.02118656328618214
+      },
+      "native": {
+        "client": "native-libcurl-multi",
+        "request_limit": null,
+        "successful": 158711,
+        "failed": 0,
+        "error_distribution": {},
+        "first_failures": [],
+        "new_connections": 32,
+        "good_rps": 19657.9316490608,
+        "p99_ms": 4.939
+      },
+      "elapsed": 8.073636780987727,
+      "origin_requests": 0,
+      "proxy_before": {
+        "cpu.stat": {
+          "usage_usec": 246189,
+          "user_usec": 175885,
+          "system_usec": 70303,
+          "nice_usec": 0,
+          "nr_periods": 10,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 20582400
+        },
+        "memory.peak": {
+          "bytes": 21938176
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "proxy_after": {
+        "cpu.stat": {
+          "usage_usec": 7538703,
+          "user_usec": 3720796,
+          "system_usec": 3817907,
+          "nice_usec": 0,
+          "nr_periods": 94,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 21856256
+        },
+        "memory.peak": {
+          "bytes": 23445504
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "host_cpu_before": {
+        "cpu": [
+          2489390,
+          0,
+          1180143,
+          34097108,
+          6553,
+          0,
+          310593,
+          2816132,
+          0,
+          0
+        ],
+        "cpu0": [
+          417446,
+          0,
+          236870,
+          6903867,
+          1666,
+          0,
+          67475,
+          579934,
+          0,
+          0
+        ],
+        "cpu1": [
+          576700,
+          0,
+          226336,
+          6664656,
+          1479,
+          0,
+          65827,
+          664625,
+          0,
+          0
+        ],
+        "cpu2": [
+          581359,
+          0,
+          220394,
+          6693135,
+          1285,
+          0,
+          47376,
+          637639,
+          0,
+          0
+        ],
+        "cpu3": [
+          551496,
+          0,
+          246772,
+          6811934,
+          1157,
+          0,
+          65697,
+          483619,
+          0,
+          0
+        ],
+        "cpu4": [
+          362387,
+          0,
+          249769,
+          7023514,
+          964,
+          0,
+          64216,
+          450314,
+          0,
+          0
+        ]
+      },
+      "host_cpu_after": {
+        "cpu": [
+          2490509,
+          0,
+          1180780,
+          34098123,
+          6553,
+          0,
+          310880,
+          2817261,
+          0,
+          0
+        ],
+        "cpu0": [
+          417592,
+          0,
+          237016,
+          6904110,
+          1666,
+          0,
+          67548,
+          580161,
+          0,
+          0
+        ],
+        "cpu1": [
+          576841,
+          0,
+          226495,
+          6664944,
+          1479,
+          0,
+          65883,
+          664837,
+          0,
+          0
+        ],
+        "cpu2": [
+          581744,
+          0,
+          220462,
+          6693200,
+          1285,
+          0,
+          47422,
+          637885,
+          0,
+          0
+        ],
+        "cpu3": [
+          551875,
+          0,
+          246860,
+          6812028,
+          1157,
+          0,
+          65734,
+          483848,
+          0,
+          0
+        ],
+        "cpu4": [
+          362456,
+          0,
+          249944,
+          7023838,
+          964,
+          0,
+          64290,
+          450528,
+          0,
+          0
+        ]
+      },
+      "origin_before": {
+        "cpu.stat": {
+          "usage_usec": 11941817,
+          "user_usec": 2643670,
+          "system_usec": 9298147,
+          "nice_usec": 0,
+          "nr_periods": 197,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6557696
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "origin_after": {
+        "cpu.stat": {
+          "usage_usec": 12002612,
+          "user_usec": 2678425,
+          "system_usec": 9324187,
+          "nice_usec": 0,
+          "nr_periods": 202,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6643712
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "filesystem_before": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 4,
+          "available_kib": 524284,
+          "used_percent": 1
+        }
+      },
+      "filesystem_after": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 4,
+          "available_kib": 524284,
+          "used_percent": 1
+        }
+      },
+      "client_cpu_seconds": 14.002064000000003,
+      "proxy_cpu_usec_per_200": 45.948384169969316,
+      "integrity_after": {
+        "protocol": "2",
+        "tls_verified": true,
+        "cache_status": "HIT",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0002-h2-hit-reuse-after.headers"
+      },
+      "status": "passed"
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "off",
+      "connection": "reuse",
+      "repeat": 0,
+      "stem": "0003-h1-tls-off-reuse",
+      "ports": {
+        "19080/tcp": 34239,
+        "19443/tcp": 34240,
+        "19443/udp": 33321
+      },
+      "fresh_instance": true,
+      "integrity_before": {
+        "protocol": "1.1",
+        "tls_verified": true,
+        "cache_status": "BYPASS",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0003-h1-tls-off-reuse-before.headers"
+      },
+      "idle_reference": {
+        "seconds": 2.000233062004554,
+        "cpu_usec": 42218,
+        "cpu_cores": 0.02110654043368866
+      },
+      "native": {
+        "client": "native-libcurl-multi",
+        "request_limit": null,
+        "successful": 114780,
+        "failed": 0,
+        "error_distribution": {},
+        "first_failures": [],
+        "new_connections": 32,
+        "good_rps": 14205.893793258732,
+        "p99_ms": 7.974
+      },
+      "elapsed": 8.07974504599406,
+      "origin_requests": 114780,
+      "proxy_before": {
+        "cpu.stat": {
+          "usage_usec": 287471,
+          "user_usec": 191650,
+          "system_usec": 95820,
+          "nice_usec": 0,
+          "nr_periods": 10,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 20549632
+        },
+        "memory.peak": {
+          "bytes": 21794816
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "proxy_after": {
+        "cpu.stat": {
+          "usage_usec": 8130930,
+          "user_usec": 2947459,
+          "system_usec": 5183471,
+          "nice_usec": 0,
+          "nr_periods": 94,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 21925888
+        },
+        "memory.peak": {
+          "bytes": 23236608
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "host_cpu_before": {
+        "cpu": [
+          2490870,
+          0,
+          1180923,
+          34102059,
+          6559,
+          0,
+          310885,
+          2817737,
+          0,
+          0
+        ],
+        "cpu0": [
+          417875,
+          0,
+          237069,
+          6904516,
+          1666,
+          0,
+          67549,
+          580389,
+          0,
+          0
+        ],
+        "cpu1": [
+          576867,
+          0,
+          226515,
+          6665827,
+          1480,
+          0,
+          65886,
+          664902,
+          0,
+          0
+        ],
+        "cpu2": [
+          581766,
+          0,
+          220490,
+          6694082,
+          1286,
+          0,
+          47423,
+          637937,
+          0,
+          0
+        ],
+        "cpu3": [
+          551889,
+          0,
+          246879,
+          6812919,
+          1160,
+          0,
+          65735,
+          483913,
+          0,
+          0
+        ],
+        "cpu4": [
+          362471,
+          0,
+          249969,
+          7024714,
+          965,
+          0,
+          64290,
+          450594,
+          0,
+          0
+        ]
+      },
+      "host_cpu_after": {
+        "cpu": [
+          2491723,
+          0,
+          1181698,
+          34103109,
+          6559,
+          0,
+          311291,
+          2818828,
+          0,
+          0
+        ],
+        "cpu0": [
+          417967,
+          0,
+          237227,
+          6904758,
+          1666,
+          0,
+          67646,
+          580622,
+          0,
+          0
+        ],
+        "cpu1": [
+          576989,
+          0,
+          226681,
+          6666047,
+          1480,
+          0,
+          65974,
+          665119,
+          0,
+          0
+        ],
+        "cpu2": [
+          582022,
+          0,
+          220618,
+          6694262,
+          1286,
+          0,
+          47472,
+          638151,
+          0,
+          0
+        ],
+        "cpu3": [
+          552185,
+          0,
+          247000,
+          6813093,
+          1160,
+          0,
+          65775,
+          484128,
+          0,
+          0
+        ],
+        "cpu4": [
+          362558,
+          0,
+          250170,
+          7024946,
+          965,
+          0,
+          64421,
+          450806,
+          0,
+          0
+        ]
+      },
+      "origin_before": {
+        "cpu.stat": {
+          "usage_usec": 12053470,
+          "user_usec": 2707540,
+          "system_usec": 9345930,
+          "nice_usec": 0,
+          "nr_periods": 207,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6430720
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "origin_after": {
+        "cpu.stat": {
+          "usage_usec": 16864312,
+          "user_usec": 3713811,
+          "system_usec": 13150501,
+          "nice_usec": 0,
+          "nr_periods": 291,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6578176
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "filesystem_before": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        }
+      },
+      "filesystem_after": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        }
+      },
+      "client_cpu_seconds": 10.131639999999999,
+      "proxy_cpu_usec_per_200": 68.33471859208922,
+      "integrity_after": {
+        "protocol": "1.1",
+        "tls_verified": true,
+        "cache_status": "BYPASS",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0003-h1-tls-off-reuse-after.headers"
+      },
+      "status": "passed"
+    },
+    {
+      "protocol": "h2",
+      "cache": "miss",
+      "connection": "multiplex",
+      "repeat": 0,
+      "stem": "0004-h2-miss-multiplex",
+      "ports": {
+        "19080/tcp": 34241,
+        "19443/tcp": 34242,
+        "19443/udp": 33322
+      },
+      "fresh_instance": true,
+      "integrity_before": {
+        "protocol": "2",
+        "tls_verified": true,
+        "cache_status": "MISS",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0004-h2-miss-multiplex-before.headers"
+      },
+      "idle_reference": {
+        "seconds": 2.000141031006933,
+        "cpu_usec": 47541,
+        "cpu_cores": 0.023768823929413808
+      },
+      "native": {
+        "client": "native-libcurl-multi",
+        "request_limit": 4096,
+        "successful": 4096,
+        "failed": 0,
+        "error_distribution": {},
+        "first_failures": [],
+        "new_connections": 2,
+        "good_rps": 5269.458501174455,
+        "p99_ms": 14.703000000000001
+      },
+      "elapsed": 0.777309470999171,
+      "origin_requests": 4096,
+      "proxy_before": {
+        "cpu.stat": {
+          "usage_usec": 250091,
+          "user_usec": 165131,
+          "system_usec": 84960,
+          "nice_usec": 0,
+          "nr_periods": 11,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 20144128
+        },
+        "memory.peak": {
+          "bytes": 22069248
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "proxy_after": {
+        "cpu.stat": {
+          "usage_usec": 1494625,
+          "user_usec": 475094,
+          "system_usec": 1019531,
+          "nice_usec": 0,
+          "nr_periods": 22,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 44933120
+        },
+        "memory.peak": {
+          "bytes": 46182400
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "host_cpu_before": {
+        "cpu": [
+          2491971,
+          0,
+          1181793,
+          34106007,
+          6563,
+          0,
+          311296,
+          2818995,
+          0,
+          0
+        ],
+        "cpu0": [
+          417994,
+          0,
+          237245,
+          6905364,
+          1667,
+          0,
+          67647,
+          580653,
+          0,
+          0
+        ],
+        "cpu1": [
+          577006,
+          0,
+          226695,
+          6666673,
+          1481,
+          0,
+          65975,
+          665140,
+          0,
+          0
+        ],
+        "cpu2": [
+          582193,
+          0,
+          220646,
+          6694669,
+          1287,
+          0,
+          47474,
+          638229,
+          0,
+          0
+        ],
+        "cpu3": [
+          552200,
+          0,
+          247020,
+          6813725,
+          1160,
+          0,
+          65776,
+          484146,
+          0,
+          0
+        ],
+        "cpu4": [
+          362577,
+          0,
+          250186,
+          7025574,
+          966,
+          0,
+          64422,
+          450825,
+          0,
+          0
+        ]
+      },
+      "host_cpu_after": {
+        "cpu": [
+          2492038,
+          0,
+          1181891,
+          34106126,
+          6563,
+          0,
+          311319,
+          2819090,
+          0,
+          0
+        ],
+        "cpu0": [
+          418003,
+          0,
+          237267,
+          6905385,
+          1667,
+          0,
+          67653,
+          580672,
+          0,
+          0
+        ],
+        "cpu1": [
+          577016,
+          0,
+          226728,
+          6666681,
+          1481,
+          0,
+          65980,
+          665162,
+          0,
+          0
+        ],
+        "cpu2": [
+          582213,
+          0,
+          220661,
+          6694689,
+          1287,
+          0,
+          47476,
+          638249,
+          0,
+          0
+        ],
+        "cpu3": [
+          552221,
+          0,
+          247029,
+          6813758,
+          1160,
+          0,
+          65779,
+          484163,
+          0,
+          0
+        ],
+        "cpu4": [
+          362583,
+          0,
+          250204,
+          7025611,
+          966,
+          0,
+          64429,
+          450843,
+          0,
+          0
+        ]
+      },
+      "origin_before": {
+        "cpu.stat": {
+          "usage_usec": 16908637,
+          "user_usec": 3743348,
+          "system_usec": 13165289,
+          "nice_usec": 0,
+          "nr_periods": 297,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6356992
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "origin_after": {
+        "cpu.stat": {
+          "usage_usec": 17142024,
+          "user_usec": 3806838,
+          "system_usec": 13335186,
+          "nice_usec": 0,
+          "nr_periods": 307,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6651904
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "filesystem_before": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 4,
+          "available_kib": 524284,
+          "used_percent": 1
+        }
+      },
+      "filesystem_after": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 16388,
+          "available_kib": 507900,
+          "used_percent": 4
+        }
+      },
+      "client_cpu_seconds": 0.8033250000000045,
+      "proxy_cpu_usec_per_200": 303.84130859375,
+      "integrity_after": {
+        "protocol": "2",
+        "tls_verified": true,
+        "cache_status": "HIT",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0004-h2-miss-multiplex-after.headers"
+      },
+      "status": "passed"
+    },
+    {
+      "protocol": "h2",
+      "cache": "hit",
+      "connection": "multiplex",
+      "repeat": 0,
+      "stem": "0005-h2-hit-multiplex",
+      "ports": {
+        "19080/tcp": 34243,
+        "19443/tcp": 34244,
+        "19443/udp": 33323
+      },
+      "fresh_instance": true,
+      "integrity_before": {
+        "protocol": "2",
+        "tls_verified": true,
+        "cache_status": "MISS",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0005-h2-hit-multiplex-before.headers"
+      },
+      "idle_reference": {
+        "seconds": 2.000106580002466,
+        "cpu_usec": 43449,
+        "cpu_cores": 0.021723342363058687
+      },
+      "native": {
+        "client": "native-libcurl-multi",
+        "request_limit": null,
+        "successful": 152000,
+        "failed": 0,
+        "error_distribution": {},
+        "first_failures": [],
+        "new_connections": 2,
+        "good_rps": 18870.435720431906,
+        "p99_ms": 5.012
+      },
+      "elapsed": 8.054927944001975,
+      "origin_requests": 0,
+      "proxy_before": {
+        "cpu.stat": {
+          "usage_usec": 257403,
+          "user_usec": 157212,
+          "system_usec": 100190,
+          "nice_usec": 0,
+          "nr_periods": 11,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 20459520
+        },
+        "memory.peak": {
+          "bytes": 21958656
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "proxy_after": {
+        "cpu.stat": {
+          "usage_usec": 6351986,
+          "user_usec": 2938458,
+          "system_usec": 3413528,
+          "nice_usec": 0,
+          "nr_periods": 95,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 20668416
+        },
+        "memory.peak": {
+          "bytes": 21958656
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "host_cpu_before": {
+        "cpu": [
+          2492134,
+          0,
+          1181977,
+          34108185,
+          6568,
+          0,
+          311324,
+          2819218,
+          0,
+          0
+        ],
+        "cpu0": [
+          418031,
+          0,
+          237289,
+          6905777,
+          1669,
+          0,
+          67654,
+          580703,
+          0,
+          0
+        ],
+        "cpu1": [
+          577030,
+          0,
+          226743,
+          6667106,
+          1481,
+          0,
+          65981,
+          665183,
+          0,
+          0
+        ],
+        "cpu2": [
+          582231,
+          0,
+          220677,
+          6695103,
+          1288,
+          0,
+          47478,
+          638272,
+          0,
+          0
+        ],
+        "cpu3": [
+          552237,
+          0,
+          247047,
+          6814181,
+          1161,
+          0,
+          65779,
+          484186,
+          0,
+          0
+        ],
+        "cpu4": [
+          362604,
+          0,
+          250219,
+          7026015,
+          966,
+          0,
+          64430,
+          450872,
+          0,
+          0
+        ]
+      },
+      "host_cpu_after": {
+        "cpu": [
+          2493089,
+          0,
+          1182478,
+          34109666,
+          6568,
+          0,
+          311603,
+          2820204,
+          0,
+          0
+        ],
+        "cpu0": [
+          418074,
+          0,
+          237410,
+          6906231,
+          1669,
+          0,
+          67692,
+          580902,
+          0,
+          0
+        ],
+        "cpu1": [
+          577201,
+          0,
+          226872,
+          6667316,
+          1481,
+          0,
+          66077,
+          665399,
+          0,
+          0
+        ],
+        "cpu2": [
+          582579,
+          0,
+          220737,
+          6695244,
+          1288,
+          0,
+          47530,
+          638488,
+          0,
+          0
+        ],
+        "cpu3": [
+          552599,
+          0,
+          247110,
+          6814366,
+          1161,
+          0,
+          65830,
+          484378,
+          0,
+          0
+        ],
+        "cpu4": [
+          362634,
+          0,
+          250347,
+          7026506,
+          966,
+          0,
+          64472,
+          451036,
+          0,
+          0
+        ]
+      },
+      "origin_before": {
+        "cpu.stat": {
+          "usage_usec": 17180785,
+          "user_usec": 3840507,
+          "system_usec": 13340277,
+          "nice_usec": 0,
+          "nr_periods": 313,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6807552
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "origin_after": {
+        "cpu.stat": {
+          "usage_usec": 17218917,
+          "user_usec": 3871077,
+          "system_usec": 13347840,
+          "nice_usec": 0,
+          "nr_periods": 318,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6610944
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "filesystem_before": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 4,
+          "available_kib": 524284,
+          "used_percent": 1
+        }
+      },
+      "filesystem_after": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 4,
+          "available_kib": 524284,
+          "used_percent": 1
+        }
+      },
+      "client_cpu_seconds": 12.352763000000003,
+      "proxy_cpu_usec_per_200": 40.09594078947369,
+      "integrity_after": {
+        "protocol": "2",
+        "tls_verified": true,
+        "cache_status": "HIT",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0005-h2-hit-multiplex-after.headers"
+      },
+      "status": "passed"
+    },
+    {
+      "protocol": "h2",
+      "cache": "miss",
+      "connection": "reuse",
+      "repeat": 0,
+      "stem": "0006-h2-miss-reuse",
+      "ports": {
+        "19080/tcp": 34245,
+        "19443/tcp": 34246,
+        "19443/udp": 33324
+      },
+      "fresh_instance": true,
+      "integrity_before": {
+        "protocol": "2",
+        "tls_verified": true,
+        "cache_status": "MISS",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0006-h2-miss-reuse-before.headers"
+      },
+      "idle_reference": {
+        "seconds": 2.0007636990048923,
+        "cpu_usec": 69706,
+        "cpu_cores": 0.03483969647923403
+      },
+      "native": {
+        "client": "native-libcurl-multi",
+        "request_limit": 4096,
+        "successful": 4096,
+        "failed": 0,
+        "error_distribution": {},
+        "first_failures": [],
+        "new_connections": 32,
+        "good_rps": 5262.372622955274,
+        "p99_ms": 18.945
+      },
+      "elapsed": 0.7783561320102308,
+      "origin_requests": 4096,
+      "proxy_before": {
+        "cpu.stat": {
+          "usage_usec": 384086,
+          "user_usec": 251531,
+          "system_usec": 132554,
+          "nice_usec": 0,
+          "nr_periods": 12,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 20410368
+        },
+        "memory.peak": {
+          "bytes": 21790720
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "proxy_after": {
+        "cpu.stat": {
+          "usage_usec": 1722739,
+          "user_usec": 539500,
+          "system_usec": 1183238,
+          "nice_usec": 0,
+          "nr_periods": 23,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 46632960
+        },
+        "memory.peak": {
+          "bytes": 47804416
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "host_cpu_before": {
+        "cpu": [
+          2493363,
+          0,
+          1182605,
+          34113160,
+          6572,
+          0,
+          311609,
+          2820596,
+          0,
+          0
+        ],
+        "cpu0": [
+          418092,
+          0,
+          237431,
+          6906986,
+          1670,
+          0,
+          67694,
+          580970,
+          0,
+          0
+        ],
+        "cpu1": [
+          577221,
+          0,
+          226896,
+          6668066,
+          1482,
+          0,
+          66079,
+          665460,
+          0,
+          0
+        ],
+        "cpu2": [
+          582778,
+          0,
+          220776,
+          6695692,
+          1289,
+          0,
+          47530,
+          638658,
+          0,
+          0
+        ],
+        "cpu3": [
+          552621,
+          0,
+          247134,
+          6815129,
+          1163,
+          0,
+          65831,
+          484428,
+          0,
+          0
+        ],
+        "cpu4": [
+          362649,
+          0,
+          250365,
+          7027285,
+          966,
+          0,
+          64472,
+          451077,
+          0,
+          0
+        ]
+      },
+      "host_cpu_after": {
+        "cpu": [
+          2493439,
+          0,
+          1182709,
+          34113253,
+          6572,
+          0,
+          311633,
+          2820687,
+          0,
+          0
+        ],
+        "cpu0": [
+          418102,
+          0,
+          237462,
+          6906996,
+          1670,
+          0,
+          67701,
+          580992,
+          0,
+          0
+        ],
+        "cpu1": [
+          577231,
+          0,
+          226929,
+          6668077,
+          1482,
+          0,
+          66082,
+          665479,
+          0,
+          0
+        ],
+        "cpu2": [
+          582804,
+          0,
+          220789,
+          6695709,
+          1289,
+          0,
+          47534,
+          638676,
+          0,
+          0
+        ],
+        "cpu3": [
+          552645,
+          0,
+          247146,
+          6815150,
+          1163,
+          0,
+          65835,
+          484444,
+          0,
+          0
+        ],
+        "cpu4": [
+          362655,
+          0,
+          250381,
+          7027318,
+          966,
+          0,
+          64478,
+          451093,
+          0,
+          0
+        ]
+      },
+      "origin_before": {
+        "cpu.stat": {
+          "usage_usec": 17267274,
+          "user_usec": 3894789,
+          "system_usec": 13372484,
+          "nice_usec": 0,
+          "nr_periods": 320,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6324224
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "origin_after": {
+        "cpu.stat": {
+          "usage_usec": 17531520,
+          "user_usec": 3956379,
+          "system_usec": 13575140,
+          "nice_usec": 0,
+          "nr_periods": 330,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6324224
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "filesystem_before": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 4,
+          "available_kib": 524284,
+          "used_percent": 1
+        }
+      },
+      "filesystem_after": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 16388,
+          "available_kib": 507900,
+          "used_percent": 4
+        }
+      },
+      "client_cpu_seconds": 0.9052099999999967,
+      "proxy_cpu_usec_per_200": 326.819580078125,
+      "integrity_after": {
+        "protocol": "2",
+        "tls_verified": true,
+        "cache_status": "HIT",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0006-h2-miss-reuse-after.headers"
+      },
+      "status": "passed"
+    },
+    {
+      "protocol": "h2",
+      "cache": "off",
+      "connection": "multiplex",
+      "repeat": 0,
+      "stem": "0007-h2-off-multiplex",
+      "ports": {
+        "19080/tcp": 34247,
+        "19443/tcp": 34248,
+        "19443/udp": 33325
+      },
+      "fresh_instance": true,
+      "integrity_before": {
+        "protocol": "2",
+        "tls_verified": true,
+        "cache_status": "BYPASS",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0007-h2-off-multiplex-before.headers"
+      },
+      "idle_reference": {
+        "seconds": 2.001776365999831,
+        "cpu_usec": 33369,
+        "cpu_cores": 0.01666969426094364
+      },
+      "native": {
+        "client": "native-libcurl-multi",
+        "request_limit": null,
+        "successful": 89042,
+        "failed": 0,
+        "error_distribution": {},
+        "first_failures": [],
+        "new_connections": 2,
+        "good_rps": 11082.002246662352,
+        "p99_ms": 9.708
+      },
+      "elapsed": 8.034829628988518,
+      "origin_requests": 89042,
+      "proxy_before": {
+        "cpu.stat": {
+          "usage_usec": 237358,
+          "user_usec": 173414,
+          "system_usec": 63944,
+          "nice_usec": 0,
+          "nr_periods": 10,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 20361216
+        },
+        "memory.peak": {
+          "bytes": 21901312
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "proxy_after": {
+        "cpu.stat": {
+          "usage_usec": 6976624,
+          "user_usec": 2670102,
+          "system_usec": 4306521,
+          "nice_usec": 0,
+          "nr_periods": 93,
+          "nr_throttled": 1,
+          "throttled_usec": 10285,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 21356544
+        },
+        "memory.peak": {
+          "bytes": 22695936
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "host_cpu_before": {
+        "cpu": [
+          2493535,
+          0,
+          1182786,
+          34115245,
+          6577,
+          0,
+          311638,
+          2820803,
+          0,
+          0
+        ],
+        "cpu0": [
+          418125,
+          0,
+          237479,
+          6907383,
+          1671,
+          0,
+          67702,
+          581023,
+          0,
+          0
+        ],
+        "cpu1": [
+          577243,
+          0,
+          226942,
+          6668487,
+          1482,
+          0,
+          66083,
+          665500,
+          0,
+          0
+        ],
+        "cpu2": [
+          582818,
+          0,
+          220803,
+          6696117,
+          1289,
+          0,
+          47536,
+          638697,
+          0,
+          0
+        ],
+        "cpu3": [
+          552663,
+          0,
+          247162,
+          6815554,
+          1165,
+          0,
+          65836,
+          484462,
+          0,
+          0
+        ],
+        "cpu4": [
+          362684,
+          0,
+          250398,
+          7027701,
+          967,
+          0,
+          64479,
+          451119,
+          0,
+          0
+        ]
+      },
+      "host_cpu_after": {
+        "cpu": [
+          2494236,
+          0,
+          1183305,
+          34116723,
+          6577,
+          0,
+          311964,
+          2822108,
+          0,
+          0
+        ],
+        "cpu0": [
+          418194,
+          0,
+          237584,
+          6907727,
+          1671,
+          0,
+          67762,
+          581307,
+          0,
+          0
+        ],
+        "cpu1": [
+          577334,
+          0,
+          227047,
+          6668808,
+          1482,
+          0,
+          66162,
+          665762,
+          0,
+          0
+        ],
+        "cpu2": [
+          583041,
+          0,
+          220883,
+          6696356,
+          1289,
+          0,
+          47577,
+          638957,
+          0,
+          0
+        ],
+        "cpu3": [
+          552920,
+          0,
+          247242,
+          6815809,
+          1165,
+          0,
+          65876,
+          484712,
+          0,
+          0
+        ],
+        "cpu4": [
+          362745,
+          0,
+          250546,
+          7028021,
+          967,
+          0,
+          64587,
+          451368,
+          0,
+          0
+        ]
+      },
+      "origin_before": {
+        "cpu.stat": {
+          "usage_usec": 17580836,
+          "user_usec": 3983774,
+          "system_usec": 13597062,
+          "nice_usec": 0,
+          "nr_periods": 334,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6352896
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "origin_after": {
+        "cpu.stat": {
+          "usage_usec": 21431876,
+          "user_usec": 4755743,
+          "system_usec": 16676132,
+          "nice_usec": 0,
+          "nr_periods": 418,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6647808
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "filesystem_before": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        }
+      },
+      "filesystem_after": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        }
+      },
+      "client_cpu_seconds": 9.240403999999995,
+      "proxy_cpu_usec_per_200": 75.68637272298466,
+      "integrity_after": {
+        "protocol": "2",
+        "tls_verified": true,
+        "cache_status": "BYPASS",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0007-h2-off-multiplex-after.headers"
+      },
+      "status": "passed"
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "connection": "reuse",
+      "repeat": 0,
+      "stem": "0008-h1-tls-hit-reuse",
+      "ports": {
+        "19080/tcp": 34249,
+        "19443/tcp": 34250,
+        "19443/udp": 33326
+      },
+      "fresh_instance": true,
+      "integrity_before": {
+        "protocol": "1.1",
+        "tls_verified": true,
+        "cache_status": "MISS",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0008-h1-tls-hit-reuse-before.headers"
+      },
+      "idle_reference": {
+        "seconds": 2.000581838990911,
+        "cpu_usec": 43553,
+        "cpu_cores": 0.021770166634106823
+      },
+      "native": {
+        "client": "native-libcurl-multi",
+        "request_limit": null,
+        "successful": 218045,
+        "failed": 0,
+        "error_distribution": {},
+        "first_failures": [],
+        "new_connections": 32,
+        "good_rps": 27030.872247885163,
+        "p99_ms": 3.9379999999999997
+      },
+      "elapsed": 8.06651735099149,
+      "origin_requests": 0,
+      "proxy_before": {
+        "cpu.stat": {
+          "usage_usec": 269641,
+          "user_usec": 167832,
+          "system_usec": 101809,
+          "nice_usec": 0,
+          "nr_periods": 11,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 22274048
+        },
+        "memory.peak": {
+          "bytes": 22654976
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "proxy_after": {
+        "cpu.stat": {
+          "usage_usec": 8845101,
+          "user_usec": 4286889,
+          "system_usec": 4558212,
+          "nice_usec": 0,
+          "nr_periods": 95,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 22204416
+        },
+        "memory.peak": {
+          "bytes": 23740416
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "host_cpu_before": {
+        "cpu": [
+          2494426,
+          0,
+          1183393,
+          34119292,
+          6581,
+          0,
+          311968,
+          2822505,
+          0,
+          0
+        ],
+        "cpu0": [
+          418313,
+          0,
+          237609,
+          6908144,
+          1672,
+          0,
+          67763,
+          581420,
+          0,
+          0
+        ],
+        "cpu1": [
+          577359,
+          0,
+          227068,
+          6669331,
+          1483,
+          0,
+          66162,
+          665839,
+          0,
+          0
+        ],
+        "cpu2": [
+          583053,
+          0,
+          220900,
+          6696894,
+          1290,
+          0,
+          47578,
+          639030,
+          0,
+          0
+        ],
+        "cpu3": [
+          552932,
+          0,
+          247252,
+          6816362,
+          1166,
+          0,
+          65877,
+          484777,
+          0,
+          0
+        ],
+        "cpu4": [
+          362767,
+          0,
+          250563,
+          7028560,
+          968,
+          0,
+          64587,
+          451437,
+          0,
+          0
+        ]
+      },
+      "host_cpu_after": {
+        "cpu": [
+          2495577,
+          0,
+          1184121,
+          34120106,
+          6582,
+          0,
+          312308,
+          2823580,
+          0,
+          0
+        ],
+        "cpu0": [
+          418435,
+          0,
+          237809,
+          6908372,
+          1672,
+          0,
+          67840,
+          581635,
+          0,
+          0
+        ],
+        "cpu1": [
+          577560,
+          0,
+          227217,
+          6669496,
+          1483,
+          0,
+          66239,
+          666061,
+          0,
+          0
+        ],
+        "cpu2": [
+          583429,
+          0,
+          220988,
+          6696965,
+          1290,
+          0,
+          47624,
+          639260,
+          0,
+          0
+        ],
+        "cpu3": [
+          553319,
+          0,
+          247341,
+          6816441,
+          1166,
+          0,
+          65933,
+          484986,
+          0,
+          0
+        ],
+        "cpu4": [
+          362833,
+          0,
+          250763,
+          7028829,
+          968,
+          0,
+          64670,
+          451636,
+          0,
+          0
+        ]
+      },
+      "origin_before": {
+        "cpu.stat": {
+          "usage_usec": 21474884,
+          "user_usec": 4792267,
+          "system_usec": 16682616,
+          "nice_usec": 0,
+          "nr_periods": 424,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6569984
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "origin_after": {
+        "cpu.stat": {
+          "usage_usec": 21522278,
+          "user_usec": 4820934,
+          "system_usec": 16701344,
+          "nice_usec": 0,
+          "nr_periods": 429,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.current": {
+          "bytes": 6639616
+        },
+        "memory.peak": {
+          "bytes": 8343552
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        }
+      },
+      "filesystem_before": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 4,
+          "available_kib": 524284,
+          "used_percent": 1
+        }
+      },
+      "filesystem_after": {
+        "/node": {
+          "size_kib": 524288,
+          "used_kib": 0,
+          "available_kib": 524288,
+          "used_percent": 0
+        },
+        "/run/cache": {
+          "size_kib": 524288,
+          "used_kib": 4,
+          "available_kib": 524284,
+          "used_percent": 1
+        }
+      },
+      "client_cpu_seconds": 14.111596999999996,
+      "proxy_cpu_usec_per_200": 39.32885413561421,
+      "integrity_after": {
+        "protocol": "1.1",
+        "tls_verified": true,
+        "cache_status": "HIT",
+        "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+        "headers_file": "0008-h1-tls-hit-reuse-after.headers"
+      },
+      "status": "passed"
+    }
+  ],
+  "status": "completed",
+  "args": {
+    "target": "openresty",
+    "output": "/workspace/edge/.worktrees/perf-next/.local/architecture-stage2/comparison-tls-h2/00-openresty",
+    "tls": "/workspace/edge/.worktrees/perf-next/.local/perf-next/tls",
+    "client": "/workspace/edge/.worktrees/perf-next/.local/protocol-state-matrix/protocol-state-client",
+    "edge_binary": "/home/agent/Library/Caches/mbx/targets/v1/31094add7081c711197af99a404c9380121ddcf5db39845201bf2f8d71b76d09/release/Zelvik-Edge",
+    "controller": "/home/agent/Library/Caches/mbx/targets/v1/31094add7081c711197af99a404c9380121ddcf5db39845201bf2f8d71b76d09/release/examples/issue34-controller",
+    "seconds": 8,
+    "repeats": 1,
+    "payload_size": 1024,
+    "concurrency": 32,
+    "cold_requests": 4096,
+    "fresh_requests": 2048,
+    "protocols": [
+      "h1-tls",
+      "h2"
+    ],
+    "states": [
+      "off",
+      "hit",
+      "miss"
+    ],
+    "connections": [
+      "reuse"
+    ],
+    "multiplex": true,
+    "seed": 20261102,
+    "idle_reference_seconds": 2.0
+  },
+  "source_revision": "01a2156882789f876f3c40c01bc6a0ee0bc5fa2b",
+  "driver_sha256": "278d9dc25ffba5afd3d2e8166d9a2e823a843a41d47ff5222acf22d05010f0a6",
+  "client_sha256": "368312b058eb6a98373260a6b4977beb1655744418406c7c1c1bcedce92b3c1b",
+  "client_source_sha256": "528394d1d89ee1830e483a20afae2d244742cf48828845ffffcac429c9185e3b",
+  "payload_sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+  "cpu_assignment": {
+    "proxy": [
+      0,
+      1
+    ],
+    "client": [
+      2,
+      3
+    ],
+    "origin": [
+      4
+    ]
+  },
+  "inter_case_quiet_seconds": 0.5,
+  "case_isolation": "fresh process and tmpfs for EVERY protocol/cache/connection/repeat case",
+  "parent_limits": {
+    "cpu.max": "800000 200000",
+    "memory.max": "17179869184"
+  },
+  "images": {
+    "nginx": "sha256:34e04bb6b4bb37d45845842374be0cd181723daffb230849b1984aaeaa96faba",
+    "openresty": "sha256:a122f8f9c6f368bc1d3a89437051db5936a8869734dfcadc566e8d34dc0e72e2",
+    "edge": "sha256:0810b43a4a49de20222b9a0dffd086044160f17623fc78b6c0b9812a876a0829"
+  },
+  "scope": "packaged server proxy",
+  "client_versions": {
+    "curl": "curl 8.14.1 (x86_64-pc-linux-gnu) libcurl/8.14.1 OpenSSL/3.5.7 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10\nRelease-Date: 2025-06-04, security patched: 8.14.1-2+deb13u4\nProtocols: dict file ftp ftps gopher gophers http https imap imaps ipfs ipns ldap ldaps mqtt pop3 pop3s rtmp rtsp scp sftp smb smbs smtp smtps telnet tftp ws wss\nFeatures: alt-svc AsynchDNS brotli GSS-API HSTS HTTP2 HTTP3 HTTPS-proxy IDN IPv6 Kerberos Largefile libz NTLM PSL SPNEGO SSL threadsafe TLS-SRP UnixSockets zstd\n",
+    "native_libcurl": "libcurl/8.14.1 OpenSSL/3.5.7 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10\n"
+  },
+  "origin_reference": {
+    "client": "native-libcurl-multi",
+    "request_limit": null,
+    "successful": 219547,
+    "failed": 0,
+    "error_distribution": {},
+    "first_failures": [],
+    "new_connections": 32,
+    "good_rps": 27217.109965489366,
+    "p99_ms": 4.193,
+    "elapsed": 8.066506703995401,
+    "origin_cpu_fraction": 0.8599091595082067,
+    "client_cpu_fraction": 0.7809735032984846
+  },
+  "ports": {
+    "19080/tcp": 34249,
+    "19443/tcp": 34250,
+    "19443/udp": 33326
+  },
+  "inspect": {
+    "edge-state-c7e9822811-origin": {
+      "Binds": null,
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "edge-state-c7e9822811-net",
+      "PortBindings": {
+        "8081/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": ""
+          }
+        ]
+      },
+      "RestartPolicy": {
+        "Name": "no",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": [],
+      "DnsOptions": [],
+      "DnsSearch": [],
+      "ExtraHosts": null,
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 268435456,
+      "NanoCpus": 1000000000,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": [],
+      "BlkioDeviceReadBps": [],
+      "BlkioDeviceWriteBps": [],
+      "BlkioDeviceReadIOps": [],
+      "BlkioDeviceWriteIOps": [],
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "4",
+      "CpusetMems": "",
+      "Devices": [],
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 268435456,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": [],
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "Mounts": [
+        {
+          "Type": "bind",
+          "Source": "/workspace/edge/.worktrees/perf-next/.local/architecture-stage2/comparison-tls-h2/00-openresty",
+          "Target": "/test",
+          "ReadOnly": true
+        },
+        {
+          "Type": "bind",
+          "Source": "/workspace/edge/.worktrees/perf-next/.local/architecture-stage2/comparison-tls-h2/00-openresty/origin.conf",
+          "Target": "/etc/nginx/nginx.conf",
+          "ReadOnly": true
+        }
+      ],
+      "MaskedPaths": [
+        "/proc/asound",
+        "/proc/acpi",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/sys/firmware",
+        "/sys/devices/virtual/powercap"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "edge-state-c7e9822811-openresty": {
+      "Binds": null,
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "edge-state-c7e9822811-net",
+      "PortBindings": {
+        "19080/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": ""
+          }
+        ],
+        "19443/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": ""
+          }
+        ],
+        "19443/udp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": ""
+          }
+        ]
+      },
+      "RestartPolicy": {
+        "Name": "no",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": [],
+      "DnsOptions": [],
+      "DnsSearch": [],
+      "ExtraHosts": null,
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "Tmpfs": {
+        "/node": "rw,size=512m,mode=1777",
+        "/run/cache": "rw,size=512m,mode=1777"
+      },
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 2147483648,
+      "NanoCpus": 2000000000,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": [],
+      "BlkioDeviceReadBps": [],
+      "BlkioDeviceWriteBps": [],
+      "BlkioDeviceReadIOps": [],
+      "BlkioDeviceWriteIOps": [],
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "0,1",
+      "CpusetMems": "",
+      "Devices": [],
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 2147483648,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": [
+        {
+          "Name": "nofile",
+          "Hard": 65536,
+          "Soft": 65536
+        }
+      ],
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "Mounts": [
+        {
+          "Type": "bind",
+          "Source": "/workspace/edge/.worktrees/perf-next/.local/architecture-stage2/comparison-tls-h2/00-openresty",
+          "Target": "/test"
+        },
+        {
+          "Type": "bind",
+          "Source": "/workspace/edge/.worktrees/perf-next/.local/perf-next/tls",
+          "Target": "/tls",
+          "ReadOnly": true
+        }
+      ],
+      "MaskedPaths": [
+        "/proc/asound",
+        "/proc/acpi",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/sys/firmware",
+        "/sys/devices/virtual/powercap"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    }
+  },
+  "server_version": "nginx version: openresty/1.27.1.2\nbuilt with OpenSSL 3.4.1 11 Feb 2025\nTLS SNI support enabled\nconfigure arguments: --prefix=/usr/local/openresty/nginx --with-cc-opt='-O2 -DNGX_LUA_ABORT_AT_PANIC -I/usr/local/openresty/zlib/include -I/usr/local/openresty/pcre2/include -I/usr/local/openresty/openssl3/include' --add-module=../ngx_devel_kit-0.3.3 --add-module=../echo-nginx-module-0.63 --add-module=../xss-nginx-module-0.06 --add-module=../ngx_coolkit-0.2 --add-module=../set-misc-nginx-module-0.33 --add-module=../form-input-nginx-module-0.12 --add-module=../encrypted-session-nginx-module-0.09 --add-module=../srcache-nginx-module-0.33 --add-module=../ngx_lua-0.10.28 --add-module=../ngx_lua_upstream-0.07 --add-module=../headers-more-nginx-module-0.37 --add-module=../array-var-nginx-module-0.06 --add-module=../memc-nginx-module-0.20 --add-module=../redis2-nginx-module-0.15 --add-module=../redis-nginx-module-0.3.9 --add-module=../ngx_stream_lua-0.0.16 --with-ld-opt='-Wl,-rpath,/usr/local/openresty/luajit/lib -L/usr/local/openresty/zlib/lib -L/usr/local/openresty/pcre2/lib -L/usr/local/openresty/openssl3/lib -Wl,-rpath,/usr/local/openresty/zlib/lib:/usr/local/openresty/pcre2/lib:/usr/local/openresty/openssl3/lib' --with-pcre-jit --with-stream --with-stream_ssl_module --with-stream_ssl_preread_module --with-http_v2_module --with-http_v3_module --without-mail_pop3_module --without-mail_imap_module --without-mail_smtp_module --with-http_stub_status_module --with-http_realip_module --with-http_addition_module --with-http_auth_request_module --with-http_secure_link_module --with-http_random_index_module --with-http_gzip_static_module --with-http_sub_module --with-http_dav_module --with-http_flv_module --with-http_mp4_module --with-http_slice_module --with-http_gunzip_module --with-threads --with-compat --with-stream --with-http_ssl_module",
+  "processes": "PID                 COMMAND             RSS                 NLWP\n625759              openresty           11636               1\n625840              openresty           17164               1\n625841              openresty           18044               1\n625842              openresty           5308                1\n625843              openresty           5084                1",
+  "ended_at": 1793611405.58657
+}

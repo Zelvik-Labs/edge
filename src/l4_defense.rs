@@ -11,7 +11,9 @@ use tracing::{debug, warn};
 use crate::config::ConfigStore;
 use crate::firewall::state::WafStateManager;
 use crate::l4_connection_registry::{self, L4ConnectionProtocol};
-use crate::memory_governor::{AdmissionClass, MEMORY_GOVERNOR, MemoryPressureLevel};
+use crate::memory_governor::{
+    AdmissionClass, L4PressureSnapshot, MEMORY_GOVERNOR, MemoryPressureLevel,
+};
 use crate::rpc::ip_report::{IpReportKind, IpReportMessage};
 
 const L4_BLOCK_WARN_INTERVAL_MS: i64 = 5_000;
@@ -507,7 +509,7 @@ impl L4AggregateState {
         }
     }
 
-    fn snapshot(&self) -> AggregateSnapshot {
+    fn pressure_observation(&self) -> (usize, L4PressureLevel) {
         let now = Instant::now();
         self.sweep_if_needed(now);
         let distinct_ips_recent = self
@@ -523,6 +525,11 @@ impl L4AggregateState {
             .unwrap_or_default();
         let pressure_level =
             AGGREGATE_PRESSURE_STATE.apply(surge_pressure_level(distinct_ips_recent));
+        (distinct_ips_recent, pressure_level)
+    }
+
+    fn snapshot(&self) -> AggregateSnapshot {
+        let (distinct_ips_recent, pressure_level) = self.pressure_observation();
         let (top_prefix, top_prefix_events) = self
             .prefix_counts
             .iter()
@@ -1107,7 +1114,10 @@ fn memory_level_to_l4(level: MemoryPressureLevel) -> L4PressureLevel {
 }
 
 pub fn current_pressure_level() -> L4PressureLevel {
-    let snapshot = MEMORY_GOVERNOR.snapshot(MEMORY_GOVERNOR.pingora_worker_threads());
+    pressure_level_with_usage(MEMORY_GOVERNOR.l4_pressure_snapshot(), 0)
+}
+
+fn pressure_level_with_usage(snapshot: L4PressureSnapshot, quic_pct: u64) -> L4PressureLevel {
     let connection_pct = snapshot
         .connection_admission_used_bytes
         .saturating_mul(100)
@@ -1115,9 +1125,9 @@ pub fn current_pressure_level() -> L4PressureLevel {
     MEMORY_PRESSURE_STATE
         .apply(memory_level_to_l4(snapshot.memory_pressure_level))
         .max(utilization_pressure_level_hysteretic(
-            connection_pct.max(snapshot.fd_used_pct),
+            connection_pct.max(quic_pct).max(snapshot.fd_used_pct),
         ))
-        .max(L4_AGGREGATES.snapshot().pressure_level)
+        .max(L4_AGGREGATES.pressure_observation().1)
         .max(crate::kernel_syn_defense::current_pressure_level())
 }
 
@@ -1144,22 +1154,31 @@ pub fn current_pressure_level_with_quic_usage(
     reassembly_bytes: usize,
     reassembly_budget_bytes: usize,
 ) -> L4PressureLevel {
+    pressure_level_with_quic_snapshot(
+        MEMORY_GOVERNOR.l4_pressure_snapshot(),
+        routes,
+        route_limit,
+        pending_routes,
+        pending_route_limit,
+        reassembly_bytes,
+        reassembly_budget_bytes,
+    )
+}
+
+pub(crate) fn pressure_level_with_quic_snapshot(
+    snapshot: L4PressureSnapshot,
+    routes: usize,
+    route_limit: usize,
+    pending_routes: usize,
+    pending_route_limit: usize,
+    reassembly_bytes: usize,
+    reassembly_budget_bytes: usize,
+) -> L4PressureLevel {
     let route_pct = usage_pct(routes, route_limit);
     let pending_pct = usage_pct(pending_routes, pending_route_limit);
     let reassembly_pct = usage_pct(reassembly_bytes, reassembly_budget_bytes);
     let quic_pct = route_pct.max(pending_pct).max(reassembly_pct);
-    let snapshot = MEMORY_GOVERNOR.snapshot(MEMORY_GOVERNOR.pingora_worker_threads());
-    let connection_pct = snapshot
-        .connection_admission_used_bytes
-        .saturating_mul(100)
-        .saturating_div(snapshot.connection_budget_bytes.max(1));
-    MEMORY_PRESSURE_STATE
-        .apply(memory_level_to_l4(snapshot.memory_pressure_level))
-        .max(utilization_pressure_level_hysteretic(
-            connection_pct.max(quic_pct).max(snapshot.fd_used_pct),
-        ))
-        .max(L4_AGGREGATES.snapshot().pressure_level)
-        .max(crate::kernel_syn_defense::current_pressure_level())
+    pressure_level_with_usage(snapshot, quic_pct)
 }
 
 fn usage_pct(used: usize, limit: usize) -> u64 {
@@ -2257,7 +2276,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
         store
     }
 

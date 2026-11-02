@@ -1,0 +1,24 @@
+{
+  "command": [
+    "curl",
+    "--silent",
+    "--show-error",
+    "--verbose",
+    "--http1.1",
+    "--no-sessionid",
+    "--noproxy",
+    "*",
+    "--cacert",
+    "/workspace/edge/.worktrees/perf-next/.local/perf-next/tls/ca.pem",
+    "--max-time",
+    "15",
+    "--output",
+    "/dev/null",
+    "--write-out",
+    "%{http_code} %{http_version} %{ssl_verify_result}",
+    "http://localhost:34501/off/payload"
+  ],
+  "returncode": 0,
+  "result": "200 1.1 0",
+  "tls_lines": []
+}

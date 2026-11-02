@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "byte_accounting": "logical",
+  "max_bytes": 5368709120,
+  "max_total_bytes": null,
+  "target_max_bytes": 10737418240,
+  "incremental_max_bytes": 4294967296,
+  "dry_run": true,
+  "action_store": {
+    "removed_objects": 0,
+    "removed_action_results": 0,
+    "removed_checkout_records": 0,
+    "removed_session_streams": 0,
+    "removed_bytes": 0,
+    "remaining_bytes": 758098470
+  },
+  "targets": {
+    "removed_directories": 0,
+    "removed_bytes": 0,
+    "remaining_directories": 3,
+    "remaining_bytes": 8321049446
+  },
+  "incremental": {
+    "removed_directories": 1,
+    "removed_bytes": 2127879,
+    "remaining_directories": 1,
+    "remaining_bytes": 5083422546,
+    "skipped_active_directories": 0,
+    "untracked_directories": 0
+  }
+}

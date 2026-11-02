@@ -1,0 +1,148 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 1K of event 'cpu-clock:u'
+# Event count (approx.): 12878787750
+#
+# Overhead  Command          Shared Object     Symbol                                                                                                                                                                                                                                                                                                                                  
+# ........  ...............  ................  ........................................................................................................................................................................................................................................................................................................................................
+#
+     5.10%  tokio-rt-worker  [vdso]            [.] __vdso_clock_gettime
+     3.06%  tokio-rt-worker  Zelvik-Edge       [.] _mi_page_malloc_zero
+     2.35%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtNtCsgAFP0MzQh2r_6chrono5naive4dateNtB2_9NaiveDate25from_num_days_from_ce_opt
+     2.12%  tokio-rt-worker  Zelvik-Edge       [.] mi_free
+     1.65%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMsh_NtCsj71vN2t3FaJ_11zelvik_edge15memory_governorNtB5_14MemoryGovernor20budgeted_from_cached
+     1.49%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMsh_NtCsj71vN2t3FaJ_11zelvik_edge15memory_governorNtB5_14MemoryGovernor15memory_snapshot
+     1.41%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMsa_NtCsgPUKHpnFc93_5quinn8endpointNtB5_9RecvState11poll_socket
+     1.25%  tokio-rt-worker  Zelvik-Edge       [.] mi_theap_malloc_aligned
+     1.10%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtNtCsgAFP0MzQh2r_6chrono6offset3utcNtB2_3Utc3now
+     1.10%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtCs5m9D2Frw48F_5bytes5bytes12shared_clone
+     1.10%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXs_NtNtNtCsb0PI53xt260_2h35qpack13prefix_string6encodeINtNtCsgFX3jaOk65H_5alloc3vec3VechENtB4_17HpackStringEncode12hpack_encode
+     1.02%  tokio-rt-worker  Zelvik-Edge       [.] _RNCNvXsl_NtCsj71vN2t3FaJ_11zelvik_edge5proxyNtB7_9EdgeProxyNtNtCs6PZZqggN5Z2_13pingora_proxy11proxy_trait9ProxyHttp14request_filter0B9_
+     0.94%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtCsfhT2LZo6Xs9_11quinn_proto10connectionNtB2_10Connection13poll_transmit
+     0.94%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtCsfhT2LZo6Xs9_11quinn_proto10connectionNtB2_10Connection15process_payload
+     0.86%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtCsgPUKHpnFc93_5quinn11send_streamNtB2_10SendStream10poll_write
+     0.86%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXs_NtNtNtCsb0PI53xt260_2h35qpack13prefix_string6decodeNtB4_10DecodeIterNtNtNtNtCskADBYZwJmSU_4core4iter6traits8iterator8Iterator4next
+     0.78%  tokio-rt-worker  Zelvik-Edge       [.] _RNCNvXs8_Cs5ScQP0vOVk8_8h3_quinnNtB7_10RecvStreamNtNtCsb0PI53xt260_2h34quic10RecvStream9poll_data0B7_
+     0.78%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtCs5m9D2Frw48F_5bytes5bytes11shared_drop
+     0.71%  tokio-rt-worker  Zelvik-Edge       [.] _RNCNCNvMs0_NtCsj71vN2t3FaJ_11zelvik_edge19http3_proxy_managerNtB9_17Http3ProxyManager16serve_connection00Csftu1kb3BiG7_11Zelvik_Edge
+     0.71%  tokio-rt-worker  Zelvik-Edge       [.] _RNCNvMs4_NtCsj71vN2t3FaJ_11zelvik_edge14quic_udp_demuxNtB7_19QuicUdpDemuxManager20run_udp_demux_worker0Csftu1kb3BiG7_11Zelvik_Edge
+     0.71%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtCsfhT2LZo6Xs9_11quinn_proto10connectionNtB2_10Connection15populate_packet
+     0.71%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXs1_NtCsj71vN2t3FaJ_11zelvik_edge7quic_ccNtB5_16QuinnTransportCcNtNtCsfhT2LZo6Xs9_11quinn_proto10congestion10Controller7on_sent
+     0.71%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXsl_NtCsj71vN2t3FaJ_11zelvik_edge5proxyNtB5_9EdgeProxyNtNtCs6PZZqggN5Z2_13pingora_proxy11proxy_trait9ProxyHttp20request_cache_filter
+     0.71%  tokio-rt-worker  libc.so.6         [.] 0x000000000017b80f
+     0.63%  tokio-rt-worker  Zelvik-Edge       [.] _RNCNvMs5_NtCsj71vN2t3FaJ_11zelvik_edge5proxyNtB7_9EdgeProxy25run_request_context_phase0B9_
+     0.63%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtNtNtNtCs8ZKwes1zzDd_3std3sys3pal4unix4timeNtB2_8Timespec12sub_timespec
+     0.63%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtNtNtNtCs7Km9dqiukUm_5tokio7runtime9scheduler12multi_thread6worker3run
+     0.63%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXs3_NtNtCskADBYZwJmSU_4core4hash3sipINtB5_6HasherNtB5_11Sip13RoundsENtB7_6Hasher5writeCs1KoBDNkbOEF_12pingora_core
+     0.55%  tokio-rt-worker  Zelvik-Edge       [.] _RINvXs2_CskOCYLaNyEE5_7dashmapINtB6_7DashMapThxNtNtNtCskADBYZwJmSU_4core3net7ip_addr6IpAddrExEINtNtB6_1t3MapBG_xNtNtNtCs8ZKwes1zzDd_3std4hash6random11RandomStateE4__getBG_ECsj71vN2t3FaJ_11zelvik_edge
+     0.55%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtCsfhT2LZo6Xs9_11quinn_proto10connectionNtB2_10Connection13can_send_1rtt
+     0.55%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtNtCsb0PI53xt260_2h35error25connection_error_creatorsINtNtB6_10connection15ConnectionInnerNtCs5ScQP0vOVk8_8h3_quinn10ConnectionNtNtCs5m9D2Frw48F_5bytes5bytes5BytesE21poll_connection_errorCsftu1kb3BiG7_11Zelvik_Edge
+     0.55%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtNtCsj71vN2t3FaJ_11zelvik_edge7metrics6record27record_http_dimension_event
+     0.55%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXs0_NtCscvtx9UD1Usk_7tracing10instrumentINtB5_12InstrumentedNCNvMNtCsgPUKHpnFc93_5quinn10connectionNtB14_10Connecting3new0ENtNtNtCskADBYZwJmSU_4core6future6future6Future4pollB16_
+     0.55%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXs0_NtNtCsb0PI53xt260_2h35proto7headersNtB5_10HeaderIterNtNtNtNtCskADBYZwJmSU_4core4iter6traits8iterator8Iterator4next
+     0.55%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXs6_NtCskOCYLaNyEE5_7dashmap4iterINtB5_4IterNtNtNtCskADBYZwJmSU_4core3net7ip_addr6IpAddrNtNtNtNtCsj71vN2t3FaJ_11zelvik_edge3xdp6af_xdp4dial16AfXdpCachedRouteENtNtNtNtBP_4iter6traits8iterator8Iterator4nextB1z_
+     0.47%  tokio-rt-worker  Zelvik-Edge       [.] _RINvNtNtCs7NbfeRjH7CN_4http6header3map15hash_elem_usingNtNtB4_4name10HeaderNameECs1KoBDNkbOEF_12pingora_core
+     0.47%  tokio-rt-worker  Zelvik-Edge       [.] _RNCNCNvMs0_NtCsj71vN2t3FaJ_11zelvik_edge19http3_proxy_managerNtB9_17Http3ProxyManager12run_endpoint0s0_0Csftu1kb3BiG7_11Zelvik_Edge
+     0.47%  tokio-rt-worker  Zelvik-Edge       [.] _RNCNvXsl_NtCsj71vN2t3FaJ_11zelvik_edge5proxyNtB7_9EdgeProxyNtNtCs6PZZqggN5Z2_13pingora_proxy11proxy_trait9ProxyHttp15response_filter0B9_
+     0.47%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtCsfhT2LZo6Xs9_11quinn_proto10connectionNtB2_10Connection13handle_decode
+     0.47%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtCsfhT2LZo6Xs9_11quinn_proto10connectionNtB2_10Connection15on_packet_acked
+     0.47%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtNtNtNtCs8ZKwes1zzDd_3std3sys3pal4unix4timeNtB2_8Timespec3now
+     0.47%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMs0_NtNtNtCs7Km9dqiukUm_5tokio4sync4mpsc4listINtB5_2RxNtNtNtCsb0PI53xt260_2h35proto6stream8StreamIdE3popCsftu1kb3BiG7_11Zelvik_Edge
+     0.47%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtCsj71vN2t3FaJ_11zelvik_edge5cache42stored_response_headers_allow_shared_cache
+     0.47%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtCskADBYZwJmSU_4core3fmt5write
+     0.47%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXs0_NtCslaqtzf2xRRd_21zelvik_edge_transport6edgeccNtB5_6EdgeCcNtNtB7_2cc20CongestionController14on_rate_sample
+     0.47%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXs1_NtNtCsb0PI53xt260_2h35proto7headersNtB5_6HeaderINtNtCskADBYZwJmSU_4core7convert7TryFromINtNtCsgFX3jaOk65H_5alloc3vec3VecNtNtNtB9_5qpack5field11HeaderFieldEE8try_from
+     0.47%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXst_NtNtCskADBYZwJmSU_4core3str7patternReNtB5_7Pattern15is_contained_in.7616
+     0.47%  tokio-rt-worker  Zelvik-Edge       [.] _mi_theap_realloc_zero
+     0.47%  tokio-rt-worker  Zelvik-Edge       [.] mi_malloc_aligned
+     0.39%  collector        Zelvik-Edge       [.] _RINvNtNtCs8ZKwes1zzDd_3std3sys9backtrace28___rust_begin_short_backtraceNCNvNtNtCscPCUYPiGwy7_4mace2cc7context14collect_thread0uEB1f_
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RINvMs0_NtNtCs7NbfeRjH7CN_4http6header3mapNtB6_9HeaderMap7get_allNtNtB8_4name10HeaderNameECs1KoBDNkbOEF_12pingora_core
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNCNvMNtCs6PZZqggN5Z2_13pingora_proxy11proxy_cacheINtB6_9HttpProxyNtNtCsj71vN2t3FaJ_11zelvik_edge5proxy9EdgeProxyE15proxy_cache_hit0Csftu1kb3BiG7_11Zelvik_Edge
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNCNvMNtNtCs7Km9dqiukUm_5tokio3net3udpNtB4_9UdpSocket9recv_from0Csftu1kb3BiG7_11Zelvik_Edge
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNCNvXsV_NtCsj71vN2t3FaJ_11zelvik_edge12cache_hybridNtB7_13HybridStorageNtNtCs9CSaqZgFvUS_13pingora_cache7storage7Storage6lookup0B9_
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNCNvXsl_NtCsj71vN2t3FaJ_11zelvik_edge5proxyNtB7_9EdgeProxyNtNtCs6PZZqggN5Z2_13pingora_proxy11proxy_trait9ProxyHttp7logging0B9_
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtNtCsfhT2LZo6Xs9_11quinn_proto10connection9assemblerNtB2_9Assembler6insert
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMs5_NtCsj71vN2t3FaJ_11zelvik_edge5proxyNtB5_9EdgeProxy29default_cache_key_for_session
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMsP_NtNtCs7NbfeRjH7CN_4http6header4nameNtB5_14StandardHeader10from_bytes
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMs_NtNtCs7NbfeRjH7CN_4http6header4nameNtB4_10HeaderName10from_bytes
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMs_NtNtNtCsfhT2LZo6Xs9_11quinn_proto10connection7streams5stateNtB4_12StreamsState12stream_freed
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMsh_NtCsj71vN2t3FaJ_11zelvik_edge15memory_governorNtB5_14MemoryGovernor12limit_for_in
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMsh_NtCsj71vN2t3FaJ_11zelvik_edge15memory_governorNtB5_14MemoryGovernor8snapshot
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMsn_NtCsgFX3jaOk65H_5alloc4syncINtB5_3ArcINtNtCshnhW7ksyupe_8lock_api6rwlock15RwLockReadGuardNtNtCskOCYLaNyEE5_7dashmap4lock9RawRwLockINtNtNtCslIGVeJjA7TR_9hashbrown3raw5inner8RawTableTIBx_eEINtNtB1A_4util11SharedValuexEEEEE9drop_slowCsj71vN2t3FaJ_11zelvik_edge
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtCsj71vN2t3FaJ_11zelvik_edge13traffic_quota15record_outbound
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtNtCs5ptrw8V4EzS_14regex_automata6hybrid6search8find_fwd
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtNtNtCs7Km9dqiukUm_5tokio7runtime4task5waker11clone_waker
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXs0_NtCscvtx9UD1Usk_7tracing10instrumentINtB5_12InstrumentedNCNvMNtCsgPUKHpnFc93_5quinn8endpointNtB14_8Endpoint24new_with_abstract_socket0ENtNtNtCskADBYZwJmSU_4core6future6future6Future4pollB16_
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] mi_find_page
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RINvNtCskADBYZwJmSU_4core3ptr9drop_glueNtNtCsj71vN2t3FaJ_11zelvik_edge5proxy8ProxyCTXECsftu1kb3BiG7_11Zelvik_Edge
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RINvNtNtNtCs7Km9dqiukUm_5tokio7runtime4task3raw4pollINtNtCskADBYZwJmSU_4core3pin3PinINtNtCsgFX3jaOk65H_5alloc5boxed3BoxDNtNtNtBT_6future6future6Futurep6OutputuNtNtBT_6marker4SendEL_EEINtNtB1p_4sync3ArcNtNtNtNtB6_9scheduler12multi_thread6handle6HandleEECsgPUKHpnFc93_5quinn
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNCNvMs0_Cs6PZZqggN5Z2_13pingora_proxyINtB7_9HttpProxyNtNtCsj71vN2t3FaJ_11zelvik_edge5proxy9EdgeProxyE18handle_new_request0Csftu1kb3BiG7_11Zelvik_Edge
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNCNvMs3_Cs9CSaqZgFvUS_13pingora_cacheNtB7_9HttpCache12cache_lookup0Csftu1kb3BiG7_11Zelvik_Edge
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNCNvXsm_Cs6PZZqggN5Z2_13pingora_proxyINtB7_9HttpProxyNtNtCsj71vN2t3FaJ_11zelvik_edge5proxy9EdgeProxyNtNtBU_9origin_h317OriginH3ConnectorENtNtCs1KoBDNkbOEF_12pingora_core4apps13HttpServerApp16process_new_http0Csftu1kb3BiG7_11Zelvik_Edge
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtNtCs7NbfeRjH7CN_4http3uri4pathNtB2_12PathAndQuery11from_shared
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtNtCsfhT2LZo6Xs9_11quinn_proto10connection14packet_builderNtB2_13PacketBuilder3new
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMs0_NtCsb0PI53xt260_2h310connectionINtB5_15ConnectionInnerNtCs5ScQP0vOVk8_8h3_quinn10ConnectionNtNtCs5m9D2Frw48F_5bytes5bytes5BytesE12poll_controlCsftu1kb3BiG7_11Zelvik_Edge
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMs0_NtNtCsb0PI53xt260_2h36server10connectionINtB5_10ConnectionNtCs5ScQP0vOVk8_8h3_quinn10ConnectionNtNtCs5m9D2Frw48F_5bytes5bytes5BytesE24poll_requests_completionCsftu1kb3BiG7_11Zelvik_Edge
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMs1_NtCs3BTM885nGDo_9hashbrown3mapINtB5_7HashMapNtNtCskADBYZwJmSU_4core3any6TypeIdINtNtCsgFX3jaOk65H_5alloc5boxed3BoxDNtNtCs7NbfeRjH7CN_4http10extensions8AnyCloneNtNtBR_6marker4SendNtB2F_4SyncEL_EINtNtBR_4hash18BuildHasherDefaultNtB1X_8IdHasherEE6insertCsbDj30vWJSIa_5hyper
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMs2_Cs9GsKx1CUNdn_3md5NtB5_7Context8finalize
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMsh_NtCsj71vN2t3FaJ_11zelvik_edge15memory_governorNtB5_14MemoryGovernor32try_charge_account_with_priority
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMsn_NtCsgFX3jaOk65H_5alloc4syncINtB5_3ArcNtNtNtCsb0PI53xt260_2h36server10connection10RequestEndE9drop_slowCsj71vN2t3FaJ_11zelvik_edge
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMsu_NtNtCskADBYZwJmSU_4core3str7patternNtB5_11StrSearcher3new
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtCs7n9IjV6glrr_12pingora_http16case_header_name18titled_header_name
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtCsj71vN2t3FaJ_11zelvik_edge13h3_downstream17build_h3_response
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtNtCsj71vN2t3FaJ_11zelvik_edge7metrics8analyzer22request_stats_from_geo
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXs19_NtNtCs7NbfeRjH7CN_4http6header3mapNtB6_9HeaderMapNtNtCskADBYZwJmSU_4core5clone5Clone5cloneCs7Zihva8XOws_5tonic
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXs2_NtCsj71vN2t3FaJ_11zelvik_edge14quic_udp_demuxNtB5_20SharedQuinnUdpSocketNtNtCsgPUKHpnFc93_5quinn7runtime14AsyncUdpSocket9poll_recv
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXs6_NtCskOCYLaNyEE5_7dashmap4iterINtB5_4IterxINtNtNtNtCs8ZKwes1zzDd_3std4sync6poison5mutex5MutexNtNtCsj71vN2t3FaJ_11zelvik_edge10l4_defense16DistinctIpWindowEENtNtNtNtCskADBYZwJmSU_4core4iter6traits8iterator8Iterator4nextB1D_
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] aws_lc_0_44_0_aes_gcm_encrypt_avx512
+     0.31%  tokio-rt-worker  Zelvik-Edge       [.] mi_theap_umalloc
+     0.31%  tokio-rt-worker  libc.so.6         [.] clock_gettime
+     0.31%  tokio-rt-worker  libc.so.6         [.] 0x000000000017b800
+     0.24%  checkpointer     Zelvik-Edge       [.] _RNvMs1_NtNtNtCs8ZKwes1zzDd_3std4sync4mpmc4listINtB5_7ChannelNtNtNtCscPCUYPiGwy7_4mace3map4data14CheckpointTaskE4recvB12_
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RINvMs0_NtNtCs7NbfeRjH7CN_4http6header3mapNtB6_9HeaderMap3getRNtNtB8_4name10HeaderNameECsj71vN2t3FaJ_11zelvik_edge
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RINvMs0_NtNtCs7NbfeRjH7CN_4http6header3mapNtB6_9HeaderMap4get2ReECsb0PI53xt260_2h3
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RINvNtNtCs7NbfeRjH7CN_4http6header3map15hash_elem_usingNtNtB4_4name7HdrNameECs7Zihva8XOws_5tonic
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RINvNtNtCsb0PI53xt260_2h35qpack13prefix_string6encodeNtNtCs5m9D2Frw48F_5bytes9bytes_mut8BytesMutECsftu1kb3BiG7_11Zelvik_Edge
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RINvXs0_NtNtCsj71vN2t3FaJ_11zelvik_edge7metrics10aggregatorNtB6_14AggregationKeyNtNtCskADBYZwJmSU_4core4hash4Hash4hashNtNtNtCs8ZKwes1zzDd_3std4hash6random13DefaultHasherEBa_
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNCNvMs2_NtNtNtNtCs7Km9dqiukUm_5tokio7runtime9scheduler12multi_thread6workerNtNtB9_6handle6Handle13schedule_task0Bf_
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvCs7n9IjV6glrr_12pingora_http18path_and_query_uri
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtNtCsb0PI53xt260_2h35qpack7static_NtB2_11StaticTable9find_name
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtNtCsfhT2LZo6Xs9_11quinn_proto10connection14packet_builderNtB2_13PacketBuilder16finish_and_track
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMNtNtNtCs7Km9dqiukUm_5tokio7runtime4task4listINtB2_10OwnedTasksINtNtCsgFX3jaOk65H_5alloc4sync3ArcNtNtNtB6_9scheduler14current_thread6HandleEE10bind_innerCs1KoBDNkbOEF_12pingora_core
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMs0_NtCsj71vN2t3FaJ_11zelvik_edge6configNtB5_11ConfigStore21find_l7_server_locked
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMs0_NtCsj71vN2t3FaJ_11zelvik_edge6configNtB5_11ConfigStore28get_global_http3_policy_sync
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMs0_NtNtNtCs7Km9dqiukUm_5tokio4sync4mpsc4listINtB5_2RxNtCsgPUKHpnFc93_5quinn15ConnectionEventE3popBV_
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMs1_Cs9kwgLjRChvg_7tinyufoINtB5_7TinyUfoyINtCskExhrhITVTz_20pingora_memory_cache4NodeINtNtCsgFX3jaOk65H_5alloc4sync3ArcNtNtCsj71vN2t3FaJ_11zelvik_edge12cache_hybrid14TinyUfoL1EntryEEE3getB20_
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMs4_NtCsj71vN2t3FaJ_11zelvik_edge14quic_udp_demuxNtB5_19QuicUdpDemuxManager30record_existing_route_dispatch
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMs_NtNtCsj71vN2t3FaJ_11zelvik_edge7metrics5dailyNtB4_18DailyDomainTracker6record
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMs_NtNtNtNtCs7Km9dqiukUm_5tokio7runtime9scheduler12multi_thread6workerNtB4_7Context13park_internal
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvMsf_NtNtCs7Km9dqiukUm_5tokio4sync6notifyNtB5_15NotifiedProject13poll_notified
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtCs5m9D2Frw48F_5bytes9bytes_mut13shared_v_drop
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtCsj71vN2t3FaJ_11zelvik_edge5cache26cache_key_encoding_variant
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtCsj71vN2t3FaJ_11zelvik_edge5cache34request_headers_allow_shared_cache
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtCsj71vN2t3FaJ_11zelvik_edge5cache35response_headers_allow_shared_cache
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtNtCsj71vN2t3FaJ_11zelvik_edge7metrics6record17record_dimensions
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtNtCsj71vN2t3FaJ_11zelvik_edge7metrics6record28request_start_without_active
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtNtCskADBYZwJmSU_4core5slice6memchr15memrchr_aligned
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvNtNtNtCs7Km9dqiukUm_5tokio7runtime4task5waker11wake_by_val
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXs1_NtCsj71vN2t3FaJ_11zelvik_edge7quic_ccNtB5_16QuinnTransportCcNtNtCsfhT2LZo6Xs9_11quinn_proto10congestion10Controller6on_ack
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXs2_NtCsj71vN2t3FaJ_11zelvik_edge14quic_udp_demuxNtB5_20SharedQuinnUdpSocketNtNtCsgPUKHpnFc93_5quinn7runtime14AsyncUdpSocket8try_send
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXsZ_NtCsgFX3jaOk65H_5alloc6stringNtB5_6StringNtNtCskADBYZwJmSU_4core3fmt5Write10write_char
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _RNvXsc_NtNtCsfhT2LZo6Xs9_11quinn_proto6crypto6rustlsINtNtCsgFX3jaOk65H_5alloc5boxed3BoxDNtNtCs7yWb6sudwAR_6rustls4quic9PacketKeyEL_ENtB7_9PacketKey7tag_len
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] __floattidf
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _mi_page_free_collect
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] _mi_theap_malloc_zero
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] aws_lc_0_44_0_aes_hw_encrypt
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] aws_lc_0_44_0_gcm_gmult_avx512
+     0.24%  tokio-rt-worker  libc.so.6         [.] 0x000000000009a72e
+     0.24%  tokio-rt-worker  libc.so.6         [.] 0x000000000017b803
+     0.24%  tokio-rt-worker  libc.so.6         [.] 0x000000000017b8bb
+     0.24%  tokio-rt-worker  libc.so.6         [.] 0x000000000017b90d
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

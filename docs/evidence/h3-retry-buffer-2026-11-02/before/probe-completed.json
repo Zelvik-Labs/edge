@@ -1,0 +1,49 @@
+{
+  "command": [
+    "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+    "scripts/perf/protocol_state_matrix.py",
+    "--target",
+    "edge",
+    "--tls",
+    "/workspace/edge/.worktrees/perf-next/.local/perf-next/tls",
+    "--client",
+    "/workspace/edge/.worktrees/perf-next/.local/protocol-state-matrix/protocol-state-client",
+    "--controller",
+    "/workspace/edge/.worktrees/perf-next/.local/h3-stage2/frozen-binaries/controller",
+    "--edge-binary",
+    "/workspace/edge/.worktrees/perf-next/.local/h3-retry-buffer/before/Zelvik-Edge",
+    "--output",
+    "/workspace/edge/.worktrees/perf-next/.local/h3-retry-buffer/before/probe",
+    "--protocols",
+    "h3",
+    "--states",
+    "off",
+    "--connections",
+    "reuse",
+    "--seconds",
+    "3",
+    "--repeats",
+    "1",
+    "--concurrency",
+    "32",
+    "--idle-reference-seconds",
+    "2"
+  ],
+  "driver_sha256": "1aa7ba8d3170636c2a1e470f83fe2fd8c6f7ae1f756e99ee4b9d403cdd2a3d4b",
+  "binary_sha256": "16e22060746f95a2f0902d1029dad0d714caaee806554e3a8435525e94c4a072",
+  "capacity_comparison": false,
+  "profile": {
+    "name": "dev",
+    "opt_level": 2,
+    "codegen_units": 16,
+    "lto": false,
+    "debug": 0,
+    "target_cpu": "x86-64-v2"
+  },
+  "returncode": 0,
+  "case_statuses": [
+    "passed"
+  ],
+  "native_errors": 0,
+  "warning_count": 10897
+}

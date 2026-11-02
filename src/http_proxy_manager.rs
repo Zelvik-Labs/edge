@@ -58,7 +58,7 @@ struct ListenerHandle {
 }
 
 const H2_CHURN_WINDOW: Duration = Duration::from_secs(30);
-const H2_CHURN_STREAM_LIMIT: u64 = 200;
+const H2_ABUSE_EVENT_LIMIT: u64 = 200;
 const H2_CHURN_HINT_STREAM_LIMIT: u64 = 100;
 const H2_L4_EVENT_FLUSH_STREAMS: u64 = 10;
 
@@ -151,7 +151,11 @@ impl H2ConnectionDefenseState {
 
     fn should_close_for_churn(&mut self) -> bool {
         self.refresh_window();
-        self.accepted_streams >= H2_CHURN_STREAM_LIMIT
+        // Accepted requests are normal work, not connection churn. A healthy
+        // multiplexed connection can complete this many streams in milliseconds.
+        // Keep the bounded abuse window for rejected/error events instead;
+        // stream admission, malformed-frame limits and lifetime remain active.
+        self.rejected_streams.saturating_add(self.errors) >= H2_ABUSE_EVENT_LIMIT
             && self.window_started_at.elapsed() <= H2_CHURN_WINDOW
     }
 
@@ -2869,6 +2873,10 @@ struct ProcessHttp1StreamArgs {
 }
 
 async fn process_http1_stream(args: ProcessHttp1StreamArgs) {
+    crate::proxy::with_http1_parse_tracking(process_http1_stream_tracked(args)).await;
+}
+
+async fn process_http1_stream_tracked(args: ProcessHttp1StreamArgs) {
     let ProcessHttp1StreamArgs {
         stream,
         proxy_inner,
@@ -3390,6 +3398,26 @@ mod tests {
         drop(guard);
         assert!(!state.has_active_streams());
         assert!(state.next_idle_deadline() <= TokioInstant::now());
+    }
+
+    #[test]
+    fn h2_successful_reuse_does_not_trigger_abuse_rotation() {
+        let mut state = H2ConnectionDefenseState::new(
+            "127.0.0.1".parse().unwrap(),
+            443,
+            crate::l4_defense::L4PressureLevel::Normal,
+        );
+        for _ in 0..10_000 {
+            state.record_stream();
+        }
+        assert!(!state.should_close_for_churn());
+        for _ in 0..H2_ABUSE_EVENT_LIMIT / 2 {
+            state.record_reject();
+            state.record_error();
+        }
+        assert!(state.should_close_for_churn());
+        state.window_started_at = TokioInstant::now() - H2_CHURN_WINDOW - Duration::from_secs(1);
+        assert!(!state.should_close_for_churn());
     }
 
     #[test]

@@ -1,0 +1,2205 @@
+--- baseline/src/cache/mod.rs
++++ candidate/src/cache/mod.rs
+@@ -70,7 +70,7 @@
+ /// prevents the decision path from accepting a response that the writer later
+ /// interprets differently.
+ pub(crate) fn response_content_length(headers: &HeaderMap) -> Result<Option<u64>, ()> {
+-    parse_content_length_values(headers.get_all("content-length").iter())
++    parse_content_length_values(headers.get_all(http::header::CONTENT_LENGTH).iter())
+ }
+ 
+ /// Validate the response transfer framing and report whether it is chunked.
+@@ -81,7 +81,7 @@
+ /// cannot disagree with the body parser about the response boundary.
+ pub(crate) fn response_transfer_encoding_is_chunked(headers: &HeaderMap) -> Result<bool, ()> {
+     let mut coding_count = 0usize;
+-    for value in headers.get_all("transfer-encoding").iter() {
++    for value in headers.get_all(http::header::TRANSFER_ENCODING).iter() {
+         let value = value.to_str().map_err(|_| ())?;
+         for coding in value.split(',') {
+             let coding = coding.trim();
+@@ -91,7 +91,7 @@
+             coding_count = coding_count.checked_add(1).ok_or(())?;
+         }
+     }
+-    if coding_count > 0 && headers.contains_key("content-length") {
++    if coding_count > 0 && headers.contains_key(http::header::CONTENT_LENGTH) {
+         return Err(());
+     }
+     if coding_count > 1 {
+@@ -115,7 +115,7 @@
+     skipped: &[String],
+ ) -> bool {
+     headers
+-        .get_all("cache-control")
++        .get_all(http::header::CACHE_CONTROL)
+         .iter()
+         .filter_map(|value| value.to_str().ok())
+         .any(|value| cache_control_has_skipped_value(value, skipped))
+@@ -128,10 +128,12 @@
+     if !method.eq_ignore_ascii_case("GET") && !method.eq_ignore_ascii_case("HEAD") {
+         return false;
+     }
+-    if headers.contains_key("cookie") || headers.contains_key("authorization") {
+-        return false;
+-    }
+-    if headers.contains_key("transfer-encoding") {
++    if headers.contains_key(http::header::COOKIE)
++        || headers.contains_key(http::header::AUTHORIZATION)
++    {
++        return false;
++    }
++    if headers.contains_key(http::header::TRANSFER_ENCODING) {
+         return false;
+     }
+     // If-Range is evaluated against the origin representation's validator.
+@@ -139,7 +141,7 @@
+     // whether the client's Range should produce 206 or fall back to 200.
+     // Treat the combination as a pass-through request so a stale/mismatched
+     // validator can never receive a false partial response from cache.
+-    if headers.contains_key("range") && headers.contains_key("if-range") {
++    if headers.contains_key(http::header::RANGE) && headers.contains_key("if-range") {
+         return false;
+     }
+     let Ok(request_content_length) = response_content_length(headers) else {
+@@ -164,7 +166,7 @@
+         return false;
+     }
+ 
+-    if headers.contains_key("set-cookie") || headers.contains_key("vary") {
++    if headers.contains_key(http::header::SET_COOKIE) || headers.contains_key(http::header::VARY) {
+         return false;
+     }
+ 
+@@ -179,7 +181,7 @@
+         return false;
+     }
+ 
+-    for value in headers.get_all("cache-control").iter() {
++    for value in headers.get_all(http::header::CACHE_CONTROL).iter() {
+         let Ok(value) = value.to_str() else {
+             return false;
+         };
+@@ -190,7 +192,7 @@
+             return false;
+         }
+     }
+-    for value in headers.get_all("pragma").iter() {
++    for value in headers.get_all(http::header::PRAGMA).iter() {
+         let Ok(value) = value.to_str() else {
+             return false;
+         };
+@@ -386,7 +388,7 @@
+ /// response exists, so this check is required on both fill and hit paths.
+ pub(crate) fn response_encoding_matches_cache_key(cache_key: &str, headers: &HeaderMap) -> bool {
+     let values = headers
+-        .get_all("content-encoding")
++        .get_all(http::header::CONTENT_ENCODING)
+         .iter()
+         .map(|value| value.to_str().map_err(|_| ()))
+         .collect::<Result<Vec<_>, _>>();
+--- baseline/src/cache_hybrid.rs
++++ candidate/src/cache_hybrid.rs
+@@ -14,7 +14,7 @@
+ use std::hash::{Hash, Hasher};
+ use std::path::{Path, PathBuf};
+ use std::sync::LazyLock as Lazy;
+-use std::sync::{Arc, Mutex as StdMutex, RwLock as StdRwLock};
++use std::sync::{Arc, Mutex as StdMutex};
+ use tokio::fs;
+ use tokio::io::{AsyncReadExt, AsyncSeek, BufReader};
+ use tokio::sync::{Mutex, OwnedMutexGuard};
+@@ -198,7 +198,7 @@
+     // normal Pingora CacheControl parser applies the same rule; keep the
+     // custom cache metadata path in lockstep with it.
+     let forbids_stale = headers
+-        .get_all("cache-control")
++        .get_all(http::header::CACHE_CONTROL)
+         .iter()
+         .filter_map(|value| value.to_str().ok())
+         .flat_map(|value| value.split(','))
+@@ -221,7 +221,7 @@
+ 
+ fn cache_control_delta_from_headers(headers: &http::HeaderMap, directive: &str) -> Option<u64> {
+     headers
+-        .get_all("cache-control")
++        .get_all(http::header::CACHE_CONTROL)
+         .iter()
+         .filter_map(|value| value.to_str().ok())
+         .find_map(|value| parse_cache_control_delta(value, directive))
+@@ -667,7 +667,9 @@
+ }
+ 
+ fn restore_content_length(header: &mut ResponseHeader, status: u16, size: u64) {
+-    if status_allows_content_length(status) && !header.headers.contains_key("content-length") {
++    if status_allows_content_length(status)
++        && !header.headers.contains_key(http::header::CONTENT_LENGTH)
++    {
+         let _ = header.insert_header("content-length", size.to_string());
+     }
+ }
+@@ -1185,7 +1187,7 @@
+             if !crate::cache::partial::content_range_matches_cache_key(k_str, &content_range)
+                 || resp_headers
+                     .headers
+-                    .get("content-length")
++                    .get(http::header::CONTENT_LENGTH)
+                     .and_then(|value| value.to_str().ok())
+                     .is_some_and(|value| {
+                         let expected = content_range
+@@ -1214,12 +1216,12 @@
+                 headers: crate::cache::partial::response_headers_to_store(&resp_headers.headers),
+                 etag: resp_headers
+                     .headers
+-                    .get("etag")
++                    .get(http::header::ETAG)
+                     .and_then(|value| value.to_str().ok())
+                     .map(str::to_string),
+                 last_modified: resp_headers
+                     .headers
+-                    .get("last-modified")
++                    .get(http::header::LAST_MODIFIED)
+                     .and_then(|value| value.to_str().ok())
+                     .map(str::to_string),
+                 created_at: timestamp_from_system_time(meta.created()),
+@@ -1398,12 +1400,12 @@
+         // Smart Compression Decision (Synchronized with HIT path via metadata)
+         let content_type = resp_headers
+             .headers
+-            .get("content-type")
++            .get(http::header::CONTENT_TYPE)
+             .and_then(|v| v.to_str().ok())
+             .unwrap_or("");
+         let content_encoding = resp_headers
+             .headers
+-            .get("content-encoding")
++            .get(http::header::CONTENT_ENCODING)
+             .and_then(|v| v.to_str().ok())
+             .unwrap_or("");
+ 
+@@ -2983,12 +2985,37 @@
+     metadata_required: bool,
+ }
+ 
++impl TinyUfoL1Entry {
++    // These facts depend only on the immutable representation, not the lookup
++    // time or current purge state. Validate at the sole insertion boundary.
++    fn immutable_representation_valid(&self) -> bool {
++        if !crate::cache::status_allows_full_cache_with_error_policy(
++            self.response_header.status.as_u16(),
++            self.error_status_allowed,
++        ) || !crate::cache::response_headers_allow_shared_cache(&self.response_header.headers)
++            || !crate::cache::response_encoding_matches_cache_key(
++                &self.cache_key,
++                &self.response_header.headers,
++            )
++        {
++            return false;
++        }
++        match crate::cache::response_content_length(&self.response_header.headers) {
++            Ok(_) if cache_key_is_head_variant(&self.cache_key) => self.data.is_empty(),
++            Ok(length) => {
++                length.is_none_or(|length| u64::try_from(self.data.len()).ok() == Some(length))
++            }
++            Err(()) => false,
++        }
++    }
++}
++
+ /// Lock-free L1 cache backed by TinyUFO (S3-FIFO + TinyLFU admission).
+ /// Replaces the old FAST_L1 (DashMap + BinaryHeap).
+ pub(crate) struct TinyUfoL1 {
+     // Entries are Arc-shared so a hit clones one refcount instead of the
+     // response HeaderMap, cache key, and body handle stored in the entry.
+-    inner: StdRwLock<Arc<MemoryCache<String, Arc<TinyUfoL1Entry>>>>,
++    inner: ArcSwap<MemoryCache<String, Arc<TinyUfoL1Entry>>>,
+     // MemoryCache intentionally has no iterator. Keep a bounded best-effort
+     // key index so prefix/tag purge can also invalidate memory-only entries.
+     // Stale index members are pruned whenever the index grows past twice the
+@@ -3047,7 +3074,7 @@
+         };
+         let cache = Arc::new(Self::build_cache(resolved_max_bytes));
+         Self {
+-            inner: StdRwLock::new(cache),
++            inner: ArcSwap::from(cache),
+             keys: DashSet::new(),
+             auto_budget: AtomicBool::new(auto_budget),
+             auto_budget_cap: AtomicU64::new(u64::MAX),
+@@ -3073,7 +3100,7 @@
+     }
+ 
+     fn read_inner(&self) -> Arc<MemoryCache<String, Arc<TinyUfoL1Entry>>> {
+-        self.inner.read().expect("TinyUfoL1 lock poisoned").clone()
++        self.inner.load_full()
+     }
+ 
+     fn get(&self, key: &str) -> Option<Arc<TinyUfoL1Entry>> {
+@@ -3120,6 +3147,12 @@
+     }
+ 
+     fn put(&self, key: &str, entry: TinyUfoL1Entry, ttl: std::time::Duration) {
++        if entry.cache_key != key || !entry.immutable_representation_valid() {
++            // An invalid replacement must not leave an older representation
++            // serving from L1. Previously lookup rejected that replacement.
++            self.remove(key);
++            return;
++        }
+         let stale_window = entry
+             .stale_while_revalidate_secs
+             .max(entry.stale_if_error_secs);
+@@ -3407,10 +3440,7 @@
+         self.max_bytes.store(resolved, Ordering::Relaxed);
+         self.applied_max_bytes.store(resolved, Ordering::Relaxed);
+         self.current_weight.store(0, Ordering::Relaxed);
+-        {
+-            let mut guard = self.inner.write().expect("TinyUfoL1 lock poisoned");
+-            *guard = new_cache.clone();
+-        }
++        self.inner.store(Arc::clone(&new_cache));
+         // Sync the key index against the NEW cache instead of clear+reinsert:
+         // a `put` landing between the swap and a plain `keys.clear()` would
+         // have its index entry wiped while the value stays live in the new
+@@ -5086,28 +5116,9 @@
+             .max(entry.stale_if_error_secs);
+         let stale_age = u64::try_from(now.saturating_sub(entry.fresh_until)).unwrap_or(0);
+         if entry.cache_key != key
+-            || !crate::cache::status_allows_full_cache_with_error_policy(
+-                entry.response_header.status.as_u16(),
+-                entry.error_status_allowed,
+-            )
+             || entry.purge_generation != current_cache_purge_generation()
+             || (entry.fresh_until < now && stale_age > stale_window)
+-            || !crate::cache::response_headers_allow_shared_cache(&entry.response_header.headers)
+-            || !crate::cache::response_encoding_matches_cache_key(
+-                key,
+-                &entry.response_header.headers,
+-            )
+         {
+-            return false;
+-        }
+-        let body_length_is_valid =
+-            match crate::cache::response_content_length(&entry.response_header.headers) {
+-                Ok(_content_length) if cache_key_is_head_variant(key) => entry.data.is_empty(),
+-                Ok(content_length) => content_length
+-                    .is_none_or(|length| u64::try_from(entry.data.len()).ok() == Some(length)),
+-                Err(()) => false,
+-            };
+-        if !body_length_is_valid {
+             return false;
+         }
+         if policy_type == POLICY_MEMORY {
+@@ -5231,15 +5242,18 @@
+                     // hit path shares it with the returned meta via Arc. The
+                     // fallback copy only covers entries built before the
+                     // invariant existed (e.g. test fixtures).
+-                    let response_header =
+-                        if entry.response_header.headers.contains_key("content-length") {
+-                            entry.response_header.clone()
+-                        } else {
+-                            let mut header = entry.response_header.as_ref().clone();
+-                            let status = header.status.as_u16();
+-                            restore_content_length(&mut header, status, entry.data.len() as u64);
+-                            Arc::new(header)
+-                        };
++                    let response_header = if entry
++                        .response_header
++                        .headers
++                        .contains_key(http::header::CONTENT_LENGTH)
++                    {
++                        entry.response_header.clone()
++                    } else {
++                        let mut header = entry.response_header.as_ref().clone();
++                        let status = header.status.as_u16();
++                        restore_content_length(&mut header, status, entry.data.len() as u64);
++                        Arc::new(header)
++                    };
+                     let mut meta = CacheMeta::new_shared(
+                         system_time_from_timestamp(entry.fresh_until),
+                         system_time_from_timestamp(entry.created_at),
+@@ -6500,7 +6514,7 @@
+         assert_eq!(
+             meta.response_header()
+                 .headers
+-                .get("content-length")
++                .get(http::header::CONTENT_LENGTH)
+                 .and_then(|value| value.to_str().ok()),
+             Some("10")
+         );
+@@ -6578,7 +6592,7 @@
+         assert_eq!(
+             meta.response_header()
+                 .headers
+-                .get("content-length")
++                .get(http::header::CONTENT_LENGTH)
+                 .and_then(|value| value.to_str().ok()),
+             Some(expected_len.as_str())
+         );
+@@ -7155,7 +7169,7 @@
+         assert_eq!(
+             meta.response_header()
+                 .headers
+-                .get("content-length")
++                .get(http::header::CONTENT_LENGTH)
+                 .and_then(|value| value.to_str().ok()),
+             Some(expected_len.as_str())
+         );
+@@ -8328,7 +8342,7 @@
+ 
+     fn auto_budget_l1_for_test(max_bytes: u64) -> TinyUfoL1 {
+         TinyUfoL1 {
+-            inner: StdRwLock::new(Arc::new(TinyUfoL1::build_cache(max_bytes))),
++            inner: ArcSwap::from_pointee(TinyUfoL1::build_cache(max_bytes)),
+             keys: DashSet::new(),
+             auto_budget: AtomicBool::new(true),
+             auto_budget_cap: AtomicU64::new(u64::MAX),
+@@ -8719,6 +8733,50 @@
+     }
+ 
+     #[test]
++    fn l1_insertion_rejects_invalid_replacements_before_they_can_be_served() {
++        let l1 = TinyUfoL1::new(64 * 1024);
++        let now = crate::utils::time::now_timestamp();
++        let entry = TinyUfoL1Entry {
++            cache_key: "validated".to_string(),
++            data: bytes::Bytes::from_static(b"ok"),
++            response_header: Arc::new(ResponseHeader::build(200, None).unwrap()),
++            fresh_until: now + 60,
++            created_at: now,
++            stale_while_revalidate_secs: 0,
++            stale_if_error_secs: 0,
++            error_status_allowed: false,
++            metadata_updated_at: now,
++            cache_state_version: 0,
++            purge_generation: 0,
++            metadata_required: false,
++        };
++        let ttl = std::time::Duration::from_secs(60);
++        for (name, value) in [
++            ("content-length", "3"),
++            ("cache-control", "private"),
++            ("set-cookie", "session=secret"),
++            ("content-encoding", "gzip"),
++        ] {
++            l1.put("validated", entry.clone(), ttl);
++            assert!(l1.get("validated").is_some());
++            let mut invalid = entry.clone();
++            Arc::make_mut(&mut invalid.response_header)
++                .insert_header(name, value)
++                .unwrap();
++            l1.put("validated", invalid, ttl);
++            assert!(
++                l1.get("validated").is_none(),
++                "invalid {name} replacement retained an old entry"
++            );
++        }
++        l1.put("validated", entry.clone(), ttl);
++        let mut invalid = entry;
++        invalid.cache_key = "different-key".to_string();
++        l1.put("validated", invalid, ttl);
++        assert!(l1.get("validated").is_none());
++    }
++
++    #[test]
+     fn l1_entry_weight_counts_headers_and_key_not_just_body() {
+         let now = crate::utils::time::now_timestamp();
+         let mut header = pingora_http::ResponseHeader::build(200, None).unwrap();
+--- baseline/src/lb_factory.rs
++++ candidate/src/lb_factory.rs
+@@ -180,7 +180,9 @@
+                 lb.select_with(consistent_key(key, &mut buf), max_iterations, accept)
+             }
+             Self::LeastConn(lb) => lb.select_with(key, max_iterations, accept),
+-            Self::OriginPool { primary, .. } => primary.select_healthy(key, max_iterations, is_down),
++            Self::OriginPool { primary, .. } => {
++                primary.select_healthy(key, max_iterations, is_down)
++            }
+         }
+     }
+ 
+@@ -390,6 +392,60 @@
+     pub client_cert: Option<crate::config_models::SSLCertConfig>,
+     pub unsupported_reason: Option<String>,
+     pub oss_backend: Option<crate::oss_origin::OssBackend>,
++}
++
++/// Installed with the backend snapshot. Request-dependent SNI, follow-port,
++/// TLS verification and PROXY identity are applied by the request path.
++#[derive(Clone, Debug)]
++pub(crate) struct PreparedOriginPeer {
++    pub address: Arc<str>,
++    pub peer: pingora_core::upstreams::peer::HttpPeer,
++}
++
++pub(crate) fn configure_origin_peer_options(
++    peer: &mut pingora_core::upstreams::peer::HttpPeer,
++    ext: Option<&BackendExtension>,
++) {
++    peer.options.tcp_keepalive = Some(pingora_core::protocols::l4::ext::TcpKeepalive {
++        idle: Duration::from_secs(60),
++        interval: Duration::from_secs(10),
++        count: 3,
++        #[cfg(target_os = "linux")]
++        user_timeout: Duration::ZERO,
++    });
++    peer.options.connection_timeout = Some(
++        ext.and_then(|e| e.connection_timeout)
++            .unwrap_or(Duration::from_secs(15)),
++    );
++    peer.options.idle_timeout = Some(
++        ext.and_then(|e| e.idle_timeout)
++            .unwrap_or(Duration::from_secs(120)),
++    );
++    peer.options.read_timeout = ext.and_then(|e| e.read_timeout);
++    peer.options.write_timeout = ext.and_then(|e| e.write_timeout);
++}
++
++fn prepare_origin_peer(backend: &mut Backend) {
++    let Some(address) = backend.addr.as_inet() else {
++        return;
++    };
++    let ext = backend.ext.get::<BackendExtension>();
++    let Some(ext) = ext else {
++        return;
++    };
++    let mut peer =
++        pingora_core::upstreams::peer::HttpPeer::new(*address, ext.use_tls, String::new());
++    configure_origin_peer_options(&mut peer, Some(ext));
++    if !ext.proxy_protocol.enabled() {
++        peer.options.custom_l4 = Some(crate::proxy::shared_origin_l4_connector(
++            peer.options.connection_timeout.expect("configured above"),
++        ));
++    }
++    let prepared = PreparedOriginPeer {
++        address: Arc::from(backend.to_string()),
++        peer,
++    };
++    backend.ext.insert(prepared);
+ }
+ 
+ pub fn build_lb(
+@@ -536,6 +592,7 @@
+             oss_backend: None,
+         });
+         backend.ext = ext;
++        prepare_origin_peer(&mut backend);
+         backend.weight = origin.weight.max(1) as usize;
+         endpoints.push(backend);
+ 
+@@ -576,9 +633,10 @@
+         .map(|scheduling| scheduling.code.as_str())
+         .unwrap_or("");
+     let lb = match code {
+-        "" | "random" => {
+-            AnyLoadBalancer::Random(finalize_lb(LoadBalancer::from_backends(backends), detected_hc))
+-        }
++        "" | "random" => AnyLoadBalancer::Random(finalize_lb(
++            LoadBalancer::from_backends(backends),
++            detected_hc,
++        )),
+         "polling" | "weight" => AnyLoadBalancer::RoundRobin(finalize_lb(
+             LoadBalancer::from_backends(backends),
+             detected_hc,
+@@ -718,6 +776,7 @@
+         oss_backend: None,
+     });
+     b.ext = ext;
++    prepare_origin_peer(&mut b);
+     let mut set = BTreeSet::new();
+     set.insert(b);
+     let backends = Backends::new(Static::new(set));
+@@ -762,6 +821,7 @@
+         oss_backend: None,
+     });
+     backend.ext = ext;
++    prepare_origin_peer(&mut backend);
+     backend.weight = origin.weight.max(1) as usize;
+     Some(backend)
+ }
+@@ -825,6 +885,7 @@
+         oss_backend: Some(oss_backend),
+     });
+     backend.ext = ext;
++    prepare_origin_peer(&mut backend);
+     backend.weight = origin.weight.max(1) as usize;
+     Some(backend)
+ }
+@@ -1013,6 +1074,7 @@
+                     oss_backend: None,
+                 });
+                 backend.ext = ext;
++                prepare_origin_peer(&mut backend);
+                 backend.weight = node.weight.max(1) as usize;
+                 endpoints.push(backend);
+             }
+@@ -1343,6 +1405,44 @@
+     }
+ 
+     #[test]
++    fn prepared_origin_keeps_configuration_snapshot_and_proxy_identity_separate() {
++        let mut cfg = rp_cfg(2, "origin.example.test");
++        cfg.primary_origins.push(origin(
++            FlexibleAddr::String("https://127.0.0.1:9443".to_string()),
++            "",
++        ));
++        let (lb, _) = build_origin_pool(&cfg, true, None);
++        let backend = lb.select(b"", 16).unwrap();
++        let prepared = backend.ext.get::<PreparedOriginPeer>().unwrap();
++        assert_eq!(prepared.address.as_ref(), "127.0.0.1:9443");
++        assert!(prepared.peer.is_tls());
++        assert!(prepared.peer.sni.is_empty());
++        assert!(prepared.peer.options.custom_l4.is_some());
++        assert_eq!(
++            prepared.peer.options.connection_timeout,
++            Some(Duration::from_secs(15))
++        );
++        let mut request = prepared.peer.clone();
++        request.sni = "request.example.test".to_string();
++        request.options.verify_cert = false;
++        assert!(prepared.peer.options.verify_cert);
++        assert!(prepared.peer.sni.is_empty());
++        cfg.proxy_protocol.is_on = true;
++        let (next_lb, _) = build_origin_pool(&cfg, true, None);
++        let next = next_lb.select(b"", 16).unwrap();
++        assert!(
++            next.ext
++                .get::<PreparedOriginPeer>()
++                .unwrap()
++                .peer
++                .options
++                .custom_l4
++                .is_none()
++        );
++        assert!(prepared.peer.options.custom_l4.is_some());
++    }
++
++    #[test]
+     fn build_lb_accepts_http_url_origin_and_preserves_custom_host() {
+         let mut cfg = rp_cfg(2, "custom.example.com");
+         cfg.primary_origins.push(origin(
+@@ -1380,9 +1480,7 @@
+         cfg.primary_origins = ids
+             .iter()
+             .enumerate()
+-            .map(|(index, id)| {
+-                origin_with_id(*id, &format!("http://127.0.0.1:{}", 9500 + index))
+-            })
++            .map(|(index, id)| origin_with_id(*id, &format!("http://127.0.0.1:{}", 9500 + index)))
+             .collect();
+         let (lb, _hc) = build_lb(1, &cfg, 2, &HashMap::new(), false, true);
+         lb
+@@ -1400,7 +1498,10 @@
+ 
+     #[test]
+     fn scheduling_code_maps_to_the_expected_algorithm() {
+-        assert_eq!(variant_name(&build_any_lb("", serde_json::json!({}), &[1, 2])), "Random");
++        assert_eq!(
++            variant_name(&build_any_lb("", serde_json::json!({}), &[1, 2])),
++            "Random"
++        );
+         assert_eq!(
+             variant_name(&build_any_lb("random", serde_json::json!({}), &[1, 2])),
+             "Random"
+@@ -1434,7 +1535,11 @@
+ 
+     #[test]
+     fn consistent_hash_is_sticky_and_advances_past_a_down_backend() {
+-        let lb = build_any_lb("hash", serde_json::json!({"hashKey": "ip"}), &[101, 102, 103]);
++        let lb = build_any_lb(
++            "hash",
++            serde_json::json!({"hashKey": "ip"}),
++            &[101, 102, 103],
++        );
+         assert_eq!(variant_name(&lb), "Consistent");
+         assert!(lb.uses_client_ip_key());
+         assert!(!lb.is_least_conn());
+@@ -1456,7 +1561,10 @@
+         for key in 0u8..64 {
+             seen.insert(lb.select(&[key], 32).expect("backend").to_string());
+         }
+-        assert!(seen.len() > 1, "distinct keys should distribute, saw {seen:?}");
++        assert!(
++            seen.len() > 1,
++            "distinct keys should distribute, saw {seen:?}"
++        );
+ 
+         // Health fallback: with the first pick marked down, selection must walk
+         // the ring to a different backend instead of spinning on the same one.
+@@ -1538,7 +1646,11 @@
+     fn consistent_hash_with_empty_key_still_spreads() {
+         // The L4 transports pass an empty key; a consistent-hash pool must not
+         // pin every such request to a single backend.
+-        let lb = build_any_lb("hash", serde_json::json!({"hashKey": "ip"}), &[401, 402, 403]);
++        let lb = build_any_lb(
++            "hash",
++            serde_json::json!({"hashKey": "ip"}),
++            &[401, 402, 403],
++        );
+         let mut seen = BTreeSet::new();
+         for _ in 0..128 {
+             seen.insert(lb.select(b"", 16).expect("backend").to_string());
+--- baseline/src/metrics.rs
++++ candidate/src/metrics.rs
+@@ -2,7 +2,7 @@
+ use dashmap::DashMap;
+ use std::collections::{BTreeMap, HashSet};
+ use std::sync::OnceLock as OnceCell;
+-use std::sync::atomic::{AtomicI64, AtomicU64, AtomicU8, AtomicUsize, Ordering};
++use std::sync::atomic::{AtomicI64, AtomicU8, AtomicU64, AtomicUsize, Ordering};
+ use std::sync::{Arc, LazyLock};
+ use std::time::{Duration, SystemTime, UNIX_EPOCH};
+ use tokio::sync::mpsc;
+@@ -17,6 +17,9 @@
+ static HTTP_DIMENSION_DROPPED_ENTRIES: AtomicU64 = AtomicU64::new(0);
+ static EMPTY_ARC_STR: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from(""));
+ static UNKNOWN_ARC_STR: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from("Unknown"));
++static HTTP_CATEGORY: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from(METRIC_CATEGORY_HTTP));
++static TCP_CATEGORY: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from(METRIC_CATEGORY_TCP));
++static UDP_CATEGORY: LazyLock<Arc<str>> = LazyLock::new(|| Arc::from(METRIC_CATEGORY_UDP));
+ static EMPTY_ATTRS: LazyLock<BTreeMap<String, String>> = LazyLock::new(BTreeMap::new);
+ static HTTP_DIMENSION_WARNING_INTERVAL_MS: u64 = 5_000;
+ /// Matches the governor's per-event queue estimate; the byte ledger below is
+@@ -167,6 +170,19 @@
+     }
+ }
+ 
++fn shared_metric_category(category: &str) -> Arc<str> {
++    let category = category.trim();
++    if category.is_empty() || category.eq_ignore_ascii_case(METRIC_CATEGORY_HTTP) {
++        Arc::clone(&HTTP_CATEGORY)
++    } else if category.eq_ignore_ascii_case(METRIC_CATEGORY_TCP) {
++        Arc::clone(&TCP_CATEGORY)
++    } else if category.eq_ignore_ascii_case(METRIC_CATEGORY_UDP) {
++        Arc::clone(&UDP_CATEGORY)
++    } else {
++        Arc::from(normalize_metric_category(category))
++    }
++}
++
+ pub fn start_pressure_updater() {
+     tokio::spawn(async {
+         let mut sys = sysinfo::System::new();
+@@ -549,14 +565,16 @@
+         bytes = bytes.saturating_add(arc_len(action));
+     }
+     if let Some(analyzed) = &event.analyzed {
+-        bytes = bytes.saturating_add(std::mem::size_of::<crate::metrics::analyzer::RequestStats>() as u64);
++        bytes = bytes
++            .saturating_add(std::mem::size_of::<crate::metrics::analyzer::RequestStats>() as u64);
+         bytes = bytes.saturating_add(arc_len(&analyzed.browser));
+         bytes = bytes.saturating_add(arc_len(&analyzed.browser_version));
+         bytes = bytes.saturating_add(arc_len(&analyzed.os));
+         bytes = bytes.saturating_add(arc_len(&analyzed.os_version));
+         bytes = bytes.saturating_add(arc_len(&analyzed.device));
+         if let Some(geo) = &analyzed.geo {
+-            bytes = bytes.saturating_add(std::mem::size_of::<crate::metrics::analyzer::GeoInfo>() as u64);
++            bytes = bytes
++                .saturating_add(std::mem::size_of::<crate::metrics::analyzer::GeoInfo>() as u64);
+             for value in [
+                 &geo.country,
+                 &geo.country_iso,
+@@ -1156,7 +1174,10 @@
+     ) -> Result<MetricReservation, MetricCapacityError> {
+         let _gate = self.family_gate.lock();
+         let ids: std::collections::BTreeSet<_> = ids.into_iter().filter(|id| *id > 0).collect();
+-        let missing = ids.iter().filter(|id| !self.servers.contains_key(id)).count();
++        let missing = ids
++            .iter()
++            .filter(|id| !self.servers.contains_key(id))
++            .count();
+         let used = self.family_slots.load(Ordering::Acquire);
+         let limit = self.family_limit_value();
+         if missing > limit.saturating_sub(used) {
+@@ -1184,9 +1205,12 @@
+         servers: impl IntoIterator<Item = &'a crate::config_models::ServerConfig>,
+     ) -> Result<(), MetricCapacityError> {
+         let servers: Vec<_> = servers.into_iter().collect();
+-        let reservation = self.reserve_servers(servers.iter()
+-            .filter(|server| server.runtime_metrics.0.get().is_none())
+-            .map(|server| server.numeric_id()))?;
++        let reservation = self.reserve_servers(
++            servers
++                .iter()
++                .filter(|server| server.runtime_metrics.0.get().is_none())
++                .map(|server| server.numeric_id()),
++        )?;
+         for server in servers {
+             reservation.bind(server);
+         }
+@@ -1199,13 +1223,17 @@
+         let _gate = self.family_gate.lock();
+         for server in servers {
+             let id = server.numeric_id();
+-            if id <= 0 { continue; }
++            if id <= 0 {
++                continue;
++            }
+             let metrics = server.runtime_metrics.get();
+             if let Some(previous) = self.servers.insert(id, Arc::clone(&metrics))
+                 && !Arc::ptr_eq(&previous, &metrics)
+             {
+-                self.retired_servers.insert(previous.instance_id,
+-                    RetiredServerMetrics::new(id, previous));
++                self.retired_servers.insert(
++                    previous.instance_id,
++                    RetiredServerMetrics::new(id, previous),
++                );
+             }
+         }
+     }
+@@ -1387,7 +1415,9 @@
+             let mut snapshot = entry.metrics.snapshot();
+             snapshot.server_id = entry.server_id;
+             let current = snapshot.fingerprint();
+-            !entry.acknowledged_fingerprints.iter()
++            !entry
++                .acknowledged_fingerprints
++                .iter()
+                 .all(|value| value.load(Ordering::Acquire) == current)
+         });
+     }
+@@ -1514,7 +1544,9 @@
+         } else if let Some(m) = get_or_create(server_id) {
+             m
+         } else {
+-            METRICS.unattributed_requests.fetch_add(1, Ordering::Relaxed);
++            METRICS
++                .unattributed_requests
++                .fetch_add(1, Ordering::Relaxed);
+             return false;
+         };
+         if user_id > 0 {
+@@ -1556,7 +1588,9 @@
+         } else if let Some(m) = get_or_create(server_id) {
+             m
+         } else {
+-            METRICS.unattributed_requests.fetch_add(1, Ordering::Relaxed);
++            METRICS
++                .unattributed_requests
++                .fetch_add(1, Ordering::Relaxed);
+             return false;
+         };
+         if user_id > 0 {
+@@ -1586,7 +1620,9 @@
+         if let Some(metrics) = cached_m.cloned().or_else(|| get_or_create(server_id)) {
+             return ActiveRequestMetricsGuard::new(metrics);
+         }
+-        METRICS.unattributed_requests.fetch_add(1, Ordering::Relaxed);
++        METRICS
++            .unattributed_requests
++            .fetch_add(1, Ordering::Relaxed);
+         ActiveRequestMetricsGuard::new(Arc::new(ServerMetrics::new()))
+     }
+ 
+@@ -1651,7 +1687,9 @@
+         } else if let Some(m) = get_or_create(server_id) {
+             m
+         } else {
+-            METRICS.unattributed_requests.fetch_add(1, Ordering::Relaxed);
++            METRICS
++                .unattributed_requests
++                .fetch_add(1, Ordering::Relaxed);
+             return;
+         };
+         if release_active {
+@@ -1696,8 +1734,12 @@
+         } else if let Some(m) = get_or_create(server_id) {
+             m
+         } else {
+-            METRICS.unattributed_bytes_sent.fetch_add(bytes_sent, Ordering::Relaxed);
+-            METRICS.unattributed_bytes_received.fetch_add(bytes_received, Ordering::Relaxed);
++            METRICS
++                .unattributed_bytes_sent
++                .fetch_add(bytes_sent, Ordering::Relaxed);
++            METRICS
++                .unattributed_bytes_received
++                .fetch_add(bytes_received, Ordering::Relaxed);
+             return;
+         };
+         m.bytes_sent.fetch_add(bytes_sent, Ordering::Relaxed);
+@@ -1724,7 +1766,9 @@
+         } else if let Some(m) = get_or_create(server_id) {
+             m
+         } else {
+-            METRICS.unattributed_origin_bytes.fetch_add(sent.saturating_add(received), Ordering::Relaxed);
++            METRICS
++                .unattributed_origin_bytes
++                .fetch_add(sent.saturating_add(received), Ordering::Relaxed);
+             return;
+         };
+         m.origin_bytes_sent.fetch_add(sent, Ordering::Relaxed);
+@@ -1767,19 +1811,17 @@
+         // cannot retire the generation between capture and enqueue.
+         let plan_lease = crate::metrics::plan::current_metric_plan_leased();
+         let plan = std::sync::Arc::clone(plan_lease.plan());
+-        let category = crate::metrics::normalize_metric_category(args.category);
+-        let request_context = plan
+-            .request_vars_for(&category)
+-            .map(|_| {
+-                MetricRequestContext::network(
+-                    args.domain,
+-                    args.client_ip,
+-                    args.user_agent,
+-                    args.bytes_sent,
+-                    args.bytes_received,
+-                    args.status,
+-                )
+-            });
++        let category = shared_metric_category(args.category);
++        let request_context = plan.request_vars_for(&category).map(|_| {
++            MetricRequestContext::network(
++                args.domain,
++                args.client_ip,
++                args.user_agent,
++                args.bytes_sent,
++                args.bytes_received,
++                args.status,
++            )
++        });
+         record_dimensions(DimensionsArgs {
+             category: args.category,
+             server_id: args.server_id,
+@@ -1819,9 +1861,13 @@
+             return;
+         }
+ 
+-        let category = crate::metrics::normalize_metric_category(category);
++        let Some(handle) = HTTP_DIMENSION_HANDLE.get() else {
++            HTTP_DIMENSION_DROPPED.fetch_add(1, Ordering::Relaxed);
++            return;
++        };
++        let category = shared_metric_category(category);
+         let event = HttpDimensionEvent {
+-            category: Arc::from(category),
++            category,
+             server_id,
+             client_ip,
+             domain: if domain.is_empty() {
+@@ -1852,13 +1898,9 @@
+             created_at: get_current_5min_ts(),
+         };
+ 
+-        if let Some(handle) = HTTP_DIMENSION_HANDLE.get() {
+-            plan.acquire_event();
+-            if !handle.try_enqueue(event) {
+-                plan.release_event();
+-            }
+-        } else {
+-            HTTP_DIMENSION_DROPPED.fetch_add(1, Ordering::Relaxed);
++        plan.acquire_event();
++        if !handle.try_enqueue(event) {
++            plan.release_event();
+         }
+     }
+ 
+@@ -1872,10 +1914,16 @@
+         let analyzed = if let Some(ref analyzed) = event.analyzed {
+             analyzed
+         } else {
+-            analyzed_owned = crate::metrics::analyzer::analyze_request(
+-                event.client_ip,
+-                event.user_agent.as_ref(),
+-            );
++            analyzed_owned = if event.category.as_ref() == METRIC_CATEGORY_HTTP
++                || event.plan.needs_analysis_for(&event.category)
++            {
++                crate::metrics::analyzer::analyze_request(
++                    event.client_ip,
++                    event.user_agent.as_ref(),
++                )
++            } else {
++                crate::metrics::analyzer::without_analysis()
++            };
+             &analyzed_owned
+         };
+ 
+@@ -1904,7 +1952,13 @@
+                     )
+                 },
+             );
+-        let provider_id = crate::metrics::storage::lookup_region_provider_id(event.client_ip);
++        let provider_id = if event.category.as_ref() == METRIC_CATEGORY_HTTP
++            || event.plan.needs_provider_id_for(&event.category)
++        {
++            crate::metrics::storage::lookup_region_provider_id(event.client_ip)
++        } else {
++            0
++        };
+         let dimensions = crate::metrics::projection::ResolvedDimensions {
+             country: Arc::clone(&country),
+             country_id,
+@@ -2087,10 +2141,7 @@
+         let in_flight = Arc::clone(&sample.metrics);
+         drop(sample);
+ 
+-        for consumer in [
+-            MetricConsumer::Bandwidth,
+-            MetricConsumer::Daily,
+-        ] {
++        for consumer in [MetricConsumer::Bandwidth, MetricConsumer::Daily] {
+             acknowledge_all(&node, consumer, instance_id, stale_fingerprint);
+         }
+         assert_eq!(
+@@ -2109,10 +2160,7 @@
+         assert_ne!(final_fingerprint, stale_fingerprint);
+         drop(samples);
+ 
+-        for consumer in [
+-            MetricConsumer::Bandwidth,
+-            MetricConsumer::Daily,
+-        ] {
++        for consumer in [MetricConsumer::Bandwidth, MetricConsumer::Daily] {
+             acknowledge_all(&node, consumer, instance_id, final_fingerprint);
+         }
+         assert_eq!(node.retired_server_metrics_count(), 0);
+@@ -2127,18 +2175,29 @@
+         node.servers.insert(7_710_003, metrics);
+         node.retire_servers_absent_from(&HashSet::from([7_710_003]), &HashSet::new());
+ 
+-        let sample = node.take_reporting_snapshots().pop().expect("retired sample");
++        let sample = node
++            .take_reporting_snapshots()
++            .pop()
++            .expect("retired sample");
+         assert_eq!(sample.snapshot.bytes_sent, 4_096);
+         let fingerprint = sample.snapshot.fingerprint();
+         drop(sample);
+ 
+         node.acknowledge_retired(MetricConsumer::Bandwidth, instance_id, fingerprint);
+         node.sweep_retired();
+-        assert_eq!(node.retired_server_metrics_count(), 1, "daily delivery is still pending");
++        assert_eq!(
++            node.retired_server_metrics_count(),
++            1,
++            "daily delivery is still pending"
++        );
+ 
+         node.acknowledge_retired(MetricConsumer::Daily, instance_id, fingerprint);
+         assert!(node.take_reporting_snapshots().is_empty());
+-        assert_eq!(node.retired_server_metrics_count(), 0, "no local history writer is required");
++        assert_eq!(
++            node.retired_server_metrics_count(),
++            0,
++            "no local history writer is required"
++        );
+     }
+ 
+     #[test]
+@@ -2179,23 +2238,29 @@
+             id: Some(7_730_001),
+             ..Default::default()
+         });
+-        node.admit_configs(std::iter::once(server.as_ref())).expect("family has room");
++        node.admit_configs(std::iter::once(server.as_ref()))
++            .expect("family has room");
+         node.publish_configs(&[Arc::clone(&server)]);
+         let held = node.find_server(7_730_001).expect("published instance");
+         let instance_id = held.instance_id;
+-        let deferred = node.retire_servers_absent_from(&HashSet::from([7_730_001]), &HashSet::new());
++        let deferred =
++            node.retire_servers_absent_from(&HashSet::from([7_730_001]), &HashSet::new());
+         assert!(deferred.is_empty());
+ 
+-        let sample = node.take_reporting_snapshots().pop().expect("retired sample");
++        let sample = node
++            .take_reporting_snapshots()
++            .pop()
++            .expect("retired sample");
+         let fingerprint = sample.snapshot.fingerprint();
+         drop(sample);
+-        for consumer in [
+-            MetricConsumer::Bandwidth,
+-            MetricConsumer::Daily,
+-        ] {
++        for consumer in [MetricConsumer::Bandwidth, MetricConsumer::Daily] {
+             node.acknowledge_retired(consumer, instance_id, fingerprint);
+         }
+-        assert_eq!(node.retired_server_metrics_count(), 1, "the held request keeps it reportable");
++        assert_eq!(
++            node.retired_server_metrics_count(),
++            1,
++            "the held request keeps it reportable"
++        );
+ 
+         drop(held);
+         drop(server);
+@@ -2211,9 +2276,12 @@
+         let mut held = Vec::new();
+         for offset in 0..8_200 {
+             let id = 8_000_000 + offset;
+-            let reservation = node.reserve_servers([id]).expect("capacity below the bound");
++            let reservation = node
++                .reserve_servers([id])
++                .expect("capacity below the bound");
+             let server = Arc::new(crate::config_models::ServerConfig {
+-                id: Some(id), ..Default::default()
++                id: Some(id),
++                ..Default::default()
+             });
+             reservation.bind(&server);
+             held.push((reservation, server.clone()));
+@@ -2222,14 +2290,20 @@
+         }
+         assert_eq!(node.family_instance_count(), 8_200);
+         let overflow = node.reserve_servers([8_999_999]);
+-        assert!(overflow.is_err(),
+-            "a failed consumer must backpressure new IDs before the whole family grows");
++        assert!(
++            overflow.is_err(),
++            "a failed consumer must backpressure new IDs before the whole family grows"
++        );
+         held.clear();
+         for id in 8_000_000..8_008_200 {
+             node.servers.remove(&id);
+         }
+         node.sweep_retired();
+-        assert_eq!(node.family_instance_count(), 8_200, "released objects are bounded by consumers");
++        assert_eq!(
++            node.family_instance_count(),
++            8_200,
++            "released objects are bounded by consumers"
++        );
+     }
+ 
+     #[test]
+@@ -2237,12 +2311,21 @@
+         let node = NodeMetrics::with_family_limit(2);
+         let ids: HashSet<i64> = HashSet::from([7_720_001, 7_720_002]);
+         for id in &ids {
+-            let server = Arc::new(crate::config_models::ServerConfig { id: Some(*id), ..Default::default() });
+-            node.admit_configs(std::iter::once(server.as_ref())).expect("two slots");
++            let server = Arc::new(crate::config_models::ServerConfig {
++                id: Some(*id),
++                ..Default::default()
++            });
++            node.admit_configs(std::iter::once(server.as_ref()))
++                .expect("two slots");
+             node.publish_configs(&[server]);
+         }
+-        let third = crate::config_models::ServerConfig { id: Some(7_720_003), ..Default::default() };
+-        let err = node.admit_configs(std::iter::once(&third)).expect_err("cap refuses admission");
++        let third = crate::config_models::ServerConfig {
++            id: Some(7_720_003),
++            ..Default::default()
++        };
++        let err = node
++            .admit_configs(std::iter::once(&third))
++            .expect_err("cap refuses admission");
+         assert_eq!((err.used, err.limit), (2, 2));
+         assert!(!node.servers.contains_key(&7_720_003));
+     }
+@@ -2255,6 +2338,16 @@
+     use std::sync::Arc;
+ 
+     static QUEUE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
++
++    #[test]
++    fn shared_categories_preserve_legacy_normalization() {
++        for input in ["", "  ", "HTTP", " Tcp ", "udp", "custom.TYPE", "未知分类"] {
++            assert_eq!(
++                super::shared_metric_category(input).as_ref(),
++                super::normalize_metric_category(input)
++            );
++        }
++    }
+ 
+     fn test_dimension_event(user_agent: String) -> super::HttpDimensionEvent {
+         super::HttpDimensionEvent {
+--- baseline/src/metrics/analyzer.rs
++++ candidate/src/metrics/analyzer.rs
+@@ -82,12 +82,7 @@
+ /// identity is part of a geo answer, and serving a cached country for an IP
+ /// after the data changed would silently mix generations. In-flight lookups
+ /// keep the snapshot they already loaded (ArcSwap), so a clear cannot tear one.
+-pub fn install_geo_store(
+-    store: Arc<GeoStore>,
+-    city_bytes: u64,
+-    asn_bytes: u64,
+-    asn_loaded: bool,
+-) {
++pub fn install_geo_store(store: Arc<GeoStore>, city_bytes: u64, asn_bytes: u64, asn_loaded: bool) {
+     let generation = store.generation();
+     GEO_CITY_BYTES.store(city_bytes, Ordering::Release);
+     GEO_ASN_BYTES.store(asn_bytes, Ordering::Release);
+@@ -207,6 +202,10 @@
+     request_stats_from_geo(cached_geo(ip), ua)
+ }
+ 
++pub(crate) fn without_analysis() -> RequestStats {
++    request_stats_from_geo(None, "")
++}
++
+ /// Combines a geo answer with UA parsing. Geo lookup happens unconditionally,
+ /// so an empty User-Agent still carries city/country/ASN.
+ fn request_stats_from_geo(geo: Option<GeoInfo>, ua: &str) -> RequestStats {
+@@ -224,11 +223,11 @@
+ fn analyze_ua(ua: &str) -> UaCacheValue {
+     if ua.is_empty() {
+         return (
+-            Arc::from(""),
+-            Arc::from(""),
+-            Arc::from(""),
+-            Arc::from(""),
+-            Arc::from(""),
++            Arc::clone(&super::EMPTY_ARC_STR),
++            Arc::clone(&super::EMPTY_ARC_STR),
++            Arc::clone(&super::EMPTY_ARC_STR),
++            Arc::clone(&super::EMPTY_ARC_STR),
++            Arc::clone(&super::EMPTY_ARC_STR),
+         );
+     }
+ 
+--- baseline/src/metrics/plan.rs
++++ candidate/src/metrics/plan.rs
+@@ -88,6 +88,8 @@
+ #[derive(Default)]
+ struct CategoryPlan {
+     items: usize,
++    needs_analysis: bool,
++    needs_provider_id: bool,
+     /// Request-context variables referenced by the category's key templates.
+     /// Geo/browser values are derived from the analysis result by the worker,
+     /// so they never need a request attribute copy.
+@@ -140,6 +142,14 @@
+ 
+     pub fn has_items_for(&self, category: &str) -> bool {
+         self.category_plan(category).items > 0
++    }
++
++    pub(crate) fn needs_analysis_for(&self, category: &str) -> bool {
++        self.category_plan(category).needs_analysis
++    }
++
++    pub(crate) fn needs_provider_id_for(&self, category: &str) -> bool {
++        self.category_plan(category).needs_provider_id
+     }
+ 
+     /// Request variables the category's templates need. `None` means no event
+@@ -389,6 +399,9 @@
+         category_plan.items += 1;
+         for template in &compiled_keys {
+             for variable in template.variables() {
++                category_plan.needs_analysis |= is_analysis_variable(variable)
++                    && !matches!(variable, "wafGroup" | "wafAction" | "isp.id");
++                category_plan.needs_provider_id |= variable == "isp.id";
+                 if !is_analysis_variable(variable) {
+                     category_plan.request_fields.register(Arc::from(variable));
+                 }
+@@ -508,7 +521,7 @@
+ 
+ #[cfg(test)]
+ mod tests {
+-    use super::{collection_window, compile_plan, publish_metric_items};
++    use super::{MetricCollectionPlan, collection_window, compile_plan, publish_metric_items};
+     use crate::config_models::MetricItemConfig;
+     use chrono::{TimeZone, Timelike};
+     use std::collections::BTreeMap;
+@@ -569,6 +582,31 @@
+             assert_eq!(key.as_ref(), "202610311207", "{period} {unit}");
+             assert_eq!(end - start, 60, "{period} {unit}");
+         }
++    }
++
++    #[test]
++    fn analysis_dependencies_are_scoped_to_enabled_category_and_generation() {
++        let plan = MetricCollectionPlan::for_test(&[
++            item(1, "tcp", 1, "minute", &["${wafAction}", "${serverId}"]),
++            item(2, "udp", 1, "minute", &["${isp.id}"]),
++            item(
++                3,
++                "http",
++                1,
++                "minute",
++                &["${browser.name}", "${geo.country.name}"],
++            ),
++        ]);
++        assert!(!plan.needs_analysis_for("tcp"));
++        assert!(!plan.needs_provider_id_for("tcp"));
++        assert!(!plan.needs_analysis_for("udp"));
++        assert!(plan.needs_provider_id_for("udp"));
++        assert!(plan.needs_analysis_for("http"));
++        let mut disabled = item(4, "tcp", 1, "minute", &["${geo.city.name}"]);
++        disabled.is_on = false;
++        let next = MetricCollectionPlan::for_test(&[disabled]);
++        assert!(!next.needs_analysis_for("tcp"));
++        assert!(plan.needs_analysis_for("http"));
+     }
+ 
+     #[test]
+--- baseline/src/proxy.rs
++++ candidate/src/proxy.rs
+@@ -135,6 +135,19 @@
+     client_addr: SocketAddr,
+     proxy_protocol: ProxyProtocolConfig,
+     connection_timeout: Duration,
++}
++
++pub(crate) fn shared_origin_l4_connector(
++    connection_timeout: Duration,
++) -> Arc<dyn L4Connect + Send + Sync> {
++    // This connector always calls connect_upstream with TOA=None. Without a
++    // PROXY header the downstream identity is unused in both kernel and AF_XDP
++    // dials; the backend can therefore share one connector across requests.
++    Arc::new(UpstreamL4Connector {
++        client_addr: SocketAddr::from(([0, 0, 0, 0], 0)),
++        proxy_protocol: ProxyProtocolConfig::default(),
++        connection_timeout,
++    })
+ }
+ 
+ #[async_trait]
+@@ -759,7 +772,7 @@
+ 
+     fn is_grpc_request(session: &Session) -> bool {
+         session
+-            .get_header("content-type")
++            .get_header(http::header::CONTENT_TYPE)
+             .and_then(|v| v.to_str().ok())
+             .map(|v| {
+                 v.trim()
+@@ -1058,7 +1071,7 @@
+ 
+         let Some(location) = response
+             .headers
+-            .get("location")
++            .get(http::header::LOCATION)
+             .and_then(|value| value.to_str().ok())
+         else {
+             return;
+@@ -1079,7 +1092,7 @@
+         }
+ 
+         let client_host = session
+-            .get_header("host")
++            .get_header(http::header::HOST)
+             .and_then(|value| value.to_str().ok())
+             .filter(|value| !value.is_empty())
+             .unwrap_or(&ctx.host);
+@@ -1101,16 +1114,20 @@
+         if !(301..=308).contains(&response.status.as_u16()) {
+             return false;
+         }
+-        response.headers.get_all("location").iter().any(|value| {
+-            let Ok(value) = value.to_str() else {
+-                return true;
+-            };
+-            let value = value.trim();
+-            value
+-                .parse::<http::Uri>()
+-                .ok()
+-                .is_some_and(|uri| uri.scheme().is_some() || uri.authority().is_some())
+-        })
++        response
++            .headers
++            .get_all(http::header::LOCATION)
++            .iter()
++            .any(|value| {
++                let Ok(value) = value.to_str() else {
++                    return true;
++                };
++                let value = value.trim();
++                value
++                    .parse::<http::Uri>()
++                    .ok()
++                    .is_some_and(|uri| uri.scheme().is_some() || uri.authority().is_some())
++            })
+     }
+ 
+     fn shared_host_key_allows_redirect(
+@@ -1457,7 +1474,8 @@
+         // headers because a full-object cache must not replay a partial
+         // response.  The partial storage backend needs it in CacheMeta,
+         // however, to open a writer for the exact range that was fetched.
+-        if preserve_content_range && let Some(value) = resp.headers.get("content-range") {
++        if preserve_content_range && let Some(value) = resp.headers.get(http::header::CONTENT_RANGE)
++        {
+             cached_header
+                 .append_header("content-range", value.clone())
+                 .unwrap();
+@@ -1583,7 +1601,7 @@
+     ) -> &'a str {
+         url.get_or_insert_with(|| {
+             let host = session
+-                .get_header("host")
++                .get_header(http::header::HOST)
+                 .and_then(|value| value.to_str().ok())
+                 .unwrap_or("");
+             format!("{scheme}://{host}{path}")
+@@ -1662,7 +1680,7 @@
+ 
+     fn request_host(session: &Session) -> String {
+         let host = session
+-            .get_header("host")
++            .get_header(http::header::HOST)
+             .and_then(|v| v.to_str().ok())
+             .map(str::trim)
+             .filter(|value| !value.is_empty())
+@@ -1809,7 +1827,7 @@
+                     .to_string()
+             }
+             "host" => session
+-                .get_header("host")
++                .get_header(http::header::HOST)
+                 .and_then(|v| v.to_str().ok())
+                 .map(|v| v.split(':').next().unwrap_or(v).to_string())
+                 .unwrap_or_else(|| {
+@@ -1830,7 +1848,7 @@
+             "requestMethod" => session.req_header().method.to_string(),
+             "requestRefererBlock" => {
+                 let referer = session
+-                    .get_header("referer")
++                    .get_header(http::header::REFERER)
+                     .and_then(|v| v.to_str().ok())
+                     .unwrap_or("");
+                 crate::headers::extract_referer_block(referer)
+@@ -1896,7 +1914,7 @@
+             .map(|pq| pq.as_str())
+             .unwrap_or("/");
+         let host = session
+-            .get_header("host")
++            .get_header(http::header::HOST)
+             .and_then(|v| v.to_str().ok())
+             .map(|v| v.split(':').next().unwrap_or(v))
+             .or_else(|| req.uri.host())
+@@ -1936,7 +1954,7 @@
+         if want("remoteUser") {
+             let remote_user = req
+                 .headers
+-                .get("authorization")
++                .get(http::header::AUTHORIZATION)
+                 .and_then(|v| v.to_str().ok())
+                 .and_then(|auth| {
+                     auth.get(..6)
+@@ -2086,7 +2104,7 @@
+         }
+         if wants_any(&["referer", "referer.host"]) {
+             let referer = session
+-                .get_header("referer")
++                .get_header(http::header::REFERER)
+                 .and_then(|v| v.to_str().ok())
+                 .unwrap_or("");
+             if want("referer") {
+@@ -2110,7 +2128,7 @@
+             values.insert(
+                 "contentType".to_string(),
+                 session
+-                    .get_header("content-type")
++                    .get_header(http::header::CONTENT_TYPE)
+                     .and_then(|v| v.to_str().ok())
+                     .unwrap_or("")
+                     .to_string(),
+@@ -2549,7 +2567,7 @@
+ 
+     fn response_content_length(resp: &pingora::http::ResponseHeader) -> Option<usize> {
+         resp.headers
+-            .get("content-length")
++            .get(http::header::CONTENT_LENGTH)
+             .and_then(|value| value.to_str().ok())
+             .and_then(|value| value.parse::<usize>().ok())
+             .filter(|value| *value > 0)
+@@ -3064,7 +3082,7 @@
+                     .map(|ctx| Self::request_full_url(session, ctx))
+                     .unwrap_or_else(|| session.req_header().uri.to_string());
+                 let source_user_agent = session
+-                    .get_header("user-agent")
++                    .get_header(http::header::USER_AGENT)
+                     .and_then(|v| v.to_str().ok())
+                     .unwrap_or("")
+                     .to_string();
+@@ -3099,7 +3117,7 @@
+     fn request_full_url(session: &Session, ctx: &ProxyCTX) -> String {
+         let scheme = Self::forwarded_proto(session, ctx);
+         let authority = session
+-            .get_header("host")
++            .get_header(http::header::HOST)
+             .and_then(|v| v.to_str().ok())
+             .filter(|value| !value.is_empty())
+             .or_else(|| {
+@@ -3680,7 +3698,7 @@
+ 
+     fn request_accepts_webp(session: &Session) -> bool {
+         let Some(accept) = session
+-            .get_header("accept")
++            .get_header(http::header::ACCEPT)
+             .and_then(|value| value.to_str().ok())
+         else {
+             return false;
+@@ -3728,7 +3746,7 @@
+ 
+     fn request_encoding_quality(session: &Session, encoding: &str) -> f32 {
+         let Some(accept_encoding) = session
+-            .get_header("accept-encoding")
++            .get_header(http::header::ACCEPT_ENCODING)
+             .and_then(|value| value.to_str().ok())
+         else {
+             return (encoding == "identity") as u8 as f32;
+@@ -4018,13 +4036,17 @@
+         if upstream_response.status.as_u16() != 200 {
+             return;
+         }
+-        if upstream_response.headers.get("content-encoding").is_some() {
++        if upstream_response
++            .headers
++            .get(http::header::CONTENT_ENCODING)
++            .is_some()
++        {
+             return;
+         }
+ 
+         let Some(content_type) = upstream_response
+             .headers
+-            .get("content-type")
++            .get(http::header::CONTENT_TYPE)
+             .and_then(|value| value.to_str().ok())
+             .map(|value| value.to_string())
+         else {
+@@ -4055,7 +4077,7 @@
+ 
+         let content_length = upstream_response
+             .headers
+-            .get("content-length")
++            .get(http::header::CONTENT_LENGTH)
+             .and_then(|value| value.to_str().ok())
+             .and_then(|value| value.parse::<i64>().ok())
+             .unwrap_or(0);
+@@ -4130,7 +4152,7 @@
+ 
+         let vary = upstream_response
+             .headers
+-            .get("vary")
++            .get(http::header::VARY)
+             .and_then(|value| value.to_str().ok())
+             .unwrap_or("");
+         let new_vary = if vary.is_empty() {
+@@ -4208,7 +4230,7 @@
+         if policy.port > 0 {
+             let port = u16::try_from(policy.port).ok()?;
+             let ua = session
+-                .get_header("user-agent")
++                .get_header(http::header::USER_AGENT)
+                 .and_then(|value| value.to_str().ok())
+                 .unwrap_or("");
+             if Self::is_mobile_user_agent(ua) && !policy.support_mobile_browsers {
+@@ -4218,7 +4240,7 @@
+         }
+ 
+         let ua = session
+-            .get_header("user-agent")
++            .get_header(http::header::USER_AGENT)
+             .and_then(|value| value.to_str().ok())
+             .unwrap_or("");
+         if Self::is_mobile_user_agent(ua) && !policy.support_mobile_browsers {
+@@ -4294,7 +4316,7 @@
+         let mut origin_is_wildcard = false;
+         // Allow-Origin: use configured value, or echo the request Origin
+         if cors.allow_origin.is_empty() {
+-            if let Some(origin) = session.get_header("origin")
++            if let Some(origin) = session.get_header(http::header::ORIGIN)
+                 && let Ok(origin_str) = origin.to_str()
+             {
+                 let _ = resp.insert_header("access-control-allow-origin", origin_str);
+@@ -4323,7 +4345,8 @@
+         // (Content-Type: application/json, Authorization, etc.)
+         if !cors.allow_headers.is_empty() {
+             let _ = resp.insert_header("access-control-allow-headers", cors.allow_headers_header());
+-        } else if let Some(req_headers) = session.get_header("access-control-request-headers")
++        } else if let Some(req_headers) =
++            session.get_header(http::header::ACCESS_CONTROL_REQUEST_HEADERS)
+             && let Ok(req_headers_str) = req_headers.to_str()
+         {
+             let _ = resp.insert_header("access-control-allow-headers", req_headers_str);
+@@ -4439,7 +4462,7 @@
+                 "No custom page matched status {} for host {:?}. site_pages={}, enable_global_pages={}, global_pages={}, global_http_page_policy_pages={}",
+                 status,
+                 session
+-                    .get_header("host")
++                    .get_header(http::header::HOST)
+                     .and_then(|v| v.to_str().ok())
+                     .map(|v| v.to_string()),
+                 site_page_count,
+@@ -4594,7 +4617,7 @@
+         let source_user_agent = session
+             .req_header()
+             .headers
+-            .get("user-agent")
++            .get(http::header::USER_AGENT)
+             .and_then(|value| value.to_str().ok())
+             .unwrap_or_default()
+             .to_string();
+@@ -4637,7 +4660,7 @@
+         let ua = session
+             .req_header()
+             .headers
+-            .get("user-agent")
++            .get(http::header::USER_AGENT)
+             .and_then(|v| v.to_str().ok())
+             .unwrap_or("");
+ 
+@@ -4967,7 +4990,7 @@
+ 
+     fn is_websocket_request(session: &Session) -> bool {
+         let upgrade = session
+-            .get_header("upgrade")
++            .get_header(http::header::UPGRADE)
+             .and_then(|v| v.to_str().ok())
+             .map(|v| v.eq_ignore_ascii_case("websocket"))
+             .unwrap_or(false);
+@@ -4976,7 +4999,7 @@
+ 
+     fn has_upgrade_connection(session: &Session) -> bool {
+         session
+-            .get_header("connection")
++            .get_header(http::header::CONNECTION)
+             .and_then(|v| v.to_str().ok())
+             .map(|v| v.to_ascii_lowercase().contains("upgrade"))
+             .unwrap_or(false)
+@@ -5018,7 +5041,7 @@
+             && !domains.is_empty()
+         {
+             let host = session
+-                .get_header("host")
++                .get_header(http::header::HOST)
+                 .and_then(|v| v.to_str().ok())
+                 .unwrap_or_default();
+             let host = crate::lb_factory::strip_addr_port(host)
+@@ -5060,7 +5083,7 @@
+             .map(str::to_string);
+ 
+         let Some(auth) = session
+-            .get_header("authorization")
++            .get_header(http::header::AUTHORIZATION)
+             .and_then(|v| v.to_str().ok())
+         else {
+             return Some((false, realm, charset));
+@@ -5109,11 +5132,11 @@
+             .filter(|plan| plan.has_auth());
+         if let Some(compiled_plan) = compiled_plan {
+             let authorization = session
+-                .get_header("authorization")
++                .get_header(http::header::AUTHORIZATION)
+                 .and_then(|value| value.to_str().ok());
+             if let Some(result) = compiled_plan.auth_result(
+                 session
+-                    .get_header("host")
++                    .get_header(http::header::HOST)
+                     .and_then(|value| value.to_str().ok())
+                     .unwrap_or_default(),
+                 session.req_header().uri.path(),
+@@ -5192,11 +5215,11 @@
+         let url = Self::current_request_url(session, ctx);
+ 
+         let origin = session
+-            .get_header("origin")
++            .get_header(http::header::ORIGIN)
+             .and_then(|v| v.to_str().ok())
+             .unwrap_or("");
+         let referer = session
+-            .get_header("referer")
++            .get_header(http::header::REFERER)
+             .and_then(|v| v.to_str().ok())
+             .unwrap_or("");
+         let source = if referer.is_empty()
+@@ -5286,7 +5309,7 @@
+         }
+         let url = Self::current_request_url(session, ctx);
+         let ua = session
+-            .get_header("user-agent")
++            .get_header(http::header::USER_AGENT)
+             .and_then(|v| v.to_str().ok())
+             .unwrap_or("");
+         let compiled_action = ctx
+@@ -5570,7 +5593,7 @@
+         }
+ 
+         let content_length = session
+-            .get_header("content-length")
++            .get_header(http::header::CONTENT_LENGTH)
+             .and_then(|v| v.to_str().ok())
+             .and_then(|v| v.parse::<i64>().ok())
+             .unwrap_or(0);
+@@ -5643,7 +5666,7 @@
+             .unwrap_or(0);
+         if max_body_bytes > 0 {
+             let content_length = session
+-                .get_header("content-length")
++                .get_header(http::header::CONTENT_LENGTH)
+                 .and_then(|v| v.to_str().ok())
+                 .and_then(|v| v.parse::<i64>().ok())
+                 .unwrap_or(0);
+@@ -5722,7 +5745,7 @@
+         };
+         let Some(current) = upstream_response
+             .headers
+-            .get("content-type")
++            .get(http::header::CONTENT_TYPE)
+             .and_then(|v| v.to_str().ok())
+             .map(str::trim)
+             .filter(|v| !v.is_empty())
+@@ -5773,7 +5796,7 @@
+     fn current_request_url(session: &Session, ctx: &ProxyCTX) -> String {
+         let scheme = Self::forwarded_proto(session, ctx);
+         let host = session
+-            .get_header("host")
++            .get_header(http::header::HOST)
+             .and_then(|v| v.to_str().ok())
+             .map(|v| v.split(':').next().unwrap_or(v))
+             .unwrap_or_else(|| session.req_header().uri.host().unwrap_or(""));
+@@ -6221,7 +6244,7 @@
+             .map(|value| Self::sanitize_waf_return_path(&value))
+             .unwrap_or_else(|| "/".to_string());
+         let ua = session
+-            .get_header("user-agent")
++            .get_header(http::header::USER_AGENT)
+             .and_then(|v| v.to_str().ok())
+             .unwrap_or("");
+         let is_uam_verification = Self::query_param(session, "__waf_uam").as_deref() == Some("1");
+@@ -6808,7 +6831,10 @@
+ 
+         if upstream_response.status.as_u16() != 200
+             || ctx.cache_ref.is_none()
+-            || upstream_response.headers.get("content-encoding").is_some()
++            || upstream_response
++                .headers
++                .get(http::header::CONTENT_ENCODING)
++                .is_some()
+         {
+             return;
+         }
+@@ -6825,7 +6851,7 @@
+         let request_url = Self::current_request_url(session, ctx);
+         let content_type = upstream_response
+             .headers
+-            .get("content-type")
++            .get(http::header::CONTENT_TYPE)
+             .and_then(|v| v.to_str().ok())
+             .unwrap_or("")
+             .split(';')
+@@ -7214,7 +7240,7 @@
+             | crate::firewall::ActionResponse::Get302 { mut life_seconds }
+             | crate::firewall::ActionResponse::Post307 { mut life_seconds } => {
+                 let ua = session
+-                    .get_header("user-agent")
++                    .get_header(http::header::USER_AGENT)
+                     .and_then(|v| v.to_str().ok())
+                     .unwrap_or("");
+                 let verifier = self.waf_verifier.as_ref();
+@@ -7679,7 +7705,7 @@
+         limit: usize,
+     ) -> Result<bool> {
+         let content_length = session
+-            .get_header("content-length")
++            .get_header(http::header::CONTENT_LENGTH)
+             .and_then(|v| v.to_str().ok())
+             .and_then(|v| v.parse::<usize>().ok());
+         if content_length.is_some_and(|len| len > limit) {
+@@ -7690,7 +7716,7 @@
+         }
+         if content_length.is_none()
+             && !session
+-                .get_header("transfer-encoding")
++                .get_header(http::header::TRANSFER_ENCODING)
+                 .and_then(|v| v.to_str().ok())
+                 .is_some_and(|v| v.to_ascii_lowercase().contains("chunked"))
+             && matches!(
+@@ -7792,7 +7818,7 @@
+             && let Some(region) = &inbound.region
+         {
+             let ua = session
+-                .get_header("user-agent")
++                .get_header(http::header::USER_AGENT)
+                 .and_then(|v| v.to_str().ok())
+                 .unwrap_or("");
+             let region_match = if let Some(compiled_policy) = compiled_policy {
+@@ -7823,7 +7849,7 @@
+ 
+         if policy.max_request_body_size > 0 {
+             let content_length = session
+-                .get_header("content-length")
++                .get_header(http::header::CONTENT_LENGTH)
+                 .and_then(|v| v.to_str().ok())
+                 .and_then(|v| v.parse::<i64>().ok())
+                 .unwrap_or(0);
+@@ -7869,7 +7895,7 @@
+ 
+         for compiled_policy in &ctx.compiled_plans.global_firewall {
+             let ua = session
+-                .get_header("user-agent")
++                .get_header(http::header::USER_AGENT)
+                 .and_then(|v| v.to_str().ok())
+                 .unwrap_or("");
+             if let Some(action) = crate::firewall::compiled::evaluate_compiled_region_deny(
+@@ -7900,7 +7926,7 @@
+                     && let Some(region) = &inbound.region
+                 {
+                     let ua = session
+-                        .get_header("user-agent")
++                        .get_header(http::header::USER_AGENT)
+                         .and_then(|v| v.to_str().ok())
+                         .unwrap_or("");
+                     let mut action = crate::firewall::check_region_deny(
+@@ -8066,7 +8092,7 @@
+             }
+ 
+             let ua = session
+-                .get_header("user-agent")
++                .get_header(http::header::USER_AGENT)
+                 .and_then(|v| v.to_str().ok())
+                 .unwrap_or("");
+             if self.waf_pass_cookie_verified_for_action(session, &matched, &ctx.client_ip_str, ua) {
+@@ -8260,7 +8286,9 @@
+                 && ws.is_on
+                 && Self::is_websocket_request(session)
+             {
+-                if let Some(origin) = session.get_header("origin").and_then(|v| v.to_str().ok())
++                if let Some(origin) = session
++                    .get_header(http::header::ORIGIN)
++                    .and_then(|v| v.to_str().ok())
+                     && let Some(origin_host) = Self::origin_header_host(origin)
+                 {
+                     let same_origin = crate::lb_factory::strip_addr_port(origin_host)
+@@ -8495,7 +8523,7 @@
+         }
+ 
+         let ua = session
+-            .get_header("user-agent")
++            .get_header(http::header::USER_AGENT)
+             .and_then(|v| v.to_str().ok())
+             .unwrap_or("");
+         let client_ip_str = ctx.client_ip_str.clone();
+@@ -8651,7 +8679,7 @@
+                     state.host.clone()
+                 };
+                 let user_agent = session
+-                    .get_header("user-agent")
++                    .get_header(http::header::USER_AGENT)
+                     .and_then(|v| v.to_str().ok())
+                     .unwrap_or("");
+                 let scheme = Self::forwarded_proto(session, ctx);
+@@ -9263,7 +9291,10 @@
+         }
+ 
+         if let Some(peer) = target_peer {
+-            let mut peer_addr = peer.to_string();
++            let prepared = peer.ext.get::<crate::lb_factory::PreparedOriginPeer>();
++            let mut peer_addr =
++                prepared.map_or_else(|| peer.to_string(), |p| p.address.to_string());
++            let mut origin_address_changed = false;
+             let backend_ext = peer.ext.get::<crate::lb_factory::BackendExtension>();
+             if let Some(ext) = backend_ext
+                 && let Some(reason) = &ext.unsupported_reason
+@@ -9304,10 +9335,11 @@
+                     },
+                     server_port,
+                 );
++                origin_address_changed = true;
+             }
+ 
+             let client_host = session
+-                .get_header("host")
++                .get_header(http::header::HOST)
+                 .and_then(|v| v.to_str().ok())
+                 .unwrap_or_else(|| session.req_header().uri.host().unwrap_or("localhost"));
+ 
+@@ -9372,8 +9404,8 @@
+             } else {
+                 ctx.origin_address = peer_addr.clone();
+             }
+-            let is_upgrade_request =
+-                Self::has_upgrade_connection(session) || session.get_header("upgrade").is_some();
++            let is_upgrade_request = Self::has_upgrade_connection(session)
++                || session.get_header(http::header::UPGRADE).is_some();
+             let proxy_protocol_to_origin = backend_ext
+                 .map(|ext| ext.proxy_protocol)
+                 .unwrap_or_default();
+@@ -9385,31 +9417,25 @@
+                 && backend_ext.map(|e| e.http3_enabled).unwrap_or(false);
+             debug!("ACCESS_LOG: origin_address set to '{}'", ctx.origin_address);
+ 
+-            let mut peer_obj = HttpPeer::new(peer_addr, is_tls, sni_host);
+-
+-            // --- OPTIMIZATION: L7 TCP & Protocol ---
+-            // Pingora sets nodelay by default.
+-            // For keepalive, we use Pingora's native struct:
+-            peer_obj.options.tcp_keepalive = Some(pingora_core::protocols::l4::ext::TcpKeepalive {
+-                idle: std::time::Duration::from_secs(60),
+-                interval: std::time::Duration::from_secs(10),
+-                count: 3,
+-                #[cfg(target_os = "linux")]
+-                user_timeout: std::time::Duration::from_secs(0),
+-            });
+-
+-            let connection_timeout = backend_ext
+-                .and_then(|e| e.connection_timeout)
+-                .unwrap_or_else(|| std::time::Duration::from_secs(15));
+-            let idle_timeout = backend_ext
+-                .and_then(|e| e.idle_timeout)
+-                .unwrap_or_else(|| std::time::Duration::from_secs(120));
+-
+-            peer_obj.options.idle_timeout = Some(idle_timeout);
+-            peer_obj.options.read_timeout = backend_ext.and_then(|e| e.read_timeout);
+-            peer_obj.options.write_timeout = backend_ext.and_then(|e| e.write_timeout);
+-            peer_obj.options.connection_timeout = Some(connection_timeout);
+-            if peer_obj.address().as_inet().is_some() {
++            let mut peer_obj = if let Some(prepared) = prepared.filter(|_| !origin_address_changed)
++            {
++                let mut peer = prepared.peer.clone();
++                peer.sni = sni_host;
++                peer
++            } else {
++                let mut peer = if !origin_address_changed && let Some(addr) = peer.addr.as_inet() {
++                    HttpPeer::new(*addr, is_tls, sni_host)
++                } else {
++                    HttpPeer::new(peer_addr, is_tls, sni_host)
++                };
++                crate::lb_factory::configure_origin_peer_options(&mut peer, backend_ext);
++                peer
++            };
++            let connection_timeout = peer_obj
++                .options
++                .connection_timeout
++                .unwrap_or(Duration::from_secs(15));
++            if peer_obj.address().as_inet().is_some() && peer_obj.options.custom_l4.is_none() {
+                 // T4-6: all inet upstream dials funnel through
+                 // `connect_upstream` — kernel mode is unchanged, afxdp
+                 // mode dials through the AF_XDP dataplane.
+@@ -9531,7 +9557,7 @@
+                 }
+ 
+                 let user_agent = session
+-                    .get_header("user-agent")
++                    .get_header(http::header::USER_AGENT)
+                     .and_then(|v| v.to_str().ok())
+                     .unwrap_or("");
+ 
+@@ -9574,7 +9600,7 @@
+                         server_id,
+                         client_ip: ctx.client_ip,
+                         domain: session
+-                            .get_header("host")
++                            .get_header(http::header::HOST)
+                             .and_then(|v| v.to_str().ok())
+                             .map(|v| v.split(':').next().unwrap_or(v))
+                             .unwrap_or_else(|| session.req_header().uri.host().unwrap_or("")),
+@@ -9825,17 +9851,19 @@
+                     Self::disable_request_cache(session, ctx, "HLSEncrypted");
+                     return Ok(());
+                 }
+-                if cache_ref.always_forward_range_request && session.get_header("range").is_some() {
++                if cache_ref.always_forward_range_request
++                    && session.get_header(http::header::RANGE).is_some()
++                {
+                     Self::disable_request_cache(session, ctx, "RangeForwarded");
+                     return Ok(());
+                 }
+                 if cache_ref.enable_request_cache_pragma {
+                     let cc = session
+-                        .get_header("cache-control")
++                        .get_header(http::header::CACHE_CONTROL)
+                         .and_then(|v| v.to_str().ok())
+                         .unwrap_or("");
+                     let pragma = session
+-                        .get_header("pragma")
++                        .get_header(http::header::PRAGMA)
+                         .and_then(|v| v.to_str().ok())
+                         .unwrap_or("");
+                     if Self::header_contains_ascii_case_insensitive(cc, b"no-cache")
+@@ -9963,7 +9991,7 @@
+                     .map(|compiled_ref| compiled_ref.response_policy.allows_partial_content())
+                     .unwrap_or(cache_ref.allow_partial_content || cache_ref.status.contains(&206));
+                 let requested_range = session
+-                    .get_header("range")
++                    .get_header(http::header::RANGE)
+                     .and_then(|v| v.to_str().ok())
+                     .map(str::trim)
+                     .filter(|v| !v.is_empty());
+@@ -10128,7 +10156,7 @@
+                     .max(0) as u64;
+                 let length = upstream_response
+                     .headers
+-                    .get("content-length")
++                    .get(http::header::CONTENT_LENGTH)
+                     .and_then(|value| value.to_str().ok())
+                     .and_then(|value| value.parse::<u64>().ok());
+                 if length.is_none_or(|length| length >= minimum) {
+@@ -10165,7 +10193,7 @@
+             {
+                 let cached_etag = upstream_response
+                     .headers
+-                    .get("etag")
++                    .get(http::header::ETAG)
+                     .and_then(|v| v.to_str().ok())
+                     .map(str::to_string);
+ 
+@@ -10183,7 +10211,7 @@
+ 
+                 let cached_last_modified = upstream_response
+                     .headers
+-                    .get("last-modified")
++                    .get(http::header::LAST_MODIFIED)
+                     .and_then(|v| v.to_str().ok())
+                     .map(str::to_string);
+ 
+@@ -10192,7 +10220,7 @@
+                     s.trim().trim_start_matches("W/").trim_matches('"')
+                 }
+                 let inm_match = session
+-                    .get_header("if-none-match")
++                    .get_header(http::header::IF_NONE_MATCH)
+                     .and_then(|v| v.to_str().ok())
+                     .and_then(|inm| {
+                         effective_etag.as_ref().map(|etag| {
+@@ -10211,7 +10239,7 @@
+                     false // INM takes precedence
+                 } else {
+                     session
+-                        .get_header("if-modified-since")
++                        .get_header(http::header::IF_MODIFIED_SINCE)
+                         .and_then(|v| v.to_str().ok())
+                         .and_then(|ims| {
+                             cached_last_modified.as_ref().and_then(|lm| {
+@@ -10319,7 +10347,7 @@
+                     };
+                     let referer = if uses_template_vars {
+                         session
+-                            .get_header("referer")
++                            .get_header(http::header::REFERER)
+                             .and_then(|v| v.to_str().ok())
+                             .unwrap_or("")
+                     } else {
+@@ -10334,7 +10362,7 @@
+                     };
+                     let user_agent = if uses_template_vars {
+                         session
+-                            .get_header("user-agent")
++                            .get_header(http::header::USER_AGENT)
+                             .and_then(|v| v.to_str().ok())
+                             .unwrap_or("")
+                     } else {
+@@ -10342,7 +10370,7 @@
+                     };
+                     let content_type = if uses_template_vars {
+                         session
+-                            .get_header("content-type")
++                            .get_header(http::header::CONTENT_TYPE)
+                             .and_then(|v| v.to_str().ok())
+                             .unwrap_or("")
+                     } else {
+@@ -10502,16 +10530,16 @@
+                     .map(|port| port.to_string())
+                     .unwrap_or_default();
+                 let referer = session
+-                    .get_header("referer")
++                    .get_header(http::header::REFERER)
+                     .and_then(|v| v.to_str().ok())
+                     .unwrap_or("");
+                 let referer_block_buf = crate::headers::extract_referer_block(referer);
+                 let user_agent = session
+-                    .get_header("user-agent")
++                    .get_header(http::header::USER_AGENT)
+                     .and_then(|v| v.to_str().ok())
+                     .unwrap_or("");
+                 let content_type = session
+-                    .get_header("content-type")
++                    .get_header(http::header::CONTENT_TYPE)
+                     .and_then(|v| v.to_str().ok())
+                     .unwrap_or("");
+                 let vars = crate::headers::RequestTemplateVars {
+@@ -10797,7 +10825,7 @@
+                 ctx.origin_address,
+                 upstream_request
+                     .headers
+-                    .get("host")
++                    .get(http::header::HOST)
+                     .and_then(|v| v.to_str().ok())
+                     .unwrap_or("?")
+             );
+@@ -10812,14 +10840,14 @@
+         upstream_request.remove_header("X-Cloud-Http3-Bridge");
+         if let Some(cache_ref) = &ctx.cache_ref {
+             if cache_ref.enable_if_none_match
+-                && let Some(value) = _session.get_header("if-none-match")
++                && let Some(value) = _session.get_header(http::header::IF_NONE_MATCH)
+             {
+                 upstream_request
+                     .insert_header("if-none-match", value.clone())
+                     .unwrap_or(());
+             }
+             if cache_ref.enable_if_modified_since
+-                && let Some(value) = _session.get_header("if-modified-since")
++                && let Some(value) = _session.get_header(http::header::IF_MODIFIED_SINCE)
+             {
+                 upstream_request
+                     .insert_header("if-modified-since", value.clone())
+@@ -10830,7 +10858,7 @@
+             upstream_request
+                 .insert_header("range", range_value)
+                 .map_err(|_| Error::new(InternalError))?;
+-            if let Some(if_range) = _session.get_header("if-range") {
++            if let Some(if_range) = _session.get_header(http::header::IF_RANGE) {
+                 upstream_request
+                     .insert_header("if-range", if_range.clone())
+                     .unwrap_or(());
+@@ -10861,15 +10889,15 @@
+                 .map(|port| port.to_string())
+                 .unwrap_or_default();
+             let referer = _session
+-                .get_header("referer")
++                .get_header(http::header::REFERER)
+                 .and_then(|v| v.to_str().ok())
+                 .unwrap_or("");
+             let user_agent = _session
+-                .get_header("user-agent")
++                .get_header(http::header::USER_AGENT)
+                 .and_then(|v| v.to_str().ok())
+                 .unwrap_or("");
+             let content_type = _session
+-                .get_header("content-type")
++                .get_header(http::header::CONTENT_TYPE)
+                 .and_then(|v| v.to_str().ok())
+                 .unwrap_or("");
+             let referer_block_buf3 = crate::headers::extract_referer_block(referer);
+@@ -10942,15 +10970,15 @@
+                     .map(|port| port.to_string())
+                     .unwrap_or_default();
+                 let referer = _session
+-                    .get_header("referer")
++                    .get_header(http::header::REFERER)
+                     .and_then(|v| v.to_str().ok())
+                     .unwrap_or("");
+                 let user_agent = _session
+-                    .get_header("user-agent")
++                    .get_header(http::header::USER_AGENT)
+                     .and_then(|v| v.to_str().ok())
+                     .unwrap_or("");
+                 let content_type = _session
+-                    .get_header("content-type")
++                    .get_header(http::header::CONTENT_TYPE)
+                     .and_then(|v| v.to_str().ok())
+                     .unwrap_or("");
+                 let referer_block_buf4 = crate::headers::extract_referer_block(referer);
+@@ -10989,7 +11017,10 @@
+                 .unwrap();
+         // 1. Automatic Gzip Back to Origin for non-cache requests.
+         } else if global_cfg.request_origins_with_encodings
+-            && upstream_request.headers.get("accept-encoding").is_none()
++            && upstream_request
++                .headers
++                .get(http::header::ACCEPT_ENCODING)
++                .is_none()
+         {
+             upstream_request
+                 .insert_header("accept-encoding", "gzip, deflate, br")
+@@ -11571,7 +11602,7 @@
+                         pingora_cache::NoCacheReason::Custom("PartialRangeTooSmall"),
+                     ));
+                 }
+-                if resp.headers.contains_key("vary") {
++                if resp.headers.contains_key(http::header::VARY) {
+                     return Ok(pingora_cache::RespCacheable::Uncacheable(
+                         pingora_cache::NoCacheReason::Custom("PartialRangeVary"),
+                     ));
+@@ -11828,6 +11859,25 @@
+     use super::EdgeProxy;
+     use pingora_core::{Error, ErrorType};
+ 
++    #[tokio::test]
++    async fn shared_origin_connector_preserves_plain_tcp_bytes() {
++        use tokio::io::{AsyncReadExt, AsyncWriteExt};
++        tokio::time::timeout(std::time::Duration::from_secs(5), async {
++            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
++            let addr = listener.local_addr().unwrap();
++            let connector = super::shared_origin_l4_connector(std::time::Duration::from_secs(2));
++            let mut outbound = connector.connect(&addr.into()).await.unwrap();
++            let (mut origin, _) = listener.accept().await.unwrap();
++            outbound.write_all(b"GET /").await.unwrap();
++            outbound.flush().await.unwrap();
++            let mut bytes = [0; 5];
++            origin.read_exact(&mut bytes).await.unwrap();
++            assert_eq!(&bytes, b"GET /");
++        })
++        .await
++        .unwrap();
++    }
++
+     #[cfg(unix)]
+     #[tokio::test]
+     async fn metric_context_materializes_only_referenced_headers_and_cookies() {
+@@ -12076,7 +12126,7 @@
+         EdgeProxy::insert_location_header(&mut resp, "https://example.com/ok");
+         assert_eq!(
+             resp.headers
+-                .get("location")
++                .get(http::header::LOCATION)
+                 .and_then(|value| value.to_str().ok()),
+             Some("https://example.com/ok")
+         );
+@@ -12085,7 +12135,7 @@
+         EdgeProxy::insert_location_header(&mut resp, "https://example.com/\r\nbad");
+         assert_eq!(
+             resp.headers
+-                .get("location")
++                .get(http::header::LOCATION)
+                 .and_then(|value| value.to_str().ok()),
+             Some("/")
+         );
+@@ -12300,26 +12350,31 @@
+ 
+         let cached = EdgeProxy::cached_response_header_for_store(&resp, 120, false);
+ 
+-        assert!(cached.headers.get("set-cookie").is_none());
++        assert!(cached.headers.get(http::header::SET_COOKIE).is_none());
+         assert_eq!(
+             cached
+                 .headers
+-                .get("content-length")
++                .get(http::header::CONTENT_LENGTH)
+                 .and_then(|value| value.to_str().ok()),
+             Some("42")
+         );
+-        assert!(cached.headers.get("transfer-encoding").is_none());
++        assert!(
++            cached
++                .headers
++                .get(http::header::TRANSFER_ENCODING)
++                .is_none()
++        );
+         assert_eq!(
+             cached
+                 .headers
+-                .get("content-type")
++                .get(http::header::CONTENT_TYPE)
+                 .and_then(|v| v.to_str().ok()),
+             Some("text/html")
+         );
+         assert_eq!(
+             cached
+                 .headers
+-                .get("cache-control")
++                .get(http::header::CACHE_CONTROL)
+                 .and_then(|v| v.to_str().ok()),
+             Some("private, max-age=0")
+         );
+@@ -12334,13 +12389,13 @@
+             .unwrap();
+ 
+         let full = EdgeProxy::cached_response_header_for_store(&resp, 120, false);
+-        assert!(full.headers.get("content-range").is_none());
++        assert!(full.headers.get(http::header::CONTENT_RANGE).is_none());
+ 
+         let partial = EdgeProxy::cached_response_header_for_store(&resp, 120, true);
+         assert_eq!(
+             partial
+                 .headers
+-                .get("content-range")
++                .get(http::header::CONTENT_RANGE)
+                 .and_then(|value| value.to_str().ok()),
+             Some("bytes 0-3/262144")
+         );
+@@ -12355,7 +12410,7 @@
+         assert_eq!(
+             cached
+                 .headers
+-                .get("content-length")
++                .get(http::header::CONTENT_LENGTH)
+                 .and_then(|value| value.to_str().ok()),
+             Some("42")
+         );

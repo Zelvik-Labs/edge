@@ -1274,6 +1274,34 @@ pub fn is_conn_error(status: &tonic::Status) -> bool {
     ) || status.message().contains("code = Canceled")
 }
 
+/// Activates this instance on the control channel at startup, before any role
+/// RPC. Registration is idempotent server-side, so a control plane that is not
+/// reachable yet is retried with capped backoff until it accepts — the instance
+/// is useless while `pending`, and every syncer re-checks the same
+/// process-wide flag on its own retry path anyway.
+pub async fn register_instance_with_retry(api_config: ApiConfig, max_backoff: Duration) {
+    let mut backoff = Duration::from_secs(2);
+    loop {
+        let attempt = async {
+            let shared = SharedRpcClient::get(&api_config).await?;
+            shared.ensure_registered().await
+        }
+        .await;
+        match attempt {
+            Ok(()) => return,
+            Err(err) => {
+                warn!(
+                    error = %err,
+                    backoff = ?backoff,
+                    "edge instance registration failed; retrying"
+                );
+                tokio::time::sleep(backoff).await;
+                backoff = (backoff.saturating_mul(2)).min(max_backoff);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1579,33 +1607,5 @@ mod tests {
         );
         assert_eq!(request.software_version, crate::RELEASE_VERSION);
         assert_eq!(request.suite_version, zelvik_suite::PROTOCOL_VERSION);
-    }
-}
-
-/// Activates this instance on the control channel at startup, before any role
-/// RPC. Registration is idempotent server-side, so a control plane that is not
-/// reachable yet is retried with capped backoff until it accepts — the instance
-/// is useless while `pending`, and every syncer re-checks the same
-/// process-wide flag on its own retry path anyway.
-pub async fn register_instance_with_retry(api_config: ApiConfig, max_backoff: Duration) {
-    let mut backoff = Duration::from_secs(2);
-    loop {
-        let attempt = async {
-            let shared = SharedRpcClient::get(&api_config).await?;
-            shared.ensure_registered().await
-        }
-        .await;
-        match attempt {
-            Ok(()) => return,
-            Err(err) => {
-                warn!(
-                    error = %err,
-                    backoff = ?backoff,
-                    "edge instance registration failed; retrying"
-                );
-                tokio::time::sleep(backoff).await;
-                backoff = (backoff.saturating_mul(2)).min(max_backoff);
-            }
-        }
     }
 }

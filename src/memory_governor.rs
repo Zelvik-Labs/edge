@@ -877,6 +877,10 @@ struct GovernorLimits {
     zero_copy_relay_limit: u64,
     zero_copy_relay_budget_bytes: u64,
     udp_queue_budget_bytes: u64,
+    quic_route_limit: usize,
+    quic_pending_route_limit: usize,
+    quic_pending_reassembly_budget_bytes: usize,
+    h3_datagram_queue_budget_bytes: usize,
     tcp_queue_budget_bytes: u64,
     /// Budget for the per-connection workspace pool (`memory_ticket`).
     /// Request-scoped classes that draw from a connection's ticket charge
@@ -1453,6 +1457,27 @@ pub struct FdEquivalentSnapshot {
     pub pressure_level: MemoryPressureLevel,
 }
 
+/// The pressure inputs consumed by L4 admission, without the diagnostic
+/// counters, resident-owner locking and budget recomputation of `snapshot`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct L4PressureSnapshot {
+    pub memory_pressure_level: MemoryPressureLevel,
+    pub connection_admission_used_bytes: u64,
+    pub connection_budget_bytes: u64,
+    pub fd_used_pct: u64,
+}
+
+/// One materialized budget generation for a QUIC ingress decision. Live
+/// connection and fd usage are still sampled for each call.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct QuicIngressSnapshot {
+    pub pressure: L4PressureSnapshot,
+    pub route_limit: usize,
+    pub pending_route_limit: usize,
+    pub pending_reassembly_budget_bytes: usize,
+    pub h3_datagram_queue_budget_bytes: usize,
+}
+
 impl Default for MemoryGovernor {
     fn default() -> Self {
         Self::new()
@@ -1549,6 +1574,10 @@ impl MemoryGovernor {
                 zero_copy_relay_limit: 0,
                 zero_copy_relay_budget_bytes: 0,
                 udp_queue_budget_bytes: 0,
+                quic_route_limit: 0,
+                quic_pending_route_limit: 0,
+                quic_pending_reassembly_budget_bytes: 0,
+                h3_datagram_queue_budget_bytes: 0,
                 tcp_queue_budget_bytes: 0,
                 request_workspace_budget_bytes: 0,
                 fd_soft_limit: 0,
@@ -2740,6 +2769,10 @@ impl MemoryGovernor {
     }
 
     pub fn fd_equivalent_snapshot(&self) -> FdEquivalentSnapshot {
+        self.fd_equivalent_snapshot_with_limit(self.limits().fd_soft_limit)
+    }
+
+    fn fd_equivalent_snapshot_with_limit(&self, soft_limit: u64) -> FdEquivalentSnapshot {
         let live_fd_count = self.live_fd_count();
         let estimated_extra = self.origin_connects.load(Ordering::Relaxed).saturating_add(
             self.zero_copy_relays
@@ -2747,13 +2780,39 @@ impl MemoryGovernor {
                 .saturating_mul(ZERO_COPY_RELAY_FD_EQUIVALENT),
         );
         let used = live_fd_count.saturating_add(estimated_extra);
-        let soft_limit = self.limits().fd_soft_limit.max(1);
+        let soft_limit = soft_limit.max(1);
         let used_pct = used.saturating_mul(100).saturating_div(soft_limit);
         FdEquivalentSnapshot {
             soft_limit,
             used,
             used_pct,
             pressure_level: pressure_level_from_pct(used_pct),
+        }
+    }
+
+    fn l4_pressure_with_limits(&self, limits: &GovernorLimits) -> L4PressureSnapshot {
+        L4PressureSnapshot {
+            memory_pressure_level: limits.memory_pressure_level,
+            connection_admission_used_bytes: self.shared_connection_used_bytes(),
+            connection_budget_bytes: limits.connection_budget_bytes,
+            fd_used_pct: self
+                .fd_equivalent_snapshot_with_limit(limits.fd_soft_limit)
+                .used_pct,
+        }
+    }
+
+    pub fn l4_pressure_snapshot(&self) -> L4PressureSnapshot {
+        self.l4_pressure_with_limits(&self.limits())
+    }
+
+    pub fn quic_ingress_snapshot(&self) -> QuicIngressSnapshot {
+        let limits = self.limits();
+        QuicIngressSnapshot {
+            pressure: self.l4_pressure_with_limits(&limits),
+            route_limit: limits.quic_route_limit,
+            pending_route_limit: limits.quic_pending_route_limit,
+            pending_reassembly_budget_bytes: limits.quic_pending_reassembly_budget_bytes,
+            h3_datagram_queue_budget_bytes: limits.h3_datagram_queue_budget_bytes,
         }
     }
 
@@ -3422,6 +3481,8 @@ impl MemoryGovernor {
         for class in ALL_ADMISSION_CLASSES {
             class_limit[class_index(class)] = self.limit_for_in(class, &snapshot) as u64;
         }
+        let quic_route_limit = (class_limit[class_index(AdmissionClass::UdpSession)] as usize)
+            .clamp(1, MAX_UDP_ROUTE_LIMIT_PER_PORT);
         self.cached_limits
             .store(std::sync::Arc::new(GovernorLimits {
                 generation,
@@ -3457,6 +3518,15 @@ impl MemoryGovernor {
                 zero_copy_relay_limit: zero_copy_relay_limit(&snapshot) as u64,
                 zero_copy_relay_budget_bytes: zero_copy_relay_budget_bytes(&snapshot),
                 udp_queue_budget_bytes: udp_queued_bytes_budget(&snapshot),
+                quic_route_limit,
+                quic_pending_route_limit: quic_pending_route_limit_per_port(
+                    &snapshot,
+                    quic_route_limit,
+                ),
+                quic_pending_reassembly_budget_bytes: quic_pending_reassembly_budget_bytes(
+                    &snapshot,
+                ),
+                h3_datagram_queue_budget_bytes: h3_datagram_queue_budget_bytes(&snapshot),
                 tcp_queue_budget_bytes: tcp_queue_bytes_budget(&snapshot),
                 request_workspace_budget_bytes: request_workspace_budget_bytes(&snapshot),
                 fd_soft_limit: snapshot.fd_soft_limit,
@@ -5618,6 +5688,94 @@ mod tests {
     /// including same-millisecond reseeds — and must always equal the live
     /// `limit_for` computation, or a tightened budget would silently keep
     /// serving the stale limit.
+    #[test]
+    fn quic_ingress_tracks_pressure_and_budget_changes() {
+        let governor = MemoryGovernor::new();
+        for (total, available, fd_limit, fd_used) in [
+            (64 << 30, 60 << 30, 1 << 20, 12),
+            (2 << 30, 300 << 20, 1024, 900),
+            (2 << 30, 100 << 20, 1024, 990),
+            (2 << 30, 10 << 20, 1024, 1000),
+            (64 << 30, 60 << 30, 1 << 20, 12),
+        ] {
+            governor.seed_cached_for_test(total, available, fd_limit, fd_used, i64::MAX as u64);
+            let ingress = governor.quic_ingress_snapshot();
+            let diagnostic = governor.snapshot(1);
+            assert_eq!(
+                ingress.pressure.memory_pressure_level,
+                diagnostic.memory_pressure_level
+            );
+            assert_eq!(
+                ingress.pressure.connection_budget_bytes,
+                diagnostic.connection_budget_bytes
+            );
+            assert_eq!(
+                ingress.pressure.connection_admission_used_bytes,
+                diagnostic.connection_admission_used_bytes
+            );
+            assert_eq!(ingress.pressure.fd_used_pct, diagnostic.fd_used_pct);
+            assert_eq!(ingress.route_limit, diagnostic.udp_route_limit_per_port);
+            assert_eq!(
+                ingress.pending_route_limit,
+                diagnostic.quic_pending_route_limit_per_port
+            );
+            assert_eq!(
+                ingress.pending_reassembly_budget_bytes,
+                diagnostic.quic_pending_reassembly_budget_bytes
+            );
+            assert_eq!(
+                ingress.h3_datagram_queue_budget_bytes,
+                diagnostic.h3_datagram_queue_budget_bytes
+            );
+        }
+    }
+
+    #[test]
+    fn quic_ingress_sees_live_usage_without_a_budget_generation_change() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(64 << 30, 60 << 30, 1024, 12, i64::MAX as u64);
+        let before = governor.quic_ingress_snapshot();
+        let generation = governor.cached_generation.load(Ordering::Acquire);
+        let permit = governor.try_admit(AdmissionClass::Http3Connection).unwrap();
+        governor.cached_fd_used.store(990, Ordering::Relaxed);
+        let after = governor.quic_ingress_snapshot();
+        assert_eq!(
+            governor.cached_generation.load(Ordering::Acquire),
+            generation
+        );
+        assert!(
+            after.pressure.connection_admission_used_bytes
+                > before.pressure.connection_admission_used_bytes
+        );
+        assert!(after.pressure.fd_used_pct > before.pressure.fd_used_pct);
+        drop(permit);
+        assert_eq!(
+            governor
+                .quic_ingress_snapshot()
+                .pressure
+                .connection_admission_used_bytes,
+            before.pressure.connection_admission_used_bytes
+        );
+    }
+
+    #[test]
+    fn quic_ingress_does_not_wait_for_diagnostic_owner_accounting() {
+        let governor = std::sync::Arc::new(MemoryGovernor::new());
+        governor.seed_cached_for_test(64 << 30, 60 << 30, 1 << 20, 12, i64::MAX as u64);
+        let owner_guard = governor.resident.owners.lock().unwrap();
+        let worker_governor = governor.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let worker =
+            std::thread::spawn(move || tx.send(worker_governor.quic_ingress_snapshot()).unwrap());
+        let result = rx.recv_timeout(std::time::Duration::from_secs(5));
+        drop(owner_guard);
+        worker.join().unwrap();
+        assert!(
+            result.is_ok(),
+            "ingress must not depend on the diagnostic owner lock"
+        );
+    }
+
     #[test]
     fn limits_table_tracks_reseeded_memory() {
         let governor = MemoryGovernor::new();

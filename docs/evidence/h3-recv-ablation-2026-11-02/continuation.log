@@ -1,0 +1,9 @@
+02-off-baseline ['passed']
+02-off-batched ['passed']
+candidate-smoke ['passed', 'passed', 'passed']
+candidate-large ['passed', 'passed']
+candidate-fresh ['passed', 'passed']
+batched-smoke ['passed', 'passed', 'passed']
+batched-large ['passed', 'passed']
+batched-fresh ['passed', 'passed']
+Continuation complete; original failure retained

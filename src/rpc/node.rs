@@ -1344,83 +1344,6 @@ fn shared_account_status(snapshot: &crate::memory_governor::GovernorSnapshot) ->
     })
 }
 
-#[cfg(test)]
-mod shared_account_status_tests {
-    use super::shared_account_status;
-    use crate::memory_governor::MemoryGovernor;
-
-    #[test]
-    fn cpu_monitor_reports_cpus_without_retaining_processes() {
-        let mut sys = super::new_cpu_monitor();
-        assert!(!sys.cpus().is_empty());
-        assert!(sys.processes().is_empty());
-        sys.refresh_cpu_all();
-        assert!(!sys.cpus().is_empty());
-        assert!(sys.processes().is_empty());
-    }
-
-    #[test]
-    fn status_matches_snapshot_and_reports_scoped_reserves() {
-        let governor = MemoryGovernor::new();
-        let snapshot = governor.snapshot(1);
-        let status = shared_account_status(&snapshot);
-        assert_eq!(
-            status["headroomBytes"].as_u64(),
-            snapshot.account_headroom_bytes
-        );
-        assert_eq!(
-            status["safetyMarginBytes"].as_u64(),
-            Some(snapshot.account_safety_margin_bytes)
-        );
-        assert_eq!(
-            status["grantableBytes"].as_u64(),
-            Some(snapshot.account_grantable_bytes)
-        );
-        assert_eq!(
-            status["pendingBytes"].as_u64(),
-            Some(snapshot.account_pending_bytes)
-        );
-        assert_eq!(
-            status["committedUnconfirmedBytes"].as_u64(),
-            Some(snapshot.account_committed_unconfirmed_bytes)
-        );
-        assert_eq!(
-            status["committedLiveBytes"].as_u64(),
-            Some(snapshot.account_committed_live_bytes)
-        );
-        assert_eq!(
-            status["observationAgeMs"].as_u64(),
-            Some(snapshot.observation_age_ms)
-        );
-        assert_eq!(status["priorityReserveEnforced"].as_bool(), Some(true));
-        assert_eq!(
-            status["controlPlaneAccountReserveEnforced"].as_bool(),
-            Some(true)
-        );
-        assert_eq!(
-            status["controlPlaneReserveBytes"].as_u64(),
-            Some(snapshot.control_plane_reserve_bytes)
-        );
-        assert_eq!(
-            status["establishedTrafficAccountReserveEnforced"].as_bool(),
-            Some(true)
-        );
-        assert_eq!(
-            status["establishedTrafficReserveBytes"].as_u64(),
-            Some(snapshot.established_traffic_reserve_bytes)
-        );
-        assert_eq!(
-            status["configApplyActive"].as_u64(),
-            Some(snapshot.config_apply_active)
-        );
-        assert_eq!(status["lowPriorityBorrowingEnforced"].as_bool(), Some(true));
-        assert_eq!(
-            status["lowPriorityBorrowableBytes"].as_u64(),
-            Some(snapshot.low_priority_borrowable_bytes)
-        );
-    }
-}
-
 pub(super) fn new_cpu_monitor() -> sysinfo::System {
     sysinfo::System::new_with_specifics(
         sysinfo::RefreshKind::nothing().with_cpu(sysinfo::CpuRefreshKind::everything()),
@@ -2131,5 +2054,82 @@ pub async fn start_node_value_reporter(config_store: Arc<ConfigStore>) {
             );
             crate::telemetry::record_gap("node_metric", created_at, &e.to_string());
         }
+    }
+}
+
+#[cfg(test)]
+mod shared_account_status_tests {
+    use super::shared_account_status;
+    use crate::memory_governor::MemoryGovernor;
+
+    #[test]
+    fn cpu_monitor_reports_cpus_without_retaining_processes() {
+        let mut sys = super::new_cpu_monitor();
+        assert!(!sys.cpus().is_empty());
+        assert!(sys.processes().is_empty());
+        sys.refresh_cpu_all();
+        assert!(!sys.cpus().is_empty());
+        assert!(sys.processes().is_empty());
+    }
+
+    #[test]
+    fn status_matches_snapshot_and_reports_scoped_reserves() {
+        let governor = MemoryGovernor::new();
+        let snapshot = governor.snapshot(1);
+        let status = shared_account_status(&snapshot);
+        assert_eq!(
+            status["headroomBytes"].as_u64(),
+            snapshot.account_headroom_bytes
+        );
+        assert_eq!(
+            status["safetyMarginBytes"].as_u64(),
+            Some(snapshot.account_safety_margin_bytes)
+        );
+        assert_eq!(
+            status["grantableBytes"].as_u64(),
+            Some(snapshot.account_grantable_bytes)
+        );
+        assert_eq!(
+            status["pendingBytes"].as_u64(),
+            Some(snapshot.account_pending_bytes)
+        );
+        assert_eq!(
+            status["committedUnconfirmedBytes"].as_u64(),
+            Some(snapshot.account_committed_unconfirmed_bytes)
+        );
+        assert_eq!(
+            status["committedLiveBytes"].as_u64(),
+            Some(snapshot.account_committed_live_bytes)
+        );
+        assert_eq!(
+            status["observationAgeMs"].as_u64(),
+            Some(snapshot.observation_age_ms)
+        );
+        assert_eq!(status["priorityReserveEnforced"].as_bool(), Some(true));
+        assert_eq!(
+            status["controlPlaneAccountReserveEnforced"].as_bool(),
+            Some(true)
+        );
+        assert_eq!(
+            status["controlPlaneReserveBytes"].as_u64(),
+            Some(snapshot.control_plane_reserve_bytes)
+        );
+        assert_eq!(
+            status["establishedTrafficAccountReserveEnforced"].as_bool(),
+            Some(true)
+        );
+        assert_eq!(
+            status["establishedTrafficReserveBytes"].as_u64(),
+            Some(snapshot.established_traffic_reserve_bytes)
+        );
+        assert_eq!(
+            status["configApplyActive"].as_u64(),
+            Some(snapshot.config_apply_active)
+        );
+        assert_eq!(status["lowPriorityBorrowingEnforced"].as_bool(), Some(true));
+        assert_eq!(
+            status["lowPriorityBorrowableBytes"].as_u64(),
+            Some(snapshot.low_priority_borrowable_bytes)
+        );
     }
 }

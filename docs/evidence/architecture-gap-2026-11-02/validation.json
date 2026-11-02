@@ -1,0 +1,12 @@
+{
+  "report_local_links_valid": true,
+  "source_and_binary_sha256_valid": true,
+  "raw_file_sha256_valid_count": 92,
+  "profile_constant_period_and_no_loss": true,
+  "zstd_group_independent_count_crosscheck": true,
+  "syscall_totals_reconciled": true,
+  "containers_cleaned": true,
+  "capacity_results_unchanged": true,
+  "production_rust_changed_this_phase": false,
+  "deployed": false
+}
