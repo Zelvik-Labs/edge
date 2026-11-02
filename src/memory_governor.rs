@@ -615,8 +615,8 @@ const H3_CONN_ESTIMATED_BYTES: u64 = 48 * 1024;
 const UDP_SESSION_ESTIMATED_BYTES: u64 = 96 * 1024;
 const UDP_DATAGRAM_ESTIMATED_BYTES: u64 = 2 * 1024;
 const ZERO_COPY_RELAY_ESTIMATED_BYTES: u64 = 768 * 1024;
-const ZERO_COPY_RELAY_FD_EQUIVALENT: u64 = 10;
-const ZERO_COPY_RELAY_BLOCKING_TASKS: u64 = 2;
+// Two owned pipes (four fds); the async splice engine borrows both sockets.
+const ZERO_COPY_RELAY_FD_EQUIVALENT: u64 = 4;
 const H2_STREAM_ESTIMATED_BYTES: u64 = 16 * 1024;
 const H3_REQUEST_ESTIMATED_BYTES: u64 = 24 * 1024;
 const ORIGIN_CONNECT_ESTIMATED_BYTES: u64 = 32 * 1024;
@@ -4838,13 +4838,9 @@ fn zero_copy_relay_limit(snapshot: &BudgetedMemorySnapshot) -> usize {
     let fd_target = fd_budget(snapshot, TCP_FD_BUDGET_PCT)
         .saturating_div(ZERO_COPY_RELAY_FD_EQUIVALENT.max(1))
         .max(1) as usize;
-    let blocking_target = snapshot
-        .cpu_parallelism
-        .max(1)
-        .saturating_mul(128)
-        .saturating_div(ZERO_COPY_RELAY_BLOCKING_TASKS as usize)
-        .max(1);
-    memory_target.min(fd_target).min(blocking_target).max(1)
+    // The readiness-driven engine owns no blocking workers. Byte and FD
+    // budgets bound idle relays without a legacy blocking-pool CPU cap.
+    memory_target.min(fd_target).max(1)
 }
 
 fn zero_copy_relay_budget_bytes(snapshot: &BudgetedMemorySnapshot) -> u64 {
@@ -6085,6 +6081,20 @@ mod tests {
             governor.cache_read_memory_bytes.load(Ordering::Acquire),
             baseline
         );
+    }
+
+    #[test]
+    fn zero_copy_relay_capacity_tracks_resources_without_a_blocking_pool_cap() {
+        let one_core = synthetic_snapshot(64, 48, 1_048_576, 1);
+        let many_cores = synthetic_snapshot(64, 48, 1_048_576, 64);
+        let limit = zero_copy_relay_limit(&one_core);
+        assert!(limit > 64, "idle relays no longer occupy blocking workers");
+        assert_eq!(limit, zero_copy_relay_limit(&many_cores));
+
+        let few_fds = synthetic_snapshot(64, 48, 512, 1);
+        assert!(zero_copy_relay_limit(&few_fds) < limit);
+        let little_memory = synthetic_snapshot(1, 1, 1_048_576, 64);
+        assert!(zero_copy_relay_limit(&little_memory) < limit);
     }
 
     #[test]

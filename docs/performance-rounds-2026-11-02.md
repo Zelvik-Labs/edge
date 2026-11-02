@@ -17,4 +17,10 @@
 3. 当前没有 io_uring 实现。先测本云环境实际系统调用能力，再建立与现有 socket/splice 相同校验的候选；旧文档中的暂缓结论由本次用户指令更新。
 4. 保留证书、完整正文、缓存状态、连接数、回源数、超时、取消和资源边界检查；逐项优化并记录回退。
 
-GitHub Actions 的提交、run URL、结论及后续每轮数据在实际执行后追加。当前没有将尚未触发的 CI 记为通过。
+基线已推送到独立分支 `perf/full-stack-20261102`。GitHub Actions [41497645026](https://github.com/Zelvik-Labs/edge/actions/runs/41497645026) 对提交 `6f942440df52b7797fbb46cec86cef916681deef` 的两个 job 均成功：all-targets check / Clippy、Rust 单元与集成测试、vendored Pingora 检查与测试，并完成 XDP eBPF 构建。[job 与 step 记录](evidence/perf-continuous-2026-11-02/baseline-github-actions.json)。此结果仅属于该基线提交，后续源码改动需另行运行 CI。
+
+## 第 1 轮：TCP/SNI 内核 splice
+
+改为 socket readiness 驱动，取消每连接两个阻塞任务和六个 socket FD 副本，修复半关闭后响应丢失，并移除与实际实现不符的阻塞池准入上限；内存、FD 和压力保护保留。本地 77 项相关测试及 Root/I/O 全目标 Clippy 通过。三轮反向对照中，旧实现的线程池停滞和半关闭错误各复现 3 次，新实现均成功。16 条连接的线程增量 32→0，FD 增量 224→128。
+
+18 个独立进程组件基准场景全部成功：1 KiB、64 KiB 配对耗时变化的中位数分别为 -36.41%、-33.50%；1 MiB 有一轮回退 +23.80%，未排除，仍待 CI 复测和剖析。不是完整 Edge 或 Nginx/OpenResty 容量结论。新增可选的 `splice_benchmark=true` Actions 输入，保存原始样本及失败。完整实现、命令、环境、限制与证据见[第 1 轮报告](performance-tcp-splice-2026-11-02.md)。候选 CI 尚待运行。

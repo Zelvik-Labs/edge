@@ -1,0 +1,18 @@
+      ┌─────────┐  mr boxington
+     ╱ ═══════ ╱│
+    ╱─────────╱ │
+    │ •    (◉)│≡│
+    │  ◟▄▄▄◞  │ ╱
+    │   ◀◆▶   │╱
+    └─────────┘
+   Compiling serde_core v1.0.229
+   Compiling zelvik-edge-io v0.1.0 (/workspace/edge/.worktrees/perf-next/crates/zelvik-edge-io)
+mbx[warning]: prediction was not restored: absolute path has no stable cache mapping: /workspace/edge/.worktrees/perf-next/crates/zelvik-edge-io/src/lib.rs
+mbx[warning]: result was not stored: absolute path has no stable cache mapping: /workspace/edge/.worktrees/perf-next/crates/zelvik-edge-io/src/lib.rs
+   Compiling serde_json v1.0.154
+   Compiling edge-splice-regression-probe v0.1.0 (/workspace/edge/.worktrees/perf-next/.local/perf-round1/probe)
+mbx[progress]: 15s elapsed; 0 hits, 0 misses, 0 bypassed, 4 not looked up; ~0.0s compiler work saved
+mbx[warning]: result was not stored: absolute path has no stable cache mapping: /workspace/edge/.worktrees/perf-next/crates/zelvik-edge-io/benches/support/blocking.rs
+    Finished `dev` profile [optimized] target(s) in 15.17s
+mbx[cache]: 0 hits, 0 misses, 4 not looked up; 0 B downloaded, 0 B uploaded, 14.8 MiB stored locally
+mbx[savings]: the sweep found 10.9 GiB logical nobody would miss. nobody has.

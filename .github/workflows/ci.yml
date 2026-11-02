@@ -4,6 +4,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      splice_benchmark:
+        description: Run isolated blocking/readiness splice component comparison
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.head_ref || github.ref }}
@@ -301,3 +306,31 @@ jobs:
         # --locked: see the vendored check step; without it cargo re-resolves
         # the whole workspace and tests tokio versions the product never ships.
         run: cargo test --locked --manifest-path pingora-main/Cargo.toml -p pingora-core -p pingora-http -p pingora-cache --lib
+
+      - name: Build splice component benchmark
+        if: github.event_name == 'workflow_dispatch' && inputs.splice_benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/splice-ci
+          cargo build --locked --release -p zelvik-edge-io --bench splice --message-format=json > .local/splice-ci/build.jsonl 2> .local/splice-ci/build.stderr
+          python3 - <<'PY'
+          import json, pathlib, os
+          records = [json.loads(line) for line in pathlib.Path('.local/splice-ci/build.jsonl').read_text().splitlines() if line.startswith('{')]
+          binaries = [r['executable'] for r in records if r.get('reason') == 'compiler-artifact' and r['target']['name'] == 'splice' and 'bench' in r['target']['kind'] and r.get('executable')]
+          assert len(binaries) == 1, binaries
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write(f'EDGE_SPLICE_BENCH_BINARY={binaries[0]}\n')
+          PY
+
+      - name: Compare splice engines after all compilation finishes
+        if: github.event_name == 'workflow_dispatch' && inputs.splice_benchmark
+        run: python3 scripts/perf/compare-splice.py --binary "$EDGE_SPLICE_BENCH_BINARY" --output .local/splice-ci/comparison
+
+      - name: Upload splice samples and failures
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.splice_benchmark
+        uses: actions/upload-artifact@v4
+        with:
+          name: splice-component-${{ github.sha }}
+          path: .local/splice-ci/
+          if-no-files-found: error

@@ -5387,11 +5387,21 @@ dependencies = [
  "woothee",
  "x509-parser 0.18.1",
  "xsk-rs",
+ "zelvik-edge-io",
  "zelvik-edge-transport",
  "zelvik-edge-xdp-common",
  "zelvik-geo-runtime",
  "zelvik-suite",
  "zstd 0.13.3",
+]
+
+[[package]]
+name = "zelvik-edge-io"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "libc",
+ "tokio",
 ]
 
 [[package]]
