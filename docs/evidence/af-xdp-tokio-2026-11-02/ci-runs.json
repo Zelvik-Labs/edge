@@ -1,0 +1,1522 @@
+[
+  {
+    "round": null,
+    "engine": "readable",
+    "functional": true,
+    "command": [
+      "/home/runner/work/edge/edge/.local/afxdp-cargo-target/release/deps/wake-fa35bded16767179",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "readable",
+      "--output",
+      "/home/runner/work/edge/edge/.local/xdp-kernel-ci/tokio/comparison/functional-readable/result.json",
+      "--functional"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5811,
+          164,
+          1556,
+          25050,
+          1854,
+          0,
+          40,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1754,
+          139,
+          421,
+          5897,
+          402,
+          0,
+          8,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1024,
+          24,
+          391,
+          6680,
+          473,
+          0,
+          17,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 75720000\nuser_usec 59760000\nsystem_usec 15960000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 0.217115,
+      "child_system_seconds": 0.029029
+    },
+    "started_unix": 1793660823.0887752,
+    "returncode": 0,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5815,
+          164,
+          1556,
+          25387,
+          1858,
+          0,
+          40,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1754,
+          139,
+          421,
+          5983,
+          402,
+          0,
+          8,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1024,
+          24,
+          391,
+          6766,
+          473,
+          0,
+          17,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 75766000\nuser_usec 59798000\nsystem_usec 15968000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 0.22011499999999998,
+      "child_system_seconds": 0.029029
+    },
+    "finished_unix": 1793660823.954701,
+    "result": {
+      "early_clear_loses_edge": true,
+      "idle_after_drain": true,
+      "negative_control_rx_only": 8,
+      "passed": true,
+      "positive_control_echoes": 8,
+      "retained_readiness_burst_passed": true
+    },
+    "passed": true
+  },
+  {
+    "round": null,
+    "engine": "read-write",
+    "functional": true,
+    "command": [
+      "/home/runner/work/edge/edge/.local/afxdp-cargo-target/release/deps/wake-fa35bded16767179",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "read-write",
+      "--output",
+      "/home/runner/work/edge/edge/.local/xdp-kernel-ci/tokio/comparison/functional-read-write/result.json",
+      "--functional"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5815,
+          164,
+          1556,
+          25388,
+          1858,
+          0,
+          40,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1754,
+          139,
+          421,
+          5983,
+          402,
+          0,
+          8,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1024,
+          24,
+          391,
+          6766,
+          473,
+          0,
+          17,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 75766000\nuser_usec 59798000\nsystem_usec 15968000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 0.22011499999999998,
+      "child_system_seconds": 0.029029
+    },
+    "started_unix": 1793660823.955206,
+    "returncode": 0,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5815,
+          164,
+          1557,
+          25724,
+          1866,
+          0,
+          40,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1754,
+          139,
+          421,
+          6070,
+          402,
+          0,
+          8,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1024,
+          24,
+          391,
+          6852,
+          473,
+          0,
+          17,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 75772000\nuser_usec 59801000\nsystem_usec 15971000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 0.22011499999999998,
+      "child_system_seconds": 0.032008999999999996
+    },
+    "finished_unix": 1793660824.820982,
+    "result": {
+      "early_clear_loses_edge": true,
+      "idle_after_drain": true,
+      "negative_control_rx_only": 8,
+      "passed": true,
+      "positive_control_echoes": 8,
+      "retained_readiness_burst_passed": true
+    },
+    "passed": true
+  },
+  {
+    "round": 1,
+    "engine": "worker",
+    "functional": false,
+    "command": [
+      "/home/runner/work/edge/edge/.local/afxdp-cargo-target/release/deps/wake-fa35bded16767179",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "worker",
+      "--output",
+      "/home/runner/work/edge/edge/.local/xdp-kernel-ci/tokio/comparison/round-1-worker/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5815,
+          164,
+          1557,
+          25725,
+          1866,
+          0,
+          40,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1754,
+          139,
+          421,
+          6070,
+          402,
+          0,
+          8,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1024,
+          24,
+          391,
+          6852,
+          473,
+          0,
+          17,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 75775000\nuser_usec 59804000\nsystem_usec 15971000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 0.22011499999999998,
+      "child_system_seconds": 0.032008999999999996
+    },
+    "started_unix": 1793660824.8216176,
+    "returncode": 0,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5863,
+          164,
+          1752,
+          26407,
+          1888,
+          0,
+          95,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1766,
+          139,
+          502,
+          6184,
+          402,
+          0,
+          8,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1060,
+          24,
+          505,
+          6891,
+          473,
+          0,
+          71,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 78763000\nuser_usec 60285000\nsystem_usec 18478000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 0.748834,
+      "child_system_seconds": 2.887775
+    },
+    "finished_unix": 1793660827.5903835,
+    "result": {
+      "elapsed_seconds": 2.629915844,
+      "empty_rx_polls": 202703,
+      "engine": "Worker",
+      "mean_roundtrip_ns": 26299.15844,
+      "measured_roundtrips": 100000,
+      "measured_wake_waits": 199298,
+      "native": {
+        "completed": 102000,
+        "fill_kicks": 0,
+        "received": 102000,
+        "submitted": 102000
+      },
+      "passed": true,
+      "resources": {
+        "fds": 18,
+        "threads": [
+          {
+            "cpus": "0-1",
+            "name": "wake-fa35bded16"
+          },
+          {
+            "cpus": "0-1",
+            "name": "xsk-wake-bench"
+          }
+        ]
+      },
+      "roundtrips_per_second": 38024.03039935448,
+      "rtt_p50_ns": 26149,
+      "rtt_p99_ns": 35784,
+      "scope": "single-process AF_PACKET client + copy-mode XSK echo; wake component only",
+      "tx_backpressure": 0,
+      "wake_waits": 202703,
+      "warmup_roundtrips": 2000,
+      "wire_bytes_per_frame": 128
+    },
+    "passed": true
+  },
+  {
+    "round": 1,
+    "engine": "readable",
+    "functional": false,
+    "command": [
+      "/home/runner/work/edge/edge/.local/afxdp-cargo-target/release/deps/wake-fa35bded16767179",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "readable",
+      "--output",
+      "/home/runner/work/edge/edge/.local/xdp-kernel-ci/tokio/comparison/round-1-readable/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5864,
+          164,
+          1753,
+          26408,
+          1888,
+          0,
+          95,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1766,
+          139,
+          503,
+          6184,
+          402,
+          0,
+          8,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1060,
+          24,
+          505,
+          6892,
+          473,
+          0,
+          71,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 78771000\nuser_usec 60290000\nsystem_usec 18481000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 0.748834,
+      "child_system_seconds": 2.887775
+    },
+    "started_unix": 1793660827.59785,
+    "returncode": 0,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5878,
+          164,
+          1805,
+          26681,
+          1894,
+          0,
+          116,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1767,
+          139,
+          503,
+          6275,
+          402,
+          0,
+          8,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1073,
+          24,
+          557,
+          6896,
+          473,
+          0,
+          92,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 79647000\nuser_usec 60429000\nsystem_usec 19218000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 0.884952,
+      "child_system_seconds": 3.62041
+    },
+    "finished_unix": 1793660828.5131733,
+    "result": {
+      "elapsed_seconds": 0.844743231,
+      "empty_rx_polls": 101999,
+      "engine": "Readable",
+      "mean_roundtrip_ns": 8447.43231,
+      "measured_roundtrips": 100000,
+      "measured_wake_waits": 100000,
+      "native": {
+        "completed": 102000,
+        "fill_kicks": 0,
+        "received": 102000,
+        "submitted": 102000
+      },
+      "passed": true,
+      "resources": {
+        "fds": 16,
+        "threads": [
+          {
+            "cpus": "0-1",
+            "name": "wake-fa35bded16"
+          }
+        ]
+      },
+      "roundtrips_per_second": 118379.16698263545,
+      "rtt_p50_ns": 8343,
+      "rtt_p99_ns": 9745,
+      "scope": "single-process AF_PACKET client + copy-mode XSK echo; wake component only",
+      "tx_backpressure": 0,
+      "wake_waits": 101999,
+      "warmup_roundtrips": 2000,
+      "wire_bytes_per_frame": 128
+    },
+    "passed": true
+  },
+  {
+    "round": 1,
+    "engine": "read-write",
+    "functional": false,
+    "command": [
+      "/home/runner/work/edge/edge/.local/afxdp-cargo-target/release/deps/wake-fa35bded16767179",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "read-write",
+      "--output",
+      "/home/runner/work/edge/edge/.local/xdp-kernel-ci/tokio/comparison/round-1-read-write/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5878,
+          164,
+          1805,
+          26682,
+          1894,
+          0,
+          116,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1767,
+          139,
+          503,
+          6275,
+          402,
+          0,
+          8,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1073,
+          24,
+          557,
+          6897,
+          473,
+          0,
+          92,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 79652000\nuser_usec 60433000\nsystem_usec 19219000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 0.884952,
+      "child_system_seconds": 3.62041
+    },
+    "started_unix": 1793660828.5181406,
+    "returncode": 0,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5893,
+          164,
+          1858,
+          26952,
+          1902,
+          0,
+          136,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1781,
+          139,
+          550,
+          6286,
+          402,
+          0,
+          27,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1074,
+          24,
+          562,
+          6981,
+          473,
+          0,
+          93,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 80526000\nuser_usec 60580000\nsystem_usec 19946000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.02908,
+      "child_system_seconds": 4.345058
+    },
+    "finished_unix": 1793660829.4335377,
+    "result": {
+      "elapsed_seconds": 0.844867538,
+      "empty_rx_polls": 101999,
+      "engine": "ReadWrite",
+      "mean_roundtrip_ns": 8448.67538,
+      "measured_roundtrips": 100000,
+      "measured_wake_waits": 100000,
+      "native": {
+        "completed": 102000,
+        "fill_kicks": 0,
+        "received": 102000,
+        "submitted": 102000
+      },
+      "passed": true,
+      "resources": {
+        "fds": 16,
+        "threads": [
+          {
+            "cpus": "0-1",
+            "name": "wake-fa35bded16"
+          }
+        ]
+      },
+      "roundtrips_per_second": 118361.74962612896,
+      "rtt_p50_ns": 8342,
+      "rtt_p99_ns": 9665,
+      "scope": "single-process AF_PACKET client + copy-mode XSK echo; wake component only",
+      "tx_backpressure": 0,
+      "wake_waits": 101999,
+      "warmup_roundtrips": 2000,
+      "wire_bytes_per_frame": 128
+    },
+    "passed": true
+  },
+  {
+    "round": 2,
+    "engine": "read-write",
+    "functional": false,
+    "command": [
+      "/home/runner/work/edge/edge/.local/afxdp-cargo-target/release/deps/wake-fa35bded16767179",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "read-write",
+      "--output",
+      "/home/runner/work/edge/edge/.local/xdp-kernel-ci/tokio/comparison/round-2-read-write/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5893,
+          164,
+          1858,
+          26953,
+          1902,
+          0,
+          136,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1781,
+          139,
+          550,
+          6287,
+          402,
+          0,
+          27,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1075,
+          24,
+          562,
+          6981,
+          473,
+          0,
+          93,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 80531000\nuser_usec 60585000\nsystem_usec 19946000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.02908,
+      "child_system_seconds": 4.345058
+    },
+    "started_unix": 1793660829.437682,
+    "returncode": 0,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5910,
+          164,
+          1911,
+          27226,
+          1907,
+          0,
+          154,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1786,
+          139,
+          565,
+          6352,
+          402,
+          0,
+          34,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1086,
+          24,
+          600,
+          7011,
+          473,
+          0,
+          105,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 81408000\nuser_usec 60749000\nsystem_usec 20659000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.19119,
+      "child_system_seconds": 5.058538
+    },
+    "finished_unix": 1793660830.353008,
+    "result": {
+      "elapsed_seconds": 0.850734652,
+      "empty_rx_polls": 101999,
+      "engine": "ReadWrite",
+      "mean_roundtrip_ns": 8507.34652,
+      "measured_roundtrips": 100000,
+      "measured_wake_waits": 100000,
+      "native": {
+        "completed": 102000,
+        "fill_kicks": 0,
+        "received": 102000,
+        "submitted": 102000
+      },
+      "passed": true,
+      "resources": {
+        "fds": 16,
+        "threads": [
+          {
+            "cpus": "0-1",
+            "name": "wake-fa35bded16"
+          }
+        ]
+      },
+      "roundtrips_per_second": 117545.46469326137,
+      "rtt_p50_ns": 8442,
+      "rtt_p99_ns": 9775,
+      "scope": "single-process AF_PACKET client + copy-mode XSK echo; wake component only",
+      "tx_backpressure": 0,
+      "wake_waits": 101999,
+      "warmup_roundtrips": 2000,
+      "wire_bytes_per_frame": 128
+    },
+    "passed": true
+  },
+  {
+    "round": 2,
+    "engine": "readable",
+    "functional": false,
+    "command": [
+      "/home/runner/work/edge/edge/.local/afxdp-cargo-target/release/deps/wake-fa35bded16767179",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "readable",
+      "--output",
+      "/home/runner/work/edge/edge/.local/xdp-kernel-ci/tokio/comparison/round-2-readable/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5910,
+          164,
+          1911,
+          27227,
+          1907,
+          0,
+          154,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1786,
+          139,
+          565,
+          6352,
+          402,
+          0,
+          34,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1086,
+          24,
+          600,
+          7011,
+          473,
+          0,
+          105,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 81412000\nuser_usec 60753000\nsystem_usec 20659000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.19119,
+      "child_system_seconds": 5.058538
+    },
+    "started_unix": 1793660830.3571043,
+    "returncode": 0,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5923,
+          164,
+          1965,
+          27502,
+          1912,
+          0,
+          173,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1798,
+          139,
+          619,
+          6358,
+          402,
+          0,
+          53,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1086,
+          24,
+          601,
+          7102,
+          473,
+          0,
+          105,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 82271000\nuser_usec 60876000\nsystem_usec 21395000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.314365,
+      "child_system_seconds": 5.790578
+    },
+    "finished_unix": 1793660831.2724688,
+    "result": {
+      "elapsed_seconds": 0.831569494,
+      "empty_rx_polls": 101999,
+      "engine": "Readable",
+      "mean_roundtrip_ns": 8315.69494,
+      "measured_roundtrips": 100000,
+      "measured_wake_waits": 100000,
+      "native": {
+        "completed": 102000,
+        "fill_kicks": 0,
+        "received": 102000,
+        "submitted": 102000
+      },
+      "passed": true,
+      "resources": {
+        "fds": 16,
+        "threads": [
+          {
+            "cpus": "0-1",
+            "name": "wake-fa35bded16"
+          }
+        ]
+      },
+      "roundtrips_per_second": 120254.53160743292,
+      "rtt_p50_ns": 8222,
+      "rtt_p99_ns": 9595,
+      "scope": "single-process AF_PACKET client + copy-mode XSK echo; wake component only",
+      "tx_backpressure": 0,
+      "wake_waits": 101999,
+      "warmup_roundtrips": 2000,
+      "wire_bytes_per_frame": 128
+    },
+    "passed": true
+  },
+  {
+    "round": 2,
+    "engine": "worker",
+    "functional": false,
+    "command": [
+      "/home/runner/work/edge/edge/.local/afxdp-cargo-target/release/deps/wake-fa35bded16767179",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "worker",
+      "--output",
+      "/home/runner/work/edge/edge/.local/xdp-kernel-ci/tokio/comparison/round-2-worker/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5923,
+          164,
+          1966,
+          27503,
+          1912,
+          0,
+          173,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1798,
+          139,
+          619,
+          6359,
+          402,
+          0,
+          53,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1086,
+          24,
+          601,
+          7102,
+          473,
+          0,
+          105,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 82276000\nuser_usec 60879000\nsystem_usec 21397000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.314365,
+      "child_system_seconds": 5.790578
+    },
+    "started_unix": 1793660831.276841,
+    "returncode": 0,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5963,
+          164,
+          2157,
+          28151,
+          1933,
+          0,
+          232,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1807,
+          139,
+          695,
+          6466,
+          402,
+          0,
+          53,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1115,
+          24,
+          715,
+          7135,
+          473,
+          0,
+          163,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 85177000\nuser_usec 61284000\nsystem_usec 23893000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.7563719999999998,
+      "child_system_seconds": 8.684671
+    },
+    "finished_unix": 1793660833.9445648,
+    "result": {
+      "elapsed_seconds": 2.557046075,
+      "empty_rx_polls": 202583,
+      "engine": "Worker",
+      "mean_roundtrip_ns": 25570.46075,
+      "measured_roundtrips": 100000,
+      "measured_wake_waits": 199210,
+      "native": {
+        "completed": 102000,
+        "fill_kicks": 0,
+        "received": 102000,
+        "submitted": 102000
+      },
+      "passed": true,
+      "resources": {
+        "fds": 18,
+        "threads": [
+          {
+            "cpus": "0-1",
+            "name": "wake-fa35bded16"
+          },
+          {
+            "cpus": "0-1",
+            "name": "xsk-wake-bench"
+          }
+        ]
+      },
+      "roundtrips_per_second": 39107.62538762623,
+      "rtt_p50_ns": 25809,
+      "rtt_p99_ns": 33932,
+      "scope": "single-process AF_PACKET client + copy-mode XSK echo; wake component only",
+      "tx_backpressure": 0,
+      "wake_waits": 202583,
+      "warmup_roundtrips": 2000,
+      "wire_bytes_per_frame": 128
+    },
+    "passed": true
+  },
+  {
+    "round": 3,
+    "engine": "readable",
+    "functional": false,
+    "command": [
+      "/home/runner/work/edge/edge/.local/afxdp-cargo-target/release/deps/wake-fa35bded16767179",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "readable",
+      "--output",
+      "/home/runner/work/edge/edge/.local/xdp-kernel-ci/tokio/comparison/round-3-readable/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5964,
+          164,
+          2157,
+          28152,
+          1933,
+          0,
+          232,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1808,
+          139,
+          695,
+          6466,
+          402,
+          0,
+          53,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1115,
+          24,
+          715,
+          7135,
+          473,
+          0,
+          163,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 85181000\nuser_usec 61288000\nsystem_usec 23893000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.7563719999999998,
+      "child_system_seconds": 8.684671
+    },
+    "started_unix": 1793660833.9490104,
+    "returncode": 0,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5981,
+          164,
+          2205,
+          28425,
+          1939,
+          0,
+          253,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1821,
+          139,
+          733,
+          6489,
+          402,
+          0,
+          70,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1118,
+          24,
+          725,
+          7210,
+          473,
+          0,
+          166,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 86048000\nuser_usec 61462000\nsystem_usec 24586000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.916427,
+      "child_system_seconds": 9.37591
+    },
+    "finished_unix": 1793660834.864077,
+    "result": {
+      "elapsed_seconds": 0.828081045,
+      "empty_rx_polls": 101999,
+      "engine": "Readable",
+      "mean_roundtrip_ns": 8280.81045,
+      "measured_roundtrips": 100000,
+      "measured_wake_waits": 100000,
+      "native": {
+        "completed": 102000,
+        "fill_kicks": 0,
+        "received": 102000,
+        "submitted": 102000
+      },
+      "passed": true,
+      "resources": {
+        "fds": 16,
+        "threads": [
+          {
+            "cpus": "0-1",
+            "name": "wake-fa35bded16"
+          }
+        ]
+      },
+      "roundtrips_per_second": 120761.12670831633,
+      "rtt_p50_ns": 8192,
+      "rtt_p99_ns": 9534,
+      "scope": "single-process AF_PACKET client + copy-mode XSK echo; wake component only",
+      "tx_backpressure": 0,
+      "wake_waits": 101999,
+      "warmup_roundtrips": 2000,
+      "wire_bytes_per_frame": 128
+    },
+    "passed": true
+  },
+  {
+    "round": 3,
+    "engine": "worker",
+    "functional": false,
+    "command": [
+      "/home/runner/work/edge/edge/.local/afxdp-cargo-target/release/deps/wake-fa35bded16767179",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "worker",
+      "--output",
+      "/home/runner/work/edge/edge/.local/xdp-kernel-ci/tokio/comparison/round-3-worker/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5982,
+          164,
+          2205,
+          28426,
+          1939,
+          0,
+          253,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1821,
+          139,
+          733,
+          6489,
+          402,
+          0,
+          70,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1118,
+          24,
+          725,
+          7210,
+          473,
+          0,
+          166,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 86054000\nuser_usec 61466000\nsystem_usec 24588000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.916427,
+      "child_system_seconds": 9.37591
+    },
+    "started_unix": 1793660834.8688273,
+    "returncode": 0,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          6026,
+          164,
+          2398,
+          29075,
+          1958,
+          0,
+          310,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1853,
+          139,
+          850,
+          6522,
+          402,
+          0,
+          125,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1130,
+          24,
+          801,
+          7315,
+          473,
+          0,
+          166,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 88990000\nuser_usec 61906000\nsystem_usec 27084000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.412235,
+      "child_system_seconds": 12.2343
+    },
+    "finished_unix": 1793660837.536402,
+    "result": {
+      "elapsed_seconds": 2.552293555,
+      "empty_rx_polls": 203266,
+      "engine": "Worker",
+      "mean_roundtrip_ns": 25522.93555,
+      "measured_roundtrips": 100000,
+      "measured_wake_waits": 199772,
+      "native": {
+        "completed": 102000,
+        "fill_kicks": 0,
+        "received": 102000,
+        "submitted": 102000
+      },
+      "passed": true,
+      "resources": {
+        "fds": 18,
+        "threads": [
+          {
+            "cpus": "0-1",
+            "name": "wake-fa35bded16"
+          },
+          {
+            "cpus": "0-1",
+            "name": "xsk-wake-bench"
+          }
+        ]
+      },
+      "roundtrips_per_second": 39180.446075294814,
+      "rtt_p50_ns": 25498,
+      "rtt_p99_ns": 33822,
+      "scope": "single-process AF_PACKET client + copy-mode XSK echo; wake component only",
+      "tx_backpressure": 0,
+      "wake_waits": 203266,
+      "warmup_roundtrips": 2000,
+      "wire_bytes_per_frame": 128
+    },
+    "passed": true
+  },
+  {
+    "round": 3,
+    "engine": "read-write",
+    "functional": false,
+    "command": [
+      "/home/runner/work/edge/edge/.local/afxdp-cargo-target/release/deps/wake-fa35bded16767179",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "read-write",
+      "--output",
+      "/home/runner/work/edge/edge/.local/xdp-kernel-ci/tokio/comparison/round-3-read-write/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          6026,
+          164,
+          2398,
+          29077,
+          1958,
+          0,
+          310,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1853,
+          139,
+          850,
+          6522,
+          402,
+          0,
+          125,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1130,
+          24,
+          801,
+          7315,
+          473,
+          0,
+          166,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 88995000\nuser_usec 61911000\nsystem_usec 27084000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.412235,
+      "child_system_seconds": 12.2343
+    },
+    "started_unix": 1793660837.540918,
+    "returncode": 0,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          6042,
+          164,
+          2448,
+          29347,
+          1965,
+          0,
+          332,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1855,
+          139,
+          855,
+          6604,
+          402,
+          0,
+          128,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1144,
+          24,
+          846,
+          7328,
+          473,
+          0,
+          186,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 89874000\nuser_usec 62072000\nsystem_usec 27802000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.572418,
+      "child_system_seconds": 12.949117
+    },
+    "finished_unix": 1793660838.4559062,
+    "result": {
+      "elapsed_seconds": 0.850857596,
+      "empty_rx_polls": 101999,
+      "engine": "ReadWrite",
+      "mean_roundtrip_ns": 8508.57596,
+      "measured_roundtrips": 100000,
+      "measured_wake_waits": 100000,
+      "native": {
+        "completed": 102000,
+        "fill_kicks": 0,
+        "received": 102000,
+        "submitted": 102000
+      },
+      "passed": true,
+      "resources": {
+        "fds": 16,
+        "threads": [
+          {
+            "cpus": "0-1",
+            "name": "wake-fa35bded16"
+          }
+        ]
+      },
+      "roundtrips_per_second": 117528.48005367046,
+      "rtt_p50_ns": 8393,
+      "rtt_p99_ns": 10516,
+      "scope": "single-process AF_PACKET client + copy-mode XSK echo; wake component only",
+      "tx_backpressure": 0,
+      "wake_waits": 101999,
+      "warmup_roundtrips": 2000,
+      "wire_bytes_per_frame": 128
+    },
+    "passed": true
+  }
+]

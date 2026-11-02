@@ -49,4 +49,8 @@ RW+edge-triggered 初始 EPOLLOUT 后没有继续空闲唤醒，不能仅凭永�
 
 ## 第 6 轮：Tokio 与 owned poll worker 对照
 
-独立原生基准复用节点 worker 源码和上一轮 C ring fixture，对照 worker/channel、READABLE-only 和 RW Tokio 注册。保留 RX 空观察后的 guard 清除、驱动 poll/kick、完整正文、序号与 TX 完成检查；冻结并核对实际编译的基线，记录计时阶段唤醒次数以防忙路径绕过。8 项本地测试与 Clippy/release 构建通过；本地 11 项原生尝试均因 EAFNOSUPPORT 失败，已清理并保留空耗时，没有性能结论。下一步在同一实际提交的 GitHub Actions 中运行控制与三轮独立比较。节点默认后端没有变更。细节见[第 6 轮报告](performance-af-xdp-tokio-2026-11-02.md)。
+独立原生基准复用节点 worker 源码和上一轮 C ring fixture，对照 worker/channel、READABLE-only 和 RW Tokio 注册。保留 RX 空观察后的 guard 清除、驱动 poll/kick、完整正文、序号与 TX 完成检查；冻结并核对实际编译的基线，记录计时阶段唤醒次数以防忙路径绕过。8 项本地测试与 Clippy/release 构建通过；本地 11 项原生尝试均因 EAFNOSUPPORT 失败，已清理并保留空耗时。
+
+提交 `7daf4b80b1971aa45e3d12086acbf2bf48f16de5` 的 [Actions 41542718770](https://github.com/Zelvik-Labs/edge/actions/runs/41542718770) 三个 job 全部成功。两个真实 XSK 功能控制和 9 个性能场景通过，90 万计时 RTT 样本复核成功，CPU steal 为 0%。READABLE 配对耗时中位数下降 67.56%，P99 下降 71.81%，组件吞吐约 3.08 倍；线程 2→1、FD 18→16。RW 方案耗时也下降 66.73%，不支持将旧问题仅归因于 RW 注册。worker 测量阶段有约 20 万次等待，直接 readiness 为 10 万次。
+
+历史代码另有 `.ok()` 吞掉错误和收到 guard 后立即清除的问题，尚未复现旧节点整个 CPU 事件。本轮支持继续节点集成，但不外推为整个 Edge 提速 3 倍；默认节点仍保留 owned worker，硬件与完整协议/长稳对照仍待推进。细节和所有原始样本见[第 6 轮报告](performance-af-xdp-tokio-2026-11-02.md)。
