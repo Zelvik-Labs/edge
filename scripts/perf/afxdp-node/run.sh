@@ -21,7 +21,8 @@ fi
 mkdir -p "$output"
 # Fail before tests if HTTP/2 would otherwise be skipped by the legacy smoke.
 /usr/bin/curl --version > "$output/curl.log"
-if ! /usr/bin/curl --version | rg -q 'HTTP2'; then
+curl_version=$(/usr/bin/curl --version)
+if [[ $curl_version != *HTTP2* ]]; then
   echo 'curl must support HTTP/2; protocol checks cannot be skipped' >&2
   exit 1
 fi
@@ -37,7 +38,7 @@ metadata = {'network_namespace': sys.argv[3], 'parent_network_namespace': sys.ar
             'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
             'scope': 'full-node copy-mode veth correctness, IPv4/IPv6 and reload; no throughput claim'}
 metadata['binaries'] = {}
-for name in ['zelvik-edge', 'h3-probe']:
+for name in ['Zelvik-Edge', 'h3-probe']:
     with pathlib.Path(os.environ['CARGO_TARGET_DIR'], 'debug', name).open('rb') as source:
         digest = hashlib.sha256()
         for block in iter(lambda: source.read(1024 * 1024), b''):
@@ -90,7 +91,7 @@ root = pathlib.Path(sys.argv[1])
 cases = [json.loads(root.joinpath(label + '.json').read_text()) for label in
          ['1-worker', '1-readable', '2-readable', '2-worker']]
 binaries = {}
-for name in ['zelvik-edge', 'h3-probe']:
+for name in ['Zelvik-Edge', 'h3-probe']:
     with pathlib.Path(os.environ['CARGO_TARGET_DIR'], 'debug', name).open('rb') as source:
         digest = hashlib.sha256()
         for block in iter(lambda: source.read(1024 * 1024), b''):

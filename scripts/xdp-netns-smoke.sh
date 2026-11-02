@@ -23,7 +23,7 @@ HOST_BYPASS_IP="${HOST_BYPASS_ADDR%/*}"
 HOST_IP6="${HOST_ADDR6%/*}"
 TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT_DIR/target}"
 XDP_SMOKE_PROFILE="${XDP_SMOKE_PROFILE:-debug}"
-NODE_BIN="$TARGET_DIR/$XDP_SMOKE_PROFILE/zelvik-edge"
+NODE_BIN="${XDP_SMOKE_NODE_BIN:-$TARGET_DIR/$XDP_SMOKE_PROFILE/Zelvik-Edge}"
 H3_PROBE_BIN="$TARGET_DIR/$XDP_SMOKE_PROFILE/h3-probe"
 export XDP_SMOKE_WAKE="${XDP_SMOKE_WAKE:-worker}"
 case "$XDP_SMOKE_WAKE" in
@@ -462,9 +462,9 @@ if [[ "${XDP_SMOKE_SKIP_BUILD:-0}" != "1" ]]; then
 
     log "building smoke binaries"
     if [[ "$XDP_SMOKE_PROFILE" == "release" ]]; then
-        cargo build -q --release --bin zelvik-edge --bin h3-probe
+        cargo build -q --release --bin Zelvik-Edge --bin h3-probe
     else
-        cargo build -q --bin zelvik-edge --bin h3-probe
+        cargo build -q --bin Zelvik-Edge --bin h3-probe
     fi
 fi
 [[ -x "$NODE_BIN" ]] || die "missing node binary: $NODE_BIN"

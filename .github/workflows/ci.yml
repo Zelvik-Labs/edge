@@ -542,7 +542,7 @@ jobs:
           set -euo pipefail
           mkdir -p .local/afxdp-node-ci
           sudo apt-get install -y --no-install-recommends iproute2 ethtool iputils-ping curl
-          cargo build --locked --bin zelvik-edge --bin h3-probe > .local/afxdp-node-ci/build.log 2>&1
+          cargo build --locked --bin Zelvik-Edge --bin h3-probe > .local/afxdp-node-ci/build.log 2>&1
 
       - name: Validate XSK wake modes in isolated full nodes
         if: github.event_name == 'workflow_dispatch' && inputs.xdp_node_smoke

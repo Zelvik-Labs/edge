@@ -1,7 +1,7 @@
 # Full-node XSK wake integration gate
 
 The CI `workflow_dispatch` input `xdp_node_smoke=true` builds one pair of
-`zelvik-edge` / `h3-probe` binaries, then runs the existing full application
+`Zelvik-Edge` / `h3-probe` binaries, then runs the existing full application
 smoke in worker/readable/readable/worker order. Both modes use the same binary.
 `--wake readable` is available only on explicit proxy smoke / reload commands;
 normal serving still uses the owned poll worker.
