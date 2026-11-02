@@ -39,4 +39,4 @@
 
 实验后端启动时显式注册内核工作线程 CPU 范围，并提供 `[2,2]` 上限候选。16 项 I/O 测试和默认/实验全目标 Clippy 通过；删除设置上限调用时，并发测试会因实际限额仍为内核默认而失败。基准增加逐线程 CPU、限额读回与数量检查，缺失或越界均失败。本地 36 个场景全部通过，候选各档均为 2 个 io-wq 线程；但性能方向不稳定，CPU steal 最高约 47.80%，全部离群值保留。
 
-新增不附加接口的 BPF/AF_XDP 探针，本地确认 AF_XDP 返回 EAFNOSUPPORT，隔离 Docker 可加载最小 BPF 程序，容器清理成功。下一步通过同一源码提交的 GitHub Actions 完成 72 个性能对照与原生内核能力验证，不接入默认代理。完整实现、原始样本及限制见[第 4 轮报告](performance-io-wq-bounded-2026-11-02.md)。
+新增不附加接口的 BPF/AF_XDP 探针，本地确认 AF_XDP 返回 EAFNOSUPPORT，隔离 Docker 可加载最小 BPF 程序，容器清理成功。提交 `112815b891ea26e6d0e132e7a2d1487b9d6d8f9a` 的 [Actions 41529553377](https://github.com/Zelvik-Labs/edge/actions/runs/41529553377) 三个 job 全部成功，16 项 I/O 测试和 72 个计时场景通过，CPU steal 为 0%，所有观测线程都在 CPU 0/1 内。候选均为 2 个 io-wq 线程，默认数量对照最多观察到 394 个；但限额使小包耗时增加约 6%～16%，相比 readiness 的六组中位数仍慢约 9%～163%。不接入默认代理，后续优先 AF_XDP readiness 与完整协议路径。原生 6.8 内核探针确认 BPF 和 AF_XDP socket 可用。完整实现、全部快慢样本及限制见[第 4 轮报告](performance-io-wq-bounded-2026-11-02.md)。
