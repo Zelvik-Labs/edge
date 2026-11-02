@@ -349,6 +349,7 @@ async fn many_connections_progress_on_one_owned_worker() {
     let mut driver = Driver::<NoopObserver>::new(Config {
         ring_entries: 8,
         max_connections: 32,
+        io_wq_max_workers: Some([1, 1]),
         ..Config::default()
     })
     .unwrap();
@@ -393,10 +394,23 @@ async fn many_connections_progress_on_one_owned_worker() {
     .await
     .unwrap();
     let report = driver.shutdown().unwrap().unwrap();
+    assert_eq!(report.io_wq_limits, [1, 1]);
+    assert!(report.io_wq_cpus > 0);
     assert_eq!(
         (report.accepted, report.completed, report.rejected),
         (16, 16, 0)
     );
+}
+
+#[test]
+fn zero_worker_limits_must_not_silently_keep_the_kernel_default() {
+    for limits in [[0, 1], [1, 0], [u32::MAX, 1]] {
+        let result = Driver::<NoopObserver>::new(Config {
+            io_wq_max_workers: Some(limits),
+            ..Config::default()
+        });
+        assert!(matches!(result, Err(error) if error.kind() == std::io::ErrorKind::InvalidInput));
+    }
 }
 
 #[tokio::test]

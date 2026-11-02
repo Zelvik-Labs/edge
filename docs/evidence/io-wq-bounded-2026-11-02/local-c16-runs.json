@@ -1,0 +1,1260 @@
+[
+  {
+    "round": 1,
+    "engine": "uring-unbounded",
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round4-workers/bin/splice-workers",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 102241338041\nuser_usec 67327494403\nsystem_usec 34913843638\nnice_usec 0\nnr_periods 633238\nnr_throttled 11872\nthrottled_usec 917749247\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          4165234,
+          0,
+          1818564,
+          51280595,
+          21017,
+          0,
+          421578,
+          5732080,
+          0,
+          0
+        ],
+        "cpu0": [
+          709962,
+          0,
+          373584,
+          10378540,
+          7453,
+          0,
+          94711,
+          1178348,
+          0,
+          0
+        ],
+        "cpu1": [
+          959954,
+          0,
+          363289,
+          9961718,
+          7221,
+          0,
+          90575,
+          1346199,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 0.022861,
+      "child_system_seconds": 0.035876
+    },
+    "started_unix": 1793654993.49433,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 102265444805\nuser_usec 67336996726\nsystem_usec 34928448078\nnice_usec 0\nnr_periods 633329\nnr_throttled 11872\nthrottled_usec 917749247\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          4165514,
+          0,
+          1819181,
+          51286296,
+          21789,
+          0,
+          421719,
+          5734468,
+          0,
+          0
+        ],
+        "cpu0": [
+          710123,
+          0,
+          373937,
+          10378825,
+          7968,
+          0,
+          94803,
+          1178887,
+          0,
+          0
+        ],
+        "cpu1": [
+          960028,
+          0,
+          363462,
+          9962194,
+          7478,
+          0,
+          90619,
+          1347353,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 4.90503,
+      "child_system_seconds": 14.416409
+    },
+    "finished_unix": 1793655011.7616415,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 1037872.8491995729,
+        "mean_per_roundtrip_ns": 64867.05307497331,
+        "roundtrips_per_second": 15416.146604412574,
+        "median_ns": 1011674.88,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 974646.6641038931,
+          "upper_bound": 1102744.216938357
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 92876842.85,
+        "mean_per_roundtrip_ns": 5804802.678125,
+        "roundtrips_per_second": 172.27114433509192,
+        "median_ns": 74447830.25,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 71795332.336875,
+          "upper_bound": 118656142.27937497
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 4696621.294436942,
+        "mean_per_roundtrip_ns": 293538.83090230887,
+        "roundtrips_per_second": 3406.7043086807307,
+        "median_ns": 3306719.755208333,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 3588583.1857034457,
+          "upper_bound": 6014090.722925471
+        }
+      }
+    ],
+    "resource_checks": {
+      "passed": true,
+      "affinities": [
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-15918:0-1",
+            "iou-wrk-15918:0-1",
+            "iou-wrk-15918:0-1",
+            "iou-wrk-15918:0-1",
+            "iou-wrk-15918:0-1",
+            "iou-wrk-15918:0-1",
+            "iou-wrk-15918:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-15943:0-1",
+            "iou-wrk-15943:0-1",
+            "iou-wrk-15943:0-1",
+            "iou-wrk-15943:0-1",
+            "iou-wrk-15943:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-15996:0-1",
+            "iou-wrk-15996:0-1",
+            "iou-wrk-15996:0-1",
+            "iou-wrk-15996:0-1",
+            "iou-wrk-15996:0-1",
+            "iou-wrk-15996:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        }
+      ],
+      "io_wq_reports": [
+        {
+          "limits": [
+            20,
+            71955
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            20,
+            71955
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            20,
+            71955
+          ],
+          "cpus": 2
+        }
+      ]
+    },
+    "passed": true
+  },
+  {
+    "round": 1,
+    "engine": "uring",
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round4-workers/bin/splice-workers",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 102265459207\nuser_usec 67337007765\nsystem_usec 34928451442\nnice_usec 0\nnr_periods 633330\nnr_throttled 11872\nthrottled_usec 917749247\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          4165514,
+          0,
+          1819181,
+          51286302,
+          21789,
+          0,
+          421719,
+          5734469,
+          0,
+          0
+        ],
+        "cpu0": [
+          710123,
+          0,
+          373937,
+          10378825,
+          7968,
+          0,
+          94803,
+          1178888,
+          0,
+          0
+        ],
+        "cpu1": [
+          960028,
+          0,
+          363462,
+          9962195,
+          7478,
+          0,
+          90619,
+          1347353,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 4.90503,
+      "child_system_seconds": 14.416409
+    },
+    "started_unix": 1793655011.7760565,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 102283870807\nuser_usec 67343646594\nsystem_usec 34940224213\nnice_usec 0\nnr_periods 633403\nnr_throttled 11872\nthrottled_usec 917749247\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          4165751,
+          0,
+          1819710,
+          51291087,
+          22402,
+          0,
+          421841,
+          5736047,
+          0,
+          0
+        ],
+        "cpu0": [
+          710262,
+          0,
+          374248,
+          10379041,
+          8378,
+          0,
+          94881,
+          1179307,
+          0,
+          0
+        ],
+        "cpu1": [
+          960095,
+          0,
+          363626,
+          9962596,
+          7680,
+          0,
+          90659,
+          1348214,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 9.044011,
+      "child_system_seconds": 26.517307
+    },
+    "finished_unix": 1793655026.4625292,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 1175975.5766262964,
+        "mean_per_roundtrip_ns": 73498.47353914352,
+        "roundtrips_per_second": 13605.724742942097,
+        "median_ns": 1211381.6243386245,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 1024752.9572936436,
+          "upper_bound": 1330492.8113036489
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 86394940.025,
+        "mean_per_roundtrip_ns": 5399683.7515625,
+        "roundtrips_per_second": 185.19603110286434,
+        "median_ns": 75663938.75,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 69044486.46625,
+          "upper_bound": 106072376.271875
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 3153088.7688738457,
+        "mean_per_roundtrip_ns": 197068.04805461536,
+        "roundtrips_per_second": 5074.389328313946,
+        "median_ns": 2940508.658333333,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 2710362.474228022,
+          "upper_bound": 3812265.9261805047
+        }
+      }
+    ],
+    "resource_checks": {
+      "passed": true,
+      "affinities": [
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-16021:0-1",
+            "iou-wrk-16021:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-16041:0-1",
+            "iou-wrk-16041:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-16057:0-1",
+            "iou-wrk-16057:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        }
+      ],
+      "io_wq_reports": [
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        }
+      ]
+    },
+    "passed": true
+  },
+  {
+    "round": 2,
+    "engine": "uring",
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round4-workers/bin/splice-workers",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 102283888001\nuser_usec 67343658629\nsystem_usec 34940229372\nnice_usec 0\nnr_periods 633403\nnr_throttled 11872\nthrottled_usec 917749247\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          4165751,
+          0,
+          1819710,
+          51291090,
+          22402,
+          0,
+          421841,
+          5736048,
+          0,
+          0
+        ],
+        "cpu0": [
+          710263,
+          0,
+          374249,
+          10379041,
+          8378,
+          0,
+          94881,
+          1179307,
+          0,
+          0
+        ],
+        "cpu1": [
+          960095,
+          0,
+          363626,
+          9962597,
+          7680,
+          0,
+          90659,
+          1348214,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 9.044011,
+      "child_system_seconds": 26.517307
+    },
+    "started_unix": 1793655026.4699686,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 102308709741\nuser_usec 67354271096\nsystem_usec 34954438644\nnice_usec 0\nnr_periods 633480\nnr_throttled 11872\nthrottled_usec 917749247\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          4165997,
+          0,
+          1820261,
+          51295371,
+          22927,
+          0,
+          421968,
+          5738782,
+          0,
+          0
+        ],
+        "cpu0": [
+          710362,
+          0,
+          374506,
+          10379250,
+          8705,
+          0,
+          94946,
+          1180061,
+          0,
+          0
+        ],
+        "cpu1": [
+          960204,
+          0,
+          363856,
+          9962846,
+          7879,
+          0,
+          90717,
+          1349063,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 13.608515,
+      "child_system_seconds": 40.567354
+    },
+    "finished_unix": 1793655041.827586,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 1203996.9880360872,
+        "mean_per_roundtrip_ns": 75249.81175225545,
+        "roundtrips_per_second": 13289.069789201527,
+        "median_ns": 971791.9533333334,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 963453.6061735464,
+          "upper_bound": 1479417.2996842389
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 223004491.8,
+        "mean_per_roundtrip_ns": 13937780.7375,
+        "roundtrips_per_second": 71.74743374384353,
+        "median_ns": 68710725.5,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 112073832.43375002,
+          "upper_bound": 351955137.59625
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 1988158.144682308,
+        "mean_per_roundtrip_ns": 124259.88404264425,
+        "roundtrips_per_second": 8047.649550814115,
+        "median_ns": 1779286.5369318181,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 1648504.624438893,
+          "upper_bound": 2443782.7021772787
+        }
+      }
+    ],
+    "resource_checks": {
+      "passed": true,
+      "affinities": [
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-16079:0-1",
+            "iou-wrk-16079:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-16094:0-1",
+            "iou-wrk-16094:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-16108:0-1",
+            "iou-wrk-16108:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        }
+      ],
+      "io_wq_reports": [
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        }
+      ]
+    },
+    "passed": true
+  },
+  {
+    "round": 2,
+    "engine": "uring-unbounded",
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round4-workers/bin/splice-workers",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 102308717476\nuser_usec 67354271928\nsystem_usec 34954445547\nnice_usec 0\nnr_periods 633480\nnr_throttled 11872\nthrottled_usec 917749247\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          4165997,
+          0,
+          1820261,
+          51295374,
+          22927,
+          0,
+          421968,
+          5738783,
+          0,
+          0
+        ],
+        "cpu0": [
+          710362,
+          0,
+          374506,
+          10379250,
+          8705,
+          0,
+          94947,
+          1180062,
+          0,
+          0
+        ],
+        "cpu1": [
+          960204,
+          0,
+          363856,
+          9962847,
+          7879,
+          0,
+          90717,
+          1349063,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 13.608515,
+      "child_system_seconds": 40.567354
+    },
+    "started_unix": 1793655041.8340175,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 102341499505\nuser_usec 67372444082\nsystem_usec 34969055423\nnice_usec 0\nnr_periods 633565\nnr_throttled 11876\nthrottled_usec 918657788\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          4166213,
+          0,
+          1820630,
+          51299462,
+          23355,
+          0,
+          422054,
+          5743533,
+          0,
+          0
+        ],
+        "cpu0": [
+          710466,
+          0,
+          374681,
+          10379456,
+          8977,
+          0,
+          95001,
+          1181169,
+          0,
+          0
+        ],
+        "cpu1": [
+          960261,
+          0,
+          363975,
+          9963163,
+          8034,
+          0,
+          90741,
+          1350357,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 19.03509,
+      "child_system_seconds": 53.70989
+    },
+    "finished_unix": 1793655058.962336,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 33549059.6,
+        "mean_per_roundtrip_ns": 2096816.225,
+        "roundtrips_per_second": 476.91351682477557,
+        "median_ns": 1001684.5,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 9028087.725750001,
+          "upper_bound": 63018594.08624994
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 67643987.025,
+        "mean_per_roundtrip_ns": 4227749.1890625,
+        "roundtrips_per_second": 236.53247988009173,
+        "median_ns": 49212324.25,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 53066938.46,
+          "upper_bound": 85274874.9325
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 3586828.272983781,
+        "mean_per_roundtrip_ns": 224176.76706148632,
+        "roundtrips_per_second": 4460.765551702884,
+        "median_ns": 3324857.2,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 3012289.22907391,
+          "upper_bound": 4243508.965893404
+        }
+      }
+    ],
+    "resource_checks": {
+      "passed": true,
+      "affinities": [
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-16138:0-1",
+            "iou-wrk-16138:0-1",
+            "iou-wrk-16138:0-1",
+            "iou-wrk-16138:0-1",
+            "iou-wrk-16138:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-16154:0-1",
+            "iou-wrk-16154:0-1",
+            "iou-wrk-16154:0-1",
+            "iou-wrk-16154:0-1",
+            "iou-wrk-16154:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-16176:0-1",
+            "iou-wrk-16176:0-1",
+            "iou-wrk-16176:0-1",
+            "iou-wrk-16176:0-1",
+            "iou-wrk-16176:0-1",
+            "iou-wrk-16176:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        }
+      ],
+      "io_wq_reports": [
+        {
+          "limits": [
+            20,
+            71955
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            20,
+            71955
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            20,
+            71955
+          ],
+          "cpus": 2
+        }
+      ]
+    },
+    "passed": true
+  },
+  {
+    "round": 3,
+    "engine": "uring-unbounded",
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round4-workers/bin/splice-workers",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 102341505248\nuser_usec 67372449109\nsystem_usec 34969056139\nnice_usec 0\nnr_periods 633565\nnr_throttled 11876\nthrottled_usec 918657788\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          4166213,
+          0,
+          1820630,
+          51299464,
+          23355,
+          0,
+          422054,
+          5743533,
+          0,
+          0
+        ],
+        "cpu0": [
+          710466,
+          0,
+          374681,
+          10379457,
+          8977,
+          0,
+          95001,
+          1181169,
+          0,
+          0
+        ],
+        "cpu1": [
+          960261,
+          0,
+          363975,
+          9963163,
+          8034,
+          0,
+          90741,
+          1350357,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 19.03509,
+      "child_system_seconds": 53.70989
+    },
+    "started_unix": 1793655058.965929,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 102360860682\nuser_usec 67377154092\nsystem_usec 34983706590\nnice_usec 0\nnr_periods 633634\nnr_throttled 11876\nthrottled_usec 918657788\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          4166532,
+          0,
+          1821340,
+          51303933,
+          23796,
+          0,
+          422274,
+          5744493,
+          0,
+          0
+        ],
+        "cpu0": [
+          710609,
+          0,
+          375046,
+          10379747,
+          9129,
+          0,
+          95121,
+          1181567,
+          0,
+          0
+        ],
+        "cpu1": [
+          960401,
+          0,
+          364268,
+          9963367,
+          8324,
+          0,
+          90838,
+          1350807,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 23.335721,
+      "child_system_seconds": 67.132507
+    },
+    "finished_unix": 1793655072.7690647,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 852144.6512105884,
+        "mean_per_roundtrip_ns": 53259.040700661775,
+        "roundtrips_per_second": 18776.154937157447,
+        "median_ns": 826329.8098290598,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 794766.4051984374,
+          "upper_bound": 913170.9566419591
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 42629838.17,
+        "mean_per_roundtrip_ns": 2664364.885625,
+        "roundtrips_per_second": 375.32396759741204,
+        "median_ns": 40114003.2,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 38038950.36225,
+          "upper_bound": 47568466.999999985
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 2060423.8453479547,
+        "mean_per_roundtrip_ns": 128776.49033424717,
+        "roundtrips_per_second": 7765.392560431174,
+        "median_ns": 1966827.878125,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 1938656.0645901023,
+          "upper_bound": 2193361.8491797675
+        }
+      }
+    ],
+    "resource_checks": {
+      "passed": true,
+      "affinities": [
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-16201:0-1",
+            "iou-wrk-16201:0-1",
+            "iou-wrk-16201:0-1",
+            "iou-wrk-16201:0-1",
+            "iou-wrk-16201:0-1",
+            "iou-wrk-16201:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-16225:0-1",
+            "iou-wrk-16225:0-1",
+            "iou-wrk-16225:0-1",
+            "iou-wrk-16225:0-1",
+            "iou-wrk-16225:0-1",
+            "iou-wrk-16225:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-16248:0-1",
+            "iou-wrk-16248:0-1",
+            "iou-wrk-16248:0-1",
+            "iou-wrk-16248:0-1",
+            "iou-wrk-16248:0-1",
+            "iou-wrk-16248:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        }
+      ],
+      "io_wq_reports": [
+        {
+          "limits": [
+            20,
+            71955
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            20,
+            71955
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            20,
+            71955
+          ],
+          "cpus": 2
+        }
+      ]
+    },
+    "passed": true
+  },
+  {
+    "round": 3,
+    "engine": "uring",
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round4-workers/bin/splice-workers",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 102360868154\nuser_usec 67377156323\nsystem_usec 34983711830\nnice_usec 0\nnr_periods 633635\nnr_throttled 11876\nthrottled_usec 918657788\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          4166532,
+          0,
+          1821340,
+          51303935,
+          23796,
+          0,
+          422274,
+          5744494,
+          0,
+          0
+        ],
+        "cpu0": [
+          710609,
+          0,
+          375047,
+          10379747,
+          9129,
+          0,
+          95121,
+          1181568,
+          0,
+          0
+        ],
+        "cpu1": [
+          960401,
+          0,
+          364268,
+          9963367,
+          8324,
+          0,
+          90838,
+          1350807,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 23.335721,
+      "child_system_seconds": 67.132507
+    },
+    "started_unix": 1793655072.7735503,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 102379400393\nuser_usec 67381294658\nsystem_usec 34998105735\nnice_usec 0\nnr_periods 633701\nnr_throttled 11876\nthrottled_usec 918657788\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          4166872,
+          0,
+          1822077,
+          51308207,
+          24233,
+          0,
+          422480,
+          5745356,
+          0,
+          0
+        ],
+        "cpu0": [
+          710792,
+          0,
+          375438,
+          10379942,
+          9329,
+          0,
+          95230,
+          1181867,
+          0,
+          0
+        ],
+        "cpu1": [
+          960526,
+          0,
+          364568,
+          9963624,
+          8561,
+          0,
+          90933,
+          1351262,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 27.636435,
+      "child_system_seconds": 79.793927
+    },
+    "finished_unix": 1793655086.006961,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 816000.6019214521,
+        "mean_per_roundtrip_ns": 51000.037620090756,
+        "roundtrips_per_second": 19607.828673562857,
+        "median_ns": 823704.185515873,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 714549.5647084557,
+          "upper_bound": 917702.4175970765
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 33476851.159999996,
+        "mean_per_roundtrip_ns": 2092303.1974999998,
+        "roundtrips_per_second": 477.9422032116835,
+        "median_ns": 31832985.200000003,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 29786405.645999998,
+          "upper_bound": 37496068.282749996
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 2295418.810609277,
+        "mean_per_roundtrip_ns": 143463.6756630798,
+        "roundtrips_per_second": 6970.405542574208,
+        "median_ns": 2088670.4145833333,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 1947651.4387783,
+          "upper_bound": 2671193.4126414773
+        }
+      }
+    ],
+    "resource_checks": {
+      "passed": true,
+      "affinities": [
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-16277:0-1",
+            "iou-wrk-16277:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-16289:0-1",
+            "iou-wrk-16289:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        },
+        {
+          "threads": [
+            "edge-uring:0-1",
+            "iou-wrk-16311:0-1",
+            "iou-wrk-16311:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "splice-workers:0-1",
+            "tokio-rt-worker:0-1",
+            "tokio-rt-worker:0-1"
+          ],
+          "within_cpu_budget": true
+        }
+      ],
+      "io_wq_reports": [
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        },
+        {
+          "limits": [
+            2,
+            2
+          ],
+          "cpus": 2
+        }
+      ]
+    },
+    "passed": true
+  }
+]

@@ -10,7 +10,11 @@ on:
         type: boolean
         default: false
       io_uring_benchmark:
-        description: Test shared io_uring splice and compare against readiness at 1 and 16 connections
+        description: Test io_uring splice against readiness and default io-wq limits at 1 and 16 connections
+        type: boolean
+        default: false
+      xdp_kernel_probe:
+        description: Probe BPF load and AF_XDP socket creation inside an isolated network namespace
         type: boolean
         default: false
 
@@ -19,6 +23,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  xdp-kernel:
+    name: Isolated BPF / AF_XDP capability
+    if: github.event_name == 'workflow_dispatch' && inputs.xdp_kernel_probe
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+      - name: Compile and probe without attaching interfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/xdp-kernel-ci
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, platform, subprocess
+          source = pathlib.Path('scripts/perf/kernel-capability.c')
+          metadata = {'commit': os.environ['GITHUB_SHA'], 'kernel': platform.uname()._asdict(), 'cpus': sorted(os.sched_getaffinity(0)), 'source_sha256': hashlib.sha256(source.read_bytes()).hexdigest(), 'compiler': subprocess.check_output(['cc', '--version'], text=True).splitlines()[0], 'scope': 'minimal XDP_PASS load/close and AF_XDP socket open/close; no attachment or traffic'}
+          pathlib.Path('.local/xdp-kernel-ci/metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
+          PY
+          cc -std=gnu11 -O2 -Wall -Wextra -Werror scripts/perf/kernel-capability.c -o .local/xdp-kernel-ci/probe > .local/xdp-kernel-ci/build.log 2>&1
+          sudo unshare --net -- .local/xdp-kernel-ci/probe > .local/xdp-kernel-ci/result.json 2> .local/xdp-kernel-ci/probe.log
+          cat .local/xdp-kernel-ci/result.json
+      - name: Upload kernel capability and failures
+        if: always() && hashFiles('.local/xdp-kernel-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: xdp-kernel-${{ github.sha }}
+          path: |
+            .local/xdp-kernel-ci/*.json
+            .local/xdp-kernel-ci/*.log
+          if-no-files-found: error
+
   check:
     name: Check / Clippy - linux-x64
     runs-on: ubuntu-22.04
@@ -404,6 +440,8 @@ jobs:
           if [ "$IO_URING_BENCHMARK" = "true" ]; then
             python3 scripts/perf/compare-splice.py --binary "$EDGE_SPLICE_BENCH_BINARY" --baseline-engine readiness --candidate-engine uring --concurrency 1 --output .local/splice-ci/comparison-c1
             python3 scripts/perf/compare-splice.py --binary "$EDGE_SPLICE_BENCH_BINARY" --baseline-engine readiness --candidate-engine uring --concurrency 16 --output .local/splice-ci/comparison-c16
+            python3 scripts/perf/compare-splice.py --binary "$EDGE_SPLICE_BENCH_BINARY" --baseline-engine uring-unbounded --candidate-engine uring --concurrency 1 --output .local/splice-ci/workers-c1
+            python3 scripts/perf/compare-splice.py --binary "$EDGE_SPLICE_BENCH_BINARY" --baseline-engine uring-unbounded --candidate-engine uring --concurrency 16 --output .local/splice-ci/workers-c16
           else
             python3 scripts/perf/compare-splice.py --binary "$EDGE_SPLICE_BENCH_BINARY" --output .local/splice-ci/comparison
           fi

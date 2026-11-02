@@ -14,6 +14,8 @@ pub enum Engine {
     Readiness,
     #[cfg(feature = "io-uring")]
     Uring,
+    #[cfg(feature = "io-uring")]
+    UringUnbounded,
 }
 
 impl Engine {
@@ -23,6 +25,8 @@ impl Engine {
             Self::Readiness => "readiness",
             #[cfg(feature = "io-uring")]
             Self::Uring => "uring",
+            #[cfg(feature = "io-uring")]
+            Self::UringUnbounded => "uring-unbounded",
         }
     }
 }
@@ -73,7 +77,7 @@ async fn relay(context: Context, front: TcpStream, back: TcpStream) -> io::Resul
             ))
         }
         #[cfg(feature = "io-uring")]
-        Engine::Uring => {
+        Engine::Uring | Engine::UringUnbounded => {
             use zelvik_edge_io::uring::EndReason;
             let handle = context
                 .uring
@@ -185,13 +189,13 @@ impl Group {
     pub async fn new(engine: Engine, bytes: usize, concurrency: usize) -> Self {
         assert!([1, 16].contains(&concurrency));
         #[cfg(feature = "io-uring")]
-        let driver = if matches!(engine, Engine::Uring) {
-            Some(
-                zelvik_edge_io::uring::Driver::<Count>::new(
-                    zelvik_edge_io::uring::Config::default(),
-                )
-                .unwrap(),
-            )
+        let driver = if matches!(engine, Engine::Uring | Engine::UringUnbounded) {
+            let mut config = zelvik_edge_io::uring::Config::default();
+            if matches!(engine, Engine::UringUnbounded) {
+                config.io_wq_max_workers = None;
+            }
+            eprintln!("SPLICE_URING_CONFIG {config:?}");
+            Some(zelvik_edge_io::uring::Driver::<Count>::new(config).unwrap())
         } else {
             None
         };
@@ -248,10 +252,19 @@ impl Group {
             .map(|connection| connection.completed.load(Ordering::Relaxed))
             .sum();
         match resources() {
-            Ok((fds, threads)) => eprintln!(
-                "SPLICE_RESOURCE engine={} concurrency={concurrency} completed_roundtrips={requests} fds={fds} threads={threads:?}",
-                self.engine.name()
-            ),
+            Ok(snapshot) => {
+                eprintln!(
+                    "SPLICE_RESOURCE engine={} concurrency={concurrency} completed_roundtrips={requests} fds={} threads={:?}",
+                    self.engine.name(),
+                    snapshot.fds,
+                    snapshot.threads
+                );
+                eprintln!(
+                    "SPLICE_AFFINITY engine={} threads={:?}",
+                    self.engine.name(),
+                    snapshot.affinity
+                );
+            }
             Err(error) => eprintln!(
                 "SPLICE_RESOURCE_UNAVAILABLE engine={} error={error}",
                 self.engine.name()
@@ -272,17 +285,36 @@ impl Group {
     }
 }
 
-fn resources() -> io::Result<(usize, Vec<String>)> {
+struct ResourceSnapshot {
+    fds: usize,
+    threads: Vec<String>,
+    affinity: Vec<String>,
+}
+
+fn resources() -> io::Result<ResourceSnapshot> {
     let fds = std::fs::read_dir("/proc/self/fd")?
         .try_fold(0usize, |count, entry| entry.map(|_| count + 1))?;
     let mut threads = Vec::new();
+    let mut affinity = Vec::new();
     for entry in std::fs::read_dir("/proc/self/task")? {
-        threads.push(
-            std::fs::read_to_string(entry?.path().join("comm"))?
-                .trim()
-                .to_owned(),
-        );
+        let path = entry?.path();
+        let name = std::fs::read_to_string(path.join("comm"))?
+            .trim()
+            .to_owned();
+        let status = std::fs::read_to_string(path.join("status"))?;
+        let cpus = status
+            .lines()
+            .find_map(|line| line.strip_prefix("Cpus_allowed_list:"))
+            .ok_or_else(|| io::Error::other("missing thread CPU affinity"))?
+            .trim();
+        affinity.push(format!("{name}:{cpus}"));
+        threads.push(name);
     }
     threads.sort();
-    Ok((fds, threads))
+    affinity.sort();
+    Ok(ResourceSnapshot {
+        fds,
+        threads,
+        affinity,
+    })
 }

@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import resource
 import statistics
 import subprocess
@@ -33,13 +34,40 @@ def cpu_stat():
     return {"cgroup": path.read_text() if path.exists() else None, "proc": proc, "child_user_seconds": child.ru_utime, "child_system_seconds": child.ru_stime}
 
 
+def resource_checks(path, engine, cpus):
+    """Read post-timing diagnostics; missing or out-of-budget data fails the case."""
+    text = path.read_text()
+    affinities = []
+    for line in text.splitlines():
+        if line.startswith("SPLICE_AFFINITY "):
+            observed = json.loads(line.split(" threads=", 1)[1])
+            valid = bool(observed)
+            for thread in observed:
+                allowed = set()
+                for part in thread.rsplit(":", 1)[1].split(","):
+                    bounds = [int(v) for v in part.split("-")]
+                    allowed.update(range(bounds[0], bounds[-1] + 1))
+                valid &= bool(allowed) and allowed <= set(cpus)
+            affinities.append({"threads": observed, "within_cpu_budget": valid})
+    reports = []
+    for limits, count in re.findall(r"io_wq_limits: \[(\d+, \d+)\], io_wq_cpus: (\d+)", text):
+        reports.append({"limits": [int(v) for v in limits.split(", ")], "cpus": int(count)})
+    valid = len(affinities) == 3 and all(a["within_cpu_budget"] for a in affinities)
+    if engine.startswith("uring"):
+        valid &= len(reports) == 3 and all(r["cpus"] == len(cpus) for r in reports)
+    if engine == "uring":
+        valid &= all(r["limits"] == [2, 2] for r in reports)
+        valid &= all(sum(t.startswith("iou-wrk-") for t in a["threads"]) <= 4 for a in affinities)
+    return {"passed": valid, "affinities": affinities, "io_wq_reports": reports}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--rounds", type=int, default=3)
-    parser.add_argument("--baseline-engine", choices=["blocking", "readiness", "uring"], default="blocking")
-    parser.add_argument("--candidate-engine", choices=["blocking", "readiness", "uring"], default="readiness")
+    parser.add_argument("--baseline-engine", choices=["blocking", "readiness", "uring", "uring-unbounded"], default="blocking")
+    parser.add_argument("--candidate-engine", choices=["blocking", "readiness", "uring", "uring-unbounded"], default="readiness")
     parser.add_argument("--concurrency", type=int, choices=[1, 16], default=1)
     args = parser.parse_args()
     if args.rounds < 1:
@@ -63,11 +91,12 @@ def main():
     sources += sorted((root / "crates/zelvik-edge-io").rglob("*.rs"))
     sources.append(root / "crates/zelvik-edge-io/Cargo.toml")
     metadata = {
-        "schema_version": 2,
+        "schema_version": 3,
         "scope": "single-process client + echo origin + relay component",
         "algorithm_reference_commits": {"blocking": "6f942440df52b7797fbb46cec86cef916681deef", "readiness": "2df8b242b1b0d24f199e22592b6924e592f960a2"},
         "baseline_engine": args.baseline_engine,
         "candidate_engine": args.candidate_engine,
+        "uring_worker_policy": {"uring": "explicit [2,2] worker limits and issuer CPU affinity", "uring-unbounded": "kernel worker-count defaults with explicit issuer CPU affinity; differs from round 3 which did not register affinity"},
         "concurrency": args.concurrency,
         "baseline_splice_normalized_sha256": normalized_hash,
         "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
@@ -108,7 +137,8 @@ def main():
                 mean = data["mean"]["point_estimate"]
                 record["cases"].append({"bytes": int(estimate.parent.parent.name), "mean_ns": mean, "mean_per_roundtrip_ns": mean / args.concurrency, "roundtrips_per_second": args.concurrency * 1e9 / mean, "median_ns": data["median"]["point_estimate"], "mean_confidence_interval": data["mean"]["confidence_interval"]})
             valid_sizes = sorted(case["bytes"] for case in record["cases"]) == [1024, 65536, 1048576]
-            record["passed"] = record["returncode"] == 0 and valid_sizes
+            record["resource_checks"] = resource_checks(run_dir / "stderr.log", engine, cpus)
+            record["passed"] = record["returncode"] == 0 and valid_sizes and record["resource_checks"]["passed"]
             failed |= not record["passed"]
             records.append(record)
             write_json(run_dir / "result.json", record)

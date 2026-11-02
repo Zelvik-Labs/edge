@@ -1,0 +1,71 @@
+[
+  {
+    "mode": "user",
+    "returncode": 1,
+    "result": {
+      "uid": 1000,
+      "euid": 1000,
+      "xdp_program_load": false,
+      "bpf_errno": 1,
+      "af_xdp_socket": false,
+      "socket_errno": 97,
+      "cleanup_errno": 0
+    },
+    "stderr": ""
+  },
+  {
+    "mode": "user_network_namespace",
+    "returncode": 1,
+    "result": {
+      "uid": 0,
+      "euid": 0,
+      "xdp_program_load": false,
+      "bpf_errno": 1,
+      "af_xdp_socket": false,
+      "socket_errno": 97,
+      "cleanup_errno": 0
+    },
+    "stderr": ""
+  },
+  {
+    "mode": "isolated_docker",
+    "command": [
+      "docker",
+      "--host=unix:///var/run/docker.sock",
+      "create",
+      "--name",
+      "edge-perf-xdp-cap-20261102-r4",
+      "--network",
+      "none",
+      "--cap-add",
+      "BPF",
+      "--cap-add",
+      "NET_ADMIN",
+      "--cap-add",
+      "NET_RAW",
+      "--security-opt",
+      "seccomp=unconfined",
+      "--mount",
+      "type=bind,src=/workspace/edge/.worktrees/perf-next/.local/perf-round4-workers/kernel-probe,dst=/probe,readonly",
+      "--entrypoint",
+      "/probe",
+      "debian:trixie-slim"
+    ],
+    "returncode": 1,
+    "result": {
+      "uid": 0,
+      "euid": 0,
+      "xdp_program_load": true,
+      "bpf_errno": 0,
+      "af_xdp_socket": false,
+      "socket_errno": 97,
+      "cleanup_errno": 0
+    },
+    "stderr": ""
+  },
+  {
+    "mode": "docker_cleanup",
+    "returncode": 0,
+    "stderr": ""
+  }
+]

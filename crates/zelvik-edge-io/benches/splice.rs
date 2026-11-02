@@ -21,6 +21,8 @@ fn main() {
         "readiness" => &[support::Engine::Readiness],
         #[cfg(feature = "io-uring")]
         "uring" => &[support::Engine::Uring],
+        #[cfg(feature = "io-uring")]
+        "uring-unbounded" => &[support::Engine::UringUnbounded],
         "all" => &[support::Engine::Blocking, support::Engine::Readiness],
         _ => panic!("unsupported EDGE_SPLICE_BENCH_ENGINE; uring requires feature io-uring"),
     };

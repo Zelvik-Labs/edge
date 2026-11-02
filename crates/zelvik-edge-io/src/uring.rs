@@ -28,6 +28,9 @@ pub struct Config {
     pub pipe_capacity_hint: usize,
     /// SINGLE_ISSUER + DEFER_TASKRUN. Requires Linux 6.1 or newer.
     pub defer_taskrun: bool,
+    /// Kernel worker limits [bounded, unbounded]. None explicitly retains
+    /// kernel defaults for comparison. Both configured limits must be nonzero.
+    pub io_wq_max_workers: Option<[u32; 2]>,
 }
 
 impl Default for Config {
@@ -37,6 +40,7 @@ impl Default for Config {
             max_connections: 1024,
             pipe_capacity_hint: 256 * 1024,
             defer_taskrun: true,
+            io_wq_max_workers: Some([2, 2]),
         }
     }
 }
@@ -72,6 +76,11 @@ pub struct Report {
     pub abandoned_receivers: u64,
     pub submit_calls: u64,
     pub completions: u64,
+    /// Limits read back on the issuer before shutdown. Zero means the
+    /// kernel has not initialized an io-wq for this issuer.
+    pub io_wq_limits: [u32; 2],
+    /// Number of CPUs explicitly permitted for kernel workers at startup.
+    pub io_wq_cpus: u32,
 }
 
 struct Shared {
@@ -233,6 +242,11 @@ impl<O: Observer + Send + 'static> Driver<O> {
             || config.max_connections > u32::MAX as usize / 6
             || config.pipe_capacity_hint == 0
             || config.pipe_capacity_hint > i32::MAX as usize
+            || config.io_wq_max_workers.is_some_and(|limits| {
+                limits
+                    .iter()
+                    .any(|&limit| limit == 0 || limit > i32::MAX as u32)
+            })
         {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -423,6 +437,22 @@ impl<O: Observer + Send + 'static> Worker<O> {
             builder.setup_single_issuer().setup_defer_taskrun();
         }
         let ring = builder.build(config.ring_entries)?;
+        // Linux 6.8 initializes io-wq with cpu_possible_mask, independently
+        // of this thread's sched affinity. Bind workers explicitly before
+        // admitting I/O, so they obey the same CPU budget as their issuer.
+        // SAFETY: cpu_set_t is fully initialized and writable for the syscall.
+        let mut affinity: libc::cpu_set_t = unsafe { std::mem::zeroed() };
+        if unsafe { libc::sched_getaffinity(0, std::mem::size_of_val(&affinity), &mut affinity) }
+            < 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        ring.submitter().register_iowq_aff(&affinity)?;
+        if let Some(mut limits) = config.io_wq_max_workers {
+            ring.submitter().register_iowq_max_workers(&mut limits)?;
+        }
+        // SAFETY: affinity was initialized above and populated by the kernel.
+        let io_wq_cpus = unsafe { libc::CPU_COUNT(&affinity) } as u32;
         let mut probe = Probe::new();
         ring.submitter().register_probe(&mut probe)?;
         for code in [
@@ -458,7 +488,10 @@ impl<O: Observer + Send + 'static> Worker<O> {
             deadlines: BTreeSet::new(),
             stopping: false,
             wake_pending: false,
-            report: Report::default(),
+            report: Report {
+                io_wq_cpus,
+                ..Report::default()
+            },
         })
     }
 
@@ -494,6 +527,13 @@ impl<O: Observer + Send + 'static> Worker<O> {
                 && !self.wake_pending
                 && self.pending.is_empty()
             {
+                // Query only after I/O: before io-wq is initialized the
+                // registration API returns zero rather than effective limits.
+                let mut limits = [0, 0];
+                self.ring
+                    .submitter()
+                    .register_iowq_max_workers(&mut limits)?;
+                self.report.io_wq_limits = limits;
                 return Ok(self.report);
             }
             {

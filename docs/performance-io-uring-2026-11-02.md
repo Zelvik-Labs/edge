@@ -57,7 +57,7 @@ flowchart LR
 
 提交 `b88f24b8de525f71941948e231cbfbda1ee635e1` 的 [Actions 41524209297](https://github.com/Zelvik-Labs/edge/actions/runs/41524209297) 两个 job 均成功：XDP eBPF 构建、all-targets check / Clippy、常规单元/集成与 vendored Pingora 检查/测试，以及实验 feature 的 15 项测试和 Clippy。日志接口返回的常规测试日志在末尾前截断，因此本轮不据该前缀声明全仓测试总数；15 项实验测试的完整日志在基准产物内，0 失败、0 忽略。
 
-runner 内核 `6.8.0-1070-azure`，两个允许 CPU 为 0/1。同一 release 二进制分别测量两种引擎，各连接数三轮交错，共 36 个场景全部通过。12 个独立进程的 CPU steal 均为 0%，源码与二进制在测量前后未变，tracked dirty 为 false。
+runner 内核 `6.8.0-1070-azure`，两个允许 CPU 为 0/1。同一 release 二进制分别测量两种引擎，各连接数三轮交错，共 36 个场景全部通过。12 个独立进程的 CPU steal 均为 0%，源码与二进制在测量前后未变，tracked dirty 为 false。这里的两个 CPU 是用户态进程的 affinity；第 3 轮没有显式注册 io-wq affinity，也没有记录内核线程 CPU 掩码。后续核对 Linux 6.8 `io-wq.c` 发现其初始化使用 `cpu_possible_mask`，因此不能确认该轮 io-wq 的有效 CPU 范围与进程一致。第 4 轮将显式注册并逐线程读取实际掩码，原始数据保持不变。
 
 | 连接 | 正文 | 第 1 轮 | 第 2 轮 | 第 3 轮 | 配对中位数 |
 | --- | --- | ---: | ---: | ---: | ---: |
