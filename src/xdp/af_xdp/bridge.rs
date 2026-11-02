@@ -1238,22 +1238,19 @@ pub(crate) async fn run_queue_bridge_loop(
     // Event-driven idle wait sources. The socket is bound with
     // XDP_USE_NEED_WAKEUP, so a POLLIN poll on the fd is also what wakes
     // the NIC driver after fill-ring starvation — readability signals
-    // real RX. A dedicated thread does that blocking poll and pushes a
-    // coalesced wake: the previous AsyncFd/epoll registration let the
-    // socket's permanently-ready EPOLLOUT keep the tokio IO driver hot,
-    // so `readable()` resolved instantly every round and the queue
-    // thread spun at 100% CPU with zero useful work.
-    // Owned wake worker: an unjoined poller would keep its duplicated
-    // socket fd (and the kernel queue registration it pins) alive after
-    // teardown, so the guard must live for the whole run and be shut
-    // down + joined on every exit path.
-    let mut xsk_wake = {
-        match wake::AfXdpWakeWorker::start(
-            // SAFETY: the fd is borrowed only for the F_DUPFD_CLOEXEC
-            // inside start() — the queue handle keeps owning the socket.
-            unsafe { BorrowedFd::borrow_raw(queue_handle.rx.fd().as_raw_fd()) },
-            format!("xsk-wake-{}", queue_handle.queue),
-        ) {
+    // real RX. Keep those zero-time poll/fill wakeups in poll_raw_once
+    // with either wait mechanism. The default worker owns and joins its
+    // blocking poll thread. Explicit validation can instead register a
+    // duplicated socket with Tokio and retain readiness until RX is empty.
+    // The historical AsyncFd code swallowed errors and cleared readiness
+    // immediately; matched real-XSK tests do not support attributing the
+    // old spin to EPOLLOUT interest alone.
+    let wake_mode = crate::runtime_mode::validation_xsk_wake_mode();
+    // SAFETY: both constructors borrow only while duplicating the fd;
+    // queue_handle owns the original socket throughout this scope.
+    let socket_fd = unsafe { BorrowedFd::borrow_raw(queue_handle.rx.fd().as_raw_fd()) };
+    let mut xsk_wake = if wake_mode == crate::runtime_mode::XdpValidationWakeMode::Worker {
+        match wake::AfXdpWakeWorker::start(socket_fd, format!("xsk-wake-{}", queue_handle.queue)) {
             Ok(worker) => Some(worker),
             Err(err) => {
                 lease.owner().disable_queue_redirect_for_fault(
@@ -1264,7 +1261,29 @@ pub(crate) async fn run_queue_bridge_loop(
                 return;
             }
         }
+    } else {
+        None
     };
+    let xsk_readiness = if wake_mode == crate::runtime_mode::XdpValidationWakeMode::Readable {
+        match readiness::AfXdpReadiness::register(socket_fd) {
+            Ok(registration) => Some(registration),
+            Err(err) => {
+                lease.owner().disable_queue_redirect_for_fault(
+                    &queue_handle.interface,
+                    queue_handle.queue,
+                    format!("xsk readiness registration failed: {err}"),
+                );
+                return;
+            }
+        }
+    } else {
+        None
+    };
+    // Declared after the registration, so cancellation drops the guard
+    // before its owned fd, then releases the queue and its UMEM.
+    let mut xsk_ready: Option<readiness::AfXdpReadinessGuard<'_>> = None;
+    tracing::info!(interface = %queue_handle.interface, queue = queue_handle.queue,
+        wake = wake_mode.as_str(), "AF_XDP queue wake mechanism ready");
     // Items consumed by an idle-wake channel recv are stashed here and
     // processed first at their normal drain sites.
     let mut early_downstream: std::collections::VecDeque<crate::udp_proxy::DownstreamUdpDatagram> =
@@ -1539,6 +1558,11 @@ pub(crate) async fn run_queue_bridge_loop(
         let polled_packets = match poll_result {
             Ok(stats) => {
                 consecutive_poll_errors = 0;
+                if stats.rx_observed_empty
+                    && let Some(ready) = xsk_ready.take()
+                {
+                    ready.clear_after_empty();
+                }
                 stats.packets
             }
             Err(err) => {
@@ -2594,7 +2618,7 @@ pub(crate) async fn run_queue_bridge_loop(
             // (e.g. per-queue `fwd_rx` for all but the first queue — its
             // sender is dropped by the iface_fwd map), which would turn
             // the idle wait into a hot loop on exactly those queues.
-            if wait > AF_XDP_IDLE_SPIN_THRESHOLD {
+            if wait > AF_XDP_IDLE_SPIN_THRESHOLD && xsk_ready.is_none() {
                 tokio::select! {
                     _ = tokio::time::sleep(wait) => {}
                     item = downstream_rx.recv(), if !downstream_rx.is_closed() => {
@@ -2618,6 +2642,26 @@ pub(crate) async fn run_queue_bridge_loop(
                         }
                     }
                     _ = wake_notify.notified() => {}
+                    result = async {
+                        match xsk_readiness.as_ref() {
+                            Some(registration) => registration.readable().await,
+                            None => std::future::pending().await,
+                        }
+                    } => {
+                        match result {
+                            Ok(ready) => xsk_ready = Some(ready),
+                            Err(err) => {
+                                lease.owner().disable_queue_redirect_for_fault(
+                                    &queue_handle.interface,
+                                    queue_handle.queue,
+                                    format!("xsk readiness wait failed: {err}"),
+                                );
+                                // Join the existing abort/RST teardown at
+                                // the top of the loop; never silently retry.
+                                wake_failed = true;
+                            }
+                        }
+                    }
                     _ = async {
                         match xsk_wake
                             .as_mut()

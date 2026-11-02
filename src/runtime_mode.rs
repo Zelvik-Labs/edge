@@ -566,6 +566,42 @@ pub fn set_validation_transport_controller(controller: XdpTransportController) {
     );
 }
 
+/// Process-scoped wake selection for explicit validation commands. This is
+/// deliberately absent from production configuration and defaults to Worker.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum XdpValidationWakeMode {
+    Worker,
+    Readable,
+}
+
+static VALIDATION_XSK_READINESS: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_validation_xsk_wake_mode(mode: XdpValidationWakeMode) {
+    VALIDATION_XSK_READINESS.store(
+        mode == XdpValidationWakeMode::Readable,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn validation_xsk_wake_mode() -> XdpValidationWakeMode {
+    if VALIDATION_XSK_READINESS.load(std::sync::atomic::Ordering::Relaxed) {
+        XdpValidationWakeMode::Readable
+    } else {
+        XdpValidationWakeMode::Worker
+    }
+}
+
+impl XdpValidationWakeMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Worker => "worker",
+            Self::Readable => "readable",
+        }
+    }
+}
+
 fn validation_transport_controller() -> Option<XdpTransportController> {
     transport_controller_from_index(
         VALIDATION_TRANSPORT_CONTROLLER.load(std::sync::atomic::Ordering::Relaxed),

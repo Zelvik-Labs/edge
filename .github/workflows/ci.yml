@@ -25,6 +25,10 @@ on:
         description: Compare the owned XSK poll worker with Tokio readable and read/write registrations
         type: boolean
         default: false
+      xdp_node_smoke:
+        description: Validate both XSK wake modes in the full node across protocols, IPv4/IPv6 and reload
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.head_ref || github.ref }}
@@ -529,4 +533,30 @@ jobs:
         with:
           name: splice-component-${{ github.sha }}
           path: .local/splice-ci/
+          if-no-files-found: error
+
+      - name: Build matching full-node XSK validation binaries
+        if: github.event_name == 'workflow_dispatch' && inputs.xdp_node_smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/afxdp-node-ci
+          sudo apt-get install -y --no-install-recommends iproute2 ethtool iputils-ping curl
+          cargo build --locked --bin zelvik-edge --bin h3-probe > .local/afxdp-node-ci/build.log 2>&1
+
+      - name: Validate XSK wake modes in isolated full nodes
+        if: github.event_name == 'workflow_dispatch' && inputs.xdp_node_smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          parent_net=$(readlink /proc/self/ns/net)
+          parent_mount=$(readlink /proc/self/ns/mnt)
+          sudo unshare --net --mount --propagation private -- bash scripts/perf/afxdp-node/run.sh "$GITHUB_WORKSPACE/target" "$GITHUB_WORKSPACE/.local/afxdp-node-ci" "$parent_net" "$parent_mount"
+
+      - name: Upload full-node validation and failures
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.xdp_node_smoke && hashFiles('.local/afxdp-node-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: afxdp-node-${{ github.sha }}
+          path: .local/afxdp-node-ci/
           if-no-files-found: error

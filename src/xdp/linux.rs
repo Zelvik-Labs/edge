@@ -323,6 +323,9 @@ pub struct AfXdpPollStats {
     pub parsed: usize,
     pub parse_errors: usize,
     pub refilled: usize,
+    /// Every included queue actually polled RX and observed it empty.
+    /// A skipped read or an empty runtime does not acknowledge readiness.
+    pub rx_observed_empty: bool,
 }
 
 #[cfg(test)]
@@ -349,13 +352,17 @@ impl AfXdpRuntimeHandle {
     where
         F: FnMut(&str, u32, Vec<u8>),
     {
-        let mut stats = AfXdpPollStats::default();
+        let mut stats = AfXdpPollStats {
+            rx_observed_empty: !self.queues.is_empty(),
+            ..AfXdpPollStats::default()
+        };
         for queue in &mut self.queues {
             let queue_stats = queue.poll_raw_once(&mut on_packet)?;
             stats.packets += queue_stats.packets;
             stats.parsed += queue_stats.parsed;
             stats.parse_errors += queue_stats.parse_errors;
             stats.refilled += queue_stats.refilled;
+            stats.rx_observed_empty &= queue_stats.rx_observed_empty;
         }
         self.refresh_statuses(false);
         Ok(stats)
@@ -610,6 +617,7 @@ impl AfXdpQueueHandle {
         // kernel owns any descriptors returned by RX until this method returns them
         // to the fill ring or `free_frames`.
         let received = unsafe { self.rx.poll_and_consume(&mut self.rx_batch[..limit], 0)? };
+        stats.rx_observed_empty = received == 0;
         stats.packets += received;
         for desc in &self.rx_batch[..received] {
             // SAFETY: RX populated `desc` from this queue's UMEM, and we copy the

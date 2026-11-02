@@ -376,6 +376,7 @@ async fn proxy_reload_smoke_inner(
         Ok(serde_json::json!({
             "durationMillis": duration.as_millis(),
             "bridgeSupervisorAlive": !old_bridge.is_finished(),
+            "xskWakeMode": crate::runtime_mode::validation_xsk_wake_mode().as_str(),
             "managerReplaced": true,
             "beforeReload": {
                 "proxyReady": before_reload.proxy_ready,
@@ -736,6 +737,7 @@ async fn proxy_smoke_inner(
         // NIC→XSK delivery (kernel stats), TX backpressure (congested) and
         // reactor admission refusals must be visible in the report, not
         // only in a live `xdp status` snapshot.
+        "xskWakeMode": crate::runtime_mode::validation_xsk_wake_mode().as_str(),
         "xskQueueStats": {
             "rxDropped": queue_stats(&status).map(|q| q.rx_dropped).sum::<u64>(),
             "rxRingFull": queue_stats(&status).map(|q| q.rx_ring_full).sum::<u64>(),

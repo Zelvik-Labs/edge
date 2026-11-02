@@ -7,6 +7,10 @@ pub mod ffi;
 mod legacy;
 
 #[cfg(test)]
+#[path = "../../../../src/xdp/af_xdp/readiness.rs"]
+mod node_readiness;
+
+#[cfg(test)]
 mod readiness_tests {
     use std::io;
     use std::net::UdpSocket;

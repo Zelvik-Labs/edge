@@ -459,6 +459,9 @@ enum XdpCommands {
         /// stays pinned to edgecc)
         #[arg(long, value_enum)]
         cc: Option<XdpCliCc>,
+        /// Validation-only XSK wake mechanism for same-binary comparisons
+        #[arg(long, value_enum, default_value_t = XdpCliWake::Worker)]
+        wake: XdpCliWake,
     },
     /// Verify an in-process XDP reload while AF_XDP proxy bridge is active
     #[command(name = "proxy-reload-smoke")]
@@ -469,6 +472,9 @@ enum XdpCommands {
         /// Write this file after AF_XDP proxy redirect is ready after reload
         #[arg(long)]
         ready_file: Option<PathBuf>,
+        /// Validation-only XSK wake mechanism across generation replacement
+        #[arg(long, value_enum, default_value_t = XdpCliWake::Worker)]
+        wake: XdpCliWake,
     },
     /// Attach AF_XDP and hold a real userspace-TCP dial to an on-wire target (PTB/out-CT validation)
     #[command(name = "dial-smoke")]
@@ -511,6 +517,21 @@ enum XdpCliCc {
     Bbr3,
     NewReno,
     LossBlind,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum XdpCliWake {
+    Worker,
+    Readable,
+}
+
+impl From<XdpCliWake> for zelvik_edge::runtime_mode::XdpValidationWakeMode {
+    fn from(value: XdpCliWake) -> Self {
+        match value {
+            XdpCliWake::Worker => Self::Worker,
+            XdpCliWake::Readable => Self::Readable,
+        }
+    }
 }
 
 impl From<XdpCliCc> for zelvik_edge::runtime_mode::XdpTransportController {
@@ -1155,7 +1176,13 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             kernel,
             remote,
             cc,
+            wake,
         } => {
+            anyhow::ensure!(
+                !kernel || matches!(wake, XdpCliWake::Worker),
+                "--wake readable requires the AF_XDP dataplane; remove --kernel"
+            );
+            zelvik_edge::runtime_mode::set_validation_xsk_wake_mode(wake.into());
             let runtime_config = RuntimeConfig::load_default()?;
             RuntimeConfig::set_current(runtime_config);
             if let Some(cc) = cc {
@@ -1178,7 +1205,9 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
         XdpCommands::ProxyReloadSmoke {
             duration_ms,
             ready_file,
+            wake,
         } => {
+            zelvik_edge::runtime_mode::set_validation_xsk_wake_mode(wake.into());
             let runtime_config = RuntimeConfig::load_default()?;
             RuntimeConfig::set_current(runtime_config);
             let rt = tokio::runtime::Builder::new_current_thread()
