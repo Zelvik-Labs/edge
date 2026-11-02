@@ -1,6 +1,6 @@
 # AF_XDP 唤醒与 ring 行为验证（2026-11-02，第 5 轮）
 
-本轮从第 4 轮实现 `112815b891ea26e6d0e132e7a2d1487b9d6d8f9a` 建立独立分支 `perf/xdp-wake-20261102`，准备真实 socket 的功能证据，不修改节点数据路径。第 4 轮 [Actions 41529553377](https://github.com/Zelvik-Labs/edge/actions/runs/41529553377) 已确认 GitHub 官方 runner 可以在隔离 netns 中加载 XDP_PASS 并创建 AF_XDP socket；该轮 io_uring 配对测量仍独立运行。
+本轮从第 4 轮实现 `112815b891ea26e6d0e132e7a2d1487b9d6d8f9a` 建立独立分支 `perf/xdp-wake-20261102`，验证真实 socket 的功能，不修改节点数据路径。第 4 轮 [Actions 41529553377](https://github.com/Zelvik-Labs/edge/actions/runs/41529553377) 全部通过，已确认 GitHub 官方 runner 可以在隔离 netns 中加载 XDP_PASS 并创建 AF_XDP socket；该轮 io_uring 配对结果已[单独归档](performance-io-wq-bounded-2026-11-02.md)，本轮不重复该计时矩阵。
 
 ## 验证内容
 

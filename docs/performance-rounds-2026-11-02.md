@@ -40,3 +40,9 @@
 实验后端启动时显式注册内核工作线程 CPU 范围，并提供 `[2,2]` 上限候选。16 项 I/O 测试和默认/实验全目标 Clippy 通过；删除设置上限调用时，并发测试会因实际限额仍为内核默认而失败。基准增加逐线程 CPU、限额读回与数量检查，缺失或越界均失败。本地 36 个场景全部通过，候选各档均为 2 个 io-wq 线程；但性能方向不稳定，CPU steal 最高约 47.80%，全部离群值保留。
 
 新增不附加接口的 BPF/AF_XDP 探针，本地确认 AF_XDP 返回 EAFNOSUPPORT，隔离 Docker 可加载最小 BPF 程序，容器清理成功。提交 `112815b891ea26e6d0e132e7a2d1487b9d6d8f9a` 的 [Actions 41529553377](https://github.com/Zelvik-Labs/edge/actions/runs/41529553377) 三个 job 全部成功，16 项 I/O 测试和 72 个计时场景通过，CPU steal 为 0%，所有观测线程都在 CPU 0/1 内。候选均为 2 个 io-wq 线程，默认数量对照最多观察到 394 个；但限额使小包耗时增加约 6%～16%，相比 readiness 的六组中位数仍慢约 9%～163%。不接入默认代理，后续优先 AF_XDP readiness 与完整协议路径。原生 6.8 内核探针确认 BPF 和 AF_XDP socket 可用。完整实现、全部快慢样本及限制见[第 4 轮报告](performance-io-wq-bounded-2026-11-02.md)。
+
+## 第 5 轮：真实 AF_XDP ring 与唤醒行为
+
+新增隔离 veth 的显式 SKB/copy 探针，核对 RX 突发、部分排空、fill starvation/恢复、TX 正文和完成队列，以及三次完整销毁后重绑。提交 `81f970c5580140fd89ab248a4ea2b031b551b1d5` 的 [Actions 41531098471](https://github.com/Zelvik-Labs/edge/actions/runs/41531098471) 三个 job 全部成功，含既有全仓门禁。原生 7.0 内核三轮各完成 65 RX / 1 TX 帧，主动耗尽 fill 时各有 1 个可观察丢弃，恢复和清理均成功。
+
+RW+edge-triggered 初始 EPOLLOUT 后没有继续空闲唤醒，不能仅凭永久可写认定 Tokio 的自旋根因；部分排空 RX 后也没有第二个事件，后续 AsyncFd 必须持有 guard 到实际观察空 RX 后再清除。fill kick 为 0，因此未验证硬件 NEED_WAKEUP 或零复制。本轮建立功能验证，未改变节点唤醒后端，也不是性能提升或 Tokio 对照结论。所有原始结果和限制见[第 5 轮报告](performance-af-xdp-wake-2026-11-02.md)。
