@@ -68,9 +68,34 @@ jobs:
           printf '%s\n' "$PROTOCOL_DEPLOY_KEY" > "$key"
 
           # 主机密钥来自 HTTPS 接口而不是首次连接的 TOFU，避免第一次连接就被固定成伪造密钥。
-          curl -fsSL https://api.github.com/meta \
-            | grep -oE '"ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+"' \
-            | tr -d '"' | sed 's/^/github.com /' > "$RUNNER_TEMP/known_hosts"
+          if ! curl --fail-with-body --silent --show-error --location --retry 3 --retry-delay 2 \
+            -D "$RUNNER_TEMP/github-meta.headers" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $CI_METADATA_TOKEN" \
+            https://api.github.com/meta > "$RUNNER_TEMP/github-meta.json"; then
+            python3 - <<'PYMETAERROR'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          headers = root / 'github-meta.headers'
+          if headers.exists():
+              for line in headers.read_text().splitlines():
+                  if line.lower().startswith(('http/', 'x-ratelimit-')):
+                      print(line)
+          try:
+              message = json.loads((root / 'github-meta.json').read_text()).get('message', 'no API message')
+          except json.JSONDecodeError:
+              message = 'metadata endpoint returned a non-JSON error'
+          print(f'::error::GitHub metadata API failed: {message}')
+          PYMETAERROR
+            exit 1
+          fi
+          python3 - <<'PYMETA'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          keys = json.loads((root / 'github-meta.json').read_text())['ssh_keys']
+          assert isinstance(keys, list) and keys and all(isinstance(key, str) and key for key in keys)
+          (root / 'known_hosts').write_text(''.join(f'github.com {key}\n' for key in keys))
+          PYMETA
 
           {
             echo "GIT_SSH_COMMAND=ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
@@ -80,6 +105,7 @@ jobs:
           } >> "$GITHUB_ENV"
         env:
           PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
+          CI_METADATA_TOKEN: ${{ github.token }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.99.1
@@ -221,9 +247,34 @@ jobs:
           printf '%s\n' "$PROTOCOL_DEPLOY_KEY" > "$key"
 
           # 主机密钥来自 HTTPS 接口而不是首次连接的 TOFU，避免第一次连接就被固定成伪造密钥。
-          curl -fsSL https://api.github.com/meta \
-            | grep -oE '"ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+"' \
-            | tr -d '"' | sed 's/^/github.com /' > "$RUNNER_TEMP/known_hosts"
+          if ! curl --fail-with-body --silent --show-error --location --retry 3 --retry-delay 2 \
+            -D "$RUNNER_TEMP/github-meta.headers" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $CI_METADATA_TOKEN" \
+            https://api.github.com/meta > "$RUNNER_TEMP/github-meta.json"; then
+            python3 - <<'PYMETAERROR'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          headers = root / 'github-meta.headers'
+          if headers.exists():
+              for line in headers.read_text().splitlines():
+                  if line.lower().startswith(('http/', 'x-ratelimit-')):
+                      print(line)
+          try:
+              message = json.loads((root / 'github-meta.json').read_text()).get('message', 'no API message')
+          except json.JSONDecodeError:
+              message = 'metadata endpoint returned a non-JSON error'
+          print(f'::error::GitHub metadata API failed: {message}')
+          PYMETAERROR
+            exit 1
+          fi
+          python3 - <<'PYMETA'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          keys = json.loads((root / 'github-meta.json').read_text())['ssh_keys']
+          assert isinstance(keys, list) and keys and all(isinstance(key, str) and key for key in keys)
+          (root / 'known_hosts').write_text(''.join(f'github.com {key}\n' for key in keys))
+          PYMETA
 
           {
             echo "GIT_SSH_COMMAND=ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
@@ -233,6 +284,7 @@ jobs:
           } >> "$GITHUB_ENV"
         env:
           PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
+          CI_METADATA_TOKEN: ${{ github.token }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.99.1
@@ -357,7 +409,7 @@ jobs:
           fi
 
       - name: Upload splice samples and failures
-        if: always() && github.event_name == 'workflow_dispatch' && (inputs.splice_benchmark || inputs.io_uring_benchmark)
+        if: always() && github.event_name == 'workflow_dispatch' && (inputs.splice_benchmark || inputs.io_uring_benchmark) && hashFiles('.local/splice-ci/**') != ''
         uses: actions/upload-artifact@v4
         with:
           name: splice-component-${{ github.sha }}
