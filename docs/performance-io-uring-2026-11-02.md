@@ -53,6 +53,29 @@ flowchart LR
 
 [单连接汇总](evidence/io-uring-2026-11-02/c1-summary.json)、[16 连接汇总](evidence/io-uring-2026-11-02/c16-summary.json)、[线程/FD/批量归一化结果](evidence/io-uring-2026-11-02/resource-summary.json)、[CPU 快照](evidence/io-uring-2026-11-02/cpu-summary.json)、[全部原始样本/日志/探针与内核源码](evidence/io-uring-2026-11-02/local-raw.zip)、[逐文件校验清单](evidence/io-uring-2026-11-02/local-archive-manifest.json)。
 
-基于当前结果，候选只保留在实验分支，不接入默认转发路径。GitHub Actions 的实际提交、run、原始产物将在执行后记录。新增可选 `io_uring_benchmark=true` 输入：启用候选测试与 Clippy，编译完成后依次执行单连接和 16 连接的独立比较，上传样本与失败日志。不能将之前 readiness 提交的 CI 结果移用到本候选。
+## GitHub Actions 复核
 
-本轮没有批准或实施生产功能降级。云环境已确认可建立独立 user/network namespace，Docker CLI 也存在；尚未验证 BPF/XSK 权限或硬件零复制。RKE 继续暂缓；真实 NIC、完整 HTTP/缓存矩阵与长期稳定性仍需后续验证。
+提交 `b88f24b8de525f71941948e231cbfbda1ee635e1` 的 [Actions 41524209297](https://github.com/Zelvik-Labs/edge/actions/runs/41524209297) 两个 job 均成功：XDP eBPF 构建、all-targets check / Clippy、常规单元/集成与 vendored Pingora 检查/测试，以及实验 feature 的 15 项测试和 Clippy。日志接口返回的常规测试日志在末尾前截断，因此本轮不据该前缀声明全仓测试总数；15 项实验测试的完整日志在基准产物内，0 失败、0 忽略。
+
+runner 内核 `6.8.0-1070-azure`，两个允许 CPU 为 0/1。同一 release 二进制分别测量两种引擎，各连接数三轮交错，共 36 个场景全部通过。12 个独立进程的 CPU steal 均为 0%，源码与二进制在测量前后未变，tracked dirty 为 false。
+
+| 连接 | 正文 | 第 1 轮 | 第 2 轮 | 第 3 轮 | 配对中位数 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 1 | 1 KiB | +121.26% | +121.09% | +119.99% | +121.09% |
+| 1 | 64 KiB | +66.16% | +67.95% | +66.78% | +66.78% |
+| 1 | 1 MiB | +3.51% | +7.47% | +6.10% | +6.10% |
+| 16 | 1 KiB | +34.95% | +37.11% | +41.72% | +37.11% |
+| 16 | 64 KiB | +11.53% | +17.60% | +15.09% | +15.09% |
+| 16 | 1 MiB | +9.42% | +9.80% | +10.94% | +9.80% |
+
+该内核下出现了更明显的线程放大：18 个 io_uring 正文场景在观测时有 8～175 个 `iou-wrk` 线程。第 1 轮单连接 1 KiB 为 120 个，16 连接 1 KiB 为 123 个；公共线程仍为 5 个，候选另外有一个 ring worker。它们是测量结束时仍存活的线程快照，不是峰值。此候选尚未设置 `IORING_REGISTER_IOWQ_MAX_WORKERS`，所以不能把这些结果等同于所有经过调优的 io_uring 实现。下一项明确的消融是给内核工作队列设置上限，保留相同正文、取消和批次检查，再测其对资源与耗时的影响。
+
+16 连接第 1 轮 1 KiB 的提交批量达到约 4.79 CQE/提交，仍比 readiness 慢；这再次说明减少提交次数不代表整体变快。没有测得各调度阶段的独立 CPU 成本，不给线程放大分配未经测量的因果百分比。
+
+产物 `13180162720` 为 175,857 字节，334 个原始文件；SHA256 `88edd34cb12dc79b0a76e2e3c94cc99b355bcf9d1b74eef0e9e5b822a315a0c6` 已与 GitHub 元数据核对。证据：[原始 ZIP](evidence/io-uring-2026-11-02/ci-raw.zip)、[校验清单](evidence/io-uring-2026-11-02/ci-archive-manifest.json)、[单连接](evidence/io-uring-2026-11-02/ci-c1-summary.json)、[16 连接](evidence/io-uring-2026-11-02/ci-c16-summary.json)、[线程/FD/批量](evidence/io-uring-2026-11-02/ci-resource-summary.json)、[CPU](evidence/io-uring-2026-11-02/ci-cpu-summary.json)、[实际 job/step 与提交记录](evidence/io-uring-2026-11-02/ci-validation.json)。基准二进制 SHA256 为 `5692eced65a271c960415008b051a844fa972e830f68cd26fa25a2b1f497a4c4`。
+
+第一次运行 [41523227311](https://github.com/Zelvik-Labs/edge/actions/runs/41523227311) 在测试准备阶段请求 GitHub `/meta` 返回 HTTP403，未保留响应正文，无法确认具体服务端原因；随后缺少产物又造成上传错误。已改为使用 Actions 自带 token 获取 SSH 主机密钥，保留失败的状态与限流头；无产物时不执行上传。重跑成功，没有关闭凭据验证或改用不可信 SSH 密钥。失败与修复不涉及运行时性能代码。
+
+基于两处环境的完整结果，候选保留在默认关闭的实验分支，不接入默认代理。新增可选 `io_uring_benchmark=true` 输入已实际验证，样本和失败均随产物保留。本轮没有批准或实施生产功能降级；没有完整 Edge 或 Nginx/OpenResty 容量结论。
+
+云环境另已实际验证：独立 user/network namespace 中 BPF 加载返回 EPERM；隔离 Docker 中以 BPF/NET_ADMIN/NET_RAW 能力可加载最小 XDP 程序，但两处 AF_XDP socket 均返回 EAFNOSUPPORT。未附加接口，临时容器已清理。这限定了本地 AF_XDP 验证能力，不代表真实 NIC 零复制可用。RKE 继续暂缓；真实 AF_XDP 唤醒、完整 HTTP/缓存矩阵与长期稳定性仍需后续验证。
