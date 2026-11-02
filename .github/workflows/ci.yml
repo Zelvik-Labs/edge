@@ -17,6 +17,10 @@ on:
         description: Probe BPF load and AF_XDP socket creation inside an isolated network namespace
         type: boolean
         default: false
+      xdp_wake_probe:
+        description: Exercise real AF_XDP copy-mode RX, readiness, fill recovery, TX and teardown on isolated veths
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.head_ref || github.ref }}
@@ -25,8 +29,10 @@ concurrency:
 jobs:
   xdp-kernel:
     name: Isolated BPF / AF_XDP capability
-    if: github.event_name == 'workflow_dispatch' && inputs.xdp_kernel_probe
-    runs-on: ubuntu-22.04
+    if: github.event_name == 'workflow_dispatch' && (inputs.xdp_kernel_probe || inputs.xdp_wake_probe)
+    # The standalone ring fixture uses libbpf >= 1.0 APIs; noble ships 1.3.
+    # Rust correctness and timed splice comparisons keep their 22.04 baseline.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout code
@@ -45,6 +51,28 @@ jobs:
           cc -std=gnu11 -O2 -Wall -Wextra -Werror scripts/perf/kernel-capability.c -o .local/xdp-kernel-ci/probe > .local/xdp-kernel-ci/build.log 2>&1
           sudo unshare --net -- .local/xdp-kernel-ci/probe > .local/xdp-kernel-ci/result.json 2> .local/xdp-kernel-ci/probe.log
           cat .local/xdp-kernel-ci/result.json
+      - name: Install real AF_XDP probe dependencies
+        if: inputs.xdp_wake_probe
+        run: |
+          set -euo pipefail
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends libxdp-dev libbpf-dev pkg-config
+      - name: Build and exercise real copy-mode AF_XDP rings
+        if: inputs.xdp_wake_probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, pathlib, subprocess
+          files = ['scripts/perf/afxdp-wake.c', 'scripts/perf/afxdp-wake.sh']
+          metadata = {'sources': {p: hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in files}, 'library_versions': subprocess.check_output(['pkg-config', '--modversion', 'libxdp', 'libbpf'], text=True).splitlines(), 'scope': 'veth SKB / forced copy mode; no hardware zero-copy or Tokio throughput claim'}
+          pathlib.Path('.local/xdp-kernel-ci/wake-metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
+          PY
+          read -ra native_flags <<< "$(pkg-config --cflags --libs libxdp libbpf)"
+          pkg-config --atleast-version=1.0 libbpf
+          cc -std=gnu11 -O2 -Wall -Wextra -Werror scripts/perf/afxdp-wake.c -o .local/xdp-kernel-ci/wake-probe "${native_flags[@]}" > .local/xdp-kernel-ci/wake-build.log 2>&1
+          parent_net=$(readlink /proc/self/ns/net)
+          sudo unshare --net -- bash scripts/perf/afxdp-wake.sh "$GITHUB_WORKSPACE/.local/xdp-kernel-ci/wake-probe" "$GITHUB_WORKSPACE/.local/xdp-kernel-ci" "$parent_net"
       - name: Upload kernel capability and failures
         if: always() && hashFiles('.local/xdp-kernel-ci/**') != ''
         uses: actions/upload-artifact@v4
