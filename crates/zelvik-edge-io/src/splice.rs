@@ -66,15 +66,15 @@ pub struct PipeCapacity {
     pub resize_errno: Option<i32>,
 }
 
-struct Pipe {
-    read: OwnedFd,
-    write: OwnedFd,
-    pending: usize,
-    capacity: PipeCapacity,
+pub(super) struct Pipe {
+    pub(super) read: OwnedFd,
+    pub(super) write: OwnedFd,
+    pub(super) pending: usize,
+    pub(super) capacity: PipeCapacity,
 }
 
 impl Pipe {
-    fn new(capacity_hint: usize) -> io::Result<Self> {
+    pub(super) fn new(capacity_hint: usize) -> io::Result<Self> {
         let requested = libc::c_int::try_from(capacity_hint)
             .ok()
             .filter(|n| *n > 0)

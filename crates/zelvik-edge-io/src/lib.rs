@@ -2,3 +2,6 @@
 
 #[cfg(target_os = "linux")]
 pub mod splice;
+
+#[cfg(all(target_os = "linux", feature = "io-uring"))]
+pub mod uring;

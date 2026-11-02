@@ -19,9 +19,20 @@ fn main() {
     let engines: &[_] = match selected.as_str() {
         "blocking" => &[support::Engine::Blocking],
         "readiness" => &[support::Engine::Readiness],
+        #[cfg(feature = "io-uring")]
+        "uring" => &[support::Engine::Uring],
         "all" => &[support::Engine::Blocking, support::Engine::Readiness],
-        _ => panic!("EDGE_SPLICE_BENCH_ENGINE must be blocking, readiness or all"),
+        _ => panic!("unsupported EDGE_SPLICE_BENCH_ENGINE; uring requires feature io-uring"),
     };
+    let concurrency = match std::env::var("EDGE_SPLICE_BENCH_CONCURRENCY") {
+        Ok(value) => value.parse::<usize>().expect("invalid concurrency"),
+        Err(std::env::VarError::NotPresent) => 1,
+        Err(error) => panic!("invalid EDGE_SPLICE_BENCH_CONCURRENCY: {error}"),
+    };
+    assert!(
+        [1, 16].contains(&concurrency),
+        "concurrency must be 1 or 16"
+    );
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
@@ -35,7 +46,7 @@ fn main() {
         .measurement_time(Duration::from_secs(3));
     for size in [1024, 64 * 1024, 1024 * 1024] {
         for &engine in engines {
-            let connection = runtime.block_on(support::Connection::new(engine, size));
+            let connection = runtime.block_on(support::Group::new(engine, size, concurrency));
             group.bench_with_input(BenchmarkId::new(engine.name(), size), &size, |b, _| {
                 b.to_async(&runtime).iter(|| connection.exchange());
             });

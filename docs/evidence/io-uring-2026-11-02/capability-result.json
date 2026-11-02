@@ -1,0 +1,8 @@
+{
+  "command": [
+    "edge-uring-capability-probe"
+  ],
+  "returncode": 0,
+  "stdout": "{\"capabilities\":{\"async_cancel\":true,\"poll_add\":true,\"recv\":true,\"send\":true,\"splice\":true},\"phase\":\"registered_probe\"}\n{\"cancel_acknowledged\":true,\"capabilities\":{\"async_cancel\":true,\"poll_add\":true,\"recv\":true,\"send\":true,\"splice\":true},\"cq_entries\":128,\"features\":{\"fast_poll\":true,\"nodrop\":true},\"passed\":true,\"poll_cancelled\":true,\"sq_entries\":64,\"transferred_bytes\":18}\n",
+  "stderr": ""
+}

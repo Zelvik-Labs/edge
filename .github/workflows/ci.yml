@@ -9,6 +9,10 @@ on:
         description: Run isolated blocking/readiness splice component comparison
         type: boolean
         default: false
+      io_uring_benchmark:
+        description: Test shared io_uring splice and compare against readiness at 1 and 16 connections
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.head_ref || github.ref }}
@@ -307,13 +311,28 @@ jobs:
         # the whole workspace and tests tokio versions the product never ships.
         run: cargo test --locked --manifest-path pingora-main/Cargo.toml -p pingora-core -p pingora-http -p pingora-cache --lib
 
-      - name: Build splice component benchmark
-        if: github.event_name == 'workflow_dispatch' && inputs.splice_benchmark
+      - name: io_uring behavior tests and Clippy
+        if: github.event_name == 'workflow_dispatch' && inputs.io_uring_benchmark
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p .local/splice-ci
-          cargo build --locked --release -p zelvik-edge-io --bench splice --message-format=json > .local/splice-ci/build.jsonl 2> .local/splice-ci/build.stderr
+          cargo test --locked -p zelvik-edge-io --features io-uring > .local/splice-ci/uring-tests.log 2>&1
+          cargo clippy --locked -p zelvik-edge-io --features io-uring --all-targets -- -D clippy::correctness -D clippy::suspicious > .local/splice-ci/uring-clippy.log 2>&1
+
+      - name: Build splice component benchmark
+        if: github.event_name == 'workflow_dispatch' && (inputs.splice_benchmark || inputs.io_uring_benchmark)
+        shell: bash
+        env:
+          IO_URING_BENCHMARK: ${{ inputs.io_uring_benchmark }}
+        run: |
+          set -euo pipefail
+          mkdir -p .local/splice-ci
+          features=()
+          if [ "$IO_URING_BENCHMARK" = "true" ]; then
+            features=(--features io-uring)
+          fi
+          cargo build --locked --release -p zelvik-edge-io --bench splice "${features[@]}" --message-format=json > .local/splice-ci/build.jsonl 2> .local/splice-ci/build.stderr
           python3 - <<'PY'
           import json, pathlib, os
           records = [json.loads(line) for line in pathlib.Path('.local/splice-ci/build.jsonl').read_text().splitlines() if line.startswith('{')]
@@ -324,11 +343,21 @@ jobs:
           PY
 
       - name: Compare splice engines after all compilation finishes
-        if: github.event_name == 'workflow_dispatch' && inputs.splice_benchmark
-        run: python3 scripts/perf/compare-splice.py --binary "$EDGE_SPLICE_BENCH_BINARY" --output .local/splice-ci/comparison
+        if: github.event_name == 'workflow_dispatch' && (inputs.splice_benchmark || inputs.io_uring_benchmark)
+        shell: bash
+        env:
+          IO_URING_BENCHMARK: ${{ inputs.io_uring_benchmark }}
+        run: |
+          set -euo pipefail
+          if [ "$IO_URING_BENCHMARK" = "true" ]; then
+            python3 scripts/perf/compare-splice.py --binary "$EDGE_SPLICE_BENCH_BINARY" --baseline-engine readiness --candidate-engine uring --concurrency 1 --output .local/splice-ci/comparison-c1
+            python3 scripts/perf/compare-splice.py --binary "$EDGE_SPLICE_BENCH_BINARY" --baseline-engine readiness --candidate-engine uring --concurrency 16 --output .local/splice-ci/comparison-c16
+          else
+            python3 scripts/perf/compare-splice.py --binary "$EDGE_SPLICE_BENCH_BINARY" --output .local/splice-ci/comparison
+          fi
 
       - name: Upload splice samples and failures
-        if: always() && github.event_name == 'workflow_dispatch' && inputs.splice_benchmark
+        if: always() && github.event_name == 'workflow_dispatch' && (inputs.splice_benchmark || inputs.io_uring_benchmark)
         uses: actions/upload-artifact@v4
         with:
           name: splice-component-${{ github.sha }}
