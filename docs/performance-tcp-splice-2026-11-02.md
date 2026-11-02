@@ -48,7 +48,23 @@ Edge 适配层保留内存、FD、共享账户和连接压力准入、压力超�
 
 来源：[配对汇总](evidence/tcp-splice-2026-11-02/comparison/summary.json)、[所有均值/置信区间与 CPU 快照](evidence/tcp-splice-2026-11-02/comparison/runs.json)、[CPU 摘要](evidence/tcp-splice-2026-11-02/cpu-summary.json)、[源码/二进制与参数](evidence/tcp-splice-2026-11-02/comparison/metadata.json)。原始 Criterion sample、outlier、估计文件和 stdout/stderr 均保留在对应轮次目录。
 
-候选 GitHub Actions 的实际提交、run 和 job 结果将在执行后记录，不能用基线绿色状态替代。
+## GitHub Actions 同源复核
+
+实现提交 `2df8b242b1b0d24f199e22592b6924e592f960a2` 已推送至 `perf/full-stack-20261102`。[Actions 41508571673](https://github.com/Zelvik-Labs/edge/actions/runs/41508571673) 的 Test 与 Check / Clippy 两个 job 均成功，包括 XDP eBPF 构建、全目标检查和 Clippy、Edge 单元/集成测试、vendored Pingora 验证，以及新增独立进程基准。
+
+实际日志合计 2,241 项通过、0 失败、4 项既有忽略。Edge 库为 1,292 项通过、2 项忽略；忽略的是两项手动 UDP 高突发基准。另两项忽略来自 Pingora 既有网络测试。本轮新增的 splice 测试都实际执行。[job 与 step](evidence/tcp-splice-2026-11-02/github-actions-41508571673/jobs.json)、[测试汇总与忽略名称](evidence/tcp-splice-2026-11-02/github-actions-41508571673/test-summary.json)。
+
+CI 的 18 个基准场景均成功；六组所选 CPU 的 steal 均为 0。仍按三个配对变化取中位数：
+
+| 正文 | 第 1 轮 | 第 2 轮 | 第 3 轮 | 配对变化中位数 |
+| --- | ---: | ---: | ---: | ---: |
+| 1 KiB | -36.57% | -37.92% | -37.95% | **-37.92%** |
+| 64 KiB | -7.22% | -7.97% | -9.32% | **-7.97%** |
+| 1 MiB | +1.43% | +3.56% | -2.09% | **+1.43%** |
+
+CI 支持小包受益；大包没有明确收益，不能用共享云环境较大的降幅代替这个结论，也没有消除大包优化的后续工作。
+
+基准产物已下载，ZIP SHA-256 `7ca8fcb7f0e5c93a71c6cd3bfa7ca79c298c682c3a1fe847b09525e233adf8a8` 与 GitHub artifact digest 一致。元数据确认实际执行的是上述提交，工作树干净，测试期间源码与二进制未变。[配对结果](evidence/tcp-splice-2026-11-02/github-actions-41508571673/summary.json)、[完整原始产物 ZIP](evidence/tcp-splice-2026-11-02/github-actions-41508571673/artifact.zip)、[artifact 元数据](evidence/tcp-splice-2026-11-02/github-actions-41508571673/artifacts.json)。本地原始 stdout 另以 gzip 无损保存，原始字节校验和在 `comparison/raw-log-archives.json`。
 
 独立进程比较入口为 `scripts/perf/compare-splice.py --binary <已构建的 splice bench> --output <新目录>`。默认三个轮次交错顺序；两个引擎各自独立启动，不创建另一个引擎的连接，统一绑定到相同两个允许的 CPU。保存所有 Criterion 样本、返回码、置信区间、CPU/节流快照、二进制与源码校验和。GitHub Actions `ci.yml` 的 `splice_benchmark=true` 手动输入会在编译和功能测试完成后运行，并上传原始结果；普通 CI 不额外执行基准。
 

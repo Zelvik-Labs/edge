@@ -1,0 +1,77 @@
+{
+  "all_passed": true,
+  "comparisons": [
+    {
+      "bytes": 1024,
+      "pairs": [
+        {
+          "round": 1,
+          "explicit_budget": 83430.30614882513,
+          "tokio_budget_only": 95885.58703977014,
+          "change_percent": 14.928964624350005
+        },
+        {
+          "round": 2,
+          "tokio_budget_only": 71783.02405307723,
+          "explicit_budget": 171248.23662087668,
+          "change_percent": -58.08247403329685
+        },
+        {
+          "round": 3,
+          "explicit_budget": 75453.14887607245,
+          "tokio_budget_only": 84922.67322996708,
+          "change_percent": 12.550204325399061
+        }
+      ],
+      "median_percent": 12.550204325399061
+    },
+    {
+      "bytes": 65536,
+      "pairs": [
+        {
+          "round": 1,
+          "explicit_budget": 112004.13454103723,
+          "tokio_budget_only": 168106.93869117598,
+          "change_percent": 50.089940322321965
+        },
+        {
+          "round": 2,
+          "tokio_budget_only": 148569.8302775374,
+          "explicit_budget": 98574.82552670404,
+          "change_percent": 50.71782220632961
+        },
+        {
+          "round": 3,
+          "explicit_budget": 116731.0543838593,
+          "tokio_budget_only": 156885.73015257771,
+          "change_percent": 34.399308719232046
+        }
+      ],
+      "median_percent": 50.089940322321965
+    },
+    {
+      "bytes": 1048576,
+      "pairs": [
+        {
+          "round": 1,
+          "explicit_budget": 2494952.3163478402,
+          "tokio_budget_only": 2555906.7455089237,
+          "change_percent": 2.4431099849759663
+        },
+        {
+          "round": 2,
+          "tokio_budget_only": 2261830.224916581,
+          "explicit_budget": 2539631.1763712047,
+          "change_percent": -10.938633689777122
+        },
+        {
+          "round": 3,
+          "explicit_budget": 3111330.9694202812,
+          "tokio_budget_only": 3267285.313178727,
+          "change_percent": 5.012463967711667
+        }
+      ],
+      "median_percent": 2.4431099849759663
+    }
+  ]
+}
