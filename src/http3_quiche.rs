@@ -57,6 +57,9 @@ impl Http3ProxyManager {
         // The library queues initials before our per-connection admission.
         // Reserve the full bounded backlog plus one inline rejection worker.
         let backlog_bytes = (LISTEN_BACKLOG as u64 + 1) * TRANSPORT_RESERVATION;
+        // A large, infrequent listener reservation needs a current physical
+        // observation, including when this listener is the first consumer.
+        let _ = MEMORY_GOVERNOR.account_view_fresh();
         let _backlog = MEMORY_GOVERNOR
             .try_reserve_transport_capacity(backlog_bytes)
             .context("insufficient shared capacity for the native QUIC accept backlog")?;
