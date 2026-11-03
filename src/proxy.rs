@@ -9914,7 +9914,7 @@ impl ProxyHttp for EdgeProxy {
                 };
                 ctx.cache_encoding_variant = Some(encoding_variant.to_string());
 
-                let mut cache_key_ctx = cache_ctx.clone();
+                let mut cache_key_ctx = cache_ctx;
                 Self::apply_cache_key_config_to_context(&mut cache_key_ctx, cache);
 
                 // --- PROTOCOL PARITY: Salted Key Generation ---
