@@ -88,3 +88,13 @@ Bridge 私有接收入口省去未使用的完整分类，公开 Full 统计与�
 每个客户端数据报的完整 H3/QUIC 集合构造改为同一配置快照中的借用点查询，标记检查消除小写字符串副本。策略优先级、端口宽容解析、H3 优先、模糊 QUIC 及原配置行为保留。157 个不同本地测试、全目标 Clippy 通过。源码 `1fbca822e49c3242edf89c7fd1a134de81ab3b27` 的 [Actions 41579056235](https://github.com/Zelvik-Labs/edge/actions/runs/41579056235) 两个执行 job 均成功；八轮原生验证含 16 H2、32 H3/QUIC、损坏/合法控制、真实重载与清理，所报队列错误为 0。
 
 32 个 release 组件函数、960 样本独立重算通过，steal 为 0。全局端口约 112–183ns →31–52ns；1,000 站点回退未命中约 112μs →37μs，仍为线性扫描。第一个站点命中的巨大比例只属于提前结束场景，不是整个节点提速；本轮没有新的整机/Nginx/OpenResty 容量结论。dev 样本 steal27.13% 全部保留而不作定量结论。[第 11 轮报告与原始证据](performance-udp-demux-query-2026-11-03.md)。后续用独立 syscall 诊断分析全局配置下的主要差距，并评估站点索引和更新成本。
+
+## 第 12 轮：预热后系统调用诊断（11-03）
+
+源码 `d30b4ab9a253fefd91038f273a4b8d35ac7f6f6f` 的 [Actions 41581678506](https://github.com/Zelvik-Labs/edge/actions/runs/41581678506) 两个执行 job 均成功。136/136 记录、128 次完整代理追踪、122.4 万 RTT 独立核对，双向 redirect、正文/序号/复用/队列/清理通过，steal 为 0。跟踪器覆盖计时前后所有观察线程，主动 SIGINT 后正常分离；原始 -2 状态和所有样本保留。
+
+单流 Edge 约18–22 syscall/请求，基线约7，差异集中在poll、epoll、futex、write；16流 Edge 已批处理到1.3–1.75，基线约6，不能将所有并发差距归因于 syscall 数。Edge 上游为AF_XDP虚拟socket/通道，尚未确认write的FD类型和poll调用点。ptrace 时间不能当作原生容量或CPU消耗，没有新未追踪吞吐结论。[第12轮报告与原始证据](performance-udp-syscalls-2026-11-03.md)。后续实验减少空闲等待后的重复让出，保留忙路径公平性和协议/定时器检查。
+
+## 第 13 轮：缓存命中与编译复用（11-03）
+
+独立无依赖小库/程序在相同提交 `d73308e04d8ffeeece0eb2dbc422e32a9d4fd28e` 上完成两次云CI；首次未命中，第二次命中并恢复8个指纹，但跨检出的初始库/程序仍非fresh。改源码和恢复源码均正确重编译，同任务不变源码才fresh，原始编译消息独立核对通过。扩大/保留workspace缓存的开关本身尚未证明能消除重编译，主缓存策略不调整；没有时间戳规范化或绕过Cargo检查。[第13轮报告](performance-workspace-cache-probe-2026-11-03.md)。本地cloud缓存扩容、自动GC关闭和6/5GiB空间线继续保留。

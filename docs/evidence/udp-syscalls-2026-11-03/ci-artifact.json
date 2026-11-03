@@ -1,0 +1,19 @@
+{
+  "id": 13207203051,
+  "name": "afxdp-udp-syscalls-d30b4ab9a253fefd91038f273a4b8d35ac7f6f6f",
+  "size_in_bytes": 5442787,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13207203051",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13207203051/zip",
+  "expired": false,
+  "created_at": "2026-11-03T05:42:51Z",
+  "expires_at": "2027-02-01T05:03:56Z",
+  "updated_at": "2026-11-03T05:42:51Z",
+  "digest": "sha256:fecd02715f7f9a22cc378407840fe61a478ffb53c6e2171c985593226a94c440",
+  "workflow_run": {
+    "id": 41581678506,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/udp-syscalls-20261103",
+    "head_sha": "d30b4ab9a253fefd91038f273a4b8d35ac7f6f6f"
+  }
+}
