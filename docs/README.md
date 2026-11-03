@@ -10,6 +10,8 @@
 - [其他模型开发交接](../tasks/edge-node-development-handoff.md)：可复制的开发与独立审阅指令，以及任务状态和证据模板。
 - [运行时说明](runtime.md)：说明进程启动、任务调度、配置热更新、证书、缓存后台任务和性能监控。
 - [H3 传输后端](h3-transport-backends.md)：共享/原生 Quinn 与实验性 tokio-quiche 的实现、选择和功能边界。
+- [五项性能工作的交付与边界](performance-five-priorities-2026-11-04.md)：H3 回源池、WAF 内存、UDP 实验、三产品矩阵和 tokio-quiche 的实现、收益与未解决项。
+- [最终 H3 三后端矩阵](performance-h3-native-2026-11-04.md)：共享 Quinn、原生 Quinn、tokio-quiche 的缓存/连接对比及持续连接验收。
 - [最终独立 HTTP 状态对比](performance-http-state-2026-11-04.md)：Edge/Nginx/OpenResty 的协议、缓存、连接状态、进程 RSS 和 UDP 复测；[首轮结果](performance-http-state-2026-11-03.md)保留。
 - [功能说明](features.md)：逐项介绍协议代理、缓存、WAF、内容处理、日志统计、证书和多级分发能力。
 - [配置说明](configuration.md)：说明 `configs/api_node.yaml`、运行目录、数据文件、缓存目录和控制面配置兼容。
