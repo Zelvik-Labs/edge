@@ -1,47 +1,80 @@
-use dashmap::DashMap;
-use quinn::{Connection, Endpoint};
-use std::sync::LazyLock;
+use dashmap::{DashMap, mapref::entry::Entry};
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-use crate::origin_h3_state::OriginH3Key;
+use crate::origin_h3::{OriginH3Connection, OriginH3PoolKey};
 
 const H3_POOL_IDLE: Duration = Duration::from_secs(120);
 const H3_POOL_MAX_ENTRIES: usize = 4_096;
 
 struct PooledH3Connection {
-    endpoint: Endpoint,
-    connection: Connection,
+    context: Arc<OriginH3Connection>,
     last_used: Instant,
+    _slot: OwnedSemaphorePermit,
 }
 
-static H3_CONNECTION_POOL: LazyLock<DashMap<OriginH3Key, PooledH3Connection>> =
-    LazyLock::new(DashMap::new);
-
-pub fn take(key: &OriginH3Key) -> Option<(Endpoint, Connection)> {
-    sweep_idle();
-    let (_, pooled) = H3_CONNECTION_POOL.remove(key)?;
-    if pooled.connection.close_reason().is_some() {
-        return None;
-    }
-    Some((pooled.endpoint, pooled.connection))
+struct H3ConnectionPool {
+    entries: DashMap<OriginH3PoolKey, PooledH3Connection>,
+    // An entry owns its idle-slot permit. Removal, expiry and replacement
+    // cannot leak quota or overshoot it during concurrent releases.
+    slots: Arc<Semaphore>,
 }
 
-pub fn offer(key: OriginH3Key, endpoint: Endpoint, connection: Connection) {
-    if connection.close_reason().is_some() {
-        return;
+impl H3ConnectionPool {
+    fn new() -> Self {
+        Self {
+            entries: DashMap::new(),
+            slots: Arc::new(Semaphore::new(H3_POOL_MAX_ENTRIES)),
+        }
     }
-    sweep_idle();
-    if H3_CONNECTION_POOL.len() >= H3_POOL_MAX_ENTRIES {
-        return;
+
+    fn take(&self, key: &OriginH3PoolKey) -> Option<Arc<OriginH3Connection>> {
+        self.sweep_at(Instant::now());
+        let (_, pooled) = self.entries.remove(key)?;
+        pooled.context.is_open().then_some(pooled.context)
     }
-    H3_CONNECTION_POOL.insert(
-        key,
-        PooledH3Connection {
-            endpoint,
-            connection,
-            last_used: Instant::now(),
-        },
-    );
+
+    fn offer(&self, key: OriginH3PoolKey, context: Arc<OriginH3Connection>) {
+        if !context.is_open() {
+            return;
+        }
+        self.sweep_at(Instant::now());
+        match self.entries.entry(key) {
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().last_used = Instant::now();
+                let old = std::mem::replace(&mut entry.get_mut().context, context);
+                drop(entry);
+                drop(old);
+            }
+            Entry::Vacant(entry) => {
+                if let Ok(slot) = self.slots.clone().try_acquire_owned() {
+                    entry.insert(PooledH3Connection {
+                        context,
+                        last_used: Instant::now(),
+                        _slot: slot,
+                    });
+                }
+            }
+        }
+    }
+
+    fn sweep_at(&self, now: Instant) {
+        // Active contexts were removed by take(). The removed entries release
+        // their own permits, so concurrent releases cannot overshoot the cap.
+        self.entries
+            .retain(|_, entry| !idle_expired(entry.last_used, now) && entry.context.is_open());
+    }
+}
+
+static H3_CONNECTION_POOL: LazyLock<H3ConnectionPool> = LazyLock::new(H3ConnectionPool::new);
+
+pub fn take(key: &OriginH3PoolKey) -> Option<Arc<OriginH3Connection>> {
+    H3_CONNECTION_POOL.take(key)
+}
+
+pub fn offer(key: OriginH3PoolKey, context: Arc<OriginH3Connection>) {
+    H3_CONNECTION_POOL.offer(key, context);
 }
 
 fn idle_expired(last_used: Instant, now: Instant) -> bool {
@@ -54,9 +87,7 @@ fn sweep_idle_at(now: Instant) {
     // Only pool-owned entries are touched. A connection is removed from the
     // pool the moment a request takes it, so active requests can never be
     // evicted here.
-    H3_CONNECTION_POOL.retain(|_, entry| {
-        !idle_expired(entry.last_used, now) && entry.connection.close_reason().is_none()
-    });
+    H3_CONNECTION_POOL.sweep_at(now);
 }
 
 /// Owner-initiated cleanup for the idle connection pool. Called from the
@@ -75,13 +106,29 @@ pub fn sweep_runs() -> u64 {
 }
 
 #[cfg(test)]
+pub(crate) fn expire_for_test(key: &OriginH3PoolKey) {
+    H3_CONNECTION_POOL
+        .entries
+        .get_mut(key)
+        .expect("pooled test context")
+        .last_used = Instant::now() - H3_POOL_IDLE - Duration::from_secs(1);
+}
+
+#[cfg(test)]
+pub(crate) fn available_slots_for_test() -> usize {
+    H3_CONNECTION_POOL.slots.available_permits()
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn pool_sweep_removes_stale_entries_without_panicking() {
-        sweep_idle();
-        assert!(H3_CONNECTION_POOL.is_empty());
+        let pool = H3ConnectionPool::new();
+        pool.sweep_at(Instant::now());
+        assert!(pool.entries.is_empty());
+        assert_eq!(pool.slots.available_permits(), H3_POOL_MAX_ENTRIES);
     }
 
     #[test]
@@ -100,8 +147,14 @@ mod tests {
 
     #[test]
     fn owner_sweep_is_callable_without_pooled_entries() {
+        let before = sweep_runs();
         sweep_idle();
         sweep_idle();
-        assert!(H3_CONNECTION_POOL.is_empty());
+        assert!(sweep_runs() >= before + 2);
+        // Wire tests may use the global pool concurrently. Empty-table
+        // assertions belong to a pool owned by this test.
+        let pool = H3ConnectionPool::new();
+        pool.sweep_at(Instant::now());
+        assert!(pool.entries.is_empty());
     }
 }

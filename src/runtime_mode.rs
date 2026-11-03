@@ -1084,6 +1084,29 @@ pub(crate) fn runtime_config_test_guard() -> parking_lot::MutexGuard<'static, ()
 }
 
 #[cfg(test)]
+pub(crate) fn with_runtime_config_for_test<T>(
+    config: RuntimeConfig,
+    test: impl FnOnce() -> T,
+) -> T {
+    let _guard = runtime_config_test_guard();
+    let current = RUNTIME_CONFIG.get_or_init(|| parking_lot::RwLock::new(None));
+    struct Restore {
+        current: &'static parking_lot::RwLock<Option<RuntimeConfig>>,
+        previous: Option<RuntimeConfig>,
+    }
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            *self.current.write() = self.previous.take();
+        }
+    }
+    let _restore = Restore {
+        current,
+        previous: current.write().replace(config),
+    };
+    test()
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

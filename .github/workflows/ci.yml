@@ -526,7 +526,18 @@ jobs:
           if-no-files-found: error
 
       - name: cargo test
+        env:
+          EDGE_H3_TEST_OUTPUT: ${{ github.workspace }}/.local/h3-origin-reuse-ci
         run: cargo test --lib --bins
+
+      - name: Upload H3 origin reuse wire evidence
+        if: always() && hashFiles('.local/h3-origin-reuse-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3-origin-reuse-${{ github.sha }}
+          path: .local/h3-origin-reuse-ci/
+          include-hidden-files: true
+          if-no-files-found: error
 
       - name: cargo test (integration)
         run: cargo test --no-fail-fast --test '*'
