@@ -951,6 +951,11 @@ pub struct MemoryGovernor {
     /// checked out to connection ticket buckets. Bounded by
     /// `request_workspace_budget_bytes` in the materialized limits table.
     request_workspace_bytes: PaddedAtomicU64,
+    /// Native QUIC worst-case queue owners. While present, retired queue
+    /// commitments can obstruct any shared-account consumer, not only the
+    /// next transport reservation (connection admission precedes that gate).
+    #[cfg(feature = "h3-quiche")]
+    native_transport_reservations: AtomicU64,
     /// Observational gauge for metrics trackers (aggregators, top-IP, daily
     /// domain, unique-IP sets) that live outside the resident ledger. Kept
     /// out of `resident.total` on purpose: the ledger enforces cache budgets,
@@ -1326,6 +1331,10 @@ impl Drop for TransportCapacityReservation<'_> {
         // is not promised again until a physical observation accounts for any
         // allocator-retained pages. An ordinary pending drop refunds too soon.
         self.0.commit();
+        self.0
+            .governor
+            .native_transport_reservations
+            .fetch_sub(1, Ordering::AcqRel);
     }
 }
 
@@ -1528,6 +1537,8 @@ impl MemoryGovernor {
             sni_relays: PaddedAtomicU64::new(0),
             cache_read_memory_bytes: PaddedAtomicU64::new(0),
             request_workspace_bytes: PaddedAtomicU64::new(0),
+            #[cfg(feature = "h3-quiche")]
+            native_transport_reservations: AtomicU64::new(0),
             metrics_aggregator_bytes: AtomicU64::new(0),
             cache_l1_bytes: AtomicU64::new(0),
             admission_rejects: std::array::from_fn(|_| PaddedAtomicU64::new(0)),
@@ -1748,7 +1759,29 @@ impl MemoryGovernor {
         purpose: SharedGrantPurpose,
         priority: AccountPriority,
     ) -> bool {
-        self.try_charge_account_before_cas(bytes, committed, purpose, priority, || {})
+        let granted =
+            self.try_charge_account_before_cas(bytes, committed, purpose, priority, || {});
+        #[cfg(feature = "h3-quiche")]
+        if !granted && self.native_transport_reservations.load(Ordering::Acquire) != 0 {
+            // Retired native queues can fill the account between background
+            // observations. Confirm at the common byte gate, before callers
+            // record a final connection/request/workspace rejection. Class
+            // ceilings and listener quotas are still checked by their owners.
+            if self
+                .account_committed_unconfirmed_bytes
+                .load(Ordering::Acquire)
+                >= bytes.max(1)
+            {
+                self.invalidate_snapshot_cache();
+                let _ = self.memory_snapshot();
+            }
+            // Another thread may already have confirmed the debt. Recheck
+            // once even when no unconfirmed bytes remain; never loop or clear
+            // live pending capacity. With no retired debt, a full pool still
+            // rejects without a physical refresh.
+            return self.try_charge_account_before_cas(bytes, committed, purpose, priority, || {});
+        }
+        granted
     }
 
     fn try_charge_account_before_cas(
@@ -1900,35 +1933,14 @@ impl MemoryGovernor {
         &self,
         bytes: u64,
     ) -> Option<TransportCapacityReservation<'_>> {
-        let first = self.try_grant_shared_with_priority(
+        let permit = self.try_grant_shared_with_priority(
             SharedGrantPurpose::Admission,
             bytes,
             AccountPriority::ConnectionEstablishment,
-        );
-        if let Some(permit) = first {
-            return Some(TransportCapacityReservation(permit));
-        }
-        // Fast connection churn can retire hundreds of worst-case queues
-        // within one background observation interval. Confirm those retired
-        // bytes against physical memory before rejecting otherwise affordable
-        // work. Live pending capacity is never cleared by this observation.
-        // If no sufficient unconfirmed charge exists, a refresh cannot recover
-        // that charge, so a genuinely full capacity pool rejects immediately.
-        if self
-            .account_committed_unconfirmed_bytes
-            .load(Ordering::Acquire)
-            < bytes.max(1)
-        {
-            return None;
-        }
-        self.invalidate_snapshot_cache();
-        let _ = self.memory_snapshot();
-        self.try_grant_shared_with_priority(
-            SharedGrantPurpose::Admission,
-            bytes,
-            AccountPriority::ConnectionEstablishment,
-        )
-        .map(TransportCapacityReservation)
+        )?;
+        self.native_transport_reservations
+            .fetch_add(1, Ordering::AcqRel);
+        Some(TransportCapacityReservation(permit))
     }
 
     fn try_grant_shared_with_priority(
@@ -7962,6 +7974,12 @@ mod en16_pool_tests {
         let capacity = governor
             .try_reserve_transport_capacity(bytes)
             .expect("bounded transport capacity");
+        assert_eq!(
+            governor
+                .native_transport_reservations
+                .load(Ordering::Acquire),
+            1
+        );
         let observed = governor.account_view_fresh();
         assert_eq!(observed.pending_bytes, bytes);
         assert_eq!(observed.committed_unconfirmed_bytes, 0);
@@ -7972,6 +7990,12 @@ mod en16_pool_tests {
         );
 
         drop(capacity);
+        assert_eq!(
+            governor
+                .native_transport_reservations
+                .load(Ordering::Acquire),
+            0
+        );
         let retired = governor.account_view();
         assert_eq!(retired.pending_bytes, 0);
         assert_eq!(retired.committed_unconfirmed_bytes, bytes);
@@ -8053,6 +8077,111 @@ mod en16_pool_tests {
         drop((held, replacement));
         assert_eq!(governor.account_view().pending_bytes, 0);
         assert_eq!(governor.account_view().committed_live_bytes, 0);
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    fn seed_retired_native_capacity(
+        governor: &MemoryGovernor,
+    ) -> super::TransportCapacityReservation<'_> {
+        governor.seed_cached_for_test(2 << 30, 1 << 30, 1 << 20, 0, i64::MAX as u64);
+        let limits = governor.limits();
+        let protected =
+            limits.control_plane_reserve_bytes + limits.established_traffic_reserve_bytes;
+        let available = governor.account_view().grantable_bytes - protected;
+        let held = governor.try_reserve_transport_capacity(1 << 20).unwrap();
+        let retired = governor
+            .try_reserve_transport_capacity(available - (1 << 20))
+            .unwrap();
+        drop(retired);
+        assert_eq!(
+            governor
+                .native_transport_reservations
+                .load(Ordering::Acquire),
+            1
+        );
+        assert_eq!(governor.account_view().grantable_bytes, protected);
+        held
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    #[test]
+    fn native_retirement_confirmation_covers_connection_and_request_admission() {
+        for class in [
+            AdmissionClass::Http3Connection,
+            AdmissionClass::Http3Request,
+        ] {
+            let governor = MemoryGovernor::new();
+            let held = seed_retired_native_capacity(&governor);
+            let permit = governor.try_admit(class).expect(
+                "retired transport debt cannot block an earlier connection or request gate",
+            );
+            assert_eq!(governor.account_view().pending_bytes, 1 << 20);
+            assert_eq!(governor.counter(class).load(Ordering::Acquire), 1);
+            assert_eq!(
+                governor.admission_rejects[super::class_index(class)].load(Ordering::Acquire),
+                0,
+                "a recovered byte-gate attempt is not a final class rejection"
+            );
+            drop((permit, held));
+            assert_eq!(governor.counter(class).load(Ordering::Acquire), 0);
+            assert_eq!(
+                governor
+                    .native_transport_reservations
+                    .load(Ordering::Acquire),
+                0
+            );
+            assert_eq!(governor.account_view().committed_live_bytes, 0);
+        }
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    #[test]
+    fn native_retirement_confirmation_covers_request_workspace() {
+        let governor = MemoryGovernor::new();
+        let held = seed_retired_native_capacity(&governor);
+        assert!(governor.try_admit_workspace(64 << 10));
+        assert_eq!(governor.request_workspace_used_bytes(), 64 << 10);
+        assert_eq!(governor.account_view().pending_bytes, 1 << 20);
+        governor.workspace_refund(64 << 10);
+        drop(held);
+        assert_eq!(governor.request_workspace_used_bytes(), 0);
+        assert_eq!(
+            governor
+                .native_transport_reservations
+                .load(Ordering::Acquire),
+            0
+        );
+        assert_eq!(governor.account_view().committed_live_bytes, 0);
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    #[test]
+    fn native_retirement_confirmation_does_not_bypass_class_quota() {
+        let governor = MemoryGovernor::new();
+        let held = seed_retired_native_capacity(&governor);
+        let class = AdmissionClass::Http3Connection;
+        let limit = governor.limits().class_limit[super::class_index(class)];
+        governor.counter(class).store(limit, Ordering::Release);
+        let generation = governor.cached_generation.load(Ordering::Acquire);
+        assert!(governor.try_admit(class).is_none());
+        assert_eq!(
+            governor.cached_generation.load(Ordering::Acquire),
+            generation,
+            "a class quota rejection never reaches the physical byte-gate retry"
+        );
+        assert_eq!(governor.counter(class).load(Ordering::Acquire), limit);
+        assert_eq!(
+            governor.admission_rejects[super::class_index(class)].load(Ordering::Acquire),
+            1
+        );
+        governor.counter(class).store(0, Ordering::Release);
+        drop(held);
+        assert_eq!(
+            governor
+                .native_transport_reservations
+                .load(Ordering::Acquire),
+            0
+        );
     }
 
     #[cfg(feature = "h3-quiche")]
