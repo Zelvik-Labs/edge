@@ -1,0 +1,38 @@
+name: Relay copy accounting and timing comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - benches/support/relay_copy_probe.rs
+      - scripts/perf/relay-copy/**
+      - .github/workflows/relay-copy-probe.yml
+permissions:
+  contents: read
+concurrency:
+  group: relay-copy-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  copy:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      CARGO_BUILD_JOBS: "2"
+      RUSTFLAGS: "-C target-cpu=x86-64-v2 -D warnings"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Fetch only the immutable baseline tree
+        run: git fetch --depth=1 origin b4d635519973b2ec9aa24a533129fdbb86d3fc4f
+      - uses: dtolnay/rust-toolchain@1.99.1
+      - name: Build exact production loop variants
+        run: python3 scripts/perf/relay-copy/run.py build
+      - name: Require the old accounting failure before paired timing
+        run: python3 scripts/perf/relay-copy/run.py measure
+      - name: Retain all samples, controls and measured executables
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-copy-${{ github.sha }}
+          path: .local/relay-copy-ci/
+          include-hidden-files: true
+          if-no-files-found: error
