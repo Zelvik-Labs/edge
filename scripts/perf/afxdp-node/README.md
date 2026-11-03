@@ -36,6 +36,8 @@ diagnose stalls and must not be reported as latency or capacity improvements.
 `workflow_dispatch` input `xdp_udp_benchmark=true` builds release Edge and pinned,
 unmodified Nginx 1.28.0 / OpenResty 1.27.1.2 before starting any measurement.
 The separate `build-baselines.sh` verifies the official tarball SHA-256 digests.
+The load generator source is `benches/support/udp-bench.c`; its bytes match the
+initial comparison's source, previously stored beside this driver.
 Both baseline servers have two workers; Edge runs within the same two-CPU
 affinity. A C load generator and a C origin each occupy a separate CPU, requiring
 four available CPUs. The controller also needs CPU time; its snapshot windows

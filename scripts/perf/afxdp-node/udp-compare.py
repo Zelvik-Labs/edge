@@ -330,6 +330,7 @@ def main():
     assert len(cpus)==4,'four CPUs required: proxy2, client1, origin1'
     binaries={n:digest(getattr(args,n)) for n in ['edge','nginx','openresty','loadgen']}
     sources=[ROOT/'src/xdp/af_xdp/bridge.rs',ROOT/'src/xdp/af_xdp/readiness.rs',ROOT/'src/xdp/af_xdp/wake.rs',ROOT/'src/xdp/smoke.rs']
+    sources.append(ROOT/'benches/support/udp-bench.c')
     sources+=sorted((ROOT/'scripts/perf/afxdp-node').glob('*'))
     hashes={str(f.relative_to(ROOT)):digest(f) for f in sources if f.is_file()}
     metadata={'source_commit':command('git','rev-parse','HEAD').strip(),

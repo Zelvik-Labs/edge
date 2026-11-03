@@ -584,7 +584,7 @@ jobs:
           cargo build --locked --release --bin Zelvik-Edge > .local/afxdp-udp-ci/edge-build.log 2>&1
           bash scripts/perf/afxdp-node/build-baselines.sh "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines" > .local/afxdp-udp-ci/baseline-build.log 2>&1
           cp .local/afxdp-udp-baselines/*-build.log .local/afxdp-udp-baselines/*-version.log .local/afxdp-udp-ci/
-          cc -std=gnu11 -O3 -march=x86-64-v2 -Wall -Wextra -Werror scripts/perf/afxdp-node/udp-bench.c -o .local/afxdp-udp-ci/udp-bench
+          cc -std=gnu11 -O3 -march=x86-64-v2 -Wall -Wextra -Werror benches/support/udp-bench.c -o .local/afxdp-udp-ci/udp-bench
           UDP_BENCH_BINARY="$GITHUB_WORKSPACE/.local/afxdp-udp-ci/udp-bench" UDP_BENCH_TEST_OUTPUT="$GITHUB_WORKSPACE/.local/afxdp-udp-ci/loadgen-tests" python3 scripts/perf/afxdp-node/test_udp_bench.py > .local/afxdp-udp-ci/loadgen-tests.log 2>&1
           python3 scripts/perf/afxdp-node/test_udp_summary.py > .local/afxdp-udp-ci/summary-tests.log 2>&1
 
