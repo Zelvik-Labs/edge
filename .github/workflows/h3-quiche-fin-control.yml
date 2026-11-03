@@ -42,7 +42,9 @@ jobs:
           PY
           cp -a crates/zelvik-edge-h3-quiche/src crates/zelvik-edge-h3-quiche/tests .local/h3-fin-old/
           cp .local/h3-fin-old/Cargo.lock .local/h3-fin-control/baseline-before.lock
-          cargo update --offline --manifest-path .local/h3-fin-old/Cargo.toml -p zelvik-edge-h3-quiche > .local/h3-fin-control/baseline-lock.log 2>&1
+          # A restored Cargo cache need not contain all sparse-index entries.
+          # Resolve with network access, then reject any package identity drift.
+          cargo update --manifest-path .local/h3-fin-old/Cargo.toml -p zelvik-edge-h3-quiche > .local/h3-fin-control/baseline-lock.log 2>&1
           cp .local/h3-fin-old/Cargo.lock .local/h3-fin-control/baseline-after.lock
           python3 - <<'PY'
           from pathlib import Path
