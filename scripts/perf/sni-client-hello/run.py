@@ -5,6 +5,7 @@ from collections import defaultdict
 import csv
 import hashlib
 import json
+import itertools
 import os
 from pathlib import Path
 import shutil
@@ -14,6 +15,8 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / '.local/sni-client-hello-ci'
 BASE_REF = 'ac46a48becb18e1c36309eee541bda3d0c6b7b93'
+BOUNDED_REF = 'b4d635519973b2ec9aa24a533129fdbb86d3fc4f'
+VARIANTS = ['baseline', 'bounded', 'candidate']
 
 
 def digest(path):
@@ -33,22 +36,24 @@ def source_inputs():
     fn_end = old.index('\n}\n', fn_start) + 3
     baseline = (old[enum_start:enum_end].replace('enum ClientHelloParse', 'pub(crate) enum ClientHelloParse') + '\n' +
                 old[fn_start:fn_end].replace('fn parse_tls_client_hello_sni(', 'pub(crate) fn parse_tls_client_hello_sni(', 1))
-    return revision, old, baseline, (ROOT / 'src/tls_client_hello.rs').read_text()
+    bounded = subprocess.check_output(['git', 'show', BOUNDED_REF + ':src/tls_client_hello.rs'], cwd=ROOT, text=True)
+    return revision, old, baseline, bounded, (ROOT / 'src/tls_client_hello.rs').read_text()
 
 
 def build():
     OUT.mkdir(parents=True, exist_ok=False)
-    revision, old, baseline, candidate = source_inputs()
+    revision, old, baseline, bounded, candidate = source_inputs()
     (OUT / 'baseline-original.rs').write_text(old)
     metadata = {
         'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
         'baseline': revision,
+        'bounded': BOUNDED_REF,
         'rustc': subprocess.check_output(['rustc', '-vV'], text=True),
         'baseline_original_sha256': digest(OUT / 'baseline-original.rs'),
         'variants': {},
         'scope': 'pure production SNI parser, System allocator; no full-node throughput claim',
     }
-    for variant, source in [('baseline', baseline), ('candidate', candidate)]:
+    for variant, source in [('baseline', baseline), ('bounded', bounded), ('candidate', candidate)]:
         directory = OUT / variant
         directory.mkdir()
         (directory / 'parser.rs').write_text(source)
@@ -81,7 +86,7 @@ def measure():
     cpu = min(os.sched_getaffinity(0))
     metadata['cpu'] = cpu
     metadata['runs'] = []
-    for variant in ['baseline', 'candidate']:
+    for variant in VARIANTS:
         directory = OUT / variant
         for label, sha in metadata['variants'][variant]['binaries'].items():
             assert digest(directory / label) == sha
@@ -93,11 +98,11 @@ def measure():
             assert result.returncode == expected, (variant, mode, result.returncode)
             if expected:
                 assert 'incomplete untrusted length must not allocate' in (directory / (mode + '.log')).read_text()
-    assert (OUT / 'baseline/corpus.log').read_bytes() == (OUT / 'candidate/corpus.log').read_bytes()
+    assert (OUT / 'baseline/corpus.log').read_bytes() == (OUT / 'bounded/corpus.log').read_bytes() == (OUT / 'candidate/corpus.log').read_bytes()
     metadata['corpus_cases'] = len((OUT / 'candidate/corpus.log').read_text().splitlines())
     metadata['corpus_sha256'] = digest(OUT / 'candidate/corpus.log')
-    for repeat in range(5):
-        for variant in (['baseline', 'candidate'] if repeat % 2 == 0 else ['candidate', 'baseline']):
+    for repeat, order in enumerate(itertools.permutations(VARIANTS)):
+        for variant in order:
             file = f'round-{repeat}-{variant}.tsv'
             before = snapshot(cpu)
             with (OUT / file).open('w') as log:
@@ -110,7 +115,7 @@ def measure():
                                      'cpu_before': before, 'cpu_after': after,
                                      'host_steal_fraction': delta[7] / sum(delta[:8])})
             (OUT / 'measurement.json').write_text(json.dumps(metadata, indent=2) + '\n')
-    for variant in ['baseline', 'candidate']:
+    for variant in VARIANTS:
         for label, sha in metadata['variants'][variant]['binaries'].items():
             assert digest(OUT / variant / label) == sha
     verify()
@@ -118,8 +123,11 @@ def measure():
 
 def verify():
     metadata = json.loads((OUT / 'measurement.json').read_text())
-    assert len(metadata['runs']) == 10
-    assert digest(OUT / 'baseline/corpus.log') == digest(OUT / 'candidate/corpus.log') == metadata['corpus_sha256']
+    assert len(metadata['runs']) == 18
+    for variant in VARIANTS:
+        assert digest(OUT / variant / 'corpus.log') == metadata['corpus_sha256']
+        for file, sha in metadata['variants'][variant]['binaries'].items():
+            assert digest(OUT / variant / file) == sha
     cases = ['single', 'fragmented', 'partial', 'oversized', 'trailing']
     values = defaultdict(dict)
     for run in metadata['runs']:
@@ -134,20 +142,28 @@ def verify():
             assert iterations > 0 and elapsed > 0
             values[case][run['round'], run['variant']] = elapsed / iterations
     allocations = {}
-    for variant in ['baseline', 'candidate']:
+    for variant in VARIANTS:
         with (OUT / variant / 'allocations.log').open() as source:
             allocations[variant] = {row['case']: {k: int(v) for k, v in row.items() if k != 'case'}
                                     for row in csv.DictReader(source, delimiter='\t')}
     assert allocations['baseline']['oversized']['max_allocation_bytes'] == 0x1000003
-    assert all(value == 0 for value in allocations['candidate']['oversized'].values())
-    assert all(value == 0 for value in allocations['candidate']['partial'].values())
-    summary = {'source': metadata['source'], 'baseline': metadata['baseline'], 'corpus_cases': metadata['corpus_cases'],
-               'allocations': allocations, 'cases': {}, 'max_host_steal_fraction': max(run['host_steal_fraction'] for run in metadata['runs'])}
+    for variant in ['bounded', 'candidate']:
+        assert all(value == 0 for value in allocations[variant]['oversized'].values())
+        assert all(value == 0 for value in allocations[variant]['partial'].values())
+    for case in ['single', 'fragmented', 'trailing']:
+        assert allocations['candidate'][case]['allocations'] == 1
+        assert allocations['candidate'][case]['reallocations'] == 0
+        assert allocations['candidate'][case]['requested_bytes'] == 11
+    summary = {'source': metadata['source'], 'baseline': metadata['baseline'], 'bounded': metadata['bounded'],
+               'corpus_cases': metadata['corpus_cases'], 'allocations': allocations, 'cases': {},
+               'max_host_steal_fraction': max(run['host_steal_fraction'] for run in metadata['runs'])}
     for case in cases:
-        paired = [values[case][r, 'candidate'] / values[case][r, 'baseline'] - 1 for r in range(5)]
-        summary['cases'][case] = {'baseline_ns': statistics.median(values[case][r, 'baseline'] for r in range(5)),
-                                  'candidate_ns': statistics.median(values[case][r, 'candidate'] for r in range(5)),
-                                  'paired_change': paired, 'paired_median': statistics.median(paired)}
+        row = {variant + '_ns': statistics.median(values[case][r, variant] for r in range(6)) for variant in VARIANTS}
+        for reference in ['baseline', 'bounded']:
+            paired = [values[case][r, 'candidate'] / values[case][r, reference] - 1 for r in range(6)]
+            row['paired_change_vs_' + reference] = paired
+            row['paired_median_vs_' + reference] = statistics.median(paired)
+        summary['cases'][case] = row
     (OUT / 'verified-summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     print(json.dumps(summary, indent=2))
 
@@ -157,8 +173,10 @@ if __name__ == '__main__':
     parser.add_argument('mode', choices=['build', 'measure', 'verify', 'check-source'])
     args = parser.parse_args()
     if args.mode == 'check-source':
-        revision, old, baseline, candidate = source_inputs()
-        assert 'Vec::with_capacity(needed_handshake_len)' in baseline and 'let mut available = 0usize' in candidate
-        print(json.dumps({'baseline': revision, 'baseline_bytes': len(baseline), 'candidate_bytes': len(candidate)}))
+        revision, old, baseline, bounded, candidate = source_inputs()
+        assert 'Vec::with_capacity(needed_handshake_len)' in baseline and 'let mut available = 0usize' in bounded
+        assert 'RecordPayload' in candidate and 'Vec::with_capacity(needed_handshake_len)' not in candidate
+        print(json.dumps({'baseline': revision,
+        'bounded': BOUNDED_REF, 'baseline_bytes': len(baseline), 'bounded_bytes': len(bounded), 'candidate_bytes': len(candidate)}))
     else:
         globals()[args.mode]()

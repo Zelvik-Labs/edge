@@ -148,6 +148,25 @@ fn corpus(cases: &[(&str, Vec<u8>)]) {
         }
         println!("mutation\t{index}\t{:?}", parse_tls_client_hello_sni(&wire));
     }
+    // Exercise field boundaries and malformed lengths on every possible
+    // supported split, not mostly padding in the large fixture.
+    let small = hello(0);
+    for split in 4..small.len() {
+        let mut wire = record(&small[..split]);
+        wire.extend_from_slice(&record(&[]));
+        wire.extend_from_slice(&record(&small[split..]));
+        println!("split\t{split}\t{:?}", parse_tls_client_hello_sni(&wire));
+        for offset in 0..wire.len() {
+            for bit in 0..8 {
+                wire[offset] ^= 1 << bit;
+                println!(
+                    "split-mutation\t{split}\t{offset}\t{bit}\t{:?}",
+                    parse_tls_client_hello_sni(&wire)
+                );
+                wire[offset] ^= 1 << bit;
+            }
+        }
+    }
 }
 
 fn timing(cases: &[(&str, Vec<u8>)]) {
