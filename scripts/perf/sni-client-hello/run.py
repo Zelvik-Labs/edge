@@ -17,7 +17,11 @@ BASE_REF = 'ac46a48becb18e1c36309eee541bda3d0c6b7b93'
 
 
 def digest(path):
-    return hashlib.file_digest(path.open('rb'), 'sha256').hexdigest()
+    sha = hashlib.sha256()
+    with path.open('rb') as source:
+        while block := source.read(1024 * 1024):
+            sha.update(block)
+    return sha.hexdigest()
 
 
 def source_inputs():
