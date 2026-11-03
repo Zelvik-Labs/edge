@@ -8,8 +8,10 @@
 运行时提交 `3969d9338c4be28db163db79b2e333304ab44a58`，对照脚本修正提交
 `b4d635519973b2ec9aa24a533129fdbb86d3fc4f`；旧版固定为 `ac46a48becb18e1c36309eee541bda3d0c6b7b93`。
 [组件 Actions 41703078643](https://github.com/Zelvik-Labs/edge/actions/runs/41703078643) 通过。
-[完整 CI 41701646798](https://github.com/Zelvik-Labs/edge/actions/runs/41701646798) 的 check/Clippy、单元、集成、vendor 已通过，
-本文初次记录时原生 AF_XDP 验证仍在进行，不能提前算作完成。
+[完整 CI 41701646798](https://github.com/Zelvik-Labs/edge/actions/runs/41701646798) 已全部通过：
+check/Clippy、1347 项 lib 测试（另有 4 项既有 ignored）、16 项 bin 测试、集成、vendor，
+以及 32 组原生 AF_XDP 节点组合。原生记录逐项核对了退出状态、smoke 完成标记与网络清理，
+证据补充在 `evidence/sni-parser-2026-11-04/full-ci/`。
 
 ## 已修复
 

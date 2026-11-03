@@ -7,8 +7,10 @@
 运行时 `e11422cf59678efda70f4468e71af17e3d31c510`，测量脚本
 `9992eab3502a55c521c5cea630b2ce377137e3d6`，旧版固定为 `b4d635519973b2ec9aa24a533129fdbb86d3fc4f`。
 [组件 Actions 41704532250](https://github.com/Zelvik-Labs/edge/actions/runs/41704532250) 已通过。
-[完整 CI 41703838859](https://github.com/Zelvik-Labs/edge/actions/runs/41703838859) 初次记录时已通过 check/Clippy、单元、集成和 vendor，
-原生 AF_XDP 阶段仍在进行；其完成情况需要另行补证。
+[完整 CI 41703838859](https://github.com/Zelvik-Labs/edge/actions/runs/41703838859) 已全部通过：
+check/Clippy、1352 项 lib 测试（另有 4 项既有 ignored）、16 项 bin 测试、集成和 vendor，
+以及 32 组原生 AF_XDP 节点组合。退出状态、smoke 完成标记与网络清理均已逐项核对，
+证据补充在 `evidence/relay-copy-2026-11-04/full-ci/`。
 
 ## 已修复
 
