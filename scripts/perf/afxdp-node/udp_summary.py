@@ -2,12 +2,14 @@
 import statistics
 
 # Each entry is (wake mechanism, RX statistics mode, idle yield, UDP payload). Label order fixes the
-# baseline/candidate pairing and the four-position Williams schedule.
+# baseline/candidate pairing and the four-position Williams schedule. None is an
+# explicit kernel dataplane, whose XSK counters do not exist.
 COMPARISON_NODES = {
     'wake': {'worker': ('worker', 'bridge', 'eager', 'copied'), 'readable': ('readable', 'bridge', 'eager', 'copied')},
     'rx-stats': {'full-stats': ('worker', 'full', 'eager', 'copied'), 'bridge-stats': ('worker', 'bridge', 'eager', 'copied')},
     'idle-yield': {'eager': ('worker', 'bridge', 'eager', 'copied'), 'cooperative': ('worker', 'bridge', 'cooperative', 'copied')},
     'udp-payload': {'copied': ('worker', 'bridge', 'eager', 'copied'), 'owned': ('worker', 'bridge', 'eager', 'owned')},
+    'dataplane': {'afxdp': ('worker', 'bridge', 'eager', 'copied'), 'kernel': None},
 }
 
 
@@ -47,11 +49,16 @@ def diagnostics(record, metadata, direct_rps):
         resources['proxy_threads'] = sum(len(p['threads']) for p in record['server_after']['processes'].values())
         resources['proxy_rss_bytes_sum_of_processes'] = metadata['page_size'] * sum(
             p['rss_pages'] for p in record['server_after']['processes'].values())
+        if 'thread_cpu_deltas' in record:
+            resources['thread_cpu_complete_identity_coverage'] = all(
+                value['complete_identity_coverage'] for value in record['thread_cpu_deltas'].values())
     flags = []
     if duration < .5:
         flags.append('short_sample_under_0.5s')
     if resources['snapshot_overhead_pct'] > 5:
         flags.append('cpu_snapshot_window_overhead_over_5pct')
+    if resources.get('thread_cpu_complete_identity_coverage') is False:
+        flags.append('thread_cpu_identity_coverage_incomplete')
     if max(p['steal_pct'] for p in resources['per_cpu'].values()) > 1:
         flags.append('host_cpu_steal_over_1pct')
     for name in ['client', 'origin']:

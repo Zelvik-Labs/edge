@@ -12,6 +12,9 @@ import time
 import traceback
 from udp_summary import COMPARISON_NODES, summarize
 from syscall_profile import SyscallProfile
+from node_control import mode_arguments, validate_attachment, validate_report
+from thread_cpu import snapshot as thread_snapshot, compare as compare_threads
+from memory_maps import capture as capture_memory
 
 ROOT = Path(__file__).resolve().parents[3]
 NS = 'edge-udp-peer'
@@ -221,13 +224,11 @@ def execute(args, directory, target, concurrency, payload, cpus):
         assert wait_file(directory/'origin-ready.json', origin, as_json=True)['port'] == 19003
         if target != 'direct':
             if target in nodes:
-                wake, rx_stats, idle_yield, udp_payload = nodes[target]
                 configure(directory/'home',proxy_cpus[0])
                 env = dict(os.environ, ZELVIK_EDGE_HOME=str(directory/'home'),
                            ZELVIK_EDGE_XDP_PIN_DIR=str(Path('/sys/fs/bpf/edge-udp')/directory.name))
                 argv = ['taskset','-c',','.join(map(str,proxy_cpus)),args.edge,'xdp','proxy-smoke',
-                        '--wake',wake,'--rx-stats',rx_stats,'--idle-yield',idle_yield,
-                        '--udp-payload',udp_payload,
+                        *mode_arguments(nodes[target]),
                         '--remote','10.203.0.2','--duration-ms','60000',
                         '--ready-file',directory/'node-ready']
                 server = spawn(argv, 'server', env)
@@ -244,6 +245,8 @@ def execute(args, directory, target, concurrency, payload, cpus):
                     assert server.poll() is None and time.monotonic() < deadline
                     time.sleep(.01)
             record['server_command'] = list(map(str,argv))
+        record['link_before'] = json.loads(command('ip','-details','-json','link','show','dev','eup-node'))
+        validate_attachment(record['link_before'], target in nodes and nodes[target] is not None)
         fixed_network(directory)
         target_ip, port = ('10.203.0.2',19003) if target == 'direct' else ('10.203.0.1',443)
         argv = ['ip','netns','exec',NS,'taskset','-c',str(cpus[2]),args.loadgen,'gated-client',target_ip,
@@ -264,9 +267,15 @@ def execute(args, directory, target, concurrency, payload, cpus):
         if server:
             record['server_before'] = process_snapshot(server.pid)
             check_affinity(record['server_before'],proxy_cpus)
+            if args.resource_profile:
+                record['thread_cpu_before'] = {pid: thread_snapshot(int(pid)) for pid in record['server_before']['processes']}
         (directory/'measure-go').write_text('go\n')
         wait_file(directory/'measure-done.json',client,as_json=True)
         if server:
+            if args.resource_profile:
+                record['thread_cpu_after'] = {pid: thread_snapshot(int(pid)) for pid in record['thread_cpu_before']}
+                record['thread_cpu_deltas'] = {pid: compare_threads(value, record['thread_cpu_after'][pid])
+                                              for pid, value in record['thread_cpu_before'].items()}
             record['server_after'] = process_snapshot(server.pid)
             check_affinity(record['server_after'],proxy_cpus)
             assert record['server_before']['processes'].keys() == record['server_after']['processes'].keys(), 'server processes changed'
@@ -295,19 +304,19 @@ def execute(args, directory, target, concurrency, payload, cpus):
             record['idle_before'] = process_snapshot(server.pid)
             time.sleep(2.2)
             record['idle_after'] = process_snapshot(server.pid)
+            if args.resource_profile:
+                record['memory_after_idle'] = {pid: capture_memory(int(pid), directory)
+                                               for pid in record['idle_after']['processes']}
         stop_process(server); server = None
+        record['link_after'] = json.loads(command('ip','-details','-json','link','show','dev','eup-node'))
+        validate_attachment(record['link_after'], False)
         stop_process(origin); origin = None
         origin_data = json.loads((directory/'origin.json').read_text())
         assert origin_data['passed'] and origin_data['received'] == origin_data['sent'] == data['sent']
         assert origin_data['distinct_peer_ports'] == concurrency, 'upstream socket reuse did not match'
         if target in nodes:
             report = next(o for o in json_reports((directory/'server.log').read_text()) if 'app' in o)
-            assert report['xskWakeMode'] == nodes[target][0] and report['xskRxStatsMode'] == nodes[target][1]
-            assert report['xskIdleYieldMode'] == nodes[target][2]
-            assert report['xskUdpPayloadMode'] == nodes[target][3]
-            assert report['proxyReady'] and report['proxyRedirectEnabled']
-            assert report['redirect'] == 2*data['sent'], 'both traffic directions must use XSK'
-            assert report['xskDrops'] == 0 and all(value == 0 for value in report['xskQueueStats'].values())
+            validate_report(report, nodes[target], data['sent'], concurrency)
             record['node_report'] = report
         record['result'] = data
         record['origin'] = origin_data
@@ -350,6 +359,7 @@ def main():
     p.add_argument('--comparison',choices=COMPARISON_NODES,default='wake')
     p.add_argument('--proxy-cpus',type=int,choices=[1,2],default=2)
     p.add_argument('--syscall-profile',action='store_true',help='counts-only tracer after warmup; all timing is diagnostic')
+    p.add_argument('--resource-profile',action='store_true',help='native thread counters at timing boundaries and smaps after idle; retain read-window overhead')
     p.add_argument('--warmup',type=int,default=1000)
     p.add_argument('--rounds',type=int,default=4)
     args=p.parse_args()
@@ -376,6 +386,7 @@ def main():
           'scope':f'IPv4 UDP steady-flow reuse; single XSK queue, {args.proxy_cpus} proxy CPUs, separate client and remote origin CPUs; no HTTP/cache/hardware-zero-copy claim',
           'comparison':args.comparison,'targets':targets,'node_modes':COMPARISON_NODES[args.comparison],'proxy_cpus':cpus[:args.proxy_cpus],
           'syscall_profile':args.syscall_profile,
+          'resource_profile':args.resource_profile,
           'single_flow_iterations':args.single_flow_iterations,
           'iterations':args.iterations,'warmup':args.warmup,'rounds':args.rounds,
           'nginx_udp_policy':'proxy_requests 0; proxy_responses 2147483647; proxy_timeout 60s; actual peer ports verified'}

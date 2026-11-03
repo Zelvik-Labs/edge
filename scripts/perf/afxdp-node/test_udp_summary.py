@@ -113,6 +113,28 @@ class SummaryTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, 'target labels'):
             summarize(records, metadata)
 
+    def test_kernel_and_af_pair_preserve_all_baselines_and_rounds(self):
+        records, metadata = fixture()
+        for record in records:
+            if record['target'] in ['worker', 'readable']:
+                record['target'] = {'worker': 'afxdp', 'readable': 'kernel'}[record['target']]
+        metadata.update(comparison='dataplane', targets=['afxdp', 'kernel', 'nginx', 'openresty'])
+        summary = summarize(records, metadata)
+        self.assertTrue(summary['passed'])
+        pairs = summary['comparisons']['c1-b64']['paired_changes_pct']
+        self.assertEqual(pairs['kernel_vs_afxdp']['requests_per_second']['all'], [50]*4)
+        self.assertIn('kernel_vs_nginx', pairs)
+        self.assertIn('afxdp_vs_openresty', pairs)
+        self.assertIsNone(COMPARISON_NODES['dataplane']['kernel'])
+
+    def test_incomplete_thread_observations_are_visible_without_filtering(self):
+        records, metadata = fixture()
+        records[1]['thread_cpu_deltas'] = {'42': {'complete_identity_coverage': False}}
+        summary = summarize(records, metadata)
+        self.assertTrue(summary['passed'])
+        self.assertIn('thread_cpu_identity_coverage_incomplete',
+                      summary['resources']['c1-b64-worker-r1']['quality_flags'])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -63,6 +63,46 @@ diagnose stalls and must not be reported as latency or capacity improvements.
 
 ## Matched UDP reuse comparison
 
+`xdp_udp_comparison=dataplane` compares Edge AF_XDP (worker/bridge/eager/copied)
+with the existing `proxy-smoke --kernel` arm, plus Nginx and OpenResty in the
+same four-position Williams schedule. Both Edge arms use an external origin.
+Kernel explicitly disables XDP in its runtime before starting ordinary socket
+listeners. This is a whole-dataplane comparison, not a hybrid upstream mode:
+normal enabled XDP deliberately forces AF_XDP upstream regardless of the YAML
+upstream hint. Interface JSON must show SKB XDP for the AF arm, and no attached
+XDP for the kernel/baseline/direct arms or after graceful shutdown. Kernel XSK
+counters are absent, never synthesized as zeros. AF validates exact 2N redirects,
+the full UDP pipeline and all error/drop counters.
+
+For this comparison, CI doubles timed exchanges to 80,000 per single flow and
+20,000 per flow at concurrency 16, retaining 1,000 warmups, four rounds and both
+CPU budgets. This addresses the preceding round's short samples without
+filtering any run; durations and CPU ceilings remain visible. No Rust runtime
+source changes are needed. Binary and observer source hashes are still recorded
+at the actual build commit; do not compare absolute RPS across CI hosts.
+
+CI also enables `--resource-profile` for this matrix. Native per-thread user/system
+CPU counters bracket the measured client interval; each read records its span,
+thread name and start ticks. Reused/new/exited/unreadable-during-exit TIDs have
+unknown (`null`) deltas, with coverage flags; they never become zero CPU. Process
+counter bounds and matched thread sums are separate because reads are sequential.
+Tick resolution, boundary overhead and identical Tokio thread names limit
+attribution; names alone cannot separate runtimes. There is no ptrace profiler.
+
+After timed traffic and the existing idle observation, `/proc/PID/smaps` is saved
+with read times, identity, SHA256, byte-unit totals and largest resident mappings.
+This cannot perturb the preceding timed interval. It describes mappings, not
+allocator call sites or an atomic physical-memory census; summing process RSS
+can count shared pages repeatedly. Missing or incomplete smaps fails the case.
+Self-tests include real CPU-consuming threads, actual thread exit/creation,
+resident anonymous mappings and wrong-dataplane/stale-XDP negative controls.
+
+A successful UDP job retains the four compared executables and measurement
+metadata in `udp-comparison-binaries-SHA` for 14 days. Observer-only follow-ups
+can reuse them after verifying every binary hash, recording the original build
+commit separately from the observer commit, and checking runtime-source hashes.
+Artifact upload does not deploy or install a runtime. Reuse is not automatic.
+
 `workflow_dispatch` input `xdp_udp_benchmark=true` builds release Edge and pinned,
 unmodified Nginx 1.28.0 / OpenResty 1.27.1.2 before starting any measurement.
 The separate `build-baselines.sh` verifies the official tarball SHA-256 digests.

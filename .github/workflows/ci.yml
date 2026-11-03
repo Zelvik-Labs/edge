@@ -36,7 +36,7 @@ on:
       xdp_udp_comparison:
         description: Choose the same-binary Edge comparison inside the UDP matrix
         type: choice
-        options: [wake, rx-stats, idle-yield, udp-payload]
+        options: [wake, rx-stats, idle-yield, udp-payload, dataplane]
         default: wake
       udp_demux_benchmark:
         description: Compare production UDP listener-set queries with snapshot point queries
@@ -641,6 +641,9 @@ jobs:
           cc -std=gnu11 -O3 -march=x86-64-v2 -Wall -Wextra -Werror benches/support/udp-bench.c -o .local/afxdp-udp-ci/udp-bench
           UDP_BENCH_BINARY="$GITHUB_WORKSPACE/.local/afxdp-udp-ci/udp-bench" UDP_BENCH_TEST_OUTPUT="$GITHUB_WORKSPACE/.local/afxdp-udp-ci/loadgen-tests" python3 scripts/perf/afxdp-node/test_udp_bench.py > .local/afxdp-udp-ci/loadgen-tests.log 2>&1
           python3 scripts/perf/afxdp-node/test_udp_summary.py > .local/afxdp-udp-ci/summary-tests.log 2>&1
+          python3 scripts/perf/afxdp-node/test_thread_cpu.py > .local/afxdp-udp-ci/thread-cpu-tests.log 2>&1
+          python3 scripts/perf/afxdp-node/test_memory_maps.py > .local/afxdp-udp-ci/memory-map-tests.log 2>&1
+          python3 scripts/perf/afxdp-node/test_node_control.py > .local/afxdp-udp-ci/dataplane-control-tests.log 2>&1
           if [[ "$EDGE_UDP_SYSCALL_PROFILE" == true ]]; then
             sudo apt-get install -y --no-install-recommends strace
             sudo python3 scripts/perf/afxdp-node/test_syscall_profile.py > .local/afxdp-udp-ci/profile-helper-tests.log 2>&1
@@ -656,8 +659,12 @@ jobs:
           parent_net=$(readlink /proc/self/ns/net)
           parent_mount=$(readlink /proc/self/ns/mnt)
           result=0
+          resource_options=()
+          if [[ "$EDGE_UDP_COMPARISON" == dataplane ]]; then
+            resource_options+=(--resource-profile --iterations 20000 --single-flow-iterations 80000)
+          fi
           for proxy_cpus in 1 2; do
-            if sudo unshare --net --mount --propagation private -- bash scripts/perf/afxdp-node/udp-run.sh "$GITHUB_WORKSPACE/target/release/Zelvik-Edge" "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines/nginx/sbin/nginx" "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines/openresty/nginx/sbin/nginx" "$GITHUB_WORKSPACE/.local/afxdp-udp-ci/udp-bench" "$GITHUB_WORKSPACE/.local/afxdp-udp-ci/results-cpu$proxy_cpus" "$parent_net" "$parent_mount" --comparison "$EDGE_UDP_COMPARISON" --proxy-cpus "$proxy_cpus" --single-flow-iterations 40000; then
+            if sudo unshare --net --mount --propagation private -- bash scripts/perf/afxdp-node/udp-run.sh "$GITHUB_WORKSPACE/target/release/Zelvik-Edge" "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines/nginx/sbin/nginx" "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines/openresty/nginx/sbin/nginx" "$GITHUB_WORKSPACE/.local/afxdp-udp-ci/udp-bench" "$GITHUB_WORKSPACE/.local/afxdp-udp-ci/results-cpu$proxy_cpus" "$parent_net" "$parent_mount" --comparison "$EDGE_UDP_COMPARISON" --proxy-cpus "$proxy_cpus" --single-flow-iterations 40000 "${resource_options[@]}"; then
               :
             else
               result=1
@@ -676,6 +683,21 @@ jobs:
             .local/afxdp-udp-ci/**/*.conf
             .local/afxdp-udp-ci/**/*.yaml
           if-no-files-found: error
+
+      - name: Retain matched UDP binaries for observer-only follow-ups
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.xdp_udp_benchmark
+        uses: actions/upload-artifact@v4
+        with:
+          name: udp-comparison-binaries-${{ github.sha }}
+          path: |
+            target/release/Zelvik-Edge
+            .local/afxdp-udp-baselines/nginx/sbin/nginx
+            .local/afxdp-udp-baselines/openresty/nginx/sbin/nginx
+            .local/afxdp-udp-ci/udp-bench
+            .local/afxdp-udp-ci/results-cpu*/comparison/metadata.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Collect isolated UDP syscall diagnostics after compilation
         if: github.event_name == 'workflow_dispatch' && inputs.xdp_udp_profile
