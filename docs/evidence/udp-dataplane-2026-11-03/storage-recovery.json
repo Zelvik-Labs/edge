@@ -1,0 +1,13 @@
+{
+  "verified_before_removal": true,
+  "removed_redundant_unpacked_bytes": 273637934,
+  "udp_archive": "udp-raw.zip",
+  "udp_restore": "python3 -m zipfile -e udp-raw.zip /path/to/new/extraction",
+  "binary_archive_committed": false,
+  "binary_archive_retained_in_ignored_checkpoint": true,
+  "binary_archive_sha256": "941a6ea10a4c77a12bd4d7952ba185e4580a5cb2daf9632fa5c8e258afa1e9ce",
+  "free_before": 4892213248,
+  "free_after": 5173657600,
+  "build_caches_removed": false,
+  "cloud_cache_automatic_gc": false
+}

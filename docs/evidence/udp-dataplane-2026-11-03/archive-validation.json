@@ -1,0 +1,5 @@
+{
+  "passed": true,
+  "files": 2429,
+  "scope": "archive SHA and every ZIP entry/extracted byte checked; all original logs and smaps remain in ZIP"
+}

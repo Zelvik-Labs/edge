@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "artifact_id": 13220854028,
+  "archive_sha256": "941a6ea10a4c77a12bd4d7952ba185e4580a5cb2daf9632fa5c8e258afa1e9ce",
+  "source_commit": "b8c72e4a7a68c3c5b62cb77f6f40c8e30c3d0a76",
+  "binary_paths": {
+    "edge": "target/release/Zelvik-Edge",
+    "nginx": ".local/afxdp-udp-baselines/nginx/sbin/nginx",
+    "openresty": ".local/afxdp-udp-baselines/openresty/nginx/sbin/nginx",
+    "loadgen": ".local/afxdp-udp-ci/udp-bench"
+  },
+  "verified_binaries": {
+    "edge": "0a9ad1d1c7193823d6260b5c3a4b956d9f7a72607cbc7e087aaca1290b82facf",
+    "nginx": "5e06a61af70cf1a37fb6b023155fb37fe818072e5441b434cefa589ee4e26e87",
+    "openresty": "ba7393cac684b88566c9ab52cdfd1b9a1ccdbb2d2a4319d191f380ae60525059",
+    "loadgen": "2ddcb7e4a190219ef996b973a4398197dd70c0f943dda0f9cf27066544826146"
+  },
+  "scope": "actual archived binary bytes checked against both budget metadata; executables not run locally"
+}

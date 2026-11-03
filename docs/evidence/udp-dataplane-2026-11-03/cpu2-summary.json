@@ -1,0 +1,3089 @@
+{
+  "passed": true,
+  "comparisons": {
+    "c1-b64": {
+      "passed": true,
+      "complete": true,
+      "rps": {
+        "afxdp": {
+          "median": 6185.471747,
+          "min": 6154.126226,
+          "max": 6206.230728,
+          "all": [
+            6206.230728,
+            6154.126226,
+            6174.897131,
+            6196.046363
+          ]
+        },
+        "kernel": {
+          "median": 14190.742683,
+          "min": 14080.707066,
+          "max": 14214.772173,
+          "all": [
+            14080.707066,
+            14206.523266,
+            14214.772173,
+            14174.9621
+          ]
+        },
+        "nginx": {
+          "median": 16236.514156,
+          "min": 16139.441316,
+          "max": 16317.869553,
+          "all": [
+            16225.57823,
+            16247.450082,
+            16317.869553,
+            16139.441316
+          ]
+        },
+        "openresty": {
+          "median": 16203.5641635,
+          "min": 16155.187699,
+          "max": 16266.735355,
+          "all": [
+            16155.187699,
+            16185.685627,
+            16266.735355,
+            16221.4427
+          ]
+        }
+      },
+      "p99_rtt_ns": {
+        "afxdp": {
+          "median": 200578.5,
+          "min": 199552,
+          "max": 203549,
+          "all": [
+            200293,
+            200864,
+            203549,
+            199552
+          ]
+        },
+        "kernel": {
+          "median": 106042.5,
+          "min": 104936,
+          "max": 107911,
+          "all": [
+            107911,
+            104936,
+            105266,
+            106819
+          ]
+        },
+        "nginx": {
+          "median": 97566.5,
+          "min": 96750,
+          "max": 98754,
+          "all": [
+            98754,
+            97812,
+            97321,
+            96750
+          ]
+        },
+        "openresty": {
+          "median": 97597.0,
+          "min": 96751,
+          "max": 97822,
+          "all": [
+            97822,
+            97702,
+            97492,
+            96751
+          ]
+        }
+      },
+      "paired_changes_pct": {
+        "kernel_vs_afxdp": {
+          "requests_per_second": {
+            "median": 129.48844055935865,
+            "min": 126.88017386259185,
+            "max": 130.84549689572776,
+            "all": [
+              126.88017386259185,
+              130.84549689572776,
+              130.20257457629864,
+              128.77430654241863
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": -47.11414046195357,
+            "min": -48.28468820775341,
+            "max": -46.12342917625678,
+            "all": [
+              -46.12342917625678,
+              -47.75768679305401,
+              -48.28468820775341,
+              -46.470594130853115
+            ]
+          }
+        },
+        "afxdp_vs_nginx": {
+          "requests_per_second": {
+            "median": -61.936418319192725,
+            "min": -62.15868063570369,
+            "max": -61.60928844013029,
+            "all": [
+              -61.75032630562837,
+              -62.12251033275709,
+              -62.15868063570369,
+              -61.60928844013029
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 105.8062565205772,
+            "min": 102.82013893108126,
+            "max": 109.15218709220005,
+            "all": [
+              102.82013893108126,
+              105.35721588353168,
+              109.15218709220005,
+              106.25529715762272
+            ]
+          }
+        },
+        "kernel_vs_nginx": {
+          "requests_per_second": {
+            "median": -12.724914667887806,
+            "min": -13.21907382033558,
+            "max": -12.171915852207926,
+            "all": [
+              -13.21907382033558,
+              -12.561520766025147,
+              -12.888308569750462,
+              -12.171915852207926
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 8.71812073552628,
+            "min": 7.2833599149388695,
+            "max": 10.407235142118854,
+            "all": [
+              9.272535796018389,
+              7.2833599149388695,
+              8.163705675034173,
+              10.407235142118854
+            ]
+          }
+        },
+        "afxdp_vs_openresty": {
+          "requests_per_second": {
+            "median": -61.89066415781365,
+            "min": -62.03972711032036,
+            "max": -61.58366684663055,
+            "all": [
+              -61.58366684663055,
+              -61.97797011617443,
+              -62.03972711032036,
+              -61.80335819945287
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 105.92079363902582,
+            "min": 104.75250966040358,
+            "max": 108.78533623271652,
+            "all": [
+              104.75250966040358,
+              105.58842193609136,
+              108.78533623271652,
+              106.25316534196028
+            ]
+          }
+        },
+        "kernel_vs_openresty": {
+          "requests_per_second": {
+            "median": -12.615186045037724,
+            "min": -12.840956550002879,
+            "max": -12.227856184840757,
+            "all": [
+              -12.840956550002879,
+              -12.227856184840757,
+              -12.614474491768735,
+              -12.615897598306713
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 9.143809244909374,
+            "min": 7.40414730507053,
+            "max": 10.406093993860521,
+            "all": [
+              10.313630880579016,
+              7.40414730507053,
+              7.97398760923973,
+              10.406093993860521
+            ]
+          }
+        }
+      }
+    },
+    "c1-b1200": {
+      "passed": true,
+      "complete": true,
+      "rps": {
+        "afxdp": {
+          "median": 6040.6865099999995,
+          "min": 6002.065365,
+          "max": 6077.156918,
+          "all": [
+            6019.958476,
+            6002.065365,
+            6061.414544,
+            6077.156918
+          ]
+        },
+        "kernel": {
+          "median": 14136.949061,
+          "min": 14006.042392,
+          "max": 14188.526646,
+          "all": [
+            14188.526646,
+            14164.264271,
+            14006.042392,
+            14109.633851
+          ]
+        },
+        "nginx": {
+          "median": 16082.151299000001,
+          "min": 16019.648676,
+          "max": 16145.774551,
+          "all": [
+            16058.776816,
+            16145.774551,
+            16019.648676,
+            16105.525782
+          ]
+        },
+        "openresty": {
+          "median": 16006.3176485,
+          "min": 15941.152099,
+          "max": 16126.724735,
+          "all": [
+            15965.639275,
+            15941.152099,
+            16126.724735,
+            16046.996022
+          ]
+        }
+      },
+      "p99_rtt_ns": {
+        "afxdp": {
+          "median": 206956.0,
+          "min": 205072,
+          "max": 208759,
+          "all": [
+            208759,
+            207066,
+            205072,
+            206846
+          ]
+        },
+        "kernel": {
+          "median": 106173.0,
+          "min": 104945,
+          "max": 107550,
+          "all": [
+            104945,
+            106469,
+            107550,
+            105877
+          ]
+        },
+        "nginx": {
+          "median": 97126.0,
+          "min": 96530,
+          "max": 97381,
+          "all": [
+            97331,
+            96921,
+            97381,
+            96530
+          ]
+        },
+        "openresty": {
+          "median": 97386.5,
+          "min": 96119,
+          "max": 97842,
+          "all": [
+            97842,
+            97481,
+            96119,
+            97292
+          ]
+        }
+      },
+      "paired_changes_pct": {
+        "kernel_vs_afxdp": {
+          "requests_per_second": {
+            "median": 133.93317558366024,
+            "min": 131.06887493554012,
+            "max": 135.98983699172024,
+            "all": [
+              135.69143711814533,
+              135.98983699172024,
+              131.06887493554012,
+              132.17491404917516
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": -48.69785236163249,
+            "min": -49.72911347534718,
+            "max": -47.55500507138956,
+            "all": [
+              -49.72911347534718,
+              -48.58209459785768,
+              -47.55500507138956,
+              -48.8136101254073
+            ]
+          }
+        },
+        "afxdp_vs_nginx": {
+          "requests_per_second": {
+            "median": -62.38980224281336,
+            "min": -62.82578239872514,
+            "max": -62.162624995135076,
+            "all": [
+              -62.51297004139147,
+              -62.82578239872514,
+              -62.162624995135076,
+              -62.266634444235244
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 113.9628361968202,
+            "min": 110.58728088641523,
+            "max": 114.48356638686543,
+            "all": [
+              114.48356638686543,
+              113.6441018974216,
+              110.58728088641523,
+              114.28157049621879
+            ]
+          }
+        },
+        "kernel_vs_nginx": {
+          "requests_per_second": {
+            "median": -12.332607716423095,
+            "min": -12.569603271117336,
+            "max": -11.646280357645889,
+            "all": [
+              -11.646280357645889,
+              -12.272624479804062,
+              -12.569603271117336,
+              -12.392590953042127
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 9.76716115723375,
+            "min": 7.82279027236954,
+            "max": 10.442488781179083,
+            "all": [
+              7.82279027236954,
+              9.85132221087277,
+              10.442488781179083,
+              9.683000103594729
+            ]
+          }
+        },
+        "afxdp_vs_openresty": {
+          "requests_per_second": {
+            "median": -62.321447340971076,
+            "min": -62.413852511261325,
+            "max": -62.12900589201629,
+            "all": [
+              -62.29428479305285,
+              -62.34860988888931,
+              -62.413852511261325,
+              -62.12900589201629
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 112.97774806374437,
+            "min": 112.41677865430187,
+            "max": 113.36338177878619,
+            "all": [
+              113.36338177878619,
+              112.41677865430187,
+              113.35219883685848,
+              112.60329729063025
+            ]
+          }
+        },
+        "kernel_vs_openresty": {
+          "requests_per_second": {
+            "median": -11.609798915946923,
+            "min": -13.150111866158799,
+            "max": -11.130857953071216,
+            "all": [
+              -11.130857953071216,
+              -11.146545851673206,
+              -13.150111866158799,
+              -12.07305198022064
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 9.022105472084164,
+            "min": 7.259663539175398,
+            "max": 11.892549860069291,
+            "all": [
+              7.259663539175398,
+              9.220258306746953,
+              11.892549860069291,
+              8.823952637421373
+            ]
+          }
+        }
+      }
+    },
+    "c16-b64": {
+      "passed": true,
+      "complete": true,
+      "rps": {
+        "afxdp": {
+          "median": 59580.963702,
+          "min": 59214.806057,
+          "max": 59697.76635,
+          "all": [
+            59214.806057,
+            59697.76635,
+            59678.056586,
+            59483.870818
+          ]
+        },
+        "kernel": {
+          "median": 75802.3366,
+          "min": 75423.203982,
+          "max": 76135.791296,
+          "all": [
+            75484.6206,
+            76120.0526,
+            76135.791296,
+            75423.203982
+          ]
+        },
+        "nginx": {
+          "median": 89594.5543205,
+          "min": 81279.132626,
+          "max": 97140.841058,
+          "all": [
+            97140.841058,
+            95454.78903,
+            83734.319611,
+            81279.132626
+          ]
+        },
+        "openresty": {
+          "median": 89286.2980145,
+          "min": 83746.459547,
+          "max": 90358.647132,
+          "all": [
+            89998.014216,
+            83746.459547,
+            90358.647132,
+            88574.581813
+          ]
+        }
+      },
+      "p99_rtt_ns": {
+        "afxdp": {
+          "median": 329945.0,
+          "min": 326869,
+          "max": 331908,
+          "all": [
+            330666,
+            326869,
+            331908,
+            329224
+          ]
+        },
+        "kernel": {
+          "median": 342518.5,
+          "min": 339522,
+          "max": 344973,
+          "all": [
+            343621,
+            339522,
+            341416,
+            344973
+          ]
+        },
+        "nginx": {
+          "median": 238950.5,
+          "min": 220491,
+          "max": 267598,
+          "all": [
+            224218,
+            220491,
+            253683,
+            267598
+          ]
+        },
+        "openresty": {
+          "median": 237818.5,
+          "min": 228496,
+          "max": 261367,
+          "all": [
+            228496,
+            246540,
+            229097,
+            261367
+          ]
+        }
+      },
+      "paired_changes_pct": {
+        "kernel_vs_afxdp": {
+          "requests_per_second": {
+            "median": 27.492484726305655,
+            "min": 26.79605907417968,
+            "max": 27.577531259388977,
+            "all": [
+              27.475923044210802,
+              27.509046408400508,
+              27.577531259388977,
+              26.79605907417968
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 3.8944101782621976,
+            "min": 2.864649240150885,
+            "max": 4.78367312225112,
+            "all": [
+              3.9178506408279024,
+              3.870969715696493,
+              2.864649240150885,
+              4.78367312225112
+            ]
+          }
+        },
+        "afxdp_vs_nginx": {
+          "requests_per_second": {
+            "median": -33.09445877370146,
+            "min": -39.042316895687016,
+            "max": -26.81532283112482,
+            "all": [
+              -39.042316895687016,
+              -37.45964245833922,
+              -28.729275089063698,
+              -26.81532283112482
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 39.15547652927047,
+            "min": 23.02932009955232,
+            "max": 48.24596015256859,
+            "all": [
+              47.475225004236954,
+              48.24596015256859,
+              30.835728054303992,
+              23.02932009955232
+            ]
+          }
+        },
+        "kernel_vs_nginx": {
+          "requests_per_second": {
+            "median": -14.664977563090625,
+            "min": -22.29363079641209,
+            "max": -7.2047135037053405,
+            "all": [
+              -22.29363079641209,
+              -20.255386478224146,
+              -9.074568647957104,
+              -7.2047135037053405
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 43.91839839799266,
+            "min": 28.914640617642885,
+            "max": 53.98451637481803,
+            "all": [
+              53.25308405212783,
+              53.98451637481803,
+              34.5837127438575,
+              28.914640617642885
+            ]
+          }
+        },
+        "afxdp_vs_openresty": {
+          "requests_per_second": {
+            "median": -33.39871018111714,
+            "min": -34.20431931433361,
+            "max": -28.716071493748885,
+            "all": [
+              -34.20431931433361,
+              -28.716071493748885,
+              -33.954238492726,
+              -32.84318186950828
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 38.64833652487489,
+            "min": 25.962344136788506,
+            "max": 44.876624311972655,
+            "all": [
+              44.71413066311882,
+              32.58254238663096,
+              44.876624311972655,
+              25.962344136788506
+            ]
+          }
+        },
+        "kernel_vs_openresty": {
+          "requests_per_second": {
+            "median": -15.294124589239168,
+            "min": -16.126348722725247,
+            "max": -9.10654251923323,
+            "all": [
+              -16.126348722725247,
+              -9.10654251923323,
+              -15.740447967556015,
+              -14.847801210922318
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 43.37080194009988,
+            "min": 31.987970937417497,
+            "max": 50.383814158672365,
+            "all": [
+              50.383814158672365,
+              37.71477245071792,
+              49.02683142948183,
+              31.987970937417497
+            ]
+          }
+        }
+      }
+    },
+    "c16-b1200": {
+      "passed": true,
+      "complete": true,
+      "rps": {
+        "afxdp": {
+          "median": 54471.863968499994,
+          "min": 54146.629828,
+          "max": 54679.453116,
+          "all": [
+            54679.453116,
+            54146.629828,
+            54464.762459,
+            54478.965478
+          ]
+        },
+        "kernel": {
+          "median": 72932.33656,
+          "min": 72330.126365,
+          "max": 73797.086379,
+          "all": [
+            72621.368787,
+            72330.126365,
+            73243.304333,
+            73797.086379
+          ]
+        },
+        "nginx": {
+          "median": 81183.477564,
+          "min": 80601.299396,
+          "max": 86606.619418,
+          "all": [
+            81252.174829,
+            80601.299396,
+            86606.619418,
+            81114.780299
+          ]
+        },
+        "openresty": {
+          "median": 86606.5600915,
+          "min": 80726.747326,
+          "max": 90831.245074,
+          "all": [
+            86225.117438,
+            80726.747326,
+            90831.245074,
+            86988.002745
+          ]
+        }
+      },
+      "p99_rtt_ns": {
+        "afxdp": {
+          "median": 359565.0,
+          "min": 357275,
+          "max": 455730,
+          "all": [
+            357275,
+            360712,
+            455730,
+            358418
+          ]
+        },
+        "kernel": {
+          "median": 356194.0,
+          "min": 350533,
+          "max": 363377,
+          "all": [
+            357386,
+            363377,
+            355002,
+            350533
+          ]
+        },
+        "nginx": {
+          "median": 258782.5,
+          "min": 245818,
+          "max": 313445,
+          "all": [
+            257350,
+            260215,
+            245818,
+            313445
+          ]
+        },
+        "openresty": {
+          "median": 240007.0,
+          "min": 233705,
+          "max": 262389,
+          "all": [
+            243814,
+            262389,
+            233705,
+            236200
+          ]
+        }
+      },
+      "paired_changes_pct": {
+        "kernel_vs_afxdp": {
+          "requests_per_second": {
+            "median": 34.03014342894907,
+            "min": 32.81290255946239,
+            "max": 35.45977925884285,
+            "all": [
+              32.81290255946239,
+              33.58195439819796,
+              34.47833245970018,
+              35.45977925884285
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": -1.0844384052965783,
+            "min": -22.102560726746102,
+            "max": 0.738816562798017,
+            "all": [
+              0.03106850465328659,
+              0.738816562798017,
+              -22.102560726746102,
+              -2.199945315246443
+            ]
+          }
+        },
+        "afxdp_vs_nginx": {
+          "requests_per_second": {
+            "median": -32.8294159548127,
+            "min": -37.11247151198671,
+            "max": -32.704012869715626,
+            "all": [
+              -32.704012869715626,
+              -32.82164154454422,
+              -37.11247151198671,
+              -32.83719036508119
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 38.72459983351111,
+            "min": 14.347971733477971,
+            "max": 85.3932584269663,
+            "all": [
+              38.828443753642894,
+              38.62075591337933,
+              85.3932584269663,
+              14.347971733477971
+            ]
+          }
+        },
+        "kernel_vs_nginx": {
+          "requests_per_second": {
+            "median": -10.442041014401081,
+            "min": -15.429900364200833,
+            "max": -9.021406324502145,
+            "all": [
+              -10.622246186227057,
+              -10.261835842575106,
+              -15.429900364200833,
+              -9.021406324502145
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 39.25824234634688,
+            "min": 11.832378886247996,
+            "max": 44.41660089985273,
+            "all": [
+              38.87157567515058,
+              39.644909017543185,
+              44.41660089985273,
+              11.832378886247996
+            ]
+          }
+        },
+        "afxdp_vs_openresty": {
+          "requests_per_second": {
+            "median": -36.97855046854213,
+            "min": -40.03741508263189,
+            "max": -32.92603551913361,
+            "all": [
+              -36.58523787419931,
+              -32.92603551913361,
+              -40.03741508263189,
+              -37.371863062884955
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 49.13966083805629,
+            "min": 37.47222635095222,
+            "max": 95.00224642177105,
+            "all": [
+              46.53588391150632,
+              37.47222635095222,
+              95.00224642177105,
+              51.743437764606256
+            ]
+          }
+        },
+        "kernel_vs_openresty": {
+          "requests_per_second": {
+            "median": -15.470538860301797,
+            "min": -19.36331570339167,
+            "max": -10.40128735410557,
+            "all": [
+              -15.777013769545455,
+              -10.40128735410557,
+              -19.36331570339167,
+              -15.164063951058138
+            ]
+          },
+          "p99_rtt_ns": {
+            "median": 47.493287766863986,
+            "min": 38.48789392848025,
+            "max": 51.90175648788002,
+            "all": [
+              46.58141041941808,
+              38.48789392848025,
+              51.90175648788002,
+              48.4051651143099
+            ]
+          }
+        }
+      }
+    }
+  },
+  "resources": {
+    "c1-b64-direct-r0": {
+      "duration_seconds": 2.647286529,
+      "snapshot_overhead_pct": 0.08123291439903202,
+      "client_cpu_pct_of_one_core": 54.48416649273102,
+      "origin_cpu_pct_of_one_core": 53.98208203252858,
+      "rps_fraction_of_direct": 1.0,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.38314176245210724
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.0
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 54.88372093023256
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 58.29787234042553
+        }
+      },
+      "quality_flags": []
+    },
+    "c1-b64-afxdp-r1": {
+      "duration_seconds": 12.890271648,
+      "snapshot_overhead_pct": 0.04760397738361455,
+      "client_cpu_pct_of_one_core": 10.117979167664473,
+      "origin_cpu_pct_of_one_core": 9.770497666924769,
+      "rps_fraction_of_direct": 0.20537088752507385,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 87.76978417266187
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 29.950900163666123
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 8.271298593879239
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 8.305921052631579
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 111.98857483997475,
+      "idle_proxy_cpu_pct_of_one_core": 0.9077821715004764,
+      "proxy_fd_count": 74,
+      "proxy_threads": 6,
+      "proxy_rss_bytes_sum_of_processes": 561164288,
+      "thread_cpu_complete_identity_coverage": false,
+      "quality_flags": [
+        "thread_cpu_identity_coverage_incomplete"
+      ]
+    },
+    "c1-b64-kernel-r1": {
+      "duration_seconds": 5.681532868,
+      "snapshot_overhead_pct": 0.06960802818327672,
+      "client_cpu_pct_of_one_core": 21.38202890354202,
+      "origin_cpu_pct_of_one_core": 19.700390401387722,
+      "rps_fraction_of_direct": 0.46594582668003554,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 43.873517786561266
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 18.317757009345794
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.415270018621975
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 18.832391713747647
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 62.45707903345769,
+      "idle_proxy_cpu_pct_of_one_core": 0.4539357006698384,
+      "proxy_fd_count": 29,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 555954176,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b64-openresty-r1": {
+      "duration_seconds": 4.951969701,
+      "snapshot_overhead_pct": 0.10090073852815351,
+      "client_cpu_pct_of_one_core": 24.207700619774045,
+      "origin_cpu_pct_of_one_core": 21.991046765761997,
+      "rps_fraction_of_direct": 0.5345926346097949,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 1.02880658436214
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 52.816901408450704
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 24.242424242424242
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.521739130434785
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 51.86431757474501,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 29,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 21815296,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b64-nginx-r1": {
+      "duration_seconds": 4.930486844,
+      "snapshot_overhead_pct": 0.12125486162235521,
+      "client_cpu_pct_of_one_core": 24.00791316258099,
+      "origin_cpu_pct_of_one_core": 22.08208427323581,
+      "rps_fraction_of_direct": 0.5369219334158497,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 1.0395010395010396
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 54.060324825986086
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 24.086021505376344
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.69197396963124
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 52.6877179668348,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 31,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 15859712,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b64-kernel-r2": {
+      "duration_seconds": 5.631215921,
+      "snapshot_overhead_pct": 0.07787197403756885,
+      "client_cpu_pct_of_one_core": 21.6832033637092,
+      "origin_cpu_pct_of_one_core": 20.23018131348448,
+      "rps_fraction_of_direct": 0.4701092208223862,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 28.35538752362949
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 33.206831119544596
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.183206106870227
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 18.7984496124031
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 61.59375404529073,
+      "idle_proxy_cpu_pct_of_one_core": 0.4539430679675065,
+      "proxy_fd_count": 29,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 557350912,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b64-nginx-r2": {
+      "duration_seconds": 4.923849564,
+      "snapshot_overhead_pct": 0.12040816688119182,
+      "client_cpu_pct_of_one_core": 24.21140176003964,
+      "origin_cpu_pct_of_one_core": 21.908999680846126,
+      "rps_fraction_of_direct": 0.5376456966553941,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 53.73831775700935
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.4166666666666667
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 24.406047516198704
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 20.08830022075055
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 52.55613791683986,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 31,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 15859712,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b64-afxdp-r2": {
+      "duration_seconds": 12.999408375,
+      "snapshot_overhead_pct": 0.051118226370827635,
+      "client_cpu_pct_of_one_core": 10.03144114241276,
+      "origin_cpu_pct_of_one_core": 9.68811160423828,
+      "rps_fraction_of_direct": 0.20364669319702308,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 87.42857142857143
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 28.18181818181818
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 10.128617363344052
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 8.980582524271846
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 111.505897399072,
+      "idle_proxy_cpu_pct_of_one_core": 0.9077998312193136,
+      "proxy_fd_count": 74,
+      "proxy_threads": 6,
+      "proxy_rss_bytes_sum_of_processes": 562237440,
+      "thread_cpu_complete_identity_coverage": false,
+      "quality_flags": [
+        "thread_cpu_identity_coverage_incomplete"
+      ]
+    },
+    "c1-b64-openresty-r2": {
+      "duration_seconds": 4.942638937,
+      "snapshot_overhead_pct": 0.08606574451870408,
+      "client_cpu_pct_of_one_core": 24.20188921843554,
+      "origin_cpu_pct_of_one_core": 22.237538886438056,
+      "rps_fraction_of_direct": 0.5356018440342493,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.6224066390041494
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 53.596287703016245
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 24.190064794816415
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.350762527233115
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 52.17313539471843,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 29,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 22200320,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b64-nginx-r3": {
+      "duration_seconds": 4.90260078,
+      "snapshot_overhead_pct": 0.12753161598444418,
+      "client_cpu_pct_of_one_core": 24.110916899907153,
+      "origin_cpu_pct_of_one_core": 22.206163358696273,
+      "rps_fraction_of_direct": 0.5399759531173508,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 54.292343387471
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.42016806722689076
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 23.695652173913043
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.00656455142232
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 52.78050927385593,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 31,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 15859712,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b64-openresty-r3": {
+      "duration_seconds": 4.91801202,
+      "snapshot_overhead_pct": 0.13387630963943575,
+      "client_cpu_pct_of_one_core": 24.057220584019635,
+      "origin_cpu_pct_of_one_core": 21.728985011869664,
+      "rps_fraction_of_direct": 0.5382838671981528,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 53.50467289719626
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.8350730688935281
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 24.190064794816415
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.17903930131004
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 52.20487498734828,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 29,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 22077440,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b64-kernel-r3": {
+      "duration_seconds": 5.627948097,
+      "snapshot_overhead_pct": 0.09468163011028263,
+      "client_cpu_pct_of_one_core": 21.83472517550476,
+      "origin_cpu_pct_of_one_core": 20.238395664355906,
+      "rps_fraction_of_direct": 0.47038218607713556,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 29.636711281070742
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 30.57692307692308
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 22.22222222222222
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 18.91891891891892
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 61.26354466963508,
+      "idle_proxy_cpu_pct_of_one_core": 0.4539349314580451,
+      "proxy_fd_count": 29,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 557264896,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b64-afxdp-r3": {
+      "duration_seconds": 12.955681416,
+      "snapshot_overhead_pct": 0.03618515961816282,
+      "client_cpu_pct_of_one_core": 10.031050920988472,
+      "origin_cpu_pct_of_one_core": 9.72220942206332,
+      "rps_fraction_of_direct": 0.2043340249095396,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 87.50994431185362
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 29.41659819227609
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 8.613617719442166
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 8.251633986928104
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 111.35524002174482,
+      "idle_proxy_cpu_pct_of_one_core": 0.9077789139695005,
+      "proxy_fd_count": 74,
+      "proxy_threads": 6,
+      "proxy_rss_bytes_sum_of_processes": 563277824,
+      "thread_cpu_complete_identity_coverage": false,
+      "quality_flags": [
+        "thread_cpu_identity_coverage_incomplete"
+      ]
+    },
+    "c1-b64-openresty-r4": {
+      "duration_seconds": 4.931743833,
+      "snapshot_overhead_pct": 0.13242216589395284,
+      "client_cpu_pct_of_one_core": 24.374299247995836,
+      "origin_cpu_pct_of_one_core": 22.276361940737043,
+      "rps_fraction_of_direct": 0.5367850842551096,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.823045267489712
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 53.45622119815668
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 23.62030905077263
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.145374449339208
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 51.654853087989714,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 29,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 22200320,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b64-afxdp-r4": {
+      "duration_seconds": 12.91145923,
+      "snapshot_overhead_pct": 0.041493822693206006,
+      "client_cpu_pct_of_one_core": 10.152911275544492,
+      "origin_cpu_pct_of_one_core": 9.755062039424443,
+      "rps_fraction_of_direct": 0.2050338758716893,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 87.2289156626506
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 29.756097560975608
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 8.70279146141215
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 8.44954881050041
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 111.26936892454266,
+      "idle_proxy_cpu_pct_of_one_core": 0.45387026537931036,
+      "proxy_fd_count": 74,
+      "proxy_threads": 6,
+      "proxy_rss_bytes_sum_of_processes": 562544640,
+      "thread_cpu_complete_identity_coverage": false,
+      "quality_flags": [
+        "thread_cpu_identity_coverage_incomplete"
+      ]
+    },
+    "c1-b64-nginx-r4": {
+      "duration_seconds": 4.956801071,
+      "snapshot_overhead_pct": 0.0989747607323288,
+      "client_cpu_pct_of_one_core": 24.27388113352834,
+      "origin_cpu_pct_of_one_core": 21.969595633639212,
+      "rps_fraction_of_direct": 0.5340715697648433,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 53.02325581395348
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.6172839506172839
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 24.678111587982833
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.397379912663755
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 51.8145262725615,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 31,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 16252928,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b64-kernel-r4": {
+      "duration_seconds": 5.643754067,
+      "snapshot_overhead_pct": 0.07778047994095871,
+      "client_cpu_pct_of_one_core": 21.56387371866677,
+      "origin_cpu_pct_of_one_core": 19.830611456730164,
+      "rps_fraction_of_direct": 0.4690648277025006,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 33.587786259541986
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 28.435114503816795
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 20.872865275142317
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 18.975332068311197
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 62.162503607435305,
+      "idle_proxy_cpu_pct_of_one_core": 0.9079042048374828,
+      "proxy_fd_count": 29,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 553590784,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b1200-direct-r0": {
+      "duration_seconds": 2.670303628,
+      "snapshot_overhead_pct": 0.07115677708242618,
+      "client_cpu_pct_of_one_core": 54.65547006327177,
+      "origin_cpu_pct_of_one_core": 53.52345745752118,
+      "rps_fraction_of_direct": 1.0,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.7547169811320755
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.38022813688212925
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 56.05381165919282
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 57.327586206896555
+        }
+      },
+      "quality_flags": []
+    },
+    "c1-b1200-afxdp-r1": {
+      "duration_seconds": 13.289128209,
+      "snapshot_overhead_pct": 0.04500499134285629,
+      "client_cpu_pct_of_one_core": 10.556403534807677,
+      "origin_cpu_pct_of_one_core": 9.778362675572478,
+      "rps_fraction_of_direct": 0.20093896198898328,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 86.35255889520714
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.26334519572954
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 11.40625
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 8.80253766851705
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 110.6607893620596,
+      "idle_proxy_cpu_pct_of_one_core": 0.45388704084619574,
+      "proxy_fd_count": 74,
+      "proxy_threads": 6,
+      "proxy_rss_bytes_sum_of_processes": 560963584,
+      "thread_cpu_complete_identity_coverage": false,
+      "quality_flags": [
+        "thread_cpu_identity_coverage_incomplete"
+      ]
+    },
+    "c1-b1200-kernel-r1": {
+      "duration_seconds": 5.638358513,
+      "snapshot_overhead_pct": 0.09982536560992905,
+      "client_cpu_pct_of_one_core": 21.843201299817736,
+      "origin_cpu_pct_of_one_core": 20.199931003662684,
+      "rps_fraction_of_direct": 0.4735959272421185,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 18.552875695732837
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 43.190661478599225
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 20.99236641221374
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 19.734345351043643
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 61.32426975419813,
+      "idle_proxy_cpu_pct_of_one_core": 0.45395705068582,
+      "proxy_fd_count": 29,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 553005056,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b1200-openresty-r1": {
+      "duration_seconds": 5.010760836,
+      "snapshot_overhead_pct": 0.11454202640774902,
+      "client_cpu_pct_of_one_core": 24.21292972682602,
+      "origin_cpu_pct_of_one_core": 22.128405089894322,
+      "rps_fraction_of_direct": 0.5329138060003196,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.6109979633401221
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 53.16742081447964
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 23.554603854389722
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 20.17353579175705
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 51.84731978457019,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 29,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 22282240,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b1200-nginx-r1": {
+      "duration_seconds": 4.981699473,
+      "snapshot_overhead_pct": 0.10632020314966795,
+      "client_cpu_pct_of_one_core": 24.063876323677224,
+      "origin_cpu_pct_of_one_core": 22.058696669788237,
+      "rps_fraction_of_direct": 0.5360226249208085,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.6198347107438017
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 53.63636363636364
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 23.931623931623932
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 19.912472647702405
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 52.15322844863219,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 31,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 16154624,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b1200-kernel-r2": {
+      "duration_seconds": 5.648016619,
+      "snapshot_overhead_pct": 0.0779768066755393,
+      "client_cpu_pct_of_one_core": 21.73198279677371,
+      "origin_cpu_pct_of_one_core": 19.993051904905617,
+      "rps_fraction_of_direct": 0.47278607839227615,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.052631578947366
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 40.31311154598826
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.951219512195124
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 19.47069943289225
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 61.94161735754958,
+      "idle_proxy_cpu_pct_of_one_core": 0.9079011339553062,
+      "proxy_fd_count": 29,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 556957696,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b1200-nginx-r2": {
+      "duration_seconds": 4.954856749,
+      "snapshot_overhead_pct": 0.11535499994330678,
+      "client_cpu_pct_of_one_core": 24.114178482377753,
+      "origin_cpu_pct_of_one_core": 22.176330792085093,
+      "rps_fraction_of_direct": 0.5389265045133316,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.8298755186721992
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 54.004576659038904
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 23.49137931034483
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 20.52401746724891
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 52.22977441188479,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 31,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 16121856,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b1200-afxdp-r2": {
+      "duration_seconds": 13.328745213,
+      "snapshot_overhead_pct": 0.030923398520510403,
+      "client_cpu_pct_of_one_core": 10.471465825895669,
+      "origin_cpu_pct_of_one_core": 9.825572466100397,
+      "rps_fraction_of_direct": 0.2003417114987303,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 86.3672814755413
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 22.17391304347826
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 11.102423768569194
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 9.24170616113744
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 109.66873984332443,
+      "idle_proxy_cpu_pct_of_one_core": 0.9077717290249374,
+      "proxy_fd_count": 74,
+      "proxy_threads": 6,
+      "proxy_rss_bytes_sum_of_processes": 560832512,
+      "thread_cpu_complete_identity_coverage": false,
+      "quality_flags": [
+        "thread_cpu_identity_coverage_incomplete"
+      ]
+    },
+    "c1-b1200-openresty-r2": {
+      "duration_seconds": 5.018457857,
+      "snapshot_overhead_pct": 0.12824286231722937,
+      "client_cpu_pct_of_one_core": 23.95871469405467,
+      "origin_cpu_pct_of_one_core": 22.091377470177353,
+      "rps_fraction_of_direct": 0.5320964535639037,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 1.2170385395537524
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 54.606741573033716
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 23.110151187904968
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 20.47930283224401
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 51.96127600359428,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 29,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 22151168,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b1200-nginx-r3": {
+      "duration_seconds": 4.99386732,
+      "snapshot_overhead_pct": 0.11548690885123669,
+      "client_cpu_pct_of_one_core": 24.40613500320229,
+      "origin_cpu_pct_of_one_core": 22.20366006020579,
+      "rps_fraction_of_direct": 0.5347165747433024,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 53.21100917431193
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.8213552361396305
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 24.145299145299145
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.45922746781116
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 51.82597701431916,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 31,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 15990784,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b1200-openresty-r3": {
+      "duration_seconds": 4.960709711,
+      "snapshot_overhead_pct": 0.11331991443754852,
+      "client_cpu_pct_of_one_core": 24.375060635351094,
+      "origin_cpu_pct_of_one_core": 22.35189598831065,
+      "rps_fraction_of_direct": 0.5382906446036027,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 53.36426914153132
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.2044989775051125
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 23.580786026200872
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.663019693654267
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 51.96773751327501,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 29,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 21807104,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b1200-kernel-r3": {
+      "duration_seconds": 5.711820496,
+      "snapshot_overhead_pct": 0.07557900327965772,
+      "client_cpu_pct_of_one_core": 21.696462640376364,
+      "origin_cpu_pct_of_one_core": 19.76970406449186,
+      "rps_fraction_of_direct": 0.4675048226731617,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 34.27495291902072
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 28.810408921933085
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.26865671641791
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 18.147448015122876
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 62.12270088232623,
+      "idle_proxy_cpu_pct_of_one_core": 1.361809938810684,
+      "proxy_fd_count": 29,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 555163648,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b1200-afxdp-r3": {
+      "duration_seconds": 13.198239358,
+      "snapshot_overhead_pct": 0.04964590974800842,
+      "client_cpu_pct_of_one_core": 10.540527128391242,
+      "origin_cpu_pct_of_one_core": 9.618028745329353,
+      "rps_fraction_of_direct": 0.2023227155987922,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 86.94601128122483
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 23.164335664335663
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 10.0
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 9.156050955414011
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 110.88768552830273,
+      "idle_proxy_cpu_pct_of_one_core": 0.9077803824513518,
+      "proxy_fd_count": 74,
+      "proxy_threads": 6,
+      "proxy_rss_bytes_sum_of_processes": 561348608,
+      "thread_cpu_complete_identity_coverage": false,
+      "quality_flags": [
+        "thread_cpu_identity_coverage_incomplete"
+      ]
+    },
+    "c1-b1200-openresty-r4": {
+      "duration_seconds": 4.985356754,
+      "snapshot_overhead_pct": 0.1312117130785495,
+      "client_cpu_pct_of_one_core": 24.090452484396067,
+      "origin_cpu_pct_of_one_core": 22.03706673409913,
+      "rps_fraction_of_direct": 0.535629396208816,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 53.98633257403189
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 1.02880658436214
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 23.554603854389722
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.336206896551722
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 52.30431036062184,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 29,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 22044672,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b1200-afxdp-r4": {
+      "duration_seconds": 13.164050407,
+      "snapshot_overhead_pct": 0.04192189963863058,
+      "client_cpu_pct_of_one_core": 10.58011749377222,
+      "origin_cpu_pct_of_one_core": 9.795541619751512,
+      "rps_fraction_of_direct": 0.2028481770788694,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 86.59626320064989
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 23.892267593397047
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 10.864393338620143
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 9.56175298804781
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 110.80070244956974,
+      "idle_proxy_cpu_pct_of_one_core": 0.9077707166812409,
+      "proxy_fd_count": 74,
+      "proxy_threads": 6,
+      "proxy_rss_bytes_sum_of_processes": 560279552,
+      "thread_cpu_complete_identity_coverage": false,
+      "quality_flags": [
+        "thread_cpu_identity_coverage_incomplete"
+      ]
+    },
+    "c1-b1200-nginx-r4": {
+      "duration_seconds": 4.967239262,
+      "snapshot_overhead_pct": 0.09972612025952454,
+      "client_cpu_pct_of_one_core": 24.153618070673076,
+      "origin_cpu_pct_of_one_core": 22.124343011348955,
+      "rps_fraction_of_direct": 0.5375830490897706,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.6134969325153374
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 53.93518518518518
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 22.975929978118163
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 20.787746170678336
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 52.30854418669089,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 31,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 16121856,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c1-b1200-kernel-r4": {
+      "duration_seconds": 5.669884906,
+      "snapshot_overhead_pct": 0.10141994229748708,
+      "client_cpu_pct_of_one_core": 21.738271947913855,
+      "origin_cpu_pct_of_one_core": 20.08699057856515,
+      "rps_fraction_of_direct": 0.47096258078318365,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 32.00757575757576
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 29.924242424242426
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 21.132075471698116
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 19.622641509433965
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 61.86145457698578,
+      "idle_proxy_cpu_pct_of_one_core": 0.45393913237939076,
+      "proxy_fd_count": 29,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 557219840,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b64-direct-r0": {
+      "duration_seconds": 2.424319592,
+      "snapshot_overhead_pct": 0.10018217103118232,
+      "client_cpu_pct_of_one_core": 97.9190205711129,
+      "origin_cpu_pct_of_one_core": 97.67877156407255,
+      "rps_fraction_of_direct": 1.0,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.4149377593360996
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.42016806722689076
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 97.97570850202429
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.58677685950413
+        }
+      },
+      "quality_flags": [
+        "client_cpu_at_least_90pct",
+        "origin_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b64-afxdp-r1": {
+      "duration_seconds": 5.404053839,
+      "snapshot_overhead_pct": 0.20459770256555654,
+      "client_cpu_pct_of_one_core": 63.26563542587977,
+      "origin_cpu_pct_of_one_core": 57.99034746714201,
+      "rps_fraction_of_direct": 0.4486112951901292,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.26062846580407
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 60.8421052631579
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 66.6015625
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 60.24340770791075
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 156.1674609920351,
+      "idle_proxy_cpu_pct_of_one_core": 0.9061893587284623,
+      "proxy_fd_count": 74,
+      "proxy_threads": 22,
+      "proxy_rss_bytes_sum_of_processes": 574894080,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b64-kernel-r1": {
+      "duration_seconds": 4.239274139,
+      "snapshot_overhead_pct": 0.1273725364992373,
+      "client_cpu_pct_of_one_core": 77.18708186142146,
+      "origin_cpu_pct_of_one_core": 63.384722677894814,
+      "rps_fraction_of_direct": 0.5718713894242065,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.09523809523809
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 97.84172661870504
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 79.65686274509804
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 66.58291457286433
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 193.28829345705128,
+      "idle_proxy_cpu_pct_of_one_core": 0.45391453150324634,
+      "proxy_fd_count": 44,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 556290048,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b64-openresty-r1": {
+      "duration_seconds": 3.555634008,
+      "snapshot_overhead_pct": 0.14545476245202416,
+      "client_cpu_pct_of_one_core": 98.22012029760066,
+      "origin_cpu_pct_of_one_core": 81.72995227421848,
+      "rps_fraction_of_direct": 0.6818248409547335,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 82.20338983050848
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.43977591036415
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.87005649717514
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 88.23529411764706
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 180.95110163719076,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 44,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 22601728,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b64-nginx-r1": {
+      "duration_seconds": 3.294186014,
+      "snapshot_overhead_pct": 0.20458380223091766,
+      "client_cpu_pct_of_one_core": 97.9788325942422,
+      "origin_cpu_pct_of_one_core": 86.04703201093203,
+      "rps_fraction_of_direct": 0.7359388880027631,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.39393939393939
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.39393939393939
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.39393939393939
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 90.78947368421053
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 199.1642684729719,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 46,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 16121856,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b64-kernel-r2": {
+      "duration_seconds": 4.203885692,
+      "snapshot_overhead_pct": 0.13816267676005634,
+      "client_cpu_pct_of_one_core": 77.44977476899484,
+      "origin_cpu_pct_of_one_core": 63.66885505390781,
+      "rps_fraction_of_direct": 0.5766854214460432,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 97.60191846522783
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 97.57869249394673
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 80.0982800982801
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 67.2544080604534
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 192.98386115659176,
+      "idle_proxy_cpu_pct_of_one_core": 0.4539157547565349,
+      "proxy_fd_count": 44,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 556605440,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b64-nginx-r2": {
+      "duration_seconds": 3.352372398,
+      "snapshot_overhead_pct": 0.19154169757007455,
+      "client_cpu_pct_of_one_core": 98.58209672563949,
+      "origin_cpu_pct_of_one_core": 84.85943569835393,
+      "rps_fraction_of_direct": 0.723165359988318,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.40476190476191
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.80597014925372
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.40119760479041
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 90.06410256410257
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 197.49552869750676,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 46,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 15859712,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b64-afxdp-r2": {
+      "duration_seconds": 5.360334558,
+      "snapshot_overhead_pct": 0.18437459253826116,
+      "client_cpu_pct_of_one_core": 62.574527087941526,
+      "origin_cpu_pct_of_one_core": 57.54411610070175,
+      "rps_fraction_of_direct": 0.45227020175413235,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.25512104283054
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 60.470085470085465
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 65.6188605108055
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 60.120240480961925
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 156.1705021618013,
+      "idle_proxy_cpu_pct_of_one_core": 0.9072008291518016,
+      "proxy_fd_count": 74,
+      "proxy_threads": 22,
+      "proxy_rss_bytes_sum_of_processes": 575541248,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b64-openresty-r2": {
+      "duration_seconds": 3.821057054,
+      "snapshot_overhead_pct": 0.15224428522755407,
+      "client_cpu_pct_of_one_core": 97.3743638845964,
+      "origin_cpu_pct_of_one_core": 78.66054904151186,
+      "rps_fraction_of_direct": 0.6344630707529978,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.73821989528795
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 66.49076517150397
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.40848806366049
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 84.5272206303725
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 164.44109384430564,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 44,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 22437888,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b64-nginx-r3": {
+      "duration_seconds": 3.821611037,
+      "snapshot_overhead_pct": 0.11976210963617895,
+      "client_cpu_pct_of_one_core": 96.79313159258076,
+      "origin_cpu_pct_of_one_core": 77.10643610856702,
+      "rps_fraction_of_direct": 0.6343710986133398,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 66.66666666666666
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.73821989528795
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.13829787234043
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 82.94797687861272
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 164.73361944610028,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 46,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 16384000,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b64-openresty-r3": {
+      "duration_seconds": 3.541443018,
+      "snapshot_overhead_pct": 0.15373786821719637,
+      "client_cpu_pct_of_one_core": 97.94208130331126,
+      "origin_cpu_pct_of_one_core": 82.33269235969519,
+      "rps_fraction_of_direct": 0.6845569954665497,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 81.81818181818183
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.71830985915493
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.86685552407933
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 88.0
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 180.8147500677765,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 44,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 22396928,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b64-kernel-r3": {
+      "duration_seconds": 4.20301667,
+      "snapshot_overhead_pct": 0.11724526422112191,
+      "client_cpu_pct_of_one_core": 77.31591985334667,
+      "origin_cpu_pct_of_one_core": 63.9331916951225,
+      "rps_fraction_of_direct": 0.5768046577868727,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.06295399515739
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 97.82082324455206
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 80.44554455445545
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 67.25
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 193.53320231023002,
+      "idle_proxy_cpu_pct_of_one_core": 0.45390144741169297,
+      "proxy_fd_count": 44,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 555819008,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b64-afxdp-r3": {
+      "duration_seconds": 5.362104906,
+      "snapshot_overhead_pct": 0.2245914843352903,
+      "client_cpu_pct_of_one_core": 62.74754147825693,
+      "origin_cpu_pct_of_one_core": 57.50246517162218,
+      "rps_fraction_of_direct": 0.45212088060719796,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.06716417910447
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 60.72961373390557
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 66.2109375
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 59.756097560975604
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 155.68824791260852,
+      "idle_proxy_cpu_pct_of_one_core": 0.45358945394903477,
+      "proxy_fd_count": 75,
+      "proxy_threads": 22,
+      "proxy_rss_bytes_sum_of_processes": 574136320,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b64-openresty-r4": {
+      "duration_seconds": 3.612774607,
+      "snapshot_overhead_pct": 0.1703760314322844,
+      "client_cpu_pct_of_one_core": 96.87388173119984,
+      "origin_cpu_pct_of_one_core": 80.69448102256487,
+      "rps_fraction_of_direct": 0.6710409188844536,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 82.72980501392759
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.89807162534436
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.32402234636871
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 86.80981595092024
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 179.14497630968174,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 44,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 22323200,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b64-afxdp-r4": {
+      "duration_seconds": 5.379609558,
+      "snapshot_overhead_pct": 0.2150463128461677,
+      "client_cpu_pct_of_one_core": 63.4013298405252,
+      "origin_cpu_pct_of_one_core": 58.248124387485035,
+      "rps_fraction_of_direct": 0.45064972947641296,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.25788497217069
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 59.869848156182215
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 66.20553359683794
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 61.12224448897795
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 156.1436740603016,
+      "idle_proxy_cpu_pct_of_one_core": 0.453591301120737,
+      "proxy_fd_count": 74,
+      "proxy_threads": 22,
+      "proxy_rss_bytes_sum_of_processes": 572583936,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b64-nginx-r4": {
+      "duration_seconds": 3.937049888,
+      "snapshot_overhead_pct": 0.16081101789686691,
+      "client_cpu_pct_of_one_core": 95.19048796975773,
+      "origin_cpu_pct_of_one_core": 76.59286141343452,
+      "rps_fraction_of_direct": 0.6157706051452946,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 67.00507614213198
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.47715736040608
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 96.89922480620154
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 83.23863636363636
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 160.8651168059983,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 46,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 16384000,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b64-kernel-r4": {
+      "duration_seconds": 4.242726152,
+      "snapshot_overhead_pct": 0.14136073800503635,
+      "client_cpu_pct_of_one_core": 77.23967757040379,
+      "origin_cpu_pct_of_one_core": 63.79024721215676,
+      "rps_fraction_of_direct": 0.5714060972045435,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 96.88995215311004
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 97.36842105263158
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 79.80535279805353
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 67.42424242424242
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 191.91889144249808,
+      "idle_proxy_cpu_pct_of_one_core": 0.9077961417362198,
+      "proxy_fd_count": 44,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 555323392,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b1200-direct-r0": {
+      "duration_seconds": 2.549446874,
+      "snapshot_overhead_pct": 0.057679138757360526,
+      "client_cpu_pct_of_one_core": 97.55990702789596,
+      "origin_cpu_pct_of_one_core": 96.84540468147017,
+      "rps_fraction_of_direct": 1.0,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.3968253968253968
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 0.0
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 97.6923076923077
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.2094861660079
+        }
+      },
+      "quality_flags": [
+        "client_cpu_at_least_90pct",
+        "origin_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b1200-afxdp-r1": {
+      "duration_seconds": 5.852289695,
+      "snapshot_overhead_pct": 0.1574665213151194,
+      "client_cpu_pct_of_one_core": 61.63353470149773,
+      "origin_cpu_pct_of_one_core": 56.64395015755919,
+      "rps_fraction_of_direct": 0.43563237755898476,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.14675767918088
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 58.17120622568094
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 64.19529837251356
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 59.19117647058824
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 153.97007220616354,
+      "idle_proxy_cpu_pct_of_one_core": 0.9071714542876789,
+      "proxy_fd_count": 74,
+      "proxy_threads": 22,
+      "proxy_rss_bytes_sum_of_processes": 574287872,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b1200-kernel-r1": {
+      "duration_seconds": 4.406416532,
+      "snapshot_overhead_pct": 0.13264665193482017,
+      "client_cpu_pct_of_one_core": 76.78134773301547,
+      "origin_cpu_pct_of_one_core": 63.46551836981108,
+      "rps_fraction_of_direct": 0.5785760051248837,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 97.6905311778291
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.14814814814815
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 79.66903073286052
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 67.06443914081146
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 193.41434657328085,
+      "idle_proxy_cpu_pct_of_one_core": 0.4538995785527888,
+      "proxy_fd_count": 44,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 558243840,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b1200-openresty-r1": {
+      "duration_seconds": 3.711215589,
+      "snapshot_overhead_pct": 0.12832229456340993,
+      "client_cpu_pct_of_one_core": 97.9804032613423,
+      "origin_cpu_pct_of_one_core": 82.62342203622084,
+      "rps_fraction_of_direct": 0.6869573628531281,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 82.70270270270271
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.73045822102425
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.6449864498645
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 88.49557522123894
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 180.93107786931247,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 44,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 22708224,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b1200-nginx-r1": {
+      "duration_seconds": 3.93835612,
+      "snapshot_overhead_pct": 0.15757480560190107,
+      "client_cpu_pct_of_one_core": 97.84838858096967,
+      "origin_cpu_pct_of_one_core": 79.86338365749769,
+      "rps_fraction_of_direct": 0.6473378222621279,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.74619289340102
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 66.41025641025641
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.71134020618557
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 85.71428571428571
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 165.12221940723362,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 46,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 15990784,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b1200-kernel-r2": {
+      "duration_seconds": 4.424159283,
+      "snapshot_overhead_pct": 0.13079922375842656,
+      "client_cpu_pct_of_one_core": 76.46639245108753,
+      "origin_cpu_pct_of_one_core": 63.210645013415935,
+      "rps_fraction_of_direct": 0.5762556704925541,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 97.6958525345622
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 97.70114942528735
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 79.29411764705883
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 66.35071090047393
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 192.6270425478315,
+      "idle_proxy_cpu_pct_of_one_core": 0.9078113605322019,
+      "proxy_fd_count": 44,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 555945984,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b1200-nginx-r2": {
+      "duration_seconds": 3.97015932,
+      "snapshot_overhead_pct": 0.15762828379390914,
+      "client_cpu_pct_of_one_core": 97.33964530169031,
+      "origin_cpu_pct_of_one_core": 79.2233734810278,
+      "rps_fraction_of_direct": 0.6421522837057895,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 67.25888324873097
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.49748743718592
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.22784810126582
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 84.78873239436619
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 165.0485865563232,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 46,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 16252928,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b1200-afxdp-r2": {
+      "duration_seconds": 5.909878436,
+      "snapshot_overhead_pct": 0.19446905929554337,
+      "client_cpu_pct_of_one_core": 61.6468179414173,
+      "origin_cpu_pct_of_one_core": 56.40996339890868,
+      "rps_fraction_of_direct": 0.4313873629777706,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.15254237288136
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 57.69980506822612
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 64.07942238267148
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 59.346642468239565
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 153.9621415628571,
+      "idle_proxy_cpu_pct_of_one_core": 0.9071364925889912,
+      "proxy_fd_count": 74,
+      "proxy_threads": 22,
+      "proxy_rss_bytes_sum_of_processes": 573915136,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b1200-openresty-r2": {
+      "duration_seconds": 3.963989763,
+      "snapshot_overhead_pct": 0.17627308388183938,
+      "client_cpu_pct_of_one_core": 97.40486809627517,
+      "origin_cpu_pct_of_one_core": 79.5842578611594,
+      "rps_fraction_of_direct": 0.6431517300588796,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 67.09183673469387
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.74747474747475
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.72448979591837
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 84.44444444444444
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 165.27427494817402,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 44,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 22323200,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b1200-nginx-r3": {
+      "duration_seconds": 3.694867692,
+      "snapshot_overhead_pct": 0.13167729958327712,
+      "client_cpu_pct_of_one_core": 97.54162531457703,
+      "origin_cpu_pct_of_one_core": 82.98611012277897,
+      "rps_fraction_of_direct": 0.6899967973229332,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 82.01634877384197
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.7289972899729
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.9100817438692
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 87.5
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 180.91541698504062,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 46,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 16646144,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b1200-openresty-r3": {
+      "duration_seconds": 3.523016774,
+      "snapshot_overhead_pct": 0.19001831184581874,
+      "client_cpu_pct_of_one_core": 98.62303312439465,
+      "origin_cpu_pct_of_one_core": 85.56702644035992,
+      "rps_fraction_of_direct": 0.7236544806745877,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.86685552407933
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.71671388101983
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.14285714285714
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 89.66565349544074
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 195.86946009583082,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 44,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 22740992,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b1200-kernel-r3": {
+      "duration_seconds": 4.369000046,
+      "snapshot_overhead_pct": 0.1081813218181793,
+      "client_cpu_pct_of_one_core": 77.38548785540571,
+      "origin_cpu_pct_of_one_core": 64.02468635319688,
+      "rps_fraction_of_direct": 0.5835309789798279,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.14385150812065
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.36448598130842
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 79.95226730310262
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 67.47572815533981
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 194.42848372126156,
+      "idle_proxy_cpu_pct_of_one_core": 0.45391428240295517,
+      "proxy_fd_count": 44,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 555433984,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b1200-afxdp-r3": {
+      "duration_seconds": 5.875358407,
+      "snapshot_overhead_pct": 0.20074125156259726,
+      "client_cpu_pct_of_one_core": 61.7239111009692,
+      "origin_cpu_pct_of_one_core": 56.56787414849484,
+      "rps_fraction_of_direct": 0.4339219324828389,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.80749574105621
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 58.5603112840467
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 64.92805755395683
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 59.63302752293578
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 153.84093164936755,
+      "idle_proxy_cpu_pct_of_one_core": 0.9071749913837541,
+      "proxy_fd_count": 74,
+      "proxy_threads": 22,
+      "proxy_rss_bytes_sum_of_processes": 575578112,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b1200-openresty-r4": {
+      "duration_seconds": 3.678668206,
+      "snapshot_overhead_pct": 0.18368375786048663,
+      "client_cpu_pct_of_one_core": 98.19107888307336,
+      "origin_cpu_pct_of_one_core": 82.76514439834614,
+      "rps_fraction_of_direct": 0.6930352864817384,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 82.24043715846994
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 99.45945945945947
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.9100817438692
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 88.72403560830861
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 180.80196828906296,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 44,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 22609920,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b1200-afxdp-r4": {
+      "duration_seconds": 5.873826663,
+      "snapshot_overhead_pct": 0.15359916997264023,
+      "client_cpu_pct_of_one_core": 61.38618326470012,
+      "origin_cpu_pct_of_one_core": 56.43819492253785,
+      "rps_fraction_of_direct": 0.43403508824031073,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.9778534923339
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 58.720930232558146
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 63.934426229508205
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 59.23217550274224
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 154.26317080290212,
+      "idle_proxy_cpu_pct_of_one_core": 0.45359125503384634,
+      "proxy_fd_count": 74,
+      "proxy_threads": 22,
+      "proxy_rss_bytes_sum_of_processes": 574619648,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    },
+    "c16-b1200-nginx-r4": {
+      "duration_seconds": 3.94502702,
+      "snapshot_overhead_pct": 0.15886816410195514,
+      "client_cpu_pct_of_one_core": 94.15831580286616,
+      "origin_cpu_pct_of_one_core": 78.7144994073746,
+      "rps_fraction_of_direct": 0.6462431970902097,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 81.32992327365729
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 97.21518987341771
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 96.3917525773196
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 86.1878453038674
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 172.17239757983307,
+      "idle_proxy_cpu_pct_of_one_core": 0.0,
+      "proxy_fd_count": 46,
+      "proxy_threads": 3,
+      "proxy_rss_bytes_sum_of_processes": 16121856,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": [
+        "client_cpu_at_least_90pct"
+      ]
+    },
+    "c16-b1200-kernel-r4": {
+      "duration_seconds": 4.336214554,
+      "snapshot_overhead_pct": 0.13157437043185283,
+      "client_cpu_pct_of_one_core": 78.32868871460367,
+      "origin_cpu_pct_of_one_core": 65.18525462330635,
+      "rps_fraction_of_direct": 0.5879429724362487,
+      "per_cpu": {
+        "cpu0": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.36065573770492
+        },
+        "cpu1": {
+          "steal_pct": 0.0,
+          "busy_pct": 98.36065573770492
+        },
+        "cpu2": {
+          "steal_pct": 0.0,
+          "busy_pct": 80.85106382978722
+        },
+        "cpu3": {
+          "steal_pct": 0.0,
+          "busy_pct": 67.90123456790124
+        }
+      },
+      "proxy_cpu_pct_of_one_core": 193.7894674976464,
+      "idle_proxy_cpu_pct_of_one_core": 0.45391143682754853,
+      "proxy_fd_count": 44,
+      "proxy_threads": 4,
+      "proxy_rss_bytes_sum_of_processes": 556298240,
+      "thread_cpu_complete_identity_coverage": true,
+      "quality_flags": []
+    }
+  },
+  "failed_cases": [],
+  "interpretation": "All attempts retained. Paired changes use candidate/baseline-1, so positive RPS and negative P99 are improvements. Four balanced rounds describe dispersion, not a confidence interval. CPU windows include snapshot overhead; proxy CPU is summed across its process tree. Direct calibration is a single preceding observation, not a simultaneous capacity measurement. Quality flags do not remove samples.",
+  "binaries_unchanged": true,
+  "sources_unchanged": true
+}
