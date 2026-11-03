@@ -7,7 +7,7 @@ and preserve 32 combinations of range syntax, full-object availability and
 partial-cache policy.
 
 Actions builds baseline `a4e95a239abb82420f65d79f813654ba67fedad9` and the
-candidate sequentially in the same checkout and toolchain, then copies both
+candidate `0cf22db48e2e6a64c34f82599b6285d0efc90de5` sequentially in the same checkout and toolchain, then copies both
 actual executables with SHA-256. The only production source differences must
 be `src/proxy.rs` and `src/cache/partial.rs`. No measurements run until both
 builds and all image preparation finish. This script checks out immutable
@@ -44,3 +44,13 @@ raw transfers, Range responses and failures remain inspectable.
 python3 scripts/perf/cache-range/verify.py /path/to/extracted-evidence \
   /path/to/extracted-binaries/.local/cache-range-binaries
 ```
+
+The first run (41712678098) stopped at the second origin capacity reference:
+168 startup curl 56 errors, before the candidate Edge was measured. The
+`cache-range-reuse.yml` workflow verifies archive 13269688187 and its actual
+executables, then repeats the full experiment without rebuilding the variants.
+The current harness revision and original binary revisions are separate fields.
+Origin readiness now validates the full body and protocol before capacity timing;
+the capacity sample is never retried or filtered. Infrastructure errors remain
+failed, later independent targets continue, and no medians are emitted if any
+infrastructure failure occurred. The failed first run remains evidence.

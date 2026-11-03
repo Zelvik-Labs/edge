@@ -258,6 +258,26 @@ def cpu_assignment(allowed):
             'origin':[allowed[proxy_count+2]]}
 
 
+def wait_origin_ready(origin, url, ca, payload, stem):
+    """Validate origin startup before the single, unretried capacity sample."""
+    deadline = time.monotonic() + 120
+    attempts = []
+    while True:
+        try:
+            observation = probe('h1', url, ca, payload, stem)
+        except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+            attempts.append({'status': 'not-ready', 'error': str(error)})
+            write(stem.with_suffix('.json'), {'attempts': attempts})
+            running = json.loads(docker('inspect', origin))[0]['State']['Status'] == 'running'
+            if time.monotonic() >= deadline or not running:
+                raise RuntimeError('origin readiness failed; retained startup probes') from error
+            time.sleep(.5)
+        else:
+            attempts.append({'status': 'ready', 'observation': observation})
+            write(stem.with_suffix('.json'), {'attempts': attempts})
+            return {'attempts': len(attempts), 'observation': observation}
+
+
 def run(args):
     refuse_compilation()
     args.cpu_assignment = cpu_assignment(sorted(os.sched_getaffinity(0)))
@@ -300,6 +320,10 @@ def run(args):
                '--mount',f'type=bind,src={out}/origin.conf,dst=/etc/nginx/nginx.conf,readonly',
                '-p','127.0.0.1::8081','nginx:1.28.0')
         origin_port=ports(origin)['8081/tcp']
+        manifest['origin_readiness'] = wait_origin_ready(
+            origin, f'http://localhost:{origin_port}/off/payload', tls/'ca.pem',
+            payload, out/'origin-readiness')
+        save()
         origin_before=cgroup(origin); usage_before=resource.getrusage(resource.RUSAGE_CHILDREN)
         started=time.monotonic()
         raw=run_client(args,'h1','off','reuse',f'http://localhost:{origin_port}/off/payload',tls/'ca.pem',out/'origin-reference')
@@ -309,9 +333,9 @@ def run(args):
         reference.update(elapsed=elapsed,
                          origin_cpu_fraction=(origin_after['cpu.stat']['usage_usec']-origin_before['cpu.stat']['usage_usec'])/(elapsed*1e6),
                          client_cpu_fraction=(usage_after.ru_utime+usage_after.ru_stime-usage_before.ru_utime-usage_before.ru_stime)/(2*elapsed))
+        manifest['origin_reference']=reference; save()
         if reference['failed']:
             raise RuntimeError('direct origin capacity reference has transfer errors')
-        manifest['origin_reference']=reference; save()
         target=prefix+'-'+args.target; names.append(target)
         command=['run','-d','--name',target,'--network',net,'--cpuset-cpus',','.join(map(str,args.cpu_assignment['proxy'])),'--cpus',str(len(args.cpu_assignment['proxy'])),
                  '--memory','2g','--memory-swap','2g','--ulimit','nofile=65536:65536',

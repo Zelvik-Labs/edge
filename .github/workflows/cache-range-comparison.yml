@@ -1,11 +1,6 @@
 name: Matched Range preflight and CDN comparison
 on:
   workflow_dispatch:
-  push:
-    branches: [perf/program-wide-20261104]
-    paths:
-      - scripts/perf/cache-range/**
-      - .github/workflows/cache-range-comparison.yml
 permissions:
   contents: read
 concurrency:

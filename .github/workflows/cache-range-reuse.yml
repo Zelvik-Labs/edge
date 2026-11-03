@@ -1,0 +1,68 @@
+name: Matched Range comparison with retained executables
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - .github/workflows/cache-range-reuse.yml
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cache-range-reuse-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  matrix:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout harness
+        uses: actions/checkout@v5
+      - name: Verify and restore immutable executables
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/perf/cache-range/restore-binaries.py
+      - name: Prepare all images before timing
+        run: |
+          docker pull nginx:1.28.0
+          docker pull openresty/openresty:1.27.1.2-0-bookworm-fat
+          docker build -t edge-http-state-fixture:20261103 -f scripts/perf/http-state/Dockerfile .
+      - name: Run four targets independently in balanced order
+        run: |
+          docker run --rm --name edge-cache-range-harness --network host --pid host \
+            --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
+            -e GITHUB_SHA -e EDGE_MATRIX_HARNESS_NAME=edge-cache-range-harness \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
+            edge-http-state-fixture:20261103 bash scripts/perf/cache-range/run-ci.sh
+      - name: Recompute complete transfer records and retain failed cells
+        if: always()
+        run: |
+          if [ -f .local/cache-range-private/suite.json ]; then
+            python3 scripts/perf/cache-range/verify.py .local/cache-range-private .local/cache-range-binaries
+          fi
+      - name: Collect public evidence without runtime secrets
+        if: always()
+        run: |
+          if [ -d .local/cache-range-private ]; then
+            sudo chown -R "$(id -u):$(id -g)" .local/cache-range-private
+          fi
+          python3 scripts/perf/cache-range/collect.py
+      - name: Retain all samples, controls and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cache-range-${{ github.sha }}
+          path: .local/cache-range-ci/
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Retain every actual measured executable
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cache-range-binaries-${{ github.sha }}
+          path: |
+            .local/cache-range-binaries/
+            .local/cache-range-private/protocol-state-client
+          include-hidden-files: true
+          if-no-files-found: error

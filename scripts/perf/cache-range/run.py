@@ -60,12 +60,14 @@ def main():
         return result
 
     matrix.probe = probe
-    suite = {'source': build['harness_source'], 'build': build, 'orders': ORDERS, 'runs': [],
+    source = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+    suite = {'source': source, 'build': build, 'orders': ORDERS, 'runs': [],
              'scope': '1KiB, 32 reuse connections, four protocols and cache states; sequential targets; no fresh/mux ranking',
              'client_sha256': matrix.sha(OUT / 'protocol-state-client'),
              'sources': {p: matrix.sha(ROOT / p) for p in ['scripts/perf/cache-range/run.py',
                  'scripts/perf/protocol_state_matrix.py', 'scripts/perf/http-state/verify.py',
                  'benches/support/protocol_state_client.c']}}
+    matrix.write(OUT / 'suite.json', suite)
     for repeat, order in enumerate(ORDERS):
         for target in order:
             variant = target if target in ['before', 'after'] else 'after'
@@ -79,9 +81,15 @@ def main():
                 connections=['reuse'], multiplex=False, seed=20261104,
                 experiment='defer ordinary-request Range preflight; all builds completed',
                 comparison_variant=target, binary_source=build['variants'][variant]['source'])
-            code = matrix.run(args)
+            failure = None
+            try:
+                code = matrix.run(args)
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+                code = 1
+                failure = str(error)
             suite['runs'].append({'round': repeat, 'variant': target,
-                                 'manifest': str((directory / 'manifest.json').relative_to(OUT)), 'exit': code})
+                                 'manifest': str((directory / 'manifest.json').relative_to(OUT)),
+                                 'exit': code, 'infrastructure_failure': failure})
             matrix.write(OUT / 'suite.json', suite)
             # Per-cell failures remain in the manifest and do not remove later targets.
     for variant, data in build['variants'].items():

@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('matrix', Path(__file__).with_name('protocol_state_matrix.py'))
 matrix = importlib.util.module_from_spec(spec)
@@ -11,6 +12,27 @@ spec.loader.exec_module(matrix)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_origin_startup_is_observed_before_capacity_timing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            stem = Path(folder)/'origin-readiness'
+            with patch.object(matrix, 'probe', side_effect=[RuntimeError('not listening'), {'sha256': 'body'}]), \
+                 patch.object(matrix, 'docker', return_value='[{"State":{"Status":"running"}}]'), \
+                 patch.object(matrix.time, 'sleep'):
+                result = matrix.wait_origin_ready('origin', 'http://localhost', 'ca', b'body', stem)
+            self.assertEqual(result['attempts'], 2)
+            self.assertIn('not listening', stem.with_suffix('.json').read_text())
+
+    def test_origin_exit_or_readiness_deadline_remains_a_failure(self):
+        for state, times in [('exited', [0, 1]), ('running', [0, 121])]:
+            with tempfile.TemporaryDirectory() as folder:
+                stem = Path(folder)/'origin-readiness'
+                with patch.object(matrix, 'probe', side_effect=RuntimeError('bad body')), \
+                     patch.object(matrix, 'docker', return_value='[{"State":{"Status":"'+state+'"}}]'), \
+                     patch.object(matrix.time, 'monotonic', side_effect=times):
+                    with self.assertRaisesRegex(RuntimeError, 'origin readiness failed'):
+                        matrix.wait_origin_ready('origin', 'http://localhost', 'ca', b'body', stem)
+                self.assertIn('bad body', stem.with_suffix('.json').read_text())
+
     def test_cpu_roles_use_actual_ids_and_do_not_overlap(self):
         roles = matrix.cpu_assignment([3, 5, 8, 9])
         self.assertEqual(roles, {'proxy':[3], 'client':[5,8], 'origin':[9]})

@@ -9,6 +9,7 @@ import subprocess
 
 ROOT = Path.cwd()
 BASE = 'a4e95a239abb82420f65d79f813654ba67fedad9'
+CANDIDATE = '0cf22db48e2e6a64c34f82599b6285d0efc90de5'
 OUT = ROOT / '.local/cache-range-binaries'
 LOGS = ROOT / '.local/cache-range-private'
 
@@ -24,7 +25,7 @@ def sha(path):
 def main():
     source = command('git', 'rev-parse', 'HEAD')
     assert not command('git', 'status', '--porcelain', '--untracked-files=no')
-    changes = command('git', 'diff', '--name-only', BASE, source).splitlines()
+    changes = command('git', 'diff', '--name-only', BASE, CANDIDATE).splitlines()
     runtime_changes = [p for p in changes if p.startswith(('src/', 'crates/', 'vendor/', 'pingora-main/'))
                        or p in ['Cargo.toml', 'Cargo.lock', 'build.rs', 'rust-toolchain.toml', '.cargo/config.toml']]
     assert sorted(runtime_changes) == ['src/cache/partial.rs', 'src/proxy.rs'], runtime_changes
@@ -34,7 +35,7 @@ def main():
                 'rustc': command('rustc', '-vV'), 'rustflags': os.environ['RUSTFLAGS'],
                 'variants': {}, 'builds_complete_before_measurement': False}
     try:
-        for variant, revision in [('before', BASE), ('after', source)]:
+        for variant, revision in [('before', BASE), ('after', CANDIDATE)]:
             subprocess.run(['git', 'checkout', '--detach', revision], cwd=ROOT, check=True)
             directory = OUT / variant
             directory.mkdir()

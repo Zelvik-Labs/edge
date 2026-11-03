@@ -21,9 +21,11 @@ def same(actual, expected):
     assert math.isclose(actual, expected, rel_tol=1e-10, abs_tol=1e-9), (actual, expected)
 
 
-def validate(path, root):
+def validate(path, root, *, allow_incomplete=False):
     manifest = json.loads(path.read_text())
-    assert manifest['status'] == 'completed' and not manifest.get('cleanup_errors'), path
+    assert manifest['status'] == 'completed' or (
+        allow_incomplete and manifest['status'] == 'failed' and manifest.get('error')), path
+    assert not manifest.get('cleanup_errors'), path
     roles = manifest['cpu_assignment']
     cpus = [cpu for ids in roles.values() for cpu in ids]
     assert len(set(cpus)) == len(cpus) and len(roles['client']) == 2 and len(roles['origin']) == 1

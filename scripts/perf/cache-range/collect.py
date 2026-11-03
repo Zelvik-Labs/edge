@@ -11,7 +11,8 @@ PUBLIC = ROOT / '.local/cache-range-ci'
 PUBLIC.mkdir(parents=True, exist_ok=True)
 exact = {'build-metadata.json', 'suite.json', 'range-controls.json', 'manifest.json', 'payload',
          'curl-version.txt', 'packages.txt', 'kernel.txt', 'python-tests.log',
-         'before-build.log', 'after-build.log', 'verified-records.json', 'verified-summary.json'}
+         'before-build.log', 'after-build.log', 'verified-records.json', 'verified-summary.json',
+         'origin-readiness.json', 'binary-artifact.json'}
 suffixes = ('.client.tsv.gz', '.client.tsv', '.stderr', '.command.json', '.body', '.headers')
 retained = []
 for path in PRIVATE.rglob('*'):
