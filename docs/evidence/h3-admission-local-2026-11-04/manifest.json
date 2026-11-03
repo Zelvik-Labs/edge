@@ -1,0 +1,436 @@
+{
+  "archive_bytes": 3478373,
+  "archive_sha256": "4e5bc939bd709da6c1c2679d69ce136b1fe6435d7fd25669733491cbc8fe9e7c",
+  "files": [
+    {
+      "path": "admission-local-pre-ingress/0000-h3-hit-fresh-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "admission-local-pre-ingress/0000-h3-hit-fresh-after.headers",
+      "bytes": 271,
+      "sha256": "320e90b0cea4f247c3cc050efba24ed364d35a4470886b108f46a19fcfc3c642"
+    },
+    {
+      "path": "admission-local-pre-ingress/0000-h3-hit-fresh-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "admission-local-pre-ingress/0000-h3-hit-fresh-before.headers",
+      "bytes": 296,
+      "sha256": "9c6ac86254b7898522de0f3e029d9a4188c47b406263aab2ad6167aa1e978a06"
+    },
+    {
+      "path": "admission-local-pre-ingress/0000-h3-hit-fresh-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "admission-local-pre-ingress/0000-h3-hit-fresh-warm.headers",
+      "bytes": 271,
+      "sha256": "276e0c62ba9b76801c1df13cb69e522032c242a3cb1fc912e48aee0f971962a7"
+    },
+    {
+      "path": "admission-local-pre-ingress/0000-h3-hit-fresh.0.client.tsv.gz",
+      "bytes": 2076,
+      "sha256": "1977a12422de9643fa6037a0cf7271110b2cc60c73c786539570929c06f30811"
+    },
+    {
+      "path": "admission-local-pre-ingress/0000-h3-hit-fresh.0.stderr",
+      "bytes": 5527,
+      "sha256": "0f2bc24219773f20ab3409457a2b529899b95c5ab1148f70e835346e8e2df948"
+    },
+    {
+      "path": "admission-local-pre-ingress/0000-h3-hit-fresh.1.client.tsv.gz",
+      "bytes": 1941,
+      "sha256": "c1e74a2e019d0db2a466a06261f1364fc3169d12c546b3a9500c600c9e95700d"
+    },
+    {
+      "path": "admission-local-pre-ingress/0000-h3-hit-fresh.1.stderr",
+      "bytes": 5525,
+      "sha256": "ae32f14158be423edc3fe7d0891b3074cb96621e9de093d6ab67d6d149b9b487"
+    },
+    {
+      "path": "admission-local-pre-ingress/0000-h3-hit-fresh.command.json",
+      "bytes": 1109,
+      "sha256": "daec9b1a1b97b7c18ed182233c1f8a06392f1dd051d108ef2a62b70d62e5072b"
+    },
+    {
+      "path": "admission-local-pre-ingress/controller-status.json",
+      "bytes": 14389,
+      "sha256": "680fbf751fae21774ba473ab24d5702821835ac058511406d6e8053a7159d6ce"
+    },
+    {
+      "path": "admission-local-pre-ingress/edge-ready.json",
+      "bytes": 6922,
+      "sha256": "993fe9fd544ebd7f078c1c59a6ccc35e562bebbe1306a1f289ad828c87d0768e"
+    },
+    {
+      "path": "admission-local-pre-ingress/edge-state-c1c263bbd3-edge.log",
+      "bytes": 7262,
+      "sha256": "059cfafd534eb22a6560b735630b4ac10f6d08c58175949bc63c3194823fc701"
+    },
+    {
+      "path": "admission-local-pre-ingress/edge-state-c1c263bbd3-origin.log",
+      "bytes": 754,
+      "sha256": "df1ae8b058f5da19d13f295a62ddb42340fe7ecd11b3e82a936e07f41149a072"
+    },
+    {
+      "path": "admission-local-pre-ingress/edge.log",
+      "bytes": 213351,
+      "sha256": "546c0eabf722ca4bd4a75106fcd089593b14a6686272c3ee6290e06f9443d384"
+    },
+    {
+      "path": "admission-local-pre-ingress/manifest.json",
+      "bytes": 36259,
+      "sha256": "c3210077f553cd950fb8430112409fd0d51737666dab76aabd4efaa5ec836a92"
+    },
+    {
+      "path": "admission-local-pre-ingress/origin-reference.0.client.tsv.gz",
+      "bytes": 806741,
+      "sha256": "e68d0fd5674a2ef062a24de8039e16e61645c0d0b818a18ab21b705a6a84d2e5"
+    },
+    {
+      "path": "admission-local-pre-ingress/origin-reference.0.stderr",
+      "bytes": 92,
+      "sha256": "449b013a2527589a7cbcaedea6fb481833364598606b308f333149bd3236d1d0"
+    },
+    {
+      "path": "admission-local-pre-ingress/origin-reference.1.client.tsv.gz",
+      "bytes": 818560,
+      "sha256": "8d88825c386a3e65610e98e4e1ad799047278cd79bf64084b58a63be7d98f16a"
+    },
+    {
+      "path": "admission-local-pre-ingress/origin-reference.1.stderr",
+      "bytes": 92,
+      "sha256": "d7b7b64b3da8dd32cea40662786b056836859cf17ed759eb7fcfd40364f0a29f"
+    },
+    {
+      "path": "admission-local-pre-ingress/origin-reference.command.json",
+      "bytes": 1019,
+      "sha256": "354b3b15f6cad7aa3a82cbe5bad20d82339052c9b0a2bf816efbc21cfde19064"
+    },
+    {
+      "path": "admission-local-pre-ingress/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "admission-local-pre-ingress/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "admission-local-pre-ingress/proxy.conf",
+      "bytes": 1109,
+      "sha256": "c2ff9ee0542c763728b6dfc96173234bbf04eda1dcc313b8edb241d6036f4d91"
+    },
+    {
+      "path": "admission-local-pre-ingress/readiness.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "admission-local-pre-ingress/readiness.headers",
+      "bytes": 294,
+      "sha256": "01eb91f09eb6516de53dc6b9c9dc42b5cd6eb503bd6486268f2383b2f9b654ec"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/0000-h3-hit-fresh-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/0000-h3-hit-fresh-after.headers",
+      "bytes": 271,
+      "sha256": "f4c8e185a1f14aa522ae35d6665c515ac94ae215f4ae1c61bbc2f27018d38c7e"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/0000-h3-hit-fresh-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/0000-h3-hit-fresh-before.headers",
+      "bytes": 296,
+      "sha256": "4f82d34714258345d31b1b429cd9c45ce4677d6fa7497d6e04a2d47d510c27db"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/0000-h3-hit-fresh-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/0000-h3-hit-fresh-warm.headers",
+      "bytes": 271,
+      "sha256": "dce9d3461d4bc47ecbdc840f038ab22016e402599e7990b208208e6a021df172"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/0000-h3-hit-fresh.0.client.tsv.gz",
+      "bytes": 2530,
+      "sha256": "e03a5b7d1a26d82b6ae1f3edbd62ca1e1bfc8cb67fffed8cb430addf5ef770ab"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/0000-h3-hit-fresh.0.stderr",
+      "bytes": 87,
+      "sha256": "ac39628bb7ab3c1fcfdb218f4ae0146c28cf5f0c665e2c6695c9d2950eca9622"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/0000-h3-hit-fresh.1.client.tsv.gz",
+      "bytes": 2527,
+      "sha256": "a6af145f0486b897894ec19785c7adb983220de7fc627aadf107ed42026a7cbc"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/0000-h3-hit-fresh.1.stderr",
+      "bytes": 87,
+      "sha256": "9ab31b36eb18a55d88d4a01be2c75df9036cb6633349e6b36b5f578fc9cc189b"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/0000-h3-hit-fresh.command.json",
+      "bytes": 1115,
+      "sha256": "c16b66d3067e762ef81da0a4d034f3edcdd092dfb3213d84aedbbf753d57a64a"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/controller-status.json",
+      "bytes": 14399,
+      "sha256": "79433b79919750f05babe9bd5d9d839187cb04a2900178b86712dea55ea67b8b"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/edge-ready.json",
+      "bytes": 6927,
+      "sha256": "b618fc1d254e429d3e63e31471cbdd3227f6720a2c6b3ab1861b85ddc2131015"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/edge-state-16a83d533b-edge.log",
+      "bytes": 7267,
+      "sha256": "96e24238846a20395cb2e0f0d317b64ae07a65b55684848b3d37c7632ea99d97"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/edge-state-16a83d533b-origin.log",
+      "bytes": 754,
+      "sha256": "df1ae8b058f5da19d13f295a62ddb42340fe7ecd11b3e82a936e07f41149a072"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/edge.log",
+      "bytes": 382102,
+      "sha256": "7ba3f0f10072e186cc93f4a5834db9ae5da01fde1c8b6d19f21761def8a079c9"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/manifest.json",
+      "bytes": 34276,
+      "sha256": "73994c183efd512cc118bad17ab506ab8bbb405b498a6b50662dc6f267bb7578"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/origin-reference.0.client.tsv.gz",
+      "bytes": 734128,
+      "sha256": "269219e9dcc237cf7ab4fb61326c7b3e5f54d9355f367c25efa469775d8f5be0"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/origin-reference.0.stderr",
+      "bytes": 92,
+      "sha256": "3cc71e241d1261898b2f8f75060168866bf069069242992a4759cfdaad162242"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/origin-reference.1.client.tsv.gz",
+      "bytes": 749675,
+      "sha256": "4ac23eadc82e4b6f56e9a29ae53b856b594c27b4d9ec7e35657d70fa80799fa2"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/origin-reference.1.stderr",
+      "bytes": 92,
+      "sha256": "ce27659f465761eead1bd65f35baa519a3c4c0ea91fada268209b57ba4b89ab7"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/origin-reference.command.json",
+      "bytes": 1025,
+      "sha256": "7b9127855df47efe2bedaa0f5a4a2a1622c5019bf7d30b4b5fe09a7e7071f7e5"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/proxy.conf",
+      "bytes": 1109,
+      "sha256": "c2ff9ee0542c763728b6dfc96173234bbf04eda1dcc313b8edb241d6036f4d91"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/readiness.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g/readiness.headers",
+      "bytes": 294,
+      "sha256": "4d5030b27e717d5dfbfbaa1d513c2794ce77b52d9ac94ad5dd5c2a9cc61b5792"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/0000-h3-hit-fresh-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/0000-h3-hit-fresh-after.headers",
+      "bytes": 271,
+      "sha256": "b1e0857f3e038cc952ca29b9677fb240a7155239c6b61c9848334fb3bf08d085"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/0000-h3-hit-fresh-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/0000-h3-hit-fresh-before.headers",
+      "bytes": 296,
+      "sha256": "b605ca82486cb6d496aeb234949e71a4aa11c5f1ca805b26d030b33050fa6b6c"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/0000-h3-hit-fresh-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/0000-h3-hit-fresh-warm.headers",
+      "bytes": 271,
+      "sha256": "0f38ef49e2a4f22e1ac0b43de50bb81c2c8a09d030cae6f022fa19f5102bb596"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/0000-h3-hit-fresh.0.client.tsv.gz",
+      "bytes": 2288,
+      "sha256": "bb3d50ee594ee395a9fcdfa5e9fa47b008c505ae9f42d19fc0ba940bb971293a"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/0000-h3-hit-fresh.0.stderr",
+      "bytes": 87,
+      "sha256": "189905b1639f382b2d2d26a7db73521dda4f5aa4900b2417fa771aaef105c801"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/0000-h3-hit-fresh.1.client.tsv.gz",
+      "bytes": 2300,
+      "sha256": "bd0a8ed8263b756574979350cc1d7723dac9af119768fab132d98c8e0d079217"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/0000-h3-hit-fresh.1.stderr",
+      "bytes": 87,
+      "sha256": "08a417bc62f66eb2d2e7e77f2108c9a90008bc08c1b19b5d11a1edbb6f156cad"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/0000-h3-hit-fresh.command.json",
+      "bytes": 1113,
+      "sha256": "bf9789426ac9a914269a198b8d96e8495b4dd5592090fba6c528737586b6b7a5"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/controller-status.json",
+      "bytes": 14387,
+      "sha256": "ddf8d6c76cda98adde0c564371d0dc848f187c34cf9a35f51d320ee72e3a6a84"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/edge-ready.json",
+      "bytes": 6921,
+      "sha256": "b8faa46b7a10d47d421083a74ff56871fac4c29f84fef74bd1c639994d3a9340"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/edge-state-10f051123a-edge.log",
+      "bytes": 7261,
+      "sha256": "972c58877e6f63ed915fbc7a5e1ebad7ea3fbbb5ef2db874843c8cfe0740f40a"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/edge-state-10f051123a-origin.log",
+      "bytes": 754,
+      "sha256": "df1ae8b058f5da19d13f295a62ddb42340fe7ecd11b3e82a936e07f41149a072"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/edge.log",
+      "bytes": 382491,
+      "sha256": "dd25a5e170ee01a1f513c87b028a26199379b4f777f6c8cec170cebf86088a3b"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/manifest.json",
+      "bytes": 34237,
+      "sha256": "576d277257d256a3cd7797cc935b6f6eed269bb017bba2a19992007347243ad0"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/origin-reference.0.client.tsv.gz",
+      "bytes": 113588,
+      "sha256": "4726a60f1b35e7e9c9659fc658d11f914afb181be38bc5261f086e8363decceb"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/origin-reference.0.stderr",
+      "bytes": 89,
+      "sha256": "54009537fc70f2924664b7b5828aada8e2e04a96240002dc3047228490d62466"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/origin-reference.1.client.tsv.gz",
+      "bytes": 114261,
+      "sha256": "f05f312caa5ce3ae85a0ec0be8a70b69e9a066324e036cdce9906aadb1bcedb4"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/origin-reference.1.stderr",
+      "bytes": 89,
+      "sha256": "5d7b4f762c57fcbef56acbb9d36585676f204bdda6b42c23c72b31d0210a6834"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/origin-reference.command.json",
+      "bytes": 1023,
+      "sha256": "995b1aa330105b9e5b48d0c64dfcb5da4c08a8bc88ef1258590a248897594786"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/proxy.conf",
+      "bytes": 1109,
+      "sha256": "c2ff9ee0542c763728b6dfc96173234bbf04eda1dcc313b8edb241d6036f4d91"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/readiness.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2/readiness.headers",
+      "bytes": 294,
+      "sha256": "7e4626d48af1dd4289ae2612f8456b36595c5a2fafa6714eecf2dae3fc5a6c9a"
+    },
+    {
+      "path": "native-admission-local.py",
+      "bytes": 30685,
+      "sha256": "756c1c4739b252f43577dcddf462ab109b9a7070c5c03698656d14871ff82d44"
+    },
+    {
+      "path": "native-admission-local-4g.py",
+      "bytes": 30685,
+      "sha256": "1ea2403b4ea754feca4294120dc860a91f9bf7887086c93a46c63185fdd5b1d5"
+    },
+    {
+      "path": "admission-local-pre-ingress.log",
+      "bytes": 158,
+      "sha256": "b8da8086c281bf6a3e5e0c4763831978c1b63eb0e42a05bc3b8d9b6c92e292e7"
+    },
+    {
+      "path": "admission-local-pre-ingress-4g.log",
+      "bytes": 150,
+      "sha256": "7a7ca3784489932250c86fde4eab4619d02e4d1dc3ab2bccfa9d7440ae0d47a1"
+    },
+    {
+      "path": "admission-local-pre-ingress-c2.log",
+      "bytes": 151,
+      "sha256": "c626055f2f93f28bfb04796631b559867d4bf5809169c796f6934252b7820fd4"
+    }
+  ]
+}

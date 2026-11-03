@@ -63,6 +63,9 @@ tokio-quiche 的失败为 `curl_7/http_0/v_0`，客户端报告 `QUIC connection
 后续在当前云工作区使用该次已核验的二进制、相同客户端及 32 并发复现：
 2 GiB 时 179/512 成功，日志确认 Edge 主动执行 native admission rejection；只把内存限额提高到
 4 GiB 后 512/512 通过。该诊断使用两个代理核、开启局部 debug 日志，不参与以上单核吞吐排名。
+同一 2 GiB 配置只把并发从 32 降到 2，也得到 512/512 通过。
+[本地对照原始证据](evidence/h3-admission-local-2026-11-04) 保留全部 1,536 次传输和实际二进制摘要；
+其中 manifest 的 `source_revision` 是驱动所在 checkout，实际可执行文件来源仍为上述 `a19f6e2` artifact。
 
 当前证据支持内存准入限制，但本报告不将具体 workspace/shared-account 分支当作已经确认的事实。
 已增加首个拒绝的额度快照和独立三轮探针，以区分实时并发额度与观测周期内的累计承诺。
