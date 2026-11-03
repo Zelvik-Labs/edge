@@ -6,7 +6,9 @@
 
 [四版本 Actions 41706664208](https://github.com/Zelvik-Labs/edge/actions/runs/41706664208) 已通过，
 32 个独立计时进程、3200 个原始块和 64,203 个逐输入结果已在本地复算。
-最终完整 CI 在分支 `perf/sni-hybrid-20261104` 运行，完成前不把原生 AF_XDP 验证算作通过。
+最终[完整 CI 41707676325](https://github.com/Zelvik-Labs/edge/actions/runs/41707676325) 已通过：
+check/Clippy、1356 项 lib 测试（4 项既有 ignored）、16 项 bin 测试、集成、vendor 和 32 组原生 AF_XDP 节点验证。
+完整归档、退出状态、smoke 完成标记、网络清理和实际 CI 日志已复核，补证在 `evidence/sni-cursor-2026-11-04/hybrid/full-ci/`。
 纯 cursor 的[完整 CI 41705771249](https://github.com/Zelvik-Labs/edge/actions/runs/41705771249)
 已通过 check/Clippy、1355 项 lib 测试（4 项既有 ignored）、16 项 bin 测试、集成、vendor 和 32 组原生节点组合；
 对应退出状态、smoke 完成标记与网络清理已逐项核对，补证保存在 `evidence/sni-cursor-2026-11-04/phase2/full-ci/`。
