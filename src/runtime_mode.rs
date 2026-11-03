@@ -602,6 +602,43 @@ impl XdpValidationWakeMode {
     }
 }
 
+/// Validation-only control for measuring the legacy classification pass.
+/// Production bridge polling uses only RX ownership/readiness observations;
+/// raw diagnostic polling always retains its complete statistics.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum XdpValidationRxStats {
+    Full,
+    Bridge,
+}
+
+static VALIDATION_XSK_FULL_STATS: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_validation_xsk_rx_stats(mode: XdpValidationRxStats) {
+    VALIDATION_XSK_FULL_STATS.store(
+        mode == XdpValidationRxStats::Full,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn validation_xsk_rx_stats() -> XdpValidationRxStats {
+    if VALIDATION_XSK_FULL_STATS.load(std::sync::atomic::Ordering::Relaxed) {
+        XdpValidationRxStats::Full
+    } else {
+        XdpValidationRxStats::Bridge
+    }
+}
+
+impl XdpValidationRxStats {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Bridge => "bridge",
+        }
+    }
+}
+
 fn validation_transport_controller() -> Option<XdpTransportController> {
     transport_controller_from_index(
         VALIDATION_TRANSPORT_CONTROLLER.load(std::sync::atomic::Ordering::Relaxed),

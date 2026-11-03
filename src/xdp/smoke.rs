@@ -95,6 +95,7 @@ async fn raw_smoke_inner(
     let mut udp_seen = 0u64;
     let mut tcp_seen = 0u64;
     let mut unparseable_seen = 0u64;
+    let mut poll_stats_total = linux::AfXdpPollStats::default();
     let mut samples = Vec::new();
 
     while tokio::time::Instant::now() < deadline {
@@ -111,6 +112,12 @@ async fn raw_smoke_inner(
                 frames.push((interface.to_string(), queue, frame));
             })?
         };
+        poll_stats_total.packets = poll_stats_total.packets.saturating_add(stats.packets);
+        poll_stats_total.parsed = poll_stats_total.parsed.saturating_add(stats.parsed);
+        poll_stats_total.parse_errors = poll_stats_total
+            .parse_errors
+            .saturating_add(stats.parse_errors);
+        poll_stats_total.refilled = poll_stats_total.refilled.saturating_add(stats.refilled);
 
         for (interface, queue, frame) in frames {
             frames_seen = frames_seen.saturating_add(1);
@@ -163,6 +170,12 @@ async fn raw_smoke_inner(
         "udp": udp_seen,
         "tcp": tcp_seen,
         "unparseable": unparseable_seen,
+        "pollStats": {
+            "packets": poll_stats_total.packets,
+            "parsed": poll_stats_total.parsed,
+            "parseErrors": poll_stats_total.parse_errors,
+            "refilled": poll_stats_total.refilled,
+        },
         "tcpDataplaneReady": status.tcp_dataplane_ready,
         "tcpDataplaneDetail": status.tcp_dataplane_detail,
         "proxyReady": status.proxy_ready,
@@ -377,6 +390,7 @@ async fn proxy_reload_smoke_inner(
             "durationMillis": duration.as_millis(),
             "bridgeSupervisorAlive": !old_bridge.is_finished(),
             "xskWakeMode": crate::runtime_mode::validation_xsk_wake_mode().as_str(),
+            "xskRxStatsMode": crate::runtime_mode::validation_xsk_rx_stats().as_str(),
             "managerReplaced": true,
             "beforeReload": {
                 "proxyReady": before_reload.proxy_ready,
@@ -743,6 +757,7 @@ async fn proxy_smoke_inner(
         "snatAllocFail": status.snat_alloc_fail,
         "l4PressureAtReport": crate::l4_defense::current_pressure_level().as_str(),
         "xskWakeMode": crate::runtime_mode::validation_xsk_wake_mode().as_str(),
+        "xskRxStatsMode": crate::runtime_mode::validation_xsk_rx_stats().as_str(),
         "xskQueueStats": {
             "rxDropped": queue_stats(&status).map(|q| q.rx_dropped).sum::<u64>(),
             "rxRingFull": queue_stats(&status).map(|q| q.rx_ring_full).sum::<u64>(),

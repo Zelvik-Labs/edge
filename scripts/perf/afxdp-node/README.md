@@ -2,9 +2,15 @@
 
 The CI `workflow_dispatch` input `xdp_node_smoke=true` builds one pair of
 `Zelvik-Edge` / `h3-probe` binaries, then runs the existing full application
-smoke in worker/readable/readable/worker order. Both modes use the same binary.
+smoke for all four combinations of worker/readable and full/bridge RX statistics,
+twice each in a balanced forward/reverse order. All cases use the same binary.
 `--wake readable` is available only on explicit proxy smoke / reload commands;
 normal serving still uses the owned poll worker.
+`--rx-stats full|bridge` is likewise validation-only: normal bridge polling
+uses typed RX ownership/readiness observations, while raw diagnostics retain
+complete parsed/error statistics. Full mode measures the legacy extra
+classification pass inside the shared RX implementation, not byte-identical
+historical machine code.
 
 Run only in fresh network **and** mount namespaces. The wrapper checks both
 parent IDs, privately mounts bpffs and `/run/netns`, brings up loopback, and
@@ -16,6 +22,14 @@ half-close), HTTP/1.1, HTTPS, HTTP/2, SNI, UDP, H3, QUIC passthrough, generation
 replacement, raw redirect/bypass, and unmatched kernel traffic. Existing smoke
 TCP retries are unchanged: a passing suite does not prove every first attempt
 succeeded. This is a correctness gate, not a throughput benchmark or long soak.
+
+Wire controls send corrupt IPv4 headers, corrupt IPv4/IPv6 UDP checksums and
+forbidden zero IPv6 UDP checksums. Raw polling must count all four as parse
+errors. Application checks first require valid replies (including legal zero
+IPv4 UDP checksums), then require no corrupt replies and exact UDP backend
+counts: five valid requests in the default dual-stack fixture. The expected
+negative reply timeout is one second; other socket errors fail the case.
+`test_corrupt_udp.py` independently checks the generated wire controls.
 
 ```bash
 parent_net=$(readlink /proc/self/ns/net)
@@ -38,16 +52,22 @@ unmodified Nginx 1.28.0 / OpenResty 1.27.1.2 before starting any measurement.
 The separate `build-baselines.sh` verifies the official tarball SHA-256 digests.
 The load generator source is `benches/support/udp-bench.c`; its bytes match the
 initial comparison's source, previously stored beside this driver.
-Both baseline servers have two workers; Edge runs within the same two-CPU
-affinity. A C load generator and a C origin each occupy a separate CPU, requiring
+CI runs independent one- and two-proxy-CPU matrices. Baseline worker counts
+match each CPU budget; Edge runs within the same affinity and explicitly pins
+its single queue to the first selected proxy CPU. A C load generator and a C
+origin each occupy a separate CPU, requiring
 four available CPUs. The controller also needs CPU time; its snapshot windows
 and the host's per-CPU activity/steal are retained, rather than assumed free.
 
 The matrix is IPv4 UDP, 64/1200-byte request payloads, concurrency 1/16, one
 outstanding request per flow. It runs four balanced Williams-order rounds over
-worker/readable/Nginx/OpenResty, plus one preceding direct-origin calibration per
-matrix cell: 64 proxy cases and four direct cases. Every case has 1000 warmup
-round trips per flow, then 10000 measured round trips. The client validates the
+two Edge variants/Nginx/OpenResty, plus one preceding direct-origin calibration
+per matrix cell: 64 proxy cases and four direct cases per CPU budget. Input
+`xdp_udp_comparison=wake` compares worker/readable with bridge statistics;
+`rx-stats` compares full-stats/bridge-stats with both using worker wakeups.
+Every case has 1000 warmup round trips per flow. CI measures 40000 round trips
+per flow at concurrency one and 10000 at concurrency sixteen, addressing the
+short single-flow samples in the initial matrix. The client validates the
 entire reply prefix, payload and sequence; a timeout, loss, corrupt response or
 wrong peer count fails the case. It never retries UDP requests. Nginx/OpenResty
 use `proxy_requests 0; proxy_responses 2147483647; proxy_timeout 60s;`; the
@@ -65,7 +85,8 @@ phases. The 60-second node lifetime is a safety bound, not the timing interval.
 Warmup ends at an explicit client gate; CPU/process snapshots precede the GO
 marker. A DONE marker captures the end before samples are formatted. All RTT
 samples, process-tree CPU/thread/FD counts, idle CPU, host CPU activity/steal,
-source and binary digests, commands and failed attempts are uploaded. CPU
+source and binary digests, commands and failed attempts are uploaded. Actual
+configuration YAML and baseline server configurations are retained too. CPU
 snapshots have wider windows than the timed client phase; their overhead is
 reported. Quality flags identify short samples, noisy hosts, saturated client
 or origin CPU, and proximity to the direct calibration's throughput. Flags do

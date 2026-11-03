@@ -1246,6 +1246,7 @@ pub(crate) async fn run_queue_bridge_loop(
     // immediately; matched real-XSK tests do not support attributing the
     // old spin to EPOLLOUT interest alone.
     let wake_mode = crate::runtime_mode::validation_xsk_wake_mode();
+    let rx_stats_mode = crate::runtime_mode::validation_xsk_rx_stats();
     // SAFETY: both constructors borrow only while duplicating the fd;
     // queue_handle owns the original socket throughout this scope.
     let socket_fd = unsafe { BorrowedFd::borrow_raw(queue_handle.rx.fd().as_raw_fd()) };
@@ -1548,12 +1549,18 @@ pub(crate) async fn run_queue_bridge_loop(
             });
         }
         frames.clear();
-        // EN-17: `poll_raw_once` on a queue handle only ever yields frames
+        // EN-17: queue polling only ever yields frames
         // for this queue/interface — keep just the frame bytes instead of
         // allocating a `String` per packet on the RX path.
-        let poll_result = queue_handle.poll_raw_once(&mut |_interface, _queue, frame| {
-            frames.push(frame);
-        });
+        let mut collect = |_interface: &str, _queue: u32, frame: Vec<u8>| frames.push(frame);
+        let poll_result = match rx_stats_mode {
+            crate::runtime_mode::XdpValidationRxStats::Full => queue_handle
+                .poll_raw_once(&mut collect)
+                .map(linux::AfXdpRxObservation::from),
+            crate::runtime_mode::XdpValidationRxStats::Bridge => {
+                queue_handle.poll_bridge_once(&mut collect)
+            }
+        };
 
         let polled_packets = match poll_result {
             Ok(stats) => {

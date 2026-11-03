@@ -57,23 +57,24 @@ export XDP_SMOKE_NODE_BIN="$CARGO_TARGET_DIR/debug/Zelvik-Edge"
 export PATH=/usr/bin:/bin:$PATH
 ip link set lo up
 result=0
-for item in 1-worker 1-readable 2-readable 2-worker; do
-  mode=${item#*-}
+for item in full-1-worker bridge-1-worker bridge-1-readable full-1-readable full-2-readable bridge-2-readable bridge-2-worker full-2-worker; do
+  stats=${item%%-*}
+  mode=${item##*-}
   started=$(date +%s)
-  if XDP_SMOKE_WAKE="$mode" bash scripts/xdp-netns-smoke.sh > "$output/$item.log" 2>&1; then
+  if XDP_SMOKE_WAKE="$mode" XDP_SMOKE_RX_STATS="$stats" bash scripts/xdp-netns-smoke.sh > "$output/$item.log" 2>&1; then
     rc=0
   else
     rc=$?
     result=1
   fi
-  if ! python3 - "$output" "$item" "$mode" "$rc" "$started" <<'PY'
+  if ! python3 - "$output" "$item" "$mode" "$stats" "$rc" "$started" <<'PY'
 import json, pathlib, subprocess, sys, time
-root, label, mode, code, started = sys.argv[1:]
+root, label, mode, stats, code, started = sys.argv[1:]
 links = json.loads(subprocess.check_output(['ip', '-j', 'link', 'show'], text=True))
 namespaces = subprocess.check_output(['ip', 'netns', 'list'], text=True).strip()
 cleanup_ok = {link['ifname'] for link in links} == {'lo'} and not namespaces
 pathlib.Path(root, label + '.json').write_text(json.dumps({
-    'label': label, 'wake': mode, 'exit_code': int(code), 'passed': int(code) == 0 and cleanup_ok,
+    'label': label, 'wake': mode, 'rx_stats': stats, 'exit_code': int(code), 'passed': int(code) == 0 and cleanup_ok,
     'network_cleanup_ok': cleanup_ok, 'remaining_links': links, 'remaining_namespaces': namespaces,
     'elapsed_seconds': time.time() - int(started),
     'timing_kind': 'functional suite wall time, not throughput or latency'}, indent=2) + '\n')
@@ -90,7 +91,8 @@ python3 - "$output" <<'PY'
 import hashlib, json, os, pathlib, sys
 root = pathlib.Path(sys.argv[1])
 cases = [json.loads(root.joinpath(label + '.json').read_text()) for label in
-         ['1-worker', '1-readable', '2-readable', '2-worker']]
+         ['full-1-worker', 'bridge-1-worker', 'bridge-1-readable', 'full-1-readable',
+          'full-2-readable', 'bridge-2-readable', 'bridge-2-worker', 'full-2-worker']]
 binaries = {}
 for name in ['Zelvik-Edge', 'h3-probe']:
     with pathlib.Path(os.environ['CARGO_TARGET_DIR'], 'debug', name).open('rb') as source:

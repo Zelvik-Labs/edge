@@ -10,11 +10,10 @@ import signal
 import subprocess
 import time
 import traceback
-from udp_summary import summarize
+from udp_summary import COMPARISON_NODES, summarize
 
 ROOT = Path(__file__).resolve().parents[3]
 NS = 'edge-udp-peer'
-TARGETS = ['worker', 'readable', 'nginx', 'openresty']
 
 
 def write(path, data):
@@ -129,15 +128,16 @@ def json_reports(text):
     return reports
 
 
-def configure(home):
+def configure(home, queue_cpu):
     (home/'configs').mkdir(parents=True)
-    (home/'configs/api_node.yaml').write_text('''xdp:
+    (home/'configs/api_node.yaml').write_text(f'''xdp:
   enabled: true
   attachMode: skb
   fallback: fail-start
   interfaces:
     - name: eup-node
       queues: [0]
+      cpus: [{queue_cpu}]
       mode: proxy
       xskMode: copy
       localIps: [10.203.0.1]
@@ -145,11 +145,11 @@ def configure(home):
   proxy:
     protocols: [http, https, tcp, udp, h3]
     ports:
-      - {protocol: http, port: 9080}
-      - {protocol: https, port: 9444}
-      - {protocol: tcp, port: 9443}
-      - {protocol: udp, port: 443}
-      - {protocol: h3, port: 8443}
+      - {{protocol: http, port: 9080}}
+      - {{protocol: https, port: 9444}}
+      - {{protocol: tcp, port: 9443}}
+      - {{protocol: udp, port: 443}}
+      - {{protocol: h3, port: 8443}}
 ''')
 
 
@@ -157,7 +157,7 @@ def nginx_config(path, cpus):
     (path/'prefix').mkdir()
     masks = ' '.join(format(1 << c, 'b') for c in cpus)
     config = path/'nginx.conf'
-    config.write_text(f'''worker_processes 2;
+    config.write_text(f'''worker_processes {len(cpus)};
 worker_cpu_affinity {masks};
 worker_rlimit_nofile 65536;
 pid {path}/nginx.pid;
@@ -204,6 +204,10 @@ def execute(args, directory, target, concurrency, payload, cpus):
     origin = server = client = None
     record = {'target': target, 'concurrency': concurrency, 'payload': payload,
               'passed': False, 'started_unix': time.time(), 'errors': []}
+    nodes = COMPARISON_NODES[args.comparison]
+    proxy_cpus = cpus[:args.proxy_cpus]
+    iterations = args.single_flow_iterations if concurrency == 1 and args.single_flow_iterations is not None else args.iterations
+    record.update(proxy_cpus=proxy_cpus, iterations_per_flow=iterations)
     logs = []
     def spawn(argv, name, env=None):
         output = (directory/(name+'.log')).open('w'); logs.append(output)
@@ -215,31 +219,32 @@ def execute(args, directory, target, concurrency, payload, cpus):
                         'origin','10.203.0.2','19003',directory/'origin-ready.json',directory/'origin.json','valid'], 'origin')
         assert wait_file(directory/'origin-ready.json', origin, as_json=True)['port'] == 19003
         if target != 'direct':
-            if target in {'worker', 'readable'}:
-                configure(directory/'home')
+            if target in nodes:
+                wake, rx_stats = nodes[target]
+                configure(directory/'home',proxy_cpus[0])
                 env = dict(os.environ, ZELVIK_EDGE_HOME=str(directory/'home'),
                            ZELVIK_EDGE_XDP_PIN_DIR=str(Path('/sys/fs/bpf/edge-udp')/directory.name))
-                argv = ['taskset','-c',','.join(map(str,cpus[:2])),args.edge,'xdp','proxy-smoke',
-                        '--wake',target,'--remote','10.203.0.2','--duration-ms','60000',
+                argv = ['taskset','-c',','.join(map(str,proxy_cpus)),args.edge,'xdp','proxy-smoke',
+                        '--wake',wake,'--rx-stats',rx_stats,'--remote','10.203.0.2','--duration-ms','60000',
                         '--ready-file',directory/'node-ready']
                 server = spawn(argv, 'server', env)
                 wait_file(directory/'node-ready', server)
             else:
                 binary = args.nginx if target == 'nginx' else args.openresty
-                config = nginx_config(directory,cpus[:2])
-                argv = ['taskset','-c',','.join(map(str,cpus[:2])),binary,'-p',str(directory/'prefix')+'/',
+                config = nginx_config(directory,proxy_cpus)
+                argv = ['taskset','-c',','.join(map(str,proxy_cpus)),binary,'-p',str(directory/'prefix')+'/',
                         '-c',config,'-g','daemon off;']
                 server = spawn(argv, 'server')
                 wait_file(directory/'nginx.pid', server)
                 deadline = time.monotonic() + 5
-                while len(descendants(server.pid)) < 3:
+                while len(descendants(server.pid)) < 1+args.proxy_cpus:
                     assert server.poll() is None and time.monotonic() < deadline
                     time.sleep(.01)
             record['server_command'] = list(map(str,argv))
         fixed_network(directory)
         target_ip, port = ('10.203.0.2',19003) if target == 'direct' else ('10.203.0.1',443)
         argv = ['ip','netns','exec',NS,'taskset','-c',str(cpus[2]),args.loadgen,'gated-client',target_ip,
-                str(port),str(concurrency),str(args.iterations),str(args.warmup),str(payload),
+                str(port),str(concurrency),str(iterations),str(args.warmup),str(payload),
                 directory/'client.json',directory/'samples.json',directory/'warm-ready.json',
                 directory/'measure-go',directory/'measure-done.json']
         record['client_command'] = list(map(str,argv))
@@ -252,12 +257,12 @@ def execute(args, directory, target, concurrency, payload, cpus):
         check_affinity(record['client_after_warmup'],[cpus[2]])
         if server:
             record['server_before'] = process_snapshot(server.pid)
-            check_affinity(record['server_before'],cpus[:2])
+            check_affinity(record['server_before'],proxy_cpus)
         (directory/'measure-go').write_text('go\n')
         wait_file(directory/'measure-done.json',client,as_json=True)
         if server:
             record['server_after'] = process_snapshot(server.pid)
-            check_affinity(record['server_after'],cpus[:2])
+            check_affinity(record['server_after'],proxy_cpus)
             assert record['server_before']['processes'].keys() == record['server_after']['processes'].keys(), 'server processes changed'
         record['origin_after'] = process_snapshot(origin.pid)
         record['cpu_after'] = cpu()
@@ -265,8 +270,8 @@ def execute(args, directory, target, concurrency, payload, cpus):
         client = None
         data = json.loads((directory/'client.json').read_text())
         samples = json.loads((directory/'samples.json').read_text())
-        assert data['passed'] and len(samples) == args.iterations*concurrency
-        assert data['sent'] == data['received'] == (args.iterations+args.warmup)*concurrency
+        assert data['passed'] and len(samples) == iterations*concurrency
+        assert data['sent'] == data['received'] == (iterations+args.warmup)*concurrency
         assert data['elapsed_ns'] == data['timed_end_ns'] - data['timed_start_ns']
         assert record['cpu_before']['monotonic_ns'] <= data['timed_start_ns'] <= data['timed_end_ns'] <= record['cpu_after']['monotonic_ns']
         ordered = sorted(samples)
@@ -281,10 +286,11 @@ def execute(args, directory, target, concurrency, payload, cpus):
         origin_data = json.loads((directory/'origin.json').read_text())
         assert origin_data['passed'] and origin_data['received'] == origin_data['sent'] == data['sent']
         assert origin_data['distinct_peer_ports'] == concurrency, 'upstream socket reuse did not match'
-        if target in {'worker','readable'}:
+        if target in nodes:
             report = next(o for o in json_reports((directory/'server.log').read_text()) if 'app' in o)
-            assert report['xskWakeMode'] == target and report['proxyReady'] and report['proxyRedirectEnabled']
-            assert report['redirect'] >= data['sent'], 'traffic bypassed XSK'
+            assert report['xskWakeMode'] == nodes[target][0] and report['xskRxStatsMode'] == nodes[target][1]
+            assert report['proxyReady'] and report['proxyRedirectEnabled']
+            assert report['redirect'] == 2*data['sent'], 'both traffic directions must use XSK'
             assert report['xskDrops'] == 0 and all(value == 0 for value in report['xskQueueStats'].values())
             record['node_report'] = report
         record['result'] = data
@@ -319,24 +325,32 @@ def main():
     for name in ['edge','nginx','openresty','loadgen','output']:
         p.add_argument('--'+name,type=Path,required=True)
     p.add_argument('--iterations',type=int,default=10000)
+    p.add_argument('--single-flow-iterations',type=int)
+    p.add_argument('--comparison',choices=COMPARISON_NODES,default='wake')
+    p.add_argument('--proxy-cpus',type=int,choices=[1,2],default=2)
     p.add_argument('--warmup',type=int,default=1000)
     p.add_argument('--rounds',type=int,default=4)
     args=p.parse_args()
     assert os.geteuid()==0 and args.rounds>=4 and args.rounds%4==0 and 0<args.iterations<=125000 and 0<=args.warmup<=125000
+    assert args.single_flow_iterations is None or 0<args.single_flow_iterations<=2000000
+    targets=list(COMPARISON_NODES[args.comparison])+['nginx','openresty']
     for name in ['edge','nginx','openresty','loadgen']:
         setattr(args,name,getattr(args,name).resolve(strict=True))
     output=args.output.resolve();output.mkdir(parents=True,exist_ok=False)
     cpus=sorted(os.sched_getaffinity(0))[:4]
-    assert len(cpus)==4,'four CPUs required: proxy2, client1, origin1'
+    assert len(cpus)==4,'four CPUs required: proxy1/2, client1, origin1'
     binaries={n:digest(getattr(args,n)) for n in ['edge','nginx','openresty','loadgen']}
     sources=[ROOT/'src/xdp/af_xdp/bridge.rs',ROOT/'src/xdp/af_xdp/readiness.rs',ROOT/'src/xdp/af_xdp/wake.rs',ROOT/'src/xdp/smoke.rs']
     sources.append(ROOT/'benches/support/udp-bench.c')
+    sources += [ROOT/'src/xdp/linux.rs',ROOT/'src/runtime_mode.rs',ROOT/'src/main.rs',ROOT/'scripts/xdp-netns-smoke.sh']
     sources+=sorted((ROOT/'scripts/perf/afxdp-node').glob('*'))
     hashes={str(f.relative_to(ROOT)):digest(f) for f in sources if f.is_file()}
     metadata={'source_commit':command('git','rev-parse','HEAD').strip(),
           'binaries':binaries,'sources':hashes,'cpus':cpus,'uname':platform.uname()._asdict(),
           'clock_ticks':os.sysconf('SC_CLK_TCK'),
-          'scope':'IPv4 UDP steady-flow reuse; single XSK queue, two proxy CPUs, separate client and remote origin CPUs; no HTTP/cache/hardware-zero-copy claim',
+          'scope':f'IPv4 UDP steady-flow reuse; single XSK queue, {args.proxy_cpus} proxy CPUs, separate client and remote origin CPUs; no HTTP/cache/hardware-zero-copy claim',
+          'comparison':args.comparison,'targets':targets,'node_modes':COMPARISON_NODES[args.comparison],'proxy_cpus':cpus[:args.proxy_cpus],
+          'single_flow_iterations':args.single_flow_iterations,
           'iterations':args.iterations,'warmup':args.warmup,'rounds':args.rounds,
           'nginx_udp_policy':'proxy_requests 0; proxy_responses 2147483647; proxy_timeout 60s; actual peer ports verified'}
     write(output/'metadata.json',metadata)
@@ -346,7 +360,7 @@ def main():
             records.append(execute(args,output/f'direct-c{c}-b{payload}','direct',c,payload,cpus))
             for repeat in range(args.rounds):
                 # Balanced Williams design: each target occupies every position.
-                order=[TARGETS[i] for i in [[0,1,3,2],[1,2,0,3],[2,3,1,0],[3,0,2,1]][repeat%4]]
+                order=[targets[i] for i in [[0,1,3,2],[1,2,0,3],[2,3,1,0],[3,0,2,1]][repeat%4]]
                 for target in order:
                     label=f'r{repeat+1}-c{c}-b{payload}-{target}'
                     print('running',label,flush=True)

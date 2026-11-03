@@ -1,11 +1,12 @@
 """Check comparison direction, invalid-run handling and visible noisy runs."""
 import copy
 import unittest
-from udp_summary import summarize
+from udp_summary import COMPARISON_NODES, summarize
 
 
 def fixture():
-    metadata = {'rounds': 4, 'cpus': [0, 1, 2, 3], 'clock_ticks': 100}
+    metadata = {'rounds': 4, 'cpus': [0, 1, 2, 3], 'clock_ticks': 100,
+                'comparison': 'wake', 'targets': ['worker', 'readable', 'nginx', 'openresty']}
     def snapshot(ns, ticks):
         return {'monotonic_ns': ns, 'processes': {'42': {'ticks': ticks, 'fd_count': 3, 'threads': [{}]}}}
     def cpu(ns, ticks):
@@ -67,6 +68,25 @@ class SummaryTests(unittest.TestCase):
         self.assertIn('host_cpu_steal_over_1pct', flags)
         self.assertIn('throughput_near_direct_calibration_ceiling', flags)
         self.assertIn(900, summary['comparisons']['c1-b64']['rps']['worker']['all'])
+
+    def test_statistics_comparison_pairs_the_same_worker_mode(self):
+        records, metadata = fixture()
+        for record in records:
+            if record['target'] in ['worker', 'readable']:
+                record['target'] = {'worker': 'full-stats', 'readable': 'bridge-stats'}[record['target']]
+        metadata.update(comparison='rx-stats', targets=['full-stats', 'bridge-stats', 'nginx', 'openresty'])
+        summary = summarize(records, metadata)
+        self.assertTrue(summary['passed'])
+        pair = summary['comparisons']['c1-b64']['paired_changes_pct']['bridge-stats_vs_full-stats']
+        self.assertEqual(pair['requests_per_second']['all'], [50]*4)
+        self.assertNotIn('readable_vs_worker', summary['comparisons']['c1-b64']['paired_changes_pct'])
+        self.assertEqual({wake for wake, _ in COMPARISON_NODES['rx-stats'].values()}, {'worker'})
+
+    def test_mislabeled_comparison_metadata_is_rejected(self):
+        records, metadata = fixture()
+        metadata['comparison'] = 'rx-stats'
+        with self.assertRaisesRegex(AssertionError, 'target labels'):
+            summarize(records, metadata)
 
 
 if __name__ == '__main__':

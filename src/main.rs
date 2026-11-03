@@ -462,6 +462,9 @@ enum XdpCommands {
         /// Validation-only XSK wake mechanism for same-binary comparisons
         #[arg(long, value_enum, default_value_t = XdpCliWake::Worker)]
         wake: XdpCliWake,
+        /// Validation-only: retain full RX statistics or skip unused classification
+        #[arg(long, value_enum, default_value_t = XdpCliRxStats::Bridge)]
+        rx_stats: XdpCliRxStats,
     },
     /// Verify an in-process XDP reload while AF_XDP proxy bridge is active
     #[command(name = "proxy-reload-smoke")]
@@ -475,6 +478,9 @@ enum XdpCommands {
         /// Validation-only XSK wake mechanism across generation replacement
         #[arg(long, value_enum, default_value_t = XdpCliWake::Worker)]
         wake: XdpCliWake,
+        /// Validation-only RX classification control across generation replacement
+        #[arg(long, value_enum, default_value_t = XdpCliRxStats::Bridge)]
+        rx_stats: XdpCliRxStats,
     },
     /// Attach AF_XDP and hold a real userspace-TCP dial to an on-wire target (PTB/out-CT validation)
     #[command(name = "dial-smoke")]
@@ -523,6 +529,21 @@ enum XdpCliCc {
 enum XdpCliWake {
     Worker,
     Readable,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum XdpCliRxStats {
+    Full,
+    Bridge,
+}
+
+impl From<XdpCliRxStats> for zelvik_edge::runtime_mode::XdpValidationRxStats {
+    fn from(value: XdpCliRxStats) -> Self {
+        match value {
+            XdpCliRxStats::Full => Self::Full,
+            XdpCliRxStats::Bridge => Self::Bridge,
+        }
+    }
 }
 
 impl From<XdpCliWake> for zelvik_edge::runtime_mode::XdpValidationWakeMode {
@@ -1177,12 +1198,18 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             remote,
             cc,
             wake,
+            rx_stats,
         } => {
             anyhow::ensure!(
                 !kernel || matches!(wake, XdpCliWake::Worker),
                 "--wake readable requires the AF_XDP dataplane; remove --kernel"
             );
             zelvik_edge::runtime_mode::set_validation_xsk_wake_mode(wake.into());
+            anyhow::ensure!(
+                !kernel || matches!(rx_stats, XdpCliRxStats::Bridge),
+                "--rx-stats full requires the AF_XDP dataplane; remove --kernel"
+            );
+            zelvik_edge::runtime_mode::set_validation_xsk_rx_stats(rx_stats.into());
             let runtime_config = RuntimeConfig::load_default()?;
             RuntimeConfig::set_current(runtime_config);
             if let Some(cc) = cc {
@@ -1206,8 +1233,10 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             duration_ms,
             ready_file,
             wake,
+            rx_stats,
         } => {
             zelvik_edge::runtime_mode::set_validation_xsk_wake_mode(wake.into());
+            zelvik_edge::runtime_mode::set_validation_xsk_rx_stats(rx_stats.into());
             let runtime_config = RuntimeConfig::load_default()?;
             RuntimeConfig::set_current(runtime_config);
             let rt = tokio::runtime::Builder::new_current_thread()

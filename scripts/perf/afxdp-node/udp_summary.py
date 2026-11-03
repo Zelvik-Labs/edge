@@ -1,7 +1,12 @@
 """Describe every run, paired differences and measurement limits without filtering."""
 import statistics
 
-TARGETS = ['worker', 'readable', 'nginx', 'openresty']
+# Each entry is (wake mechanism, RX statistics mode). Label order fixes the
+# baseline/candidate pairing and the four-position Williams schedule.
+COMPARISON_NODES = {
+    'wake': {'worker': ('worker', 'bridge'), 'readable': ('readable', 'bridge')},
+    'rx-stats': {'full-stats': ('worker', 'full'), 'bridge-stats': ('worker', 'bridge')},
+}
 
 
 def process_cpu(before, after, hz):
@@ -60,13 +65,16 @@ def distribution(values):
 
 def summarize(records, metadata):
     rounds = metadata['rounds']
+    nodes = list(COMPARISON_NODES[metadata['comparison']])
+    targets = nodes + ['nginx', 'openresty']
+    assert metadata['targets'] == targets, 'metadata target labels disagree with comparison'
     comparisons, resources = {}, {}
     for concurrency in [1, 16]:
         for payload in [64, 1200]:
             key = f'c{concurrency}-b{payload}'
             selected = [r for r in records if r['concurrency'] == concurrency and r['payload'] == payload]
             direct = [r for r in selected if r['target'] == 'direct']
-            groups = {target: sorted([r for r in selected if r['target'] == target], key=lambda r: r['round']) for target in TARGETS}
+            groups = {target: sorted([r for r in selected if r['target'] == target], key=lambda r: r['round']) for target in targets}
             complete = (len(direct) == 1 and len(selected) == 1+4*rounds and
                         all([r['round'] for r in group] == list(range(1, rounds+1)) for group in groups.values()))
             case = {'passed': complete and all(r['passed'] for r in selected), 'complete': complete}
@@ -80,7 +88,8 @@ def summarize(records, metadata):
                 case['rps'] = {t: distribution([r['result']['requests_per_second'] for r in group]) for t, group in groups.items()}
                 case['p99_rtt_ns'] = {t: distribution([r['result']['p99_rtt_ns'] for r in group]) for t, group in groups.items()}
                 case['paired_changes_pct'] = {}
-                for candidate, baseline in [('readable', 'worker'), ('worker', 'nginx'), ('readable', 'nginx'), ('worker', 'openresty'), ('readable', 'openresty')]:
+                pairs = [(nodes[1], nodes[0])] + [(node, baseline) for baseline in ['nginx', 'openresty'] for node in nodes]
+                for candidate, baseline in pairs:
                     case['paired_changes_pct'][candidate+'_vs_'+baseline] = {
                         metric: distribution([(new['result'][metric]/old['result'][metric]-1)*100
                             for new, old in zip(groups[candidate], groups[baseline])])

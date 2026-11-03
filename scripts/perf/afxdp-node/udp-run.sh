@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Owned topology only; all binaries must already be built.
 set -euo pipefail
-[[ $# == 7 && $EUID == 0 ]] || { echo 'usage: sudo unshare --net --mount --propagation private -- bash udp-run.sh edge nginx openresty loadgen output parent-net parent-mount' >&2; exit 2; }
+[[ $# -ge 7 && $EUID == 0 ]] || { echo 'usage: sudo unshare --net --mount --propagation private -- bash udp-run.sh edge nginx openresty loadgen output parent-net parent-mount [comparison options]' >&2; exit 2; }
 edge_binary=$1
 nginx_binary=$2
 openresty_binary=$3
@@ -9,6 +9,7 @@ loadgen_binary=$4
 output=$5
 parent_net=$6
 parent_mount=$7
+shift 7
 current_net=$(readlink /proc/self/ns/net)
 current_mount=$(readlink /proc/self/ns/mnt)
 [[ $parent_net =~ ^net:\[[0-9]+\]$ && $current_net != "$parent_net" ]] || { echo 'network namespace must differ from caller' >&2; exit 2; }
@@ -42,4 +43,4 @@ ip netns exec edge-udp-peer ip link set eup-peer up
 ip netns exec edge-udp-peer ip link set lo up
 ulimit -n 65536
 export PATH=/usr/bin:/bin:$PATH
-python3 scripts/perf/afxdp-node/udp-compare.py --edge "$edge_binary" --nginx "$nginx_binary" --openresty "$openresty_binary" --loadgen "$loadgen_binary" --output "$output/comparison"
+python3 scripts/perf/afxdp-node/udp-compare.py --edge "$edge_binary" --nginx "$nginx_binary" --openresty "$openresty_binary" --loadgen "$loadgen_binary" --output "$output/comparison" "$@"

@@ -33,6 +33,11 @@ on:
         description: Compare release Edge wake modes with Nginx and OpenResty UDP reuse on isolated veths
         type: boolean
         default: false
+      xdp_udp_comparison:
+        description: Choose the same-binary Edge comparison inside the UDP matrix
+        type: choice
+        options: [wake, rx-stats]
+        default: wake
 
 concurrency:
   group: ci-${{ github.head_ref || github.ref }}
@@ -548,6 +553,7 @@ jobs:
           mkdir -p .local/afxdp-node-ci
           sudo apt-get install -y --no-install-recommends iproute2 ethtool iputils-ping curl
           cargo build --locked --bin Zelvik-Edge --bin h3-probe > .local/afxdp-node-ci/build.log 2>&1
+          python3 scripts/perf/afxdp-node/test_corrupt_udp.py > .local/afxdp-node-ci/wire-control-tests.log 2>&1
 
       - name: Validate XSK wake modes in isolated full nodes
         if: github.event_name == 'workflow_dispatch' && inputs.xdp_node_smoke
@@ -591,11 +597,21 @@ jobs:
       - name: Compare UDP proxy implementations after all compilation
         if: github.event_name == 'workflow_dispatch' && inputs.xdp_udp_benchmark
         shell: bash
+        env:
+          EDGE_UDP_COMPARISON: ${{ inputs.xdp_udp_comparison }}
         run: |
           set -euo pipefail
           parent_net=$(readlink /proc/self/ns/net)
           parent_mount=$(readlink /proc/self/ns/mnt)
-          sudo unshare --net --mount --propagation private -- bash scripts/perf/afxdp-node/udp-run.sh "$GITHUB_WORKSPACE/target/release/Zelvik-Edge" "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines/nginx/sbin/nginx" "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines/openresty/nginx/sbin/nginx" "$GITHUB_WORKSPACE/.local/afxdp-udp-ci/udp-bench" "$GITHUB_WORKSPACE/.local/afxdp-udp-ci/results" "$parent_net" "$parent_mount"
+          result=0
+          for proxy_cpus in 1 2; do
+            if sudo unshare --net --mount --propagation private -- bash scripts/perf/afxdp-node/udp-run.sh "$GITHUB_WORKSPACE/target/release/Zelvik-Edge" "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines/nginx/sbin/nginx" "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines/openresty/nginx/sbin/nginx" "$GITHUB_WORKSPACE/.local/afxdp-udp-ci/udp-bench" "$GITHUB_WORKSPACE/.local/afxdp-udp-ci/results-cpu$proxy_cpus" "$parent_net" "$parent_mount" --comparison "$EDGE_UDP_COMPARISON" --proxy-cpus "$proxy_cpus" --single-flow-iterations 40000; then
+              :
+            else
+              result=1
+            fi
+          done
+          exit "$result"
 
       - name: Upload UDP comparison samples and failures
         if: always() && github.event_name == 'workflow_dispatch' && inputs.xdp_udp_benchmark && hashFiles('.local/afxdp-udp-ci/**') != ''
@@ -605,4 +621,6 @@ jobs:
           path: |
             .local/afxdp-udp-ci/**/*.json
             .local/afxdp-udp-ci/**/*.log
+            .local/afxdp-udp-ci/**/*.conf
+            .local/afxdp-udp-ci/**/*.yaml
           if-no-files-found: error
