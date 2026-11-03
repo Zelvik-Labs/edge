@@ -1106,4 +1106,4 @@ pub fn should_try_origin_h3_for_peer<P: Peer>(peer: &P) -> bool {
 
 #[cfg(test)]
 #[path = "origin_h3_tests.rs"]
-mod wire_tests;
+pub(crate) mod wire_tests;

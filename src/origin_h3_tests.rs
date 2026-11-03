@@ -4,6 +4,135 @@ use std::future::Future;
 use std::sync::atomic::AtomicUsize;
 use tokio::task::JoinSet;
 
+pub(crate) fn completed_pool_contexts(
+    count: usize,
+    check: impl FnOnce(Vec<(OriginH3PoolKey, Arc<OriginH3Connection>)>),
+) {
+    wire_test(async {
+        let origin = Origin::start();
+        let mut contexts = Vec::new();
+        let mut weak = Vec::new();
+        for index in 0..count {
+            let mut peer = origin.peer();
+            peer.group_key = index as u64;
+            let mut session = new_session(&peer).await;
+            session
+                .write_request_header(request("/pool", "GET"), true)
+                .await
+                .unwrap();
+            read_complete(&mut session, "/pool", b"").await;
+            weak.push(Arc::downgrade(&session.context));
+            contexts.push((session.context.key.clone(), session.context.clone()));
+        }
+        check(contexts);
+        assert!(weak.iter().all(|context| context.upgrade().is_none()));
+        wait_count(&origin.stats.closed, count).await;
+        origin.stop().await;
+    });
+}
+
+/// Explicitly invoked by the paired CI harness. Setup and clean shutdown use
+/// real Kernel-loopback H3; the timed region measures only production pool
+/// take/offer, not HTTP throughput. The ordinary wire tests keep their 15s cap.
+#[test]
+#[ignore = "real H3 pool cost probe; run via scripts/perf/h3-pool/run.py"]
+fn real_idle_pool_cost_probe() {
+    let count: usize = std::env::var("EDGE_H3_POOL_KEYS").unwrap().parse().unwrap();
+    let cycles: usize = std::env::var("EDGE_H3_POOL_CYCLES")
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!([1, 16, 256, 1024].contains(&count));
+    assert!(cycles >= count);
+    let output = std::path::PathBuf::from(std::env::var_os("EDGE_H3_POOL_RESULT").unwrap());
+    crate::runtime_mode::with_runtime_config_for_test(
+        crate::runtime_mode::RuntimeConfig::default(),
+        || {
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    tokio::time::timeout(Duration::from_secs(180), async {
+                        let origin = Origin::start();
+                        let slots = crate::origin_h3_pool::available_slots_for_test();
+                        let mut identities = Vec::new();
+                        for index in 0..count {
+                            let mut peer = origin.peer();
+                            peer.group_key = index as u64;
+                            let mut session = new_session(&peer).await;
+                            session
+                                .write_request_header(request("/pool", "GET"), true)
+                                .await
+                                .unwrap();
+                            read_complete(&mut session, "/pool", b"").await;
+                            identities.push((
+                                session.context.key.clone(),
+                                session.context.quic.stable_id(),
+                                session.context.driver.id(),
+                                Arc::downgrade(&session.context),
+                            ));
+                            OriginH3Connector
+                                .release_http_session(session, &peer, None)
+                                .await;
+                        }
+                        assert_eq!(
+                            crate::origin_h3_pool::available_slots_for_test(),
+                            slots - count
+                        );
+                        let mut blocks = Vec::new();
+                        for block in 0..20 {
+                            let start = std::time::Instant::now();
+                            for cycle in 0..cycles {
+                                let key = &identities[(block * cycles + cycle) % count].0;
+                                let context =
+                                    crate::origin_h3_pool::take(std::hint::black_box(key))
+                                        .expect("healthy idle context");
+                                crate::origin_h3_pool::offer(key.clone(), context);
+                            }
+                            blocks.push(start.elapsed().as_nanos());
+                            tokio::task::yield_now().await;
+                        }
+                        assert_eq!(
+                            crate::origin_h3_pool::available_slots_for_test(),
+                            slots - count
+                        );
+                        for (key, quic_id, driver_id, _) in &identities {
+                            let context = crate::origin_h3_pool::take(key).unwrap();
+                            assert_eq!(context.quic.stable_id(), *quic_id);
+                            assert_eq!(context.driver.id(), *driver_id);
+                            assert!(context.is_open());
+                        }
+                        assert!(
+                            identities
+                                .iter()
+                                .all(|(_, _, _, weak)| weak.upgrade().is_none())
+                        );
+                        assert_eq!(crate::origin_h3_pool::available_slots_for_test(), slots);
+                        wait_count(&origin.stats.closed, count).await;
+                        assert_eq!(origin.stats.requests.load(Ordering::Acquire), count);
+                        assert_eq!(origin.stats.accepted.load(Ordering::Acquire), count);
+                        origin.stop().await;
+                        std::fs::write(
+                            output,
+                            serde_json::to_vec_pretty(&serde_json::json!({
+                                "passed": true, "keys": count, "cycles_per_block": cycles,
+                                "block_ns": blocks, "closed_connections": count,
+                                "allocator": "System (library test executable)",
+                                "scope": "real idle H3 take+offer only; network setup excluded"
+                            }))
+                            .unwrap(),
+                        )
+                        .unwrap();
+                    })
+                    .await
+                    .unwrap();
+                });
+        },
+    );
+}
+
 #[test]
 fn response_header_conversion_preserves_repeated_fields_and_filters_connection_fields() {
     let response = http::Response::builder()
