@@ -144,7 +144,7 @@ def run_client(args, protocol, state, connection, url, ca, stem):
     if state == 'miss':
         url = url.rsplit('/', 1)[0]
     processes = []; paths = []; commands = []
-    for shard, cpu in enumerate((2, 3)):
+    for shard, cpu in enumerate(args.cpu_assignment['client']):
         path = stem.with_suffix(f'.{shard}.client.tsv'); paths.append(path)
         command = ['taskset', '-c', str(cpu), str(args.client), '--protocol', protocol,
                    '--url', url, '--cacert', str(ca), '--payload', str(stem.parent/'payload'),
@@ -205,8 +205,8 @@ http { access_log off; sendfile on; keepalive_requests 1000000;
 server { listen 8081; location = /_stats { stub_status; }
 location / { root /test; try_files /payload =404; add_header Cache-Control "public, max-age=3600" always; } } }
 ''')
-    quic = 'listen 19443 quic reuseport;'
-    (out/'proxy.conf').write_text('''worker_processes 2;
+    quic = 'listen 19443 quic reuseport;' if getattr(args, 'supports_h3', True) else ''
+    (out/'proxy.conf').write_text('worker_processes '+str(len(args.cpu_assignment['proxy']))+''';
 worker_rlimit_nofile 65536;
 events { worker_connections 16384; }
 http { access_log off; error_log /dev/stderr warn; sendfile on; gzip off;
@@ -249,12 +249,28 @@ location /miss/ { proxy_cache matrix; proxy_cache_valid 200 1h; proxy_pass http:
     return payload
 
 
+def cpu_assignment(allowed):
+    if len(allowed) < 4:
+        raise RuntimeError('requires at least four distinct available CPU identities')
+    proxy_count = 2 if len(allowed) >= 5 else 1
+    return {'proxy':allowed[:proxy_count], 'client':allowed[proxy_count:proxy_count+2],
+            'origin':[allowed[proxy_count+2]]}
+
+
 def run(args):
     refuse_compilation()
-    if not set(range(5)).issubset(os.sched_getaffinity(0)):
-        raise RuntimeError('requires five available CPUs 0-4')
-    if docker('ps', '--format', '{{.Names}}'):
+    args.cpu_assignment = cpu_assignment(sorted(os.sched_getaffinity(0)))
+    running = docker('ps', '--format', '{{.Names}}').splitlines()
+    harness = os.environ.get('EDGE_MATRIX_HARNESS_NAME')
+    if any(name != harness for name in running):
         raise RuntimeError('independent benchmark requires no other running containers')
+    if getattr(args, 'edge_image', None): IMAGES['edge'] = args.edge_image
+    args.supports_h3 = True
+    capability = 'Edge Quinn H3 enabled in this build'
+    if args.target != 'edge':
+        executable = 'openresty' if args.target == 'openresty' else 'nginx'
+        capability = docker('run', '--rm', '--entrypoint', executable, IMAGES[args.target], '-V')
+        args.supports_h3 = '--with-http_v3_module' in capability
     out = args.output.resolve(); out.mkdir(parents=True, exist_ok=False); out.chmod(0o755)
     tls = args.tls.resolve(); payload = prepare(args, out, tls)
     manifest = {'target':args.target,'started_at':time.time(),'cases':[], 'status':'running',
@@ -262,7 +278,7 @@ def run(args):
                 'source_revision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
                 'driver_sha256':sha(__file__),'client_sha256':sha(args.client),
                 'client_source_sha256':sha(ROOT/'benches/support/protocol_state_client.c'),'payload_sha256':sha(out/'payload'),
-                'cpu_assignment':{'proxy':[0,1],'client':[2,3],'origin':[4]},
+                'cpu_assignment':args.cpu_assignment, 'protocol_capability':capability,
                 'inter_case_quiet_seconds':0.5,
                 'case_isolation':'fresh process and tmpfs for EVERY protocol/cache/connection/repeat case',
                 'parent_limits':{f:Path('/sys/fs/cgroup',f).read_text().strip() for f in ['cpu.max','memory.max']},
@@ -278,7 +294,7 @@ def run(args):
         docker('network','create',net); made_net=True
         origin=prefix+'-origin'; names.append(origin)
         docker('run','-d','--name',origin,'--network',net,'--network-alias','origin',
-               '--cpuset-cpus','4','--cpus','1','--memory','256m','--memory-swap','256m',
+               '--cpuset-cpus',str(args.cpu_assignment['origin'][0]),'--cpus','1','--memory','256m','--memory-swap','256m',
                '--mount',f'type=bind,src={out},dst=/test,readonly',
                '--mount',f'type=bind,src={out}/origin.conf,dst=/etc/nginx/nginx.conf,readonly',
                '-p','127.0.0.1::8081','nginx:1.28.0')
@@ -296,7 +312,7 @@ def run(args):
             raise RuntimeError('direct origin capacity reference has transfer errors')
         manifest['origin_reference']=reference; save()
         target=prefix+'-'+args.target; names.append(target)
-        command=['run','-d','--name',target,'--network',net,'--cpuset-cpus','0,1','--cpus','2',
+        command=['run','-d','--name',target,'--network',net,'--cpuset-cpus',','.join(map(str,args.cpu_assignment['proxy'])),'--cpus',str(len(args.cpu_assignment['proxy'])),
                  '--memory','2g','--memory-swap','2g','--ulimit','nofile=65536:65536',
                  '--tmpfs','/run/cache:rw,size=512m,mode=1777', '--tmpfs','/node:rw,size=512m,mode=1777',
                  '--mount',f'type=bind,src={out},dst=/test',
@@ -305,7 +321,7 @@ def run(args):
         if args.target=='edge':
             command += ['--mount',f'type=bind,src={args.edge_binary.resolve()},dst=/tools/Zelvik-Edge,readonly',
                         '--mount',f'type=bind,src={args.controller.resolve()},dst=/tools/controller,readonly',
-                        '-e','RUST_LOG=warn','--entrypoint','/tools/controller',IMAGES['edge'],
+                        '-e','RUST_LOG=warn','-e',f"ZELVIK_EDGE_QUIC_RX_BATCH={getattr(args, 'quic_rx_batch', '1')}",'--entrypoint','/tools/controller',IMAGES['edge'],
                         '--home','/node','--spawn-edge','--edge-binary','/tools/Zelvik-Edge',
                         '--origin','http://origin:8081','--tls-port','19443','--tls-host','localhost',
                         '--ca-file','/tls/ca.pem','--cert-file','/tls/server.pem','--key-file','/tls/server.key',
@@ -351,6 +367,13 @@ def run(args):
             if args.protocols: cases=[case for case in cases if case[0] in args.protocols]
             rng.shuffle(cases)
             for protocol,state,connection in cases:
+                if protocol == 'h3' and not args.supports_h3:
+                    manifest['cases'].append({'protocol':protocol,'cache':state,'connection':connection,
+                        'repeat':repeat,'stem':f'unsupported-{len(manifest["cases"]):04d}',
+                        'fresh_instance':False,'status':'not-supported',
+                        'reason':'actual server -V lacks --with-http_v3_module'})
+                    save()
+                    continue
                 refuse_compilation()
                 if manifest['cases']:
                     docker('stop','--time','0',target)
@@ -439,7 +462,7 @@ def run(args):
             try: docker('network','rm',net)
             except subprocess.CalledProcessError as e: manifest.setdefault('cleanup_errors',[]).append(str(e))
         manifest['ended_at']=time.time(); save()
-    return int(any(c['status']!='passed' for c in manifest['cases']))
+    return int(any(c['status'] not in {'passed','not-supported'} for c in manifest['cases']))
 
 
 if __name__=='__main__':
@@ -450,6 +473,8 @@ if __name__=='__main__':
     p.add_argument('--client',type=Path,required=True)
     p.add_argument('--edge-binary',type=Path,default=Path('/workspace/edge/target/release/Zelvik-Edge'))
     p.add_argument('--controller',type=Path,default=Path('/workspace/edge/target/release/examples/issue34-controller'))
+    p.add_argument('--edge-image')
+    p.add_argument('--quic-rx-batch', choices=['1','32'], default='1')
     p.add_argument('--seconds',type=int,default=8)
     p.add_argument('--repeats',type=int,default=3)
     p.add_argument('--payload-size',type=int,default=1024)

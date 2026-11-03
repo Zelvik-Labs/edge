@@ -11,6 +11,13 @@ spec.loader.exec_module(matrix)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_cpu_roles_use_actual_ids_and_do_not_overlap(self):
+        roles = matrix.cpu_assignment([3, 5, 8, 9])
+        self.assertEqual(roles, {'proxy':[3], 'client':[5,8], 'origin':[9]})
+        roles = matrix.cpu_assignment([3, 5, 8, 9, 12])
+        self.assertEqual(roles, {'proxy':[3,5], 'client':[8,9], 'origin':[12]})
+        with self.assertRaises(RuntimeError): matrix.cpu_assignment([1, 2, 7])
+
     def test_reused_or_wrong_protocol_transfers_fail_the_fresh_connection_gate(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder)/'curl.tsv'

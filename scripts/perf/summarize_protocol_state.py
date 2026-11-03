@@ -27,7 +27,7 @@ def run(args):
         m=json.loads(path.read_text()); target=m['target']
         if m['status']!='completed' or m.get('cleanup_errors'):
             raise RuntimeError(f'incomplete run/cleanup: {path}')
-        if not m.get('case_isolation') or any(not c.get('fresh_instance') for c in m['cases']):
+        if not m.get('case_isolation') or any(not c.get('fresh_instance') for c in m['cases'] if c['status'] != 'not-supported'):
             raise RuntimeError(f'formal comparison requires independently reset cases: {path}')
         runs.append({'target':target,'manifest':str(path),'manifest_sha256':sha(path),
                      **{k:m[k] for k in ['source_revision','driver_sha256','client_sha256','client_source_sha256',
@@ -46,8 +46,8 @@ def run(args):
             r['elapsed']=c.get('elapsed'); r['origin_requests']=c.get('origin_requests')
             r['proxy_cpu_usec_per_200']=c.get('proxy_cpu_usec_per_200')
             if r['elapsed']:
-                r['client_cpu_fraction_of_2cores']=c['client_cpu_seconds']/(2*r['elapsed'])
-                r['proxy_cpu_fraction_of_2cores']=(c['proxy_after']['cpu.stat']['usage_usec']-c['proxy_before']['cpu.stat']['usage_usec'])/(2e6*r['elapsed'])
+                r['client_cpu_fraction_of_allocated']=c['client_cpu_seconds']/(len(m['cpu_assignment']['client'])*r['elapsed'])
+                r['proxy_cpu_fraction_of_allocated']=(c['proxy_after']['cpu.stat']['usage_usec']-c['proxy_before']['cpu.stat']['usage_usec'])/(len(m['cpu_assignment']['proxy'])*1e6*r['elapsed'])
                 r['origin_cpu_fraction_of_1core']=(c['origin_after']['cpu.stat']['usage_usec']-c['origin_before']['cpu.stat']['usage_usec'])/(1e6*r['elapsed'])
                 r['proxy_peak_mib']=c['proxy_after']['memory.peak']['bytes']/2**20
                 mount='/node' if target=='edge' else '/run/cache'
@@ -78,7 +78,7 @@ def run(args):
             s['error_fraction_completed_batches']=s['failed']/(s['successful']+s['failed']) if known and s['successful']+s['failed'] else None
             s['error_fraction']=s['error_fraction_completed_batches'] if known==len(rows) else None
             for field in ['good_rps','p99_ms','proxy_cpu_usec_per_200','elapsed','new_connections',
-                          'client_cpu_fraction_of_2cores','proxy_cpu_fraction_of_2cores','origin_cpu_fraction_of_1core',
+                          'client_cpu_fraction_of_allocated','proxy_cpu_fraction_of_allocated','origin_cpu_fraction_of_1core',
                           'client_cpu_fraction_adjusted_for_steal','proxy_cpu_fraction_adjusted_for_steal','origin_cpu_fraction_adjusted_for_steal',
                           'max_cpu_steal_fraction','proxy_peak_mib']:
                 s[field+'_median']=median([r.get(field) for r in rows])
@@ -171,7 +171,7 @@ def run(args):
         for target in ['edge','nginx','openresty']:
             if target not in group['targets']: continue
             s=group['targets'][target]
-            text.append(f'| {key} | {target} | {fmt(s["p99_ms_median"])} | {fmt(s["error_fraction"],100)} | {fmt(s["proxy_cpu_usec_per_200_median"])} | {fmt(s["client_cpu_fraction_of_2cores_median"],100)} | {fmt(s["origin_cpu_fraction_of_1core_median"],100)} | {fmt(s["max_cpu_steal_fraction_median"],100)} | {fmt(s["elapsed_median"])} | {fmt(s["rps_min"])}–{fmt(s["rps_max"])} |')
+            text.append(f'| {key} | {target} | {fmt(s["p99_ms_median"])} | {fmt(s["error_fraction"],100)} | {fmt(s["proxy_cpu_usec_per_200_median"])} | {fmt(s["client_cpu_fraction_of_allocated_median"],100)} | {fmt(s["origin_cpu_fraction_of_1core_median"],100)} | {fmt(s["max_cpu_steal_fraction_median"],100)} | {fmt(s["elapsed_median"])} | {fmt(s["rps_min"])}–{fmt(s["rps_max"])} |')
     text+=['', '## 版本与证据', '']
     for target in ['edge','nginx','openresty']:
         entry=next((r for r in runs if r['target']==target),None)

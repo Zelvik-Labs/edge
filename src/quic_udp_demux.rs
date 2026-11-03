@@ -30,6 +30,14 @@ use crate::udp_proxy::{
 };
 
 const MAX_DATAGRAM_SIZE: usize = 65_535;
+
+fn quic_rx_batch_size(value: Option<&str>) -> Result<usize> {
+    match value {
+        None | Some("1") => Ok(1),
+        Some("32") => Ok(32),
+        Some(value) => anyhow::bail!("ZELVIK_EDGE_QUIC_RX_BATCH must be 1 or 32, got {value:?}"),
+    }
+}
 const UDP_SESSION_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 const H3_ROUTE_IDLE_TIMEOUT: Duration = Duration::from_secs(180);
 const NEW_ROUTE_RATE_WINDOW: Duration = Duration::from_secs(10);
@@ -1338,6 +1346,16 @@ impl QuicUdpDemuxManager {
         let port = bind_addr.port();
         let downstream_sender = UdpDownstreamSender::socket(socket.clone());
         let mut buf = vec![0u8; MAX_DATAGRAM_SIZE];
+        // An explicit experiment keeps the same per-datagram routing,
+        // admission, accounting and bounded H3 queue. Only readiness/select
+        // overhead is amortized; default behavior remains one receive.
+        let batch_value = std::env::var("ZELVIK_EDGE_QUIC_RX_BATCH")
+            .map(Some)
+            .or_else(|error| match error {
+                std::env::VarError::NotPresent => Ok(None),
+                other => Err(other),
+            })?;
+        let batch_size = quic_rx_batch_size(batch_value.as_deref())?;
         loop {
             let recv_result = tokio::select! {
                 _ = shutdown_rx.changed() => {
@@ -1349,26 +1367,45 @@ impl QuicUdpDemuxManager {
                 }
                 result = socket.recv_from(&mut buf) => result,
             };
-            let (len, client_addr) = recv_result?;
-            debug!(
-                "QUIC UDP demux: datagram received from {} on port {} bytes={} http3_enabled={}",
-                client_addr, port, len, http3_enabled
-            );
-            let data = Bytes::copy_from_slice(&buf[..len]);
-            let _ = self
-                .process_datagram_with_downstream(ProcessDatagramArgs {
-                    port,
-                    client_addr,
-                    data,
-                    // C11: kernel-socket path — no ECN metadata; contract
-                    // unchanged.
-                    ecn: None,
-                    downstream_sender: downstream_sender.clone(),
-                    shared: &shared,
-                    http3_enabled,
-                    shutdown_rx: shutdown_rx.clone(),
-                })
-                .await?;
+            let first = recv_result?;
+            let mut processed = 0;
+            for index in 0..batch_size {
+                let (len, client_addr) = if index == 0 {
+                    first
+                } else {
+                    match socket.try_recv_from(&mut buf) {
+                        Ok(datagram) => datagram,
+                        Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
+                        Err(error) => return Err(error.into()),
+                    }
+                };
+                debug!(
+                    "QUIC UDP demux: datagram received from {} on port {} bytes={} http3_enabled={}",
+                    client_addr, port, len, http3_enabled
+                );
+                let data = Bytes::copy_from_slice(&buf[..len]);
+                let _ = self
+                    .process_datagram_with_downstream(ProcessDatagramArgs {
+                        port,
+                        client_addr,
+                        data,
+                        // C11: kernel-socket path — no ECN metadata; contract
+                        // unchanged.
+                        ecn: None,
+                        downstream_sender: downstream_sender.clone(),
+                        shared: &shared,
+                        http3_enabled,
+                        shutdown_rx: shutdown_rx.clone(),
+                    })
+                    .await?;
+                processed += 1;
+            }
+            if batch_size > 1 && processed == batch_size {
+                // try_recv_from does not consume Tokio's cooperative budget.
+                // Explicitly bound this loop so queued traffic cannot starve
+                // connection drivers, maintenance or shutdown processing.
+                tokio::task::yield_now().await;
+            }
         }
     }
 
@@ -2342,6 +2379,14 @@ impl QuicUdpDemuxManager {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn receive_batch_experiment_rejects_unsupported_values() {
+        assert_eq!(super::quic_rx_batch_size(None).unwrap(), 1);
+        assert_eq!(super::quic_rx_batch_size(Some("32")).unwrap(), 32);
+        for value in ["0", "2", "65536", "", "invalid"] {
+            assert!(super::quic_rx_batch_size(Some(value)).is_err());
+        }
+    }
     use super::*;
     use crate::config_models::{NetworkAddressConfig, ServerNameConfig, UDPConfig};
     use std::collections::{HashMap, HashSet};
