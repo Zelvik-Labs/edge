@@ -119,6 +119,19 @@ impl Http3ProxyManager {
             logic,
             crate::origin_h3::OriginH3Connector,
         ));
+        let mut admission_diagnostic_reported = false;
+        let mut report_admission = |class: &'static str| {
+            if !admission_diagnostic_reported {
+                admission_diagnostic_reported = true;
+                warn!(
+                    %address,
+                    class,
+                    workspace_used = MEMORY_GOVERNOR.request_workspace_used_bytes(),
+                    account = ?MEMORY_GOVERNOR.account_view(),
+                    "HTTP/3 native first admission rejection; subsequent rejections retain L4 events"
+                );
+            }
+        };
         info!("HTTP/3 experimental tokio-quiche 0.20.0 + Hyperium h3 listener on {address}");
         loop {
             let incoming = tokio::select! {
@@ -171,6 +184,7 @@ impl Http3ProxyManager {
             let Some(connection_permit) =
                 MEMORY_GOVERNOR.try_admit(AdmissionClass::Http3Connection)
             else {
+                report_admission("quiche_connection");
                 self.record_l4_event(
                     remote.ip(),
                     L4DefenseKind::H3AdmissionReject,
@@ -189,6 +203,7 @@ impl Http3ProxyManager {
             let Some(listener_permit) =
                 MEMORY_GOVERNOR.try_admit_listener(listener_key, AdmissionClass::Http3Connection)
             else {
+                report_admission("quiche_listener");
                 self.record_l4_event(
                     remote.ip(),
                     L4DefenseKind::H3AdmissionReject,
@@ -204,6 +219,7 @@ impl Http3ProxyManager {
                 continue;
             };
             if !MEMORY_GOVERNOR.try_admit_workspace(TRANSPORT_RESERVATION) {
+                report_admission("quiche_transport_bytes");
                 MEMORY_GOVERNOR.record_reject(AdmissionClass::Http3Connection);
                 self.record_l4_event(
                     remote.ip(),

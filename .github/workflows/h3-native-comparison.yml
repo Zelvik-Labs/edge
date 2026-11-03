@@ -1,6 +1,12 @@
 name: Matched H3 native transport comparison
 on:
   workflow_dispatch:
+    inputs:
+      suite:
+        description: Full independent matrix or focused fresh-connection admission diagnosis
+        type: choice
+        options: [native, native-admission]
+        default: native
   push:
     branches: [perf/five-priorities-20261103]
     paths:
@@ -176,10 +182,12 @@ jobs:
           docker pull openresty/openresty:1.27.1.2-0-bookworm-fat
           docker build -t edge-http-state-fixture:20261103 -f scripts/perf/http-state/Dockerfile .
       - name: Run one target at a time with real HTTP3 libcurl
+        env:
+          EDGE_HTTP_SUITE: ${{ inputs.suite || 'native' }}
         run: |
           docker run --rm --name edge-http-state-harness --network host --pid host \
             --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
-            -e EDGE_HTTP_SUITE=native -e GITHUB_SHA -e EDGE_MATRIX_HARNESS_NAME=edge-http-state-harness \
+            -e EDGE_HTTP_SUITE -e GITHUB_SHA -e EDGE_MATRIX_HARNESS_NAME=edge-http-state-harness \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
             edge-http-state-fixture:20261103 bash scripts/perf/http-state/run-ci.sh

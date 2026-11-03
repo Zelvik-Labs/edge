@@ -20,5 +20,15 @@ python3 -m unittest discover -s scripts/perf -p 'test_*protocol*.py' > "$out/pyt
 case "${EDGE_HTTP_SUITE:-comparison}" in
   comparison) python3 scripts/perf/http-state/run.py ;;
   native) python3 scripts/perf/h3-native/run.py ;;
+  native-admission)
+    python3 scripts/perf/protocol_state_matrix.py \
+      --output "$out/admission-quiche" --target edge --tls "$out/tls" \
+      --client "$out/protocol-state-client" --edge-binary "$root/target/release/Zelvik-Edge" \
+      --controller "$root/target/release/examples/issue34-controller" \
+      --edge-image edge-http-state-fixture:20261103 --edge-backend tokio-quiche-native \
+      --transport-profile matched --address-validation off --protocols h3 \
+      --states hit --connections fresh --repeats 3 --fresh-requests 512 \
+      --payload-size 1024 --concurrency 32
+    ;;
   *) echo "unknown EDGE_HTTP_SUITE" >&2; exit 1 ;;
 esac
