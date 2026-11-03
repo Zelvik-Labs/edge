@@ -22,5 +22,11 @@
   "feature_bin_passed": 16,
   "final_control_ci_run": 41674107868,
   "final_control_old_exit": 101,
-  "final_control_fixed_exit": 0
+  "final_control_fixed_exit": 0,
+  "diagnostic_feature_ci": 41677182793,
+  "diagnostic_source": "74f53256ba85ad0ed3bae8424db7d21a037c10c2",
+  "diagnostic_compile_failures": [
+    41675667501,
+    41675668588
+  ]
 }

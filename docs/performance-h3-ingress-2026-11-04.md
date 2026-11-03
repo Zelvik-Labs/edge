@@ -40,6 +40,12 @@ QUIC 广告的 1350 B 接收参数不能约束解析前的入队分配，原 4 M
 因离线 Cargo 缓存缺少 `boring` 的 sparse-index 条目，在测试开始前失败。
 修复为允许正常注册表读取，仍断言基线所有包身份未变化；没有把该次失败算成旧依赖复现。
 
+后续增加原生准入拒绝的首次额度快照，初版 `5e19ac4` 因未引入 `warn!` 宏在编译阶段失败；
+两份失败产物保留。`74f5325` 使用完整 `tracing::warn!` 路径，
+[最终完整节点 CI 41677182793](https://github.com/Zelvik-Labs/edge/actions/runs/41677182793)
+再次通过 check、Clippy 和 1343+16 个测试，产物日志无 Rust warning。
+这项诊断不修改准入额度、超时或协议处理。
+
 原始 ZIP、GitHub SHA-256、逐文件摘要及失败产物均保存在
 [验收证据目录](evidence/h3-native-validation-2026-11-04)。不含测试私钥。仓库根目录可复核：
 

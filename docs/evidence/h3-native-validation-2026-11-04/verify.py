@@ -63,7 +63,7 @@ for directory in sorted(ROOT.iterdir()):
                 return {tuple(re.findall(r'^(?:name|version|source) = (.*)$', section, re.M)) for section in text.split('[[package]]')[1:]}
             assert identities('baseline-before.lock') == identities('baseline-after.lock')
             print('PASS: final adapter old/fixed FIN control and unchanged baseline package identities')
-        elif directory.name == 'quiche-node-bounded-pass':
+        elif directory.name in ['quiche-node-bounded-pass', 'quiche-node-diagnostic-pass']:
             for name in ['check.log', 'clippy.log', 'tests.log']:
                 text = re.sub(r'\x1b\[[0-9;]*m', '', archive.read(name).decode())
                 assert not any(line.startswith(('warning:', 'warning[')) for line in text.splitlines())
@@ -72,5 +72,9 @@ for directory in sorted(ROOT.iterdir()):
                 assert f'test result: ok. {count} passed; 0 failed;' in log
             assert '1343 passed; 0 failed; 4 ignored' in log
             print('PASS: full feature check, Clippy and 1343+16 tests; 4 explicit ignored probes')
+        elif directory.name in ['quiche-admission-build-failure', 'quiche-admission-node-build-failure']:
+            name = 'build.log' if directory.name == 'quiche-admission-build-failure' else 'check.log'
+            assert b'cannot find macro `warn` in this scope' in archive.read(name)
+            print('Retained diagnostic compile failure: missing qualified tracing macro')
 
 print('PASS: all archive and per-file hashes verified')
