@@ -1127,14 +1127,7 @@ impl QuicUdpDemuxManager {
     }
 
     fn af_xdp_demux_http3_enabled_sync(&self, port: u16) -> Option<bool> {
-        let http3_ports = self.http3_manager.desired_ports_sync();
-        if http3_ports.contains(&port) {
-            return Some(true);
-        }
-        self.config_store
-            .quic_passthrough_ports_sync()
-            .contains(&port)
-            .then_some(false)
+        self.config_store.af_xdp_demux_http3_enabled_sync(port)
     }
 
     async fn ensure_af_xdp_demux_handle(
@@ -2393,6 +2386,98 @@ mod tests {
 
     fn ports(values: &[u16]) -> HashSet<u16> {
         values.iter().copied().collect()
+    }
+
+    #[tokio::test]
+    async fn af_xdp_demux_point_query_matches_listener_sets_and_replacement() {
+        let store = ConfigStore::new();
+        let manager = test_demux_manager(store.clone());
+        let definitions = [
+            serde_json::json!({
+                "id": 76101, "isOn": false,
+                "serverNames": [{"name": "site.example"}],
+                "https": {"isOn": true, "http3Enabled": true, "listen": [
+                    {"portRange": "0"}, {"portRange": "443"}, {"portRange": "8444-8446"},
+                    {"portRange": " 9444:legacy "}, {"portRange": "65535-65534"},
+                    {"portRange": "20-10"}, {"portRange": "bad"}
+                ]}
+            }),
+            serde_json::json!({
+                "id": 76102, "isOn": true,
+                "serverNames": [{"name": "sni.example@SNI_PASSTHROUGH"}],
+                "https": {"isOn": true, "http3Enabled": true, "listen": [{"portRange": "7443"}]}
+            }),
+            serde_json::json!({
+                "id": 76103, "isOn": true,
+                "serverNames": [{"name": "quic.example", "subNames": ["域名@QuIc"]}],
+                "https": {"isOn": true, "http3Enabled": true, "listen": [{"portRange": "7444"}]},
+                "udp": {"isOn": true, "listen": [{"portRange": "443"}, {"portRange": "8445"}, {"portRange": "7444"}]}
+            }),
+            serde_json::json!({
+                "id": 76104, "isOn": true,
+                "serverNames": [{"name": "off.example"}],
+                "https": {"isOn": false, "http3Enabled": true, "listen": [{"portRange": "7445"}]}
+            }),
+            serde_json::json!({
+                "id": 76105, "isOn": true,
+                "serverNames": [{"name": "no-h3.example"}],
+                "https": {"isOn": true, "listen": [{"portRange": "7446"}]}
+            }),
+        ];
+        let servers = definitions
+            .into_iter()
+            .map(|value| Arc::new(serde_json::from_value(value).expect("valid server fixture")))
+            .collect();
+        store
+            .replace_all_servers(servers, HashMap::new(), HashMap::new(), HashMap::new())
+            .await
+            .expect("server configuration installs");
+        let check = || {
+            let http3 = manager.http3_manager.desired_ports_sync();
+            let quic = store.quic_passthrough_ports_sync();
+            for port in 0..=u16::MAX {
+                let expected = if http3.contains(&port) {
+                    Some(true)
+                } else {
+                    quic.contains(&port).then_some(false)
+                };
+                assert_eq!(
+                    manager.af_xdp_demux_http3_enabled_sync(port),
+                    expected,
+                    "port {port}"
+                );
+            }
+        };
+        check();
+        for is_on in [true, false] {
+            for port in [-1, 0, 443, 8443, 65535, 65536] {
+                store.test_set_http3_policy(crate::config_models::HTTP3Policy {
+                    is_on,
+                    port,
+                    address_validation: "always".into(),
+                    ..Default::default()
+                });
+                check();
+                if is_on && port == 0 {
+                    assert_eq!(manager.af_xdp_demux_http3_enabled_sync(443), Some(true));
+                    assert_eq!(manager.af_xdp_demux_http3_enabled_sync(7443), None);
+                    assert_eq!(manager.af_xdp_demux_http3_enabled_sync(7444), Some(false));
+                    assert_eq!(manager.af_xdp_demux_http3_enabled_sync(7445), None);
+                    assert_eq!(manager.af_xdp_demux_http3_enabled_sync(7446), None);
+                }
+            }
+        }
+        store
+            .replace_all_servers(Vec::new(), HashMap::new(), HashMap::new(), HashMap::new())
+            .await
+            .expect("removed server configuration installs");
+        store.test_set_http3_policy(crate::config_models::HTTP3Policy {
+            is_on: true,
+            port: 0,
+            ..Default::default()
+        });
+        check();
+        assert_eq!(manager.af_xdp_demux_http3_enabled_sync(443), None);
     }
 
     fn insert_test_af_xdp_handle(

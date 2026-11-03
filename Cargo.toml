@@ -215,6 +215,10 @@ name = "config_models_bench"
 harness = false
 
 [[bench]]
+name = "udp_demux_bench"
+harness = false
+
+[[bench]]
 name = "targeted_hotspots_bench"
 harness = false
 

@@ -1048,13 +1048,15 @@ impl ServerConfig {
     }
 
     fn has_server_name_marker(&self, marker: &str) -> bool {
-        self.server_names.iter().any(|sn| {
-            sn.name.to_ascii_lowercase().ends_with(marker)
-                || sn
-                    .sub_names
-                    .iter()
-                    .any(|sub| sub.to_ascii_lowercase().ends_with(marker))
-        })
+        let marker = marker.as_bytes();
+        let matches = |name: &str| {
+            name.as_bytes()
+                .get(name.len().saturating_sub(marker.len())..)
+                .is_some_and(|suffix| suffix.eq_ignore_ascii_case(marker))
+        };
+        self.server_names
+            .iter()
+            .any(|sn| matches(&sn.name) || sn.sub_names.iter().any(|sub| matches(sub)))
     }
 
     pub fn listens_on_https_port(&self, port: u16) -> bool {
@@ -3587,6 +3589,47 @@ pub fn parse_life_to_seconds(v: &Value) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn forwarding_markers_preserve_ascii_suffix_semantics() {
+        let names = [
+            "",
+            "x",
+            "@quic",
+            "HOST@QuIc",
+            "域名@QUIC",
+            "😀@qUiC",
+            "@quic ",
+            "@quic\n",
+            "host@quic/path",
+            "@SNI_PASSTHROUGH",
+            "域名@sni_passthrough",
+            "x@quic@SNI_PASSTHROUGH",
+            "中文",
+            "@sni_passthroughmore",
+        ];
+        for primary in names {
+            for secondary in names {
+                let server = super::ServerConfig {
+                    server_names: vec![super::ServerNameConfig {
+                        name: primary.into(),
+                        sub_names: vec![secondary.into()],
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                };
+                for (marker, actual) in [
+                    ("@quic", server.is_quic_passthrough()),
+                    ("@sni_passthrough", server.is_sni_passthrough()),
+                ] {
+                    let expected = [primary, secondary]
+                        .iter()
+                        .any(|name| name.to_ascii_lowercase().ends_with(marker));
+                    assert_eq!(actual, expected, "{primary:?}, {secondary:?}, {marker}");
+                }
+            }
+        }
+    }
+
     use super::*;
 
     #[test]

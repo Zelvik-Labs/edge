@@ -806,6 +806,37 @@ impl ConfigStore {
         lock.unique_quic_passthrough_by_port.contains_key(&port)
     }
 
+    /// H3 takes precedence over QUIC forwarding. Both decisions use the same
+    /// configuration snapshot without constructing listener port sets.
+    pub fn af_xdp_demux_http3_enabled_sync(&self, port: u16) -> Option<bool> {
+        let lock = self.inner.read();
+        let http3_enabled =
+            Self::pick_global_policy_ref(&lock.http3_policies, lock.node_cluster_id).is_some_and(
+                |policy| {
+                    if !policy.is_on {
+                        return false;
+                    }
+                    if policy.port > 0
+                        && let Ok(global_port) = u16::try_from(policy.port)
+                    {
+                        return port == global_port;
+                    }
+                    lock.all_servers.iter().any(|server| {
+                        server.supports_http3_on_port(port)
+                            && !server.is_sni_passthrough()
+                            && !server.is_quic_passthrough()
+                    })
+                },
+            );
+        if http3_enabled {
+            Some(true)
+        } else {
+            lock.unique_quic_passthrough_by_port
+                .contains_key(&port)
+                .then_some(false)
+        }
+    }
+
     /// A single configuration snapshot must exclude both kinds of forwarding
     /// before a native H3 listener can delegate protocol validation to Quinn.
     pub(crate) fn udp_port_has_no_forwarding_sync(&self, port: u16) -> bool {
@@ -1023,12 +1054,15 @@ impl ConfigStore {
         lock.global_pages.clone()
     }
 
-    fn pick_global_policy<T: Clone>(map: &HashMap<i64, T>, node_cluster_id: i64) -> Option<T> {
+    fn pick_global_policy_ref<T>(map: &HashMap<i64, T>, node_cluster_id: i64) -> Option<&T> {
         // Priority: exact cluster_id → default cluster (0) → any available
         map.get(&node_cluster_id)
             .or_else(|| map.get(&0))
             .or_else(|| map.values().next())
-            .cloned()
+    }
+
+    fn pick_global_policy<T: Clone>(map: &HashMap<i64, T>, node_cluster_id: i64) -> Option<T> {
+        Self::pick_global_policy_ref(map, node_cluster_id).cloned()
     }
 
     pub fn get_global_uam_policy_sync(&self) -> Option<UAMPolicy> {
@@ -2298,6 +2332,71 @@ mod tests {
         TLSExhaustionAttackConfig, UDPConfig,
     };
     use serde_json::json;
+
+    #[test]
+    fn af_xdp_demux_policy_priority_and_ambiguous_quic_ports() {
+        let store = ConfigStore::new();
+        let policy = |is_on, port| HTTP3Policy {
+            is_on,
+            port,
+            ..Default::default()
+        };
+        {
+            let mut lock = store.inner.write();
+            lock.node_cluster_id = 12;
+            // None is an ambiguous QUIC route, but the port still needs demux.
+            lock.unique_quic_passthrough_by_port.insert(443, None);
+            lock.http3_policies.insert(12, policy(false, 443));
+            lock.http3_policies.insert(0, policy(true, 443));
+            lock.http3_policies.insert(99, policy(true, 8443));
+        }
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(443), Some(false));
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(8443), None);
+        store.inner.write().http3_policies.remove(&12);
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(443), Some(true));
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(8443), None);
+        store.inner.write().http3_policies.remove(&0);
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(443), Some(false));
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(8443), Some(true));
+        store.inner.write().http3_policies.clear();
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(443), Some(false));
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(8443), None);
+    }
+
+    #[test]
+    fn af_xdp_demux_route_uses_one_configuration_epoch() {
+        let store = ConfigStore::new();
+        store.inner.write().http3_policies.insert(
+            0,
+            HTTP3Policy {
+                is_on: true,
+                port: 443,
+                ..Default::default()
+            },
+        );
+        let barrier = std::sync::Barrier::new(2);
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                barrier.wait();
+                for i in 0..20_000 {
+                    let mut lock = store.inner.write();
+                    let http3 = i % 2 == 0;
+                    lock.http3_policies.get_mut(&0).unwrap().is_on = http3;
+                    if http3 {
+                        lock.unique_quic_passthrough_by_port.remove(&443);
+                    } else {
+                        lock.unique_quic_passthrough_by_port.insert(443, None);
+                    }
+                }
+            });
+            barrier.wait();
+            for _ in 0..20_000 {
+                // Each installed epoch routes this port. Combining observations
+                // from two different epochs could incorrectly return None.
+                assert!(store.af_xdp_demux_http3_enabled_sync(443).is_some());
+            }
+        });
+    }
 
     #[test]
     fn sni_tcp_ports_do_not_expand_quic_listener_ports() {

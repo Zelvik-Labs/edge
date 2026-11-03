@@ -38,6 +38,10 @@ on:
         type: choice
         options: [wake, rx-stats]
         default: wake
+      udp_demux_benchmark:
+        description: Compare production UDP listener-set queries with snapshot point queries
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.head_ref || github.ref }}
@@ -623,4 +627,27 @@ jobs:
             .local/afxdp-udp-ci/**/*.log
             .local/afxdp-udp-ci/**/*.conf
             .local/afxdp-udp-ci/**/*.yaml
+          if-no-files-found: error
+
+      - name: Build UDP demux configuration benchmark
+        if: github.event_name == 'workflow_dispatch' && inputs.udp_demux_benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/udp-demux-ci
+          cargo bench --locked --bench udp_demux_bench --no-run --message-format=json > .local/udp-demux-ci/build.jsonl 2> .local/udp-demux-ci/build.log
+
+      - name: Measure UDP demux configuration lookup after compilation
+        if: github.event_name == 'workflow_dispatch' && inputs.udp_demux_benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/perf/udp-demux/run.py --build-messages .local/udp-demux-ci/build.jsonl --output .local/udp-demux-ci/results
+
+      - name: Upload UDP demux configuration samples and failures
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.udp_demux_benchmark && hashFiles('.local/udp-demux-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: udp-demux-${{ github.sha }}
+          path: .local/udp-demux-ci/
           if-no-files-found: error
