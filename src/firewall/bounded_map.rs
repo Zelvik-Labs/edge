@@ -1,8 +1,9 @@
 //! Fixed-address, bounded scoped-state table for attacker-driven keys.
 //!
 //! Hashing and eight-slot replacement windows never change as the table fills.
-//! Slot storage is allocated in 64-slot chunks only on first write; empty
-//! tables allocate no slot payload. Retain reclaims empty chunks. The configured
+//! Slot storage is reserved only on first write; an occupancy bitmap protects
+//! uninitialized payload and prevents touching empty pages. Retain releases
+//! empty segments. The configured
 //! slot bound and earliest-expiry replacement policy remain in force.
 
 use ahash::RandomState;
@@ -12,63 +13,96 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 const PROBES: usize = 8;
 const SEGMENTS: usize = 64;
-const CHUNK_SLOTS: usize = 64;
 
-type Slot<K> = Option<(K, i64)>;
+struct SlotStorage<K> {
+    // Only occupied bits permit reads. K: Copy excludes drop glue, so stale
+    // values after removal need no destruction. The segment mutex publishes
+    // writes before occupancy and excludes concurrent readers during removal.
+    slots: Box<[std::mem::MaybeUninit<(K, i64)>]>,
+    occupied: Box<[u64]>,
+}
+
+impl<K: Copy> SlotStorage<K> {
+    fn new(capacity: usize) -> Self {
+        Self {
+            // Reserve virtual capacity without writing every payload page.
+            slots: Box::<[(K, i64)]>::new_uninit_slice(capacity),
+            occupied: vec![0; capacity.div_ceil(64)].into_boxed_slice(),
+        }
+    }
+
+    #[inline]
+    fn get(&self, index: usize) -> Option<(K, i64)> {
+        if self.occupied[index / 64] & (1 << (index % 64)) == 0 {
+            return None;
+        }
+        // SAFETY: put writes the complete Copy value before setting its bit;
+        // all access holds the same segment mutex, and the index is in bounds.
+        Some(unsafe { self.slots[index].assume_init() })
+    }
+
+    #[inline]
+    fn put(&mut self, index: usize, value: Option<(K, i64)>) {
+        let mask = 1 << (index % 64);
+        if let Some(value) = value {
+            self.slots[index].write(value);
+            self.occupied[index / 64] |= mask;
+        } else {
+            self.occupied[index / 64] &= !mask;
+        }
+    }
+
+    fn entries(&self) -> impl Iterator<Item = (usize, K, i64)> + '_ {
+        self.occupied.iter().enumerate().flat_map(|(word, &mask)| {
+            let mut remaining = mask;
+            std::iter::from_fn(move || {
+                if remaining == 0 {
+                    return None;
+                }
+                let bit = remaining.trailing_zeros() as usize;
+                remaining &= remaining - 1;
+                let index = word * 64 + bit;
+                // SAFETY: only bits published by put are enumerated. Padding
+                // bits in the final word are never set; values are Copy.
+                let (key, expiry) = unsafe { self.slots[index].assume_init() };
+                Some((index, key, expiry))
+            })
+        })
+    }
+}
 
 struct Segment<K> {
-    chunks: Vec<Option<Box<[Slot<K>]>>>,
+    storage: Option<SlotStorage<K>>,
     len: usize,
 }
 
 impl<K: Copy> Segment<K> {
-    fn slot(&self, index: usize) -> Slot<K> {
-        self.chunks
-            .get(index / CHUNK_SLOTS)
-            .and_then(Option::as_ref)
-            .and_then(|chunk| chunk[index % CHUNK_SLOTS])
+    #[inline]
+    fn slot(&self, index: usize) -> Option<(K, i64)> {
+        self.storage.as_ref()?.get(index)
     }
 
-    fn put(&mut self, index: usize, value: Slot<K>, capacity: usize) {
-        let chunk_index = index / CHUNK_SLOTS;
-        if self.chunks.is_empty() {
-            if value.is_none() {
-                return;
-            }
-            self.chunks
-                .resize_with(capacity.div_ceil(CHUNK_SLOTS), || None);
+    #[inline]
+    fn put(&mut self, index: usize, value: Option<(K, i64)>, capacity: usize) {
+        if value.is_none() && self.storage.is_none() {
+            return;
         }
-        if self.chunks[chunk_index].is_none() {
-            if value.is_none() {
-                return;
-            }
-            let length = CHUNK_SLOTS.min(capacity - chunk_index * CHUNK_SLOTS);
-            self.chunks[chunk_index] = Some(vec![None; length].into_boxed_slice());
-        }
-        self.chunks[chunk_index].as_mut().expect("allocated chunk")[index % CHUNK_SLOTS] = value;
+        self.storage
+            .get_or_insert_with(|| SlotStorage::new(capacity))
+            .put(index, value);
     }
 
     fn earliest(&self) -> Option<usize> {
-        let mut best = None;
-        let mut expiry = i64::MAX;
-        for (chunk_index, chunk) in self.chunks.iter().enumerate() {
-            if let Some(chunk) = chunk {
-                for (offset, slot) in chunk.iter().enumerate() {
-                    if let Some((_, value)) = slot
-                        && (best.is_none() || *value < expiry)
-                    {
-                        best = Some(chunk_index * CHUNK_SLOTS + offset);
-                        expiry = *value;
-                    }
-                }
-            }
-        }
-        best
+        self.storage
+            .as_ref()?
+            .entries()
+            .min_by_key(|(_, _, expiry)| *expiry)
+            .map(|(index, _, _)| index)
     }
 }
 
 /// Bounded map with immutable slot addresses. Lookups and ordinary inserts
-/// probe eight slots. Cold iteration scans allocated chunks, not reserved space.
+/// probe eight slots. Cold iteration scans occupancy words and live values, not empty payload.
 pub struct BoundedScopedMap<K> {
     segs: Box<[Mutex<Segment<K>>]>,
     seg_cap: usize,
@@ -87,7 +121,7 @@ impl<K: Copy + Eq + Hash> BoundedScopedMap<K> {
         let segs = (0..SEGMENTS)
             .map(|_| {
                 Mutex::new(Segment {
-                    chunks: Vec::new(),
+                    storage: None,
                     len: 0,
                 })
             })
@@ -141,7 +175,7 @@ impl<K: Copy + Eq + Hash> BoundedScopedMap<K> {
 
     fn reserve(&self, soft_cap: usize) -> bool {
         self.total_len
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |count| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |count| {
                 (count < soft_cap.max(1)).then(|| count + 1)
             })
             .is_ok()
@@ -293,8 +327,8 @@ impl<K: Copy + Eq + Hash> BoundedScopedMap<K> {
             if seg.len == 0 {
                 continue;
             }
-            for chunk in seg.chunks.iter().flatten() {
-                for &(key, expiry) in chunk.iter().flatten() {
+            if let Some(storage) = &seg.storage {
+                for (_, key, expiry) in storage.entries() {
                     if !visit(key, expiry) {
                         return;
                     }
@@ -303,27 +337,26 @@ impl<K: Copy + Eq + Hash> BoundedScopedMap<K> {
         }
     }
 
-    /// Full semantic sweep over allocated chunks. Empty payload is returned to
-    /// the allocator; unchanged hash addresses keep remaining keys reachable.
+    /// Scan occupancy words and live values, without touching empty payload
+    /// pages. A completely empty segment releases both reservations and bits.
     pub fn retain(&self, mut keep: impl FnMut(i64) -> bool) {
         for seg in &self.segs {
             let mut seg = seg.lock();
             let mut removed = 0;
-            for entry in &mut seg.chunks {
-                if let Some(chunk) = entry {
-                    let mut live = 0;
-                    for slot in chunk.iter_mut() {
-                        if let Some((_, expiry)) = *slot {
-                            if keep(expiry) {
-                                live += 1;
-                            } else {
-                                *slot = None;
-                                removed += 1;
-                            }
+            if let Some(storage) = &mut seg.storage {
+                for (word, mask) in storage.occupied.iter_mut().enumerate() {
+                    let mut remaining = *mask;
+                    while remaining != 0 {
+                        let bit = remaining.trailing_zeros() as usize;
+                        remaining &= remaining - 1;
+                        let index = word * 64 + bit;
+                        // SAFETY: as in entries(), every set bit denotes a
+                        // fully initialized Copy value under the shard lock.
+                        let (_, expiry) = unsafe { storage.slots[index].assume_init() };
+                        if !keep(expiry) {
+                            *mask &= !(1 << bit);
+                            removed += 1;
                         }
-                    }
-                    if live == 0 {
-                        *entry = None;
                     }
                 }
             }
@@ -332,7 +365,7 @@ impl<K: Copy + Eq + Hash> BoundedScopedMap<K> {
                 self.total_len.fetch_sub(removed, Ordering::Relaxed);
             }
             if seg.len == 0 {
-                seg.chunks = Vec::new();
+                seg.storage = None;
             }
         }
     }
@@ -343,50 +376,54 @@ mod tests {
     use super::*;
 
     #[test]
-    fn empty_tables_allocate_no_slot_payload_and_sweeps_release_empty_chunks() {
+    fn empty_tables_reserve_no_payload_and_sweep_releases_empty_segments() {
         let map = BoundedScopedMap::<u64>::new(8_000_000);
-        assert!(map.segs.iter().all(|seg| seg.lock().chunks.is_empty()));
+        assert!(map.segs.iter().all(|seg| seg.lock().storage.is_none()));
         map.insert(1, 100, 0, 8_000_000);
-        let allocated = map
-            .segs
-            .iter()
-            .map(|seg| {
-                seg.lock()
-                    .chunks
-                    .iter()
-                    .flatten()
-                    .map(|chunk| chunk.len())
-                    .sum::<usize>()
-            })
-            .sum::<usize>();
-        assert_eq!(allocated, CHUNK_SLOTS);
+        assert_eq!(
+            map.segs
+                .iter()
+                .filter(|seg| seg.lock().storage.is_some())
+                .count(),
+            1
+        );
         assert_eq!(map.get(&1), Some(100));
         map.retain(|_| false);
         assert!(map.is_empty());
-        assert!(map.segs.iter().all(|seg| seg.lock().chunks.is_empty()));
+        assert!(map.segs.iter().all(|seg| seg.lock().storage.is_none()));
         map.insert(1, 200, 0, 8_000_000);
         assert_eq!(map.get(&1), Some(200));
     }
 
     #[test]
-    fn chunk_edges_and_partial_last_chunk_keep_fixed_slot_addresses() {
-        let mut segment = Segment {
-            chunks: Vec::new(),
-            len: 0,
-        };
-        let capacity = CHUNK_SLOTS * 2 + 3;
+    fn occupancy_bits_guard_uninitialized_slots_including_partial_last_word() {
+        let capacity = 131;
+        let mut storage = SlotStorage::<usize>::new(capacity);
+        for index in 0..capacity {
+            assert_eq!(storage.get(index), None);
+        }
         for index in [0, 63, 64, 127, 128, 130] {
-            segment.put(index, Some((index, 100)), capacity);
+            storage.put(index, Some((index, 100)));
         }
         for index in 0..capacity {
             assert_eq!(
-                segment.slot(index),
+                storage.get(index),
                 [0, 63, 64, 127, 128, 130]
                     .contains(&index)
                     .then_some((index, 100))
             );
         }
-        assert_eq!(segment.chunks[2].as_ref().unwrap().len(), 3);
+        assert_eq!(
+            storage
+                .entries()
+                .map(|(index, _, _)| index)
+                .collect::<Vec<_>>(),
+            [0, 63, 64, 127, 128, 130]
+        );
+        storage.put(64, None);
+        assert_eq!(storage.get(64), None);
+        storage.put(64, Some((999, 200)));
+        assert_eq!(storage.get(64), Some((999, 200)));
     }
 
     #[test]
