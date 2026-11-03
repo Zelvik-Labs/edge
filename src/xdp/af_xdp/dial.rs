@@ -852,6 +852,15 @@ pub struct AfXdpUdpSocket {
 
 #[cfg(target_os = "linux")]
 impl AfXdpUdpSocket {
+    #[cfg(test)]
+    pub(crate) fn test_channels() -> (
+        Self,
+        mpsc::Sender<AfXdpUdpIngress>,
+        mpsc::Receiver<AfXdpReactorRequest>,
+    ) {
+        tests::test_socket(&tests::test_registry())
+    }
+
     pub fn local_addr(&self) -> SocketAddr {
         self.flow.local_addr
     }
@@ -861,11 +870,15 @@ impl AfXdpUdpSocket {
     }
 
     fn egress_request(&self, payload: &[u8], ecn: Option<u8>) -> AfXdpReactorRequest {
+        self.owned_egress_request(Bytes::copy_from_slice(payload), ecn)
+    }
+
+    fn owned_egress_request(&self, payload: Bytes, ecn: Option<u8>) -> AfXdpReactorRequest {
         AfXdpReactorRequest::UdpEgress {
             link: self.link,
             local: self.flow.local_addr,
             remote: self.flow.peer_addr,
-            payload: Bytes::copy_from_slice(payload),
+            payload,
             ecn,
             enqueued_ms: crate::udp_proxy::udp_activity_now_ms(),
         }
@@ -913,6 +926,18 @@ impl AfXdpUdpSocket {
         self.check_payload_cap(len)?;
         self.egress_tx
             .send(self.egress_request(payload, ecn))
+            .await
+            .map_err(|_| self.egress_closed_error())?;
+        Ok(len)
+    }
+
+    /// Transfer an owned payload without copying it into another allocation.
+    /// Queue capacity, PMTU checks, ECN and close errors match `send_with_ecn`.
+    pub async fn send_owned_with_ecn(&self, payload: Bytes, ecn: Option<u8>) -> io::Result<usize> {
+        let len = payload.len();
+        self.check_payload_cap(len)?;
+        self.egress_tx
+            .send(self.owned_egress_request(payload, ecn))
             .await
             .map_err(|_| self.egress_closed_error())?;
         Ok(len)
@@ -1079,7 +1104,7 @@ impl Drop for AfXdpUdpSocket {
 mod tests {
     use super::*;
 
-    fn test_registry() -> Arc<AfXdpDialRegistry> {
+    pub(super) fn test_registry() -> Arc<AfXdpDialRegistry> {
         Arc::new(AfXdpDialRegistry::new(Arc::new(XdpManager::new(
             crate::runtime_mode::XdpConfig::default(),
         ))))
@@ -1092,7 +1117,7 @@ mod tests {
         }
     }
 
-    fn test_socket(
+    pub(super) fn test_socket(
         registry: &Arc<AfXdpDialRegistry>,
     ) -> (
         AfXdpUdpSocket,
@@ -1119,6 +1144,104 @@ mod tests {
             udp_tx,
             egress_rx,
         )
+    }
+
+    #[tokio::test]
+    async fn owned_udp_send_preserves_payload_allocation_ecn_and_flow() {
+        let registry = test_registry();
+        let (socket, _ingress_tx, mut egress_rx) = test_socket(&registry);
+        for len in [0, 1, 64, 1200, 65_507] {
+            let input = Bytes::from(vec![0x5a; len]);
+            for owned in [false, true] {
+                let before = crate::udp_proxy::udp_activity_now_ms();
+                let result = if owned {
+                    socket.send_owned_with_ecn(input.clone(), Some(0b10)).await
+                } else {
+                    socket.send_with_ecn(&input, Some(0b10)).await
+                };
+                assert_eq!(result.unwrap(), len);
+                let AfXdpReactorRequest::UdpEgress {
+                    link,
+                    local,
+                    remote,
+                    payload,
+                    ecn,
+                    enqueued_ms,
+                } = egress_rx.recv().await.unwrap()
+                else {
+                    panic!("expected UDP egress request");
+                };
+                assert_eq!(local, socket.local_addr());
+                assert_eq!(remote, socket.peer_addr());
+                assert_eq!(link.source_mac, socket.link.source_mac);
+                assert_eq!(link.destination_mac, socket.link.destination_mac);
+                assert_eq!(link.ethertype, socket.link.ethertype);
+                assert_eq!(ecn, Some(0b10));
+                assert!(
+                    before <= enqueued_ms && enqueued_ms <= crate::udp_proxy::udp_activity_now_ms()
+                );
+                assert_eq!(payload, input);
+                if len > 0 {
+                    assert_eq!(payload.as_ptr() == input.as_ptr(), owned);
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn owned_udp_send_waits_for_capacity_and_surfaces_closed_queue() {
+        let registry = test_registry();
+        let (socket, _ingress_tx, mut egress_rx) = test_socket(&registry);
+        for _ in 0..8 {
+            socket
+                .send_owned_with_ecn(Bytes::from_static(b"queued"), None)
+                .await
+                .unwrap();
+        }
+        let mut pending =
+            Box::pin(socket.send_owned_with_ecn(Bytes::from_static(b"pending"), None));
+        {
+            let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+            assert!(std::future::Future::poll(pending.as_mut(), &mut context).is_pending());
+        }
+        egress_rx.recv().await.unwrap();
+        assert_eq!(pending.await.unwrap(), b"pending".len());
+        drop(egress_rx);
+        let err = socket
+            .send_owned_with_ecn(Bytes::from_static(b"closed"), None)
+            .await
+            .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::BrokenPipe);
+    }
+
+    #[tokio::test]
+    async fn owned_udp_send_rejects_ptb_oversize_before_enqueue() {
+        let registry = test_registry();
+        let (mut socket, ingress_tx, mut egress_rx) = test_socket(&registry);
+        ingress_tx
+            .try_send(AfXdpUdpIngress::IcmpError { mtu: Some(1400) })
+            .unwrap();
+        assert_eq!(
+            socket.recv().await.unwrap_err().raw_os_error(),
+            Some(libc::EMSGSIZE)
+        );
+        let cap = 1400 - 20 - 8;
+        let err = socket
+            .send_owned_with_ecn(Bytes::from(vec![0; cap + 1]), Some(0b11))
+            .await
+            .unwrap_err();
+        assert_eq!(err.raw_os_error(), Some(libc::EMSGSIZE));
+        assert!(matches!(
+            egress_rx.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+        assert_eq!(
+            socket
+                .send_owned_with_ecn(Bytes::from(vec![0; cap]), Some(0b11))
+                .await
+                .unwrap(),
+            cap
+        );
     }
 
     #[tokio::test]

@@ -57,26 +57,27 @@ export XDP_SMOKE_NODE_BIN="$CARGO_TARGET_DIR/debug/Zelvik-Edge"
 export PATH=/usr/bin:/bin:$PATH
 ip link set lo up
 result=0
+for payload in copied owned; do
 for idle in eager cooperative; do
 for item in full-1-worker bridge-1-worker bridge-1-readable full-1-readable full-2-readable bridge-2-readable bridge-2-worker full-2-worker; do
   stats=${item%%-*}
   mode=${item##*-}
-  label=$idle-$item
+  label=$payload-$idle-$item
   started=$(date +%s)
-  if XDP_SMOKE_WAKE="$mode" XDP_SMOKE_RX_STATS="$stats" XDP_SMOKE_IDLE_YIELD="$idle" bash scripts/xdp-netns-smoke.sh > "$output/$label.log" 2>&1; then
+  if XDP_SMOKE_WAKE="$mode" XDP_SMOKE_RX_STATS="$stats" XDP_SMOKE_IDLE_YIELD="$idle" XDP_SMOKE_UDP_PAYLOAD="$payload" bash scripts/xdp-netns-smoke.sh > "$output/$label.log" 2>&1; then
     rc=0
   else
     rc=$?
     result=1
   fi
-  if ! python3 - "$output" "$label" "$mode" "$stats" "$idle" "$rc" "$started" <<'PY'
+  if ! python3 - "$output" "$label" "$mode" "$stats" "$idle" "$payload" "$rc" "$started" <<'PY'
 import json, pathlib, subprocess, sys, time
-root, label, mode, stats, idle, code, started = sys.argv[1:]
+root, label, mode, stats, idle, payload, code, started = sys.argv[1:]
 links = json.loads(subprocess.check_output(['ip', '-j', 'link', 'show'], text=True))
 namespaces = subprocess.check_output(['ip', 'netns', 'list'], text=True).strip()
 cleanup_ok = {link['ifname'] for link in links} == {'lo'} and not namespaces
 pathlib.Path(root, label + '.json').write_text(json.dumps({
-    'label': label, 'wake': mode, 'rx_stats': stats, 'idle_yield': idle,
+    'label': label, 'wake': mode, 'rx_stats': stats, 'idle_yield': idle, 'udp_payload': payload,
     'exit_code': int(code), 'passed': int(code) == 0 and cleanup_ok,
     'network_cleanup_ok': cleanup_ok, 'remaining_links': links, 'remaining_namespaces': namespaces,
     'elapsed_seconds': time.time() - int(started),
@@ -91,10 +92,11 @@ PY
   # baseline/candidate evidence; no fallback or successful retry replaces it.
 done
 done
+done
 python3 - "$output" <<'PY'
 import hashlib, json, os, pathlib, sys
 root = pathlib.Path(sys.argv[1])
-cases = [json.loads(root.joinpath(idle + '-' + label + '.json').read_text()) for idle in ['eager', 'cooperative'] for label in
+cases = [json.loads(root.joinpath(payload + '-' + idle + '-' + label + '.json').read_text()) for payload in ['copied', 'owned'] for idle in ['eager', 'cooperative'] for label in
          ['full-1-worker', 'bridge-1-worker', 'bridge-1-readable', 'full-1-readable',
           'full-2-readable', 'bridge-2-readable', 'bridge-2-worker', 'full-2-worker']]
 binaries = {}

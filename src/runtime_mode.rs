@@ -674,6 +674,41 @@ impl XdpValidationIdleYield {
     }
 }
 
+/// Validation-only ownership comparison; normal serving keeps the copied path.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum XdpValidationUdpPayload {
+    Copied,
+    Owned,
+}
+
+static VALIDATION_OWNED_UDP_PAYLOAD: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_validation_udp_payload(mode: XdpValidationUdpPayload) {
+    VALIDATION_OWNED_UDP_PAYLOAD.store(
+        mode == XdpValidationUdpPayload::Owned,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn validation_udp_payload() -> XdpValidationUdpPayload {
+    if VALIDATION_OWNED_UDP_PAYLOAD.load(std::sync::atomic::Ordering::Relaxed) {
+        XdpValidationUdpPayload::Owned
+    } else {
+        XdpValidationUdpPayload::Copied
+    }
+}
+
+impl XdpValidationUdpPayload {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Copied => "copied",
+            Self::Owned => "owned",
+        }
+    }
+}
+
 fn validation_transport_controller() -> Option<XdpTransportController> {
     transport_controller_from_index(
         VALIDATION_TRANSPORT_CONTROLLER.load(std::sync::atomic::Ordering::Relaxed),

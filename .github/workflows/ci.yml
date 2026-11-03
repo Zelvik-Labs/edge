@@ -26,17 +26,17 @@ on:
         type: boolean
         default: false
       xdp_node_smoke:
-        description: Validate XSK wake, statistics and idle yield modes across protocols, IPv4/IPv6 and reload
+        description: Validate XSK wake, statistics, idle yield and UDP ownership across protocols, IPv4/IPv6 and reload
         type: boolean
         default: false
       xdp_udp_benchmark:
-        description: Compare release Edge wake modes with Nginx and OpenResty UDP reuse on isolated veths
+        description: Compare release Edge variants with Nginx and OpenResty UDP reuse on isolated veths
         type: boolean
         default: false
       xdp_udp_comparison:
         description: Choose the same-binary Edge comparison inside the UDP matrix
         type: choice
-        options: [wake, rx-stats, idle-yield]
+        options: [wake, rx-stats, idle-yield, udp-payload]
         default: wake
       udp_demux_benchmark:
         description: Compare production UDP listener-set queries with snapshot point queries

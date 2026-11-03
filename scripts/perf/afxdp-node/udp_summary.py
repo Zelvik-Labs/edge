@@ -1,12 +1,13 @@
 """Describe every run, paired differences and measurement limits without filtering."""
 import statistics
 
-# Each entry is (wake mechanism, RX statistics mode, idle yield). Label order fixes the
+# Each entry is (wake mechanism, RX statistics mode, idle yield, UDP payload). Label order fixes the
 # baseline/candidate pairing and the four-position Williams schedule.
 COMPARISON_NODES = {
-    'wake': {'worker': ('worker', 'bridge', 'eager'), 'readable': ('readable', 'bridge', 'eager')},
-    'rx-stats': {'full-stats': ('worker', 'full', 'eager'), 'bridge-stats': ('worker', 'bridge', 'eager')},
-    'idle-yield': {'eager': ('worker', 'bridge', 'eager'), 'cooperative': ('worker', 'bridge', 'cooperative')},
+    'wake': {'worker': ('worker', 'bridge', 'eager', 'copied'), 'readable': ('readable', 'bridge', 'eager', 'copied')},
+    'rx-stats': {'full-stats': ('worker', 'full', 'eager', 'copied'), 'bridge-stats': ('worker', 'bridge', 'eager', 'copied')},
+    'idle-yield': {'eager': ('worker', 'bridge', 'eager', 'copied'), 'cooperative': ('worker', 'bridge', 'cooperative', 'copied')},
+    'udp-payload': {'copied': ('worker', 'bridge', 'eager', 'copied'), 'owned': ('worker', 'bridge', 'eager', 'owned')},
 }
 
 
@@ -44,6 +45,8 @@ def diagnostics(record, metadata, direct_rps):
         resources['idle_proxy_cpu_pct_of_one_core'] = process_cpu(record['idle_before'], record['idle_after'], metadata['clock_ticks'])
         resources['proxy_fd_count'] = sum(p['fd_count'] for p in record['server_after']['processes'].values())
         resources['proxy_threads'] = sum(len(p['threads']) for p in record['server_after']['processes'].values())
+        resources['proxy_rss_bytes_sum_of_processes'] = metadata['page_size'] * sum(
+            p['rss_pages'] for p in record['server_after']['processes'].values())
     flags = []
     if duration < .5:
         flags.append('short_sample_under_0.5s')

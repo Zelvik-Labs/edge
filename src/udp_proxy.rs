@@ -346,27 +346,99 @@ async fn bind_backend_socket(
 enum UpstreamUdpSocket {
     Kernel(UdpSocket),
     #[cfg(target_os = "linux")]
-    AfXdp(crate::xdp::af_xdp::AfXdpUdpSocket),
+    AfXdp {
+        socket: crate::xdp::af_xdp::AfXdpUdpSocket,
+        owned_payloads: bool,
+    },
 }
 
-impl UpstreamUdpSocket {
-    async fn send(&self, data: &[u8]) -> io::Result<usize> {
+const UDP_RECEIVE_BUFFER_SIZE: usize = 65_535;
+
+#[derive(Debug)]
+enum UpstreamUdpDatagram {
+    Buffered(usize),
+    #[cfg(target_os = "linux")]
+    Owned(Bytes),
+}
+
+impl UpstreamUdpDatagram {
+    #[cfg(target_os = "linux")]
+    fn from_owned(mut payload: Bytes) -> Self {
+        // Preserve the relay's existing maximum receive size without retaining
+        // a scratch allocation for an AF_XDP socket which already owns bytes.
+        payload.truncate(UDP_RECEIVE_BUFFER_SIZE);
+        Self::Owned(payload)
+    }
+
+    fn bytes<'a>(&'a self, buffer: &'a [u8]) -> &'a [u8] {
         match self {
-            Self::Kernel(socket) => socket.send(data).await,
+            Self::Buffered(len) => &buffer[..*len],
             #[cfg(target_os = "linux")]
-            Self::AfXdp(socket) => socket.send(data).await,
+            Self::Owned(payload) => payload,
         }
     }
 
-    async fn recv(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+    async fn send_to(
+        self,
+        sender: &UdpDownstreamSender,
+        buffer: &[u8],
+        target: SocketAddr,
+    ) -> io::Result<usize> {
         match self {
-            Self::Kernel(socket) => socket.recv(buf).await,
+            Self::Buffered(len) => sender.send_to(&buffer[..len], target).await,
             #[cfg(target_os = "linux")]
-            Self::AfXdp(socket) => {
+            Self::Owned(payload) => sender.send_owned_to(payload, target).await,
+        }
+    }
+}
+
+impl UpstreamUdpSocket {
+    fn receive_buffer_size(&self) -> usize {
+        #[cfg(target_os = "linux")]
+        if matches!(
+            self,
+            Self::AfXdp {
+                owned_payloads: true,
+                ..
+            }
+        ) {
+            return 0;
+        }
+        UDP_RECEIVE_BUFFER_SIZE
+    }
+
+    async fn send(&self, data: Bytes) -> io::Result<usize> {
+        match self {
+            Self::Kernel(socket) => socket.send(&data).await,
+            #[cfg(target_os = "linux")]
+            Self::AfXdp {
+                socket,
+                owned_payloads,
+            } => {
+                if *owned_payloads {
+                    socket.send_owned_with_ecn(data, None).await
+                } else {
+                    socket.send(&data).await
+                }
+            }
+        }
+    }
+
+    async fn recv(&mut self, buf: &mut [u8]) -> io::Result<UpstreamUdpDatagram> {
+        match self {
+            Self::Kernel(socket) => socket.recv(buf).await.map(UpstreamUdpDatagram::Buffered),
+            #[cfg(target_os = "linux")]
+            Self::AfXdp {
+                socket,
+                owned_payloads,
+            } => {
                 let payload = socket.recv().await?;
+                if *owned_payloads {
+                    return Ok(UpstreamUdpDatagram::from_owned(payload));
+                }
                 let len = payload.len().min(buf.len());
                 buf[..len].copy_from_slice(&payload[..len]);
-                Ok(len)
+                Ok(UpstreamUdpDatagram::Buffered(len))
             }
         }
     }
@@ -375,7 +447,7 @@ impl UpstreamUdpSocket {
         match self {
             Self::Kernel(socket) => socket.local_addr(),
             #[cfg(target_os = "linux")]
-            Self::AfXdp(socket) => Ok(socket.local_addr()),
+            Self::AfXdp { socket, .. } => Ok(socket.local_addr()),
         }
     }
 
@@ -385,7 +457,7 @@ impl UpstreamUdpSocket {
         match self {
             Self::Kernel(_) => false,
             #[cfg(target_os = "linux")]
-            Self::AfXdp(socket) => socket.defunct(),
+            Self::AfXdp { socket, .. } => socket.defunct(),
         }
     }
 }
@@ -414,7 +486,11 @@ async fn connect_backend_udp_socket(
                 backend_addr,
                 socket.local_addr()
             );
-            return Ok(UpstreamUdpSocket::AfXdp(socket));
+            return Ok(UpstreamUdpSocket::AfXdp {
+                socket,
+                owned_payloads: crate::runtime_mode::validation_udp_payload()
+                    == crate::runtime_mode::XdpValidationUdpPayload::Owned,
+            });
         }
     }
     let socket = bind_backend_socket(preferred, fallback_addr, session_id).await?;
@@ -852,6 +928,14 @@ impl UdpDownstreamSender {
         }
     }
 
+    #[cfg(any(test, target_os = "linux"))]
+    pub(crate) async fn send_owned_to(&self, data: Bytes, target: SocketAddr) -> io::Result<usize> {
+        match self {
+            Self::Socket(socket) => socket.send_to(&data, target).await,
+            Self::Channel(sender) => sender.try_send_owned_to(data, target),
+        }
+    }
+
     pub(crate) fn try_send_to(&self, data: &[u8], target: SocketAddr) -> io::Result<usize> {
         match self {
             Self::Socket(socket) => socket.try_send_to(data, target),
@@ -886,11 +970,15 @@ pub struct ChannelUdpDownstreamSender {
 
 impl ChannelUdpDownstreamSender {
     fn try_send_to(&self, data: &[u8], target: SocketAddr) -> io::Result<usize> {
+        self.try_send_owned_to(Bytes::copy_from_slice(data), target)
+    }
+
+    fn try_send_owned_to(&self, data: Bytes, target: SocketAddr) -> io::Result<usize> {
         let len = data.len();
         match self.tx.try_send(DownstreamUdpDatagram {
             listen_addr: self.listen_addr,
             peer_addr: target,
-            payload: Bytes::copy_from_slice(data),
+            payload: data,
             #[cfg(target_os = "linux")]
             enqueued_ms: udp_activity_now_ms(),
         }) {
@@ -2200,7 +2288,7 @@ impl UdpProxyManager {
         };
         crate::origin_state::ORIGIN_STATE_MANAGER.record_success(origin_id);
         let mut transfer_metrics = UdpTransferAccumulator::new(Instant::now());
-        let mut buf = vec![0u8; 65535];
+        let mut buf = vec![0u8; backend_socket.receive_buffer_size()];
         'session_relay: loop {
             let idle_deadline =
                 udp_session_idle_deadline(&last_activity_ms, UDP_SESSION_IDLE_TIMEOUT);
@@ -2233,7 +2321,7 @@ impl UdpProxyManager {
                     while let Some(item) = next_item.take() {
                         let data = item.data;
                         let len = data.len() as u64;
-                        if let Err(err) = backend_socket.send(&data).await {
+                        if let Err(err) = backend_socket.send(data).await {
                             // A UDP send error must not tear down the session:
                             // connected sockets surface transient ICMP and
                             // egress failures that would otherwise force a new
@@ -2267,7 +2355,7 @@ impl UdpProxyManager {
                     }
                 }
                 recv = backend_socket.recv(&mut buf) => {
-                    let len = match recv {
+                    let packet = match recv {
                         Ok(packet) => packet,
                         Err(err) => {
                             if backend_socket.defunct() {
@@ -2289,8 +2377,9 @@ impl UdpProxyManager {
                     };
                     #[cfg(target_os = "linux")]
                     af_xdp_udp_diag::bump(&af_xdp_udp_diag::UPSTREAM_RX);
-                    let len_u64 = len as u64;
-                    if let Some(cids) = crate::quic_probe::quic_packet_cids(&buf[..len], 0) {
+                    let data = packet.bytes(&buf);
+                    let len_u64 = data.len() as u64;
+                    if let Some(cids) = crate::quic_probe::quic_packet_cids(data, 0) {
                         if let Some(scid) = cids.scid.as_ref()
                             && let Ok(cid_len) = u8::try_from(scid.len())
                             && (1..=20).contains(&cid_len)
@@ -2313,7 +2402,7 @@ impl UdpProxyManager {
                         }
                     }
                     let current_client_addr = **client_addr.load();
-                    match downstream_sender.send_to(&buf[..len], current_client_addr).await {
+                    match packet.send_to(&downstream_sender, &buf, current_client_addr).await {
                         Ok(_) => {
                             #[cfg(target_os = "linux")]
                             af_xdp_udp_diag::bump(&af_xdp_udp_diag::DOWNSTREAM_ENQ);
@@ -2466,6 +2555,170 @@ mod tests {
     use crate::config_models::{NetworkAddressConfig, ServerNameConfig, UDPConfig};
     use arc_swap::ArcSwap;
     use std::collections::HashMap;
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn af_xdp_upstream_payload_modes_preserve_limits_ownership_and_errors() {
+        use crate::xdp::af_xdp::{
+            AfXdpReactorRequest, AfXdpUdpDatagram, AfXdpUdpIngress, AfXdpUdpSocket,
+        };
+        let listen_addr = "127.0.0.1:443".parse().unwrap();
+        let peer_addr = "127.0.0.1:53000".parse().unwrap();
+        for owned in [false, true] {
+            let (socket, ingress_tx, mut egress_rx) = AfXdpUdpSocket::test_channels();
+            let mut upstream = UpstreamUdpSocket::AfXdp {
+                socket,
+                owned_payloads: owned,
+            };
+            assert_eq!(
+                upstream.receive_buffer_size(),
+                if owned { 0 } else { UDP_RECEIVE_BUFFER_SIZE }
+            );
+            let mut buffer = vec![0; upstream.receive_buffer_size()];
+            for len in [0, 1, 64, 1200, 65_535, 65_536] {
+                let input = Bytes::from(vec![0xa5; len]);
+                ingress_tx
+                    .try_send(AfXdpUdpIngress::Datagram(AfXdpUdpDatagram {
+                        payload: input.clone(),
+                        ecn: Some(0b10),
+                        enqueued_ms: udp_activity_now_ms(),
+                    }))
+                    .unwrap();
+                let packet = upstream.recv(&mut buffer).await.unwrap();
+                let expected = len.min(UDP_RECEIVE_BUFFER_SIZE);
+                assert_eq!(packet.bytes(&buffer), &input[..expected]);
+                if expected > 0 {
+                    assert_eq!(packet.bytes(&buffer).as_ptr() == input.as_ptr(), owned);
+                }
+                let (tx, mut rx) = mpsc::channel(1);
+                let sender = UdpDownstreamSender::channel(listen_addr, tx);
+                assert_eq!(
+                    packet.send_to(&sender, &buffer, peer_addr).await.unwrap(),
+                    expected
+                );
+                let sent = rx.recv().await.unwrap();
+                assert_eq!(sent.listen_addr, listen_addr);
+                assert_eq!(sent.peer_addr, peer_addr);
+                assert_eq!(sent.payload, input.slice(..expected));
+                if expected > 0 {
+                    assert_eq!(sent.payload.as_ptr() == input.as_ptr(), owned);
+                }
+                if len <= 1200 {
+                    assert_eq!(upstream.send(input.clone()).await.unwrap(), len);
+                    let AfXdpReactorRequest::UdpEgress { payload, .. } =
+                        egress_rx.recv().await.unwrap()
+                    else {
+                        panic!("expected upstream UDP request");
+                    };
+                    assert_eq!(payload, input);
+                    if len > 0 {
+                        assert_eq!(payload.as_ptr() == input.as_ptr(), owned);
+                    }
+                }
+            }
+            ingress_tx
+                .try_send(AfXdpUdpIngress::IcmpError { mtu: Some(1400) })
+                .unwrap();
+            assert_eq!(
+                upstream.recv(&mut buffer).await.unwrap_err().raw_os_error(),
+                Some(libc::EMSGSIZE)
+            );
+            assert!(!upstream.defunct());
+            let err = upstream
+                .send(Bytes::from(vec![0; 1400 - 20 - 8 + 1]))
+                .await
+                .unwrap_err();
+            assert_eq!(err.raw_os_error(), Some(libc::EMSGSIZE));
+            assert!(matches!(
+                egress_rx.try_recv(),
+                Err(mpsc::error::TryRecvError::Empty)
+            ));
+            drop(ingress_tx);
+            assert_eq!(
+                upstream.recv(&mut buffer).await.unwrap_err().kind(),
+                io::ErrorKind::UnexpectedEof
+            );
+            assert!(upstream.defunct());
+            drop(egress_rx);
+            assert_eq!(
+                upstream
+                    .send(Bytes::from_static(b"closed"))
+                    .await
+                    .unwrap_err()
+                    .kind(),
+                io::ErrorKind::BrokenPipe
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn downstream_owned_and_copied_paths_share_metadata_and_error_contracts() {
+        let listen_addr = "127.0.0.1:443".parse().unwrap();
+        let peer_addr = "127.0.0.1:53000".parse().unwrap();
+        for owned in [false, true] {
+            let input = Bytes::from(vec![0x5a; 1200]);
+            let (tx, mut rx) = mpsc::channel(1);
+            let sender = UdpDownstreamSender::channel(listen_addr, tx);
+            let result = if owned {
+                sender.send_owned_to(input.clone(), peer_addr).await
+            } else {
+                sender.send_to(&input, peer_addr).await
+            };
+            assert_eq!(result.unwrap(), input.len());
+            let full = if owned {
+                sender
+                    .send_owned_to(
+                        Bytes::from_static(b"must not replace queued data"),
+                        peer_addr,
+                    )
+                    .await
+            } else {
+                sender
+                    .send_to(b"must not replace queued data", peer_addr)
+                    .await
+            };
+            assert_eq!(full.unwrap_err().kind(), io::ErrorKind::WouldBlock);
+            let sent = rx.recv().await.unwrap();
+            assert_eq!(sent.listen_addr, listen_addr);
+            assert_eq!(sent.peer_addr, peer_addr);
+            assert_eq!(sent.payload, input);
+            assert_eq!(sent.payload.as_ptr() == input.as_ptr(), owned);
+            drop(rx);
+            let closed = if owned {
+                sender.send_owned_to(input.clone(), peer_addr).await
+            } else {
+                sender.send_to(&input, peer_addr).await
+            };
+            assert_eq!(closed.unwrap_err().kind(), io::ErrorKind::BrokenPipe);
+        }
+    }
+
+    #[tokio::test]
+    async fn kernel_upstream_datagrams_keep_buffer_size_and_empty_packet_semantics() {
+        let origin = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let destination = socket.local_addr().unwrap();
+        socket.connect(origin.local_addr().unwrap()).await.unwrap();
+        let mut upstream = UpstreamUdpSocket::Kernel(socket);
+        assert_eq!(upstream.receive_buffer_size(), UDP_RECEIVE_BUFFER_SIZE);
+        let mut buffer = vec![0; upstream.receive_buffer_size()];
+        // Linux loopback accepts the IPv4 maximum. Other development kernels
+        // can impose a smaller UDP send limit (for example Darwin maxdgram).
+        #[cfg(target_os = "linux")]
+        let sizes = [0, 1, 1200, 65_507];
+        #[cfg(not(target_os = "linux"))]
+        let sizes = [0, 1, 1200];
+        for len in sizes {
+            let input = vec![0x7b; len];
+            assert_eq!(origin.send_to(&input, destination).await.unwrap(), len);
+            let packet = tokio::time::timeout(Duration::from_secs(3), upstream.recv(&mut buffer))
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(packet.bytes(&buffer), input);
+            assert!(!upstream.defunct());
+        }
+    }
 
     /// A least-connections pool over the given origin ids, built through the
     /// production `build_lb` path so the shared in-flight counters are wired in.

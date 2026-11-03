@@ -5,10 +5,10 @@ from udp_summary import COMPARISON_NODES, summarize
 
 
 def fixture():
-    metadata = {'rounds': 4, 'cpus': [0, 1, 2, 3], 'clock_ticks': 100,
+    metadata = {'rounds': 4, 'cpus': [0, 1, 2, 3], 'clock_ticks': 100, 'page_size': 4096,
                 'comparison': 'wake', 'targets': ['worker', 'readable', 'nginx', 'openresty']}
     def snapshot(ns, ticks):
-        return {'monotonic_ns': ns, 'processes': {'42': {'ticks': ticks, 'fd_count': 3, 'threads': [{}]}}}
+        return {'monotonic_ns': ns, 'processes': {'42': {'ticks': ticks, 'rss_pages': 64, 'fd_count': 3, 'threads': [{}]}}}
     def cpu(ns, ticks):
         return {'monotonic_ns': ns, 'proc': {'cpu'+str(i): [ticks, 0, 0, ticks, 0, 0, 0, 0, 0, 0] for i in range(4)}}
     records = []
@@ -39,6 +39,7 @@ class SummaryTests(unittest.TestCase):
         self.assertAlmostEqual(resource['client_cpu_pct_of_one_core'], 30)
         self.assertEqual(resource['proxy_cpu_pct_of_one_core'], 60)
         self.assertEqual(resource['idle_proxy_cpu_pct_of_one_core'], 0)
+        self.assertEqual(resource['proxy_rss_bytes_sum_of_processes'], 64*4096)
         self.assertEqual(resource['quality_flags'], [])
 
     def test_failed_or_missing_runs_withhold_the_cell_comparison(self):
@@ -80,7 +81,7 @@ class SummaryTests(unittest.TestCase):
         pair = summary['comparisons']['c1-b64']['paired_changes_pct']['bridge-stats_vs_full-stats']
         self.assertEqual(pair['requests_per_second']['all'], [50]*4)
         self.assertNotIn('readable_vs_worker', summary['comparisons']['c1-b64']['paired_changes_pct'])
-        self.assertEqual({wake for wake, _, _ in COMPARISON_NODES['rx-stats'].values()}, {'worker'})
+        self.assertEqual({wake for wake, _, _, _ in COMPARISON_NODES['rx-stats'].values()}, {'worker'})
 
     def test_idle_yield_comparison_pairs_the_same_worker_and_statistics(self):
         records, metadata = fixture()
@@ -92,7 +93,19 @@ class SummaryTests(unittest.TestCase):
         self.assertTrue(summary['passed'])
         pair = summary['comparisons']['c1-b64']['paired_changes_pct']['cooperative_vs_eager']
         self.assertEqual(pair['requests_per_second']['all'], [50]*4)
-        self.assertEqual({(wake, stats) for wake, stats, _ in COMPARISON_NODES['idle-yield'].values()}, {('worker', 'bridge')})
+        self.assertEqual({(wake, stats, payload) for wake, stats, _, payload in COMPARISON_NODES['idle-yield'].values()}, {('worker', 'bridge', 'copied')})
+
+    def test_udp_payload_comparison_holds_other_controls_fixed(self):
+        records, metadata = fixture()
+        for record in records:
+            if record['target'] in ['worker', 'readable']:
+                record['target'] = {'worker': 'copied', 'readable': 'owned'}[record['target']]
+        metadata.update(comparison='udp-payload', targets=['copied', 'owned', 'nginx', 'openresty'])
+        summary = summarize(records, metadata)
+        self.assertTrue(summary['passed'])
+        pair = summary['comparisons']['c1-b64']['paired_changes_pct']['owned_vs_copied']
+        self.assertEqual(pair['requests_per_second']['all'], [50]*4)
+        self.assertEqual({(wake, stats, idle) for wake, stats, idle, _ in COMPARISON_NODES['udp-payload'].values()}, {('worker', 'bridge', 'eager')})
 
     def test_mislabeled_comparison_metadata_is_rejected(self):
         records, metadata = fixture()

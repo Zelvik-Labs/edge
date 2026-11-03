@@ -2,9 +2,9 @@
 
 The CI `workflow_dispatch` input `xdp_node_smoke=true` builds one pair of
 `Zelvik-Edge` / `h3-probe` binaries, then runs the existing full application
-smoke for all eight combinations of worker/readable, full/bridge RX statistics
-and eager/cooperative idle yielding, twice each in a forward/reverse order
-within each idle mode. All 16 cases use the same binary. This functional order
+smoke for all 16 combinations of worker/readable, full/bridge RX statistics,
+eager/cooperative idle yielding and copied/owned UDP payloads, twice each in
+a forward/reverse order within each idle/payload mode. All 32 cases use the same binary. This functional order
 is distinct from the balanced performance schedule below.
 `--wake readable` is available only on explicit proxy smoke / reload commands;
 normal serving still uses the owned poll worker.
@@ -19,6 +19,14 @@ after the idle event select completes, even if that select was immediately
 ready; busy rounds still explicitly yield every time. No readiness, ring,
 pressure, timer or error handling is removed. The helper's standalone tests and
 two deliberate scheduling faults are described in `../idle-yield/README.md`.
+`--udp-payload copied|owned` compares the existing relay copies with transferring
+the upstream/downstream `Bytes` allocation. Serving retains copied mode until
+the candidate is validated. Owned AF_XDP sessions also omit the 65,535-byte
+scratch buffer; kernel sessions keep it. The receive size cap, ECN, learned
+PMTU rejection, channel capacity/closed errors, timestamps, CID handling and
+metrics remain. The QUIC slice/poll APIs keep their existing copy contract.
+An owned send returning success means queued, as with the existing API; it is
+not an acknowledgement of on-wire delivery.
 
 Run only in fresh network **and** mount namespaces. The wrapper checks both
 parent IDs, privately mounts bpffs and `/run/netns`, brings up loopback, and
@@ -73,8 +81,9 @@ two Edge variants/Nginx/OpenResty, plus one preceding direct-origin calibration
 per matrix cell: 64 proxy cases and four direct cases per CPU budget. Input
 `xdp_udp_comparison=wake` compares worker/readable with bridge statistics;
 `rx-stats` compares full-stats/bridge-stats with both using worker wakeups.
-`idle-yield` compares eager/cooperative with both using worker wakeups and
-bridge statistics. The report must confirm all three selected controls from
+`idle-yield` compares eager/cooperative with both using worker wakeups,
+bridge statistics and copied payloads. `udp-payload` compares copied/owned,
+holding worker/bridge/eager fixed. The report must confirm all four selected controls from
 each node's JSON; source and binary hashes must remain unchanged.
 Every case has 1000 warmup round trips per flow. CI measures 40000 round trips
 per flow at concurrency one and 10000 at concurrency sixteen, addressing the
@@ -103,6 +112,10 @@ reported. Quality flags identify short samples, noisy hosts, saturated client
 or origin CPU, and proximity to the direct calibration's throughput. Flags do
 not remove samples. Four paired rounds describe dispersion, not a confidence
 interval. A failed or missing case withholds its whole matrix cell comparison.
+The process snapshots already contain RSS pages; metadata records the actual
+page size, and the summary reports their byte sum. This is observed RSS,
+distinct from allocated buffer capacity. Summing multiple baseline processes
+can count shared pages repeatedly, so it is not physical or private memory.
 
 Run `test_udp_bench.py` against the compiled C binary with `UDP_BENCH_BINARY`
 and `UDP_BENCH_TEST_OUTPUT` set; run `test_udp_summary.py` for analysis checks.

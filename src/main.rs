@@ -468,6 +468,9 @@ enum XdpCommands {
         /// Validation-only: cooperation after an idle event wait
         #[arg(long, value_enum, default_value_t = XdpCliIdleYield::Eager)]
         idle_yield: XdpCliIdleYield,
+        /// Validation-only owned UDP relay payloads
+        #[arg(long, value_enum, default_value_t = XdpCliUdpPayload::Copied)]
+        udp_payload: XdpCliUdpPayload,
     },
     /// Verify an in-process XDP reload while AF_XDP proxy bridge is active
     #[command(name = "proxy-reload-smoke")]
@@ -487,6 +490,9 @@ enum XdpCommands {
         /// Validation-only idle cooperation across generation replacement
         #[arg(long, value_enum, default_value_t = XdpCliIdleYield::Eager)]
         idle_yield: XdpCliIdleYield,
+        /// Validation-only UDP payload ownership across generation replacement
+        #[arg(long, value_enum, default_value_t = XdpCliUdpPayload::Copied)]
+        udp_payload: XdpCliUdpPayload,
     },
     /// Attach AF_XDP and hold a real userspace-TCP dial to an on-wire target (PTB/out-CT validation)
     #[command(name = "dial-smoke")]
@@ -547,6 +553,21 @@ enum XdpCliRxStats {
 enum XdpCliIdleYield {
     Eager,
     Cooperative,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum XdpCliUdpPayload {
+    Copied,
+    Owned,
+}
+
+impl From<XdpCliUdpPayload> for zelvik_edge::runtime_mode::XdpValidationUdpPayload {
+    fn from(value: XdpCliUdpPayload) -> Self {
+        match value {
+            XdpCliUdpPayload::Copied => Self::Copied,
+            XdpCliUdpPayload::Owned => Self::Owned,
+        }
+    }
 }
 
 impl From<XdpCliIdleYield> for zelvik_edge::runtime_mode::XdpValidationIdleYield {
@@ -1221,6 +1242,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             wake,
             rx_stats,
             idle_yield,
+            udp_payload,
         } => {
             anyhow::ensure!(
                 !kernel || matches!(wake, XdpCliWake::Worker),
@@ -1237,6 +1259,11 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 "--idle-yield cooperative requires the AF_XDP dataplane; remove --kernel"
             );
             zelvik_edge::runtime_mode::set_validation_idle_yield(idle_yield.into());
+            anyhow::ensure!(
+                !kernel || matches!(udp_payload, XdpCliUdpPayload::Copied),
+                "--udp-payload owned requires the AF_XDP dataplane; remove --kernel"
+            );
+            zelvik_edge::runtime_mode::set_validation_udp_payload(udp_payload.into());
             let runtime_config = RuntimeConfig::load_default()?;
             RuntimeConfig::set_current(runtime_config);
             if let Some(cc) = cc {
@@ -1262,10 +1289,12 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
             wake,
             rx_stats,
             idle_yield,
+            udp_payload,
         } => {
             zelvik_edge::runtime_mode::set_validation_xsk_wake_mode(wake.into());
             zelvik_edge::runtime_mode::set_validation_xsk_rx_stats(rx_stats.into());
             zelvik_edge::runtime_mode::set_validation_idle_yield(idle_yield.into());
+            zelvik_edge::runtime_mode::set_validation_udp_payload(udp_payload.into());
             let runtime_config = RuntimeConfig::load_default()?;
             RuntimeConfig::set_current(runtime_config);
             let rt = tokio::runtime::Builder::new_current_thread()
