@@ -719,6 +719,23 @@ impl Driver {
                 && s.recv.len() < 2
                 && qconn.stream_readable(id)
             {
+                // FIN/RESET consume no payload bytes. They must remain readable
+                // even when H3 retains every budgeted buffer while awaiting the
+                // terminal event (for example, trailers on concurrent streams).
+                if qconn.stream_readable_len(id, CHUNK) == 0 {
+                    match qconn.stream_recv(id, &mut []) {
+                        Ok((0, fin)) => s.recv_fin = fin,
+                        Err(quiche::Error::StreamReset(code)) => {
+                            s.recv_error = Some(code);
+                            s.recv.clear();
+                        }
+                        Err(quiche::Error::Done) => {}
+                        Ok(_) => return Err("zero-capacity QUIC read produced payload".into()),
+                        Err(error) => return Err(error.into()),
+                    }
+                    wake(&mut s.read_waker);
+                    break;
+                }
                 let Ok(permit) = self
                     .shared
                     .receive_budget
@@ -884,6 +901,25 @@ impl ApplicationOverQuic for Driver {
             ConnectionError::InternalError(format!("QUIC worker ended: {result:?}"))
         };
         let mut state = self.shared.state.lock();
+        if std::env::var_os("EDGE_QUICHE_DIAGNOSTICS").is_some() {
+            eprintln!(
+                "quiche-close error={error:?} rx_free={} tx_free={} quic={:?}",
+                self.shared.receive_budget.available_permits(),
+                self.shared.send_budget.available_permits(),
+                qconn.stats()
+            );
+            for (id, stream) in &state.streams {
+                eprintln!(
+                    "quiche-stream id={id} recv_chunks={} recv_fin={} send_remaining={} finish={} sent_fin={} capacity={:?}",
+                    stream.recv.len(),
+                    stream.recv_fin,
+                    stream.send.as_ref().map_or(0, Buf::remaining),
+                    stream.finish,
+                    stream.sent_fin,
+                    qconn.stream_capacity(*id)
+                );
+            }
+        }
         state.terminate(error);
         state.streams.clear();
         state.dirty.clear();

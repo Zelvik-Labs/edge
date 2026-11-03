@@ -210,7 +210,7 @@ impl DynamicCertSelector {
             "no certificate snapshot available for QUIC listener"
         );
         let selected = Ssl::new_ex_index::<Arc<CertPair>>()?;
-        let mut builder = SslContextBuilder::new(SslMethod::tls_server())?;
+        let mut builder = SslContextBuilder::new(SslMethod::tls())?;
         builder.set_min_proto_version(Some(SslVersion::TLS1_3))?;
         let selector = self.clone();
         builder.set_select_certificate_callback(move |mut hello| {

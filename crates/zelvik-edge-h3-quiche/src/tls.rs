@@ -28,8 +28,7 @@ impl Certificate {
             .collect::<Result<_, _>>()?;
         let key = PKey::private_key_from_der(key)?;
         // Validate with a temporary builder, not at the first client handshake.
-        let mut context =
-            boring::ssl::SslContextBuilder::new(boring::ssl::SslMethod::tls_server())?;
+        let mut context = boring::ssl::SslContextBuilder::new(boring::ssl::SslMethod::tls())?;
         if let Some(leaf) = chain.first() {
             context.set_certificate(leaf)?;
         }
