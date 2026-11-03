@@ -1,0 +1,48 @@
+name: Experimental tokio-quiche transport
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/five-priorities-20261103]
+    paths:
+      - crates/zelvik-edge-h3-quiche/**
+      - .github/workflows/h3-quiche-adapter.yml
+permissions:
+  contents: read
+concurrency:
+  group: h3-quiche-adapter-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  transport:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    env:
+      RUSTFLAGS: '-C target-cpu=x86-64-v2'
+      CARGO_BUILD_JOBS: '2'
+      RUST_TEST_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: clippy
+      - name: Install BoringSSL build prerequisites
+        run: sudo apt-get update && sudo apt-get install -y cmake clang libclang-dev build-essential pkg-config perl openssl
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/zelvik-edge-h3-quiche -> target
+          key: h3-quiche-0.20.1
+          cache-on-failure: true
+      - name: Check transport and exercise real H3 semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/h3-quiche
+          cargo clippy --locked --manifest-path crates/zelvik-edge-h3-quiche/Cargo.toml --all-targets -- -D clippy::correctness -D clippy::suspicious > .local/h3-quiche/clippy.log 2>&1
+          cargo test --locked --manifest-path crates/zelvik-edge-h3-quiche/Cargo.toml --all-targets -- --nocapture > .local/h3-quiche/tests.log 2>&1
+      - name: Retain all results and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3-quiche-adapter-${{ github.sha }}
+          path: .local/h3-quiche/
+          include-hidden-files: true
+          if-no-files-found: error
