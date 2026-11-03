@@ -62,3 +62,10 @@ RW+edge-triggered 初始 EPOLLOUT 后没有继续空闲唤醒，不能仅凭永�
 全仓门禁也暴露了 fake-time shedding 测试与真实压力观察共用原子状态、H3 NAT 用例依赖全局压力滞回等问题。生产仍使用相同单例状态和完整压力组合，测试拥有独立 shedding 状态和明确的完整 QUIC 压力观测；保留所有原断言，并增加并发状态隔离、高压按 IP 限流、总路由上限用例。修复后本地完整库 1,300 通过、0 失败、2 项既有忽略，全目标 Clippy 通过；独立唤醒包 13 项通过。
 
 前三次 CI 分别停止于过期 Cargo 目标名、预编译模式不必要的 Cargo 前置检查、共享测试状态导致的 8 项库测试失败；均归档，未算原生协议成功。源码最终提交 `4651bd39f576687240bbefe99bfee38927b96c3d` 的 [Actions 41553649436](https://github.com/Zelvik-Labs/edge/actions/runs/41553649436) 两个执行 job 均成功，原生 Linux 6.8 四轮 worker/readable 对照全部通过：IPv4/IPv6 八种协议路径、真实 generation reload、网络清理与前后二进制一致性均复核成功；8 次 H2 和 16 个 H3/QUIC 探针成功，所报队列错误与丢弃计数均为 0。没有整机吞吐提升或超过 Nginx/OpenResty 的新结论。完整过程与原始证据见[第 7 轮报告](performance-af-xdp-node-readiness-2026-11-02.md)。
+
+
+## 第 8 轮：完整节点 UDP 复用对比（11-03）
+
+新增 byte/sequence 校验 C 负载工具、独立回源、计时 gate 和 CPU/FD/线程/steal 观测。release Edge 两种 wake、官方固定版本 Nginx/OpenResty 在相同四 CPU 分工、64/1200 字节、1/16 流下做四轮轮换对照；源端口数证明真实复用，UDP 无重试。源码 `4b29028edb47e6a038392d066eee747e2f34d3f7` 的 [Actions 41561819976](https://github.com/Zelvik-Labs/edge/actions/runs/41561819976) 两个执行 job 成功，68/68 场景通过、578 万 RTT 独立复核，双向 XSK redirect 和流水线计数相符，所报错误/丢弃为 0。
+
+READABLE 单流吞吐配对中位数 +14.81%/+13.51%，16 流却 -3.62%/-3.56%，默认 worker 不切换。四档仍落后于基线；基线 16 流客户端均超过 90% CPU，15 个单流基线样本短于 0.5 秒，不能视为最大容量。全部离群值保留，含单流大报文 P99 回退 +59.72%。仅为 IPv4 UDP 单队列 SKB/copy，不代表 H3/缓存或硬件性能。完整结果与已核对原始产物见[第 8 轮报告](performance-af-xdp-udp-reuse-2026-11-03.md)。后续优先实际 CPU/系统调用与重复解析归因，不将组件 3 倍直接外推整机。

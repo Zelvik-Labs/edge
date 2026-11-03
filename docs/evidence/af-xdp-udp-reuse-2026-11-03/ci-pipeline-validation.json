@@ -1,0 +1,294 @@
+{
+  "passed": true,
+  "cases": [
+    {
+      "round": 1,
+      "target": "worker",
+      "concurrency": 1,
+      "payload": 64,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 1,
+      "target": "readable",
+      "concurrency": 1,
+      "payload": 64,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 2,
+      "target": "readable",
+      "concurrency": 1,
+      "payload": 64,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 2,
+      "target": "worker",
+      "concurrency": 1,
+      "payload": 64,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 3,
+      "target": "readable",
+      "concurrency": 1,
+      "payload": 64,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 3,
+      "target": "worker",
+      "concurrency": 1,
+      "payload": 64,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 4,
+      "target": "worker",
+      "concurrency": 1,
+      "payload": 64,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 4,
+      "target": "readable",
+      "concurrency": 1,
+      "payload": 64,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 1,
+      "target": "worker",
+      "concurrency": 1,
+      "payload": 1200,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 1,
+      "target": "readable",
+      "concurrency": 1,
+      "payload": 1200,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 2,
+      "target": "readable",
+      "concurrency": 1,
+      "payload": 1200,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 2,
+      "target": "worker",
+      "concurrency": 1,
+      "payload": 1200,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 3,
+      "target": "readable",
+      "concurrency": 1,
+      "payload": 1200,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 3,
+      "target": "worker",
+      "concurrency": 1,
+      "payload": 1200,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 4,
+      "target": "worker",
+      "concurrency": 1,
+      "payload": 1200,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 4,
+      "target": "readable",
+      "concurrency": 1,
+      "payload": 1200,
+      "requests": 11000,
+      "redirect": 22000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 1,
+      "target": "worker",
+      "concurrency": 16,
+      "payload": 64,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 1,
+      "target": "readable",
+      "concurrency": 16,
+      "payload": 64,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 2,
+      "target": "readable",
+      "concurrency": 16,
+      "payload": 64,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 2,
+      "target": "worker",
+      "concurrency": 16,
+      "payload": 64,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 3,
+      "target": "readable",
+      "concurrency": 16,
+      "payload": 64,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 3,
+      "target": "worker",
+      "concurrency": 16,
+      "payload": 64,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 4,
+      "target": "worker",
+      "concurrency": 16,
+      "payload": 64,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 4,
+      "target": "readable",
+      "concurrency": 16,
+      "payload": 64,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 1,
+      "target": "worker",
+      "concurrency": 16,
+      "payload": 1200,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 1,
+      "target": "readable",
+      "concurrency": 16,
+      "payload": 1200,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 2,
+      "target": "readable",
+      "concurrency": 16,
+      "payload": 1200,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 2,
+      "target": "worker",
+      "concurrency": 16,
+      "payload": 1200,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 3,
+      "target": "readable",
+      "concurrency": 16,
+      "payload": 1200,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 3,
+      "target": "worker",
+      "concurrency": 16,
+      "payload": 1200,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 4,
+      "target": "worker",
+      "concurrency": 16,
+      "payload": 1200,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    },
+    {
+      "round": 4,
+      "target": "readable",
+      "concurrency": 16,
+      "payload": 1200,
+      "requests": 176000,
+      "redirect": 352000,
+      "pressure_at_report": "normal"
+    }
+  ],
+  "scope": "all32Node cases, end-of-run diagnostic counters includewarmup; pressure is end-of-run, not timed phase"
+}
