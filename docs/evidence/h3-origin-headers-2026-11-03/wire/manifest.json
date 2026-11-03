@@ -1,0 +1,43 @@
+{
+  "artifact_id": 13228395386,
+  "archive": "raw.zip",
+  "archive_bytes": 3292,
+  "archive_sha256": "d8e658fffb6361d1020378afb324148bc351fb332de0970daf59654ae5127d12",
+  "files": [
+    {
+      "path": "origin_h3__wire_tests__idle_expiration_releases_the_sender_driver_and_endpoint.json",
+      "bytes": 287,
+      "sha256": "1987324194e2756d8cdf492cd30a31988fb9aa40fa4b6d5a9de606b320984b1e"
+    },
+    {
+      "path": "origin_h3__wire_tests__abandoned_request_body_writer_cannot_be_finished_into_a_healthy_pool_entry.json",
+      "bytes": 306,
+      "sha256": "4b446de2978c37bbd9f6891dc5543a18bd3e7b82f242ac4d507b38feceb3a0eb"
+    },
+    {
+      "path": "origin_h3__wire_tests__partial_response_and_reset_are_not_returned_to_the_idle_pool.json",
+      "bytes": 292,
+      "sha256": "ffe9cd14db46a42e0d16dff2c8cc2c07d638d367246813ea811fdf36303a7dd3"
+    },
+    {
+      "path": "origin_h3__wire_tests__pending_header_and_trailer_timeouts_do_not_prove_reusable_completion.json",
+      "bytes": 300,
+      "sha256": "e5432011d477266c3bdd255d435d5e01ce4c3040c159e1d0bebf04407029126e"
+    },
+    {
+      "path": "origin_h3__wire_tests__pooled_h3_contexts_keep_peer_trust_and_group_isolation.json",
+      "bytes": 286,
+      "sha256": "fa6cc412cafdff7895ce6605f69a3b851bce2051c051cd4de06fea5f530ea56d"
+    },
+    {
+      "path": "origin_h3__wire_tests__request_upload_progresses_while_response_headers_are_pending.json",
+      "bytes": 292,
+      "sha256": "36fa3a9fb454aa500fe029e3dab30eb7565625f433b6e4e70efa91b748da6143"
+    },
+    {
+      "path": "origin_h3__wire_tests__sequential_h3_requests_reuse_one_protocol_driver_and_quic_connection.json",
+      "bytes": 301,
+      "sha256": "e512ec89cc7c6ade6b109dc214e88aa3b3105ef52d3b931cb5418095e024448f"
+    }
+  ]
+}

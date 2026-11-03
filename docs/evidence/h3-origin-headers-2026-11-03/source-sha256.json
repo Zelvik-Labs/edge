@@ -1,0 +1,35 @@
+{
+  "commit": "b5bc67ee7484915d7d6f86319cf239ff5d8ade38",
+  "files": [
+    {
+      "path": "src/origin_h3.rs",
+      "bytes": 37474,
+      "sha256": "7a4dff7b6a792a557358f24b60b8f68586648f748c27e60ffbe7c25b24cbd5dc"
+    },
+    {
+      "path": "src/origin_h3_tests.rs",
+      "bytes": 24951,
+      "sha256": "0e01258e22938fd745762e9f49c6b1890470c006c5a64b5bce0202141b093969"
+    },
+    {
+      "path": "src/config/h3_ports.rs",
+      "bytes": 2469,
+      "sha256": "839854edf669b7f7b8f1079bd34d88e8c071943428d49757731b94c414912f40"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "bytes": 39845,
+      "sha256": "6d160d3820ee22f1eba4686e7eb68cdad75e05b5ce7bccf35db76280e32948df"
+    },
+    {
+      "path": "Cargo.toml",
+      "bytes": 8594,
+      "sha256": "84c5739a6fe13362ca7e1769b6c6b5a6b788e79c9de4863552b28a2d0169d57e"
+    },
+    {
+      "path": "Cargo.lock",
+      "bytes": 134855,
+      "sha256": "b2193be03731b279b403f6c9e84be1ae8ff5c63ce39bd06946dd01cdfbafcc46"
+    }
+  ]
+}
