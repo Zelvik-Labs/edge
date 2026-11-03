@@ -325,6 +325,7 @@ def run(args):
                         '-e','RUST_LOG=warn',
                         '-e',f"ZELVIK_EDGE_H3_BACKEND={getattr(args, 'edge_backend', 'quinn-shared')}",
                         '-e',f"ZELVIK_EDGE_H3_TRANSPORT_PROFILE={getattr(args, 'transport_profile', 'production')}",
+                        '-e',f"ZELVIK_EDGE_QUINN_NATIVE_GSO={getattr(args, 'quinn_native_gso', 'auto')}",
                         '-e',f"ZELVIK_EDGE_QUIC_RX_BATCH={getattr(args, 'quic_rx_batch', '1')}",'--entrypoint','/tools/controller',IMAGES['edge'],
                         '--home','/node','--spawn-edge','--edge-binary','/tools/Zelvik-Edge',
                         '--origin','http://origin:8081','--tls-port','19443','--tls-host','localhost',
@@ -485,6 +486,7 @@ if __name__=='__main__':
     p.add_argument('--quic-rx-batch', choices=['1','32'], default='1')
     p.add_argument('--edge-backend', choices=['quinn-shared','quinn-native','tokio-quiche-native'], default='quinn-shared')
     p.add_argument('--transport-profile', choices=['production','matched'], default='production')
+    p.add_argument('--quinn-native-gso', choices=['auto','off'], default='auto')
     p.add_argument('--address-validation', choices=['adaptive','always','off'], default='adaptive')
     p.add_argument('--seconds',type=int,default=8)
     p.add_argument('--repeats',type=int,default=3)

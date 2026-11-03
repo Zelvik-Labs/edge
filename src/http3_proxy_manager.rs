@@ -353,6 +353,7 @@ impl Http3ProxyManager {
         let address = socket.local_addr()?;
         match backend {
             crate::h3_backend::H3Backend::QuinnNative => {
+                let gso = crate::h3_backend::native_gso()?;
                 let config = self.build_quinn_server_config().await?;
                 let endpoint = Endpoint::new(
                     quinn::EndpointConfig::default(),
@@ -360,7 +361,7 @@ impl Http3ProxyManager {
                     socket.into_std()?,
                     Arc::new(quinn::TokioRuntime),
                 )?;
-                info!("HTTP/3 experimental native Quinn listener on {address}");
+                info!(?gso, "HTTP/3 experimental native Quinn listener on {address}");
                 self.run_endpoint(address.port(), endpoint, shutdown).await
             }
             crate::h3_backend::H3Backend::TokioQuicheNative => {
