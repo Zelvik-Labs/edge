@@ -1,0 +1,18 @@
+{
+  "src/main.rs": {
+    "preexisting_format_changes": 34,
+    "new_format_changes": 0
+  },
+  "src/runtime_mode.rs": {
+    "preexisting_format_changes": 1,
+    "new_format_changes": 0
+  },
+  "src/xdp/af_xdp/bridge.rs": {
+    "preexisting_format_changes": 2,
+    "new_format_changes": 0
+  },
+  "src/xdp/smoke.rs": {
+    "preexisting_format_changes": 1,
+    "new_format_changes": 0
+  }
+}

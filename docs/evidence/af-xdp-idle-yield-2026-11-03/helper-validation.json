@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "artifact_id": 13209284565,
+  "normal_runs": 2,
+  "negative_controls": 2,
+  "source_sha256": "658f3b75c323bb74854f3280d75e7151a1a324190f63e02f3161094adadc0061",
+  "scope": "same production helper, finite fairness and busy-yield contract; no loaded network scheduling claim"
+}
