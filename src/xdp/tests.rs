@@ -1130,6 +1130,53 @@ fn xdp_proxy_queue_fault_keeps_sibling_ready() {
 }
 
 #[test]
+fn xdp_proxy_redirect_requires_a_healthy_configured_queue() {
+    let mut config = test_proxy_config("eth0");
+    config.interfaces[0].queues = vec![0, 1];
+    let manager = XdpManager::new(config);
+    *manager.xsk_status.write() = (0..2)
+        .map(|queue| XdpQueueStatus {
+            interface: "eth0".into(),
+            queue,
+            configured: true,
+            socket_created: true,
+            registered: true,
+            ready: true,
+            ..Default::default()
+        })
+        .collect();
+    manager
+        .proxy_redirect_enabled
+        .store(true, Ordering::Relaxed);
+    assert!(manager.proxy_redirect_ready());
+    for queue in 0..2 {
+        {
+            let mut statuses = manager.xsk_status.write();
+            statuses[queue].registered = false;
+            statuses[queue].ready = false;
+            statuses[queue].faulted = true;
+        }
+        assert_eq!(
+            manager.proxy_redirect_ready(),
+            queue == 0,
+            "only the last healthy queue's withdrawal ends readiness"
+        );
+    }
+    assert!(!manager.status().proxy_ready);
+    manager.xsk_status.write().push(XdpQueueStatus {
+        interface: "unconfigured".into(),
+        queue: 0,
+        registered: true,
+        ready: true,
+        ..Default::default()
+    });
+    assert!(
+        !manager.proxy_redirect_ready(),
+        "an unrelated queue cannot make the configured dataplane ready"
+    );
+}
+
+#[test]
 fn xdp_map_sync_failure_status_is_fail_open() {
     let manager = XdpManager::new(XdpConfig {
         enabled: true,
