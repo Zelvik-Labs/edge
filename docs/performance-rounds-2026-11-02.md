@@ -69,3 +69,10 @@ RW+edge-triggered 初始 EPOLLOUT 后没有继续空闲唤醒，不能仅凭永�
 新增 byte/sequence 校验 C 负载工具、独立回源、计时 gate 和 CPU/FD/线程/steal 观测。release Edge 两种 wake、官方固定版本 Nginx/OpenResty 在相同四 CPU 分工、64/1200 字节、1/16 流下做四轮轮换对照；源端口数证明真实复用，UDP 无重试。源码 `4b29028edb47e6a038392d066eee747e2f34d3f7` 的 [Actions 41561819976](https://github.com/Zelvik-Labs/edge/actions/runs/41561819976) 两个执行 job 成功，68/68 场景通过、578 万 RTT 独立复核，双向 XSK redirect 和流水线计数相符，所报错误/丢弃为 0。
 
 READABLE 单流吞吐配对中位数 +14.81%/+13.51%，16 流却 -3.62%/-3.56%，默认 worker 不切换。四档仍落后于基线；基线 16 流客户端均超过 90% CPU，15 个单流基线样本短于 0.5 秒，不能视为最大容量。全部离群值保留，含单流大报文 P99 回退 +59.72%。仅为 IPv4 UDP 单队列 SKB/copy，不代表 H3/缓存或硬件性能。完整结果与已核对原始产物见[第 8 轮报告](performance-af-xdp-udp-reuse-2026-11-03.md)。后续优先实际 CPU/系统调用与重复解析归因，不将组件 3 倍直接外推整机。
+
+
+## 第 9 轮：健康队列门禁与逐轮分配（11-03）
+
+回归复现内部 redirect/worker 继续条件在最后一条健康队列退出后仍返回 true。要求至少一条配置内健康队列，保留故障 siblings 隔离和公开全健康状态定义；同时消除每轮接口 Vec 分配。没有将公开状态的首次测试误用当作内部问题证据，所有失败保留。相关 9 项本地测试、全目标 Clippy 通过。
+
+源码 `2f65ad03d1ed309b62746b5d55363b75b848ac71` 的 [Actions 41564288724](https://github.com/Zelvik-Labs/edge/actions/runs/41564288724) 两个执行 job 均成功，四轮 worker/readable 原生协议、IPv4/IPv6、实际 manager reload、二进制一致和网络清理全部通过；8 次 H2、16 个 H3/QUIC 探针成功，所报队列错误/丢弃为 0。零健康条件目前是受控 manager 状态回归，尚非硬件资源耗尽注入；没有该改动的吞吐收益数据，也不将第 8 轮成绩归给本轮。完整证据见[第 9 轮报告](performance-af-xdp-queue-health-2026-11-03.md)。

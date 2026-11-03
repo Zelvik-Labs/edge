@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "source_commit": "2f65ad03d1ed309b62746b5d55363b75b848ac71",
+  "workflow": 41564288724,
+  "artifact": 13199965767,
+  "case_order": [
+    "1-worker",
+    "1-readable",
+    "2-readable",
+    "2-worker"
+  ],
+  "same_binaries": true,
+  "h2_checks": 8,
+  "h3_quic_probe_successes": 16,
+  "all_queue_fault_counts_zero": true,
+  "all_network_cleanup_passed": true,
+  "binary_sha256": {
+    "Zelvik-Edge": "5ee985a4922f7f82ce416ad483843e6c492d6d8834278980c1ac188d339d53a7",
+    "h3-probe": "ea52d93abcdd32b1165786bb67f3bcc0c160dba55e7240a58570232f13cd0beb"
+  },
+  "scope": "native full-node functional suites; zero-survivor regression is a separate controlled manager-state unit test, not hardware fault injection; no throughput claim"
+}

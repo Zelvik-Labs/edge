@@ -42,7 +42,7 @@ UDP 无重试，完整回复前缀、长度、正文、序号必须匹配。基�
 
 ## 资源与限制
 
-单流代理进程树 CPU 中位数约为 worker **114%**、READABLE **105%～108%**、两个基线 **51%～52%**，100% 表示一个 CPU。16 流 Edge 约 **150%～156%**，基线约 **156%～179%**。CPU 来自略宽于客户端计时的窗口，最大快照开销 **1.11%**；计数分辨率 10ms，不能解读微小 CPU 差异。
+单流代理进程树 CPU 中位数约为 worker **114%**、READABLE **105%～108%**、两个基线 **51%～52%**，100% 表示一个 CPU。16 流 Edge 约 **150%～156%**，基线约 **156%～179%**。CPU 来自略宽于客户端计时的窗口，最大快照开销 **1.11%**；计数分辨率 10ms，不能解读微小差异。网络内核工作也可能计入客户端或其他上下文，代理进程树 CPU 不能单独代表全部网络 CPU 成本。
 
 全部观测 CPU steal 为 **0%**。以下限制均标记，未删除样本：
 
@@ -65,6 +65,8 @@ READABLE 比 worker 少一条线程和两个 FD：单流 6/7 条线程，16 流 
 - [完整汇总与质量标记](evidence/af-xdp-udp-reuse-2026-11-03/ci-final-summary.json)、[环境和源码摘要](evidence/af-xdp-udp-reuse-2026-11-03/ci-final-metadata.json)、[job/step](evidence/af-xdp-udp-reuse-2026-11-03/ci-final-jobs.json)。
 - [独立复算](evidence/af-xdp-udp-reuse-2026-11-03/ci-final-validation.json)、[复算程序](evidence/af-xdp-udp-reuse-2026-11-03/validate-ci.py)、[双向流水线核对](evidence/af-xdp-udp-reuse-2026-11-03/ci-pipeline-validation.json)。
 - [本地记录](evidence/af-xdp-udp-reuse-2026-11-03/local-validation.zip)及[清单](evidence/af-xdp-udp-reuse-2026-11-03/local-manifest.json)：C 工具 5 项、分析 3 项、Rust lib check 通过；也保留较早开发尝试，不将其算成原生测量。
+
+归档后将[负载源码](../benches/support/udp-bench.c)原样移至 `benches/support`：SHA256 与实测提交一致，本地重编二进制逐字节相同，5 项工具测试通过。首次重编被 6GiB 剩余空间保护拒绝，随后一次准备测试因二进制未生成而失败，执行了 0 项；修正执行顺序并无损归档历史数据后重编通过。原失败与验证见[迁移验证记录](evidence/af-xdp-udp-reuse-2026-11-03/loadgen-relocation.zip)和[结论](evidence/af-xdp-udp-reuse-2026-11-03/loadgen-move-verification.json)，不将准备失败或本地重编计入 CI 性能结果。
 
 ## 决定与后续
 
