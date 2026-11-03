@@ -1,10 +1,31 @@
 //! Prevalidated TLS material; parsing happens during configuration publication.
 use boring::{
     error::ErrorStack,
+    ex_data::Index,
     pkey::{PKey, Private},
-    ssl::SslRef,
+    ssl::{SelectCertError, Ssl, SslRef},
     x509::X509,
 };
+
+/// Per-context admission marker, checked before selecting/signing certificates.
+/// Rejected initials still run the upstream closing stage to unmap their CIDs.
+#[derive(Clone, Copy)]
+pub struct HandshakeGate(Index<Ssl, bool>);
+impl HandshakeGate {
+    pub fn new() -> Result<Self, ErrorStack> {
+        Ok(Self(Ssl::new_ex_index()?))
+    }
+    pub fn reject(&self, ssl: &mut SslRef) {
+        ssl.set_ex_data(self.0, true);
+    }
+    pub fn check(&self, ssl: &SslRef) -> Result<(), SelectCertError> {
+        if ssl.ex_data(self.0).copied().unwrap_or(false) {
+            Err(SelectCertError::ERROR)
+        } else {
+            Ok(())
+        }
+    }
+}
 
 pub struct Certificate {
     chain: Vec<X509>,

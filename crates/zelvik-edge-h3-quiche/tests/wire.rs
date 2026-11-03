@@ -15,7 +15,27 @@ use tokio_quiche::{
     metrics::DefaultMetrics,
     settings::{CertificateKind, Hooks, QuicSettings, TlsCertificatePaths},
 };
+use zelvik_edge_h3_quiche::tls::HandshakeGate;
 use zelvik_edge_h3_quiche::{CloseHandle, Connection, Limits};
+
+struct AdmissionTls(HandshakeGate);
+impl tokio_quiche::quic::ConnectionHook for AdmissionTls {
+    fn create_custom_ssl_context_builder(
+        &self,
+        paths: TlsCertificatePaths<'_>,
+    ) -> Option<boring::ssl::SslContextBuilder> {
+        let mut builder =
+            boring::ssl::SslContextBuilder::new(boring::ssl::SslMethod::tls()).unwrap();
+        builder.set_certificate_chain_file(paths.cert).unwrap();
+        builder
+            .set_private_key_file(paths.private_key, boring::ssl::SslFiletype::PEM)
+            .unwrap();
+        builder.check_private_key().unwrap();
+        let gate = self.0;
+        builder.set_select_certificate_callback(move |hello| gate.check(hello.ssl()));
+        Some(builder)
+    }
+}
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 struct Fixture {
@@ -24,6 +44,8 @@ struct Fixture {
     client: quinn::Connection,
     server: Connection,
     close: CloseHandle,
+    listener: tokio_quiche::QuicConnectionStream<DefaultMetrics>,
+    gate: HandshakeGate,
 }
 impl Fixture {
     async fn new(limits: Limits) -> Self {
@@ -73,6 +95,9 @@ impl Fixture {
         settings.initial_max_stream_data_uni = 64 * 1024;
         settings.initial_max_data = 256 * 1024;
         settings.max_idle_timeout = Some(Duration::from_secs(5));
+        let gate = HandshakeGate::new().unwrap();
+        let mut hooks = Hooks::default();
+        hooks.connection_hook = Some(Arc::new(AdmissionTls(gate)));
         let params = ConnectionParams::new_server(
             settings,
             TlsCertificatePaths {
@@ -80,7 +105,7 @@ impl Fixture {
                 private_key: key.to_str().unwrap(),
                 kind: CertificateKind::X509,
             },
-            Hooks::default(),
+            hooks,
         );
         let mut listeners = tokio_quiche::listen([socket], params, DefaultMetrics).unwrap();
         let mut roots = rustls::RootCertStore::empty();
@@ -101,7 +126,8 @@ impl Fixture {
         )));
         let connect = endpoint.connect(address, "localhost").unwrap();
         let (driver, server, close) = zelvik_edge_h3_quiche::server(limits).unwrap();
-        let incoming = listeners[0].next().await.unwrap().unwrap();
+        let mut listener = listeners.pop().unwrap();
+        let incoming = listener.next().await.unwrap().unwrap();
         let _metadata = incoming.start(driver);
         let client = connect.await.unwrap();
         Self {
@@ -110,8 +136,45 @@ impl Fixture {
             client,
             server,
             close,
+            listener,
+            gate,
         }
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rejected_initials_finish_cleanup_without_admitting_application_streams() {
+    tokio::time::timeout(Duration::from_secs(15), async {
+        let mut fixture = Fixture::new(Limits::default()).await;
+        for _ in 0..16 {
+            let connect = fixture
+                .endpoint
+                .connect(fixture.client.remote_address(), "localhost")
+                .unwrap();
+            let incoming = fixture.listener.next().await.unwrap().unwrap();
+            let reason = zelvik_edge_h3_quiche::admission::reject(incoming, fixture.gate)
+                .await
+                .unwrap();
+            assert!(!reason.is_empty());
+            assert!(connect.await.is_err(), "rejected TLS must never establish");
+        }
+        let (mut tx, _rx) = fixture.client.open_bi().await.unwrap();
+        tx.write_all(b"existing connection remains healthy")
+            .await
+            .unwrap();
+        tx.finish().unwrap();
+        let mut stream = poll_fn(|cx| fixture.server.poll_accept_bidi(cx))
+            .await
+            .unwrap();
+        let mut body = Vec::new();
+        while let Some(chunk) = poll_fn(|cx| stream.poll_data(cx)).await.unwrap() {
+            body.extend_from_slice(&chunk);
+        }
+        assert_eq!(body, b"existing connection remains healthy");
+        poll_fn(|cx| stream.poll_finish(cx)).await.unwrap();
+    })
+    .await
+    .expect("admission rejection must run bounded cleanup");
 }
 impl Drop for Fixture {
     fn drop(&mut self) {

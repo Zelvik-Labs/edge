@@ -32,10 +32,11 @@ impl ConnectionHook for PreparedTls {
 // worst-case payload plus bounded adapter RX/TX, QUIC receive window and
 // metadata headroom. The token follows the worker and outstanding Bytes.
 const TRANSPORT_RESERVATION: u64 = 4 * 1024 * 1024;
-struct TransportReservation;
+const LISTEN_BACKLOG: usize = 32;
+struct TransportReservation(u64);
 impl Drop for TransportReservation {
     fn drop(&mut self) {
-        MEMORY_GOVERNOR.workspace_refund(TRANSPORT_RESERVATION);
+        MEMORY_GOVERNOR.workspace_refund(self.0);
     }
 }
 
@@ -57,7 +58,15 @@ impl Http3ProxyManager {
     ) -> Result<()> {
         self.validate_quiche_policy()?;
         let address = socket.local_addr()?;
-        let builder = self.cert_selector.build_quiche_ssl_builder()?;
+        let (builder, handshake_gate) = self.cert_selector.build_quiche_ssl_builder()?;
+        // The library queues initials before our per-connection admission.
+        // Reserve the full bounded backlog plus one inline rejection worker.
+        let backlog_bytes = (LISTEN_BACKLOG as u64 + 1) * TRANSPORT_RESERVATION;
+        anyhow::ensure!(
+            MEMORY_GOVERNOR.try_admit_workspace(backlog_bytes),
+            "insufficient workspace budget for the native QUIC accept backlog"
+        );
+        let _backlog = TransportReservation(backlog_bytes);
         let mut settings = QuicSettings::default();
         settings.enable_dgram = false;
         settings.enable_early_data = false;
@@ -73,7 +82,7 @@ impl Http3ProxyManager {
         settings.max_stream_window = 64 * 1024;
         settings.handshake_timeout = Some(std::time::Duration::from_secs(10));
         settings.max_idle_timeout = Some(std::time::Duration::from_secs(30));
-        settings.listen_backlog = 32;
+        settings.listen_backlog = LISTEN_BACKLOG;
         let mut hooks = Hooks::default();
         hooks.connection_hook = Some(Arc::new(PreparedTls(Mutex::new(Some(builder)))));
         // The upstream hook requires Some(paths), but our prepared builder is
@@ -99,7 +108,20 @@ impl Http3ProxyManager {
         info!("HTTP/3 experimental tokio-quiche 0.20.0 + Hyperium h3 listener on {address}");
         loop {
             let incoming = tokio::select! {
-                _ = shutdown.changed() => return Ok(()),
+                _ = shutdown.changed() => {
+                    listener.close();
+                    while let Some(queued) = listener.next().await {
+                        match queued {
+                            Ok(initial) => {
+                                let reason = zelvik_edge_h3_quiche::admission::reject(initial, handshake_gate)
+                                    .await.map_err(|error| anyhow::anyhow!(error))?;
+                                debug!("HTTP/3 native queued initial rejected during shutdown: {reason}");
+                            }
+                            Err(error) => error!("HTTP/3 native queued initial failed during shutdown: {error}"),
+                        }
+                    }
+                    return Ok(());
+                },
                 incoming = listener.next() => incoming,
             };
             let Some(incoming) = incoming else {
@@ -112,7 +134,13 @@ impl Http3ProxyManager {
                     continue;
                 }
             };
-            self.validate_quiche_policy()?; // a reload must never silently select a weaker Retry policy
+            if let Err(error) = self.validate_quiche_policy() {
+                let reason = zelvik_edge_h3_quiche::admission::reject(incoming, handshake_gate)
+                    .await
+                    .map_err(|error| anyhow::anyhow!(error))?;
+                error!("HTTP/3 native policy rejects new initial: {error}; {reason}");
+                continue;
+            }
             let remote = incoming.peer_addr();
             if crate::l4_defense::is_l4_blocked(
                 &self.config_store,
@@ -120,7 +148,10 @@ impl Http3ProxyManager {
                 remote.ip(),
             ) {
                 H3_IGNORED_INCOMING.fetch_add(1, Ordering::Relaxed);
-                drop(incoming); // no worker/handshake is started, hence no reply
+                let reason = zelvik_edge_h3_quiche::admission::reject(incoming, handshake_gate)
+                    .await
+                    .map_err(|error| anyhow::anyhow!(error))?;
+                debug!("HTTP/3 native blocked peer {remote} rejected: {reason}");
                 continue;
             }
             let Some(connection_permit) =
@@ -134,7 +165,10 @@ impl Http3ProxyManager {
                         address.port()
                     ),
                 );
-                drop(incoming);
+                let reason = zelvik_edge_h3_quiche::admission::reject(incoming, handshake_gate)
+                    .await
+                    .map_err(|error| anyhow::anyhow!(error))?;
+                debug!("HTTP/3 native admission rejection for {remote}: {reason}");
                 continue;
             };
             let listener_key = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), address.port());
@@ -149,7 +183,10 @@ impl Http3ProxyManager {
                         address.port()
                     ),
                 );
-                drop(incoming);
+                let reason = zelvik_edge_h3_quiche::admission::reject(incoming, handshake_gate)
+                    .await
+                    .map_err(|error| anyhow::anyhow!(error))?;
+                debug!("HTTP/3 native admission rejection for {remote}: {reason}");
                 continue;
             };
             if !MEMORY_GOVERNOR.try_admit_workspace(TRANSPORT_RESERVATION) {
@@ -162,13 +199,16 @@ impl Http3ProxyManager {
                         address.port()
                     ),
                 );
-                drop(incoming);
+                let reason = zelvik_edge_h3_quiche::admission::reject(incoming, handshake_gate)
+                    .await
+                    .map_err(|error| anyhow::anyhow!(error))?;
+                debug!("HTTP/3 native admission rejection for {remote}: {reason}");
                 continue;
             }
             let owner = Arc::new((
                 connection_permit,
                 listener_permit,
-                TransportReservation,
+                TransportReservation(TRANSPORT_RESERVATION),
                 crate::metrics::transport_metrics_guard(
                     crate::metrics::ShadowTransportKind::QuicConnection,
                 ),
@@ -189,8 +229,9 @@ impl Http3ProxyManager {
                 );
                 let handler_shutdown = request_shutdown.clone();
                 let serve = async move {
-                    let (_, worker) = incoming.handshake(driver).await?;
-                    tokio_quiche::InitialQuicConnection::resume(worker);
+                    // start owns handshake -> running -> closing as one lifecycle.
+                    // Cancelling our H3 handler cannot drop a paused Running worker.
+                    let _metadata = incoming.start(driver);
                     manager
                         .serve_h3_transport(
                             transport,

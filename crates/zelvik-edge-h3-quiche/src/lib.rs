@@ -23,6 +23,7 @@ use tokio_quiche::{
     quiche,
 };
 
+pub mod admission;
 pub mod tls;
 pub use boring;
 pub use tokio_quiche;
@@ -871,8 +872,19 @@ impl ApplicationOverQuic for Driver {
     fn should_act(&self) -> bool {
         true
     }
-    async fn wait_for_data(&mut self, _: &mut QuicheConnection) -> QuicResult<()> {
+    async fn wait_for_data(&mut self, qconn: &mut QuicheConnection) -> QuicResult<()> {
         self.shared.notify.notified().await;
+        // A close may arrive before the handshake completes, when the worker
+        // does not call process_reads/process_writes yet. Never orphan it until
+        // the handshake timeout just because no application stream exists.
+        let close = self.shared.state.lock().close.take();
+        if let Some((code, reason)) = close {
+            match qconn.close(true, code, &reason) {
+                Ok(()) | Err(quiche::Error::Done) => {}
+                Err(error) => return Err(error.into()),
+            }
+            return Err("H3 transport explicitly closed".into());
+        }
         Ok(())
     }
     fn process_reads(&mut self, qconn: &mut QuicheConnection) -> QuicResult<()> {

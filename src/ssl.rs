@@ -201,7 +201,10 @@ impl DynamicCertSelector {
     #[cfg(feature = "h3-quiche")]
     pub(crate) fn build_quiche_ssl_builder(
         &self,
-    ) -> anyhow::Result<zelvik_edge_h3_quiche::boring::ssl::SslContextBuilder> {
+    ) -> anyhow::Result<(
+        zelvik_edge_h3_quiche::boring::ssl::SslContextBuilder,
+        zelvik_edge_h3_quiche::tls::HandshakeGate,
+    )> {
         use zelvik_edge_h3_quiche::boring::ssl::{
             NameType, SelectCertError, Ssl, SslContextBuilder, SslMethod, SslVersion,
         };
@@ -210,10 +213,12 @@ impl DynamicCertSelector {
             "no certificate snapshot available for QUIC listener"
         );
         let selected = Ssl::new_ex_index::<Arc<CertPair>>()?;
+        let admission = zelvik_edge_h3_quiche::tls::HandshakeGate::new()?;
         let mut builder = SslContextBuilder::new(SslMethod::tls())?;
         builder.set_min_proto_version(Some(SslVersion::TLS1_3))?;
         let selector = self.clone();
         builder.set_select_certificate_callback(move |mut hello| {
+            admission.check(hello.ssl())?;
             if hello.ssl().ex_data(selected).is_some() {
                 return Ok(());
             }
@@ -249,7 +254,7 @@ impl DynamicCertSelector {
             }
             Ok(false)
         })?;
-        Ok(builder)
+        Ok((builder, admission))
     }
 
     pub fn resolve_certified_key_for_host(&self, host: &str) -> Option<Arc<CertifiedKey>> {
@@ -1138,6 +1143,9 @@ fn fnv_hash64_bytes(chunks: &[&[u8]]) -> u64 {
 mod tests {
     use super::*;
     use crate::config_models::{HTTPSConfig, ServerConfig, ServerNameConfig};
+
+    #[cfg(feature = "h3-quiche")]
+    include!("ssl_quiche_tests.rs");
 
     const CERT_A_PEM: &str =
         include_str!("../pingora-main/pingora-core/examples/keys/server/cert.pem");
