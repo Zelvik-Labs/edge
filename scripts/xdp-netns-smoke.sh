@@ -62,7 +62,9 @@ trap cleanup EXIT
 [[ "$(uname -s)" == "Linux" ]] || die "Linux is required for XDP/AF_XDP smoke tests"
 [[ "${EUID:-$(id -u)}" -eq 0 ]] || die "root or CAP_NET_ADMIN/CAP_BPF/CAP_NET_RAW is required"
 require_cmd ip
-require_cmd cargo
+if [[ "${XDP_SMOKE_SKIP_BUILD:-0}" != "1" ]]; then
+    require_cmd cargo
+fi
 require_cmd ethtool
 require_cmd ping
 require_cmd python3
