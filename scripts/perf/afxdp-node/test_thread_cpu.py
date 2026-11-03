@@ -85,7 +85,7 @@ assert sys.stdin.readline().strip()=='EXIT';release.set();a.join();b.join()
 
 
     def test_native_thread_exit_and_creation_leave_unknown_deltas_visible(self):
-        program=r''' 
+        program=r'''
 import ctypes,json,sys,threading,time
 libc=ctypes.CDLL(None,use_errno=True);old_ready=threading.Event();old_exit=threading.Event();new_ready=threading.Event();new_exit=threading.Event();ids={}
 def old_worker():
