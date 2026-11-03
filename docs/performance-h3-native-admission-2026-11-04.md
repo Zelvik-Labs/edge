@@ -105,6 +105,10 @@ python3 docs/evidence/h3-capacity-local-2026-11-04/verify.py
 
 ## 持续周转暴露的准入顺序
 
+同版本的[完整 243 格矩阵](performance-h3-native-capacity-matrix-2026-11-04.md)中，
+tokio-quiche 的 81/81 个短场景均通过；原生 Quinn 有一个独立 curl 56 错误。
+这与下述持续失败并不矛盾：每格重启的短测不能证明一个进程持续接收连接时稳定。
+
 短探针通过后，用实际 `b30f0cf` 二进制继续做一次 262,144 请求、32 并发、2 GiB 的 H3/HIT/fresh。
 本地两个代理 CPU 上耗时 774.10 秒，260,579 次成功、1565 次失败：
 120 次 curl 95（stream reset）、654 次 curl 7（连接关闭）、791 次 curl 28（超时）。
@@ -136,6 +140,13 @@ check、Clippy、1350 个库测试及 16 个二进制测试，4 个性能探针�
 新增三项回归覆盖连接/请求准入、工作区以及不能绕过分类配额；原有四项容量生命周期回归继续通过。
 [完整日志与核验](evidence/h3-native-validation-2026-11-04/quiche-node-all-gates-pass)保留了实际产物，
 不是以编译通过代替网络验收。
+
+[562d49c 短连接探针](https://github.com/Zelvik-Labs/edge/actions/runs/41692111832)再次通过
+三轮 1536/1536 请求，32 并发、1 CPU/2 GiB，未出现最终准入拒绝，已记录 host steal 为零。
+三轮各不足一秒，RPS 为 715.43、715.33、668.37；跨 runner 不与 b30 的绝对值计算提升。
+[全部 63 个原始文件及实际二进制核验](evidence/h3-native-all-gates-2026-11-04)已保留，
+测量 artifact `13259695780`，二进制 artifact `13259535913`。
+实际 Edge SHA-256 为 `0e7f31a48cda7f061c276f82beef5d7883d9f599cce54384697ce34264336daa`。
 
 ```bash
 python3 docs/evidence/h3-capacity-churn-local-2026-11-04/verify.py

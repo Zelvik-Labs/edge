@@ -1,0 +1,730 @@
+backend,batch,cache,cgroup_peak_mib,client_cpu_fraction,connection,cpu_usec_per_request,elapsed,error,failed,manifest,max_host_steal_fraction,new_connections,origin_cpu_fraction,origin_requests,p99_ms,payload_bytes,protocol,proxy_cpu_fraction,proxy_processes_after,rps,source,status,stem,successful,target,unique_connections_per_client
+quinn-native,1,hit,142.31640625,0.9561015532598394,reuse,127.19431654341659,3.02755705200002,,0,native-0-quinn-native-1024/manifest.json,0.0,32,0.009903694458934279,0,5.563000000000001,1024,h3,0.9033041997320491,"PID                 COMMAND             RSS                 NLWP
+26520               controller          5792                2
+26614               Zelvik-Edge         172056              25",7101.765426945903,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,21501,edge,"[16, 16]"
+quinn-native,1,hit,146.9296875,0.6756111615637386,fresh,1801.8515625,0.9187074389999452,,0,native-0-quinn-native-1024/manifest.json,0.0,512,0.032866828674935546,0,63.147999999999996,1024,h3,1.0041803961054625,"PID                 COMMAND             RSS                 NLWP
+27080               controller          5892                2
+27168               Zelvik-Edge         176116              24",557.304728649346,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-native,1,miss,161.875,0.6757130002628899,reuse,503.623046875,0.5161621869999635,,0,native-0-quinn-native-1024/manifest.json,0.0,32,0.17681651678216878,1024,70.753,1024,h3,0.999123943963056,"PID                 COMMAND             RSS                 NLWP
+27605               controller          5896                2
+27692               Zelvik-Edge         180788              44",1983.872561358456,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-native,1,off,149.4140625,0.8928971168722896,reuse,177.21837166100826,3.0285745680000673,,0,native-0-quinn-native-1024/manifest.json,0.0,32,0.3299185730994944,15611,7.998,1024,h3,0.9134845247765874,"PID                 COMMAND             RSS                 NLWP
+28135               controller          5916                2
+28224               Zelvik-Edge         172540              25",5154.570128451152,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,15611,edge,"[16, 16]"
+quinn-native,1,miss,156.87109375,0.7250616604034898,multiplex,428.306640625,0.4674705869999798,,0,native-0-quinn-native-1024/manifest.json,0.0,2,0.19730225294367876,1024,29.244,1024,h3,0.9382108996731787,"PID                 COMMAND             RSS                 NLWP
+28644               controller          5792                2
+28734               Zelvik-Edge         173384              33",2190.5121487355614,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-native,1,hit,143.953125,0.9518437621271241,multiplex,119.71641443538999,3.0224230219998844,,0,native-0-quinn-native-1024/manifest.json,0.0,2,0.009572452231010404,0,5.045,1024,h3,0.8506122343850048,"PID                 COMMAND             RSS                 NLWP
+29167               controller          5844                2
+29256               Zelvik-Edge         168712              26",7105.226450330029,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,21475,edge,"[1, 1]"
+quinn-native,1,miss,156.890625,0.6442253951982296,fresh,2191.001953125,1.169707846999927,,0,native-0-quinn-native-1024/manifest.json,0.0,512,0.05901559109571769,512,87.38,1024,h3,0.9590369106928545,"PID                 COMMAND             RSS                 NLWP
+29685               controller          5916                2
+29775               Zelvik-Edge         181416              26",437.716136822695,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-native,1,off,137.03515625,0.9008834289028632,multiplex,165.74366106080208,3.025433049999947,,0,native-0-quinn-native-1024/manifest.json,0.0,2,0.3321045230202723,15460,7.637,1024,h3,0.8469521412810788,"PID                 COMMAND             RSS                 NLWP
+30201               controller          5764                2
+30291               Zelvik-Edge         163912              25",5110.012267500109,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,15460,edge,"[1, 1]"
+quinn-native,1,off,155.28515625,0.7003268277287353,fresh,1964.47265625,1.0184380660000443,,0,native-0-quinn-native-1024/manifest.json,0.0,512,0.06820836957992985,512,75.617,1024,h3,0.9876005557710137,"PID                 COMMAND             RSS                 NLWP
+30716               controller          5776                2
+30807               Zelvik-Edge         180900              26",502.73061965456594,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-native,1,hit,159.13671875,0.8749022820640562,reuse,1007.887839433294,3.0838043920000473,,0,native-0-quinn-native-131072/manifest.json,0.0,32,0.010006146978728191,0,170.003,131072,h3,0.5536544420356911,"PID                 COMMAND             RSS                 NLWP
+57099               controller          5684                2
+57193               Zelvik-Edge         181036              25",549.3214823853763,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,1694,edge,"[16, 16]"
+quinn-native,1,hit,160.796875,0.8439552340538587,fresh,2508.84375,1.4212323729998388,,0,native-0-quinn-native-131072/manifest.json,0.0,512,0.02073904349489747,0,132.614,131072,h3,0.9038127926179358,"PID                 COMMAND             RSS                 NLWP
+57661               controller          5876                2
+57750               Zelvik-Edge         182272              25",360.2507300894827,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-native,1,miss,163.0,0.8118666334330535,reuse,1518.6015625,1.9765727939998214,,0,native-0-quinn-native-131072/manifest.json,0.0,32,0.07695491937445625,1024,184.837,131072,h3,0.7867395548095055,"PID                 COMMAND             RSS                 NLWP
+58184               controller          5848                2
+58272               Zelvik-Edge         180208              29",518.0684481282466,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-native,1,off,146.83203125,0.8254799524125783,reuse,1127.1630901287554,3.0859846959999686,,0,native-0-quinn-native-131072/manifest.json,0.0,32,0.07135842257592395,1631,171.196,131072,h3,0.5957265447177768,"PID                 COMMAND             RSS                 NLWP
+58709               controller          5920                2
+58798               Zelvik-Edge         173676              25",528.518499172757,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,1631,edge,"[16, 16]"
+quinn-native,1,miss,169.453125,0.8456798436961832,multiplex,1728.451171875,2.329171630000019,,0,native-0-quinn-native-131072/manifest.json,0.0,2,0.0665979260618071,1024,426.113,131072,h3,0.759898488030264,"PID                 COMMAND             RSS                 NLWP
+59233               controller          5880                2
+59324               Zelvik-Edge         187956              25",439.64128139410303,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-native,1,hit,153.62109375,0.8871261375880395,multiplex,1334.9753168779187,3.082337882000047,,0,native-0-quinn-native-131072/manifest.json,0.0,2,0.00947365315480996,0,469.464,131072,h3,0.6492240878866664,"PID                 COMMAND             RSS                 NLWP
+59751               controller          5836                2
+59841               Zelvik-Edge         173516              26",486.3191698592559,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,1499,edge,"[1, 1]"
+quinn-native,1,miss,163.59375,0.798059597419842,fresh,3078.75390625,1.6767262799999116,,0,native-0-quinn-native-131072/manifest.json,0.0,512,0.05812159155757083,512,153.948,131072,h3,0.9401188606646537,"PID                 COMMAND             RSS                 NLWP
+60274               controller          5908                2
+60364               Zelvik-Edge         185300              25",305.35693637486673,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-native,1,off,152.16015625,0.8839531471548987,multiplex,1426.0618982118294,3.0820524920000025,,0,native-0-quinn-native-131072/manifest.json,0.0,2,0.06413064038105937,1454,503.49399999999997,131072,h3,0.6727640120932756,"PID                 COMMAND             RSS                 NLWP
+60788               controller          5908                2
+60877               Zelvik-Edge         176232              25",471.76354191698783,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,1454,edge,"[1, 1]"
+quinn-native,1,off,153.65234375,0.8496641834366698,fresh,2738.01171875,1.5240509430000202,,0,native-0-quinn-native-131072/manifest.json,0.0,512,0.06258780288028648,512,134.603,131072,h3,0.9198262081978066,"PID                 COMMAND             RSS                 NLWP
+61307               controller          5872                2
+61395               Zelvik-Edge         178736              26",335.94677550092445,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-native,1,hit,148.6328125,0.9589385554553839,reuse,308.6076968973747,3.03094602200008,,0,native-0-quinn-native-32768/manifest.json,0.0,32,0.009668928376580382,0,46.618,32768,h3,0.6825941422192524,"PID                 COMMAND             RSS                 NLWP
+41807               controller          5808                2
+41901               Zelvik-Edge         176244              25",2211.8506734660095,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,6704,edge,"[16, 16]"
+quinn-native,1,hit,154.453125,0.7630225396962214,fresh,2055.11328125,1.0684854739999992,,0,native-0-quinn-native-32768/manifest.json,0.0,512,0.02711314351476155,0,71.295,32768,h3,0.984775203410955,"PID                 COMMAND             RSS                 NLWP
+42369               controller          5856                2
+42461               Zelvik-Edge         182572              24",479.1829299122511,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-native,1,miss,189.81640625,0.8130454035103555,reuse,745.4501953125,0.7733227409999017,,0,native-0-quinn-native-32768/manifest.json,0.0,32,0.13611522643689253,1024,84.493,32768,h3,0.9870923994980474,"PID                 COMMAND             RSS                 NLWP
+42893               controller          5956                2
+42983               Zelvik-Edge         179152              38",1324.1560679774839,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-native,1,off,149.19140625,0.9215417094185261,reuse,414.75084414430427,3.0292871950000517,,0,native-0-quinn-native-32768/manifest.json,0.0,32,0.1440193589832253,5627,57.027,32768,h3,0.7704132522832522,"PID                 COMMAND             RSS                 NLWP
+43425               controller          5864                2
+43512               Zelvik-Edge         173568              24",1857.5326926042428,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,5627,edge,"[16, 16]"
+quinn-native,1,miss,186.8828125,0.8138772150538667,multiplex,728.2314453125,0.8191364589999921,,0,native-0-quinn-native-32768/manifest.json,0.0,2,0.13305719554109244,1024,42.782000000000004,32768,h3,0.9103599184321097,"PID                 COMMAND             RSS                 NLWP
+43946               controller          5884                2
+44032               Zelvik-Edge         176156              42",1250.0969633925304,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-native,1,hit,143.953125,0.9041951742152339,multiplex,380.8151046405823,3.033840014000134,,0,native-0-quinn-native-32768/manifest.json,0.0,2,0.009967236195863117,0,27.562,32768,h3,0.6897459952876432,"PID                 COMMAND             RSS                 NLWP
+44475               controller          5812                2
+44562               Zelvik-Edge         169884              25",1811.2359170696063,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,5495,edge,"[1, 1]"
+quinn-native,1,miss,171.56640625,0.7361298146179217,fresh,2519.48046875,1.319932953000034,,0,native-0-quinn-native-32768/manifest.json,0.0,512,0.060951580773207586,512,99.253,32768,h3,0.9773026706152449,"PID                 COMMAND             RSS                 NLWP
+44994               controller          5892                2
+45085               Zelvik-Edge         181920              26",387.8984904773317,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-native,1,off,144.30078125,0.8811673038944969,multiplex,439.99167956656345,3.0340759220000564,,0,native-0-quinn-native-32768/manifest.json,0.0,2,0.12651726913509742,5168,28.883,32768,h3,0.7494463086807218,"PID                 COMMAND             RSS                 NLWP
+45511               controller          5840                2
+45600               Zelvik-Edge         170508              26",1703.3192750803894,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,5168,edge,"[1, 1]"
+quinn-native,1,off,155.08984375,0.7340993225230503,fresh,2175.1640625,1.1716616179999164,,0,native-0-quinn-native-32768/manifest.json,0.0,512,0.06569900286688873,512,88.502,32768,h3,0.9505167557687115,"PID                 COMMAND             RSS                 NLWP
+46028               controller          5848                2
+46120               Zelvik-Edge         181352              24",436.9862357307641,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-shared,1,hit,142.11328125,0.9514964889500077,reuse,131.4131691141639,3.022439423999913,,0,native-0-quinn-shared-1024/manifest.json,0.0,32,0.009659085230354922,0,5.68,1024,h3,0.9178453596031706,"PID                 COMMAND             RSS                 NLWP
+21429               controller          5884                2
+21523               Zelvik-Edge         168048              25",6984.424512324191,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,21110,edge,"[16, 16]"
+quinn-shared,1,hit,147.4140625,0.6438898444488818,fresh,1856.61328125,0.9686198740000691,,0,native-0-quinn-shared-1024/manifest.json,0.0,512,0.029602944116339652,0,64.044,1024,h3,0.9813818872767959,"PID                 COMMAND             RSS                 NLWP
+21994               controller          5988                2
+22086               Zelvik-Edge         174820              25",528.5871307653589,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-shared,1,miss,156.4765625,0.6947229196007254,reuse,503.2626953125,0.5169895650001308,,0,native-0-quinn-shared-1024/manifest.json,0.0,32,0.17498032092770985,1024,72.162,1024,h3,0.9968112219051648,"PID                 COMMAND             RSS                 NLWP
+22518               controller          5848                2
+22608               Zelvik-Edge         174688              35",1980.6976181419461,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-shared,1,off,141.65234375,0.8988589037781732,reuse,184.96813709083608,3.0266112829999656,,0,native-0-quinn-shared-1024/manifest.json,0.0,32,0.31264305572206863,14939,8.56,1024,h3,0.9129811335603982,"PID                 COMMAND             RSS                 NLWP
+23048               controller          5732                2
+23135               Zelvik-Edge         168668              25",4935.883271138975,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,14939,edge,"[16, 16]"
+quinn-shared,1,miss,152.5,0.7302255853679128,multiplex,440.9140625,0.4677376509998794,,0,native-0-quinn-shared-1024/manifest.json,0.0,2,0.19971024312520885,1024,33.022000000000006,1024,h3,0.96527615220806,"PID                 COMMAND             RSS                 NLWP
+23560               controller          5876                2
+23647               Zelvik-Edge         169520              36",2189.2614327946503,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-shared,1,hit,138.25390625,0.9469251070440674,multiplex,120.14168596572488,3.022535234000088,,0,native-0-quinn-shared-1024/manifest.json,0.0,2,0.009636943077567165,0,4.886,1024,h3,0.858173288047078,"PID                 COMMAND             RSS                 NLWP
+24085               controller          5860                2
+24175               Zelvik-Edge         162976              26",7143.010197908373,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,21590,edge,"[1, 1]"
+quinn-shared,1,miss,152.13671875,0.6539919758422675,fresh,2232.041015625,1.167122117999952,,0,native-0-quinn-shared-1024/manifest.json,0.0,512,0.06114955658821893,512,88.537,1024,h3,0.9791648897532477,"PID                 COMMAND             RSS                 NLWP
+24610               controller          5800                2
+24697               Zelvik-Edge         175568              29",438.6858856529879,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-shared,1,off,137.359375,0.9127603032808982,multiplex,180.71889706369723,3.0242901560000064,,0,native-0-quinn-shared-1024/manifest.json,0.0,2,0.3262874754402361,15087,7.439,1024,h3,0.9015358511784258,"PID                 COMMAND             RSS                 NLWP
+25133               controller          5832                2
+25224               Zelvik-Edge         162812              25",4988.608639309398,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,15087,edge,"[1, 1]"
+quinn-shared,1,off,144.21484375,0.6875808505963569,fresh,1984.892578125,1.0174592549999488,,0,native-0-quinn-shared-1024/manifest.json,0.0,512,0.06757715324925072,512,75.044,1024,h3,0.9988262380099449,"PID                 COMMAND             RSS                 NLWP
+25647               controller          5812                2
+25735               Zelvik-Edge         171068              25",503.21425401946516,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-shared,1,hit,151.78125,0.9264457045524306,reuse,1964.3103678929765,3.0790422860000035,,0,native-0-quinn-shared-131072/manifest.json,0.0,32,0.010165498584516668,0,396.535,131072,h3,0.9537524097517369,"PID                 COMMAND             RSS                 NLWP
+52009               controller          5900                2
+52102               Zelvik-Edge         177504              24",485.5405873435277,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,1495,edge,"[16, 16]"
+quinn-shared,1,hit,153.7265625,0.8590083091547857,fresh,3894.876953125,2.1270265729999664,,0,native-0-quinn-shared-131072/manifest.json,0.0,512,0.013970206285711726,0,218.94,131072,h3,0.9375421188026839,"PID                 COMMAND             RSS                 NLWP
+52571               controller          5820                2
+52664               Zelvik-Edge         182684              25",240.7116142784588,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-shared,1,miss,161.03515625,0.8698905947903248,reuse,2510.357421875,2.7778418510001757,,0,native-0-quinn-shared-131072/manifest.json,0.0,32,0.05404519337410994,1024,253.98100000000002,131072,h3,0.9253968144638761,"PID                 COMMAND             RSS                 NLWP
+53096               controller          5840                2
+53187               Zelvik-Edge         177384              32",368.6314970131592,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-shared,1,off,141.6796875,0.8988331829588802,reuse,2074.5456490727533,3.1325312120000035,,0,native-0-quinn-shared-131072/manifest.json,0.0,32,0.06085653648708155,1402,301.428,131072,h3,0.9284865187801349,"PID                 COMMAND             RSS                 NLWP
+53619               controller          5852                2
+53708               Zelvik-Edge         168152              25",447.5613825104956,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,1402,edge,"[16, 16]"
+quinn-shared,1,miss,160.75390625,0.905043427176599,multiplex,2762.5576171875,3.033093681000082,,0,native-0-quinn-shared-131072/manifest.json,0.0,2,0.054950165583097094,1024,675.1819999999999,131072,h3,0.9326645654634903,"PID                 COMMAND             RSS                 NLWP
+54139               controller          5824                2
+54227               Zelvik-Edge         178288              26",337.60909081527717,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-shared,1,hit,157.63671875,0.91422222471749,multiplex,2127.0437361008153,3.0863436960000854,,0,native-0-quinn-shared-131072/manifest.json,0.0,2,0.009868311179818503,0,627.414,131072,h3,0.9297026781945029,"PID                 COMMAND             RSS                 NLWP
+54654               controller          5936                2
+54741               Zelvik-Edge         176328              25",437.0867709089917,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,1349,edge,"[1, 1]"
+quinn-shared,1,miss,153.8515625,0.8166254290263766,fresh,4507.064453125,2.4749682389999634,,0,native-0-quinn-shared-131072/manifest.json,0.0,512,0.04592503378787872,512,233.656,131072,h3,0.932382470060471,"PID                 COMMAND             RSS                 NLWP
+55176               controller          5920                2
+55267               Zelvik-Edge         174656              34",206.87134159219713,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-shared,1,off,149.24609375,0.9145748836557027,multiplex,2322.61804995971,3.083398691999946,,0,native-0-quinn-shared-131072/manifest.json,0.0,2,0.06086887190000899,1241,534.778,131072,h3,0.9348025629894929,"PID                 COMMAND             RSS                 NLWP
+55707               controller          5868                2
+55797               Zelvik-Edge         173712              25",402.4779549981147,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,1241,edge,"[1, 1]"
+quinn-shared,1,off,142.734375,0.8568228626496811,fresh,4095.583984375,2.2247159629998805,,0,native-0-quinn-shared-131072/manifest.json,0.0,512,0.05045453076564545,512,238.338,131072,h3,0.9425648194533645,"PID                 COMMAND             RSS                 NLWP
+56225               controller          6036                2
+56316               Zelvik-Edge         170956              25",230.1417387726217,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-shared,1,hit,143.65234375,0.9601644911870123,reuse,626.383695652174,3.0298240839999835,,0,native-0-quinn-shared-32768/manifest.json,0.0,32,0.010756400073556277,0,30.595000000000002,32768,h3,0.9510007578380633,"PID                 COMMAND             RSS                 NLWP
+36686               controller          5944                2
+36778               Zelvik-Edge         168712              25",1518.239961287477,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,4600,edge,"[16, 16]"
+quinn-shared,1,hit,142.23046875,0.7787768446980566,fresh,2435.046875,1.268953367999984,,0,native-0-quinn-shared-32768/manifest.json,0.0,512,0.023752645889191085,0,124.032,32768,h3,0.9824978848237832,"PID                 COMMAND             RSS                 NLWP
+37247               controller          5860                2
+37341               Zelvik-Edge         166696              25",403.48212386005224,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-shared,1,miss,182.375,0.8301941036811319,reuse,1119.681640625,1.220069493999972,,0,native-0-quinn-shared-32768/manifest.json,0.0,32,0.09071122632298398,1024,115.838,32768,h3,0.939744830633415,"PID                 COMMAND             RSS                 NLWP
+37770               controller          5776                2
+37860               Zelvik-Edge         173724              39",839.2964540428247,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-shared,1,off,146.26953125,0.9351713251865144,reuse,762.5671363998937,3.034021065000161,,0,native-0-quinn-shared-32768/manifest.json,0.0,32,0.10445379027056398,3761,61.707,32768,h3,0.9452851310377596,"PID                 COMMAND             RSS                 NLWP
+38304               controller          5716                2
+38395               Zelvik-Edge         171084              26",1239.6090598664978,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,3761,edge,"[16, 16]"
+quinn-shared,1,miss,183.90234375,0.8543619811664929,multiplex,1039.2392578125,1.1225300529999913,,0,native-0-quinn-shared-32768/manifest.json,0.0,2,0.09919645331758514,1024,59.825,32768,h3,0.9480200526978749,"PID                 COMMAND             RSS                 NLWP
+38822               controller          5872                2
+38912               Zelvik-Edge         173596              31",912.2250199567778,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-shared,1,hit,142.58203125,0.9421608270966284,multiplex,584.7332388089933,3.0288846850000937,,0,native-0-quinn-shared-32768/manifest.json,0.0,2,0.009938641820561442,0,28.997,32768,h3,0.9530993419116948,"PID                 COMMAND             RSS                 NLWP
+39352               controller          5960                2
+39441               Zelvik-Edge         166156              26",1629.9729152613306,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,4937,edge,"[1, 1]"
+quinn-shared,1,miss,169.39453125,0.7346969634528107,fresh,2901.6640625,1.520939320000025,,0,native-0-quinn-shared-32768/manifest.json,0.0,512,0.05338477277318247,512,134.07,32768,h3,0.976798995504946,"PID                 COMMAND             RSS                 NLWP
+39871               controller          5836                2
+39961               Zelvik-Edge         176188              34",336.6340742640486,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-shared,1,off,142.5625,0.9039231998510359,multiplex,677.0820488498933,3.03163974600011,,0,native-0-quinn-shared-32768/manifest.json,0.0,2,0.10423995806788997,4217,31.745,32768,h3,0.9418186985334163,"PID                 COMMAND             RSS                 NLWP
+40400               controller          6000                2
+40488               Zelvik-Edge         167024              27",1390.9964089776277,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,4217,edge,"[1, 1]"
+quinn-shared,1,off,139.578125,0.7446110378689623,fresh,2585.33203125,1.4192174790000536,,0,native-0-quinn-shared-32768/manifest.json,0.0,512,0.05642686986664218,512,121.657,32768,h3,0.9326900348864362,"PID                 COMMAND             RSS                 NLWP
+40919               controller          5836                2
+41011               Zelvik-Edge         167408              24",360.76218590595636,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,hit,135.9765625,0.9469864921324432,reuse,207.6425192193968,3.024522550000029,,0,native-0-tokio-quiche-native-1024/manifest.json,0.0,32,0.009968846157222308,0,9.598,1024,h3,0.9287376614203037,"PID                 COMMAND             RSS                 NLWP
+31594               controller          5792                2
+31687               Zelvik-Edge         162068              25",4472.772074389021,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,13528,edge,"[16, 16]"
+tokio-quiche-native,1,hit,144.5390625,0.7013956447518408,fresh,1881.5078125,0.9690286860000015,,0,native-0-tokio-quiche-native-1024/manifest.json,0.0,512,0.030139458637244054,0,73.422,1024,h3,0.9941212411125655,"PID                 COMMAND             RSS                 NLWP
+32162               controller          5840                2
+32252               Zelvik-Edge         167672              24",528.3641314205628,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,miss,153.203125,0.8160984804086514,reuse,553.353515625,0.6162552829998731,,0,native-0-tokio-quiche-native-1024/manifest.json,0.0,32,0.14857479120388956,1024,72.767,1024,h3,0.9194793385651457,"PID                 COMMAND             RSS                 NLWP
+32677               controller          5836                2
+32767               Zelvik-Edge         170860              30",1661.6490409871437,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+tokio-quiche-native,1,off,140.5859375,0.9087216727937822,reuse,275.7650446871897,3.0306067110000185,,0,native-0-tokio-quiche-native-1024/manifest.json,0.0,32,0.22171336107755218,10070,12.809,1024,h3,0.9163029930345795,"PID                 COMMAND             RSS                 NLWP
+33200               controller          5840                2
+33292               Zelvik-Edge         160624              25",3322.767010133483,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,10070,edge,"[16, 16]"
+tokio-quiche-native,1,miss,151.421875,0.8485866136657167,multiplex,496.3154296875,0.5164080990000457,,0,native-0-tokio-quiche-native-1024/manifest.json,0.0,2,0.19070769840887272,1024,31.846,1024,h3,0.9841576864966153,"PID                 COMMAND             RSS                 NLWP
+33715               controller          5752                2
+33805               Zelvik-Edge         167312              39",1982.9278471480932,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+tokio-quiche-native,1,hit,136.359375,0.9536684239006955,multiplex,161.05423423423423,3.0253806540001733,,0,native-0-tokio-quiche-native-1024/manifest.json,0.0,2,0.01008930891378611,0,6.904999999999999,1024,h3,0.886352266599721,"PID                 COMMAND             RSS                 NLWP
+34245               controller          6008                2
+34336               Zelvik-Edge         162120              24",5503.439700384574,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,16650,edge,"[1, 1]"
+tokio-quiche-native,1,miss,144.65234375,0.6835764420753866,fresh,2196.28125,1.1677443089999997,,0,native-0-tokio-quiche-native-1024/manifest.json,0.0,512,0.06354901447864819,512,89.52300000000001,1024,h3,0.9629642305540025,"PID                 COMMAND             RSS                 NLWP
+34765               controller          5832                2
+34855               Zelvik-Edge         168312              32",438.45214748976366,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,off,136.59765625,0.920999904826511,multiplex,234.27681806690822,3.026387391999833,,0,native-0-tokio-quiche-native-1024/manifest.json,0.0,2,0.27497603320706865,11867,9.716000000000001,1024,h3,0.9186408215119055,"PID                 COMMAND             RSS                 NLWP
+35293               controller          5800                2
+35381               Zelvik-Edge         162496              24",3921.176790311137,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,11867,edge,"[1, 1]"
+tokio-quiche-native,1,off,146.734375,0.6899276266540251,fresh,2035.224609375,1.0703448760000356,,0,native-0-tokio-quiche-native-1024/manifest.json,0.0,512,0.06566201378255364,512,72.728,1024,h3,0.9735506969437441,"PID                 COMMAND             RSS                 NLWP
+35806               controller          5812                2
+35893               Zelvik-Edge         168436              24",478.3504938271718,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,hit,150.48046875,0.8533147410371318,reuse,1073.3244030285382,3.0784965660000125,,0,native-0-tokio-quiche-native-131072/manifest.json,0.0,32,0.009521855675833123,0,166.893,131072,h3,0.5986357173022724,"PID                 COMMAND             RSS                 NLWP
+62178               controller          5888                2
+62270               Zelvik-Edge         175828              24",557.7397808278058,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,1717,edge,"[16, 16]"
+tokio-quiche-native,1,hit,151.234375,0.8368649545577599,fresh,2608.650390625,1.4229673419999926,,0,native-0-tokio-quiche-native-131072/manifest.json,0.0,512,0.020786141134081032,0,117.441,131072,h3,0.938622384771503,"PID                 COMMAND             RSS                 NLWP
+62740               controller          6056                2
+62830               Zelvik-Edge         167076              25",359.81149031880074,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,miss,165.125,0.7846134036924978,reuse,1699.3359375,2.0261341350001203,,0,native-0-tokio-quiche-native-131072/manifest.json,0.0,32,0.07219364082229991,1024,173.903,131072,h3,0.8588375122557701,"PID                 COMMAND             RSS                 NLWP
+63266               controller          5880                2
+63355               Zelvik-Edge         180916              36",505.39595691671184,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+tokio-quiche-native,1,off,148.5703125,0.8522244193687897,reuse,1324.2012987012988,3.081070478999891,,0,native-0-tokio-quiche-native-131072/manifest.json,0.0,32,0.07260496036189762,1540,189.693,131072,h3,0.6618706108475464,"PID                 COMMAND             RSS                 NLWP
+63798               controller          5828                2
+63887               Zelvik-Edge         169672              25",499.8262813189138,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,1540,edge,"[16, 16]"
+tokio-quiche-native,1,miss,161.66015625,0.8369978785025172,multiplex,1928.736328125,2.3928644879999865,,0,native-0-tokio-quiche-native-131072/manifest.json,0.0,2,0.07103202076523146,1024,107.643,131072,h3,0.8253814663992002,"PID                 COMMAND             RSS                 NLWP
+64312               controller          5876                2
+64404               Zelvik-Edge         176516              40",427.93898490084734,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+tokio-quiche-native,1,hit,146.19140625,0.8917041586317718,multiplex,1340.8021534320324,3.0808205539999562,,0,native-0-tokio-quiche-native-131072/manifest.json,0.0,2,0.00969839024256277,0,100.748,131072,h3,0.6467212111439413,"PID                 COMMAND             RSS                 NLWP
+64847               controller          5860                2
+64939               Zelvik-Edge         167444              28",482.33903077239114,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,1486,edge,"[1, 1]"
+tokio-quiche-native,1,miss,157.1796875,0.7973367828591676,fresh,3312.947265625,1.7730606820000503,,0,native-0-tokio-quiche-native-131072/manifest.json,0.0,512,0.06216820502480516,512,156.818,131072,h3,0.956667201083393,"PID                 COMMAND             RSS                 NLWP
+65373               controller          5776                2
+65461               Zelvik-Edge         179228              36",288.76620253202674,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,off,146.84375,0.8838727724323392,multiplex,1549.1838235294117,3.080324550000114,,0,native-0-tokio-quiche-native-131072/manifest.json,0.0,2,0.06683094481066691,1360,109.273,131072,h3,0.6839831211941358,"PID                 COMMAND             RSS                 NLWP
+65907               controller          5844                2
+65998               Zelvik-Edge         161140              25",441.51191795681063,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,1360,edge,"[1, 1]"
+tokio-quiche-native,1,off,148.00390625,0.8174090148169844,fresh,3006.615234375,1.6249735150001925,,0,native-0-tokio-quiche-native-131072/manifest.json,0.0,512,0.06670877955816232,512,134.075,131072,h3,0.9473305169529594,"PID                 COMMAND             RSS                 NLWP
+66424               controller          5820                2
+66512               Zelvik-Edge         170312              25",315.08205842969653,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,hit,139.5,0.9382107954380787,reuse,370.0034407256803,3.0813906789999237,,0,native-0-tokio-quiche-native-32768/manifest.json,0.0,32,0.009548935226074503,0,48.994,32768,h3,0.7677708692128028,"PID                 COMMAND             RSS                 NLWP
+46907               controller          5992                2
+46999               Zelvik-Edge         165340              24",2075.0371069711923,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,6394,edge,"[16, 16]"
+tokio-quiche-native,1,hit,145.9375,0.7585328858837223,fresh,2167.5859375,1.121974426999941,,0,native-0-tokio-quiche-native-32768/manifest.json,0.0,512,0.02774573042920312,0,90.835,32768,h3,0.9891526698763682,"PID                 COMMAND             RSS                 NLWP
+47475               controller          5908                2
+47564               Zelvik-Edge         169608              25",456.33838675721165,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,miss,187.30078125,0.8260766586025259,reuse,898.3720703125,0.9733878710001136,,0,native-0-tokio-quiche-native-32768/manifest.json,0.0,32,0.1080792180941278,1024,93.301,32768,h3,0.9450836890486513,"PID                 COMMAND             RSS                 NLWP
+47993               controller          5864                2
+48085               Zelvik-Edge         177000              36",1051.99584924752,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+tokio-quiche-native,1,off,142.82421875,0.9110449308834491,reuse,493.77222326630334,3.0311567589999413,,0,native-0-tokio-quiche-native-32768/manifest.json,0.0,32,0.12968349420822797,5321,55.638,32768,h3,0.8667852601812768,"PID                 COMMAND             RSS                 NLWP
+48519               controller          5816                2
+48611               Zelvik-Edge         166476              25",1755.43544034837,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,5321,edge,"[16, 16]"
+tokio-quiche-native,1,miss,185.96484375,0.8332549547618878,multiplex,804.34765625,0.8682432619998508,,0,native-0-tokio-quiche-native-32768/manifest.json,0.0,2,0.12727423849563832,1024,48.4,32768,h3,0.9486419717244422,"PID                 COMMAND             RSS                 NLWP
+49038               controller          5816                2
+49129               Zelvik-Edge         175932              35",1179.3929706305926,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+tokio-quiche-native,1,hit,134.8671875,0.8973772646516827,multiplex,404.94222139117426,3.0322648090000257,,0,native-0-tokio-quiche-native-32768/manifest.json,0.0,2,0.009908765194524192,0,26.808,32768,h3,0.7141958689004401,"PID                 COMMAND             RSS                 NLWP
+49559               controller          5844                2
+49646               Zelvik-Edge         160972              25",1763.6982047632089,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,5348,edge,"[1, 1]"
+tokio-quiche-native,1,miss,156.125,0.7201705296998879,fresh,2408.095703125,1.2715668890000416,,0,native-0-tokio-quiche-native-32768/manifest.json,0.0,512,0.06102785521650797,512,104.757,32768,h3,0.9696265376724194,"PID                 COMMAND             RSS                 NLWP
+50081               controller          5752                2
+50168               Zelvik-Edge         172124              37",402.6528249745761,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,off,138.8359375,0.8725949071528362,multiplex,520.4863447673148,3.0389313279999897,,0,native-0-tokio-quiche-native-32768/manifest.json,0.0,2,0.11597530906759641,4577,31.74,32768,h3,0.7839157068310062,"PID                 COMMAND             RSS                 NLWP
+50614               controller          5848                2
+50705               Zelvik-Edge         163940              25",1506.1215624810643,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,4577,edge,"[1, 1]"
+tokio-quiche-native,1,off,146.5390625,0.7440283321239417,fresh,2317.703125,1.221682643999884,,0,native-0-tokio-quiche-native-32768/manifest.json,0.0,512,0.06574538845622467,512,88.791,32768,h3,0.9713357276770094,"PID                 COMMAND             RSS                 NLWP
+51133               controller          5904                2
+51224               Zelvik-Edge         170184              25",419.09410968111337,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-native,1,hit,149.078125,0.9521015669439287,reuse,127.41618767232114,3.023469449000004,,0,native-1-quinn-native-1024/manifest.json,0.0,32,0.009866810464999662,0,5.768,1024,h3,0.9018047134234485,"PID                 COMMAND             RSS                 NLWP
+67312               controller          5832                2
+67406               Zelvik-Edge         175912              25",7077.630636247243,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,21399,edge,"[16, 16]"
+quinn-native,1,hit,152.17578125,0.6820560282922649,fresh,1818.6875,0.9194471920000069,,0,native-1-quinn-native-1024/manifest.json,0.0,512,0.03292521883083827,0,62.391000000000005,1024,h3,1.0127476684925185,"PID                 COMMAND             RSS                 NLWP
+67878               controller          5864                2
+67969               Zelvik-Edge         181004              25",556.8563420007662,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-native,1,miss,166.62109375,0.6811023444679316,reuse,506.2666015625,0.51630126200007,,0,native-1-quinn-native-1024/manifest.json,0.0,32,0.17284094881795564,1024,73.31,1024,h3,1.0040978749339755,"PID                 COMMAND             RSS                 NLWP
+68399               controller          5836                2
+68487               Zelvik-Edge         179332              51",1983.3381697212687,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-native,1,off,147.61328125,0.8863647179307601,reuse,182.09247027741083,3.02532405199986,,0,native-1-quinn-native-1024/manifest.json,0.0,32,0.32225770966767336,15140,8.571,1024,h3,0.9112676700459881,"PID                 COMMAND             RSS                 NLWP
+68942               controller          5860                2
+69032               Zelvik-Edge         171152              25",5004.422580778365,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,15140,edge,"[16, 16]"
+quinn-native,1,miss,160.82421875,0.7503690627166014,multiplex,427.6494140625,0.46583410400012326,,0,native-1-quinn-native-1024/manifest.json,0.0,2,0.20061648384587846,1024,27.622,1024,h3,0.9400621299291649,"PID                 COMMAND             RSS                 NLWP
+69456               controller          5912                2
+69545               Zelvik-Edge         180336              30",2198.2074545571036,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-native,1,hit,139.21484375,0.9493399073893705,multiplex,119.0578612824827,3.021061768999971,,0,native-1-quinn-native-1024/manifest.json,0.0,2,0.009802182896049314,0,5.0889999999999995,1024,h3,0.843200899147198,"PID                 COMMAND             RSS                 NLWP
+69979               controller          5912                2
+70066               Zelvik-Edge         166760              24",7082.278230637597,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,21396,edge,"[1, 1]"
+quinn-native,1,miss,154.3984375,0.6754185789949222,fresh,2163.345703125,1.1182169450000856,,0,native-1-quinn-native-1024/manifest.json,0.0,512,0.062004962731086764,512,90.223,1024,h3,0.9905349806695295,"PID                 COMMAND             RSS                 NLWP
+70500               controller          5900                2
+70590               Zelvik-Edge         178164              27",457.871795172949,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-native,1,off,135.6796875,0.908134952620714,multiplex,166.75924152461215,3.0233898520000366,,0,native-1-quinn-native-1024/manifest.json,0.0,2,0.3318205885146921,15663,7.347,1024,h3,0.8639143900916845,"PID                 COMMAND             RSS                 NLWP
+71019               controller          5860                2
+71109               Zelvik-Edge         163228              24",5180.608775821151,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,15663,edge,"[1, 1]"
+quinn-native,1,off,150.93359375,0.7050335239126438,fresh,1982.306640625,1.0171906379998745,,0,native-1-quinn-native-1024/manifest.json,0.0,512,0.0683431378573193,512,74.142,1024,h3,0.9977883811393525,"PID                 COMMAND             RSS                 NLWP
+71536               controller          5872                2
+71627               Zelvik-Edge         177780              25",503.3471415021647,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-native,1,hit,155.078125,0.8720167639229545,reuse,999.3153360137852,3.0778771820000657,,0,native-1-quinn-native-131072/manifest.json,0.0,32,0.009666402601765467,0,166.272,131072,h3,0.5652623211136184,"PID                 COMMAND             RSS                 NLWP
+98098               controller          5952                2
+98196               Zelvik-Edge         178496              24",565.6496010242565,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,1741,edge,"[16, 16]"
+quinn-native,1,hit,159.3203125,0.8699818542702281,fresh,2585.6966731898237,1.422692317000383,,1,native-1-quinn-native-131072/manifest.json,0.0,512,0.02074236266504844,0,117.608,131072,h3,0.9287257576436637,"PID                 COMMAND             RSS                 NLWP
+98658               controller          5908                2
+98748               Zelvik-Edge         187676              25",359.17815390849717,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,traffic-errors,0001-h3-hit-fresh,511,edge,"[256, 256]"
+quinn-native,1,miss,164.81640625,0.7947863990046689,reuse,1457.037109375,1.9718662800000857,,0,native-1-quinn-native-131072/manifest.json,0.0,32,0.07595342621305613,1024,161.221,131072,h3,0.7566466423879084,"PID                 COMMAND             RSS                 NLWP
+99184               controller          5884                2
+99273               Zelvik-Edge         182624              27",519.30499060005,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-native,1,off,147.390625,0.8329259741920223,reuse,1149.4972644376899,3.080813396999929,,0,native-1-quinn-native-131072/manifest.json,0.0,32,0.07239029803530977,1645,170.292,131072,h3,0.6137739474391294,"PID                 COMMAND             RSS                 NLWP
+99701               controller          5904                2
+99790               Zelvik-Edge         170316              24",533.9498982969523,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,1645,edge,"[16, 16]"
+quinn-native,1,miss,165.0859375,0.8527672604038016,multiplex,1799.7041015625,2.3767463809999754,,0,native-1-quinn-native-131072/manifest.json,0.0,2,0.0668636760196256,1024,409.78999999999996,131072,h3,0.7753864757015566,"PID                 COMMAND             RSS                 NLWP
+100223              controller          5908                2
+100311              Zelvik-Edge         175520              26",430.8410893926215,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-native,1,hit,152.6484375,0.8905047306102939,multiplex,1381.9134020618558,3.079730411000128,,0,native-1-quinn-native-131072/manifest.json,0.0,2,0.009538821935540766,0,453.63599999999997,131072,h3,0.6528766260898271,"PID                 COMMAND             RSS                 NLWP
+100739              controller          5888                2
+100832              Zelvik-Edge         175084              26",472.4439498999835,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,1455,edge,"[1, 1]"
+quinn-native,1,miss,166.734375,0.8081595340762324,fresh,3071.552734375,1.6747949420000623,,0,native-1-quinn-native-131072/manifest.json,0.0,512,0.05726253262114069,512,137.90800000000002,131072,h3,0.9390015222531891,"PID                 COMMAND             RSS                 NLWP
+101262              controller          5916                2
+101352              Zelvik-Edge         188848              27",305.7090675163867,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-native,1,off,149.26171875,0.8868350281951952,multiplex,1463.3973277074542,3.079958970000007,,0,native-1-quinn-native-131072/manifest.json,0.0,2,0.06393331921561266,1422,530.3330000000001,131072,h3,0.675642442080972,"PID                 COMMAND             RSS                 NLWP
+101786              controller          5888                2
+101874              Zelvik-Edge         174588              24",461.6944621181096,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,1422,edge,"[1, 1]"
+quinn-native,1,off,154.50390625,0.8343863402241156,fresh,2682.37890625,1.5226633500001299,,0,native-1-quinn-native-131072/manifest.json,0.0,512,0.06200451334169956,512,126.90100000000001,131072,h3,0.9019577439753068,"PID                 COMMAND             RSS                 NLWP
+102308              controller          5824                2
+102398              Zelvik-Edge         180132              25",336.2529215666459,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-native,1,hit,148.71875,0.9583226840642008,reuse,298.46743978590547,3.028216433000125,,0,native-1-quinn-native-32768/manifest.json,0.0,32,0.009793883844232734,0,47.854,32768,h3,0.6629288376231188,"PID                 COMMAND             RSS                 NLWP
+82766               controller          5916                2
+82851               Zelvik-Edge         176104              24",2221.1094050950624,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,6726,edge,"[16, 16]"
+quinn-native,1,hit,151.69140625,0.7489189209192001,fresh,2028.89453125,1.0715011699999195,,0,native-1-quinn-native-32768/manifest.json,0.0,512,0.027925307818378067,0,71.336,32768,h3,0.9694753763078746,"PID                 COMMAND             RSS                 NLWP
+83315               controller          5776                2
+83407               Zelvik-Edge         180164              25",477.8342892523752,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-native,1,miss,192.06640625,0.8184937506412149,reuse,734.857421875,0.7673729940001977,,0,native-1-quinn-native-32768/manifest.json,0.0,32,0.1397182345981443,1024,91.405,32768,h3,0.9806104800188032,"PID                 COMMAND             RSS                 NLWP
+83834               controller          5876                2
+83921               Zelvik-Edge         181268              30",1334.4227748516992,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-native,1,off,150.6796875,0.9316061369097396,reuse,396.68999472481096,3.0253836770002636,,0,native-1-quinn-native-32768/manifest.json,0.0,32,0.14266752454616433,5687,54.809999999999995,32768,h3,0.7456826111512743,"PID                 COMMAND             RSS                 NLWP
+84354               controller          5876                2
+84445               Zelvik-Edge         176408              25",1879.761579740785,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,5687,edge,"[16, 16]"
+quinn-native,1,miss,187.453125,0.784242496164352,multiplex,697.0517578125,0.821615766999912,,0,native-1-quinn-native-32768/manifest.json,0.0,2,0.12705208954444416,1024,40.814,32768,h3,0.86875280230604,"PID                 COMMAND             RSS                 NLWP
+84873               controller          5880                2
+84962               Zelvik-Edge         176504              32",1246.3246703980421,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-native,1,hit,143.1953125,0.8946837446413839,multiplex,352.9794639749391,3.0330678479999733,,0,native-1-quinn-native-32768/manifest.json,0.0,2,0.009862951143584264,0,26.405,32768,h3,0.6687024826488543,"PID                 COMMAND             RSS                 NLWP
+85398               controller          5928                2
+85490               Zelvik-Edge         168688              26",1894.451521679264,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,5746,edge,"[1, 1]"
+quinn-native,1,miss,171.9140625,0.7589945361691851,fresh,2365.154296875,1.2209600410001258,,0,native-1-quinn-native-32768/manifest.json,0.0,512,0.06040983940767019,512,93.75500000000001,32768,h3,0.9918088711634383,"PID                 COMMAND             RSS                 NLWP
+85920               controller          5876                2
+86008               Zelvik-Edge         182480              32",419.3421429096116,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-native,1,off,141.33984375,0.8704172931148594,multiplex,429.1169878096736,3.036499872999684,,0,native-1-quinn-native-32768/manifest.json,0.0,2,0.12294912419383423,5086,29.193,32768,h3,0.7187515531966654,"PID                 COMMAND             RSS                 NLWP
+86443               controller          5928                2
+86532               Zelvik-Edge         168080              24",1674.9547876567717,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,5086,edge,"[1, 1]"
+quinn-native,1,off,156.95703125,0.7274510692847161,fresh,2139.193359375,1.169222283000181,,0,native-1-quinn-native-32768/manifest.json,0.0,512,0.062089990120371974,512,84.725,32768,h3,0.9367483120400216,"PID                 COMMAND             RSS                 NLWP
+86962               controller          5920                2
+87049               Zelvik-Edge         181504              24",437.89791508781974,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-shared,1,hit,142.3046875,0.9497735502182173,reuse,130.81107954545453,3.023898695999833,,0,native-1-quinn-shared-1024/manifest.json,0.0,32,0.009706012982123268,0,5.682,1024,h3,0.9136317971414453,"PID                 COMMAND             RSS                 NLWP
+77645               controller          5708                2
+77738               Zelvik-Edge         170592              25",6984.360960219537,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,21120,edge,"[16, 16]"
+quinn-shared,1,hit,144.61328125,0.6601294050666143,fresh,1894.33203125,0.9674625839998043,,0,native-1-quinn-shared-1024/manifest.json,0.0,512,0.030676121734136235,0,66.12700000000001,1024,h3,1.002517323192104,"PID                 COMMAND             RSS                 NLWP
+78215               controller          5852                2
+78304               Zelvik-Edge         171144              24",529.21943284176,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-shared,1,miss,155.43359375,0.6976545789532099,reuse,504.037109375,0.5160325909996573,,0,native-1-quinn-shared-1024/manifest.json,0.0,32,0.178467410016863,1024,70.415,1024,h3,1.000196516658272,"PID                 COMMAND             RSS                 NLWP
+78731               controller          5852                2
+78823               Zelvik-Edge         173024              53",1984.370789481163,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-shared,1,off,141.578125,0.9056187311934886,reuse,189.38449001765585,3.0275527720000355,,0,native-1-quinn-shared-1024/manifest.json,0.0,32,0.305851646439935,14726,8.687000000000001,1024,h3,0.9211651158627492,"PID                 COMMAND             RSS                 NLWP
+79276               controller          5872                2
+79368               Zelvik-Edge         166940              25",4863.994489606151,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,14726,edge,"[16, 16]"
+quinn-shared,1,miss,148.77734375,0.7791385999243539,multiplex,442.3623046875,0.46573806000014883,,0,native-1-quinn-shared-1024/manifest.json,0.0,2,0.20504014638608123,1024,29.309,1024,h3,0.9726046439061803,"PID                 COMMAND             RSS                 NLWP
+79799               controller          5904                2
+79889               Zelvik-Edge         167424              31",2198.660766525443,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-shared,1,hit,134.73828125,0.9511746216440865,multiplex,122.44914974798624,3.0233365509998293,,0,native-1-quinn-shared-1024/manifest.json,0.0,2,0.009600651303739566,0,4.8580000000000005,1024,h3,0.8598027232993111,"PID                 COMMAND             RSS                 NLWP
+80318               controller          5996                2
+80409               Zelvik-Edge         160112              25",7021.7124828459755,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,21229,edge,"[1, 1]"
+quinn-shared,1,miss,151.94921875,0.6602307321636671,fresh,2271.015625,1.168383963999986,,0,native-1-quinn-shared-1024/manifest.json,0.0,512,0.06190601910726059,512,89.03800000000001,1024,h3,0.9951865446862758,"PID                 COMMAND             RSS                 NLWP
+80842               controller          5768                2
+80932               Zelvik-Edge         174432              28",438.2121081559162,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-shared,1,off,135.3671875,0.9095224026692668,multiplex,183.08035955663692,3.0257671409999602,,0,native-1-quinn-shared-1024/manifest.json,0.0,2,0.3218185519980874,14796,7.891,1024,h3,0.8952628783934684,"PID                 COMMAND             RSS                 NLWP
+81364               controller          5704                2
+81455               Zelvik-Edge         161316              26",4889.999563915614,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,14796,edge,"[1, 1]"
+quinn-shared,1,off,147.66796875,0.6635159452484283,fresh,2002.701171875,1.0674905480000234,,0,native-1-quinn-shared-1024/manifest.json,0.0,512,0.06492984891515731,512,74.80199999999999,1024,h3,0.9605546409015862,"PID                 COMMAND             RSS                 NLWP
+81886               controller          5812                2
+81977               Zelvik-Edge         176072              25",479.62953953948147,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-shared,1,hit,154.64453125,0.9109744000798738,reuse,1902.498371335505,3.1300050800000463,,0,native-1-quinn-shared-131072/manifest.json,0.0,32,0.009539281642315916,0,323.30199999999996,131072,h3,0.9330128627139342,"PID                 COMMAND             RSS                 NLWP
+108291              controller          5808                2
+108386              Zelvik-Edge         178568              25",490.41453951888707,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,1535,edge,"[16, 16]"
+quinn-shared,1,hit,154.12109375,0.8557276779742632,fresh,3815.466796875,2.072771567000018,,0,native-1-quinn-shared-131072/manifest.json,0.0,512,0.014406314943435222,0,198.126,131072,h3,0.9424670962789133,"PID                 COMMAND             RSS                 NLWP
+108858              controller          5888                2
+108948              Zelvik-Edge         177804              24",247.01226519670587,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-shared,1,miss,158.65625,0.8424212668127543,reuse,2579.1767578125,2.8315382030000364,,0,native-1-quinn-shared-131072/manifest.json,0.0,32,0.05421788052774438,1024,276.601,131072,h3,0.9327357819865395,"PID                 COMMAND             RSS                 NLWP
+109374              controller          5908                2
+109464              Zelvik-Edge         174408              25",361.64089148260973,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-shared,1,off,143.01953125,0.9002822993436447,reuse,2098.188953488372,3.084217585999795,,0,native-1-quinn-shared-131072/manifest.json,0.0,32,0.06119963807249121,1376,304.35,131072,h3,0.9360908948530299,"PID                 COMMAND             RSS                 NLWP
+109887              controller          5892                2
+109980              Zelvik-Edge         167824              25",446.14232350080744,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,1376,edge,"[16, 16]"
+quinn-shared,1,miss,166.19921875,0.8984293818570974,multiplex,2813.8779296875,3.0840787890001593,,0,native-1-quinn-shared-131072/manifest.json,0.0,2,0.05397981419727971,1024,680.52,131072,h3,0.9342857939547443,"PID                 COMMAND             RSS                 NLWP
+110403              controller          5860                2
+110492              Zelvik-Edge         181784              28",332.0278339361022,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-shared,1,hit,149.0625,0.9086639751018981,multiplex,2134.557240333586,3.0850287640000715,,0,native-1-quinn-shared-131072/manifest.json,0.0,2,0.009839130303810449,0,660.307,131072,h3,0.9126271472261497,"PID                 COMMAND             RSS                 NLWP
+110924              controller          5920                2
+111014              Zelvik-Edge         172536              25",427.54868784100887,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,1319,edge,"[1, 1]"
+quinn-shared,1,miss,155.60546875,0.8097109986202515,fresh,4703.857421875,2.5754318559997955,,0,native-1-quinn-shared-131072/manifest.json,0.0,512,0.0457810598736375,512,266.031,131072,h3,0.9351344297420973,"PID                 COMMAND             RSS                 NLWP
+111439              controller          5956                2
+111527              Zelvik-Edge         175992              25",198.80161022596306,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-shared,1,off,149.296875,0.9054203706292387,multiplex,2292.8163592622295,3.087125704999835,,0,native-1-quinn-shared-131072/manifest.json,0.0,2,0.05954568021065078,1247,575.85,131072,h3,0.9261501711347232,"PID                 COMMAND             RSS                 NLWP
+111961              controller          5956                2
+112050              Zelvik-Edge         165404              27",403.9356084465199,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,1247,edge,"[1, 1]"
+quinn-shared,1,off,143.609375,0.847065697593586,fresh,4013.619140625,2.2254973909998625,,0,native-1-quinn-shared-131072/manifest.json,0.0,512,0.048175297995667984,512,241.764,131072,h3,0.9233769530849686,"PID                 COMMAND             RSS                 NLWP
+112482              controller          5924                2
+112574              Zelvik-Edge         169720              25",230.06093023095872,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-shared,1,hit,145.9921875,0.9493450921400882,reuse,618.798918918919,3.0330388010002025,,0,native-1-quinn-shared-32768/manifest.json,0.0,32,0.009689951869494081,0,28.741,32768,h3,0.9435899728866702,"PID                 COMMAND             RSS                 NLWP
+92989               controller          5792                2
+93081               Zelvik-Edge         171668              25",1524.8733377478777,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,4625,edge,"[16, 16]"
+quinn-shared,1,hit,143.88671875,0.7452854165857782,fresh,2356.81640625,1.2684979189998558,,0,native-1-quinn-shared-32768/manifest.json,0.0,512,0.023324437160549542,0,122.522,32768,h3,0.9512747178579621,"PID                 COMMAND             RSS                 NLWP
+93556               controller          5840                2
+93647               Zelvik-Edge         171944              24",403.6269924697119,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-shared,1,miss,183.63671875,0.8312302889805823,reuse,1112.4990234375,1.2194635030000427,,0,native-1-quinn-shared-32768/manifest.json,0.0,32,0.08996989227646952,1024,109.69800000000001,32768,h3,0.934180479528431,"PID                 COMMAND             RSS                 NLWP
+94075               controller          6028                2
+94165               Zelvik-Edge         174604              29",839.7135276954363,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-shared,1,off,144.01953125,0.9431680395336878,reuse,735.128270908158,3.0314030800000182,,0,native-1-quinn-shared-32768/manifest.json,0.0,32,0.1045657709102803,3898,48.336999999999996,32768,h3,0.9452817472231316,"PID                 COMMAND             RSS                 NLWP
+94596               controller          5784                2
+94687               Zelvik-Edge         167280              24",1285.8732069375533,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,3898,edge,"[16, 16]"
+quinn-shared,1,miss,184.453125,0.8342233168184978,multiplex,987.9169921875,1.0694252749999578,,0,native-1-quinn-shared-32768/manifest.json,0.0,2,0.09900177457466973,1024,68.85900000000001,32768,h3,0.9459538909813404,"PID                 COMMAND             RSS                 NLWP
+95120               controller          5996                2
+95210               Zelvik-Edge         172460              49",957.5236568071953,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-shared,1,hit,141.1484375,0.937704789652468,multiplex,585.2877567458719,3.0280414809999456,,0,native-1-quinn-shared-32768/manifest.json,0.0,2,0.010217825678458912,0,26.75,32768,h3,0.95987423495935,"PID                 COMMAND             RSS                 NLWP
+95661               controller          5828                2
+95749               Zelvik-Edge         164296              24",1640.0039534333212,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,4966,edge,"[1, 1]"
+quinn-shared,1,miss,169.671875,0.7228328873562099,fresh,2868.376953125,1.5227613729998666,,0,native-1-quinn-shared-32768/manifest.json,0.0,512,0.05187680840917083,512,152.197,32768,h3,0.9644380439640484,"PID                 COMMAND             RSS                 NLWP
+96184               controller          5876                2
+96272               Zelvik-Edge         177140              29",336.23127633671913,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-shared,1,off,142.8125,0.904683330654348,multiplex,686.1173787806049,3.0341395790001116,,0,native-1-quinn-shared-32768/manifest.json,0.0,2,0.10555743783730136,4166,31.41,32768,h3,0.9420677347157386,"PID                 COMMAND             RSS                 NLWP
+96701               controller          5816                2
+96794               Zelvik-Edge         166388              25",1373.0416454251879,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,4166,edge,"[1, 1]"
+quinn-shared,1,off,144.41796875,0.7395763390879789,fresh,2511.865234375,1.3687532260000808,,0,native-1-quinn-shared-32768/manifest.json,0.0,512,0.056246077479561285,512,126.14600000000002,32768,h3,0.9395959589869299,"PID                 COMMAND             RSS                 NLWP
+97220               controller          5856                2
+97309               Zelvik-Edge         168988              25",374.06304531330454,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,hit,138.53515625,0.9403448608966318,reuse,196.40296835620273,3.0253315760000987,,0,native-1-tokio-quiche-native-1024/manifest.json,0.0,32,0.009530195046626869,0,8.489,1024,h3,0.9273099260442547,"PID                 COMMAND             RSS                 NLWP
+72410               controller          5812                2
+72502               Zelvik-Edge         163616              25",4721.465942217612,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,14284,edge,"[16, 16]"
+tokio-quiche-native,1,hit,144.3203125,0.6754835906257239,fresh,1916.431640625,1.017183851000027,,0,native-1-tokio-quiche-native-1024/manifest.json,0.0,512,0.030166621274838924,0,75.016,1024,h3,0.9646368245379998,"PID                 COMMAND             RSS                 NLWP
+72971               controller          5732                2
+73060               Zelvik-Edge         169312              25",503.35050000708907,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,miss,152.875,0.8484946442668899,reuse,581.435546875,0.6157752479998635,,0,native-1-tokio-quiche-native-1024/manifest.json,0.0,32,0.14997192612071422,1024,72.062,1024,h3,0.966894986334579,"PID                 COMMAND             RSS                 NLWP
+73552               controller          6052                2
+73643               Zelvik-Edge         172316              49",1662.9443994803555,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+tokio-quiche-native,1,off,140.7109375,0.9112439499474513,reuse,261.45269573370837,3.028692261999822,,0,native-1-tokio-quiche-native-1024/manifest.json,0.0,32,0.23320295985886513,10665,12.157,1024,h3,0.9206590695876264,"PID                 COMMAND             RSS                 NLWP
+74095               controller          5776                2
+74186               Zelvik-Edge         161328              25",3521.321771053089,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,10665,edge,"[16, 16]"
+tokio-quiche-native,1,miss,161.31640625,0.8119364250415796,multiplex,526.9658203125,0.5658121570004369,,0,native-1-tokio-quiche-native-1024/manifest.json,0.0,2,0.17529669303292014,1024,32.913,1024,h3,0.9536963695878724,"PID                 COMMAND             RSS                 NLWP
+74615               controller          5796                2
+74703               Zelvik-Edge         177388              77",1809.787908108184,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+tokio-quiche-native,1,hit,135.19140625,0.9417662153998008,multiplex,157.65861188624353,3.0242468390001704,,0,native-1-tokio-quiche-native-1024/manifest.json,0.0,2,0.010218411936975577,0,6.984,1024,h3,0.8780513434802503,"PID                 COMMAND             RSS                 NLWP
+75180               controller          5884                2
+75267               Zelvik-Edge         159688              25",5569.320527278247,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,16843,edge,"[1, 1]"
+tokio-quiche-native,1,miss,153.953125,0.6756814775667916,fresh,2059.578125,1.0681512280002607,,0,native-1-tokio-quiche-native-1024/manifest.json,0.0,512,0.0641004739826815,512,84.188,1024,h3,0.9872235057709849,"PID                 COMMAND             RSS                 NLWP
+75706               controller          5912                2
+75794               Zelvik-Edge         170560              48",479.3328758873786,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,off,134.15234375,0.9110597584786222,multiplex,226.64378950825056,3.0291564019998987,,0,native-1-tokio-quiche-native-1024/manifest.json,0.0,2,0.2777192354427753,12181,9.356,1024,h3,0.9113916990807437,"PID                 COMMAND             RSS                 NLWP
+76242               controller          5880                2
+76332               Zelvik-Edge         160576              24",4021.2515906930075,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,12181,edge,"[1, 1]"
+tokio-quiche-native,1,off,145.11328125,0.6850443261351179,fresh,2006.94921875,1.0674301969997941,,0,native-1-tokio-quiche-native-1024/manifest.json,0.0,512,0.06478643774025941,512,73.285,1024,h3,0.9626465532717154,"PID                 COMMAND             RSS                 NLWP
+76762               controller          5764                2
+76852               Zelvik-Edge         171512              25",479.65665711825346,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,hit,150.86328125,0.8494189161892186,reuse,1067.6945412311265,3.083320196999921,,0,native-1-tokio-quiche-native-131072/manifest.json,0.0,32,0.009532581153458695,0,190.499,131072,h3,0.5962955134497331,"PID                 COMMAND             RSS                 NLWP
+103196              controller          5860                2
+103282              Zelvik-Edge         172000              26",558.4888658905782,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,1722,edge,"[16, 16]"
+tokio-quiche-native,1,hit,149.10546875,0.829189639364511,fresh,2693.251953125,1.4727879390002272,,0,native-1-tokio-quiche-native-131072/manifest.json,0.0,512,0.02035051972271439,0,122.613,131072,h3,0.9362821106045106,"PID                 COMMAND             RSS                 NLWP
+103747              controller          5800                2
+103839              Zelvik-Edge         171748              24",347.6400006015537,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,miss,161.37109375,0.7866977813101457,reuse,1644.6904296875,1.97215822499993,,0,native-1-tokio-quiche-native-131072/manifest.json,0.0,32,0.07343528433171488,1024,171.27100000000002,131072,h3,0.8539695135262586,"PID                 COMMAND             RSS                 NLWP
+104268              controller          5896                2
+104355              Zelvik-Edge         177888              29",519.228116192369,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+tokio-quiche-native,1,off,142.91796875,0.804576541118032,reuse,1261.0762976860537,3.080433461999746,,0,native-1-tokio-quiche-native-131072/manifest.json,0.0,32,0.07052838591714335,1599,191.23399999999998,131072,h3,0.6546030046988778,"PID                 COMMAND             RSS                 NLWP
+104790              controller          6000                2
+104880              Zelvik-Edge         167220              25",519.0827913426074,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,1599,edge,"[16, 16]"
+tokio-quiche-native,1,miss,164.23828125,0.8577165564369762,multiplex,1905.2431640625,2.38141083399978,,0,native-1-tokio-quiche-native-131072/manifest.json,0.0,2,0.07032301928295312,1024,122.574,131072,h3,0.819249233330808,"PID                 COMMAND             RSS                 NLWP
+105308              controller          5884                2
+105396              Zelvik-Edge         179040              44",429.99720391802606,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+tokio-quiche-native,1,hit,140.48046875,0.8853824139598586,multiplex,1329.103861517976,3.0850618409999697,,0,native-1-tokio-quiche-native-131072/manifest.json,0.0,2,0.009803044982137944,0,98.065,131072,h3,0.647090432181719,"PID                 COMMAND             RSS                 NLWP
+105848              controller          5760                2
+105939              Zelvik-Edge         163624              25",486.86220160603085,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,1502,edge,"[1, 1]"
+tokio-quiche-native,1,miss,159.33203125,0.8145594892668946,fresh,3170.076171875,1.6767578280000635,,0,native-1-tokio-quiche-native-131072/manifest.json,0.0,512,0.06241867385514662,512,153.977,131072,h3,0.9679865350239107,"PID                 COMMAND             RSS                 NLWP
+106370              controller          5852                2
+106460              Zelvik-Edge         180424              32",305.3511911202365,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,off,144.98046875,0.8830444122989495,multiplex,1497.0994989262706,3.082860229999824,,0,native-1-tokio-quiche-native-131072/manifest.json,0.0,2,0.06132649095155728,1397,104.973,131072,h3,0.678411554194956,"PID                 COMMAND             RSS                 NLWP
+106892              controller          5856                2
+106981              Zelvik-Edge         167304              25",453.1506120211229,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,1397,edge,"[1, 1]"
+tokio-quiche-native,1,off,152.94921875,0.8287249338410537,fresh,2919.427734375,1.5778142379999736,,0,native-1-tokio-quiche-native-131072/manifest.json,0.0,512,0.06704591545205829,512,131.15099999999998,131072,h3,0.9473529671621743,"PID                 COMMAND             RSS                 NLWP
+107415              controller          5884                2
+107506              Zelvik-Edge         176252              25",324.4995435261173,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,hit,141.96484375,0.9521919354934277,reuse,366.68352030336547,3.0314802009997948,,0,native-1-tokio-quiche-native-32768/manifest.json,0.0,32,0.00971967423382225,0,51.582,32768,h3,0.7655468108400016,"PID                 COMMAND             RSS                 NLWP
+87849               controller          5804                2
+87942               Zelvik-Edge         166368              24",2087.758975932836,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,6329,edge,"[16, 16]"
+tokio-quiche-native,1,hit,146.8515625,0.7566641177829531,fresh,2089.248046875,1.0689961120001499,,0,native-1-tokio-quiche-native-32768/manifest.json,0.0,512,0.02829196445196777,0,84.76,32768,h3,1.000653779739706,"PID                 COMMAND             RSS                 NLWP
+88409               controller          5720                2
+88500               Zelvik-Edge         172272              25",478.95403383836464,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,miss,184.375,0.8268299513921646,reuse,865.39453125,0.9200174699999479,,0,native-1-tokio-quiche-native-32768/manifest.json,0.0,32,0.11129245187051262,1024,93.749,32768,h3,0.9632034487345661,"PID                 COMMAND             RSS                 NLWP
+88931               controller          5888                2
+89020               Zelvik-Edge         169648              45",1113.0223429344858,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+tokio-quiche-native,1,off,141.5390625,0.9161437288272569,reuse,478.9881422924901,3.0292512109999734,,0,native-1-tokio-quiche-native-32768/manifest.json,0.0,32,0.12803758189204975,5313,58.105999999999995,32768,h3,0.8400967178816198,"PID                 COMMAND             RSS                 NLWP
+89472               controller          5744                2
+89560               Zelvik-Edge         164328              24",1753.8987789151195,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,5313,edge,"[16, 16]"
+tokio-quiche-native,1,miss,183.3828125,0.8211624970704188,multiplex,802.1572265625,0.8690186200001335,,0,native-1-tokio-quiche-native-32768/manifest.json,0.0,2,0.12629763905402067,1024,46.333,32768,h3,0.9452144995464813,"PID                 COMMAND             RSS                 NLWP
+89996               controller          5904                2
+90087               Zelvik-Edge         172604              50",1178.3406896388972,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+tokio-quiche-native,1,hit,138.203125,0.8880438872510323,multiplex,407.5071482317532,3.0341647959999136,,0,native-1-tokio-quiche-native-32768/manifest.json,0.0,2,0.010062077063266036,0,27.234,32768,h3,0.7139717667464697,"PID                 COMMAND             RSS                 NLWP
+90543               controller          5980                2
+90633               Zelvik-Edge         162884              24",1752.0472213665983,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,5316,edge,"[1, 1]"
+tokio-quiche-native,1,miss,160.2109375,0.7364423076428688,fresh,2510.90234375,1.3209025199998905,,0,native-1-tokio-quiche-native-32768/manifest.json,0.0,512,0.062252133488250753,512,115.618,32768,h3,0.9732603129564069,"PID                 COMMAND             RSS                 NLWP
+91067               controller          5884                2
+91156               Zelvik-Edge         174320              45",387.6137657758745,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,off,139.109375,0.8653434823750105,multiplex,508.5045387375976,3.0368062550001014,,0,native-1-tokio-quiche-native-32768/manifest.json,0.0,2,0.117500745861704,4737,30.176000000000002,32768,h3,0.793197128079519,"PID                 COMMAND             RSS                 NLWP
+91605               controller          5800                2
+91695               Zelvik-Edge         163996              25",1559.862435148943,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,4737,edge,"[1, 1]"
+tokio-quiche-native,1,off,148.765625,0.7233139682554688,fresh,2262.869140625,1.2203421180001897,,0,native-1-tokio-quiche-native-32768/manifest.json,0.0,512,0.062247298425201276,512,90.301,32768,h3,0.9493968805228271,"PID                 COMMAND             RSS                 NLWP
+92115               controller          6032                2
+92206               Zelvik-Edge         171932              24",419.5544777549999,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-native,1,hit,144.47265625,0.9393528107361844,reuse,126.5212899623063,3.074217127999873,,0,native-2-quinn-native-1024/manifest.json,0.0,32,0.009795989920722751,0,5.771,1024,h3,0.8843929647119292,"PID                 COMMAND             RSS                 NLWP
+123583              controller          5888                2
+123674              Zelvik-Edge         172428              25",6990.072303052008,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,21489,edge,"[16, 16]"
+quinn-native,1,hit,156.51953125,0.6524954508803028,fresh,1837.126953125,0.9680603890001294,,0,native-2-quinn-native-1024/manifest.json,0.0,512,0.0306602773311036,0,63.022999999999996,1024,h3,0.9716428961332848,"PID                 COMMAND             RSS                 NLWP
+124144              controller          6128                2
+124232              Zelvik-Edge         182364              27",528.892624693408,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-native,1,miss,159.796875,0.6549893255173194,reuse,524.310546875,0.5665557980000813,,0,native-2-quinn-native-1024/manifest.json,0.0,32,0.1659642357062005,1024,72.476,1024,h3,0.9476454073812568,"PID                 COMMAND             RSS                 NLWP
+124663              controller          5816                2
+124754              Zelvik-Edge         176272              30",1807.4124448371688,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-native,1,off,148.265625,0.8925803511245017,reuse,181.51659641728133,3.0273341739998614,,0,native-2-quinn-native-1024/manifest.json,0.0,32,0.3233835261425767,15184,8.255,1024,h3,0.910420799814922,"PID                 COMMAND             RSS                 NLWP
+125190              controller          5904                2
+125278              Zelvik-Edge         174408              27",5015.633929814283,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,15184,edge,"[16, 16]"
+quinn-native,1,miss,159.25390625,0.7120335172744557,multiplex,449.0185546875,0.46607918300014717,,0,native-2-quinn-native-1024/manifest.json,0.0,2,0.20622032372548518,1024,26.444,1024,h3,0.9865169198081408,"PID                 COMMAND             RSS                 NLWP
+125708              controller          5936                2
+125800              Zelvik-Edge         178080              52",2197.051568380553,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-native,1,hit,139.4921875,0.946621261343836,multiplex,121.6351176498778,3.022573669999929,,0,native-2-quinn-native-1024/manifest.json,0.0,2,0.009990161794799434,0,5.5360000000000005,1024,h3,0.8397347019833135,"PID                 COMMAND             RSS                 NLWP
+126261              controller          5776                2
+126351              Zelvik-Edge         167496              25",6903.719240034435,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,20867,edge,"[1, 1]"
+quinn-native,1,miss,156.2421875,0.6517401962165443,fresh,2288.9296875,1.2191169190000437,,0,native-2-quinn-native-1024/manifest.json,0.0,512,0.06226146058432093,512,89.796,1024,h3,0.9612958213731081,"PID                 COMMAND             RSS                 NLWP
+126783              controller          5904                2
+126874              Zelvik-Edge         178956              26",419.9761253579827,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-native,1,off,140.76953125,0.9042449665169442,multiplex,169.68276176221775,3.0269463489999,,0,native-2-quinn-native-1024/manifest.json,0.0,2,0.3338526301709596,15367,7.707000000000001,1024,h3,0.8614341647850879,"PID                 COMMAND             RSS                 NLWP
+127301              controller          5832                2
+127389              Zelvik-Edge         167048              25",5076.733522243379,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,15367,edge,"[1, 1]"
+quinn-native,1,off,150.13671875,0.6944298155607057,fresh,1963.98828125,1.018058246000237,,0,native-2-quinn-native-1024/manifest.json,0.0,512,0.06914437388681946,512,77.862,1024,h3,0.9877254115377657,"PID                 COMMAND             RSS                 NLWP
+127811              controller          5904                2
+127903              Zelvik-Edge         178292              25",502.9181797913366,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-native,1,hit,154.51953125,0.8699254049853994,reuse,1012.6062052505966,3.0802089290000367,,0,native-2-quinn-native-131072/manifest.json,0.0,32,0.009950948363087365,0,172.22899999999998,131072,h3,0.5509782093096386,"PID                 COMMAND             RSS                 NLWP
+154229              controller          5884                2
+154313              Zelvik-Edge         179300              24",544.1189343425801,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,1676,edge,"[16, 16]"
+quinn-native,1,hit,160.29296875,0.8544614474606315,fresh,2534.34375,1.4245475949996944,,0,native-2-quinn-native-131072/manifest.json,0.0,512,0.020424028022739557,0,123.548,131072,h3,0.9108744450200544,"PID                 COMMAND             RSS                 NLWP
+154782              controller          5876                2
+154867              Zelvik-Edge         185460              25",359.41235083837955,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-native,1,miss,165.87109375,0.8041766655347506,reuse,1446.5126953125,2.025558026999988,,0,native-2-quinn-native-131072/manifest.json,0.0,32,0.07285745361665755,1024,174.754,131072,h3,0.7312695959610782,"PID                 COMMAND             RSS                 NLWP
+155307              controller          5936                2
+155396              Zelvik-Edge         180088              27",505.5397013318967,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-native,1,off,148.24609375,0.85021965279337,reuse,1167.8379746835444,3.085900204000154,,0,native-2-quinn-native-131072/manifest.json,0.0,32,0.07151624660898755,1580,169.004,131072,h3,0.5979402696199141,"PID                 COMMAND             RSS                 NLWP
+155828              controller          5756                2
+155919              Zelvik-Edge         173548              24",512.0061880004727,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,1580,edge,"[16, 16]"
+quinn-native,1,miss,172.6875,0.8541386723355362,multiplex,1675.6484375,2.2785029679998843,,0,native-2-quinn-native-131072/manifest.json,0.0,2,0.06701549313057895,1024,384.595,131072,h3,0.7530663879302382,"PID                 COMMAND             RSS                 NLWP
+156345              controller          5872                2
+156435              Zelvik-Edge         189688              32",449.41789165141523,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-native,1,hit,154.5390625,0.8862652616323315,multiplex,1355.0584677419354,3.0850910200001636,,0,native-2-quinn-native-131072/manifest.json,0.0,2,0.00955660620995177,0,517.091,131072,h3,0.6535713166737924,"PID                 COMMAND             RSS                 NLWP
+156870              controller          5820                2
+156958              Zelvik-Edge         175776              25",482.3196431980542,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,1488,edge,"[1, 1]"
+quinn-native,1,miss,164.28125,0.8025885888754621,fresh,3240.546875,1.774582917999851,,0,native-2-quinn-native-131072/manifest.json,0.0,512,0.05844922711016917,512,146.76,131072,h3,0.9349577205837498,"PID                 COMMAND             RSS                 NLWP
+157387              controller          5888                2
+157475              Zelvik-Edge         184312              38",288.51849908319866,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-native,1,off,150.09375,0.8815500247028158,multiplex,1501.565527065527,3.088108925999677,,0,native-2-quinn-native-131072/manifest.json,0.0,2,0.06572630851558933,1404,383.583,131072,h3,0.6826825252990512,"PID                 COMMAND             RSS                 NLWP
+157919              controller          5720                2
+158006              Zelvik-Edge         175232              25",454.64717522731155,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,1404,edge,"[1, 1]"
+quinn-native,1,off,150.4140625,0.8357493173911517,fresh,2794.51953125,1.5751062819999788,,0,native-2-quinn-native-131072/manifest.json,0.0,512,0.06169742392024903,512,131.75500000000002,131072,h3,0.908379336906244,"PID                 COMMAND             RSS                 NLWP
+158439              controller          5868                2
+158530              Zelvik-Edge         174088              24",325.0574299976075,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-native,1,hit,147.8671875,0.949452439793869,reuse,309.21735159817354,3.032192956000017,,0,native-2-quinn-native-32768/manifest.json,0.0,32,0.009839413399125327,0,47.093999999999994,32768,h3,0.6699962797486259,"PID                 COMMAND             RSS                 NLWP
+138907              controller          5836                2
+139003              Zelvik-Edge         173968              24",2166.748651994416,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,6570,edge,"[16, 16]"
+quinn-native,1,hit,150.32421875,0.737251103957902,fresh,2019.373046875,1.0691852420000032,,0,native-2-quinn-native-32768/manifest.json,0.0,512,0.028281348088416574,0,70.852,32768,h3,0.9670157792918703,"PID                 COMMAND             RSS                 NLWP
+139474              controller          5888                2
+139561              Zelvik-Edge         176376              25",478.8693108429554,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-native,1,miss,190.671875,0.8086861852066716,reuse,739.7001953125,0.768364183000358,,0,native-2-quinn-native-32768/manifest.json,0.0,32,0.14071061925064982,1024,82.94200000000001,32768,h3,0.9857994643142378,"PID                 COMMAND             RSS                 NLWP
+139996              controller          5772                2
+140086              Zelvik-Edge         181248              48",1332.7013708544023,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-native,1,off,148.6796875,0.9141848445719736,reuse,390.9179612497818,3.030038199000046,,0,native-2-quinn-native-32768/manifest.json,0.0,32,0.14088865286941998,5729,53.207,32768,h3,0.739122365103875,"PID                 COMMAND             RSS                 NLWP
+140539              controller          5860                2
+140630              Zelvik-Edge         173788              25",1890.7352395394382,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,5729,edge,"[16, 16]"
+quinn-native,1,miss,188.5625,0.7799570343112266,multiplex,693.0234375,0.8206599489999462,,0,native-2-quinn-native-32768/manifest.json,0.0,2,0.12658227092304075,1024,46.690000000000005,32768,h3,0.864738191335869,"PID                 COMMAND             RSS                 NLWP
+141059              controller          5856                2
+141146              Zelvik-Edge         175944              33",1247.7762576909515,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-native,1,hit,144.76953125,0.8972234879577228,multiplex,358.11955951756687,3.0296242089998486,,0,native-2-quinn-native-32768/manifest.json,0.0,2,0.009948428557728596,0,26.208,32768,h3,0.6762561488364786,"PID                 COMMAND             RSS                 NLWP
+141580              controller          5908                2
+141669              Zelvik-Edge         169580              25",1888.3530119032944,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,5721,edge,"[1, 1]"
+quinn-native,1,miss,174.953125,0.720152563773845,fresh,2379.59375,1.2746826799998416,,0,native-2-quinn-native-32768/manifest.json,0.0,512,0.058748738941058885,512,95.08800000000001,32768,h3,0.9558080760932214,"PID                 COMMAND             RSS                 NLWP
+142100              controller          5768                2
+142186              Zelvik-Edge         184308              44",401.66859410066166,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-native,1,off,141.3828125,0.8753764358718847,multiplex,427.9494064993189,3.0263106150000567,,0,native-2-quinn-native-32768/manifest.json,0.0,2,0.1225535138930189,5139,28.942,32768,h3,0.7267039903635136,"PID                 COMMAND             RSS                 NLWP
+142638              controller          5800                2
+142728              Zelvik-Edge         167892              24",1698.1072512941319,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,5139,edge,"[1, 1]"
+quinn-native,1,off,152.9140625,0.7443232464403031,fresh,2096.271484375,1.1176044869998805,,0,native-2-quinn-native-32768/manifest.json,0.0,512,0.06383385252103738,512,82.792,32768,h3,0.9603495802716071,"PID                 COMMAND             RSS                 NLWP
+143158              controller          5764                2
+143248              Zelvik-Edge         179320              27",458.1227133173229,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-shared,1,hit,143.25,0.9515223650430547,reuse,134.2735560836041,3.022287867999694,,0,native-2-quinn-shared-1024/manifest.json,0.0,32,0.009774052403403616,0,5.904000000000001,1024,h3,0.9161453577327732,"PID                 COMMAND             RSS                 NLWP
+118467              controller          5888                2
+118562              Zelvik-Edge         167816              24",6822.976797920987,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,20621,edge,"[16, 16]"
+quinn-shared,1,hit,146.51171875,0.6553369540068933,fresh,1884.58203125,0.967803656000342,,0,native-2-quinn-shared-1024/manifest.json,0.0,512,0.030373929482231273,0,64.395,1024,h3,0.9970059464206643,"PID                 COMMAND             RSS                 NLWP
+119029              controller          5752                2
+119116              Zelvik-Edge         174124              24",529.0329260750582,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-shared,1,miss,157.546875,0.6510906539468158,reuse,514.5283203125,0.5664602890001333,,0,native-2-quinn-shared-1024/manifest.json,0.0,32,0.1629505223798279,1024,71.783,1024,h3,0.9301216876649866,"PID                 COMMAND             RSS                 NLWP
+119547              controller          5960                2
+119636              Zelvik-Edge         175956              33",1807.7171866848357,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-shared,1,off,146.17578125,0.9025391760552671,reuse,190.41509305337786,3.028104011999858,,0,native-2-quinn-shared-1024/manifest.json,0.0,32,0.3129109820023066,14669,8.659,1024,h3,0.9224250517588003,"PID                 COMMAND             RSS                 NLWP
+120081              controller          6012                2
+120170              Zelvik-Edge         171032              25",4844.285381832746,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,14669,edge,"[16, 16]"
+quinn-shared,1,miss,149.71875,0.767921253355095,multiplex,451.201171875,0.4667920030001369,,0,native-2-quinn-shared-1024/manifest.json,0.0,2,0.20731503405805266,1024,27.421999999999997,1024,h3,0.9897984477678905,"PID                 COMMAND             RSS                 NLWP
+120593              controller          5876                2
+120684              Zelvik-Edge         168428              47",2193.696535970218,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-shared,1,hit,138.11328125,0.9488221636702078,multiplex,122.57075516168568,3.027620570000181,,0,native-2-quinn-shared-1024/manifest.json,0.0,2,0.010265817423746115,0,5.041,1024,h3,0.8588315278885308,"PID                 COMMAND             RSS                 NLWP
+121140              controller          5960                2
+121230              Zelvik-Edge         163780              25",7006.822522677844,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,21214,edge,"[1, 1]"
+quinn-shared,1,miss,153.7421875,0.6603599898534454,fresh,2338.76953125,1.2180651649996435,,0,native-2-quinn-shared-1024/manifest.json,0.0,512,0.06263129608506811,512,89.78800000000001,1024,h3,0.9830754826654537,"PID                 COMMAND             RSS                 NLWP
+121660              controller          5872                2
+121750              Zelvik-Edge         176084              34",420.33875913375283,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-shared,1,off,137.35546875,0.917607954618208,multiplex,183.5086160833556,3.025070768000205,,0,native-2-quinn-shared-1024/manifest.json,0.0,2,0.32615898128302334,14972,7.8790000000000004,1024,h3,0.908240239885791,"PID                 COMMAND             RSS                 NLWP
+122183              controller          5912                2
+122272              Zelvik-Edge         162432              25",4949.305701663831,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,14972,edge,"[1, 1]"
+quinn-shared,1,off,144.3125,0.6938385102185557,fresh,2070.0234375,1.0674609279999459,,0,native-2-quinn-shared-1024/manifest.json,0.0,512,0.06867230272994472,512,78.441,1024,h3,0.9928719376978019,"PID                 COMMAND             RSS                 NLWP
+122706              controller          5852                2
+122795              Zelvik-Edge         171948              25",479.6428483422917,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-shared,1,hit,153.5859375,0.8994278437666685,reuse,1905.3939197930142,3.128180897999755,,0,native-2-quinn-shared-131072/manifest.json,0.0,32,0.009558590431620986,0,383.547,131072,h3,0.9416779579095271,"PID                 COMMAND             RSS                 NLWP
+149126              controller          5976                2
+149212              Zelvik-Edge         176320              25",494.2169428208436,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,1546,edge,"[16, 16]"
+quinn-shared,1,hit,155.1171875,0.8783164432258456,fresh,3884.982421875,2.076137266999922,,0,native-2-quinn-shared-131072/manifest.json,0.0,512,0.014646912072409297,0,217.483,131072,h3,0.9580826044678263,"PID                 COMMAND             RSS                 NLWP
+149692              controller          5768                2
+149784              Zelvik-Edge         178104              26",246.6118248240179,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-shared,1,miss,163.6640625,0.8682999715507317,reuse,2682.373046875,2.9331148030000804,,0,native-2-quinn-shared-131072/manifest.json,0.0,32,0.052905873251629335,1024,241.051,131072,h3,0.9364618109016869,"PID                 COMMAND             RSS                 NLWP
+150223              controller          5824                2
+150315              Zelvik-Edge         183428              28",349.11691794423496,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-shared,1,off,143.85546875,0.904425749469773,reuse,2123.936170212766,3.085551248000229,,0,native-2-quinn-shared-131072/manifest.json,0.0,32,0.060908727450825366,1363,313.807,131072,h3,0.9382197109434578,"PID                 COMMAND             RSS                 NLWP
+150749              controller          5824                2
+150839              Zelvik-Edge         168236              25",441.73630267310307,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,1363,edge,"[16, 16]"
+quinn-shared,1,miss,162.93359375,0.913759641072392,multiplex,2827.1904296875,3.0822821159999876,,0,native-2-quinn-shared-131072/manifest.json,0.0,2,0.054701676762413755,1024,598.407,131072,h3,0.9392530894469272,"PID                 COMMAND             RSS                 NLWP
+151272              controller          5988                2
+151363              Zelvik-Edge         177872              27",332.22137411902116,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-shared,1,hit,149.40625,0.91302135076502,multiplex,2079.4137184115525,3.0826863990000675,,0,native-2-quinn-shared-131072/manifest.json,0.0,2,0.009692844529917864,0,575.663,131072,h3,0.9342461824641596,"PID                 COMMAND             RSS                 NLWP
+151797              controller          5908                2
+151887              Zelvik-Edge         169176              25",449.28345628970015,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,1385,edge,"[1, 1]"
+quinn-shared,1,miss,155.390625,0.8082071571954585,fresh,4438.265625,2.428013638000266,,0,native-2-quinn-shared-131072/manifest.json,0.0,512,0.04487371829168781,512,256.941,131072,h3,0.9359057809376898,"PID                 COMMAND             RSS                 NLWP
+152316              controller          5908                2
+152406              Zelvik-Edge         169856              26",210.87196216150082,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-shared,1,off,147.53515625,0.9118748427324757,multiplex,2210.5108864696736,3.0792910039999697,,0,native-2-quinn-shared-131072/manifest.json,0.0,2,0.06114329556882693,1286,591.423,131072,h3,0.9231725732668129,"PID                 COMMAND             RSS                 NLWP
+152837              controller          6020                2
+152928              Zelvik-Edge         171396              25",417.62860292499096,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,1286,edge,"[1, 1]"
+quinn-shared,1,off,143.58984375,0.8635775950733204,fresh,4001.275390625,2.1779826280003363,,0,native-2-quinn-shared-131072/manifest.json,0.0,512,0.04909543291361068,512,220.115,131072,h3,0.9406195318834673,"PID                 COMMAND             RSS                 NLWP
+153352              controller          5824                2
+153442              Zelvik-Edge         170840              25",235.07992828670118,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+quinn-shared,1,hit,144.1328125,0.9556341669047748,reuse,619.8602704443014,3.030078454999966,,0,native-2-quinn-shared-32768/manifest.json,0.0,32,0.010130760789162583,0,30.336,32768,h3,0.953087203149673,"PID                 COMMAND             RSS                 NLWP
+133816              controller          5832                2
+133906              Zelvik-Edge         170544              25",1537.5839501159226,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,4659,edge,"[16, 16]"
+quinn-shared,1,hit,143.01171875,0.7469125504545666,fresh,2371.109375,1.2694096509999326,,0,native-2-quinn-shared-32768/manifest.json,0.0,512,0.023493597970133586,0,119.422,32768,h3,0.9563563653732332,"PID                 COMMAND             RSS                 NLWP
+134384              controller          5884                2
+134475              Zelvik-Edge         169340              26",403.33709421280207,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+quinn-shared,1,miss,184.0859375,0.8265965986947789,reuse,1098.2314453125,1.2219243360000291,,0,native-2-quinn-shared-32768/manifest.json,0.0,32,0.08900141915169893,1024,115.157,32768,h3,0.9203425833070348,"PID                 COMMAND             RSS                 NLWP
+134903              controller          5888                2
+134992              Zelvik-Edge         171944              27",838.022428910832,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+quinn-shared,1,off,145.3828125,0.924819552560369,reuse,716.1572977060752,3.0322126000000935,,0,native-2-quinn-shared-32768/manifest.json,0.0,32,0.1057422556716472,3967,59.331,32768,h3,0.9369382608593844,"PID                 COMMAND             RSS                 NLWP
+135418              controller          5812                2
+135511              Zelvik-Edge         172600              24",1308.2855733796098,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,3967,edge,"[16, 16]"
+quinn-shared,1,miss,181.859375,0.8704453098292614,multiplex,992.166015625,1.0711523049999414,,0,native-2-quinn-shared-32768/manifest.json,0.0,2,0.10082506427506208,1024,57.805,32768,h3,0.948490700395828,"PID                 COMMAND             RSS                 NLWP
+135941              controller          5844                2
+136030              Zelvik-Edge         170240              31",955.9798314582873,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+quinn-shared,1,hit,142.0859375,0.9454709404906798,multiplex,591.2856557377049,3.028978869000184,,0,native-2-quinn-shared-32768/manifest.json,0.0,2,0.009730341898927988,0,27.348000000000003,32768,h3,0.9526226906140309,"PID                 COMMAND             RSS                 NLWP
+136461              controller          5960                2
+136550              Zelvik-Edge         168520              26",1611.1040093227218,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,4880,edge,"[1, 1]"
+quinn-shared,1,miss,166.46484375,0.7223841822200698,fresh,2828.80859375,1.5200111340000149,,0,native-2-quinn-shared-32768/manifest.json,0.0,512,0.051673963593479325,512,145.9,32768,h3,0.9528548624433864,"PID                 COMMAND             RSS                 NLWP
+136978              controller          5908                2
+137066              Zelvik-Edge         174768              26",336.8396379128069,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+quinn-shared,1,off,141.83203125,0.9101841562521359,multiplex,688.0410958904109,3.0315260720003607,,0,native-2-quinn-shared-32768/manifest.json,0.0,2,0.10602448811793092,4161,35.736999999999995,32768,h3,0.9443887111651598,"PID                 COMMAND             RSS                 NLWP
+137501              controller          5824                2
+137592              Zelvik-Edge         166632              24",1372.576023156005,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,4161,edge,"[1, 1]"
+quinn-shared,1,off,142.99609375,0.756874452162416,fresh,2485.96875,1.3217958370000815,,0,native-2-quinn-shared-32768/manifest.json,0.0,512,0.05864294456844716,512,122.27000000000001,32768,h3,0.9629444762730944,"PID                 COMMAND             RSS                 NLWP
+138018              controller          5840                2
+138111              Zelvik-Edge         169516              25",387.3518025007734,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,hit,143.265625,0.937046877966164,reuse,194.75438104584327,3.0237825519998296,,0,native-2-tokio-quiche-native-1024/manifest.json,0.0,32,0.009848591784585995,0,8.815,1024,h3,0.9188378966478528,"PID                 COMMAND             RSS                 NLWP
+113358              controller          5968                2
+113452              Zelvik-Edge         166584              25",4717.93184684029,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,14266,edge,"[16, 16]"
+tokio-quiche-native,1,hit,144.90234375,0.7076332263374951,fresh,1961.537109375,1.0175080439998965,,0,native-2-tokio-quiche-native-1024/manifest.json,0.0,512,0.029248908817474693,0,81.679,1024,h3,0.9870261035500002,"PID                 COMMAND             RSS                 NLWP
+113924              controller          5836                2
+114016              Zelvik-Edge         171004              25",503.19012514858514,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,miss,155.1015625,0.8382910662625042,reuse,583.7275390625,0.6170142099999794,,0,native-2-tokio-quiche-native-1024/manifest.json,0.0,32,0.14831911245610221,1024,83.575,1024,h3,0.9687572673569705,"PID                 COMMAND             RSS                 NLWP
+114445              controller          5908                2
+114535              Zelvik-Edge         174572              42",1659.6052139545284,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+tokio-quiche-native,1,off,140.0078125,0.9005226163388069,reuse,280.5164544065206,3.0281460460000744,,0,native-2-tokio-quiche-native-1024/manifest.json,0.0,32,0.21561080280867798,9815,12.741999999999999,1024,h3,0.9092259614217868,"PID                 COMMAND             RSS                 NLWP
+114980              controller          5888                2
+115070              Zelvik-Edge         165456              25",3241.2571424567805,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,9815,edge,"[16, 16]"
+tokio-quiche-native,1,miss,153.90234375,0.8543105604255309,multiplex,497.55859375,0.5157427760000246,,0,native-2-tokio-quiche-native-1024/manifest.json,0.0,2,0.1910215801064275,1024,27.022000000000002,1024,h3,0.9878955628841918,"PID                 COMMAND             RSS                 NLWP
+115498              controller          5848                2
+115589              Zelvik-Edge         168920              54",1985.4858810469332,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+tokio-quiche-native,1,hit,139.11328125,0.9455489888080901,multiplex,158.85488844549246,3.0233541930001593,,0,native-2-tokio-quiche-native-1024/manifest.json,0.0,2,0.010217129065300479,0,7.076,1024,h3,0.869002052780609,"PID                 COMMAND             RSS                 NLWP
+116043              controller          5836                2
+116132              Zelvik-Edge         162276              25",5470.414296244889,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,16539,edge,"[1, 1]"
+tokio-quiche-native,1,miss,149.2734375,0.6744833481399655,fresh,2142.314453125,1.1209179620000214,,0,native-2-tokio-quiche-native-1024/manifest.json,0.0,512,0.061888561296869184,512,95.52,1024,h3,0.978541728462354,"PID                 COMMAND             RSS                 NLWP
+116562              controller          5772                2
+116651              Zelvik-Edge         172396              29",456.76848561374936,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,off,133.87109375,0.9193744224157978,multiplex,229.63219731689026,3.025880351000069,,0,native-2-tokio-quiche-native-1024/manifest.json,0.0,2,0.2732451069080561,12001,9.709999999999999,1024,h3,0.9107485030229926,"PID                 COMMAND             RSS                 NLWP
+117083              controller          5980                2
+117171              Zelvik-Edge         160044              25",3966.118487148247,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,12001,edge,"[1, 1]"
+tokio-quiche-native,1,off,144.88671875,0.6693929789792196,fresh,2003.056640625,1.0675470500000301,,0,native-2-tokio-quiche-native-1024/manifest.json,0.0,512,0.06458169689101577,512,74.269,1024,h3,0.9606742859717247,"PID                 COMMAND             RSS                 NLWP
+117597              controller          5804                2
+117684              Zelvik-Edge         170284              25",479.60415421501614,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,hit,149.08984375,0.8517911949499097,reuse,1092.2857977790766,3.0797753199999534,,0,native-2-tokio-quiche-native-131072/manifest.json,0.0,32,0.009790649273727038,0,184.703,131072,h3,0.6068303060497375,"PID                 COMMAND             RSS                 NLWP
+144033              controller          5852                2
+144127              Zelvik-Edge         172176              25",555.5600075397792,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,1711,edge,"[16, 16]"
+tokio-quiche-native,1,hit,149.22265625,0.8490961594964442,fresh,2655.0,1.4264615220004089,,0,native-2-tokio-quiche-native-131072/manifest.json,0.0,512,0.02012181861011444,0,125.69,131072,h3,0.9529594587968215,"PID                 COMMAND             RSS                 NLWP
+144595              controller          5720                2
+144685              Zelvik-Edge         173436              24",358.9301163076541,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,miss,162.44921875,0.7798095930322743,reuse,1633.236328125,2.024253759000203,,0,native-2-tokio-quiche-native-131072/manifest.json,0.0,32,0.07182251699105548,1024,182.702,131072,h3,0.8261977988500957,"PID                 COMMAND             RSS                 NLWP
+145116              controller          6008                2
+145208              Zelvik-Edge         177664              37",505.86543087649386,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+tokio-quiche-native,1,off,145.98046875,0.8536667977054373,reuse,1268.5556962025316,3.085848022999926,,0,native-2-tokio-quiche-native-131072/manifest.json,0.0,32,0.07040268943277289,1580,175.64499999999998,131072,h3,0.6495193493202203,"PID                 COMMAND             RSS                 NLWP
+145649              controller          5912                2
+145735              Zelvik-Edge         166016              25",512.0148459106529,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,1580,edge,"[16, 16]"
+tokio-quiche-native,1,miss,159.26171875,0.8476667347429909,multiplex,1869.935546875,2.328603823999856,,0,native-2-tokio-quiche-native-131072/manifest.json,0.0,2,0.07037349948112519,1024,113.02,131072,h3,0.8223013207591977,"PID                 COMMAND             RSS                 NLWP
+146169              controller          6000                2
+146258              Zelvik-Edge         173096              27",439.748483381372,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+tokio-quiche-native,1,hit,142.8359375,0.8892878484399296,multiplex,1318.6930693069307,3.0759843450000517,,0,native-2-tokio-quiche-native-131072/manifest.json,0.0,2,0.009849529972168791,0,97.508,131072,h3,0.6494896514175745,"PID                 COMMAND             RSS                 NLWP
+146689              controller          5868                2
+146781              Zelvik-Edge         165896              25",492.5252634860125,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,1515,edge,"[1, 1]"
+tokio-quiche-native,1,miss,153.48828125,0.806160550084654,fresh,3256.0859375,1.7268830630000593,,0,native-2-tokio-quiche-native-131072/manifest.json,0.0,512,0.06138574306000728,512,136.012,131072,h3,0.965390208358273,"PID                 COMMAND             RSS                 NLWP
+147207              controller          6016                2
+147298              Zelvik-Edge         176672              31",296.487938859345,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,off,143.609375,0.87822249452401,multiplex,1491.9547703180212,3.081469123000261,,0,native-2-tokio-quiche-native-131072/manifest.json,0.0,2,0.0638312415762549,1415,102.665,131072,h3,0.6851004880245303,"PID                 COMMAND             RSS                 NLWP
+147726              controller          5904                2
+147817              Zelvik-Edge         167980              24",459.1965531760028,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,1415,edge,"[1, 1]"
+tokio-quiche-native,1,off,149.96484375,0.8335200285171137,fresh,2978.470703125,1.5742327180000757,,0,native-2-tokio-quiche-native-131072/manifest.json,0.0,512,0.07021642908071911,512,130.8,131072,h3,0.9687112855444582,"PID                 COMMAND             RSS                 NLWP
+148245              controller          5788                2
+148336              Zelvik-Edge         170668              25",325.2378089628648,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,hit,139.6796875,0.9512345617749647,reuse,375.33094867807154,3.033396405000076,,0,native-2-tokio-quiche-native-32768/manifest.json,0.0,32,0.009849355643315353,0,47.114999999999995,32768,h3,0.7956025780283535,"PID                 COMMAND             RSS                 NLWP
+128692              controller          5968                2
+128787              Zelvik-Edge         164920              25",2119.7361444093353,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0000-h3-hit-reuse,6430,edge,"[16, 16]"
+tokio-quiche-native,1,hit,147.19140625,0.7302925613672345,fresh,2118.30859375,1.1218367040000885,,0,native-2-tokio-quiche-native-32768/manifest.json,0.0,512,0.02624267854227533,0,88.67800000000001,32768,h3,0.9667841996368792,"PID                 COMMAND             RSS                 NLWP
+129256              controller          5912                2
+129345              Zelvik-Edge         171668              25",456.39440943087527,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0001-h3-hit-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,miss,187.02734375,0.837704686656834,reuse,858.552734375,0.9193609779999861,,0,native-2-tokio-quiche-native-32768/manifest.json,0.0,32,0.11107062671089522,1024,86.703,32768,h3,0.9562707369988172,"PID                 COMMAND             RSS                 NLWP
+129776              controller          5880                2
+129868              Zelvik-Edge         176068              35",1113.8171235281814,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0002-h3-miss-reuse,1024,edge,"[16, 16]"
+tokio-quiche-native,1,off,141.12109375,0.9080950832947311,reuse,493.63532922962133,3.0342400819999966,,0,native-2-tokio-quiche-native-32768/manifest.json,0.0,32,0.12732512575120628,5361,56.499,32768,h3,0.8721719206397336,"PID                 COMMAND             RSS                 NLWP
+130306              controller          5880                2
+130396              Zelvik-Edge         166408              25",1766.8344808319641,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0003-h3-off-reuse,5361,edge,"[16, 16]"
+tokio-quiche-native,1,miss,185.28515625,0.8271456647259854,multiplex,794.607421875,0.8709143149999363,,0,native-2-tokio-quiche-native-32768/manifest.json,0.0,2,0.1252373489807754,1024,48.448,32768,h3,0.9342801995395602,"PID                 COMMAND             RSS                 NLWP
+130827              controller          5868                2
+130915              Zelvik-Edge         173188              27",1175.7758281881897,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0004-h3-miss-multiplex,1024,edge,"[1, 1]"
+tokio-quiche-native,1,hit,137.99609375,0.890986714742021,multiplex,410.4077986938148,3.03209852100008,,0,native-2-tokio-quiche-native-32768/manifest.json,0.0,2,0.009878306985262769,0,27.894,32768,h3,0.7046548735808521,"PID                 COMMAND             RSS                 NLWP
+131350              controller          5856                2
+131439              Zelvik-Edge         162116              26",1716.962679129206,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0005-h3-hit-multiplex,5206,edge,"[1, 1]"
+tokio-quiche-native,1,miss,155.4921875,0.7303309450260091,fresh,2402.537109375,1.2701947059999839,,0,native-2-tokio-quiche-native-32768/manifest.json,0.0,512,0.06006244526105037,512,95.471,32768,h3,0.9684334174827017,"PID                 COMMAND             RSS                 NLWP
+131879              controller          5900                2
+131968              Zelvik-Edge         173024              36",403.0878081773445,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0006-h3-miss-fresh,512,edge,"[256, 256]"
+tokio-quiche-native,1,off,137.71875,0.8668465599461775,multiplex,508.05289885738466,3.0376454399997783,,0,native-2-tokio-quiche-native-32768/manifest.json,0.0,2,0.11281402216580781,4726,31.798,32768,h3,0.7904339224001651,"PID                 COMMAND             RSS                 NLWP
+132412              controller          5916                2
+132502              Zelvik-Edge         162328              26",1555.8102791615945,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0007-h3-off-multiplex,4726,edge,"[1, 1]"
+tokio-quiche-native,1,off,150.87890625,0.739249639928961,fresh,2238.41015625,1.1705396299998938,,0,native-2-tokio-quiche-native-32768/manifest.json,0.0,512,0.06509561748029576,512,89.72800000000001,32768,h3,0.9790920107507202,"PID                 COMMAND             RSS                 NLWP
+132933              controller          5928                2
+133024              Zelvik-Edge         164820              24",437.40509665618623,b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6,passed,0008-h3-off-fresh,512,edge,"[256, 256]"
