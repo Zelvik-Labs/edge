@@ -13,6 +13,7 @@ use tokio::task::JoinSet;
 use tokio_quiche::{
     ConnectionParams,
     metrics::DefaultMetrics,
+    quiche,
     settings::{CertificateKind, Hooks, QuicSettings, TlsCertificatePaths},
 };
 use zelvik_edge_h3_quiche::tls::HandshakeGate;
@@ -442,6 +443,117 @@ async fn fin_sent_after_all_body_bytes_are_acknowledged_still_reaches_peer() {
     })
     .await
     .expect("FIN after the last DATA ACK must reach the peer");
+}
+
+fn pending_packets(connection: &mut quiche::Connection) -> Vec<(Vec<u8>, quiche::RecvInfo)> {
+    let mut packets = Vec::new();
+    let mut buffer = [0; 1350];
+    loop {
+        match connection.send(&mut buffer) {
+            Ok((length, info)) => packets.push((
+                buffer[..length].to_vec(),
+                quiche::RecvInfo {
+                    from: info.from,
+                    to: info.to,
+                },
+            )),
+            Err(quiche::Error::Done) => return packets,
+            Err(error) => panic!("packet generation failed: {error:?}"),
+        }
+    }
+}
+
+fn deliver_packets(connection: &mut quiche::Connection, packets: Vec<(Vec<u8>, quiche::RecvInfo)>) {
+    for (mut packet, info) in packets {
+        connection.recv(&mut packet, info).unwrap();
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn queued_fin_survives_ack_before_first_transmit() {
+    // Reuse the strict fixture's ephemeral certificate, but drive these two
+    // quiche endpoints packet-by-packet to control ACK/FIN ordering exactly.
+    let fixture = Fixture::new(Limits::default()).await;
+    let config = || {
+        let mut config = quiche::Config::new(quiche::PROTOCOL_VERSION).unwrap();
+        config.set_application_protos(&[b"h3"]).unwrap();
+        config.set_initial_max_data(1024 * 1024);
+        config.set_initial_max_stream_data_bidi_local(64 * 1024);
+        config.set_initial_max_stream_data_bidi_remote(64 * 1024);
+        config.set_initial_max_streams_bidi(16);
+        config.set_max_send_udp_payload_size(1350);
+        config.set_max_recv_udp_payload_size(1350);
+        config.set_max_ack_delay(0);
+        config
+    };
+    let mut server_config = config();
+    server_config
+        .load_cert_chain_from_pem_file(fixture.directory.join("cert.pem").to_str().unwrap())
+        .unwrap();
+    server_config
+        .load_priv_key_from_pem_file(fixture.directory.join("key.pem").to_str().unwrap())
+        .unwrap();
+    // Server does not require client certificates; the client verifies the
+    // generated server leaf and localhost name through the real TLS stack.
+    server_config.verify_peer(false);
+    let mut client_config = config();
+    client_config
+        .load_verify_locations_from_file(fixture.directory.join("cert.pem").to_str().unwrap())
+        .unwrap();
+    let client_address = "127.0.0.1:40000".parse().unwrap();
+    let server_address = "127.0.0.1:40001".parse().unwrap();
+    let mut client = quiche::connect(
+        Some("localhost"),
+        &quiche::ConnectionId::from_ref(b"clientid"),
+        client_address,
+        server_address,
+        &mut client_config,
+    )
+    .unwrap();
+    let mut server = quiche::accept(
+        &quiche::ConnectionId::from_ref(b"serverid"),
+        None,
+        server_address,
+        client_address,
+        &mut server_config,
+    )
+    .unwrap();
+    for _ in 0..16 {
+        deliver_packets(&mut server, pending_packets(&mut client));
+        deliver_packets(&mut client, pending_packets(&mut server));
+    }
+    assert!(client.is_established() && server.is_established());
+    assert_eq!(client.stream_send(0, b"request", true).unwrap(), 7);
+    deliver_packets(&mut server, pending_packets(&mut client));
+    let mut request = [0; 7];
+    assert_eq!(server.stream_recv(0, &mut request).unwrap(), (7, true));
+    assert_eq!(&request, b"request");
+    deliver_packets(&mut client, pending_packets(&mut server));
+
+    let body = vec![0x5a; 4096];
+    assert_eq!(server.stream_send(0, &body, false).unwrap(), body.len());
+    deliver_packets(&mut client, pending_packets(&mut server));
+    let mut received = vec![0; body.len()];
+    assert_eq!(
+        client.stream_recv(0, &mut received).unwrap(),
+        (body.len(), false)
+    );
+    assert_eq!(received, body);
+    let acknowledgements = pending_packets(&mut client);
+    assert!(
+        !acknowledgements.is_empty(),
+        "body ACK must be available before queueing FIN"
+    );
+    assert_eq!(server.stream_send(0, &[], true).unwrap(), 0);
+    // The FIN is queued but has never been sent. Old quiche collects the
+    // stream when these last DATA ACKs arrive, losing the pending empty FIN.
+    deliver_packets(&mut server, acknowledgements);
+    deliver_packets(&mut client, pending_packets(&mut server));
+    assert_eq!(
+        client.stream_recv(0, &mut [0; 1]),
+        Ok((0, true)),
+        "queued FIN was discarded before its first packet was sent"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

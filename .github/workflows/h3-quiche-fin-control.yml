@@ -35,17 +35,17 @@ jobs:
           git show e193f11aa935b0019a4b19638f64db7217d9581b:crates/zelvik-edge-h3-quiche/Cargo.lock > .local/h3-fin-old/Cargo.lock
           cp -a crates/zelvik-edge-h3-quiche/src crates/zelvik-edge-h3-quiche/tests .local/h3-fin-old/
           export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/crates/zelvik-edge-h3-quiche/target"
-          test_name=fin_sent_after_all_body_bytes_are_acknowledged_still_reaches_peer
+          test_name=queued_fin_survives_ack_before_first_transmit
           old_status=0
           EDGE_QUICHE_EVIDENCE_DIR="$GITHUB_WORKSPACE/.local/h3-fin-control/old-wire" cargo test --locked --manifest-path .local/h3-fin-old/Cargo.toml --test wire "$test_name" -- --exact --nocapture > .local/h3-fin-control/old.log 2>&1 || old_status=$?
           fixed_status=0
           EDGE_QUICHE_EVIDENCE_DIR="$GITHUB_WORKSPACE/.local/h3-fin-control/fixed-wire" cargo test --locked --manifest-path crates/zelvik-edge-h3-quiche/Cargo.toml --test wire "$test_name" -- --exact --nocapture > .local/h3-fin-control/fixed.log 2>&1 || fixed_status=$?
           printf '%s\n' "old_status=$old_status" "fixed_status=$fixed_status" > .local/h3-fin-control/status.txt
-          # Only the specific runtime timeout is a valid old-upstream control.
+          # Only the specific lost-FIN assertion is a valid old-upstream control.
           # Compile failures, unrelated failures and unexpected passes fail the job.
           test "$old_status" -ne 0
           grep -F 'test result: FAILED. 0 passed; 1 failed' .local/h3-fin-control/old.log
-          grep -F 'ConnectionError(Timeout)' .local/h3-fin-control/old.log
+          grep -F 'queued FIN was discarded before its first packet was sent' .local/h3-fin-control/old.log
           test "$fixed_status" -eq 0
           grep -F 'test result: ok. 1 passed; 0 failed' .local/h3-fin-control/fixed.log
       - name: Retain both outcomes and packet evidence
