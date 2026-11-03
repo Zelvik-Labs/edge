@@ -28,10 +28,11 @@ impl ConnectionHook for PreparedTls {
         )
     }
 }
-// tokio-quiche 0.20 has a fixed 2048 x 1500-byte incoming queue. Reserve its
-// worst-case payload plus bounded adapter RX/TX, QUIC receive window and
-// metadata headroom. The token follows the worker and outstanding Bytes.
-const TRANSPORT_RESERVATION: u64 = 4 * 1024 * 1024;
+// Upstream queues 2048 incoming Vecs, each potentially 64KiB with GRO. The
+// bounded listener enforces <=1500-byte datagrams before this queue, with GRO
+// off and GSO preserved. Reserve payload budgets plus metadata headroom;
+// ordinary connection admission remains separately charged as well.
+const TRANSPORT_RESERVATION: u64 = 5 * 1024 * 1024;
 const LISTEN_BACKLOG: usize = 32;
 struct TransportReservation(u64);
 impl Drop for TransportReservation {
@@ -103,7 +104,13 @@ impl Http3ProxyManager {
             },
             hooks,
         );
-        let mut listeners = tokio_quiche::listen([socket], params, DefaultMetrics)?;
+        let (bounded, discarded) = zelvik_edge_h3_quiche::ingress::bounded_listener(socket)
+            .context("configure bounded native QUIC ingress")?;
+        info!(
+            "HTTP/3 native ingress: UDP <=1500 bytes, GRO off, GSO on, pre-readiness discarded={discarded}"
+        );
+        let mut listeners =
+            tokio_quiche::listen_with_capabilities([bounded], params, DefaultMetrics)?;
         let mut listener = listeners.pop().context("native QUIC listener missing")?;
         let mut logic = self.proxy_logic.clone();
         logic.tls_downstream = true;

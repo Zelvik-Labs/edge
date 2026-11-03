@@ -19,7 +19,7 @@ common = ['--target','edge','--tls',str(OUT/'tls'),'--client',str(OUT/'protocol-
 backends = ['quinn-shared','quinn-native','tokio-quiche-native']
 metadata = {'source':os.environ['GITHUB_SHA'],'binary_sha256':digest,
             'scope':'same complete CDN/cache node, matched transport; explicit Retry off; no native UDP multiplexing or XDP',
-            'profile':'256KiB receive/send;64KiB stream;MTU1350;uni8;idle30s;Cubic initial13500;PMTU off;migration off;TLS providers differ', 'runs':[]}
+            'profile':'256KiB receive/send;64KiB stream;MTU1350;uni8;idle30s;Cubic initial13500;PMTU off;migration off;quiche RX<=1500/GRO off/GSO on;TLS providers differ', 'runs':[]}
 records=[]
 def save():
     (OUT/'native-suite.json').write_text(json.dumps(metadata,indent=2)+'\n')

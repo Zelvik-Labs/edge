@@ -14,6 +14,7 @@ quiche = { git = "https://github.com/cloudflare/quiche", rev = "af8788e03413ebb3
 octets = { git = "https://github.com/cloudflare/quiche", rev = "af8788e03413ebb3cf81123fc4f1aacea44dfc40" }
 
 [dependencies]
+libc = "=0.2.191"
 bytes = "=1.12.1"
 futures-util = "=0.3.34"
 h3 = "=0.0.8"

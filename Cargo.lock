@@ -6386,6 +6386,7 @@ dependencies = [
  "bytes",
  "futures-util",
  "h3",
+ "libc",
  "parking_lot",
  "tokio",
  "tokio-quiche",

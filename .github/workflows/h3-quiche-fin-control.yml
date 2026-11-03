@@ -33,7 +33,25 @@ jobs:
           git fetch --depth=1 origin e193f11aa935b0019a4b19638f64db7217d9581b
           git show e193f11aa935b0019a4b19638f64db7217d9581b:crates/zelvik-edge-h3-quiche/Cargo.toml > .local/h3-fin-old/Cargo.toml
           git show e193f11aa935b0019a4b19638f64db7217d9581b:crates/zelvik-edge-h3-quiche/Cargo.lock > .local/h3-fin-old/Cargo.lock
+          # The current adapter now uses the already-locked libc directly for
+          # bounded Linux ingress. Preserve all baseline dependency identities.
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.local/h3-fin-old/Cargo.toml')
+          path.write_text(path.read_text().replace('[dependencies]\n', '[dependencies]\nlibc = "=0.2.191"\n'))
+          PY
           cp -a crates/zelvik-edge-h3-quiche/src crates/zelvik-edge-h3-quiche/tests .local/h3-fin-old/
+          cp .local/h3-fin-old/Cargo.lock .local/h3-fin-control/baseline-before.lock
+          cargo update --offline --manifest-path .local/h3-fin-old/Cargo.toml -p zelvik-edge-h3-quiche > .local/h3-fin-control/baseline-lock.log 2>&1
+          cp .local/h3-fin-old/Cargo.lock .local/h3-fin-control/baseline-after.lock
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          def identities(name):
+              text = Path('.local/h3-fin-control', name).read_text()
+              return {tuple(re.findall(r'^(?:name|version|source) = (.*)$', section, re.M)) for section in text.split('[[package]]')[1:]}
+          assert identities('baseline-before.lock') == identities('baseline-after.lock')
+          PY
           export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/crates/zelvik-edge-h3-quiche/target"
           test_name=queued_fin_survives_ack_before_first_transmit
           old_status=0

@@ -169,7 +169,11 @@ impl Fixture {
             },
             hooks,
         );
-        let mut listeners = tokio_quiche::listen([socket], params, DefaultMetrics).unwrap();
+        let (bounded, discarded) =
+            zelvik_edge_h3_quiche::ingress::bounded_listener(socket).unwrap();
+        assert_eq!(discarded, 0);
+        let mut listeners =
+            tokio_quiche::listen_with_capabilities([bounded], params, DefaultMetrics).unwrap();
         let mut roots = rustls::RootCertStore::empty();
         for der in rustls_pemfile::certs(&mut std::io::Cursor::new(std::fs::read(&cert).unwrap())) {
             roots.add(der.unwrap()).unwrap();

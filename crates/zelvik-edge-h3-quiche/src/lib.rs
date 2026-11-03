@@ -24,6 +24,7 @@ use tokio_quiche::{
 };
 
 pub mod admission;
+pub mod ingress;
 pub mod tls;
 pub use boring;
 pub use tokio_quiche;
