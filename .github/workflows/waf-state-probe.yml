@@ -47,3 +47,28 @@ jobs:
           path: .local/waf-state-paired/
           include-hidden-files: true
           if-no-files-found: error
+
+  occupancy-miri:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-10-31
+          components: miri
+      - name: Validate initialized-slot and partial-word safety with Miri
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/waf-miri
+          cargo +nightly-2026-10-31 miri setup > .local/waf-miri/setup.log 2>&1
+          cargo +nightly-2026-10-31 miri test --locked --manifest-path scripts/perf/waf-state/Cargo.toml --lib occupancy_bits_guard_uninitialized_slots_including_partial_last_word > .local/waf-miri/test.log 2>&1
+      - name: Retain interpreter evidence and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waf-miri-${{ github.sha }}
+          path: .local/waf-miri/
+          include-hidden-files: true
+          if-no-files-found: error

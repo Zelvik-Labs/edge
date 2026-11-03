@@ -95,6 +95,13 @@ impl<K: Copy> Segment<K> {
             .put(index, value);
     }
 
+    #[inline]
+    fn replace_live(&mut self, index: usize, value: (K, i64)) {
+        // The probe already proved occupancy. Updating a live row needs
+        // neither lazy-allocation checks nor another occupancy-word write.
+        self.storage.as_mut().expect("live segment").slots[index].write(value);
+    }
+
     fn earliest(&self) -> Option<usize> {
         self.storage
             .as_ref()?
@@ -211,7 +218,7 @@ impl<K: Copy + Eq + Hash> BoundedScopedMap<K> {
                     }
                     Some((stored, value)) => {
                         if stored == key {
-                            seg.put(index, Some((key, expiry)), self.seg_cap);
+                            seg.replace_live(index, (key, expiry));
                             return None;
                         }
                         if victim.is_none() || value < victim_expiry {
@@ -230,7 +237,7 @@ impl<K: Copy + Eq + Hash> BoundedScopedMap<K> {
             }
             if let Some(index) = victim {
                 let (evicted, _) = seg.slot(index).expect("live victim");
-                seg.put(index, Some((key, expiry)), self.seg_cap);
+                seg.replace_live(index, (key, expiry));
                 return Some(evicted);
             }
             let index = dead.expect("a window without victims has a free slot");
