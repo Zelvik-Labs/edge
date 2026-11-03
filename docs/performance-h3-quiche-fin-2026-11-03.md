@@ -56,7 +56,10 @@ python3 docs/evidence/h3-quiche-fin-2026-11-03/verify.py
 ```
 
 已解决：已复现的无丢包 FIN 丢失及依赖身份不一致。
-仍待验证：完整 CDN 缓存比较、受控丢包、长期运行与生产策略覆盖。
+本阶段之后已完成[完整 CDN 缓存基线](performance-h3-native-capacity-matrix-2026-11-04.md)、
+[受控双向丢包及最终 FIN 对照](performance-h3-ingress-2026-11-04.md)与
+[262,144 次持续连接](performance-h3-native-sustained-2026-11-04.md)。
+长期运行与全部生产策略覆盖仍未完成。
 设计限制：实验后端暂不覆盖共享 UDP/XDP/自适应 Retry。
 经审批的功能降级：无。
 
