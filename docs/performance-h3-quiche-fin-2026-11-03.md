@@ -64,4 +64,8 @@ python3 docs/evidence/h3-quiche-fin-2026-11-03/verify.py
 
 [首次控制实验](https://github.com/Zelvik-Labs/edge/actions/runs/41667192163) 中，“所有 DATA 已 ACK 再排队 FIN”在旧版和修复版都通过。
 因此该测试只覆盖一个合法结束顺序，不能独立复现此次竞争；工作流因预期旧版失败未出现而正确失败，原件保留。
-实际缺陷需要“FIN 已排队但尚未发送，此时最后的 DATA ACK 到达”。新增逐包驱动的独立 QUIC 测试专门固定这一顺序，结果待该工作流返回后记录。
+实际缺陷需要“FIN 已排队但尚未发送，此时最后的 DATA ACK 到达”。新增逐包驱动的独立 QUIC 测试专门固定这一顺序，[因果对照工作流 41669006784](https://github.com/Zelvik-Labs/edge/actions/runs/41669006784) 已通过：
+相同适配层和测试代码，旧依赖在最后的 EOF 断言返回 `Err(Done)`，修复依赖返回 `Ok((0, true))`。
+TLS 握手、完整 4 KiB 正文、ACK 可用性和精确先后顺序均通过前置断言；没有通过等待超时制造差异。
+当前 [全部适配层验证](https://github.com/Zelvik-Labs/edge/actions/runs/41669006839) 为 8 项测试及 10 次重复全部通过，
+双向实际丢包仍为 49/46 个。原始旧版失败、修复版成功及首次未复现对照全部纳入同一证据目录。

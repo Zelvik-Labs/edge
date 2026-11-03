@@ -44,12 +44,13 @@ Edge 到源站的 **H3 回源**继续使用 Quinn/h3-quinn，拥有独立的空�
 ## 同条件比较范围
 
 三条路径使用同一个启用 `h3-quiche` 的生产可执行文件，统一 256 KiB 连接接收/发送预算、
-64 KiB 流接收窗口、8 个单向流、1350 字节 UDP 大小、30 秒空闲超时、Cubic 及
+64 KiB 流接收窗口、8 个单向流、1350 字节初始发送 MTU、30 秒空闲超时、Cubic 及
 13,500 字节初始拥塞窗口，关闭主动迁移和 PMTU 探测。双向流上限沿用节点 governor。
 比较时显式配置地址验证 Off，关闭 0-RTT 和 QUIC DATAGRAM。
 
 Quinn 的 AWS-LC/rustls 与 quiche 的 BoringSSL、拥塞控制具体实现、socket offload 支持仍不同。
-“matched”覆盖上述传输参数，不表示加密实现、内核收发和全部内部默认完全相同。
+quiche 的 UDP 接收上限显式设为 1350，Quinn 端点的接收上限沿用库默认值。
+“matched”覆盖上述共同参数，不表示加密实现、内核收发和全部内部默认完全相同。
 共享 Quinn 与原生 Quinn 的比较更适合定位 demux 开销；原生两库比较反映整套传输栈。
 
 ## 生命周期、内存和功能边界

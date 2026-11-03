@@ -3,6 +3,7 @@
 import hashlib
 import json
 from pathlib import Path
+import re
 import zipfile
 
 root = Path(__file__).resolve().parent
@@ -38,14 +39,31 @@ for directory in sorted(root.iterdir()):
             if len(streams) == 16:
                 rows.append({'fixture': Path(entry['path']).parent.parent.name,
                              'missing': {str(key): value for key, value in streams.items() if not value['fin']}})
-        if directory.name == 'quiche-loss-late-fin-pass':
+        if directory.name in ['quiche-loss-late-fin-pass', 'quiche-eight-wire-pass']:
             tests = archive.read('tests.log').decode()
-            assert 'test result: ok. 7 passed; 0 failed' in tests
+            count = 8 if directory.name == 'quiche-eight-wire-pass' else 7
+            assert f'test result: ok. {count} passed; 0 failed' in tests
             assert 'loss fixture dropped server/client datagrams: [49, 46]' in tests
             assert 'test fin_sent_after_all_body_bytes_are_acknowledged_still_reaches_peer ... ok' in tests
             for attempt in range(1, 11):
                 assert 'test result: ok. 1 passed; 0 failed' in archive.read(f'repeat-{attempt}.log').decode()
-            print('PASS: 7 wire tests, 49/46 actual dropped datagrams and all 10 repeats')
+            print(f'PASS: {count} wire tests, 49/46 actual dropped datagrams and all 10 repeats')
+        if directory.name == 'fin-control-first':
+            assert archive.read('status.txt').decode() == 'old_status=0\nfixed_status=0\n'
+            print('Retained negative control: ACK-before-FIN passed on both dependencies')
+        if directory.name == 'fin-control-causal-pass':
+            assert archive.read('status.txt').decode() == 'old_status=101\nfixed_status=0\n'
+            old, fixed = (archive.read(name + '.log').decode() for name in ['old', 'fixed'])
+            assert 'queued FIN was discarded before its first packet was sent' in old
+            assert 'left: Err(Done)' in old and 'right: Ok((0, true))' in old
+            assert 'test result: FAILED. 0 passed; 1 failed' in old
+            assert 'test result: ok. 1 passed; 0 failed' in fixed
+            print('PASS: exact ACK-between-FIN-enqueue-and-send control distinguishes old/fixed upstream')
+        if directory.name == 'quiche-node-matched-pass':
+            for entry in manifest['files']:
+                log = re.sub(r'\x1b\[[0-9;]*m', '', archive.read(entry['path']).decode())
+                assert not any(line.startswith(('warning:', 'warning[')) for line in log.splitlines())
+            assert 'test result: ok. 1343 passed; 0 failed; 4 ignored' in archive.read('tests.log').decode()
     expected = directory / 'wire-summary.json'
     if expected.exists():
         assert sorted(rows, key=lambda row: row['fixture']) == sorted(json.loads(expected.read_text()), key=lambda row: row['fixture'])
