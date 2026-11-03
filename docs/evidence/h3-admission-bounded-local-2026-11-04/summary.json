@@ -1,0 +1,113 @@
+{
+  "binary_source": "74f53256ba85ad0ed3bae8424db7d21a037c10c2",
+  "binary_artifact": 13250783704,
+  "binary_digests": {
+    ".local/five-priorities/native-admission-probe-binaries/extracted/target/release/Zelvik-Edge": "ca14acbf43d782d46a669a63472104c0a0ba4d780a7e6c44c5eb0dac3bfa5792",
+    ".local/five-priorities/native-admission-probe-binaries/extracted/target/release/examples/issue34-controller": "c626e86c136d3f295cb458697024d1d4be5dc4efd95f5646895a7e815651d915"
+  },
+  "harness_checkout": "3e761646f1020b6a95df44d4622422a12355bcac",
+  "driver_sha256": "155efd9c884bf13b65331f549a5b119c4fc6bbc7e0111323b734e2e3908bd4b2",
+  "scope": "Diagnostic only: latest bounded ingress, 4 GiB, 32 concurrency, two proxy CPUs, unmodified warn logging; three independent fresh-instance rounds. Do not mix into single-core 2 GiB throughput ranking.",
+  "excluded": [
+    "overrides.json containing a generated test private key",
+    "generated TLS directory"
+  ],
+  "rows": [
+    {
+      "protocol": "h3",
+      "cache": "hit",
+      "connection": "fresh",
+      "status": "passed",
+      "error": null,
+      "origin_requests": 0,
+      "payload_bytes": 1024,
+      "target": "edge",
+      "source": "3e761646f1020b6a95df44d4622422a12355bcac",
+      "manifest": "admission-local-bounded-4g/manifest.json",
+      "stem": "0000-h3-hit-fresh",
+      "backend": "tokio-quiche-native",
+      "batch": "1",
+      "rps": 548.4851898534099,
+      "p99_ms": 117.95400000000001,
+      "successful": 512,
+      "failed": 0,
+      "elapsed": 0.9334800819997326,
+      "new_connections": 512,
+      "unique_connections_per_client": [
+        256,
+        256
+      ],
+      "cpu_usec_per_request": 3239.98046875,
+      "client_cpu_fraction": 0.8921936483270764,
+      "proxy_cpu_fraction": 0.8885406512618419,
+      "origin_cpu_fraction": 0.035285166373811745,
+      "max_host_steal_fraction": 0.3263157894736842,
+      "cgroup_peak_mib": 151.8125,
+      "proxy_processes_after": "PID                 COMMAND             RSS                 NLWP\n25364               controller          6704                3\n25440               Zelvik-Edge         178668              27"
+    },
+    {
+      "protocol": "h3",
+      "cache": "hit",
+      "connection": "fresh",
+      "status": "passed",
+      "error": null,
+      "origin_requests": 0,
+      "payload_bytes": 1024,
+      "target": "edge",
+      "source": "3e761646f1020b6a95df44d4622422a12355bcac",
+      "manifest": "admission-local-bounded-4g/manifest.json",
+      "stem": "0001-h3-hit-fresh",
+      "backend": "tokio-quiche-native",
+      "batch": "1",
+      "rps": 554.3877266204317,
+      "p99_ms": 63.097,
+      "successful": 512,
+      "failed": 0,
+      "elapsed": 0.9235413690003043,
+      "new_connections": 512,
+      "unique_connections_per_client": [
+        256,
+        256
+      ],
+      "cpu_usec_per_request": 2944.818359375,
+      "client_cpu_fraction": 0.9397527053276078,
+      "proxy_cpu_fraction": 0.8162855777820079,
+      "origin_cpu_fraction": 0.03712015633594071,
+      "max_host_steal_fraction": 0.2978723404255319,
+      "cgroup_peak_mib": 152.0234375,
+      "proxy_processes_after": "PID                 COMMAND             RSS                 NLWP\n25962               controller          6276                3\n26041               Zelvik-Edge         179340              25"
+    },
+    {
+      "protocol": "h3",
+      "cache": "hit",
+      "connection": "fresh",
+      "status": "passed",
+      "error": null,
+      "origin_requests": 0,
+      "payload_bytes": 1024,
+      "target": "edge",
+      "source": "3e761646f1020b6a95df44d4622422a12355bcac",
+      "manifest": "admission-local-bounded-4g/manifest.json",
+      "stem": "0002-h3-hit-fresh",
+      "backend": "tokio-quiche-native",
+      "batch": "1",
+      "rps": 524.0218568616652,
+      "p99_ms": 87.658,
+      "successful": 512,
+      "failed": 0,
+      "elapsed": 0.9770584819998476,
+      "new_connections": 512,
+      "unique_connections_per_client": [
+        256,
+        256
+      ],
+      "cpu_usec_per_request": 3258.505859375,
+      "client_cpu_fraction": 0.9158576651096924,
+      "proxy_cpu_fraction": 0.8537641455121517,
+      "origin_cpu_fraction": 0.054844209417557015,
+      "max_host_steal_fraction": 0.31958762886597936,
+      "cgroup_peak_mib": 150.296875,
+      "proxy_processes_after": "PID                 COMMAND             RSS                 NLWP\n26517               controller          6672                3\n26595               Zelvik-Edge         179736              25"
+    }
+  ]
+}
