@@ -1,0 +1,58 @@
+name: WAF state reservation probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/waf-state-reservation-20261103]
+    paths:
+      - .github/workflows/waf-state-probe.yml
+      - scripts/perf/waf-state/**
+      - src/firewall/bounded_map.rs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: waf-state-probe-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  production-table:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      CARGO_BUILD_JOBS: "2"
+      RUST_TEST_THREADS: "2"
+      RUSTFLAGS: "-C target-cpu=x86-64-v2"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.1
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: scripts/perf/waf-state -> target
+          key: waf-state-source-v1
+          cache-on-failure: true
+      - name: Compile and test the actual production table
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/waf-state-probe
+          cargo test --locked --manifest-path scripts/perf/waf-state/Cargo.toml > .local/waf-state-probe/tests.log 2>&1
+          cargo clippy --locked --manifest-path scripts/perf/waf-state/Cargo.toml --all-targets -- -D clippy::correctness -D clippy::suspicious > .local/waf-state-probe/clippy.log 2>&1
+          cargo build --locked --release --manifest-path scripts/perf/waf-state/Cargo.toml > .local/waf-state-probe/build.log 2>&1
+      - name: Measure only after every compiler exits
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/perf/waf-state/run.py --output .local/waf-state-probe/measurements
+      - name: Retain raw table allocation and timing evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waf-state-reservation-${{ github.sha }}
+          path: .local/waf-state-probe/
+          include-hidden-files: true
+          if-no-files-found: error
