@@ -1,0 +1,6 @@
+{
+  "parent": "8851c119d8e0f160cb10cdb347b9acb0943c3c7d",
+  "original_body_sha256": "102d54404087d2f71e739a803a404375a087c0147e5eaf973504ccaa29790e6b",
+  "retained_body_identical": true,
+  "scope": "source body identity; same-binary control is compiled in a new context, not a historical executable"
+}

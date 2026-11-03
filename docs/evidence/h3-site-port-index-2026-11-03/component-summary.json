@@ -1,0 +1,489 @@
+{
+  "passed": true,
+  "functions": 52,
+  "comparisons": {
+    "udp_demux/sites1-policy0/443": {
+      "sets": {
+        "mean_ns": 169.6491449686506,
+        "min_sample_ns": 127.09674710612272,
+        "max_sample_ns": 291.73145929140486,
+        "sample_count": 30,
+        "iterations": 14358270.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy0/sets/443/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 18.38572216377086,
+        "min_sample_ns": 17.938349090651304,
+        "max_sample_ns": 19.22433273075287,
+        "sample_count": 30,
+        "iterations": 104948640.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy0/point/443/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 40.179704290210864,
+        "min_sample_ns": 38.231710315939075,
+        "max_sample_ns": 43.148727548129514,
+        "sample_count": 30,
+        "iterations": 49732215.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy0/scan/443/new/sample.json"
+      },
+      "change_pct": -89.16250231195191,
+      "point_vs_scan_pct": -54.24127059031083
+    },
+    "udp_demux/sites1-policy0/5300": {
+      "sets": {
+        "mean_ns": 179.1440595635868,
+        "min_sample_ns": 173.44163999663115,
+        "max_sample_ns": 202.50833555583628,
+        "sample_count": 30,
+        "iterations": 11042355.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy0/sets/5300/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 31.727248689855777,
+        "min_sample_ns": 30.792831375055417,
+        "max_sample_ns": 35.24708258974284,
+        "sample_count": 30,
+        "iterations": 63576660.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy0/point/5300/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 50.15266595352341,
+        "min_sample_ns": 48.77925224049626,
+        "max_sample_ns": 53.931124251698414,
+        "sample_count": 30,
+        "iterations": 39554295.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy0/scan/5300/new/sample.json"
+      },
+      "change_pct": -82.28953348096131,
+      "point_vs_scan_pct": -36.73865967711968
+    },
+    "udp_demux/sites1-policy0/8443": {
+      "sets": {
+        "mean_ns": 180.08517202722805,
+        "min_sample_ns": 170.28780873531085,
+        "max_sample_ns": 199.8164868213045,
+        "sample_count": 30,
+        "iterations": 11532465.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy0/sets/8443/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 31.001554567953864,
+        "min_sample_ns": 29.799713721280217,
+        "max_sample_ns": 34.97933620131092,
+        "sample_count": 30,
+        "iterations": 63239070.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy0/point/8443/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 50.628982854542436,
+        "min_sample_ns": 48.043482218245764,
+        "max_sample_ns": 61.712521205642446,
+        "sample_count": 30,
+        "iterations": 40018830.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy0/scan/8443/new/sample.json"
+      },
+      "change_pct": -82.78505985863924,
+      "point_vs_scan_pct": -38.76717875802159
+    },
+    "udp_demux/sites1-policy0/9999": {
+      "sets": {
+        "mean_ns": 179.3137225614725,
+        "min_sample_ns": 173.23599338035766,
+        "max_sample_ns": 203.92613836962454,
+        "sample_count": 30,
+        "iterations": 11268345.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy0/sets/9999/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 30.971188787833924,
+        "min_sample_ns": 29.47546633367197,
+        "max_sample_ns": 37.30957218647703,
+        "sample_count": 30,
+        "iterations": 65910960.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy0/point/9999/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 50.06834870751244,
+        "min_sample_ns": 47.96264623617626,
+        "max_sample_ns": 56.125551530351586,
+        "sample_count": 30,
+        "iterations": 40047660.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy0/scan/9999/new/sample.json"
+      },
+      "change_pct": -82.72793161314446,
+      "point_vs_scan_pct": -38.142180464627764
+    },
+    "udp_demux/sites1-policy8443/443": {
+      "sets": {
+        "mean_ns": 110.7450247288364,
+        "min_sample_ns": 104.36578413774764,
+        "max_sample_ns": 189.58980728958915,
+        "sample_count": 30,
+        "iterations": 18652080.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy8443/sets/443/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 30.629143345350226,
+        "min_sample_ns": 30.415345429569,
+        "max_sample_ns": 32.6504392343676,
+        "sample_count": 30,
+        "iterations": 64992120.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy8443/point/443/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 30.734465594895962,
+        "min_sample_ns": 30.54946550188224,
+        "max_sample_ns": 31.8783295975938,
+        "sample_count": 30,
+        "iterations": 64726140.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy8443/scan/443/new/sample.json"
+      },
+      "change_pct": -72.3426461637018,
+      "point_vs_scan_pct": -0.34268449933038125
+    },
+    "udp_demux/sites1-policy8443/5300": {
+      "sets": {
+        "mean_ns": 100.53601777135171,
+        "min_sample_ns": 99.82783057802514,
+        "max_sample_ns": 109.5224938728936,
+        "sample_count": 30,
+        "iterations": 19717395.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy8443/sets/5300/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 29.73895453505686,
+        "min_sample_ns": 29.561445772541916,
+        "max_sample_ns": 31.018716293095626,
+        "sample_count": 30,
+        "iterations": 66614505.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy8443/point/5300/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 29.857321305857763,
+        "min_sample_ns": 29.539701661033515,
+        "max_sample_ns": 31.659731970434038,
+        "sample_count": 30,
+        "iterations": 67551015.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy8443/scan/5300/new/sample.json"
+      },
+      "change_pct": -70.41960165689879,
+      "point_vs_scan_pct": -0.39644136052379153
+    },
+    "udp_demux/sites1-policy8443/8443": {
+      "sets": {
+        "mean_ns": 64.15380663835096,
+        "min_sample_ns": 63.62814035607576,
+        "max_sample_ns": 68.63193816825938,
+        "sample_count": 30,
+        "iterations": 31385175.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy8443/sets/8443/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 18.36860207056417,
+        "min_sample_ns": 18.229176485289916,
+        "max_sample_ns": 19.00173274668776,
+        "sample_count": 30,
+        "iterations": 108531000.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy8443/point/8443/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 17.714516046504187,
+        "min_sample_ns": 17.49829675622279,
+        "max_sample_ns": 19.323053394610454,
+        "sample_count": 30,
+        "iterations": 111673470.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy8443/scan/8443/new/sample.json"
+      },
+      "change_pct": -71.36786882481971,
+      "point_vs_scan_pct": 3.692373093020862
+    },
+    "udp_demux/sites1-policy8443/9999": {
+      "sets": {
+        "mean_ns": 101.03301581578616,
+        "min_sample_ns": 99.76696542267426,
+        "max_sample_ns": 104.96717066091504,
+        "sample_count": 30,
+        "iterations": 19668570.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy8443/sets/9999/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 29.538660932921132,
+        "min_sample_ns": 29.20550634997727,
+        "max_sample_ns": 31.075604658106897,
+        "sample_count": 30,
+        "iterations": 66963255.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy8443/point/9999/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 29.425874496206294,
+        "min_sample_ns": 29.297961942116075,
+        "max_sample_ns": 30.2802419216432,
+        "sample_count": 30,
+        "iterations": 67735155.0,
+        "raw_samples": "criterion/udp_demux_sites1-policy8443/scan/9999/new/sample.json"
+      },
+      "change_pct": -70.76335820086864,
+      "point_vs_scan_pct": 0.38329000801446966
+    },
+    "udp_demux/sites1000-policy0/443": {
+      "sets": {
+        "mean_ns": 64151.119225341434,
+        "min_sample_ns": 61229.76417910448,
+        "max_sample_ns": 82362.10021321962,
+        "sample_count": 30,
+        "iterations": 31155.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy0/sets/443/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 18.64549824461374,
+        "min_sample_ns": 17.88174204066142,
+        "max_sample_ns": 24.703869794123374,
+        "sample_count": 30,
+        "iterations": 107817690.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy0/point/443/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 39.36906556537566,
+        "min_sample_ns": 37.81692714745062,
+        "max_sample_ns": 47.19678112080845,
+        "sample_count": 30,
+        "iterations": 50615250.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy0/scan/443/new/sample.json"
+      },
+      "change_pct": -99.97093503828185,
+      "point_vs_scan_pct": -52.639215645971284
+    },
+    "udp_demux/sites1000-policy0/5300": {
+      "sets": {
+        "mean_ns": 66291.54920208764,
+        "min_sample_ns": 64473.18461538461,
+        "max_sample_ns": 71256.31474358974,
+        "sample_count": 30,
+        "iterations": 30225.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy0/sets/5300/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 31.458249718862024,
+        "min_sample_ns": 29.930973875845357,
+        "max_sample_ns": 41.14608508586477,
+        "sample_count": 30,
+        "iterations": 62684325.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy0/point/5300/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 20277.760212555084,
+        "min_sample_ns": 19163.30377166157,
+        "max_sample_ns": 28459.381716906948,
+        "sample_count": 30,
+        "iterations": 101370.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy0/scan/5300/new/sample.json"
+      },
+      "change_pct": -99.9525456108697,
+      "point_vs_scan_pct": -99.84486329165986
+    },
+    "udp_demux/sites1000-policy0/8443": {
+      "sets": {
+        "mean_ns": 65379.11800621325,
+        "min_sample_ns": 61553.15223880597,
+        "max_sample_ns": 89120.35820895522,
+        "sample_count": 30,
+        "iterations": 31155.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy0/sets/8443/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 31.43700030761142,
+        "min_sample_ns": 30.96255608522799,
+        "max_sample_ns": 33.646475307633175,
+        "sample_count": 30,
+        "iterations": 63578520.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy0/point/8443/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 20886.436543647837,
+        "min_sample_ns": 19863.05701754386,
+        "max_sample_ns": 23855.92043740573,
+        "sample_count": 30,
+        "iterations": 94860.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy0/scan/8443/new/sample.json"
+      },
+      "change_pct": -99.95191583908394,
+      "point_vs_scan_pct": -99.84948605166844
+    },
+    "udp_demux/sites1000-policy0/9999": {
+      "sets": {
+        "mean_ns": 63691.83225710451,
+        "min_sample_ns": 61570.91044776119,
+        "max_sample_ns": 68148.78662244334,
+        "sample_count": 30,
+        "iterations": 31155.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy0/sets/9999/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 31.388367204350207,
+        "min_sample_ns": 29.721593122154,
+        "max_sample_ns": 35.801382651001724,
+        "sample_count": 30,
+        "iterations": 65661255.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy0/point/9999/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 20267.340792055733,
+        "min_sample_ns": 19879.190730106646,
+        "max_sample_ns": 21906.921383647797,
+        "sample_count": 30,
+        "iterations": 98580.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy0/scan/9999/new/sample.json"
+      },
+      "change_pct": -99.95071837927719,
+      "point_vs_scan_pct": -99.84512833959622
+    },
+    "udp_demux/sites1000-policy8443/443": {
+      "sets": {
+        "mean_ns": 106.80157409208883,
+        "min_sample_ns": 104.08110961650719,
+        "max_sample_ns": 121.72928352072283,
+        "sample_count": 30,
+        "iterations": 18321465.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy8443/sets/443/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 30.814777081786524,
+        "min_sample_ns": 30.33950161169256,
+        "max_sample_ns": 32.39584895074563,
+        "sample_count": 30,
+        "iterations": 65751930.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy8443/point/443/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 31.260625300831887,
+        "min_sample_ns": 30.391778570474628,
+        "max_sample_ns": 37.24898635736719,
+        "sample_count": 30,
+        "iterations": 63961680.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy8443/scan/443/new/sample.json"
+      },
+      "change_pct": -71.14763771625995,
+      "point_vs_scan_pct": -1.4262293692298589
+    },
+    "udp_demux/sites1000-policy8443/5300": {
+      "sets": {
+        "mean_ns": 105.38238062595903,
+        "min_sample_ns": 101.09634139884577,
+        "max_sample_ns": 124.34003747313507,
+        "sample_count": 30,
+        "iterations": 18081525.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy8443/sets/5300/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 30.721360551103956,
+        "min_sample_ns": 29.763580789877665,
+        "max_sample_ns": 34.5363389971109,
+        "sample_count": 30,
+        "iterations": 65023740.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy8443/point/5300/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 31.269618547488673,
+        "min_sample_ns": 29.874221634517305,
+        "max_sample_ns": 35.112570717903345,
+        "sample_count": 30,
+        "iterations": 65172540.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy8443/scan/5300/new/sample.json"
+      },
+      "change_pct": -70.84772580708211,
+      "point_vs_scan_pct": -1.7533248624446274
+    },
+    "udp_demux/sites1000-policy8443/8443": {
+      "sets": {
+        "mean_ns": 63.25590084693536,
+        "min_sample_ns": 61.37752979085603,
+        "max_sample_ns": 66.06368969977008,
+        "sample_count": 30,
+        "iterations": 30593280.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy8443/sets/8443/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 18.345137867965363,
+        "min_sample_ns": 17.729586628744507,
+        "max_sample_ns": 19.140821818988957,
+        "sample_count": 30,
+        "iterations": 108936945.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy8443/point/8443/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 18.249556809049718,
+        "min_sample_ns": 17.649892883106094,
+        "max_sample_ns": 20.763071673367655,
+        "sample_count": 30,
+        "iterations": 111937125.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy8443/scan/8443/new/sample.json"
+      },
+      "change_pct": -70.99853512108483,
+      "point_vs_scan_pct": 0.5237445485155368
+    },
+    "udp_demux/sites1000-policy8443/9999": {
+      "sets": {
+        "mean_ns": 105.35515626456166,
+        "min_sample_ns": 100.46977818853973,
+        "max_sample_ns": 116.66800083920839,
+        "sample_count": 30,
+        "iterations": 18364245.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy8443/sets/9999/new/sample.json"
+      },
+      "point": {
+        "mean_ns": 29.955125180222858,
+        "min_sample_ns": 29.280492636882848,
+        "max_sample_ns": 31.13272568685438,
+        "sample_count": 30,
+        "iterations": 66680535.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy8443/point/9999/new/sample.json"
+      },
+      "scan": {
+        "mean_ns": 31.143317149997696,
+        "min_sample_ns": 29.709537231742054,
+        "max_sample_ns": 35.28753645352455,
+        "sample_count": 30,
+        "iterations": 62359290.0,
+        "raw_samples": "criterion/udp_demux_sites1000-policy8443/scan/9999/new/sample.json"
+      },
+      "change_pct": -71.56748066036624,
+      "point_vs_scan_pct": -3.81523896138638
+    }
+  },
+  "index_build": {
+    "sites1000/0-65535": {
+      "mean_ns": 58448.14854964022,
+      "min_sample_ns": 56466.8167217761,
+      "max_sample_ns": 59601.318112633184,
+      "sample_count": 30,
+      "iterations": 33945.0,
+      "raw_samples": "criterion/h3_site_index_build/sites1000/0-65535/new/sample.json"
+    },
+    "sites1000/443-444": {
+      "mean_ns": 6680.710394125574,
+      "min_sample_ns": 6612.761111111111,
+      "max_sample_ns": 6843.493692968331,
+      "sample_count": 30,
+      "iterations": 301320.0,
+      "raw_samples": "criterion/h3_site_index_build/sites1000/443-444/new/sample.json"
+    },
+    "sites1/0-65535": {
+      "mean_ns": 156.22364007791637,
+      "min_sample_ns": 152.87191539111043,
+      "max_sample_ns": 169.5178834323571,
+      "sample_count": 30,
+      "iterations": 12634050.0,
+      "raw_samples": "criterion/h3_site_index_build/sites1/0-65535/new/sample.json"
+    },
+    "sites1/443-444": {
+      "mean_ns": 102.40837728970045,
+      "min_sample_ns": 100.6630534720542,
+      "max_sample_ns": 105.0859937091701,
+      "sample_count": 30,
+      "iterations": 19218450.0,
+      "raw_samples": "criterion/h3_site_index_build/sites1/443-444/new/sample.json"
+    }
+  },
+  "interpretation": "Negative lookup time is improvement. Means recomputed from raw samples; no proxy RPS or maximum-capacity inference. See raw Criterion estimates and outliers."
+}

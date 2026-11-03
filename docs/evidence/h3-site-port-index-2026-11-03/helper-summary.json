@@ -1,0 +1,24 @@
+{
+  "passed": true,
+  "source_restored": true,
+  "runs": [
+    {
+      "label": "production",
+      "exit_code": 0,
+      "source_sha256": "95f64ec498fd6036fea2f03dc5f7e69328860f8eaa008982fe94f7b9391791dd"
+    },
+    {
+      "label": "missing-middle-words-mutant",
+      "exit_code": 101,
+      "source_sha256": "0e6bdba790c2a5a3fc5f9d718eb39bd24e4798313b470deeee8b6007f01cd4bc"
+    },
+    {
+      "label": "restored-production",
+      "exit_code": 0,
+      "source_sha256": "95f64ec498fd6036fea2f03dc5f7e69328860f8eaa008982fe94f7b9391791dd"
+    }
+  ],
+  "source_sha256": "95f64ec498fd6036fea2f03dc5f7e69328860f8eaa008982fe94f7b9391791dd",
+  "clippy_exit_code": 0,
+  "scope": "production bitmap full-u16 reference union and immutable clone; full parser/config epoch tests remain root gates"
+}
