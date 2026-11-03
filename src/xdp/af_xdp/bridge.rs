@@ -1,5 +1,9 @@
 use super::*;
 
+#[cfg(target_os = "linux")]
+#[path = "affinity.rs"]
+mod affinity;
+
 #[cfg(any(test, target_os = "linux"))]
 #[path = "cooperation.rs"]
 mod cooperation;
@@ -608,29 +612,17 @@ pub async fn start_udp_bridge(quic_demux: Arc<crate::quic_udp_demux::QuicUdpDemu
     start_proxy_bridge_inner(quic_demux, None, None).await;
 }
 
-#[cfg(target_os = "linux")]
-pub(crate) fn pin_current_thread_to_cpu(cpu: u32) -> bool {
-    // SAFETY: `set` is zeroed before CPU_SET marks exactly one bit; pid 0
-    // targets the calling thread. cpu_set_t is a plain bitmask with no
-    // pointers.
-    unsafe {
-        let mut set: libc::cpu_set_t = std::mem::zeroed();
-        libc::CPU_ZERO(&mut set);
-        libc::CPU_SET(cpu as usize, &mut set);
-        libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &set) == 0
-    }
-}
-
 /// Resolve the CPU a queue reactor should pin to: explicit `cpus[]` entry
 /// aligned with `queues[]`, else round-robin the global queue ordinal over
-/// online CPUs.
+/// the supervisor's inherited CPU identities. Explicit entries retain their
+/// existing precedence; they are not silently remapped into the auto set.
 #[cfg(target_os = "linux")]
-pub(crate) fn af_xdp_queue_cpu(
+fn af_xdp_queue_cpu(
     config: &XdpConfig,
     interface: &str,
     queue: u32,
     ordinal: usize,
-    online_cpus: usize,
+    allowed_cpus: &affinity::CpuAffinity,
 ) -> u32 {
     if let Some(cfg) = config
         .interfaces
@@ -641,7 +633,7 @@ pub(crate) fn af_xdp_queue_cpu(
     {
         return *cpu;
     }
-    (ordinal % online_cpus.max(1)) as u32
+    allowed_cpus.automatic_cpu(ordinal)
 }
 
 /// Whether a generation's AF_XDP setup has reached its terminal state:
@@ -815,7 +807,16 @@ pub(crate) async fn spawn_queue_reactors(
         queue_handles.len()
     );
 
-    let online_cpus = num_cpus::get().max(1);
+    let allowed_cpus = match affinity::CpuAffinity::current() {
+        Ok(affinity) => Arc::new(affinity),
+        Err(error) => {
+            lease.retire();
+            manager.disable_proxy_redirect_for_fallback(format!(
+                "AF_XDP bridge cannot establish inherited CPU affinity: {error}; proxy workers were not started"
+            ));
+            return;
+        }
+    };
     let udp_routes = Arc::new(DashMap::new());
     // T4: one dial registry per bridge generation. Queues register their
     // request senders up-front so no dial window exists between redirect
@@ -936,7 +937,7 @@ pub(crate) async fn spawn_queue_reactors(
             &queue_handle.interface,
             queue_handle.queue,
             ordinal,
-            online_cpus,
+            &allowed_cpus,
         );
         let thread_name = format!("afxdp-{}-{}", queue_handle.interface, queue_handle.queue);
         let join_interface = queue_handle.interface.clone();
@@ -948,13 +949,15 @@ pub(crate) async fn spawn_queue_reactors(
         let ready = ready_tx.clone();
         let name = thread_name.clone();
         let worker_lease = ctx.lease.clone();
+        let worker_affinity = allowed_cpus.clone();
         worker_lease.worker_started();
         let join = match std::thread::Builder::new()
             .name(thread_name)
             .spawn(move || {
-                if !pin_current_thread_to_cpu(cpu) {
-                    tracing::warn!("{name}: failed to pin reactor thread to cpu {cpu}");
+                if let Err(error) = worker_affinity.pin_current_thread(cpu) {
+                    tracing::warn!(%error, "{name}: failed to pin reactor thread to cpu {cpu}");
                 }
+                drop(worker_affinity);
                 match tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()

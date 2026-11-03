@@ -116,7 +116,8 @@ pub struct XdpInterfaceConfig {
     #[serde(default)]
     pub queues: Vec<u32>,
     /// Optional CPU ids aligned index-wise with `queues`; pins each per-queue
-    /// AF_XDP reactor thread. Empty = auto round-robin across online CPUs.
+    /// AF_XDP reactor thread. Empty = auto round-robin across the supervisor's
+    /// inherited CPU affinity, preserving sparse taskset/cpuset identities.
     #[serde(default)]
     pub cpus: Vec<u32>,
     #[serde(default)]
