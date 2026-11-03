@@ -53,6 +53,12 @@ check、Clippy、1346 个库测试和 16 个二进制用例，仍有 4 个显式
 三个产物日志无 Rust warning。监听开始前另强制读取物理余量，避免依赖后台刷新线程的启动顺序。
 该功能通过不代替[实际连接容量验收](performance-h3-native-admission-2026-11-04.md)。
 
+`b30f0cf` 进一步在容量不足时确认未观测释放额度，
+[最终功能 CI 41685537743](https://github.com/Zelvik-Labs/edge/actions/runs/41685537743)
+通过 check、Clippy、1347+16 个测试，4 个性能探针仍显式 ignored，产物日志无 Rust warning。
+新增测试先填满存活容量并验证拒绝不触发无效刷新，再退役部分容量，验证真实观测后可以接纳新工作，
+同时仍完整扣住其余存活队列的容量。
+
 原始 ZIP、GitHub SHA-256、逐文件摘要及失败产物均保存在
 [验收证据目录](evidence/h3-native-validation-2026-11-04)。不含测试私钥。仓库根目录可复核：
 
