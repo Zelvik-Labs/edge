@@ -1,0 +1,34 @@
+{
+  "source": "52687f97a1134d063384c7ecd7bf49c9a8f0083a",
+  "baseline": "ac46a48becb18e1c36309eee541bda3d0c6b7b93",
+  "bounded": "b4d635519973b2ec9aa24a533129fdbb86d3fc4f",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "baseline_original_sha256": "c54056369d7515d6eea96abf7decbb9a94e864b2ef614556edc3d3addaa751f7",
+  "variants": {
+    "baseline": {
+      "parser_sha256": "4ca0b8114ba84514f6a761637166710ce9cafb51f6efae87e84e09862552dd67",
+      "probe_sha256": "91e134d987982ec22df60e6cff86f303c90fa05974244b60018d228b4a0b677a",
+      "binaries": {
+        "timing": "6d38ec0500f4944f2a8242a838777c207c5d91305a37df0f90ec6aaa49e49860",
+        "allocations": "3a772150f026b6a7953a62b081f445adc0b0ad7ce72920d58b1c888e96aaddda"
+      }
+    },
+    "bounded": {
+      "parser_sha256": "393e705cf22796e79eb08ef5113849d1f6175df06d0aaf260aa80f3826f51ad4",
+      "probe_sha256": "91e134d987982ec22df60e6cff86f303c90fa05974244b60018d228b4a0b677a",
+      "binaries": {
+        "timing": "b403d483fa0951053f0fbe39441cb9a8bf3a348efc8b04e6db5d3a841c9bb045",
+        "allocations": "618b2dc59db33fc09ab4a49c8f87bf58ee0a4758f223c05ca10e07027d44575a"
+      }
+    },
+    "candidate": {
+      "parser_sha256": "9eba216dd8a107d1c3d85254c58e0733453739d01bc63f245ec450a73b2f7262",
+      "probe_sha256": "91e134d987982ec22df60e6cff86f303c90fa05974244b60018d228b4a0b677a",
+      "binaries": {
+        "timing": "7560a51957bfa711f74bcee1c0e90f275434165bf05f1e1a02d6a0399fcc2218",
+        "allocations": "bc1c50a542359f8da3ae23ecc92240f8057d6d4d1ba379d0e7e848add5f6f507"
+      }
+    }
+  },
+  "scope": "pure production SNI parser, System allocator; no full-node throughput claim"
+}

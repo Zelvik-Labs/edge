@@ -1,0 +1,43 @@
+{
+  "source": "471f95a5d108bad4e0238444e7cdc1443449f90a",
+  "baseline": "ac46a48becb18e1c36309eee541bda3d0c6b7b93",
+  "bounded": "b4d635519973b2ec9aa24a533129fdbb86d3fc4f",
+  "cursor": "52687f97a1134d063384c7ecd7bf49c9a8f0083a",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "baseline_original_sha256": "c54056369d7515d6eea96abf7decbb9a94e864b2ef614556edc3d3addaa751f7",
+  "variants": {
+    "baseline": {
+      "parser_sha256": "4ca0b8114ba84514f6a761637166710ce9cafb51f6efae87e84e09862552dd67",
+      "probe_sha256": "91e134d987982ec22df60e6cff86f303c90fa05974244b60018d228b4a0b677a",
+      "binaries": {
+        "timing": "6d38ec0500f4944f2a8242a838777c207c5d91305a37df0f90ec6aaa49e49860",
+        "allocations": "3a772150f026b6a7953a62b081f445adc0b0ad7ce72920d58b1c888e96aaddda"
+      }
+    },
+    "bounded": {
+      "parser_sha256": "393e705cf22796e79eb08ef5113849d1f6175df06d0aaf260aa80f3826f51ad4",
+      "probe_sha256": "91e134d987982ec22df60e6cff86f303c90fa05974244b60018d228b4a0b677a",
+      "binaries": {
+        "timing": "b403d483fa0951053f0fbe39441cb9a8bf3a348efc8b04e6db5d3a841c9bb045",
+        "allocations": "618b2dc59db33fc09ab4a49c8f87bf58ee0a4758f223c05ca10e07027d44575a"
+      }
+    },
+    "cursor": {
+      "parser_sha256": "9eba216dd8a107d1c3d85254c58e0733453739d01bc63f245ec450a73b2f7262",
+      "probe_sha256": "91e134d987982ec22df60e6cff86f303c90fa05974244b60018d228b4a0b677a",
+      "binaries": {
+        "timing": "faf64e7584e931efe76b1bbe64912b28d4d89f3435ec0cfd4f772a25f118600f",
+        "allocations": "e4a3d7718a35416aedf340b59271cefb7e696040b028ead70c392eff3d6cdaf5"
+      }
+    },
+    "candidate": {
+      "parser_sha256": "e20d309f372761b7efc448989d1ff8f631e691a19575d452268d803d9959816d",
+      "probe_sha256": "91e134d987982ec22df60e6cff86f303c90fa05974244b60018d228b4a0b677a",
+      "binaries": {
+        "timing": "fae76b0240fe374d7e3bf7d6a4d6ac51665ce8628aadc18cb704780e1c9ac0a5",
+        "allocations": "219d0ec32505857077553d23dc8ef2b9f91a6b0512df2464a9596c58d4f756c9"
+      }
+    }
+  },
+  "scope": "pure production SNI parser, System allocator; no full-node throughput claim"
+}
