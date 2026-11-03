@@ -1011,8 +1011,32 @@ fn active_context_budget_saturation_opens_a_second_connection() {
         for _ in 1..32 {
             sessions.push(OriginH3Connector.reused_http_session(&peer).await.unwrap());
         }
-        let second = new_session(&peer).await;
+        let (connection, reused) = OriginH3Connector.get_http_session(&peer).await.unwrap();
+        assert!(
+            !reused,
+            "the saturated context must create another connection"
+        );
+        let Connection::Session(mut second) = connection else {
+            panic!("unexpected H1 fallback")
+        };
         assert_ne!(second.context.quic.stable_id(), id);
+        // Complete real requests on both contexts before closing them. Dropping
+        // a freshly handshaken, unused context can race the fixture's H3 setup
+        // and legitimately close its control streams before build() finishes.
+        second
+            .write_request_header(request("/capacity-extra", "GET"), true)
+            .await
+            .unwrap();
+        read_complete(&mut second, "/capacity-extra", b"").await;
+        for session in &mut sessions {
+            session
+                .write_request_header(request("/capacity-held", "GET"), true)
+                .await
+                .unwrap();
+            read_complete(session, "/capacity-held", b"").await;
+        }
+        assert_eq!(origin.stats.accepted.load(Ordering::Acquire), 2);
+        assert_eq!(origin.stats.requests.load(Ordering::Acquire), 33);
         drop(sessions);
         drop(second);
         wait_count(&origin.stats.closed, 2).await;
