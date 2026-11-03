@@ -1,0 +1,181 @@
+{
+  "source_commit": "1fbca822e49c3242edf89c7fd1a134de81ab3b27",
+  "dirty_files": [],
+  "binaries": {
+    "/home/runner/work/edge/edge/target/release/deps/udp_demux_bench-b72090c5f24f5458": "c6c9139ec64a3e3d18390c0b9ceeeabf295b3d06cf9496ad5e67df919223ef23"
+  },
+  "sources": {
+    "Cargo.toml": "84c5739a6fe13362ca7e1769b6c6b5a6b788e79c9de4863552b28a2d0169d57e",
+    "Cargo.lock": "b2193be03731b279b403f6c9e84be1ae8ff5c63ce39bd06946dd01cdfbafcc46",
+    "src/config.rs": "59c7f1af024229a49a96041b420b304d2824dc93e619a4913033c634fd636798",
+    "src/config_models.rs": "7812873e008ab373f1598a41aeae4616975bf8beb8e4865f4f735aaa52b4ee0a",
+    "src/quic_udp_demux.rs": "25fd6510e54f5ca7140f596a9a5c67f43dd1d62e67b420cf18a1428e4d4310c0",
+    "src/http3_proxy_manager.rs": "f8e024b6a1e9a87d62baad1357c2f86f7de2ed975e909d042c54182dc44d8e8c",
+    "benches/udp_demux_bench.rs": "2d1d10980da9670c3e69008797eb015436f5f16a51a0780bc0b61fda9ef8bc1d",
+    ".github/workflows/ci.yml": "406da5598b1583ac1415d9e05c8f89b68a0ac69a3d2a0f1d45ae849aaa48363d",
+    "/home/runner/work/edge/edge/scripts/perf/udp-demux/run.py": "14ad1e9202c0a1a54b54035a1a9713e95e81421d2ceac548328dbbcd48330770"
+  },
+  "command": [
+    "taskset",
+    "-c",
+    "0",
+    "/home/runner/work/edge/edge/target/release/deps/udp_demux_bench-b72090c5f24f5458",
+    "--bench",
+    "--noplot"
+  ],
+  "available_cpus": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "benchmark_cpu": 0,
+  "build_profiles": [
+    {
+      "opt_level": "3",
+      "debuginfo": 0,
+      "debug_assertions": false,
+      "overflow_checks": false,
+      "test": true
+    }
+  ],
+  "rustflags": "-C target-cpu=x86-64-v2",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "uname": {
+    "system": "Linux",
+    "node": "runnervmcwoy2",
+    "release": "6.8.0-1070-azure",
+    "version": "#78~22.04.1-Ubuntu SMP Thu Sep 24 18:46:45 UTC 2026",
+    "machine": "x86_64",
+    "processor": "x86_64"
+  },
+  "cpu_before": {
+    "cpu": [
+      368887,
+      409,
+      50890,
+      656633,
+      6448,
+      0,
+      550,
+      0,
+      0,
+      0
+    ],
+    "cpu0": [
+      92127,
+      38,
+      12266,
+      164715,
+      1604,
+      0,
+      121,
+      0,
+      0,
+      0
+    ],
+    "cpu1": [
+      89157,
+      4,
+      13673,
+      166087,
+      1637,
+      0,
+      342,
+      0,
+      0,
+      0
+    ],
+    "cpu2": [
+      89035,
+      94,
+      12923,
+      167396,
+      1500,
+      0,
+      44,
+      0,
+      0,
+      0
+    ],
+    "cpu3": [
+      98567,
+      271,
+      12026,
+      158434,
+      1706,
+      0,
+      43,
+      0,
+      0,
+      0
+    ]
+  },
+  "scope": "single-thread production configuration API lookup, System allocator, no network; Criterion function samples are sequential, not paired proxy rounds",
+  "elapsed_seconds": 117.77182038499996,
+  "cpu_after": {
+    "cpu": [
+      380594,
+      409,
+      51073,
+      691783,
+      6450,
+      0,
+      558,
+      0,
+      0,
+      0
+    ],
+    "cpu0": [
+      103773,
+      38,
+      12396,
+      164716,
+      1604,
+      0,
+      122,
+      0,
+      0,
+      0
+    ],
+    "cpu1": [
+      89172,
+      4,
+      13708,
+      177795,
+      1637,
+      0,
+      343,
+      0,
+      0,
+      0
+    ],
+    "cpu2": [
+      89074,
+      94,
+      12935,
+      179098,
+      1501,
+      0,
+      49,
+      0,
+      0,
+      0
+    ],
+    "cpu3": [
+      98573,
+      271,
+      12033,
+      170173,
+      1708,
+      0,
+      44,
+      0,
+      0,
+      0
+    ]
+  },
+  "exit_code": 0,
+  "binaries_unchanged": true,
+  "sources_unchanged": true
+}

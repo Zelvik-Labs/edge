@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "source_commit": "1fbca822e49c3242edf89c7fd1a134de81ab3b27",
+  "functions": 32,
+  "raw_samples": 960,
+  "build_profiles": [
+    {
+      "opt_level": "3",
+      "debuginfo": 0,
+      "debug_assertions": false,
+      "overflow_checks": false,
+      "test": true
+    }
+  ],
+  "overall_cpu_steal_pct": {
+    "cpu0": 0.0,
+    "cpu1": 0.0,
+    "cpu2": 0.0,
+    "cpu3": 0.0
+  },
+  "quality_flags": [],
+  "scope": "sample/estimate/summary recomputation and source checks, not proxy RPS or per-function steal observations; no samples removed"
+}
