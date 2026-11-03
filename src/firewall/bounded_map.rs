@@ -1,67 +1,93 @@
-//! Fixed-capacity scoped-state table for attacker-driven maps.
+//! Fixed-address, bounded scoped-state table for attacker-driven keys.
 //!
-//! `DashMap` grows by allocation and enforces a bound by checking `len()`
-//! then scanning for victims — under a sustained insert flood every insert
-//! costs an O(len) retain/scan and the map retains a high-water-mark heap
-//! footprint. This table instead pre-allocates `capacity` slots across 64
-//! mutexed segments once at construction: memory is physically incapable of
-//! exceeding the bound, insert is a constant 8-slot probe with in-window
-//! earliest-expiry replacement (Redis maxmemory sampled-eviction style),
-//! and flood CPU is flat O(1) regardless of fill level.
-//!
-//! Eviction policy: within the probe window the smallest `expiry` wins —
-//! already-expired rows sort first naturally, so dead entries are reclaimed
-//! before live ones without a sweep. A soft capacity below the physical cap
-//! can be enforced per-insert via `soft_cap` (used when the governor shrinks
-//! the budget); the table never exceeds `min(soft_cap, physical_cap)`.
-//!
-//! Hashing uses `ahash::RandomState` (per-instance seed) — attacker-chosen
-//! keys cannot be pre-computed into collisions.
+//! Hashing and eight-slot replacement windows never change as the table fills.
+//! Slot storage is allocated in 64-slot chunks only on first write; empty
+//! tables allocate no slot payload. Retain reclaims empty chunks. The configured
+//! slot bound and earliest-expiry replacement policy remain in force.
 
 use ahash::RandomState;
 use parking_lot::Mutex;
 use std::hash::Hash;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-/// Slots probed per insert/lookup. 8 keeps the window in ~1-2 cache lines
-/// worth of scanning while giving eviction enough candidates to prefer
-/// expired entries.
 const PROBES: usize = 8;
 const SEGMENTS: usize = 64;
+const CHUNK_SLOTS: usize = 64;
 
-/// One fixed-size probe region behind a mutex; `len` lives under the same
-/// lock as the slots it counts.
+type Slot<K> = Option<(K, i64)>;
+
 struct Segment<K> {
-    slots: Box<[Option<(K, i64)>]>,
+    chunks: Vec<Option<Box<[Slot<K>]>>>,
     len: usize,
 }
 
-/// Bounded map with fixed physical capacity. All operations are O(PROBES)
-/// except `retain`/`for_each`, which sweep the physical table and are meant
-/// for periodic/cold paths only.
+impl<K: Copy> Segment<K> {
+    fn slot(&self, index: usize) -> Slot<K> {
+        self.chunks
+            .get(index / CHUNK_SLOTS)
+            .and_then(Option::as_ref)
+            .and_then(|chunk| chunk[index % CHUNK_SLOTS])
+    }
+
+    fn put(&mut self, index: usize, value: Slot<K>, capacity: usize) {
+        let chunk_index = index / CHUNK_SLOTS;
+        if self.chunks.is_empty() {
+            if value.is_none() {
+                return;
+            }
+            self.chunks
+                .resize_with(capacity.div_ceil(CHUNK_SLOTS), || None);
+        }
+        if self.chunks[chunk_index].is_none() {
+            if value.is_none() {
+                return;
+            }
+            let length = CHUNK_SLOTS.min(capacity - chunk_index * CHUNK_SLOTS);
+            self.chunks[chunk_index] = Some(vec![None; length].into_boxed_slice());
+        }
+        self.chunks[chunk_index].as_mut().expect("allocated chunk")[index % CHUNK_SLOTS] = value;
+    }
+
+    fn earliest(&self) -> Option<usize> {
+        let mut best = None;
+        let mut expiry = i64::MAX;
+        for (chunk_index, chunk) in self.chunks.iter().enumerate() {
+            if let Some(chunk) = chunk {
+                for (offset, slot) in chunk.iter().enumerate() {
+                    if let Some((_, value)) = slot
+                        && (best.is_none() || *value < expiry)
+                    {
+                        best = Some(chunk_index * CHUNK_SLOTS + offset);
+                        expiry = *value;
+                    }
+                }
+            }
+        }
+        best
+    }
+}
+
+/// Bounded map with immutable slot addresses. Lookups and ordinary inserts
+/// probe eight slots. Cold iteration scans allocated chunks, not reserved space.
 pub struct BoundedScopedMap<K> {
     segs: Box<[Mutex<Segment<K>>]>,
-    /// Per-segment physical capacity. Global physical cap =
-    /// `seg_cap * SEGMENTS` (>= requested capacity).
     seg_cap: usize,
-    /// Global live count, maintained exactly under the segment locks so
-    /// `len()` and the insert soft-cap check stay O(1).
+    // Includes a short-lived reservation while a writer owns its segment lock.
     total_len: AtomicUsize,
+    // Only cross-segment eviction takes this lock, always BEFORE any segment
+    // lock. Ordinary updates/lookups and local replacement remain independent.
+    pressure: Mutex<()>,
     rs: RandomState,
 }
 
-impl<K> BoundedScopedMap<K>
-where
-    K: Copy + Eq + Hash,
-{
-    /// Allocate `capacity` slots up front. The footprint never changes
-    /// afterwards: inserts reuse dead slots or evict in-window.
+impl<K: Copy + Eq + Hash> BoundedScopedMap<K> {
     pub fn new(capacity: usize) -> Self {
+        // Preserve the deployed rounding and minimum physical size exactly.
         let seg_cap = (capacity.max(1) / SEGMENTS).max(64);
         let segs = (0..SEGMENTS)
             .map(|_| {
                 Mutex::new(Segment {
-                    slots: vec![None; seg_cap].into_boxed_slice(),
+                    chunks: Vec::new(),
                     len: 0,
                 })
             })
@@ -70,39 +96,38 @@ where
             segs,
             seg_cap,
             total_len: AtomicUsize::new(0),
+            pressure: Mutex::new(()),
             rs: RandomState::new(),
         }
     }
 
     #[inline]
-    fn hash(&self, k: &K) -> u64 {
-        self.rs.hash_one(k)
+    fn hash(&self, key: &K) -> u64 {
+        self.rs.hash_one(key)
     }
 
     #[inline]
-    fn seg_of(&self, h: u64) -> usize {
-        // High bits pick the segment; low bits pick the home slot — the two
-        // are independent enough for a hash-mixed key.
-        (h >> 26) as usize % SEGMENTS
+    fn seg_of(&self, hash: u64) -> usize {
+        (hash >> 26) as usize % SEGMENTS
     }
 
     pub fn len(&self) -> usize {
         self.total_len.load(Ordering::Relaxed)
     }
-
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// Probe-window lookup under the segment lock.
     pub fn get(&self, key: &K) -> Option<i64> {
-        let h = self.hash(key);
-        let seg = &self.segs[self.seg_of(h)];
-        let seg = seg.lock();
-        let home = (h as usize) % self.seg_cap;
+        let hash = self.hash(key);
+        let seg = self.segs[self.seg_of(hash)].lock();
+        if seg.len == 0 {
+            return None;
+        }
+        let home = hash as usize % self.seg_cap;
         for probe in 0..PROBES {
-            if let Some((k, expiry)) = seg.slots[(home + probe) % self.seg_cap]
-                && k == *key
+            if let Some((stored, expiry)) = seg.slot((home + probe) % self.seg_cap)
+                && stored == *key
             {
                 return Some(expiry);
             }
@@ -114,95 +139,118 @@ where
         self.get(key).is_some()
     }
 
-    /// Insert or update. When the map is at `soft_cap`, or the probe window
-    /// is full, the lowest-expiry live slot found is overwritten and the
-    /// victim key is returned for downstream reconciliation. Inserts with
-    /// `expiry <= now` act as removes (same convention as the previous
-    /// DashMap callers).
+    fn reserve(&self, soft_cap: usize) -> bool {
+        self.total_len
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |count| {
+                (count < soft_cap.max(1)).then(|| count + 1)
+            })
+            .is_ok()
+    }
+
+    /// Existing rows survive a budget reduction; subsequent insertions replace
+    /// rows until expiry/removal reduces occupancy. New slots are atomically
+    /// reserved so simultaneous writers cannot overshoot the current budget.
     pub fn insert(&self, key: K, expiry: i64, now: i64, soft_cap: usize) -> Option<K> {
         if now >= expiry {
             self.remove(&key);
             return None;
         }
-        let h = self.hash(&key);
-        let seg_idx = self.seg_of(h);
-        let seg = &self.segs[seg_idx];
-        let mut seg = seg.lock();
-        let home = (h as usize) % self.seg_cap;
-        let mut dead: Option<usize> = None;
-        // Track the lowest-expiry live slot as the eviction victim; expired
-        // entries sort first since expiry <= now < any live expiry.
-        let mut victim: Option<usize> = None;
-        let mut victim_expiry = i64::MAX;
-        for probe in 0..PROBES {
-            let idx = (home + probe) % self.seg_cap;
-            match seg.slots[idx] {
-                None => {
-                    if dead.is_none() {
-                        dead = Some(idx);
+        let hash = self.hash(&key);
+        let seg_index = self.seg_of(hash);
+        let home = hash as usize % self.seg_cap;
+        let mut pressure = None;
+        loop {
+            let mut seg = self.segs[seg_index].lock();
+            let mut dead = None;
+            let mut victim = None;
+            let mut victim_expiry = i64::MAX;
+            for probe in 0..PROBES {
+                let index = (home + probe) % self.seg_cap;
+                match seg.slot(index) {
+                    None => {
+                        if dead.is_none() {
+                            dead = Some(index);
+                        }
                     }
-                }
-                Some((k, slot_expiry)) => {
-                    if k == key {
-                        seg.slots[idx] = Some((key, expiry));
-                        return None;
-                    }
-                    if slot_expiry < victim_expiry {
-                        victim_expiry = slot_expiry;
-                        victim = Some(idx);
+                    Some((stored, value)) => {
+                        if stored == key {
+                            seg.put(index, Some((key, expiry)), self.seg_cap);
+                            return None;
+                        }
+                        if victim.is_none() || value < victim_expiry {
+                            victim = Some(index);
+                            victim_expiry = value;
+                        }
                     }
                 }
             }
-        }
-        // At the soft cap we must evict rather than occupy a dead slot —
-        // the global count would otherwise exceed the budget.
-        let must_evict = self.len() >= soft_cap.max(1);
-        if !must_evict && let Some(idx) = dead {
-            seg.slots[idx] = Some((key, expiry));
-            seg.len += 1;
-            self.total_len.fetch_add(1, Ordering::Relaxed);
-            return None;
-        }
-        if let Some(idx) = victim {
-            // Full window or soft-cap pressure: evict earliest-expiry.
-            let (evicted, _) = seg.slots[idx].expect("victim slot is live");
-            seg.slots[idx] = Some((key, expiry));
-            return Some(evicted);
-        }
-        // Rare corner: the window has dead slots but no live slot to evict
-        // while the global count is at the soft cap (other segments hold
-        // the entries). Evict the earliest-expiry live entry elsewhere —
-        // a bounded scan across segments, taken only in this corner.
-        if let Some(idx) = dead {
-            if let Some(evicted) = self.evict_anywhere(seg_idx, now) {
-                seg.slots[idx] = Some((key, expiry));
+            if let Some(index) = dead
+                && self.reserve(soft_cap)
+            {
+                seg.put(index, Some((key, expiry)), self.seg_cap);
                 seg.len += 1;
-                self.total_len.fetch_add(1, Ordering::Relaxed);
+                return None;
+            }
+            if let Some(index) = victim {
+                let (evicted, _) = seg.slot(index).expect("live victim");
+                seg.put(index, Some((key, expiry)), self.seg_cap);
                 return Some(evicted);
             }
-            // `total_len` disagreed with reality (impossible while the
-            // counters are exact): fall back to the dead slot rather than
-            // dropping the insert.
-            seg.slots[idx] = Some((key, expiry));
-            seg.len += 1;
-            self.total_len.fetch_add(1, Ordering::Relaxed);
+            let index = dead.expect("a window without victims has a free slot");
+            if pressure.is_none() {
+                // Never acquire the cross-segment lock with a shard held.
+                drop(seg);
+                pressure = Some(self.pressure.lock());
+                continue;
+            }
+            // Transfer the victim's global reservation to the incoming row;
+            // do not briefly decrement the counter and expose a stolen slot.
+            if let Some(evicted) = self.evict_elsewhere(seg_index) {
+                seg.put(index, Some((key, expiry)), self.seg_cap);
+                seg.len += 1;
+                return Some(evicted);
+            }
+            // All other segments can be empty while this segment has rows
+            // outside the incoming key's probe window.
+            if let Some(victim) = seg.earliest() {
+                let (evicted, _) = seg.slot(victim).expect("live local victim");
+                seg.put(victim, None, self.seg_cap);
+                seg.put(index, Some((key, expiry)), self.seg_cap);
+                return Some(evicted);
+            }
+            // Concurrent removals may have emptied the table during the scan.
+            // Re-probe and reserve; never insert an unaccounted row.
+            drop(seg);
+        }
+    }
+
+    // Called only with pressure and the destination segment held. Other
+    // cross-segment writers acquire pressure before their destination locks.
+    fn evict_elsewhere(&self, skip: usize) -> Option<K> {
+        for offset in 1..SEGMENTS {
+            let mut other = self.segs[(skip + offset) % SEGMENTS].lock();
+            if other.len == 0 {
+                continue;
+            }
+            if let Some(index) = other.earliest() {
+                let (key, _) = other.slot(index).expect("live victim");
+                other.put(index, None, self.seg_cap);
+                other.len -= 1;
+                return Some(key);
+            }
         }
         None
     }
 
-    /// Test-only backdoor: plant an entry bypassing the expired-as-remove
-    /// convention, so tests can seed a dead row deterministically.
     #[cfg(test)]
     pub fn seed_unchecked(&self, key: K, expiry: i64) {
-        let h = self.hash(&key);
-        let seg = &self.segs[self.seg_of(h)];
-        let mut seg = seg.lock();
-        let home = (h as usize) % self.seg_cap;
-        // Stay inside the PROBES window so get() can see the seeded row.
+        let hash = self.hash(&key);
+        let mut seg = self.segs[self.seg_of(hash)].lock();
+        let home = hash as usize % self.seg_cap;
         for probe in 0..PROBES {
-            let idx = (home + probe) % self.seg_cap;
-            if seg.slots[idx].is_none() {
-                seg.slots[idx] = Some((key, expiry));
+            let index = (home + probe) % self.seg_cap;
+            if seg.slot(index).is_none() {
+                seg.put(index, Some((key, expiry)), self.seg_cap);
                 seg.len += 1;
                 self.total_len.fetch_add(1, Ordering::Relaxed);
                 return;
@@ -211,112 +259,80 @@ where
         panic!("test seed found no free slot in probe window");
     }
 
-    /// Corner-case eviction: find and remove one live entry with the lowest
-    /// expiry across segments other than `skip_seg`. Bounded by the
-    /// physical cap; only reachable when the insert probe window contained
-    /// no live slot but the soft cap is already reached.
-    fn evict_anywhere(&self, skip_seg: usize, _now: i64) -> Option<K> {
-        for offset in 1..SEGMENTS {
-            let idx = (skip_seg + offset) % SEGMENTS;
-            let mut other = self.segs[idx].lock();
-            if other.len == 0 {
+    pub fn remove(&self, key: &K) -> bool {
+        self.remove_matching(key, |_| true)
+    }
+    pub fn remove_if(&self, key: &K, expected: i64) -> bool {
+        self.remove_matching(key, |expiry| expiry == expected)
+    }
+    fn remove_matching(&self, key: &K, matches: impl Fn(i64) -> bool) -> bool {
+        let hash = self.hash(key);
+        let mut seg = self.segs[self.seg_of(hash)].lock();
+        if seg.len == 0 {
+            return false;
+        }
+        let home = hash as usize % self.seg_cap;
+        for probe in 0..PROBES {
+            let index = (home + probe) % self.seg_cap;
+            if let Some((stored, expiry)) = seg.slot(index)
+                && stored == *key
+                && matches(expiry)
+            {
+                seg.put(index, None, self.seg_cap);
+                seg.len -= 1;
+                self.total_len.fetch_sub(1, Ordering::Relaxed);
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn for_each(&self, mut visit: impl FnMut(K, i64) -> bool) {
+        for seg in &self.segs {
+            let seg = seg.lock();
+            if seg.len == 0 {
                 continue;
             }
-            let mut victim: Option<usize> = None;
-            let mut victim_expiry = i64::MAX;
-            for (i, slot) in other.slots.iter().enumerate() {
-                if let Some((_, expiry)) = slot
-                    && *expiry < victim_expiry
-                {
-                    victim_expiry = *expiry;
-                    victim = Some(i);
-                }
-            }
-            if let Some(i) = victim {
-                let (k, _) = other.slots[i].take().expect("live");
-                other.len -= 1;
-                self.total_len.fetch_sub(1, Ordering::Relaxed);
-                return Some(k);
-            }
-        }
-        None
-    }
-
-    pub fn remove(&self, key: &K) -> bool {
-        let h = self.hash(key);
-        let seg = &self.segs[self.seg_of(h)];
-        let mut seg = seg.lock();
-        let home = (h as usize) % self.seg_cap;
-        for probe in 0..PROBES {
-            let idx = (home + probe) % self.seg_cap;
-            if let Some((k, _)) = seg.slots[idx]
-                && k == *key
-            {
-                seg.slots[idx] = None;
-                seg.len -= 1;
-                self.total_len.fetch_sub(1, Ordering::Relaxed);
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Remove only if the stored expiry still equals `expected` — the
-    /// conditional form the DashMap callers use so a concurrent refresh of
-    /// the same key survives an eviction race.
-    pub fn remove_if(&self, key: &K, expected: i64) -> bool {
-        let h = self.hash(key);
-        let seg = &self.segs[self.seg_of(h)];
-        let mut seg = seg.lock();
-        let home = (h as usize) % self.seg_cap;
-        for probe in 0..PROBES {
-            let idx = (home + probe) % self.seg_cap;
-            if let Some((k, expiry)) = seg.slots[idx]
-                && k == *key
-                && expiry == expected
-            {
-                seg.slots[idx] = None;
-                seg.len -= 1;
-                self.total_len.fetch_sub(1, Ordering::Relaxed);
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Visit every live entry; `f` returning false stops the walk. Each
-    /// segment is locked briefly in turn — callers do cold work (snapshot
-    /// rebuilds, kernel sync, any-scope checks).
-    pub fn for_each(&self, mut f: impl FnMut(K, i64) -> bool) {
-        for seg in self.segs.iter() {
-            let seg = seg.lock();
-            for slot in seg.slots.iter() {
-                if let Some((k, expiry)) = *slot
-                    && !f(k, expiry)
-                {
-                    return;
+            for chunk in seg.chunks.iter().flatten() {
+                for &(key, expiry) in chunk.iter().flatten() {
+                    if !visit(key, expiry) {
+                        return;
+                    }
                 }
             }
         }
     }
 
-    /// Sweep: drop entries where `keep` is false. O(physical cap); intended
-    /// for the periodic expiry sweep, never the per-insert path.
+    /// Full semantic sweep over allocated chunks. Empty payload is returned to
+    /// the allocator; unchanged hash addresses keep remaining keys reachable.
     pub fn retain(&self, mut keep: impl FnMut(i64) -> bool) {
-        for seg in self.segs.iter() {
+        for seg in &self.segs {
             let mut seg = seg.lock();
-            let mut removed = 0usize;
-            for slot in seg.slots.iter_mut() {
-                if let Some((_, expiry)) = *slot
-                    && !keep(expiry)
-                {
-                    *slot = None;
-                    removed += 1;
+            let mut removed = 0;
+            for entry in &mut seg.chunks {
+                if let Some(chunk) = entry {
+                    let mut live = 0;
+                    for slot in chunk.iter_mut() {
+                        if let Some((_, expiry)) = *slot {
+                            if keep(expiry) {
+                                live += 1;
+                            } else {
+                                *slot = None;
+                                removed += 1;
+                            }
+                        }
+                    }
+                    if live == 0 {
+                        *entry = None;
+                    }
                 }
             }
             seg.len -= removed;
             if removed > 0 {
                 self.total_len.fetch_sub(removed, Ordering::Relaxed);
+            }
+            if seg.len == 0 {
+                seg.chunks = Vec::new();
             }
         }
     }
@@ -325,6 +341,115 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn empty_tables_allocate_no_slot_payload_and_sweeps_release_empty_chunks() {
+        let map = BoundedScopedMap::<u64>::new(8_000_000);
+        assert!(map.segs.iter().all(|seg| seg.lock().chunks.is_empty()));
+        map.insert(1, 100, 0, 8_000_000);
+        let allocated = map
+            .segs
+            .iter()
+            .map(|seg| {
+                seg.lock()
+                    .chunks
+                    .iter()
+                    .flatten()
+                    .map(|chunk| chunk.len())
+                    .sum::<usize>()
+            })
+            .sum::<usize>();
+        assert_eq!(allocated, CHUNK_SLOTS);
+        assert_eq!(map.get(&1), Some(100));
+        map.retain(|_| false);
+        assert!(map.is_empty());
+        assert!(map.segs.iter().all(|seg| seg.lock().chunks.is_empty()));
+        map.insert(1, 200, 0, 8_000_000);
+        assert_eq!(map.get(&1), Some(200));
+    }
+
+    #[test]
+    fn chunk_edges_and_partial_last_chunk_keep_fixed_slot_addresses() {
+        let mut segment = Segment {
+            chunks: Vec::new(),
+            len: 0,
+        };
+        let capacity = CHUNK_SLOTS * 2 + 3;
+        for index in [0, 63, 64, 127, 128, 130] {
+            segment.put(index, Some((index, 100)), capacity);
+        }
+        for index in 0..capacity {
+            assert_eq!(
+                segment.slot(index),
+                [0, 63, 64, 127, 128, 130]
+                    .contains(&index)
+                    .then_some((index, 100))
+            );
+        }
+        assert_eq!(segment.chunks[2].as_ref().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn concurrent_small_budget_progresses_and_never_overshoots() {
+        for capacity in [1, 7, 64] {
+            let map = std::sync::Arc::new(BoundedScopedMap::new(65_536));
+            let (tx, rx) = std::sync::mpsc::channel();
+            let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+            let mut handles = Vec::new();
+            for worker in 0..8u64 {
+                let map = map.clone();
+                let tx = tx.clone();
+                let barrier = barrier.clone();
+                handles.push(std::thread::spawn(move || {
+                    barrier.wait();
+                    for index in 0..2000 {
+                        map.insert(worker * 2000 + index, i64::MAX, 0, capacity);
+                        assert!(map.len() <= capacity, "soft cap overshoot");
+                    }
+                    tx.send(()).unwrap();
+                }));
+            }
+            drop(tx);
+            for _ in 0..8 {
+                rx.recv_timeout(std::time::Duration::from_secs(10))
+                    .expect("cross-segment eviction must make progress");
+            }
+            for handle in handles {
+                handle.join().unwrap();
+            }
+            let mut visited = 0;
+            map.for_each(|_, _| {
+                visited += 1;
+                true
+            });
+            assert_eq!(map.len(), visited);
+            assert_eq!(visited, capacity);
+        }
+    }
+
+    #[test]
+    fn returned_victims_keep_a_reference_model_consistent_under_churn() {
+        let mut map = BoundedScopedMap::new(4096);
+        map.rs = RandomState::with_seeds(11, 22, 33, 44);
+        let mut expected = std::collections::HashMap::new();
+        for step in 0..5000u64 {
+            let key = step.wrapping_mul(2654435761) % 211;
+            if step % 7 == 0 {
+                assert_eq!(map.remove(&key), expected.remove(&key).is_some());
+            } else {
+                let expiry = 100 + step as i64;
+                if let Some(victim) = map.insert(key, expiry, 0, 31) {
+                    assert!(expected.remove(&victim).is_some());
+                }
+                expected.insert(key, expiry);
+            }
+            assert_eq!(map.len(), expected.len());
+            assert!(map.len() <= 31);
+            for (key, expiry) in &expected {
+                assert_eq!(map.get(key), Some(*expiry));
+            }
+        }
+    }
 
     #[test]
     fn insert_get_remove_roundtrip() {

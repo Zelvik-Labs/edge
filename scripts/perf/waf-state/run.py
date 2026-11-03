@@ -110,7 +110,7 @@ def main():
                 assert row['page_size'] == metadata['page_size']
                 assert row['rss_live_empty_delta_bytes'] == row['rss_empty']-row['rss_before']
                 assert row['verified_hits'] == row['verified_misses'] == row['lookup_iterations'] == 200_000
-                assert row['live_entries'] == 7 and len(row['first_write_ns']) == 7
+                assert row['live_entries_after_clear'] == 0 and len(row['first_write_ns']) == 7
                 assert all(row[k] > 0 for k in ['construction_ns', 'empty_visit_ns', 'empty_retain_ns', 'empty_lookup_ns', 'hit_lookup_ns'])
                 key = 'cpu'+str(selected)
                 delta = [b-a for a, b in zip(before['proc'][key], after['proc'][key])]

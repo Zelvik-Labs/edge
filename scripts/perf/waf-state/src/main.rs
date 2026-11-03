@@ -89,6 +89,62 @@ fn main() -> Result<(), Box<dyn Error>> {
     let hit_lookup_ns = begin.elapsed().as_nanos();
     assert_eq!(hits, LOOKUPS);
 
+    let sparse_per_table = (capacity / 16).min(16_384);
+    let begin = Instant::now();
+    for (table, map) in maps.iter().enumerate() {
+        for index in 0..sparse_per_table {
+            let key = (table as i64, IpAddr::V4(Ipv4Addr::from(index as u32 + 1)));
+            map.insert(key, 86_400, 0, capacity);
+        }
+    }
+    let sparse_fill_ns = begin.elapsed().as_nanos();
+    let rss_sparse = resident_bytes(page_size)?;
+    let mut live_keys = Vec::new();
+    for (table, map) in maps.iter().enumerate() {
+        let mut selected = 0;
+        map.for_each(|key, _| {
+            live_keys.push((table, key));
+            selected += 1;
+            selected < 256
+        });
+    }
+    assert_eq!(live_keys.len(), TABLES * 256);
+    let begin = Instant::now();
+    for index in 0..LOOKUPS {
+        let (table, key) = &live_keys[index % live_keys.len()];
+        assert_eq!(black_box(maps[*table].get(black_box(key))), Some(86_400));
+    }
+    let sparse_lookup_ns = begin.elapsed().as_nanos();
+    let begin = Instant::now();
+    for index in 0..LOOKUPS {
+        let (table, key) = live_keys[index % live_keys.len()];
+        assert_eq!(
+            maps[table].insert(black_box(key), 86_400, 0, capacity),
+            None
+        );
+    }
+    let sparse_update_ns = begin.elapsed().as_nanos();
+    let begin = Instant::now();
+    let mut sparse_visits = 0;
+    for map in &maps {
+        map.for_each(|_, _| {
+            sparse_visits += 1;
+            true
+        });
+    }
+    let sparse_visit_ns = begin.elapsed().as_nanos();
+    assert_eq!(
+        sparse_visits,
+        maps.iter().map(BoundedScopedMap::len).sum::<usize>()
+    );
+    let begin = Instant::now();
+    for map in &maps {
+        map.retain(|_| false);
+    }
+    let clear_ns = begin.elapsed().as_nanos();
+    assert!(maps.iter().all(BoundedScopedMap::is_empty));
+    let rss_after_clear = resident_bytes(page_size)?;
+
     let slot_size = std::mem::size_of::<Option<(Key, i64)>>();
     let physical_slots = (capacity.max(1) / 64).max(64) * 64;
     let record = json!({
@@ -106,9 +162,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         "lookup_iterations": LOOKUPS, "empty_lookup_ns": empty_lookup_ns,
         "hit_lookup_ns": hit_lookup_ns, "first_write_ns": first_write_ns,
         "verified_misses": misses, "verified_hits": hits,
-        "live_entries": maps.iter().map(BoundedScopedMap::len).sum::<usize>(),
+        "live_entries_after_clear": maps.iter().map(BoundedScopedMap::len).sum::<usize>(),
+        "sparse_per_table": sparse_per_table, "sparse_fill_ns": sparse_fill_ns,
+        "rss_sparse": rss_sparse, "sparse_lookup_ns": sparse_lookup_ns,
+        "sparse_update_ns": sparse_update_ns, "sparse_visit_ns": sparse_visit_ns,
+        "sparse_visits": sparse_visits, "clear_ns": clear_ns, "rss_after_clear": rss_after_clear,
         "allocator": "Rust default/System; not Edge mimalloc",
-        "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network"
+        "scope": "actual production table source; representative fixed capacities, not the full node governor or network"
     });
     println!("{}", serde_json::to_string(&record)?);
     black_box(&maps);
