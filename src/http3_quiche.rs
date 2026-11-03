@@ -123,7 +123,7 @@ impl Http3ProxyManager {
         let mut report_admission = |class: &'static str| {
             if !admission_diagnostic_reported {
                 admission_diagnostic_reported = true;
-                warn!(
+                tracing::warn!(
                     %address,
                     class,
                     workspace_used = MEMORY_GOVERNOR.request_workspace_used_bytes(),
