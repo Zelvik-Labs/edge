@@ -26,7 +26,7 @@ on:
         type: boolean
         default: false
       xdp_node_smoke:
-        description: Validate both XSK wake modes in the full node across protocols, IPv4/IPv6 and reload
+        description: Validate XSK wake, statistics and idle yield modes across protocols, IPv4/IPv6 and reload
         type: boolean
         default: false
       xdp_udp_benchmark:
@@ -36,7 +36,7 @@ on:
       xdp_udp_comparison:
         description: Choose the same-binary Edge comparison inside the UDP matrix
         type: choice
-        options: [wake, rx-stats]
+        options: [wake, rx-stats, idle-yield]
         default: wake
       udp_demux_benchmark:
         description: Compare production UDP listener-set queries with snapshot point queries
@@ -422,6 +422,8 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: clippy
 
       - name: Install dependencies
         timeout-minutes: 15
@@ -455,6 +457,7 @@ jobs:
           workspaces: |
             . -> target
             pingora-main -> pingora-main/target
+            scripts/perf/idle-yield -> ../../../.local/idle-yield-target
 
       - name: Install eBPF Toolchain
         shell: bash
@@ -486,6 +489,23 @@ jobs:
           test -s data/zelvik-edge-xdp-ebpf.o
           echo "ZELVIK_EDGE_XDP_EBPF_SOURCE=data/zelvik-edge-xdp-ebpf.o" >> "$GITHUB_ENV"
           echo "ZELVIK_EDGE_XDP_EBPF_SHA256=$(sha256sum data/zelvik-edge-xdp-ebpf.o | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Validate idle cooperation and scheduling fault controls
+        if: github.event_name == 'workflow_dispatch' && inputs.xdp_udp_comparison == 'idle-yield'
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/.local/idle-yield-target
+        run: |
+          set -euo pipefail
+          python3 scripts/perf/idle-yield/validate.py --output .local/idle-yield-ci/results
+
+      - name: Upload idle cooperation validation and failures
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.xdp_udp_comparison == 'idle-yield' && hashFiles('.local/idle-yield-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: idle-yield-${{ github.sha }}
+          path: .local/idle-yield-ci/
+          if-no-files-found: error
 
       - name: cargo test
         run: cargo test --lib --bins

@@ -391,6 +391,7 @@ async fn proxy_reload_smoke_inner(
             "bridgeSupervisorAlive": !old_bridge.is_finished(),
             "xskWakeMode": crate::runtime_mode::validation_xsk_wake_mode().as_str(),
             "xskRxStatsMode": crate::runtime_mode::validation_xsk_rx_stats().as_str(),
+            "xskIdleYieldMode": crate::runtime_mode::validation_idle_yield().as_str(),
             "managerReplaced": true,
             "beforeReload": {
                 "proxyReady": before_reload.proxy_ready,
@@ -758,6 +759,7 @@ async fn proxy_smoke_inner(
         "l4PressureAtReport": crate::l4_defense::current_pressure_level().as_str(),
         "xskWakeMode": crate::runtime_mode::validation_xsk_wake_mode().as_str(),
         "xskRxStatsMode": crate::runtime_mode::validation_xsk_rx_stats().as_str(),
+        "xskIdleYieldMode": crate::runtime_mode::validation_idle_yield().as_str(),
         "xskQueueStats": {
             "rxDropped": queue_stats(&status).map(|q| q.rx_dropped).sum::<u64>(),
             "rxRingFull": queue_stats(&status).map(|q| q.rx_ring_full).sum::<u64>(),

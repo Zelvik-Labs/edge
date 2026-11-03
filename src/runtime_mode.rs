@@ -639,6 +639,41 @@ impl XdpValidationRxStats {
     }
 }
 
+/// Validation-only idle-round cooperation. Production retains eager yields.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum XdpValidationIdleYield {
+    Eager,
+    Cooperative,
+}
+
+static VALIDATION_COOPERATIVE_IDLE_YIELD: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_validation_idle_yield(mode: XdpValidationIdleYield) {
+    VALIDATION_COOPERATIVE_IDLE_YIELD.store(
+        mode == XdpValidationIdleYield::Cooperative,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn validation_idle_yield() -> XdpValidationIdleYield {
+    if VALIDATION_COOPERATIVE_IDLE_YIELD.load(std::sync::atomic::Ordering::Relaxed) {
+        XdpValidationIdleYield::Cooperative
+    } else {
+        XdpValidationIdleYield::Eager
+    }
+}
+
+impl XdpValidationIdleYield {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Eager => "eager",
+            Self::Cooperative => "cooperative",
+        }
+    }
+}
+
 fn validation_transport_controller() -> Option<XdpTransportController> {
     transport_controller_from_index(
         VALIDATION_TRANSPORT_CONTROLLER.load(std::sync::atomic::Ordering::Relaxed),

@@ -2,8 +2,10 @@
 
 The CI `workflow_dispatch` input `xdp_node_smoke=true` builds one pair of
 `Zelvik-Edge` / `h3-probe` binaries, then runs the existing full application
-smoke for all four combinations of worker/readable and full/bridge RX statistics,
-twice each in a balanced forward/reverse order. All cases use the same binary.
+smoke for all eight combinations of worker/readable, full/bridge RX statistics
+and eager/cooperative idle yielding, twice each in a forward/reverse order
+within each idle mode. All 16 cases use the same binary. This functional order
+is distinct from the balanced performance schedule below.
 `--wake readable` is available only on explicit proxy smoke / reload commands;
 normal serving still uses the owned poll worker.
 `--rx-stats full|bridge` is likewise validation-only: normal bridge polling
@@ -11,6 +13,12 @@ uses typed RX ownership/readiness observations, while raw diagnostics retain
 complete parsed/error statistics. Full mode measures the legacy extra
 classification pass inside the shared RX implementation, not byte-identical
 historical machine code.
+`--idle-yield eager|cooperative` is validation-only too. Normal serving retains
+eager per-round yielding. Cooperative mode spends a Tokio cooperative token
+after the idle event select completes, even if that select was immediately
+ready; busy rounds still explicitly yield every time. No readiness, ring,
+pressure, timer or error handling is removed. The helper's standalone tests and
+two deliberate scheduling faults are described in `../idle-yield/README.md`.
 
 Run only in fresh network **and** mount namespaces. The wrapper checks both
 parent IDs, privately mounts bpffs and `/run/netns`, brings up loopback, and
@@ -65,6 +73,9 @@ two Edge variants/Nginx/OpenResty, plus one preceding direct-origin calibration
 per matrix cell: 64 proxy cases and four direct cases per CPU budget. Input
 `xdp_udp_comparison=wake` compares worker/readable with bridge statistics;
 `rx-stats` compares full-stats/bridge-stats with both using worker wakeups.
+`idle-yield` compares eager/cooperative with both using worker wakeups and
+bridge statistics. The report must confirm all three selected controls from
+each node's JSON; source and binary hashes must remain unchanged.
 Every case has 1000 warmup round trips per flow. CI measures 40000 round trips
 per flow at concurrency one and 10000 at concurrency sixteen, addressing the
 short single-flow samples in the initial matrix. The client validates the

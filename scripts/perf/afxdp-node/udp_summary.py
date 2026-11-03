@@ -1,11 +1,12 @@
 """Describe every run, paired differences and measurement limits without filtering."""
 import statistics
 
-# Each entry is (wake mechanism, RX statistics mode). Label order fixes the
+# Each entry is (wake mechanism, RX statistics mode, idle yield). Label order fixes the
 # baseline/candidate pairing and the four-position Williams schedule.
 COMPARISON_NODES = {
-    'wake': {'worker': ('worker', 'bridge'), 'readable': ('readable', 'bridge')},
-    'rx-stats': {'full-stats': ('worker', 'full'), 'bridge-stats': ('worker', 'bridge')},
+    'wake': {'worker': ('worker', 'bridge', 'eager'), 'readable': ('readable', 'bridge', 'eager')},
+    'rx-stats': {'full-stats': ('worker', 'full', 'eager'), 'bridge-stats': ('worker', 'bridge', 'eager')},
+    'idle-yield': {'eager': ('worker', 'bridge', 'eager'), 'cooperative': ('worker', 'bridge', 'cooperative')},
 }
 
 

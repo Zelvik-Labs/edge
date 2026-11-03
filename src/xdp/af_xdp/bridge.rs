@@ -1,5 +1,11 @@
 use super::*;
 
+#[cfg(any(test, target_os = "linux"))]
+#[path = "cooperation.rs"]
+mod cooperation;
+#[cfg(target_os = "linux")]
+use cooperation::cooperate_after_round;
+
 #[cfg(target_os = "linux")]
 use std::os::fd::{AsRawFd, BorrowedFd};
 
@@ -1247,6 +1253,8 @@ pub(crate) async fn run_queue_bridge_loop(
     // old spin to EPOLLOUT interest alone.
     let wake_mode = crate::runtime_mode::validation_xsk_wake_mode();
     let rx_stats_mode = crate::runtime_mode::validation_xsk_rx_stats();
+    let cooperative_idle = crate::runtime_mode::validation_idle_yield()
+        == crate::runtime_mode::XdpValidationIdleYield::Cooperative;
     // SAFETY: both constructors borrow only while duplicating the fd;
     // queue_handle owns the original socket throughout this scope.
     let socket_fd = unsafe { BorrowedFd::borrow_raw(queue_handle.rx.fd().as_raw_fd()) };
@@ -2595,6 +2603,7 @@ pub(crate) async fn run_queue_bridge_loop(
         // this check a round that only deferred TX work would sleep up to
         // the 1s cap, blowing past the CoDel 5ms target and amplifying
         // TCP loss under TX backpressure.
+        let mut idle_waited = false;
         if proxy_bridge_should_idle(
             polled_packets,
             parsed_frames,
@@ -2681,13 +2690,13 @@ pub(crate) async fn run_queue_bridge_loop(
                         }
                     } => {}
                 }
+                idle_waited = true;
             }
         }
-        // The busy path above never awaits; without an explicit yield the
-        // current-thread runtime starves tokio::spawn'ed TCP/HTTP proxy
-        // tasks (sessions get ACKed by the smoltcp stack but no relay task
-        // is ever polled).
-        tokio::task::yield_now().await;
+        // The busy path still yields every round. Only an explicit validation
+        // mode can replace the extra yield after idle select with a bounded
+        // cooperative token; ready Notify events alone need not spend one.
+        cooperate_after_round(idle_waited, cooperative_idle).await;
     }
 }
 

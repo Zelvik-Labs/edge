@@ -221,12 +221,13 @@ def execute(args, directory, target, concurrency, payload, cpus):
         assert wait_file(directory/'origin-ready.json', origin, as_json=True)['port'] == 19003
         if target != 'direct':
             if target in nodes:
-                wake, rx_stats = nodes[target]
+                wake, rx_stats, idle_yield = nodes[target]
                 configure(directory/'home',proxy_cpus[0])
                 env = dict(os.environ, ZELVIK_EDGE_HOME=str(directory/'home'),
                            ZELVIK_EDGE_XDP_PIN_DIR=str(Path('/sys/fs/bpf/edge-udp')/directory.name))
                 argv = ['taskset','-c',','.join(map(str,proxy_cpus)),args.edge,'xdp','proxy-smoke',
-                        '--wake',wake,'--rx-stats',rx_stats,'--remote','10.203.0.2','--duration-ms','60000',
+                        '--wake',wake,'--rx-stats',rx_stats,'--idle-yield',idle_yield,
+                        '--remote','10.203.0.2','--duration-ms','60000',
                         '--ready-file',directory/'node-ready']
                 server = spawn(argv, 'server', env)
                 wait_file(directory/'node-ready', server)
@@ -301,6 +302,7 @@ def execute(args, directory, target, concurrency, payload, cpus):
         if target in nodes:
             report = next(o for o in json_reports((directory/'server.log').read_text()) if 'app' in o)
             assert report['xskWakeMode'] == nodes[target][0] and report['xskRxStatsMode'] == nodes[target][1]
+            assert report['xskIdleYieldMode'] == nodes[target][2]
             assert report['proxyReady'] and report['proxyRedirectEnabled']
             assert report['redirect'] == 2*data['sent'], 'both traffic directions must use XSK'
             assert report['xskDrops'] == 0 and all(value == 0 for value in report['xskQueueStats'].values())
@@ -360,6 +362,7 @@ def main():
     binaries={n:digest(getattr(args,n)) for n in ['edge','nginx','openresty','loadgen']}
     sources=[ROOT/'src/xdp/af_xdp/bridge.rs',ROOT/'src/xdp/af_xdp/readiness.rs',ROOT/'src/xdp/af_xdp/wake.rs',ROOT/'src/xdp/smoke.rs']
     sources.append(ROOT/'benches/support/udp-bench.c')
+    sources += [ROOT/'src/xdp/af_xdp/cooperation.rs', ROOT/'src/xdp/af_xdp/cooperation_tests.rs']
     sources += [ROOT/'src/xdp/linux.rs',ROOT/'src/runtime_mode.rs',ROOT/'src/main.rs',ROOT/'scripts/xdp-netns-smoke.sh']
     sources+=sorted((ROOT/'scripts/perf/afxdp-node').glob('*'))
     hashes={str(f.relative_to(ROOT)):digest(f) for f in sources if f.is_file()}

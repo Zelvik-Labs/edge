@@ -35,6 +35,11 @@ case "$XDP_SMOKE_RX_STATS" in
     full|bridge) ;;
     *) printf 'invalid XDP_SMOKE_RX_STATS: %s\n' "$XDP_SMOKE_RX_STATS" >&2; exit 2 ;;
 esac
+export XDP_SMOKE_IDLE_YIELD="${XDP_SMOKE_IDLE_YIELD:-eager}"
+case "$XDP_SMOKE_IDLE_YIELD" in
+    eager|cooperative) ;;
+    *) printf 'invalid XDP_SMOKE_IDLE_YIELD: %s\n' "$XDP_SMOKE_IDLE_YIELD" >&2; exit 2 ;;
+esac
 PIDS_TO_KILL=()
 
 log() {
@@ -223,7 +228,7 @@ run_proxy_smoke() {
     proxy_output_file="$(mktemp)"
     proxy_ready_file="$(mktemp)"
     rm -f "$proxy_ready_file"
-    setsid "$NODE_BIN" xdp proxy-smoke --wake "$XDP_SMOKE_WAKE" --rx-stats "$XDP_SMOKE_RX_STATS" --duration-ms 25000 --ready-file "$proxy_ready_file" >"$proxy_output_file" 2>&1 &
+    setsid "$NODE_BIN" xdp proxy-smoke --wake "$XDP_SMOKE_WAKE" --rx-stats "$XDP_SMOKE_RX_STATS" --idle-yield "$XDP_SMOKE_IDLE_YIELD" --duration-ms 25000 --ready-file "$proxy_ready_file" >"$proxy_output_file" 2>&1 &
     proxy_pid=$!
     PIDS_TO_KILL+=("$proxy_pid")
     for _ in $(seq 1 "${XDP_SMOKE_READY_TICKS:-400}"); do
@@ -411,6 +416,8 @@ if report.get("xskWakeMode") != os.environ["XDP_SMOKE_WAKE"]:
     raise SystemExit(f"{label}: wrong XSK wake mechanism: {report.get('xskWakeMode')!r}")
 if report.get("xskRxStatsMode") != os.environ["XDP_SMOKE_RX_STATS"]:
     raise SystemExit(f"{label}: wrong XSK RX statistics mode: {report.get('xskRxStatsMode')!r}")
+if report.get("xskIdleYieldMode") != os.environ["XDP_SMOKE_IDLE_YIELD"]:
+    raise SystemExit(f"{label}: wrong XSK idle yield mode: {report.get('xskIdleYieldMode')!r}")
 if report.get("proxyReady") is not True:
     raise SystemExit(f"{label}: proxyReady was not true")
 if report.get("proxyRedirectEnabled") is not True:
@@ -447,7 +454,7 @@ run_proxy_reload_smoke() {
     reload_output_file="$(mktemp)"
     reload_ready_file="$(mktemp)"
     rm -f "$reload_ready_file"
-    if ! "$NODE_BIN" xdp proxy-reload-smoke --wake "$XDP_SMOKE_WAKE" --rx-stats "$XDP_SMOKE_RX_STATS" --duration-ms 3000 --ready-file "$reload_ready_file" >"$reload_output_file" 2>&1; then
+    if ! "$NODE_BIN" xdp proxy-reload-smoke --wake "$XDP_SMOKE_WAKE" --rx-stats "$XDP_SMOKE_RX_STATS" --idle-yield "$XDP_SMOKE_IDLE_YIELD" --duration-ms 3000 --ready-file "$reload_ready_file" >"$reload_output_file" 2>&1; then
         reload_output="$(cat "$reload_output_file" 2>/dev/null || true)"
         rm -f "$reload_output_file" "$reload_ready_file"
         printf '%s\n' "$reload_output"
@@ -468,6 +475,8 @@ if report.get("xskWakeMode") != os.environ["XDP_SMOKE_WAKE"]:
     raise SystemExit(f"{label}: wrong XSK wake mechanism after reload")
 if report.get("xskRxStatsMode") != os.environ["XDP_SMOKE_RX_STATS"]:
     raise SystemExit(f"{label}: wrong XSK RX statistics mode after reload")
+if report.get("xskIdleYieldMode") != os.environ["XDP_SMOKE_IDLE_YIELD"]:
+    raise SystemExit(f"{label}: wrong XSK idle yield mode after reload")
 before = report.get("beforeReload") or {}
 after = report.get("afterReload") or {}
 if report.get("bridgeSupervisorAlive") is not True:

@@ -80,7 +80,19 @@ class SummaryTests(unittest.TestCase):
         pair = summary['comparisons']['c1-b64']['paired_changes_pct']['bridge-stats_vs_full-stats']
         self.assertEqual(pair['requests_per_second']['all'], [50]*4)
         self.assertNotIn('readable_vs_worker', summary['comparisons']['c1-b64']['paired_changes_pct'])
-        self.assertEqual({wake for wake, _ in COMPARISON_NODES['rx-stats'].values()}, {'worker'})
+        self.assertEqual({wake for wake, _, _ in COMPARISON_NODES['rx-stats'].values()}, {'worker'})
+
+    def test_idle_yield_comparison_pairs_the_same_worker_and_statistics(self):
+        records, metadata = fixture()
+        for record in records:
+            if record['target'] in ['worker', 'readable']:
+                record['target'] = {'worker': 'eager', 'readable': 'cooperative'}[record['target']]
+        metadata.update(comparison='idle-yield', targets=['eager', 'cooperative', 'nginx', 'openresty'])
+        summary = summarize(records, metadata)
+        self.assertTrue(summary['passed'])
+        pair = summary['comparisons']['c1-b64']['paired_changes_pct']['cooperative_vs_eager']
+        self.assertEqual(pair['requests_per_second']['all'], [50]*4)
+        self.assertEqual({(wake, stats) for wake, stats, _ in COMPARISON_NODES['idle-yield'].values()}, {('worker', 'bridge')})
 
     def test_mislabeled_comparison_metadata_is_rejected(self):
         records, metadata = fixture()
