@@ -1,0 +1,1 @@
+First temporary download reference returned HTTP 403 after workspace outage. No artifact bytes received. Retained for provenance; retry uses refreshed reference in wire-retry.

@@ -1,0 +1,12 @@
+{
+  "job_id": 125875473111,
+  "actual_compiler_warnings_or_errors": [
+    "2026-11-03T11:00:15.3148570Z warning: binary `Zelvik-Edge` should have a kebab-case name",
+    "2026-11-03T11:00:15.3159094Z warning: `zelvik-edge` (manifest) generated 1 warning",
+    "2026-11-03T11:02:33.7696122Z warning: unused import: `super::*`",
+    "2026-11-03T11:02:33.8441510Z warning: `zelvik-edge` (bench \"udp_demux_bench\") generated 1 warning (run `cargo fix --bench \"udp_demux_bench\" -p zelvik-edge` to apply 1 suggestion)",
+    "2026-11-03T11:04:31.3385811Z warning: unused import: `super::*`",
+    "2026-11-03T11:04:31.4505388Z warning: `zelvik-edge` (bench \"udp_demux_bench\") generated 1 warning (run `cargo clippy --fix --bench \"udp_demux_bench\" -p zelvik-edge -- -D clippy::correctness -D clippy::suspicious` to apply 1 suggestion)"
+  ],
+  "scope": "timestamp-prefixed Rust warning/error diagnostics; echoed workflow error branches are not executed diagnostics"
+}
