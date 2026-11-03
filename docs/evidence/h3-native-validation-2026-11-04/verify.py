@@ -10,7 +10,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 
 for directory in sorted(ROOT.iterdir()):
-    if not directory.is_dir():
+    if not directory.is_dir() or directory.name == '__pycache__':
         continue
     manifest = json.loads((directory / 'manifest.json').read_text())
     artifact = json.loads((directory / 'artifact.json').read_text())
@@ -63,15 +63,21 @@ for directory in sorted(ROOT.iterdir()):
                 return {tuple(re.findall(r'^(?:name|version|source) = (.*)$', section, re.M)) for section in text.split('[[package]]')[1:]}
             assert identities('baseline-before.lock') == identities('baseline-after.lock')
             print('PASS: final adapter old/fixed FIN control and unchanged baseline package identities')
-        elif directory.name in ['quiche-node-bounded-pass', 'quiche-node-diagnostic-pass']:
+        elif directory.name in ['quiche-node-bounded-pass', 'quiche-node-diagnostic-pass', 'quiche-node-capacity-pass']:
             for name in ['check.log', 'clippy.log', 'tests.log']:
                 text = re.sub(r'\x1b\[[0-9;]*m', '', archive.read(name).decode())
                 assert not any(line.startswith(('warning:', 'warning[')) for line in text.splitlines())
             log = archive.read('tests.log').decode()
-            for count in [1343, 15, 1]:
+            library_count = 1346 if directory.name == 'quiche-node-capacity-pass' else 1343
+            for count in [library_count, 15, 1]:
                 assert f'test result: ok. {count} passed; 0 failed;' in log
-            assert '1343 passed; 0 failed; 4 ignored' in log
-            print('PASS: full feature check, Clippy and 1343+16 tests; 4 explicit ignored probes')
+            assert f'{library_count} passed; 0 failed; 4 ignored' in log
+            if directory.name == 'quiche-node-capacity-pass':
+                for test in ['transport_capacity_survives_observation_and_retires_without_early_refund',
+                             'transport_capacity_does_not_consume_request_workspace_partition',
+                             'transport_capacity_keeps_global_hard_bound_and_protected_reserves']:
+                    assert test + ' ... ok' in log
+            print(f'PASS: full feature check, Clippy and {library_count}+16 tests; 4 explicit ignored probes')
         elif directory.name in ['quiche-admission-build-failure', 'quiche-admission-node-build-failure']:
             name = 'build.log' if directory.name == 'quiche-admission-build-failure' else 'check.log'
             assert b'cannot find macro `warn` in this scope' in archive.read(name)

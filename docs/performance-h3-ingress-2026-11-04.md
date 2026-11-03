@@ -46,6 +46,13 @@ QUIC 广告的 1350 B 接收参数不能约束解析前的入队分配，原 4 M
 再次通过 check、Clippy 和 1343+16 个测试，产物日志无 Rust warning。
 这项诊断不修改准入额度、超时或协议处理。
 
+容量记账修正后的 `183c583` 已通过
+[完整节点 CI 41682804739](https://github.com/Zelvik-Labs/edge/actions/runs/41682804739)：
+check、Clippy、1346 个库测试和 16 个二进制用例，仍有 4 个显式 ignored 性能探针。
+新增三项测试验证最坏容量跨物理观测持续保留、释放等待确认、工作区隔离、全局硬限额和保护额度；
+三个产物日志无 Rust warning。监听开始前另强制读取物理余量，避免依赖后台刷新线程的启动顺序。
+该功能通过不代替[实际连接容量验收](performance-h3-native-admission-2026-11-04.md)。
+
 原始 ZIP、GitHub SHA-256、逐文件摘要及失败产物均保存在
 [验收证据目录](evidence/h3-native-validation-2026-11-04)。不含测试私钥。仓库根目录可复核：
 

@@ -66,6 +66,8 @@ quiche 的 UDP 接收上限显式设为 1350，Quinn 端点的接收上限沿用
   存续期间保持全额 pending，避免物理观测把暂时未填满的队列容量再次授予。
   最后一个持有者释放时转为 committed-unconfirmed，等待下一次物理观测才解除扣减。
   控制面和已建立流量保留额度继续生效，预算数值和节点内存上限均未放大。
+  `b30f0cf` 起，如果额度不足且存在足够的未确认释放额度，先刷新物理观测再按同一硬门槛重试一次；
+  存活容量不受该确认影响，没有可确认额度的满池仍直接拒绝。
 - 接受的连接连续驱动 handshake → running → closing；拒绝连接也驱动真实关闭流程，回收 CID 和队列。
   拒绝留下防护日志/计数；原生库可能发出 TLS/QUIC close，不承诺与原路径的静默丢弃行为相同。
 - 动态 SNI 精确/通配/默认选择、证书热更新和 OCSP transport/过期检查接入现有原子证书快照。
@@ -78,7 +80,7 @@ quiche 的 UDP 接收上限显式设为 1350，Quinn 端点的接收上限沿用
 
 可复查的真实网络回归覆盖并行正文、重复响应头、双向 trailers、FIN、reset、预算背压、
 拒绝清理和受控双向丢包。完整节点特性检查见
-[ed01add CI](https://github.com/Zelvik-Labs/edge/actions/runs/41672874652)：
-1,343 个库测试、16 个有测试的二进制用例通过；4 个性能探针保持显式 ignored，Rust warning 为零。
+[183c583 CI](https://github.com/Zelvik-Labs/edge/actions/runs/41682804739)：
+1,346 个库测试、16 个有测试的二进制用例通过；4 个性能探针保持显式 ignored，产物日志无 Rust warning。
 短时测试不替代 24/72 小时稳定性验收。
 最终接收边界、默认路径及适配层回归见[验收报告](performance-h3-ingress-2026-11-04.md)。
