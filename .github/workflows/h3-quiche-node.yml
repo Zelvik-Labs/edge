@@ -6,6 +6,7 @@ on:
     paths:
       - src/http3_quiche.rs
       - src/h3_backend.rs
+      - src/memory_governor.rs
       - .github/workflows/h3-quiche-node.yml
 permissions:
   contents: read

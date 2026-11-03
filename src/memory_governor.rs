@@ -1312,6 +1312,23 @@ pub struct SharedPermit<'a> {
 
 pub type StaticSharedPermit = SharedPermit<'static>;
 
+/// Worst-case capacity for a native QUIC queue, including growth after the
+/// latest RSS observation. Keep the entire capacity pending while any owner
+/// or buffer can still use it; observing a sparsely filled queue must not
+/// make its unfilled slots available to another connection.
+#[cfg(feature = "h3-quiche")]
+pub(crate) struct TransportCapacityReservation<'a>(SharedPermit<'a>);
+
+#[cfg(feature = "h3-quiche")]
+impl Drop for TransportCapacityReservation<'_> {
+    fn drop(&mut self) {
+        // Retire through the committed path: ownership ends now, but capacity
+        // is not promised again until a physical observation accounts for any
+        // allocator-retained pages. An ordinary pending drop refunds too soon.
+        self.0.commit();
+    }
+}
+
 impl std::fmt::Debug for SharedPermit<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SharedPermit")
@@ -1873,6 +1890,22 @@ impl MemoryGovernor {
                 _ => AccountPriority::Ordinary,
             },
         )
+    }
+
+    /// Reserve long-lived native transport capacity in the global account,
+    /// outside the short-lived request-workspace partition. New transport
+    /// capacity still leaves both control and established-traffic reserves.
+    #[cfg(feature = "h3-quiche")]
+    pub(crate) fn try_reserve_transport_capacity(
+        &self,
+        bytes: u64,
+    ) -> Option<TransportCapacityReservation<'_>> {
+        self.try_grant_shared_with_priority(
+            SharedGrantPurpose::Admission,
+            bytes,
+            AccountPriority::ConnectionEstablishment,
+        )
+        .map(TransportCapacityReservation)
     }
 
     fn try_grant_shared_with_priority(
@@ -7895,6 +7928,103 @@ mod en16_pool_tests {
         let after = governor.account_view();
         assert_eq!(after.pending_bytes, 0);
         assert_eq!(after.grantable_bytes, before, "cancel refunds fully");
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    #[test]
+    fn transport_capacity_survives_observation_and_retires_without_early_refund() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 2 << 30, 1 << 30, 1 << 20, 0);
+        let bytes = 8 << 20;
+        let capacity = governor
+            .try_reserve_transport_capacity(bytes)
+            .expect("bounded transport capacity");
+        let observed = governor.account_view_fresh();
+        assert_eq!(observed.pending_bytes, bytes);
+        assert_eq!(observed.committed_unconfirmed_bytes, 0);
+        assert_eq!(observed.committed_live_bytes, 0);
+        assert_eq!(
+            governor.account_outstanding_bytes.load(Ordering::Acquire),
+            bytes
+        );
+
+        drop(capacity);
+        let retired = governor.account_view();
+        assert_eq!(retired.pending_bytes, 0);
+        assert_eq!(retired.committed_unconfirmed_bytes, bytes);
+        assert_eq!(retired.committed_live_bytes, 0);
+        assert_eq!(retired.grantable_bytes, observed.grantable_bytes);
+        assert_eq!(
+            governor.account_outstanding_bytes.load(Ordering::Acquire),
+            bytes
+        );
+
+        let confirmed = governor.account_view_fresh();
+        assert_eq!(confirmed.pending_bytes, 0);
+        assert_eq!(confirmed.committed_unconfirmed_bytes, 0);
+        assert_eq!(confirmed.committed_live_bytes, 0);
+        assert_eq!(
+            governor.account_outstanding_bytes.load(Ordering::Acquire),
+            0
+        );
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    #[test]
+    fn transport_capacity_does_not_consume_request_workspace_partition() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(2 << 30, 1920 << 20, 1 << 20, 0, i64::MAX as u64);
+        let workspace_limit = governor.limits().request_workspace_budget_bytes;
+        // The dual-stack backlog plus 32 connections exceeds the workspace
+        // partition, but fits in the globally accounted connection capacity.
+        let bytes = (33 * 2 + 32) * 5 * 1024 * 1024;
+        assert!(bytes > workspace_limit);
+        let capacity = governor
+            .try_reserve_transport_capacity(bytes)
+            .expect("transport queues fit the global account");
+        assert_eq!(governor.request_workspace_used_bytes(), 0);
+        assert_eq!(governor.account_view().pending_bytes, bytes);
+        assert!(governor.try_admit_workspace(64 << 10));
+        assert_eq!(governor.request_workspace_used_bytes(), 64 << 10);
+        governor.workspace_refund(64 << 10);
+        drop(capacity);
+        assert_eq!(governor.request_workspace_used_bytes(), 0);
+        assert_eq!(governor.account_view().pending_bytes, 0);
+        assert_eq!(governor.account_view().committed_live_bytes, 0);
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    #[test]
+    fn transport_capacity_keeps_global_hard_bound_and_protected_reserves() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(2 << 30, 1 << 30, 1 << 20, 0, i64::MAX as u64);
+        let available = governor.account_view().grantable_bytes;
+        let limits = governor.limits();
+        let protected =
+            limits.control_plane_reserve_bytes + limits.established_traffic_reserve_bytes;
+        let capacity = governor
+            .try_reserve_transport_capacity(available - protected)
+            .expect("capacity outside the protected reserves");
+        assert!(governor.try_reserve_transport_capacity(1).is_none());
+        assert_eq!(governor.account_view().grantable_bytes, protected);
+        let continuation = governor
+            .try_grant_shared(
+                SharedGrantPurpose::TcpQueue,
+                limits.established_traffic_reserve_bytes,
+            )
+            .expect("existing traffic retains its reserve");
+        let control = governor
+            .try_grant_shared(
+                SharedGrantPurpose::ConfigPublish,
+                limits.control_plane_reserve_bytes,
+            )
+            .expect("control plane retains its reserve");
+        assert_eq!(governor.account_view().grantable_bytes, 0);
+        assert!(governor.try_reserve_transport_capacity(1).is_none());
+        drop((capacity, continuation, control));
+        assert_eq!(governor.account_view().pending_bytes, 0);
+        assert_eq!(governor.account_view().committed_live_bytes, 0);
+        assert_eq!(governor.account_view().grantable_bytes, protected);
     }
 
     /// commit() moves the charge to committed-unconfirmed; the deduction

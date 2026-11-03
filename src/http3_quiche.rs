@@ -34,12 +34,6 @@ impl ConnectionHook for PreparedTls {
 // ordinary connection admission remains separately charged as well.
 const TRANSPORT_RESERVATION: u64 = 5 * 1024 * 1024;
 const LISTEN_BACKLOG: usize = 32;
-struct TransportReservation(u64);
-impl Drop for TransportReservation {
-    fn drop(&mut self) {
-        MEMORY_GOVERNOR.workspace_refund(self.0);
-    }
-}
 
 impl Http3ProxyManager {
     fn validate_quiche_policy(&self) -> Result<()> {
@@ -63,11 +57,9 @@ impl Http3ProxyManager {
         // The library queues initials before our per-connection admission.
         // Reserve the full bounded backlog plus one inline rejection worker.
         let backlog_bytes = (LISTEN_BACKLOG as u64 + 1) * TRANSPORT_RESERVATION;
-        anyhow::ensure!(
-            MEMORY_GOVERNOR.try_admit_workspace(backlog_bytes),
-            "insufficient workspace budget for the native QUIC accept backlog"
-        );
-        let _backlog = TransportReservation(backlog_bytes);
+        let _backlog = MEMORY_GOVERNOR
+            .try_reserve_transport_capacity(backlog_bytes)
+            .context("insufficient shared capacity for the native QUIC accept backlog")?;
         let mut settings = QuicSettings::default();
         settings.enable_dgram = false;
         settings.enable_early_data = false;
@@ -218,7 +210,9 @@ impl Http3ProxyManager {
                 debug!("HTTP/3 native admission rejection for {remote}: {reason}");
                 continue;
             };
-            if !MEMORY_GOVERNOR.try_admit_workspace(TRANSPORT_RESERVATION) {
+            let Some(transport_capacity) =
+                MEMORY_GOVERNOR.try_reserve_transport_capacity(TRANSPORT_RESERVATION)
+            else {
                 report_admission("quiche_transport_bytes");
                 MEMORY_GOVERNOR.record_reject(AdmissionClass::Http3Connection);
                 self.record_l4_event(
@@ -234,11 +228,11 @@ impl Http3ProxyManager {
                     .map_err(|error| anyhow::anyhow!(error))?;
                 debug!("HTTP/3 native admission rejection for {remote}: {reason}");
                 continue;
-            }
+            };
             let owner = Arc::new((
                 connection_permit,
                 listener_permit,
-                TransportReservation(TRANSPORT_RESERVATION),
+                transport_capacity,
                 crate::metrics::transport_metrics_guard(
                     crate::metrics::ShadowTransportKind::QuicConnection,
                 ),
