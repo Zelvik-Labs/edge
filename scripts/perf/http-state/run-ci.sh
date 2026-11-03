@@ -17,4 +17,8 @@ extendedKeyUsage=serverAuth
 CERT
 openssl x509 -req -in "$out/tls/server.csr" -CA "$out/tls/ca.pem" -CAkey "$out/tls/ca.key" -CAcreateserial -out "$out/tls/server.pem" -days 2 -extfile "$out/tls/server.ext" >> "$out/tls/build.log" 2>&1
 python3 -m unittest discover -s scripts/perf -p 'test_*protocol*.py' > "$out/python-tests.log" 2>&1
-python3 scripts/perf/http-state/run.py
+case "${EDGE_HTTP_SUITE:-comparison}" in
+  comparison) python3 scripts/perf/http-state/run.py ;;
+  native) python3 scripts/perf/h3-native/run.py ;;
+  *) echo "unknown EDGE_HTTP_SUITE" >&2; exit 1 ;;
+esac

@@ -294,3 +294,44 @@ async fn peer_reset_is_an_error_and_another_stream_can_finish() {
     .await
     .expect("reset must not stall an unrelated stream");
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn fin_progresses_while_every_receive_allocation_is_still_owned() {
+    tokio::time::timeout(Duration::from_secs(15), async {
+        let mut fixture = Fixture::new(Limits {
+            streams: 16,
+            receive_bytes: 32 * 1024,
+            send_bytes: 32 * 1024,
+        })
+        .await;
+        let (mut tx, _rx) = fixture.client.open_bi().await.unwrap();
+        tx.write_all(&[0x72]).await.unwrap();
+        let mut stream = poll_fn(|cx| fixture.server.poll_accept_bidi(cx))
+            .await
+            .unwrap();
+        let mut held = Vec::new();
+        for index in 0..2 {
+            if index != 0 {
+                tx.write_all(&[0x72]).await.unwrap();
+            }
+            let bytes = poll_fn(|cx| stream.poll_data(cx)).await.unwrap().unwrap();
+            assert_eq!(&bytes[..], &[0x72]);
+            held.push(bytes);
+        }
+        assert_eq!(fixture.close.buffered_receive_bytes(), 32 * 1024);
+        // Deliberately send FIN only after the peer has used every receive
+        // permit. Returning None must not depend on dropping these Bytes.
+        tx.finish().unwrap();
+        assert!(poll_fn(|cx| stream.poll_data(cx)).await.unwrap().is_none());
+        assert!(
+            held.iter()
+                .all(|bytes| bytes.iter().all(|value| *value == 0x72))
+        );
+        assert_eq!(fixture.close.buffered_receive_bytes(), 32 * 1024);
+        drop(held);
+        assert_eq!(fixture.close.buffered_receive_bytes(), 0);
+        poll_fn(|cx| stream.poll_finish(cx)).await.unwrap();
+    })
+    .await
+    .expect("FIN must bypass a fully occupied payload budget");
+}

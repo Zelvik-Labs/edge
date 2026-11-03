@@ -242,7 +242,8 @@ location /miss/ { proxy_cache matrix; proxy_cache_valid 200 1h; proxy_pass http:
                         'maxSize':{'count':8,'unit':'m'},
                         'onlyURLPatterns':[{'type':'prefix','pattern':'/hit/'},{'type':'prefix','pattern':'/miss/'}]}]}}}
     write(out/'overrides.json', {'servers':[server],'metricItems':[],
-         'http3Policies':{'1':{'isOn':True,'port':19443}},
+         'http3Policies':{'1':{'isOn':True,'port':19443,
+                             'addressValidation':getattr(args, 'address_validation', 'adaptive')}},
          'globalServerConfig':{'httpAll':{'allowLocalOrigins':True,'supportsLowVersionHTTP':True},
                                'httpAccessLog':{'isOn':False}}})
     (out/'overrides.json').chmod(0o600)
@@ -321,7 +322,10 @@ def run(args):
         if args.target=='edge':
             command += ['--mount',f'type=bind,src={args.edge_binary.resolve()},dst=/tools/Zelvik-Edge,readonly',
                         '--mount',f'type=bind,src={args.controller.resolve()},dst=/tools/controller,readonly',
-                        '-e','RUST_LOG=warn','-e',f"ZELVIK_EDGE_QUIC_RX_BATCH={getattr(args, 'quic_rx_batch', '1')}",'--entrypoint','/tools/controller',IMAGES['edge'],
+                        '-e','RUST_LOG=warn',
+                        '-e',f"ZELVIK_EDGE_H3_BACKEND={getattr(args, 'edge_backend', 'quinn-shared')}",
+                        '-e',f"ZELVIK_EDGE_H3_TRANSPORT_PROFILE={getattr(args, 'transport_profile', 'production')}",
+                        '-e',f"ZELVIK_EDGE_QUIC_RX_BATCH={getattr(args, 'quic_rx_batch', '1')}",'--entrypoint','/tools/controller',IMAGES['edge'],
                         '--home','/node','--spawn-edge','--edge-binary','/tools/Zelvik-Edge',
                         '--origin','http://origin:8081','--tls-port','19443','--tls-host','localhost',
                         '--ca-file','/tls/ca.pem','--cert-file','/tls/server.pem','--key-file','/tls/server.key',
@@ -475,6 +479,9 @@ if __name__=='__main__':
     p.add_argument('--controller',type=Path,default=Path('/workspace/edge/target/release/examples/issue34-controller'))
     p.add_argument('--edge-image')
     p.add_argument('--quic-rx-batch', choices=['1','32'], default='1')
+    p.add_argument('--edge-backend', choices=['quinn-shared','quinn-native','tokio-quiche-native'], default='quinn-shared')
+    p.add_argument('--transport-profile', choices=['production','matched'], default='production')
+    p.add_argument('--address-validation', choices=['adaptive','always','off'], default='adaptive')
     p.add_argument('--seconds',type=int,default=8)
     p.add_argument('--repeats',type=int,default=3)
     p.add_argument('--payload-size',type=int,default=1024)
