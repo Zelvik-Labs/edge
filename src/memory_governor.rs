@@ -1900,6 +1900,29 @@ impl MemoryGovernor {
         &self,
         bytes: u64,
     ) -> Option<TransportCapacityReservation<'_>> {
+        let first = self.try_grant_shared_with_priority(
+            SharedGrantPurpose::Admission,
+            bytes,
+            AccountPriority::ConnectionEstablishment,
+        );
+        if let Some(permit) = first {
+            return Some(TransportCapacityReservation(permit));
+        }
+        // Fast connection churn can retire hundreds of worst-case queues
+        // within one background observation interval. Confirm those retired
+        // bytes against physical memory before rejecting otherwise affordable
+        // work. Live pending capacity is never cleared by this observation.
+        // If no sufficient unconfirmed charge exists, a refresh cannot recover
+        // that charge, so a genuinely full capacity pool rejects immediately.
+        if self
+            .account_committed_unconfirmed_bytes
+            .load(Ordering::Acquire)
+            < bytes.max(1)
+        {
+            return None;
+        }
+        self.invalidate_snapshot_cache();
+        let _ = self.memory_snapshot();
         self.try_grant_shared_with_priority(
             SharedGrantPurpose::Admission,
             bytes,
@@ -7989,6 +8012,45 @@ mod en16_pool_tests {
         governor.workspace_refund(64 << 10);
         drop(capacity);
         assert_eq!(governor.request_workspace_used_bytes(), 0);
+        assert_eq!(governor.account_view().pending_bytes, 0);
+        assert_eq!(governor.account_view().committed_live_bytes, 0);
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    #[test]
+    fn transport_capacity_confirms_retired_bytes_on_pressure_without_refunding_live_capacity() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(2 << 30, 1 << 30, 1 << 20, 0, i64::MAX as u64);
+        let limits = governor.limits();
+        let protected =
+            limits.control_plane_reserve_bytes + limits.established_traffic_reserve_bytes;
+        let available = governor.account_view().grantable_bytes - protected;
+        let held_bytes = 1 << 20;
+        let held = governor.try_reserve_transport_capacity(held_bytes).unwrap();
+        let retired = governor
+            .try_reserve_transport_capacity(available - held_bytes)
+            .unwrap();
+        let generation = governor.cached_generation.load(Ordering::Acquire);
+        assert!(governor.try_reserve_transport_capacity(1).is_none());
+        assert_eq!(
+            governor.cached_generation.load(Ordering::Acquire),
+            generation,
+            "fully live reservations must not trigger a futile physical refresh"
+        );
+        drop(retired);
+        assert_eq!(governor.account_view().grantable_bytes, protected);
+        let replacement = governor
+            .try_reserve_transport_capacity(1)
+            .expect("retired capacity can be reused after a real physical observation");
+        let view = governor.account_view();
+        assert!(governor.cached_generation.load(Ordering::Acquire) > generation);
+        assert_eq!(view.committed_unconfirmed_bytes, 0);
+        assert_eq!(view.pending_bytes, held_bytes + 1);
+        assert_eq!(
+            governor.account_outstanding_bytes.load(Ordering::Acquire),
+            held_bytes + 1
+        );
+        drop((held, replacement));
         assert_eq!(governor.account_view().pending_bytes, 0);
         assert_eq!(governor.account_view().committed_live_bytes, 0);
     }
