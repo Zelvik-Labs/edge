@@ -163,6 +163,10 @@ fn response_header_conversion_preserves_repeated_fields_and_filters_connection_f
 }
 
 fn wire_test(test: impl Future<Output = ()>) {
+    wire_test_with_timeout(Duration::from_secs(15), test);
+}
+
+fn wire_test_with_timeout(timeout: Duration, test: impl Future<Output = ()>) {
     // Own a controlled Kernel policy for the fixture and restore even a
     // previously uninitialized config on panic. The guard stays synchronous.
     crate::runtime_mode::with_runtime_config_for_test(
@@ -173,20 +177,27 @@ fn wire_test(test: impl Future<Output = ()>) {
                 .enable_all()
                 .build()
                 .unwrap()
-                .block_on(async {
-                    tokio::time::timeout(Duration::from_secs(15), test)
-                        .await
-                        .unwrap()
-                });
+                .block_on(async { tokio::time::timeout(timeout, test).await.unwrap() });
         },
     );
 }
 
-#[derive(Default)]
 struct Stats {
     accepted: AtomicUsize,
     requests: AtomicUsize,
     closed: AtomicUsize,
+    multiplex_gate: tokio::sync::Barrier,
+}
+
+impl Default for Stats {
+    fn default() -> Self {
+        Self {
+            accepted: AtomicUsize::new(0),
+            requests: AtomicUsize::new(0),
+            closed: AtomicUsize::new(0),
+            multiplex_gate: tokio::sync::Barrier::new(32),
+        }
+    }
 }
 
 struct Origin {
@@ -240,111 +251,141 @@ async fn serve(
         .build(h3_quinn::Connection::new(connection.clone()))
         .await
         .map_err(|e| e.to_string())?;
+    let mut requests: JoinSet<Result<(), String>> = JoinSet::new();
     loop {
-        let resolver = match h3.accept().await {
+        let accepted = tokio::select! {
+            completed = requests.join_next(), if !requests.is_empty() => {
+                completed.unwrap().map_err(|error| error.to_string())??;
+                continue;
+            }
+            accepted = h3.accept() => accepted,
+        };
+        let resolver = match accepted {
             Ok(Some(resolver)) => resolver,
-            Ok(None) => return Ok(()),
-            Err(_) if expected_close(&connection, &stopping) => return Ok(()),
+            Ok(None) => break,
+            Err(_) if expected_close(&connection, &stopping) => break,
             Err(error) => return Err(format!("H3 accept: {error}")),
         };
-        let (request, mut stream) = resolver
-            .resolve_request()
+        requests.spawn(serve_request(
+            resolver,
+            connection.clone(),
+            stats.clone(),
+            stopping.clone(),
+        ));
+    }
+    while let Some(result) = requests.join_next().await {
+        result.map_err(|error| error.to_string())??;
+    }
+    Ok(())
+}
+
+async fn serve_request(
+    resolver: h3::server::RequestResolver<h3_quinn::Connection, Bytes>,
+    connection: quinn::Connection,
+    stats: Arc<Stats>,
+    stopping: Arc<AtomicBool>,
+) -> Result<(), String> {
+    let (request, mut stream) = resolver
+        .resolve_request()
+        .await
+        .map_err(|e| e.to_string())?;
+    stats.requests.fetch_add(1, Ordering::AcqRel);
+    let path = request.uri().path().to_owned();
+    if path == "/hold-upload" {
+        let reason = connection.closed().await;
+        return if expected_close(&connection, &stopping) {
+            Ok(())
+        } else {
+            Err(reason.to_string())
+        };
+    }
+    // Headers deliberately wait for the entire upload. A client holding
+    // the bidirectional stream mutex while awaiting headers deadlocks here.
+    let mut body = Vec::new();
+    while let Some(mut chunk) = stream.recv_data().await.map_err(|e| e.to_string())? {
+        let len = chunk.remaining();
+        body.extend_from_slice(&chunk.copy_to_bytes(len));
+    }
+    let request_trailers = stream.recv_trailers().await.map_err(|e| e.to_string())?;
+    if request_trailers.is_some() {
+        return Err("unexpected request trailers".to_owned());
+    }
+    if path == "/empty" {
+        stream
+            .send_response(http::Response::builder().status(204).body(()).unwrap())
             .await
             .map_err(|e| e.to_string())?;
-        stats.requests.fetch_add(1, Ordering::AcqRel);
-        let path = request.uri().path().to_owned();
-        if path == "/hold-upload" {
-            let reason = connection.closed().await;
-            return if expected_close(&connection, &stopping) {
-                Ok(())
-            } else {
-                Err(reason.to_string())
-            };
-        }
-        // Headers deliberately wait for the entire upload. A client holding
-        // the bidirectional stream mutex while awaiting headers deadlocks here.
-        let mut body = Vec::new();
-        while let Some(mut chunk) = stream.recv_data().await.map_err(|e| e.to_string())? {
-            let len = chunk.remaining();
-            body.extend_from_slice(&chunk.copy_to_bytes(len));
-        }
-        let request_trailers = stream.recv_trailers().await.map_err(|e| e.to_string())?;
-        if request_trailers.is_some() {
-            return Err("unexpected request trailers".to_owned());
-        }
-        if path == "/empty" {
-            stream
-                .send_response(http::Response::builder().status(204).body(()).unwrap())
-                .await
-                .map_err(|e| e.to_string())?;
-            stream.finish().await.map_err(|e| e.to_string())?;
-            continue;
-        }
-        if path == "/reset-response" {
-            stream
-                .send_response(http::Response::builder().status(200).body(()).unwrap())
-                .await
-                .map_err(|e| e.to_string())?;
-            stream.stop_stream(Code::H3_INTERNAL_ERROR);
-            continue;
-        }
-        if path == "/hold-response" {
-            stream
-                .send_response(
-                    http::Response::builder()
-                        .status(200)
-                        .header("content-length", "99")
-                        .body(())
-                        .unwrap(),
-                )
-                .await
-                .map_err(|e| e.to_string())?;
-            stream
-                .send_data(Bytes::from_static(b"part"))
-                .await
-                .map_err(|e| e.to_string())?;
-            let reason = connection.closed().await;
-            return if expected_close(&connection, &stopping) {
-                Ok(())
-            } else {
-                Err(reason.to_string())
-            };
-        }
-        let response = response_bytes(&path, &body);
+        stream.finish().await.map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    if path == "/reset-response" {
+        stream
+            .send_response(http::Response::builder().status(200).body(()).unwrap())
+            .await
+            .map_err(|e| e.to_string())?;
+        stream.stop_stream(Code::H3_INTERNAL_ERROR);
+        return Ok(());
+    }
+    if path == "/hold-response" {
         stream
             .send_response(
                 http::Response::builder()
                     .status(200)
-                    .header("content-length", response.len().to_string())
-                    .header("set-cookie", "session=abc; HttpOnly")
-                    .header("set-cookie", "theme=dark; Secure")
-                    .header("x-origin-value", "first")
-                    .header("x-origin-value", "second")
+                    .header("content-length", "99")
                     .body(())
                     .unwrap(),
             )
             .await
             .map_err(|e| e.to_string())?;
         stream
-            .send_data(response)
+            .send_data(Bytes::from_static(b"part"))
             .await
             .map_err(|e| e.to_string())?;
-        let mut trailers = HeaderMap::new();
-        trailers.insert("x-body-bytes", body.len().to_string().parse().unwrap());
-        stream
-            .send_trailers(trailers)
-            .await
-            .map_err(|e| e.to_string())?;
-        if path == "/hold-trailers" {
-            let reason = connection.closed().await;
-            return if expected_close(&connection, &stopping) {
-                Ok(())
-            } else {
-                Err(reason.to_string())
-            };
-        }
-        stream.finish().await.map_err(|e| e.to_string())?;
+        let reason = connection.closed().await;
+        return if expected_close(&connection, &stopping) {
+            Ok(())
+        } else {
+            Err(reason.to_string())
+        };
     }
+    if path == "/multiplex" {
+        stats.multiplex_gate.wait().await;
+    }
+    let response = response_bytes(&path, &body);
+    stream
+        .send_response(
+            http::Response::builder()
+                .status(200)
+                .header("content-length", response.len().to_string())
+                .header("set-cookie", "session=abc; HttpOnly")
+                .header("set-cookie", "theme=dark; Secure")
+                .header("x-origin-value", "first")
+                .header("x-origin-value", "second")
+                .body(())
+                .unwrap(),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+    stream
+        .send_data(response)
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut trailers = HeaderMap::new();
+    trailers.insert("x-body-bytes", body.len().to_string().parse().unwrap());
+    stream
+        .send_trailers(trailers)
+        .await
+        .map_err(|e| e.to_string())?;
+    if path == "/hold-trailers" {
+        let reason = connection.closed().await;
+        return if expected_close(&connection, &stopping) {
+            Ok(())
+        } else {
+            Err(reason.to_string())
+        };
+    }
+    stream.finish().await.map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 impl Origin {
@@ -803,6 +844,291 @@ fn idle_expiration_releases_the_sender_driver_and_endpoint() {
         crate::origin_h3_pool::expire_for_test(&key);
         crate::origin_h3_pool::sweep_idle();
         assert!(weak.upgrade().is_none());
+        assert!(crate::origin_h3_pool::take(&key).is_none());
+        wait_count(&origin.stats.closed, 1).await;
+        origin.stop().await;
+    });
+}
+
+#[test]
+fn thirty_two_active_requests_multiplex_one_origin_connection() {
+    wire_test(async {
+        let origin = Origin::start();
+        let peer = origin.peer();
+        let slots = crate::origin_h3_active::slots_for_test();
+        let first = new_session(&peer).await;
+        let id = first.context.quic.stable_id();
+        let driver = first.context.driver.id();
+        let key = first.context.key.clone();
+        let weak = Arc::downgrade(&first.context);
+        let mut sessions = vec![first];
+        for _ in 1..32 {
+            let session = OriginH3Connector.reused_http_session(&peer).await.unwrap();
+            assert_eq!(session.context.quic.stable_id(), id);
+            assert_eq!(session.context.driver.id(), driver);
+            sessions.push(session);
+        }
+        assert!(
+            OriginH3Connector.reused_http_session(&peer).await.is_none(),
+            "local stream budget is bounded"
+        );
+        let mut requests = JoinSet::new();
+        for mut session in sessions {
+            let peer = peer.clone();
+            requests.spawn(async move {
+                session
+                    .write_request_header(request("/multiplex", "GET"), true)
+                    .await
+                    .unwrap();
+                // Origin waits for all 32 requests before sending any response.
+                read_complete(&mut session, "/multiplex", b"").await;
+                OriginH3Connector
+                    .release_http_session(session, &peer, None)
+                    .await;
+            });
+        }
+        while let Some(result) = requests.join_next().await {
+            result.unwrap();
+        }
+        assert_eq!(origin.stats.accepted.load(Ordering::Acquire), 1);
+        assert_eq!(origin.stats.requests.load(Ordering::Acquire), 32);
+        assert_eq!(crate::origin_h3_active::slots_for_test(), slots - 1);
+        drop(crate::origin_h3_pool::take(&key).unwrap());
+        assert!(weak.upgrade().is_none());
+        assert_eq!(crate::origin_h3_active::slots_for_test(), slots);
+        wait_count(&origin.stats.closed, 1).await;
+        origin.stop().await;
+    });
+}
+
+#[test]
+fn failed_stream_drains_new_reuse_without_cancelling_an_active_peer() {
+    wire_test(async {
+        let origin = Origin::start();
+        let peer = origin.peer();
+        let mut partial = new_session(&peer).await;
+        let old_id = partial.context.quic.stable_id();
+        let key = partial.context.key.clone();
+        let weak = Arc::downgrade(&partial.context);
+        let mut other = OriginH3Connector.reused_http_session(&peer).await.unwrap();
+        partial
+            .write_request_header(request("/hold-response", "GET"), true)
+            .await
+            .unwrap();
+        partial.read_response_header().await.unwrap();
+        assert_eq!(
+            partial.read_response_body().await.unwrap().unwrap(),
+            Bytes::from_static(b"part")
+        );
+        OriginH3Connector
+            .release_http_session(partial, &peer, None)
+            .await;
+        assert!(OriginH3Connector.reused_http_session(&peer).await.is_none());
+        assert!(
+            other.context.is_open(),
+            "failed request must not close another active stream"
+        );
+        let replacement = new_session(&peer).await;
+        assert_ne!(replacement.context.quic.stable_id(), old_id);
+        other
+            .write_request_header(request("/survivor", "GET"), true)
+            .await
+            .unwrap();
+        other.read_response_header().await.unwrap();
+        let mut body = Vec::new();
+        while let Some(bytes) = other.read_response_body().await.unwrap() {
+            body.extend_from_slice(&bytes);
+        }
+        assert_eq!(body.as_slice(), response_bytes("/survivor", b"").as_ref());
+        assert_eq!(
+            other.read_trailers().await.unwrap().unwrap()["x-body-bytes"],
+            "0"
+        );
+        assert!(
+            !other.can_reuse_connection(),
+            "context stays draining after a failed sibling"
+        );
+        OriginH3Connector
+            .release_http_session(other, &peer, None)
+            .await;
+        assert!(weak.upgrade().is_none());
+        let borrowed = crate::origin_h3_active::get(&key).unwrap();
+        assert_eq!(
+            borrowed.quic.stable_id(),
+            replacement.context.quic.stable_id(),
+            "old drop cannot remove a newer registry entry"
+        );
+        drop(borrowed);
+        drop(replacement);
+        wait_count(&origin.stats.closed, 2).await;
+        origin.stop().await;
+    });
+}
+
+#[test]
+fn idle_retention_expiry_leaves_an_active_request_alive() {
+    wire_test(async {
+        let origin = Origin::start();
+        let peer = origin.peer();
+        let mut first = new_session(&peer).await;
+        let key = first.context.key.clone();
+        let id = first.context.quic.stable_id();
+        let mut active = OriginH3Connector.reused_http_session(&peer).await.unwrap();
+        first
+            .write_request_header(request("/retention", "GET"), true)
+            .await
+            .unwrap();
+        read_complete(&mut first, "/retention", b"").await;
+        OriginH3Connector
+            .release_http_session(first, &peer, None)
+            .await;
+        crate::origin_h3_pool::expire_for_test(&key);
+        crate::origin_h3_pool::sweep_idle();
+        assert!(active.context.is_open());
+        assert_eq!(active.context.quic.stable_id(), id);
+        active
+            .write_request_header(request("/after-expiry", "GET"), true)
+            .await
+            .unwrap();
+        read_complete(&mut active, "/after-expiry", b"").await;
+        OriginH3Connector
+            .release_http_session(active, &peer, None)
+            .await;
+        drop(crate::origin_h3_pool::take(&key).unwrap());
+        wait_count(&origin.stats.closed, 1).await;
+        origin.stop().await;
+    });
+}
+
+#[test]
+fn active_context_budget_saturation_opens_a_second_connection() {
+    wire_test(async {
+        let origin = Origin::start();
+        let peer = origin.peer();
+        let first = new_session(&peer).await;
+        let id = first.context.quic.stable_id();
+        let mut sessions = vec![first];
+        for _ in 1..32 {
+            sessions.push(OriginH3Connector.reused_http_session(&peer).await.unwrap());
+        }
+        let second = new_session(&peer).await;
+        assert_ne!(second.context.quic.stable_id(), id);
+        drop(sessions);
+        drop(second);
+        wait_count(&origin.stats.closed, 2).await;
+        origin.stop().await;
+    });
+}
+
+/// Same executable, same origin policy and real HTTP exchanges. Disabling only
+/// the active index reproduces exclusive idle-pool borrowing for this ablation;
+/// it is not an exact historical binary or complete Edge benchmark.
+#[test]
+#[ignore = "real concurrent origin reuse ablation; explicitly run in CI"]
+fn active_origin_reuse_cost_probe() {
+    let enabled = match std::env::var("EDGE_H3_ACTIVE_REUSE").unwrap().as_str() {
+        "on" => true,
+        "off" => false,
+        other => panic!("unknown probe mode {other}"),
+    };
+    let output = std::path::PathBuf::from(std::env::var_os("EDGE_H3_ACTIVE_RESULT").unwrap());
+    wire_test_with_timeout(Duration::from_secs(180), async {
+        crate::origin_h3_active::set_probe_reuse(enabled);
+        let origin = Origin::start();
+        let peer = origin.peer();
+        let mut warm = new_session(&peer).await;
+        let key = warm.context.key.clone();
+        warm.write_request_header(request("/warm", "GET"), true)
+            .await
+            .unwrap();
+        read_complete(&mut warm, "/warm", b"").await;
+        OriginH3Connector
+            .release_http_session(warm, &peer, None)
+            .await;
+        let mut waves = Vec::new();
+        for _ in 0..100 {
+            let start = std::time::Instant::now();
+            let mut requests = JoinSet::new();
+            for _ in 0..32 {
+                let peer = peer.clone();
+                requests.spawn(async move {
+                    let (connection, reused) =
+                        OriginH3Connector.get_http_session(&peer).await.unwrap();
+                    let Connection::Session(mut session) = connection else {
+                        panic!("unexpected H1 fallback")
+                    };
+                    session
+                        .write_request_header(request("/multiplex", "GET"), true)
+                        .await
+                        .unwrap();
+                    read_complete(&mut session, "/multiplex", b"").await;
+                    OriginH3Connector
+                        .release_http_session(session, &peer, None)
+                        .await;
+                    reused
+                });
+            }
+            let mut reused = 0;
+            while let Some(result) = requests.join_next().await {
+                reused += usize::from(result.unwrap());
+            }
+            assert_eq!(reused, if enabled { 32 } else { 1 });
+            waves.push(start.elapsed().as_nanos());
+        }
+        drop(crate::origin_h3_pool::take(&key).unwrap());
+        let accepted = origin.stats.accepted.load(Ordering::Acquire);
+        assert_eq!(accepted, if enabled { 1 } else { 3101 });
+        assert_eq!(origin.stats.requests.load(Ordering::Acquire), 3201);
+        wait_count(&origin.stats.closed, accepted).await;
+        origin.stop().await;
+        crate::origin_h3_active::set_probe_reuse(true);
+        std::fs::write(
+            output,
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "passed": true, "active_reuse": enabled, "concurrency": 32,
+                "wave_ns": waves, "measured_requests": 3200, "warmup_requests": 1,
+                "accepted_and_closed_connections": accepted,
+                "scope": "real H3 origin connector, System allocator library test; not whole Node"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    });
+}
+
+#[test]
+fn failed_active_request_discards_a_completed_siblings_idle_retention() {
+    wire_test(async {
+        let origin = Origin::start();
+        let peer = origin.peer();
+        let mut completed = new_session(&peer).await;
+        let key = completed.context.key.clone();
+        let weak = Arc::downgrade(&completed.context);
+        let mut partial = OriginH3Connector.reused_http_session(&peer).await.unwrap();
+        completed
+            .write_request_header(request("/completed", "GET"), true)
+            .await
+            .unwrap();
+        read_complete(&mut completed, "/completed", b"").await;
+        OriginH3Connector
+            .release_http_session(completed, &peer, None)
+            .await;
+        partial
+            .write_request_header(request("/hold-response", "GET"), true)
+            .await
+            .unwrap();
+        partial.read_response_header().await.unwrap();
+        assert_eq!(
+            partial.read_response_body().await.unwrap().unwrap(),
+            Bytes::from_static(b"part")
+        );
+        OriginH3Connector
+            .release_http_session(partial, &peer, None)
+            .await;
+        assert!(
+            weak.upgrade().is_none(),
+            "failed request removes idle retention immediately"
+        );
         assert!(crate::origin_h3_pool::take(&key).is_none());
         wait_count(&origin.stats.closed, 1).await;
         origin.stop().await;

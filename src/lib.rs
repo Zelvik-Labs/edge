@@ -55,6 +55,7 @@ pub mod node_control;
 pub mod node_upgrade;
 pub mod storage_migration;
 pub mod origin_h3;
+mod origin_h3_active;
 pub mod origin_h3_pool;
 pub mod origin_h3_state;
 pub mod origin_state;

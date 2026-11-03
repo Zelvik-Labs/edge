@@ -119,16 +119,23 @@ pub struct OriginH3Connection {
     driver: tokio::task::JoinHandle<()>,
     server_addr: StdSocketAddr,
     client_addr: StdSocketAddr,
+    request_slots: Arc<tokio::sync::Semaphore>,
+    reusable: AtomicBool,
 }
 
 impl OriginH3Connection {
     pub(crate) fn is_open(&self) -> bool {
         self.quic.close_reason().is_none() && !self.driver.is_finished()
     }
+
+    pub(crate) fn can_open_request(&self) -> bool {
+        self.reusable.load(Ordering::Acquire) && self.is_open()
+    }
 }
 
 impl Drop for OriginH3Connection {
     fn drop(&mut self) {
+        crate::origin_h3_active::remove(&self.key, self as *const Self);
         self.quic.close(
             quinn::VarInt::from_u32(Code::H3_NO_ERROR.value() as u32),
             b"origin H3 context released",
@@ -178,8 +185,7 @@ impl CustomConnector for OriginH3Connector {
                 return None;
             }
         };
-        let context = crate::origin_h3_pool::take(&plan.key)?;
-        Some(session_for_connection(peer, context))
+        reuse_session(peer, &plan.key)
     }
 
     async fn release_http_session<P: Peer + Send + Sync + 'static>(
@@ -201,6 +207,7 @@ impl CustomConnector for OriginH3Connector {
 
 pub struct OriginH3ClientSession {
     context: Arc<OriginH3Connection>,
+    _request_slot: tokio::sync::OwnedSemaphorePermit,
     request_send: Option<Arc<H3RequestSend>>,
     response_stream: Option<Mutex<H3ResponseStream>>,
     response_header: Option<ResponseHeader>,
@@ -216,7 +223,7 @@ pub struct OriginH3ClientSession {
 
 impl OriginH3ClientSession {
     fn can_reuse_connection(&self) -> bool {
-        self.context.is_open()
+        self.context.can_open_request()
             && !self.failed
             && self.request_send.as_ref().is_some_and(|send| {
                 send.finished.load(Ordering::Acquire) && !send.failed.load(Ordering::Acquire)
@@ -228,6 +235,17 @@ impl OriginH3ClientSession {
             && self.response_finished
             && self.response_trailers_finished
             && self.response_stream.is_none()
+    }
+}
+
+impl Drop for OriginH3ClientSession {
+    fn drop(&mut self) {
+        if self.failed || (self.request_send.is_some() && !self.can_reuse_connection()) {
+            // Stop admitting new requests on a context with an incomplete or
+            // failed request, but let other independently owned streams finish.
+            self.context.reusable.store(false, Ordering::Release);
+            crate::origin_h3_pool::discard(&self.context.key, &self.context);
+        }
     }
 }
 
@@ -442,8 +460,8 @@ async fn connect_h3<P: Peer + Send + Sync + 'static>(
     peer: &P,
 ) -> PingoraResult<(OriginH3ClientSession, bool)> {
     let plan = connection_plan(peer)?;
-    if let Some(context) = crate::origin_h3_pool::take(&plan.key) {
-        return Ok((session_for_connection(peer, context), true));
+    if let Some(session) = reuse_session(peer, &plan.key) {
+        return Ok((session, true));
     }
 
     let server_addr = plan.server_addr;
@@ -473,7 +491,26 @@ async fn connect_h3<P: Peer + Send + Sync + 'static>(
     })?;
 
     let context = build_h3_connection(plan.key, endpoint, connection).await?;
-    Ok((session_for_connection(peer, context), false))
+    let session = session_for_connection(peer, context).ok_or_else(|| {
+        Error::explain(
+            ErrorType::ConnectError,
+            "new H3 context has no request capacity",
+        )
+    })?;
+    crate::origin_h3_active::register(&session.context.key, &session.context);
+    Ok((session, false))
+}
+
+fn reuse_session<P: Peer>(peer: &P, key: &OriginH3PoolKey) -> Option<OriginH3ClientSession> {
+    if let Some(context) = crate::origin_h3_pool::take(key)
+        && let Some(session) = session_for_connection(peer, context)
+    {
+        // A concurrent cold connection may have replaced this key's weak
+        // index before this context became the final idle survivor.
+        crate::origin_h3_active::register(key, &session.context);
+        return Some(session);
+    }
+    session_for_connection(peer, crate::origin_h3_active::get(key)?)
 }
 
 async fn build_h3_connection(
@@ -508,17 +545,27 @@ async fn build_h3_connection(
         driver,
         server_addr,
         client_addr: local_addr,
+        // Bound per-origin request contention before opening a QUIC stream.
+        // Saturation creates another context through the ordinary connector;
+        // it never discards a request or waits indefinitely on this semaphore.
+        request_slots: Arc::new(tokio::sync::Semaphore::new(32)),
+        reusable: AtomicBool::new(true),
     }))
 }
 
 fn session_for_connection<P: Peer>(
     peer: &P,
     context: Arc<OriginH3Connection>,
-) -> OriginH3ClientSession {
+) -> Option<OriginH3ClientSession> {
+    if !context.can_open_request() {
+        return None;
+    }
+    let request_slot = context.request_slots.clone().try_acquire_owned().ok()?;
     let server_addr = context.server_addr.into();
     let client_addr = context.client_addr.into();
-    OriginH3ClientSession {
+    Some(OriginH3ClientSession {
         context,
+        _request_slot: request_slot,
         request_send: None,
         response_stream: None,
         response_header: None,
@@ -530,7 +577,7 @@ fn session_for_connection<P: Peer>(
         digest: Digest::default(),
         server_addr,
         client_addr,
-    }
+    })
 }
 
 fn client_config(

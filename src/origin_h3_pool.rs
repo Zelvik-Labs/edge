@@ -68,11 +68,12 @@ impl H3ConnectionPool {
         self.maybe_sweep_at(now);
         let (_, pooled) = self.entries.remove(key)?;
         // A deferred global scan never extends this key's idle TTL.
-        (!idle_expired(pooled.last_used, now) && pooled.context.is_open()).then_some(pooled.context)
+        (!idle_expired(pooled.last_used, now) && pooled.context.can_open_request())
+            .then_some(pooled.context)
     }
 
     fn offer(&self, key: OriginH3PoolKey, context: Arc<OriginH3Connection>) {
-        if !context.is_open() {
+        if !context.can_open_request() {
             return;
         }
         self.maybe_sweep_at(Instant::now());
@@ -120,10 +121,11 @@ impl H3ConnectionPool {
     }
 
     fn sweep_at(&self, now: Instant) {
-        // Active contexts were removed by take(). The removed entries release
-        // their own permits, so concurrent releases cannot overshoot the cap.
-        self.entries
-            .retain(|_, entry| !idle_expired(entry.last_used, now) && entry.context.is_open());
+        // Each retained context owns its pool slot. Active sessions own their
+        // own Arcs, so dropping idle retention cannot terminate their streams.
+        self.entries.retain(|_, entry| {
+            !idle_expired(entry.last_used, now) && entry.context.can_open_request()
+        });
     }
 }
 
@@ -137,6 +139,14 @@ pub fn offer(key: OriginH3PoolKey, context: Arc<OriginH3Connection>) {
     H3_CONNECTION_POOL.offer(key, context);
 }
 
+pub(crate) fn discard(key: &OriginH3PoolKey, context: &Arc<OriginH3Connection>) {
+    // A completed sibling may already have retained this context. An error
+    // retires that retention immediately, without evicting a newer connection.
+    H3_CONNECTION_POOL
+        .entries
+        .remove_if(key, |_, entry| Arc::ptr_eq(&entry.context, context));
+}
+
 fn idle_expired(last_used: Instant, now: Instant) -> bool {
     now.saturating_duration_since(last_used) > H3_POOL_IDLE
 }
@@ -144,9 +154,8 @@ fn idle_expired(last_used: Instant, now: Instant) -> bool {
 fn sweep_idle_at(now: Instant) {
     #[cfg(test)]
     SWEEP_RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    // Only pool-owned entries are touched. A connection is removed from the
-    // pool the moment a request takes it, so active requests can never be
-    // evicted here.
+    // Only pool retention is removed. Any concurrent active session retains
+    // its own Arc and can finish even when the retention entry expires.
     H3_CONNECTION_POOL.sweep_at(now);
 }
 
