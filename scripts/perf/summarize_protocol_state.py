@@ -56,13 +56,14 @@ def run(args):
                     r['data_filesystem_growth_mib']=(c['filesystem_after'][mount]['used_kib']-c['filesystem_before'][mount]['used_kib'])/1024
                 r['oom_kill_delta']=c['proxy_after']['memory.events']['oom_kill']-c['proxy_before']['memory.events']['oom_kill']
                 steals={}
-                for cpu in ['cpu0','cpu1','cpu2','cpu3','cpu4']:
+                for cpu in [f'cpu{cpu}' for ids in m['cpu_assignment'].values() for cpu in ids]:
                     delta=[b-a for a,b in zip(c['host_cpu_before'][cpu],c['host_cpu_after'][cpu])]
                     steals[cpu]=delta[7]/sum(delta[:8]) if sum(delta[:8]) else 0
                 r['max_cpu_steal_fraction']=max(steals.values())
-                for role,cores in [('client',['cpu2','cpu3']),('proxy',['cpu0','cpu1']),('origin',['cpu4'])]:
+                for role,ids in m['cpu_assignment'].items():
+                    cores=[f'cpu{cpu}' for cpu in ids]
                     available=1-statistics.mean(steals[cpu] for cpu in cores)
-                    field=f'{role}_cpu_fraction_of_{1 if role=="origin" else 2}core'+('' if role=='origin' else 's')
+                    field='origin_cpu_fraction_of_1core' if role=='origin' else role+'_cpu_fraction_of_allocated'
                     r[role+'_cpu_fraction_adjusted_for_steal']=r[field]/available if available>0 else None
             records.append(r)
             groups[(r['payload_bytes'],r['protocol'],r['cache'],r['connection'])][target].append(r)

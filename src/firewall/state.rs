@@ -3060,29 +3060,38 @@ mod tests {
         let state = Arc::new(WafStateManager::new());
         let now = crate::utils::time::now_timestamp();
         let ip: IpAddr = "203.0.113.11".parse().unwrap();
-        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let phase = Arc::new(std::sync::Barrier::new(2));
         let writer = {
             let state = Arc::clone(&state);
-            let stop = Arc::clone(&stop);
+            let phase = Arc::clone(&phase);
             std::thread::spawn(move || {
                 let mut round = 0i64;
-                while !stop.load(Ordering::Relaxed) {
-                    round += 1;
-                    if round % 2 == 0 {
-                        state.apply_black_ip_until(5, ip, now + 3600);
-                    } else {
-                        state.remove_black_ip(5, ip);
+                for _ in 0..20 {
+                    phase.wait();
+                    for _ in 0..100 {
+                        round += 1;
+                        if round % 2 == 0 {
+                            state.apply_black_ip_until(5, ip, now + 3600);
+                        } else {
+                            state.remove_black_ip(5, ip);
+                        }
                     }
+                    phase.wait();
                 }
                 round
             })
         };
-        for _ in 0..2000 {
-            let _ = state.is_blocked(ip, 5);
-            let _ = state.is_whitelisted(ip, 5);
-            let _ = state.is_graylisted(ip, 5);
+        // Coordinate work instead of assuming 2000 faster empty-map reads
+        // give the OS enough time to schedule the writer at least 11 times.
+        for _ in 0..20 {
+            phase.wait();
+            for _ in 0..100 {
+                let _ = state.is_blocked(ip, 5);
+                let _ = state.is_whitelisted(ip, 5);
+                let _ = state.is_graylisted(ip, 5);
+            }
+            phase.wait();
         }
-        stop.store(true, Ordering::Relaxed);
         let rounds = writer.join().unwrap();
         assert!(rounds > 10, "writer must complete multiple churn rounds");
         // Quiesce: final state must match the source maps exactly.

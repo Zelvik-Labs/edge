@@ -17,7 +17,7 @@ class ReportTests(unittest.TestCase):
            'source_revision':'synthetic','driver_sha256':'synthetic','client_sha256':'synthetic',
            'client_source_sha256':'synthetic','args':{'payload_size':1024},
            'images':{target:'synthetic'},'server_version':'synthetic','scope':'synthetic',
-           'cpu_assignment':{},'parent_limits':{},'client_versions':{},'started_at':0,'ended_at':10,'cases':[]}
+           'cpu_assignment':{'proxy':[0,1],'client':[2,3],'origin':[4]},'parent_limits':{},'client_versions':{},'started_at':0,'ended_at':10,'cases':[]}
         for repeat,rate in enumerate([100,300,200]):
             count=rate*multiplier*10
             m['cases'].append({'protocol':'h1','cache':'hit','connection':'reuse','repeat':repeat,
@@ -46,7 +46,7 @@ class ReportTests(unittest.TestCase):
             self.assertEqual((r['total_cases'],r['passed_cases']),(12,9))
             h1=next(g for g in r['groups'] if g['protocol']=='h1')
             self.assertEqual([h1['targets'][t]['good_rps_median'] for t in ['edge','nginx','openresty']],[200,400,600])
-            self.assertAlmostEqual(h1['targets']['edge']['proxy_cpu_fraction_of_2cores_median'],.25)
+            self.assertAlmostEqual(h1['targets']['edge']['proxy_cpu_fraction_of_allocated_median'],.25)
             self.assertAlmostEqual(h1['targets']['edge']['client_cpu_fraction_adjusted_for_steal_median'],1/3)
             h3=next(g for g in r['groups'] if g['protocol']=='h3')
             self.assertIsNone(h3['targets']['edge']['good_rps_median'])

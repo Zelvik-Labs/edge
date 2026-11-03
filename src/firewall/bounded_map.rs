@@ -53,21 +53,24 @@ impl<K: Copy> SlotStorage<K> {
     }
 
     fn entries(&self) -> impl Iterator<Item = (usize, K, i64)> + '_ {
-        self.occupied.iter().enumerate().flat_map(|(word, &mask)| {
-            let mut remaining = mask;
-            std::iter::from_fn(move || {
-                if remaining == 0 {
-                    return None;
-                }
-                let bit = remaining.trailing_zeros() as usize;
-                remaining &= remaining - 1;
-                let index = word * 64 + bit;
-                // SAFETY: only bits published by put are enumerated. Padding
-                // bits in the final word are never set; values are Copy.
-                let (key, expiry) = unsafe { self.slots[index].assume_init() };
-                Some((index, key, expiry))
+        self.occupied
+            .iter()
+            .enumerate()
+            .flat_map(move |(word, &mask)| {
+                let mut remaining = mask;
+                std::iter::from_fn(move || {
+                    if remaining == 0 {
+                        return None;
+                    }
+                    let bit = remaining.trailing_zeros() as usize;
+                    remaining &= remaining - 1;
+                    let index = word * 64 + bit;
+                    // SAFETY: only bits published by put are enumerated. Padding
+                    // bits in the final word are never set; values are Copy.
+                    let (key, expiry) = unsafe { self.slots[index].assume_init() };
+                    Some((index, key, expiry))
+                })
             })
-        })
     }
 }
 
