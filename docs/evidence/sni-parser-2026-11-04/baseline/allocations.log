@@ -1,0 +1,6 @@
+case	allocations	reallocations	requested_bytes	max_allocation_bytes
+single	1	0	11	11
+fragmented	2	0	8274	8263
+partial	1	0	8263	8263
+oversized	1	0	16777219	16777219
+trailing	2	1	8337	8259

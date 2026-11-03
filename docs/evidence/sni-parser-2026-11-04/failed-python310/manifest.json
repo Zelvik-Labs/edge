@@ -1,0 +1,13 @@
+{
+  "artifact_id": 13265035400,
+  "archive": "raw.zip",
+  "archive_bytes": 28038,
+  "archive_sha256": "4dc76cabf706d72bdd7fdc0edc9a140a0fba8949eba7e3f8bbd17361014de897",
+  "files": [
+    {
+      "path": "baseline-original.rs",
+      "bytes": 160784,
+      "sha256": "c54056369d7515d6eea96abf7decbb9a94e864b2ef614556edc3d3addaa751f7"
+    }
+  ]
+}

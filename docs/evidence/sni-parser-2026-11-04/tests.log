@@ -1,0 +1,10 @@
+
+running 5 tests
+test tests::declared_24_bit_length_does_not_imply_buffered_payload ... ok
+test tests::every_supported_record_split_preserves_sni ... ok
+test tests::incomplete_fragments_preserve_need_more ... ok
+test tests::trailing_handshake_bytes_do_not_change_first_sni ... ok
+test tests::unexpected_following_record_stays_invalid ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
