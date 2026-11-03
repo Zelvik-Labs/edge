@@ -9978,22 +9978,6 @@ impl ProxyHttp for EdgeProxy {
                 // cached object, so keep the complete-object key when that entry already exists.
                 // When it does not exist and partial caching is enabled, the zelvik-edge partial
                 // store keeps one aggregate sparse object and records covered byte ranges.
-                let full_object_hash = format!("{:x}", md5_legacy::compute(key.as_bytes()));
-                let full_object_cached = crate::metrics::storage::STORAGE
-                    .get_cache_meta(&full_object_hash)
-                    .is_some_and(|meta| {
-                        meta.cache_key == key
-                            && meta.expires >= crate::utils::time::now_timestamp()
-                            && meta.status == 200
-                            && !meta.compressed
-                            && crate::cache::stored_response_headers_allow_shared_cache(
-                                &meta.headers,
-                            )
-                            && crate::cache::stored_response_encoding_matches_cache_key(
-                                &key,
-                                &meta.headers,
-                            )
-                    });
                 let partial_cache_allowed = ctx
                     .compiled_cache_ref
                     .as_ref()
@@ -10004,24 +9988,36 @@ impl ProxyHttp for EdgeProxy {
                     .and_then(|v| v.to_str().ok())
                     .map(str::trim)
                     .filter(|v| !v.is_empty());
-                if requested_range.is_some() && !full_object_cached && !partial_cache_allowed {
-                    // A compressed full-object hit cannot seek, and this
-                    // policy does not permit the separate partial store. Do
-                    // not let Pingora replay the entire representation as a
-                    // false Range response.
-                    Self::disable_request_cache(session, ctx, "RangeRequiresSeekableCache");
-                    return Ok(());
-                }
-                let selected_partial_range = if !partial_cache_allowed || full_object_cached {
-                    None
-                } else if let Some(requested_range) = requested_range {
-                    if crate::cache::partial::parse_single_range_header(requested_range).is_none() {
-                        Self::disable_request_cache(session, ctx, "UnsupportedRange");
+                let selected_partial_range = match crate::cache::partial::select_cache_range(
+                    requested_range,
+                    partial_cache_allowed,
+                    || {
+                        let full_object_hash = format!("{:x}", md5_legacy::compute(key.as_bytes()));
+                        crate::metrics::storage::STORAGE
+                            .get_cache_meta(&full_object_hash)
+                            .is_some_and(|meta| {
+                                meta.cache_key == key
+                                    && meta.expires >= crate::utils::time::now_timestamp()
+                                    && meta.status == 200
+                                    && !meta.compressed
+                                    && crate::cache::stored_response_headers_allow_shared_cache(
+                                        &meta.headers,
+                                    )
+                                    && crate::cache::stored_response_encoding_matches_cache_key(
+                                        &key,
+                                        &meta.headers,
+                                    )
+                            })
+                    },
+                ) {
+                    Ok(range) => range.map(str::to_owned),
+                    Err(reason) => {
+                        // Compressed/nonseekable full objects must not turn a
+                        // Range into a false full-body response when partial
+                        // caching is disabled. Keep the original error reason.
+                        Self::disable_request_cache(session, ctx, reason);
                         return Ok(());
                     }
-                    Some(requested_range.to_string())
-                } else {
-                    None
                 };
                 if let Some(range_value) = selected_partial_range {
                     let partial_key =
