@@ -48,6 +48,7 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     sources = list(map(Path, [
         'Cargo.toml', 'Cargo.lock', 'src/config.rs', 'src/config_models.rs',
+        'src/config/h3_ports.rs',
         'src/quic_udp_demux.rs', 'src/http3_proxy_manager.rs',
         'benches/udp_demux_bench.rs', '.github/workflows/ci.yml', __file__,
     ]))
@@ -91,15 +92,21 @@ def main():
                       'raw_samples': str(path.with_name('sample.json').relative_to(output))}
     expected = {(f'udp_demux/sites{sites}-policy{policy}', method, str(port))
                 for sites in [1, 1000] for policy in [8443, 0]
-                for method in ['sets', 'point'] for port in [443, 8443, 5300, 9999]}
+                for method in ['sets', 'point', 'scan'] for port in [443, 8443, 5300, 9999]}
+    expected |= {('h3_site_index_build', f'sites{sites}', ports)
+                 for sites in [1, 1000] for ports in ['443-444', '0-65535']}
     assert set(cases) == expected, set(cases)^expected
     comparisons = {}
     for group, method, port in sorted(cases):
         if method == 'point':
             old, new = cases[(group, 'sets', port)], cases[(group, 'point', port)]
             comparisons[group+'/'+port] = {'sets': old, 'point': new,
-                'change_pct': (new['mean_ns']/old['mean_ns']-1)*100}
+                'scan': cases[(group, 'scan', port)],
+                'change_pct': (new['mean_ns']/old['mean_ns']-1)*100,
+                'point_vs_scan_pct': (new['mean_ns']/cases[(group, 'scan', port)]['mean_ns']-1)*100}
     summary = {'passed': True, 'functions': len(cases), 'comparisons': comparisons,
+               'index_build': {method+'/'+ports: stats for (group, method, ports), stats in cases.items()
+                               if group == 'h3_site_index_build'},
                'interpretation': 'Negative lookup time is improvement. Means recomputed from raw samples; no proxy RPS or maximum-capacity inference. See raw Criterion estimates and outliers.'}
     (output/'summary.json').write_text(json.dumps(summary, indent=2)+'\n')
     print(json.dumps({'passed': True, 'functions': len(cases), 'output': str(output)}))

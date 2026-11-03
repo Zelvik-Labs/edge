@@ -10,6 +10,9 @@ use zelvik_edge::config::ConfigStore;
 use zelvik_edge::config_models::{HTTP3Policy, ServerConfig};
 use zelvik_edge::http3_proxy_manager::Http3ProxyManager;
 
+#[path = "../src/config/h3_ports.rs"]
+mod h3_ports;
+
 fn fixture(rt: &Runtime, sites: usize, policy_port: i32) -> (ConfigStore, Arc<Http3ProxyManager>) {
     let store = ConfigStore::new();
     let mut all_servers = Vec::new();
@@ -152,16 +155,51 @@ fn udp_demux(c: &mut Criterion) {
                 };
                 assert_eq!(listener_sets(&manager, &store, port), expected);
                 assert_eq!(store.af_xdp_demux_http3_enabled_sync(port), expected);
+                assert_eq!(
+                    store.af_xdp_demux_http3_scan_for_validation_sync(port),
+                    expected
+                );
                 group.bench_with_input(BenchmarkId::new("sets", port), &port, |b, port| {
                     b.iter(|| black_box(listener_sets(&manager, &store, black_box(*port))))
                 });
                 group.bench_with_input(BenchmarkId::new("point", port), &port, |b, port| {
                     b.iter(|| black_box(store.af_xdp_demux_http3_enabled_sync(black_box(*port))))
                 });
+                group.bench_with_input(BenchmarkId::new("scan", port), &port, |b, port| {
+                    b.iter(|| {
+                        black_box(
+                            store.af_xdp_demux_http3_scan_for_validation_sync(black_box(*port)),
+                        )
+                    })
+                });
             }
             group.finish();
         }
     }
+    let mut group = c.benchmark_group("h3_site_index_build");
+    for sites in [1, 1000] {
+        for (start, end) in [(443, 444), (0, 65535)] {
+            let mut check = h3_ports::Http3SitePorts::default();
+            for _ in 0..sites {
+                check.insert_range(start, end);
+            }
+            assert!(check.contains(start) && check.contains(end));
+            group.bench_with_input(
+                BenchmarkId::new(format!("sites{sites}"), format!("{start}-{end}")),
+                &(sites, start, end),
+                |b, &(sites, start, end)| {
+                    b.iter(|| {
+                        let mut index = h3_ports::Http3SitePorts::default();
+                        for _ in 0..sites {
+                            index.insert_range(black_box(start), black_box(end));
+                        }
+                        black_box(index)
+                    })
+                },
+            );
+        }
+    }
+    group.finish();
 }
 
 fn criterion_config() -> Criterion {

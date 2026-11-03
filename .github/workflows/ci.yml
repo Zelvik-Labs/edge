@@ -458,6 +458,7 @@ jobs:
             . -> target
             pingora-main -> pingora-main/target
             scripts/perf/idle-yield -> ../../../.local/idle-yield-target
+            scripts/perf/h3-index -> ../../../.local/h3-index-target
 
       - name: Install eBPF Toolchain
         shell: bash
@@ -505,6 +506,23 @@ jobs:
         with:
           name: idle-yield-${{ github.sha }}
           path: .local/idle-yield-ci/
+          if-no-files-found: error
+
+      - name: Validate H3 site bitmap and range-union fault control
+        if: github.event_name == 'workflow_dispatch' && inputs.udp_demux_benchmark
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/.local/h3-index-target
+        run: |
+          set -euo pipefail
+          python3 scripts/perf/h3-index/validate.py --output .local/h3-index-ci/results
+
+      - name: Upload H3 site bitmap validation and failures
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.udp_demux_benchmark && hashFiles('.local/h3-index-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3-index-${{ github.sha }}
+          path: .local/h3-index-ci/
           if-no-files-found: error
 
       - name: cargo test

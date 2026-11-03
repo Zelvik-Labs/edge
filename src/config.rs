@@ -7,6 +7,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::Notify;
 use tracing::warn;
 
+mod h3_ports;
+use h3_ports::Http3SitePorts;
+
 type OriginBuildContext = (
     i32,
     Arc<HashMap<i64, Vec<ParentNodeConfig>>>,
@@ -48,6 +51,8 @@ pub struct NodeConfig {
     pub servers: HashMap<String, Arc<ServerConfig>>,
     /// Unique runtime server list preserved independently from host routing map
     pub all_servers: Vec<Arc<ServerConfig>>,
+    /// Derived only from site listeners; policy selection stays in this snapshot.
+    http3_site_ports: Http3SitePorts,
     /// Mapping of Host domain to an upstream load balancer
     pub routes: HashMap<String, Arc<crate::lb_factory::AnyLoadBalancer>>,
     /// Direct mapping from Server ID to Load Balancer
@@ -257,6 +262,7 @@ impl Default for NodeConfig {
             version: 0,
             servers: HashMap::new(),
             all_servers: Vec::new(),
+            http3_site_ports: Http3SitePorts::default(),
             routes: HashMap::new(),
             id_to_lb: HashMap::new(),
             deleted_contents: Vec::new(),
@@ -809,6 +815,34 @@ impl ConfigStore {
     /// H3 takes precedence over QUIC forwarding. Both decisions use the same
     /// configuration snapshot without constructing listener port sets.
     pub fn af_xdp_demux_http3_enabled_sync(&self, port: u16) -> Option<bool> {
+        let lock = self.inner.read();
+        let http3_enabled =
+            Self::pick_global_policy_ref(&lock.http3_policies, lock.node_cluster_id).is_some_and(
+                |policy| {
+                    if !policy.is_on {
+                        return false;
+                    }
+                    if policy.port > 0
+                        && let Ok(global_port) = u16::try_from(policy.port)
+                    {
+                        return port == global_port;
+                    }
+                    lock.http3_site_ports.contains(port)
+                },
+            );
+        if http3_enabled {
+            Some(true)
+        } else {
+            lock.unique_quic_passthrough_by_port
+                .contains_key(&port)
+                .then_some(false)
+        }
+    }
+
+    /// Retained pre-index point query for same-binary component measurements.
+    /// Serving uses `af_xdp_demux_http3_enabled_sync`; this has no runtime switch.
+    #[doc(hidden)]
+    pub fn af_xdp_demux_http3_scan_for_validation_sync(&self, port: u16) -> Option<bool> {
         let lock = self.inner.read();
         let http3_enabled =
             Self::pick_global_policy_ref(&lock.http3_policies, lock.node_cluster_id).is_some_and(
@@ -2105,6 +2139,7 @@ impl ConfigStore {
     }
 
     fn refresh_passthrough_indexes(lock: &mut NodeConfig) {
+        let mut http3_site_ports = Http3SitePorts::default();
         lock.sni_passthrough_exact.clear();
         lock.sni_passthrough_wildcard.clear();
         lock.quic_passthrough_exact.clear();
@@ -2113,6 +2148,20 @@ impl ConfigStore {
         lock.udp_server_by_port.clear();
 
         for server in &lock.all_servers {
+            if server.http3_enabled()
+                && !server.is_sni_passthrough()
+                && !server.is_quic_passthrough()
+                && let Some(https) = &server.https
+            {
+                for (start, end) in https
+                    .listen
+                    .iter()
+                    .filter_map(|addr| addr.port_range.as_deref())
+                    .filter_map(crate::config_models::port_range_bounds)
+                {
+                    http3_site_ports.insert_range(start, end);
+                }
+            }
             if !server.is_quic_passthrough() {
                 for port in Self::server_udp_ports(server, false) {
                     if let Some(existing) = lock.udp_server_by_port.get(&port) {
@@ -2149,6 +2198,7 @@ impl ConfigStore {
             }
         }
 
+        lock.http3_site_ports = http3_site_ports;
         lock.unique_quic_passthrough_by_port = Self::build_unique_quic_passthrough_by_port(lock);
         lock.has_any_sni_passthrough =
             !lock.sni_passthrough_exact.is_empty() || !lock.sni_passthrough_wildcard.is_empty();
@@ -2332,6 +2382,167 @@ mod tests {
         TLSExhaustionAttackConfig, UDPConfig,
     };
     use serde_json::json;
+
+    fn http3_index_server(id: i64, user: i64, range: &str) -> Arc<ServerConfig> {
+        Arc::new(
+            serde_json::from_value(json!({
+                "id": id, "userId": user, "isOn": false,
+                "serverNames": [{"name": format!("h3-{id}.example")}],
+                "https": {"isOn": true, "http3Enabled": true, "listen": [{"portRange": range}]}
+            }))
+            .expect("valid site-listener fixture"),
+        )
+    }
+
+    fn assert_http3_site_index_matches_scan(store: &ConfigStore) {
+        let lock = store.inner.read();
+        for port in 0..=u16::MAX {
+            let expected = lock.all_servers.iter().any(|server| {
+                server.supports_http3_on_port(port)
+                    && !server.is_sni_passthrough()
+                    && !server.is_quic_passthrough()
+            });
+            assert_eq!(
+                lock.http3_site_ports.contains(port),
+                expected,
+                "port={port}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn http3_site_index_tracks_full_incremental_user_and_removal_updates() {
+        let store = ConfigStore::new();
+        store.test_set_http3_policy(HTTP3Policy {
+            is_on: true,
+            port: 0,
+            ..Default::default()
+        });
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(443), None);
+        store
+            .replace_all_servers(
+                vec![
+                    http3_index_server(970101, 7, "443"),
+                    http3_index_server(970102, 8, "8443"),
+                ],
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+            )
+            .await
+            .expect("full server replacement installs");
+        assert_http3_site_index_matches_scan(&store);
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(443), Some(true));
+        store
+            .replace_server(
+                970101,
+                vec![http3_index_server(970101, 7, "9443")],
+                HashMap::new(),
+                HashMap::new(),
+            )
+            .await
+            .expect("single server replacement installs");
+        assert_http3_site_index_matches_scan(&store);
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(443), None);
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(9443), Some(true));
+        store
+            .replace_user_servers(
+                7,
+                vec![http3_index_server(970103, 7, "10443")],
+                HashMap::new(),
+                HashMap::new(),
+            )
+            .await
+            .expect("user server replacement installs");
+        assert_http3_site_index_matches_scan(&store);
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(9443), None);
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(10443), Some(true));
+        store
+            .remove_server(970102)
+            .await
+            .expect("single server removal installs");
+        assert_http3_site_index_matches_scan(&store);
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(8443), None);
+        store
+            .replace_servers_snapshot(
+                HashSet::from([970103]),
+                vec![http3_index_server(970104, 9, "0-65535")],
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::new(),
+            )
+            .await
+            .expect("incremental replacement installs");
+        assert_http3_site_index_matches_scan(&store);
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(0), Some(true));
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(65535), Some(true));
+        store
+            .remove_user_servers(9)
+            .await
+            .expect("user removal installs");
+        assert_http3_site_index_matches_scan(&store);
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(10443), None);
+        update_store_for_cluster_policy_test(
+            &store,
+            0,
+            vec![http3_index_server(970105, 10, "443")],
+            Vec::new(),
+            HashMap::new(),
+        )
+        .await;
+        // Policy changes do not require rebuilding a site-only membership map.
+        store.test_set_http3_policy(HTTP3Policy {
+            is_on: true,
+            port: 0,
+            ..Default::default()
+        });
+        assert_http3_site_index_matches_scan(&store);
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(443), Some(true));
+        store
+            .replace_all_servers(Vec::new(), HashMap::new(), HashMap::new(), HashMap::new())
+            .await
+            .expect("empty full replacement installs");
+        assert_http3_site_index_matches_scan(&store);
+        assert_eq!(store.af_xdp_demux_http3_enabled_sync(443), None);
+    }
+
+    #[test]
+    fn http3_site_index_and_quic_forwarding_share_one_epoch() {
+        let store = ConfigStore::new();
+        store.test_set_http3_policy(HTTP3Policy {
+            is_on: true,
+            port: 0,
+            ..Default::default()
+        });
+        let server = http3_index_server(970101, 7, "443");
+        store
+            .inner
+            .write()
+            .unique_quic_passthrough_by_port
+            .insert(443, None);
+        let barrier = std::sync::Barrier::new(2);
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                barrier.wait();
+                for i in 0..2000 {
+                    let mut lock = store.inner.write();
+                    lock.all_servers = if i % 2 == 0 {
+                        vec![server.clone()]
+                    } else {
+                        Vec::new()
+                    };
+                    ConfigStore::refresh_passthrough_indexes(&mut lock);
+                    if i % 2 != 0 {
+                        lock.unique_quic_passthrough_by_port.insert(443, None);
+                    }
+                }
+            });
+            barrier.wait();
+            for _ in 0..20_000 {
+                assert!(store.af_xdp_demux_http3_enabled_sync(443).is_some());
+            }
+        });
+    }
 
     #[test]
     fn af_xdp_demux_policy_priority_and_ambiguous_quic_ports() {

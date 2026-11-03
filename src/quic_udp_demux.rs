@@ -2446,6 +2446,11 @@ mod tests {
                     expected,
                     "port {port}"
                 );
+                assert_eq!(
+                    store.af_xdp_demux_http3_scan_for_validation_sync(port),
+                    expected,
+                    "scan port {port}"
+                );
             }
         };
         check();
