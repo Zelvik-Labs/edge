@@ -14,19 +14,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 const PROBES: usize = 8;
 const SEGMENTS: usize = 64;
 
-#[inline]
-fn probe_window(home: usize, capacity: usize) -> impl Iterator<Item = usize> {
-    // Every segment has at least 64 slots, so an eight-slot window wraps at
-    // most once. Preserve the exact addresses without a division per probe.
-    (home..home + PROBES).map(move |index| {
-        if index >= capacity {
-            index - capacity
-        } else {
-            index
-        }
-    })
-}
-
 struct SlotStorage<K> {
     // Only occupied bits permit reads. K: Copy excludes drop glue, so stale
     // values after removal need no destruction. The segment mutex publishes
@@ -182,8 +169,8 @@ impl<K: Copy + Eq + Hash> BoundedScopedMap<K> {
             return None;
         }
         let home = hash as usize % self.seg_cap;
-        for index in probe_window(home, self.seg_cap) {
-            if let Some((stored, expiry)) = seg.slot(index)
+        for probe in 0..PROBES {
+            if let Some((stored, expiry)) = seg.slot((home + probe) % self.seg_cap)
                 && stored == *key
             {
                 return Some(expiry);
@@ -221,7 +208,8 @@ impl<K: Copy + Eq + Hash> BoundedScopedMap<K> {
             let mut dead = None;
             let mut victim = None;
             let mut victim_expiry = i64::MAX;
-            for index in probe_window(home, self.seg_cap) {
+            for probe in 0..PROBES {
+                let index = (home + probe) % self.seg_cap;
                 match seg.slot(index) {
                     None => {
                         if dead.is_none() {
@@ -303,7 +291,8 @@ impl<K: Copy + Eq + Hash> BoundedScopedMap<K> {
         let hash = self.hash(&key);
         let mut seg = self.segs[self.seg_of(hash)].lock();
         let home = hash as usize % self.seg_cap;
-        for index in probe_window(home, self.seg_cap) {
+        for probe in 0..PROBES {
+            let index = (home + probe) % self.seg_cap;
             if seg.slot(index).is_none() {
                 seg.put(index, Some((key, expiry)), self.seg_cap);
                 seg.len += 1;
@@ -327,7 +316,8 @@ impl<K: Copy + Eq + Hash> BoundedScopedMap<K> {
             return false;
         }
         let home = hash as usize % self.seg_cap;
-        for index in probe_window(home, self.seg_cap) {
+        for probe in 0..PROBES {
+            let index = (home + probe) % self.seg_cap;
             if let Some((stored, expiry)) = seg.slot(index)
                 && stored == *key
                 && matches(expiry)

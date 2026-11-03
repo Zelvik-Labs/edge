@@ -20,7 +20,7 @@ jobs:
       CARGO_BUILD_JOBS: '2'
       RUST_TEST_THREADS: '2'
       EDGE_QUICHE_DIAGNOSTICS: '1'
-      EDGE_QUICHE_EVIDENCE_DIR: .local/h3-quiche/wire
+      EDGE_QUICHE_EVIDENCE_DIR: ${{ github.workspace }}/.local/h3-quiche/wire
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@1.99.1
@@ -50,6 +50,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: h3-quiche-adapter-${{ github.sha }}
-          path: .local/h3-quiche/
+          path: |
+            .local/h3-quiche/
+            !.local/h3-quiche/wire/**/key.pem
           include-hidden-files: true
           if-no-files-found: error
