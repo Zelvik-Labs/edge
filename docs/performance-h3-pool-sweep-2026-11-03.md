@@ -1,6 +1,8 @@
 # H3 回源连接池清理优化（2026-11-03）
 
 真实连接池组件已验证提速；尚未据此宣称整机 HTTP/3 吞吐提升。
+后续活跃连接多路复用已实现并验证，见 [配对报告](performance-h3-active-reuse-2026-11-03.md)；
+下文“仍待完成”描述的是本次空闲池实验对应提交的状态。
 源提交 `dd7a0cae0f6b08dfd3fd884244612539d0b4a3c2`。
 [完整 CI](https://github.com/Zelvik-Labs/edge/actions/runs/41642732218) 与
 [配对实验](https://github.com/Zelvik-Labs/edge/actions/runs/41642730646) 均通过。

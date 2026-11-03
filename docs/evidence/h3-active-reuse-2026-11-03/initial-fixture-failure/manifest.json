@@ -1,0 +1,93 @@
+{
+  "artifact_id": 13238550271,
+  "archive": "raw.zip",
+  "archive_bytes": 51212,
+  "archive_sha256": "64e462f52688cc8a2d43e2b67e18dcbd55888f7ace371cd664f8d484103f6bb7",
+  "files": [
+    {
+      "path": "build.jsonl",
+      "bytes": 486240,
+      "sha256": "bdf1bcf466a8d37ec6c5af5a4517a04d93598936f6a7fba59c3f4ef6c29e4e33"
+    },
+    {
+      "path": "regressions.log",
+      "bytes": 3250,
+      "sha256": "77cd1c445ad5b92deda74fbe35786d70777512702f3788276ae7129876b465c2"
+    },
+    {
+      "path": "build.log",
+      "bytes": 39963,
+      "sha256": "55bb6be7673932c3297fa7bb437e154ca82877a33e86f86c173d3006ba23a866"
+    },
+    {
+      "path": "wire/origin_h3__wire_tests__abandoned_request_body_writer_cannot_be_finished_into_a_healthy_pool_entry.json",
+      "bytes": 306,
+      "sha256": "4b446de2978c37bbd9f6891dc5543a18bd3e7b82f242ac4d507b38feceb3a0eb"
+    },
+    {
+      "path": "wire/origin_h3__wire_tests__failed_active_request_discards_a_completed_siblings_idle_retention.json",
+      "bytes": 298,
+      "sha256": "f940cb99bcff0b2077d2744028d3cf427cecbbf6b05901c5891eac4cddefbc08"
+    },
+    {
+      "path": "wire/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "bda848d5bb3c81aba52e88345aafc0d133ed56a28c8b38e779b9d993b6dbefd0"
+    },
+    {
+      "path": "wire/origin_h3__wire_tests__idle_expiration_releases_the_sender_driver_and_endpoint.json",
+      "bytes": 287,
+      "sha256": "1987324194e2756d8cdf492cd30a31988fb9aa40fa4b6d5a9de606b320984b1e"
+    },
+    {
+      "path": "wire/origin_h3__wire_tests__idle_retention_expiry_leaves_an_active_request_alive.json",
+      "bytes": 284,
+      "sha256": "0ff7d2f4889a2b78be2ee103b516b5104fce5eb392f6d5e25aebf3324c0e7520"
+    },
+    {
+      "path": "wire/origin_h3__wire_tests__partial_response_and_reset_are_not_returned_to_the_idle_pool.json",
+      "bytes": 292,
+      "sha256": "ffe9cd14db46a42e0d16dff2c8cc2c07d638d367246813ea811fdf36303a7dd3"
+    },
+    {
+      "path": "wire/origin_h3__wire_tests__pending_header_and_trailer_timeouts_do_not_prove_reusable_completion.json",
+      "bytes": 300,
+      "sha256": "e5432011d477266c3bdd255d435d5e01ce4c3040c159e1d0bebf04407029126e"
+    },
+    {
+      "path": "wire/origin_h3__wire_tests__pooled_h3_contexts_keep_peer_trust_and_group_isolation.json",
+      "bytes": 286,
+      "sha256": "fa6cc412cafdff7895ce6605f69a3b851bce2051c051cd4de06fea5f530ea56d"
+    },
+    {
+      "path": "wire/origin_h3__wire_tests__request_upload_progresses_while_response_headers_are_pending.json",
+      "bytes": 292,
+      "sha256": "36fa3a9fb454aa500fe029e3dab30eb7565625f433b6e4e70efa91b748da6143"
+    },
+    {
+      "path": "wire/origin_h3__wire_tests__sequential_h3_requests_reuse_one_protocol_driver_and_quic_connection.json",
+      "bytes": 301,
+      "sha256": "e512ec89cc7c6ade6b109dc214e88aa3b3105ef52d3b931cb5418095e024448f"
+    },
+    {
+      "path": "wire/origin_h3__wire_tests__thirty_two_active_requests_multiplex_one_origin_connection.json",
+      "bytes": 291,
+      "sha256": "c6d539b1fed5936a117611ad0ec266ac54dc32d55282a74355e08dfb25e79d68"
+    },
+    {
+      "path": "wire/origin_h3_pool__tests__capacity_pressure_reclaims_expired_entries_without_a_shard_lock.json",
+      "bytes": 295,
+      "sha256": "84bb5d8dabb66bae1ea2b620d6ed86bc13f08e33b569b1d5d07718f062b13685"
+    },
+    {
+      "path": "wire/origin_h3_pool__tests__capacity_refuses_new_idle_context_without_displacing_a_healthy_entry.json",
+      "bytes": 300,
+      "sha256": "7b17ee328a255043b8d85a7957ae7e39b68874a460531e78e9cda96ebf7e6871"
+    },
+    {
+      "path": "wire/origin_h3_pool__tests__expired_key_is_rejected_even_with_a_deferred_scan.json",
+      "bytes": 281,
+      "sha256": "3ed1f1cc00fd03aef946936c6b23588c3d794e0bf7d93180f6bc290d65a44344"
+    }
+  ]
+}
