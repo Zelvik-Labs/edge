@@ -1,0 +1,9 @@
+{
+  "id": 13234231088,
+  "size_in_bytes": 264076,
+  "digest": "sha256:37d28f118ffc6faf4ee37b6fc355ce1991164aea66b21d26e471a4c2c8dce83f",
+  "workflow_run": {
+    "id": 41644177094,
+    "head_sha": "1bf7c9c58a8b13d61a65867b7626dc67ce58d94f"
+  }
+}
