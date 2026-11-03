@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "source_sha256": "658f3b75c323bb74854f3280d75e7151a1a324190f63e02f3161094adadc0061",
+  "source_restored": true,
+  "runs": [
+    {
+      "label": "production",
+      "exit_code": 0,
+      "expected_failing_test": null,
+      "actual_source_sha256": "658f3b75c323bb74854f3280d75e7151a1a324190f63e02f3161094adadc0061"
+    },
+    {
+      "label": "no-idle-budget-mutant",
+      "exit_code": 101,
+      "expected_failing_test": "ready_idle_rounds_allow_other_task_progress",
+      "actual_source_sha256": "3744decdaf936d891c1752fb29e347b9d59d88a1483f48bfeff32bd13923a88a"
+    },
+    {
+      "label": "busy-budget-mutant",
+      "exit_code": 101,
+      "expected_failing_test": "busy_rounds_remain_pending_on_the_first_poll",
+      "actual_source_sha256": "8a99c5fcdd478072a3b5289b6f237747da5f28d9adc85d2f37f6c22e61d512d5"
+    },
+    {
+      "label": "restored-production",
+      "exit_code": 0,
+      "expected_failing_test": null,
+      "actual_source_sha256": "658f3b75c323bb74854f3280d75e7151a1a324190f63e02f3161094adadc0061"
+    }
+  ],
+  "clippy_exit_code": 0,
+  "scope": "real current-thread ready-task progress and busy-round first-poll contract; no throughput or loaded network timer claim"
+}
