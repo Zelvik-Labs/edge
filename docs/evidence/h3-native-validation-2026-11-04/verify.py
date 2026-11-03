@@ -63,22 +63,27 @@ for directory in sorted(ROOT.iterdir()):
                 return {tuple(re.findall(r'^(?:name|version|source) = (.*)$', section, re.M)) for section in text.split('[[package]]')[1:]}
             assert identities('baseline-before.lock') == identities('baseline-after.lock')
             print('PASS: final adapter old/fixed FIN control and unchanged baseline package identities')
-        elif directory.name in ['quiche-node-bounded-pass', 'quiche-node-diagnostic-pass', 'quiche-node-capacity-pass', 'quiche-node-confirmation-pass']:
+        elif directory.name in ['quiche-node-bounded-pass', 'quiche-node-diagnostic-pass', 'quiche-node-capacity-pass', 'quiche-node-confirmation-pass', 'quiche-node-all-gates-pass']:
             for name in ['check.log', 'clippy.log', 'tests.log']:
                 text = re.sub(r'\x1b\[[0-9;]*m', '', archive.read(name).decode())
                 assert not any(line.startswith(('warning:', 'warning[')) for line in text.splitlines())
             log = archive.read('tests.log').decode()
-            library_count = {'quiche-node-capacity-pass': 1346, 'quiche-node-confirmation-pass': 1347}.get(directory.name, 1343)
+            library_count = {'quiche-node-capacity-pass': 1346, 'quiche-node-confirmation-pass': 1347, 'quiche-node-all-gates-pass': 1350}.get(directory.name, 1343)
             for count in [library_count, 15, 1]:
                 assert f'test result: ok. {count} passed; 0 failed;' in log
             assert f'{library_count} passed; 0 failed; 4 ignored' in log
-            if directory.name in ['quiche-node-capacity-pass', 'quiche-node-confirmation-pass']:
+            if directory.name in ['quiche-node-capacity-pass', 'quiche-node-confirmation-pass', 'quiche-node-all-gates-pass']:
                 for test in ['transport_capacity_survives_observation_and_retires_without_early_refund',
                              'transport_capacity_does_not_consume_request_workspace_partition',
                              'transport_capacity_keeps_global_hard_bound_and_protected_reserves']:
                     assert test + ' ... ok' in log
-            if directory.name == 'quiche-node-confirmation-pass':
+            if directory.name in ['quiche-node-confirmation-pass', 'quiche-node-all-gates-pass']:
                 assert 'transport_capacity_confirms_retired_bytes_on_pressure_without_refunding_live_capacity ... ok' in log
+            if directory.name == 'quiche-node-all-gates-pass':
+                for test in ['native_retirement_confirmation_covers_connection_and_request_admission',
+                             'native_retirement_confirmation_covers_request_workspace',
+                             'native_retirement_confirmation_does_not_bypass_class_quota']:
+                    assert test + ' ... ok' in log
             print(f'PASS: full feature check, Clippy and {library_count}+16 tests; 4 explicit ignored probes')
         elif directory.name in ['quiche-admission-build-failure', 'quiche-admission-node-build-failure']:
             name = 'build.log' if directory.name == 'quiche-admission-build-failure' else 'check.log'
