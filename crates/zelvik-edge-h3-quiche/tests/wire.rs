@@ -38,6 +38,53 @@ impl tokio_quiche::quic::ConnectionHook for AdmissionTls {
 }
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
+struct LossRelay {
+    address: std::net::SocketAddr,
+    task: tokio::task::JoinHandle<()>,
+    dropped: Arc<[AtomicUsize; 2]>,
+}
+impl LossRelay {
+    async fn new(server: std::net::SocketAddr, client: std::net::SocketAddr) -> Self {
+        let socket = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let address = socket.local_addr().unwrap();
+        let dropped = Arc::new([AtomicUsize::new(0), AtomicUsize::new(0)]);
+        let counts = dropped.clone();
+        let task = tokio::spawn(async move {
+            let mut packets = [0usize; 2];
+            let mut buffer = vec![0; 65536];
+            loop {
+                let (size, peer) = socket.recv_from(&mut buffer).await.unwrap();
+                let (direction, destination) = if peer == server {
+                    (0, client)
+                } else {
+                    assert_eq!(peer, client);
+                    (1, server)
+                };
+                packets[direction] += 1;
+                // Deterministic ~2.7% loss in each direction, including ACKs.
+                // This relay is a correctness fixture, never a throughput probe.
+                if packets[direction].is_multiple_of(37) {
+                    counts[direction].fetch_add(1, Ordering::Relaxed);
+                    continue;
+                }
+                assert_eq!(
+                    socket.send_to(&buffer[..size], destination).await.unwrap(),
+                    size
+                );
+            }
+        });
+        Self {
+            address,
+            task,
+            dropped,
+        }
+    }
+}
+impl Drop for LossRelay {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
 struct Fixture {
     directory: PathBuf,
     endpoint: quinn::Endpoint,
@@ -46,9 +93,13 @@ struct Fixture {
     close: CloseHandle,
     listener: tokio_quiche::QuicConnectionStream<DefaultMetrics>,
     gate: HandshakeGate,
+    relay: Option<LossRelay>,
 }
 impl Fixture {
     async fn new(limits: Limits) -> Self {
+        Self::with_loss(limits, false).await
+    }
+    async fn with_loss(limits: Limits, loss: bool) -> Self {
         let base = std::env::var_os("EDGE_QUICHE_EVIDENCE_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir);
@@ -134,7 +185,17 @@ impl Fixture {
         endpoint.set_default_client_config(quinn::ClientConfig::new(Arc::new(
             quinn::crypto::rustls::QuicClientConfig::try_from(tls).unwrap(),
         )));
-        let connect = endpoint.connect(address, "localhost").unwrap();
+        let relay = if loss {
+            Some(LossRelay::new(address, endpoint.local_addr().unwrap()).await)
+        } else {
+            None
+        };
+        let connect = endpoint
+            .connect(
+                relay.as_ref().map_or(address, |relay| relay.address),
+                "localhost",
+            )
+            .unwrap();
         let (driver, server, close) = zelvik_edge_h3_quiche::server(limits).unwrap();
         let mut listener = listeners.pop().unwrap();
         let incoming = listener.next().await.unwrap().unwrap();
@@ -148,6 +209,7 @@ impl Fixture {
             close,
             listener,
             gate,
+            relay,
         }
     }
 }
@@ -201,8 +263,17 @@ impl Drop for Fixture {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn real_h3_multiplex_preserves_body_duplicate_headers_and_both_trailers() {
+    multiplex_roundtrip(false).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn real_h3_multiplex_recovers_bidirectional_packet_loss() {
+    multiplex_roundtrip(true).await;
+}
+
+async fn multiplex_roundtrip(loss: bool) {
     tokio::time::timeout(Duration::from_secs(25), async {
-        let mut fixture = Fixture::new(Limits::default()).await;
+        let mut fixture = Fixture::with_loss(Limits::default(), loss).await;
         // Move the H3-facing connection while retaining fixture cleanup ownership.
         let (_, replacement, _) = zelvik_edge_h3_quiche::server(Limits::default()).unwrap();
         let transport = std::mem::replace(&mut fixture.server, replacement);
@@ -290,9 +361,46 @@ async fn real_h3_multiplex_preserves_body_duplicate_headers_and_both_trailers() 
         drop(sender);
         client_driver.abort();
         assert!(client_driver.await.unwrap_err().is_cancelled());
+        if let Some(relay) = &fixture.relay {
+            let dropped = relay
+                .dropped
+                .each_ref()
+                .map(|count| count.load(Ordering::Relaxed));
+            eprintln!("loss fixture dropped server/client datagrams: {dropped:?}");
+            assert!(dropped.iter().all(|count| *count > 0));
+            assert!(!relay.task.is_finished(), "loss relay must remain healthy");
+        }
     })
     .await
     .expect("real H3 multiplex timed out");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn fin_sent_after_all_body_bytes_are_acknowledged_still_reaches_peer() {
+    tokio::time::timeout(Duration::from_secs(15), async {
+        let mut fixture = Fixture::new(Limits::default()).await;
+        let (mut request, mut response) = fixture.client.open_bi().await.unwrap();
+        request.write_all(b"request").await.unwrap();
+        request.finish().unwrap();
+        let mut stream = poll_fn(|cx| fixture.server.poll_accept_bidi(cx))
+            .await
+            .unwrap();
+        while poll_fn(|cx| stream.poll_data(cx)).await.unwrap().is_some() {}
+        stream.send_data(Bytes::from_static(b"response")).unwrap();
+        poll_fn(|cx| stream.poll_ready(cx)).await.unwrap();
+        let mut body = [0; 8];
+        response.read_exact(&mut body).await.unwrap();
+        assert_eq!(&body, b"response");
+        // Budgeted send buffers are released on ACK: this forces the late-FIN
+        // ordering behind upstream quiche #2665 instead of relying on a race.
+        while fixture.close.buffered_send_bytes() != 0 {
+            tokio::task::yield_now().await;
+        }
+        poll_fn(|cx| stream.poll_finish(cx)).await.unwrap();
+        assert!(response.read_to_end(0).await.unwrap().is_empty());
+    })
+    .await
+    .expect("FIN after the last DATA ACK must reach the peer");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
