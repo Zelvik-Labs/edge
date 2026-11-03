@@ -252,6 +252,9 @@ exclude = ["crates/zelvik-edge-xdp-ebpf", "crates/zelvik-edge-h3-quiche", "pingo
 # both dependency declarations (linux target + dev-dependencies).
 [patch.crates-io]
 smoltcp = { path = "vendor/smoltcp-edge" }
+# Upstream #2665: data ACKs must not collect a stream before its FIN is ACKed.
+# The experimental native backend otherwise intermittently stalls at trailers.
+quiche = { git = "https://github.com/cloudflare/quiche", rev = "af8788e03413ebb3cf81123fc4f1aacea44dfc40" }
 
 [profile.release]
 lto = "fat"

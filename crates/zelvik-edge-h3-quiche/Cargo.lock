@@ -659,7 +659,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1359,7 +1359,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1715,6 +1715,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d59d30d3ad7f7e1c9a66e51c9cb71ae1c794b28ffe7053fd785defb0d180069"
 
 [[package]]
+name = "octets"
+version = "0.3.7"
+source = "git+https://github.com/cloudflare/quiche?rev=af8788e03413ebb3cf81123fc4f1aacea44dfc40#af8788e03413ebb3cf81123fc4f1aacea44dfc40"
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2022,6 +2027,17 @@ dependencies = [
 
 [[package]]
 name = "qlog"
+version = "0.18.0"
+source = "git+https://github.com/cloudflare/quiche?rev=af8788e03413ebb3cf81123fc4f1aacea44dfc40#af8788e03413ebb3cf81123fc4f1aacea44dfc40"
+dependencies = [
+ "humantime",
+ "serde",
+ "serde_json",
+ "serde_with",
+]
+
+[[package]]
+name = "qlog"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a2a344e91e2b69996227f8cbc7c7a37b29498d8e7ea5fe394170a55fb31c381"
@@ -2051,8 +2067,7 @@ dependencies = [
 [[package]]
 name = "quiche"
 version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52b35a721a2a56797347929745fa783fc99e680d9484b80324ce40106b75493a"
+source = "git+https://github.com/cloudflare/quiche?rev=af8788e03413ebb3cf81123fc4f1aacea44dfc40#af8788e03413ebb3cf81123fc4f1aacea44dfc40"
 dependencies = [
  "boring",
  "boring-sys",
@@ -2065,8 +2080,8 @@ dependencies = [
  "libc",
  "libm",
  "log",
- "octets",
- "qlog",
+ "octets 0.3.7 (git+https://github.com/cloudflare/quiche?rev=af8788e03413ebb3cf81123fc4f1aacea44dfc40)",
+ "qlog 0.18.0",
  "serde",
  "serde_json",
  "serde_with",
@@ -2131,7 +2146,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2331,7 +2346,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2397,7 +2412,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2988,9 +3003,9 @@ dependencies = [
  "libc",
  "log",
  "nix",
- "octets",
+ "octets 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "pin-project",
- "qlog",
+ "qlog 0.18.2",
  "quiche",
  "serde",
  "serde_with",
@@ -3340,7 +3355,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

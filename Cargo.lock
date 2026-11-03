@@ -2099,6 +2099,8 @@ version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
 dependencies = [
+ "allocator-api2",
+ "equivalent",
  "foldhash 0.1.5",
 ]
 
@@ -3271,6 +3273,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d59d30d3ad7f7e1c9a66e51c9cb71ae1c794b28ffe7053fd785defb0d180069"
 
 [[package]]
+name = "octets"
+version = "0.3.7"
+source = "git+https://github.com/cloudflare/quiche?rev=af8788e03413ebb3cf81123fc4f1aacea44dfc40#af8788e03413ebb3cf81123fc4f1aacea44dfc40"
+
+[[package]]
 name = "oid-registry"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3644,7 +3651,7 @@ dependencies = [
  "arrayvec",
  "async-channel",
  "flurry",
- "hashbrown 0.17.1",
+ "hashbrown 0.15.5",
  "log",
  "parking_lot",
  "rand 0.8.7",
@@ -4059,6 +4066,17 @@ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
 name = "qlog"
+version = "0.18.0"
+source = "git+https://github.com/cloudflare/quiche?rev=af8788e03413ebb3cf81123fc4f1aacea44dfc40#af8788e03413ebb3cf81123fc4f1aacea44dfc40"
+dependencies = [
+ "humantime",
+ "serde",
+ "serde_json",
+ "serde_with",
+]
+
+[[package]]
+name = "qlog"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a2a344e91e2b69996227f8cbc7c7a37b29498d8e7ea5fe394170a55fb31c381"
@@ -4088,8 +4106,7 @@ dependencies = [
 [[package]]
 name = "quiche"
 version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52b35a721a2a56797347929745fa783fc99e680d9484b80324ce40106b75493a"
+source = "git+https://github.com/cloudflare/quiche?rev=af8788e03413ebb3cf81123fc4f1aacea44dfc40#af8788e03413ebb3cf81123fc4f1aacea44dfc40"
 dependencies = [
  "boring",
  "boring-sys",
@@ -4102,8 +4119,8 @@ dependencies = [
  "libc",
  "libm",
  "log",
- "octets",
- "qlog",
+ "octets 0.3.7 (git+https://github.com/cloudflare/quiche?rev=af8788e03413ebb3cf81123fc4f1aacea44dfc40)",
+ "qlog 0.18.0",
  "serde",
  "serde_json",
  "serde_with",
@@ -5371,9 +5388,9 @@ dependencies = [
  "libc",
  "log",
  "nix 0.31.3",
- "octets",
+ "octets 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "pin-project",
- "qlog",
+ "qlog 0.18.2",
  "quiche",
  "serde",
  "serde_with",
