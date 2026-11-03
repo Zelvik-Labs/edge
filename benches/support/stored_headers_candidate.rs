@@ -1,4 +1,4 @@
-// Candidate only: production still uses the original restored HeaderMap path.
+// Frozen measured candidate. CI compares the production body against this file.
 fn candidate(headers: &[(String, String)]) -> bool {
     // Preserve the original large-map capacity behavior, including its limits.
     // This bound selects an optimization; it does not reject larger metadata.

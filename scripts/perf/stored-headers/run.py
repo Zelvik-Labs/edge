@@ -41,8 +41,18 @@ def build():
         'stored_response_headers_allow_shared_cache', 'baseline')
     (source / 'original.rs').write_text(extracted)
     (source / 'original-full.rs').write_text(original)
-    for name in ['candidate', 'probe']:
-        shutil.copy2(ROOT / f'benches/support/stored_headers_{name}.rs', source / ('candidate.rs' if name == 'candidate' else 'main.rs'))
+    current = (ROOT / 'src/cache/mod.rs').read_text()
+    candidate = function(current, 'pub(crate) fn stored_response_headers_allow_shared_cache(').replace(
+        'pub(crate) fn stored_response_headers_allow_shared_cache(', 'fn candidate(').replace(
+        'stored_response_headers_allow_shared_cache_restored', 'baseline')
+    fixture = function((ROOT / 'benches/support/stored_headers_candidate.rs').read_text(), 'fn candidate(')
+    assert candidate.strip() == fixture.strip(), 'production differs from the measured candidate'
+    restored = function(current, 'fn stored_response_headers_allow_shared_cache_restored(').replace(
+        'fn stored_response_headers_allow_shared_cache_restored(', 'pub(crate) fn baseline(')
+    assert restored.strip() == function(extracted, 'pub(crate) fn baseline(').strip()
+    (source / 'candidate.rs').write_text(candidate)
+    (source / 'candidate-full.rs').write_text(current)
+    shutil.copy2(ROOT / 'benches/support/stored_headers_probe.rs', source / 'main.rs')
     allocator = (ROOT / 'benches/support/sni_client_hello_probe.rs').read_text()
     (source / 'allocator.rs').write_text(allocator[allocator.index('#[cfg(feature = "count-allocations")]'):
                                                 allocator.index('\nfn record(payload:')])
@@ -62,7 +72,7 @@ def build():
                             '--target-dir', str(target), *extra], stdout=log, stderr=subprocess.STDOUT, check=True)
         shutil.copy2(target / 'release/stored-headers-probe', OUT / label)
     metadata = {'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
-                'baseline': BASE, 'scope': 'candidate only; production unchanged; header validation component, not node throughput',
+                'baseline': BASE, 'scope': 'exact integrated production helpers; header validation component, not node throughput',
                 'rustc': subprocess.check_output(['rustc', '-vV'], text=True), 'rustflags': os.environ['RUSTFLAGS'],
                 'binaries': {name: sha(OUT / name) for name in ['timing', 'allocations']},
                 'sources': {p.name: sha(p) for p in source.iterdir()}, 'runs': []}

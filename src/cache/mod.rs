@@ -208,6 +208,55 @@ pub(crate) fn response_headers_allow_shared_cache(headers: &HeaderMap) -> bool {
 /// original response are not sufficient for legacy or externally replicated
 /// entries.
 pub(crate) fn stored_response_headers_allow_shared_cache(headers: &[(String, String)]) -> bool {
+    // Preserve the original large-map capacity behavior, including its limits.
+    // This bound selects an optimization; it does not reject larger metadata.
+    if headers.len() > 32 {
+        return stored_response_headers_allow_shared_cache_restored(headers);
+    }
+    let mut content_length = None;
+    for (name, value) in headers {
+        let Ok(name) = HeaderName::from_bytes(name.as_bytes()) else {
+            return false;
+        };
+        let Ok(value) = HeaderValue::from_str(value) else {
+            return false;
+        };
+        let Ok(text) = value.to_str() else {
+            return false;
+        };
+        let is_content_length = name == http::header::CONTENT_LENGTH;
+        if !should_store_response_header(name.as_str()) && !is_content_length {
+            return false;
+        }
+        if is_content_length {
+            let Ok(length) = text.trim().parse::<u64>() else {
+                return false;
+            };
+            if content_length.is_some_and(|previous| previous != length) {
+                return false;
+            }
+            content_length = Some(length);
+        }
+        if name == http::header::VARY {
+            return false;
+        }
+        if name == http::header::CACHE_CONTROL
+            && (cache_control_has_directive(text, "no-store")
+                || cache_control_has_directive(text, "private")
+                || cache_control_has_directive(text, "no-cache"))
+        {
+            return false;
+        }
+        if name == http::header::PRAGMA && cache_control_has_directive(text, "no-cache") {
+            return false;
+        }
+        // Set-Cookie and every Transfer-Encoding are rejected by the storage
+        // header gate above. A temporary map adds no further framing checks.
+    }
+    true
+}
+
+fn stored_response_headers_allow_shared_cache_restored(headers: &[(String, String)]) -> bool {
     let mut restored = HeaderMap::with_capacity(headers.len());
     for (name, value) in headers {
         let Ok(name) = HeaderName::from_bytes(name.as_bytes()) else {
@@ -834,6 +883,42 @@ mod tests {
         headers.insert("content-length", HeaderValue::from_static("10"));
         assert!(super::response_transfer_encoding_is_chunked(&headers).is_err());
         assert!(!super::response_headers_allow_shared_cache(&headers));
+    }
+
+    #[test]
+    fn stored_header_streaming_and_restored_paths_preserve_privacy_and_framing() {
+        for count in [2, 32, 33] {
+            for (name, value, expected) in [
+                ("Content-Length", "+00042", true),
+                ("content-length", "43", false),
+                ("content-length", "42,42", false),
+                ("Cache-Control", "public, max-age=60", true),
+                ("cache-control", "PrIvAtE = \"authorization\"", false),
+                ("pragma", "foo, no-cache", false),
+                ("Vary", "", false),
+                ("set-cookie", "session=secret", false),
+                ("transfer-encoding", "chunked", false),
+                ("x-custom", "visible\ttext", true),
+                ("x-custom", "non-ascii: 中文", false),
+                ("bad name", "value", false),
+                ("x-custom", "value\r\nforged: yes", false),
+            ] {
+                let mut headers: Vec<_> = (0..count)
+                    .map(|index| (format!("x-{index}"), "value".to_string()))
+                    .collect();
+                headers[0] = ("content-length".into(), "42".into());
+                headers[count - 1] = (name.into(), value.into());
+                assert_eq!(
+                    super::stored_response_headers_allow_shared_cache(&headers),
+                    expected,
+                    "count={count}, name={name}, value={value:?}"
+                );
+                assert_eq!(
+                    super::stored_response_headers_allow_shared_cache_restored(&headers),
+                    expected
+                );
+            }
+        }
     }
 
     #[test]

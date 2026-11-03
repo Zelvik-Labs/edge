@@ -2,7 +2,8 @@
 
 This experiment uses the exact cache helpers from commit
 `a79b20d22c32e2b77c926e2335792b874b1d8bc8` and a streaming candidate in
-`benches/support/stored_headers_candidate.rs`. Production is unchanged.
+`benches/support/stored_headers_candidate.rs`. The first measured candidate is now integrated into production; CI extracts its
+exact implementation and checks it against the frozen candidate before building.
 The candidate retains `http` HeaderName/HeaderValue validation and all shared
 cache privacy, duplicate length and stored-header gates. Up to 32 fields avoid
 a temporary HeaderMap; larger inputs use the exact original implementation.
