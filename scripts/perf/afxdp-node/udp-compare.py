@@ -11,6 +11,7 @@ import subprocess
 import time
 import traceback
 from udp_summary import COMPARISON_NODES, summarize
+from syscall_profile import SyscallProfile
 
 ROOT = Path(__file__).resolve().parents[3]
 NS = 'edge-udp-peer'
@@ -201,7 +202,7 @@ def check_affinity(snapshot, allowed):
 
 def execute(args, directory, target, concurrency, payload, cpus):
     directory.mkdir()
-    origin = server = client = None
+    origin = server = client = tracer = None
     record = {'target': target, 'concurrency': concurrency, 'payload': payload,
               'passed': False, 'started_unix': time.time(), 'errors': []}
     nodes = COMPARISON_NODES[args.comparison]
@@ -250,6 +251,9 @@ def execute(args, directory, target, concurrency, payload, cpus):
         record['client_command'] = list(map(str,argv))
         client = spawn(argv, 'client')
         wait_file(directory/'warm-ready.json',client,as_json=True)
+        if args.syscall_profile and server is not None:
+            tracer = SyscallProfile(descendants(server.pid), directory)
+            record['trace_attached_before'] = tracer.attach()
         record['cpu_before'] = cpu()
         record['origin_before'] = process_snapshot(origin.pid)
         check_affinity(record['origin_before'],[cpus[3]])
@@ -266,6 +270,9 @@ def execute(args, directory, target, concurrency, payload, cpus):
             assert record['server_before']['processes'].keys() == record['server_after']['processes'].keys(), 'server processes changed'
         record['origin_after'] = process_snapshot(origin.pid)
         record['cpu_after'] = cpu()
+        if tracer is not None:
+            tracer.check_after_measurement()
+            record['syscall_profile'] = tracer.finish()
         assert client.wait(timeout=15) == 0
         client = None
         data = json.loads((directory/'client.json').read_text())
@@ -274,6 +281,11 @@ def execute(args, directory, target, concurrency, payload, cpus):
         assert data['sent'] == data['received'] == (iterations+args.warmup)*concurrency
         assert data['elapsed_ns'] == data['timed_end_ns'] - data['timed_start_ns']
         assert record['cpu_before']['monotonic_ns'] <= data['timed_start_ns'] <= data['timed_end_ns'] <= record['cpu_after']['monotonic_ns']
+        if tracer is not None:
+            trace = record['syscall_profile']
+            assert trace['completed']
+            assert trace['attached_before']['monotonic_ns'] <= record['cpu_before']['monotonic_ns']
+            assert record['cpu_after']['monotonic_ns'] <= trace['attached_after']['monotonic_ns'] <= trace['stop_requested_monotonic_ns']
         ordered = sorted(samples)
         assert data['p99_rtt_ns'] == ordered[(len(samples)*99+99)//100-1]
         assert data['p50_rtt_ns'] == ordered[(len(samples)-1)//2]
@@ -299,6 +311,11 @@ def execute(args, directory, target, concurrency, payload, cpus):
     except Exception:
         record['errors'].append(traceback.format_exc())
     finally:
+        if tracer is not None and not tracer.stopped:
+            try:
+                tracer.abort()
+            except Exception:
+                record['errors'].append(traceback.format_exc());record['passed'] = False
         for process in [client,server,origin]:
             try:
                 stop_process(process)
@@ -328,6 +345,7 @@ def main():
     p.add_argument('--single-flow-iterations',type=int)
     p.add_argument('--comparison',choices=COMPARISON_NODES,default='wake')
     p.add_argument('--proxy-cpus',type=int,choices=[1,2],default=2)
+    p.add_argument('--syscall-profile',action='store_true',help='counts-only tracer after warmup; all timing is diagnostic')
     p.add_argument('--warmup',type=int,default=1000)
     p.add_argument('--rounds',type=int,default=4)
     args=p.parse_args()
@@ -350,9 +368,13 @@ def main():
           'clock_ticks':os.sysconf('SC_CLK_TCK'),
           'scope':f'IPv4 UDP steady-flow reuse; single XSK queue, {args.proxy_cpus} proxy CPUs, separate client and remote origin CPUs; no HTTP/cache/hardware-zero-copy claim',
           'comparison':args.comparison,'targets':targets,'node_modes':COMPARISON_NODES[args.comparison],'proxy_cpus':cpus[:args.proxy_cpus],
+          'syscall_profile':args.syscall_profile,
           'single_flow_iterations':args.single_flow_iterations,
           'iterations':args.iterations,'warmup':args.warmup,'rounds':args.rounds,
           'nginx_udp_policy':'proxy_requests 0; proxy_responses 2147483647; proxy_timeout 60s; actual peer ports verified'}
+    if args.syscall_profile:
+        metadata['scope'] = 'ptrace syscall diagnostics on IPv4 UDP reuse; timing/CPU perturbed, not native performance or capacity'
+        metadata['strace_version'] = command('strace','--version').splitlines()[0]
     write(output/'metadata.json',metadata)
     records=[]
     for c in [1,16]:
@@ -371,6 +393,8 @@ def main():
     assert binaries=={n:digest(getattr(args,n)) for n in binaries},'binaries changed'
     assert hashes=={str(f.relative_to(ROOT)):digest(f) for f in sources if f.is_file()},'sources changed'
     summary=summarize(records,metadata)
+    if args.syscall_profile:
+        summary['interpretation'] = 'Instrumented ptrace diagnostics only; RPS/RTT/CPU are perturbed, never native capacity. All attempts and outliers retained. Syscall wall time sums observed waits across threads, not CPU consumption. Trace excludes warmup and the 2.2s idle observation; includes snapshot boundary overhead.'
     summary.update(binaries_unchanged=True,sources_unchanged=True)
     write(output/'summary.json',summary)
     raise SystemExit(0 if summary['passed'] else 1)

@@ -98,3 +98,29 @@ and `UDP_BENCH_TEST_OUTPUT` set; run `test_udp_summary.py` for analysis checks.
 The loopback tests validate the tool, not AF_XDP support or proxy performance.
 This comparison does not cover HTTP cache, HTTP/2, H3, hardware zero-copy,
 long-running stability or equivalent production feature costs.
+
+## Syscall diagnostics
+
+Dispatch with `xdp_udp_profile=true` and `xdp_udp_comparison=rx-stats` for a
+separate instrumented matrix. It retains four balanced rounds and 1/2 proxy CPU
+budgets, with 2,000 timed requests for a single flow and 1,000 per flow for 16
+flows; warmup stays at 1,000 per flow. These diagnostic iterations are distinct
+from the uninstrumented performance matrix. All byte, sequence, reuse, redirect,
+affinity, queue/error and cleanup checks remain required.
+
+The counts-only `strace -f -c -w` tracer attaches to the observed proxy process
+tree after warmup. `/proc` must identify it as tracer for every observed thread
+before GO and after DONE; it detaches before idle sampling. Raw summary, exact
+signal/exit status, attachment timestamps/thread IDs, syscall/error counts and
+aborted traces are retained. The helper validates total counts and completed
+coverage; an early exit fails even with status zero or SIGINT. A requested
+SIGINT can yield zero or `-SIGINT` after normal detach; both require the retained
+summary and proof that all observed threads detached. The real-process helper
+tests cover counts, thread coverage, early death and cancellation.
+
+The `afxdp-udp-syscalls-*` artifact is separate. Its timing and CPU measurements
+are perturbed by ptrace and must not be quoted as native throughput, latency or
+capacity. Syscall wall time includes waiting and is summed across threads;
+it is not CPU consumption. Counts include snapshot boundary overhead, exclude
+warmup and the 2.2-second idle observation, and are retained without filtering.
+No application buffers or request contents are logged by the tracer.
