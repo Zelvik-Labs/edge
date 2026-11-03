@@ -1,0 +1,19 @@
+{
+  "id": 13246162187,
+  "name": "h3-quiche-adapter-a04c47da4bd8a61d5e89b530f51d9195aa8ff9ac",
+  "size_in_bytes": 1361068,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13246162187",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13246162187/zip",
+  "expired": false,
+  "created_at": "2026-11-03T15:39:20Z",
+  "expires_at": "2027-02-01T15:37:42Z",
+  "updated_at": "2026-11-03T15:39:20Z",
+  "digest": "sha256:c1d9dc2f3cc0f054fd8d362ef3e801e10d0aef821cc535637bf4c911571663b4",
+  "workflow_run": {
+    "id": 41665849933,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/five-priorities-20261103",
+    "head_sha": "a04c47da4bd8a61d5e89b530f51d9195aa8ff9ac"
+  }
+}

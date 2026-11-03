@@ -1,0 +1,37 @@
+{
+  "workflow": 41653073592,
+  "source": "cd51c20d193418d225c2777c3fd4d39defdf9522",
+  "cpu_assignment": {
+    "proxy": [
+      0
+    ],
+    "client": [
+      1,
+      2
+    ],
+    "origin": [
+      3
+    ]
+  },
+  "images": {
+    "nginx": "sha256:34e04bb6b4bb37d45845842374be0cd181723daffb230849b1984aaeaa96faba",
+    "openresty": "sha256:a122f8f9c6f368bc1d3a89437051db5936a8869734dfcadc566e8d34dc0e72e2",
+    "edge": "sha256:3ae9a5c2cd1a95f060761850959701d22a0522e17bbb1d3c9a7394ecd280e6a0"
+  },
+  "binaries_recorded_on_runner": {
+    "/home/runner/work/edge/edge/target/release/Zelvik-Edge": "c581410ef37b2c0a1eb1a95656ab4b32b8b442c9abc96ed5f8b21314a865a9f9",
+    "/home/runner/work/edge/edge/target/release/examples/issue34-controller": "4394df7e2975712fee179cee61ed6cbe59f0f6cd3f05728af7a38797110239bb"
+  },
+  "client_sha256": "368312b058eb6a98373260a6b4977beb1655744418406c7c1c1bcedce92b3c1b",
+  "cases": 594,
+  "status": {
+    "passed": 586,
+    "failed": 3,
+    "traffic-errors": 5
+  },
+  "measured_successful_transfers": 16283624,
+  "shorter_than_one_second": 348,
+  "max_host_steal_fraction": 0.0,
+  "source_archive_external": true,
+  "caveat": "Production Edge executable was hashed on runner but not included in this older artifact; current workflow retains a separate executable artifact."
+}

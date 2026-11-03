@@ -1,0 +1,13 @@
+{
+  "artifact_id": 13243731476,
+  "archive": "raw.zip",
+  "archive_bytes": 1091,
+  "archive_sha256": "339d1a4012d504a9286ce94f5439f5f987598e77db5f3512822294e36fa113ed",
+  "files": [
+    {
+      "path": "clippy.log",
+      "bytes": 4364,
+      "sha256": "9e805ae8c9376532428e016e18ca443795d5089cc9895a0cb33039e865446631"
+    }
+  ]
+}
