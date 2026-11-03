@@ -1,0 +1,19 @@
+{
+  "id": 13203723870,
+  "name": "afxdp-udp-07021fe84f976795f28771c255243b6f6f7c21ee",
+  "size_in_bytes": 38504122,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13203723870",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13203723870/zip",
+  "expired": false,
+  "created_at": "2026-11-03T04:15:07Z",
+  "expires_at": "2027-02-01T03:21:42Z",
+  "updated_at": "2026-11-03T04:15:07Z",
+  "digest": "sha256:55ec16a3f14eafe8ffd5d04c2fb017d8327e6f9f73855121e40007de4c5cf2d5",
+  "workflow_run": {
+    "id": 41571736445,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/rx-stats-20261103",
+    "head_sha": "07021fe84f976795f28771c255243b6f6f7c21ee"
+  }
+}

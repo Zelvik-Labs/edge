@@ -1,0 +1,127 @@
+{
+  "reason": "physical disk headroom for retained evidence and compilation; inactive prior-run executables and one perf sample archived; no compiler cache removed",
+  "first_attempt": "one readable perf file compressed and verified; remaining old root-owned perf files inaccessible; sudo unavailable; left those untouched",
+  "files": [
+    {
+      "original": ".local/architecture-profile-cold-repeat-20261102/0000-h1-miss-reuse.perf.data",
+      "archive": ".local/architecture-profile-cold-repeat-20261102/0000-h1-miss-reuse.perf.data.gz",
+      "original_bytes": 96323592,
+      "original_sha256": "52b47d5dfed767bf6574f7494cdc7c3ca812f8643661aaa0ed54a9a2434fd91a",
+      "mode": "0o600",
+      "mtime_ns": 1793596955157917246,
+      "archive_bytes": 13895256,
+      "archive_sha256": "2d19a63de50c8ddc28fd3a55d240f6ec54df44306c3f454b0e4d9bf0ed382061",
+      "roundtrip_sha256_matches": true,
+      "restore_while_retaining_archive": "gzip -dk .local/architecture-profile-cold-repeat-20261102/0000-h1-miss-reuse.perf.data.gz"
+    },
+    {
+      "original": ".local/architecture-implementation/baseline-Zelvik-Edge",
+      "archive": ".local/architecture-implementation/baseline-Zelvik-Edge.gz",
+      "original_bytes": 45054296,
+      "original_sha256": "94e8026636a67c69c6abb2f70f5c5259ee54a1eee44353640f547a55a068f645",
+      "mode": "0o700",
+      "mtime_ns": 1793598799435627188,
+      "archive_bytes": 17210933,
+      "archive_sha256": "e8b1e3a0f6f0f4580b49fa922df6e435d602f3a329ebd0524f1f778b98499beb",
+      "roundtrip_sha256_matches": true,
+      "restore_while_retaining_archive": "gzip -dk .local/architecture-implementation/baseline-Zelvik-Edge.gz"
+    },
+    {
+      "original": ".local/architecture-stage2/baseline-Zelvik-Edge",
+      "archive": ".local/architecture-stage2/baseline-Zelvik-Edge.gz",
+      "original_bytes": 45056832,
+      "original_sha256": "64d0dc7bae0e0ebcd8b52862c46ad7bb00d038f1f8cf4e22fd34a2fe4ab563ff",
+      "mode": "0o700",
+      "mtime_ns": 1793603576006881465,
+      "archive_bytes": 17200764,
+      "archive_sha256": "3e630f6a4ca48bb53cfc982fd4497830756a0260a3bff6342b49a297994fac06",
+      "roundtrip_sha256_matches": true,
+      "restore_while_retaining_archive": "gzip -dk .local/architecture-stage2/baseline-Zelvik-Edge.gz"
+    },
+    {
+      "original": ".local/h3-recv-ablation/lean-Zelvik-Edge",
+      "archive": ".local/h3-recv-ablation/lean-Zelvik-Edge.gz",
+      "original_bytes": 44997688,
+      "original_sha256": "7fdcb6fbcc9586d08a65404427a084c93df011aeb1774abd3c9effada03bbc93",
+      "mode": "0o700",
+      "mtime_ns": 1793636483882069335,
+      "archive_bytes": 17399924,
+      "archive_sha256": "6db5682a06e02715d4815ef08a37b0f2a2e52d4be2d88ab82df485052b429b1c",
+      "roundtrip_sha256_matches": true,
+      "restore_while_retaining_archive": "gzip -dk .local/h3-recv-ablation/lean-Zelvik-Edge.gz"
+    },
+    {
+      "original": ".local/h3-retry-buffer/after/Zelvik-Edge",
+      "archive": ".local/h3-retry-buffer/after/Zelvik-Edge.gz",
+      "original_bytes": 77247472,
+      "original_sha256": "83e4a208f86389a82575c764c146ca76b3e0f035d702e1b812a7cf0fd33cc0b9",
+      "mode": "0o700",
+      "mtime_ns": 1793641361213908451,
+      "archive_bytes": 24329008,
+      "archive_sha256": "5eb8d4a5b61c4a84c9fcaf1d928d30cd74242d6de9706a57a603d0e06a40a3b7",
+      "roundtrip_sha256_matches": true,
+      "restore_while_retaining_archive": "gzip -dk .local/h3-retry-buffer/after/Zelvik-Edge.gz"
+    },
+    {
+      "original": ".local/h3-retry-buffer/before/Zelvik-Edge",
+      "archive": ".local/h3-retry-buffer/before/Zelvik-Edge.gz",
+      "original_bytes": 81201312,
+      "original_sha256": "16e22060746f95a2f0902d1029dad0d714caaee806554e3a8435525e94c4a072",
+      "mode": "0o700",
+      "mtime_ns": 1793638904990422699,
+      "archive_bytes": 25477032,
+      "archive_sha256": "ca86ea73bb7479c1d78c819afb67e17d5c5cc1d76a6e348a21e0f3e3c2c15578",
+      "roundtrip_sha256_matches": true,
+      "restore_while_retaining_archive": "gzip -dk .local/h3-retry-buffer/before/Zelvik-Edge.gz"
+    },
+    {
+      "original": ".local/h3-stage1/baseline-Zelvik-Edge",
+      "archive": ".local/h3-stage1/baseline-Zelvik-Edge.gz",
+      "original_bytes": 45029680,
+      "original_sha256": "a57ba4470036cbf605893208bd9d61e77cdd35e05f5b1b7a224aea392dfa6478",
+      "mode": "0o700",
+      "mtime_ns": 1793609844143508422,
+      "archive_bytes": 17410188,
+      "archive_sha256": "77880a31828a44ace2ac9c67b2a140fce357cabf78cbda2a8ba4f04ec4e942f7",
+      "roundtrip_sha256_matches": true,
+      "restore_while_retaining_archive": "gzip -dk .local/h3-stage1/baseline-Zelvik-Edge.gz"
+    },
+    {
+      "original": ".local/h3-stage2/baseline-Zelvik-Edge",
+      "archive": ".local/h3-stage2/baseline-Zelvik-Edge.gz",
+      "original_bytes": 44993280,
+      "original_sha256": "f1a38b9003ba868f0f26f5b6fe95b0fa5a12005e37c15a160ff9e3bb46ebb414",
+      "mode": "0o700",
+      "mtime_ns": 1793619111602867127,
+      "archive_bytes": 17395949,
+      "archive_sha256": "31c4a1862b80bd38d661a57450d4fe1b27b8a1cdb0f0bc0b161304cdbc7ef2f8",
+      "roundtrip_sha256_matches": true,
+      "restore_while_retaining_archive": "gzip -dk .local/h3-stage2/baseline-Zelvik-Edge.gz"
+    },
+    {
+      "original": ".local/h3-stage2/frozen-binaries/baseline",
+      "archive": ".local/h3-stage2/frozen-binaries/baseline.gz",
+      "original_bytes": 44993280,
+      "original_sha256": "f1a38b9003ba868f0f26f5b6fe95b0fa5a12005e37c15a160ff9e3bb46ebb414",
+      "mode": "0o700",
+      "mtime_ns": 1793619111602867127,
+      "archive_bytes": 17395937,
+      "archive_sha256": "063c4dd4a487cd68105fa25085d0cf6d6c563984bdea82a49cf90d7ad4b7b410",
+      "roundtrip_sha256_matches": true,
+      "restore_while_retaining_archive": "gzip -dk .local/h3-stage2/frozen-binaries/baseline.gz"
+    },
+    {
+      "original": ".local/h3-stage2/frozen-binaries/candidate",
+      "archive": ".local/h3-stage2/frozen-binaries/candidate.gz",
+      "original_bytes": 45025104,
+      "original_sha256": "8226346bcba3eb8609eba60a4fe61308b10196643ac6d1734e09a00d6c492966",
+      "mode": "0o700",
+      "mtime_ns": 1793628774100863075,
+      "archive_bytes": 17193759,
+      "archive_sha256": "795c5e8a55afa1f0523c30deff19602dc12789e759c49cda67e312e28ec98018",
+      "roundtrip_sha256_matches": true,
+      "restore_while_retaining_archive": "gzip -dk .local/h3-stage2/frozen-binaries/candidate.gz"
+    }
+  ],
+  "saved_bytes": 385013786
+}
