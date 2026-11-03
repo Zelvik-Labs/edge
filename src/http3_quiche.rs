@@ -80,6 +80,12 @@ impl Http3ProxyManager {
         settings.initial_max_stream_data_bidi_remote = 64 * 1024;
         settings.initial_max_stream_data_uni = 64 * 1024;
         settings.max_stream_window = 64 * 1024;
+        settings.cc_algorithm = "cubic".into();
+        settings.initial_congestion_window_packets = 10;
+        settings.max_send_udp_payload_size = 1350;
+        settings.max_recv_udp_payload_size = 1350;
+        settings.discover_path_mtu = false;
+        settings.disable_active_migration = true;
         settings.handshake_timeout = Some(std::time::Duration::from_secs(10));
         settings.max_idle_timeout = Some(std::time::Duration::from_secs(30));
         settings.listen_backlog = LISTEN_BACKLOG;

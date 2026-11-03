@@ -570,6 +570,9 @@ impl Http3ProxyManager {
         let mut server_config = quinn::ServerConfig::with_crypto(Arc::new(
             quinn::crypto::rustls::QuicServerConfig::try_from(Arc::new(rustls_config))?,
         ));
+        if crate::h3_backend::transport_profile()? == crate::h3_backend::TransportProfile::Matched {
+            server_config.migration(false);
+        }
         let per_conn_limit = MEMORY_GOVERNOR.h3_request_limit_per_connection();
         if let Some(transport_config) = Arc::get_mut(&mut server_config.transport) {
             *transport_config = crate::h3_backend::quinn_transport()?;

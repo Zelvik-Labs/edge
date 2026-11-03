@@ -90,6 +90,9 @@ pub(crate) fn quinn_transport() -> Result<quinn::TransportConfig> {
     ));
     transport.initial_mtu(1350);
     transport.mtu_discovery_config(None);
+    let mut cubic = quinn::congestion::CubicConfig::default();
+    cubic.initial_window(10 * 1350);
+    transport.congestion_controller_factory(std::sync::Arc::new(cubic));
     Ok(transport)
 }
 
