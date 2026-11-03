@@ -1,0 +1,62 @@
+name: Production HTTP CPU attribution
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - scripts/perf/architecture-ci/**
+      - scripts/perf/profile_architecture.py
+      - .github/workflows/architecture-profile.yml
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: architecture-profile-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  profile:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+      - name: Download the exact final HTTP matrix executables
+        uses: actions/download-artifact@v4
+        with:
+          name: http-state-binaries-a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a
+          run-id: 41665387055
+          github-token: ${{ github.token }}
+          path: .local/architecture-profile-binaries
+      - name: Verify executable provenance before starting containers
+        run: |
+          python3 scripts/perf/architecture-ci/evidence.py prepare
+          chmod +x .local/architecture-profile-binaries/target/release/Zelvik-Edge \
+            .local/architecture-profile-binaries/target/release/examples/issue34-controller \
+            .local/architecture-profile-binaries/.local/http-state-ci/protocol-state-client
+      - name: Prepare diagnostic images before sampling
+        run: |
+          docker pull nginx:1.28.0
+          docker pull openresty/openresty:1.27.1.2-0-bookworm-fat
+          docker build -t edge-architecture-profiler:20261104 -f scripts/perf/architecture-ci/Dockerfile .
+      - name: Profile each isolated protocol and cache state
+        run: |
+          docker run --rm --name edge-architecture-harness --network host --pid host \
+            --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
+            -e GITHUB_SHA -e EDGE_MATRIX_HARNESS_NAME=edge-architecture-harness \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
+            edge-architecture-profiler:20261104 bash scripts/perf/architecture-ci/run.sh
+      - name: Retain symbolized evidence and failures
+        if: always()
+        run: |
+          if [ -d .local/architecture-profile-private ]; then
+            sudo chown -R "$(id -u):$(id -g)" .local/architecture-profile-private
+          fi
+          python3 scripts/perf/architecture-ci/evidence.py collect
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-profile-${{ github.sha }}
+          path: .local/architecture-profile-ci/
+          include-hidden-files: true
+          if-no-files-found: error

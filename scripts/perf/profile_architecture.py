@@ -68,11 +68,13 @@ def main(options):
     args = argparse.Namespace(
         target='edge', output=options.output, tls=options.tls, client=options.client,
         edge_binary=options.edge_binary, controller=options.controller,
-        seconds=options.seconds, repeats=1, payload_size=1024, concurrency=32,
-        cold_requests=options.cold_requests, fresh_requests=2048, protocols=['h1'],
+        seconds=options.seconds, repeats=options.repeats, payload_size=options.payload_size, concurrency=32,
+        cold_requests=None if options.timed_misses else options.cold_requests,
+        fresh_requests=2048, protocols=options.protocols,
         states=options.states, connections=['reuse'], multiplex=False, seed=20261102,
         experiment='instrumented production CPU profile; exclude from capacity comparison',
-        profiler_image=options.profiler_image, profile_driver_sha256=matrix.sha(__file__))
+        edge_image=options.profiler_image, profiler_image=options.profiler_image,
+        profile_driver_sha256=matrix.sha(__file__))
     return matrix.run(args)
 
 
@@ -87,5 +89,9 @@ if __name__ == '__main__':
     parser.add_argument('--frequency', type=int, default=199)
     parser.add_argument('--seconds', type=int, default=15)
     parser.add_argument('--cold-requests', type=int, default=8192)
+    parser.add_argument('--timed-misses', action='store_true', help='Use the same timed client window for unique MISS requests')
+    parser.add_argument('--repeats', type=int, default=1)
+    parser.add_argument('--payload-size', type=int, default=1024)
+    parser.add_argument('--protocols', nargs='+', choices=['h1', 'h1-tls', 'h2', 'h3'], default=['h1'])
     parser.add_argument('--states', nargs='+', choices=['off', 'hit', 'miss'], default=['off', 'hit', 'miss'])
     raise SystemExit(main(parser.parse_args()))
