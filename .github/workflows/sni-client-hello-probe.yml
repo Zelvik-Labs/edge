@@ -19,8 +19,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
-      - name: Fetch only the two immutable comparison trees
-        run: git fetch --depth=1 origin ac46a48becb18e1c36309eee541bda3d0c6b7b93 b4d635519973b2ec9aa24a533129fdbb86d3fc4f
+      - name: Fetch only the immutable comparison trees
+        run: git fetch --depth=1 origin ac46a48becb18e1c36309eee541bda3d0c6b7b93 b4d635519973b2ec9aa24a533129fdbb86d3fc4f 52687f97a1134d063384c7ecd7bf49c9a8f0083a
       - uses: dtolnay/rust-toolchain@1.99.1
       - name: Build exact source variants and test the production parser
         run: python3 scripts/perf/sni-client-hello/run.py build

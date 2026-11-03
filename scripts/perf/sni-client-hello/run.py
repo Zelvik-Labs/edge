@@ -5,7 +5,6 @@ from collections import defaultdict
 import csv
 import hashlib
 import json
-import itertools
 import os
 from pathlib import Path
 import shutil
@@ -16,7 +15,11 @@ ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / '.local/sni-client-hello-ci'
 BASE_REF = 'ac46a48becb18e1c36309eee541bda3d0c6b7b93'
 BOUNDED_REF = 'b4d635519973b2ec9aa24a533129fdbb86d3fc4f'
-VARIANTS = ['baseline', 'bounded', 'candidate']
+CURSOR_REF = '52687f97a1134d063384c7ecd7bf49c9a8f0083a'
+VARIANTS = ['baseline', 'bounded', 'cursor', 'candidate']
+# Williams design: each variant appears in every position and follows every
+# other variant once per cycle. Retain two full cycles without outlier removal.
+ORDERS = [[VARIANTS[i] for i in row] for row in [(0, 1, 3, 2), (1, 2, 0, 3), (2, 3, 1, 0), (3, 0, 2, 1)]] * 2
 
 
 def digest(path):
@@ -37,23 +40,25 @@ def source_inputs():
     baseline = (old[enum_start:enum_end].replace('enum ClientHelloParse', 'pub(crate) enum ClientHelloParse') + '\n' +
                 old[fn_start:fn_end].replace('fn parse_tls_client_hello_sni(', 'pub(crate) fn parse_tls_client_hello_sni(', 1))
     bounded = subprocess.check_output(['git', 'show', BOUNDED_REF + ':src/tls_client_hello.rs'], cwd=ROOT, text=True)
-    return revision, old, baseline, bounded, (ROOT / 'src/tls_client_hello.rs').read_text()
+    cursor = subprocess.check_output(['git', 'show', CURSOR_REF + ':src/tls_client_hello.rs'], cwd=ROOT, text=True)
+    return revision, old, baseline, bounded, cursor, (ROOT / 'src/tls_client_hello.rs').read_text()
 
 
 def build():
     OUT.mkdir(parents=True, exist_ok=False)
-    revision, old, baseline, bounded, candidate = source_inputs()
+    revision, old, baseline, bounded, cursor, candidate = source_inputs()
     (OUT / 'baseline-original.rs').write_text(old)
     metadata = {
         'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
         'baseline': revision,
         'bounded': BOUNDED_REF,
+        'cursor': CURSOR_REF,
         'rustc': subprocess.check_output(['rustc', '-vV'], text=True),
         'baseline_original_sha256': digest(OUT / 'baseline-original.rs'),
         'variants': {},
         'scope': 'pure production SNI parser, System allocator; no full-node throughput claim',
     }
-    for variant, source in [('baseline', baseline), ('bounded', bounded), ('candidate', candidate)]:
+    for variant, source in [('baseline', baseline), ('bounded', bounded), ('cursor', cursor), ('candidate', candidate)]:
         directory = OUT / variant
         directory.mkdir()
         (directory / 'parser.rs').write_text(source)
@@ -98,10 +103,11 @@ def measure():
             assert result.returncode == expected, (variant, mode, result.returncode)
             if expected:
                 assert 'incomplete untrusted length must not allocate' in (directory / (mode + '.log')).read_text()
-    assert (OUT / 'baseline/corpus.log').read_bytes() == (OUT / 'bounded/corpus.log').read_bytes() == (OUT / 'candidate/corpus.log').read_bytes()
+    for variant in VARIANTS:
+        assert (OUT / variant / 'corpus.log').read_bytes() == (OUT / 'candidate/corpus.log').read_bytes()
     metadata['corpus_cases'] = len((OUT / 'candidate/corpus.log').read_text().splitlines())
     metadata['corpus_sha256'] = digest(OUT / 'candidate/corpus.log')
-    for repeat, order in enumerate(itertools.permutations(VARIANTS)):
+    for repeat, order in enumerate(ORDERS):
         for variant in order:
             file = f'round-{repeat}-{variant}.tsv'
             before = snapshot(cpu)
@@ -123,7 +129,8 @@ def measure():
 
 def verify():
     metadata = json.loads((OUT / 'measurement.json').read_text())
-    assert len(metadata['runs']) == 18
+    assert len(metadata['runs']) == len(ORDERS) * len(VARIANTS)
+    assert [(r['round'], r['variant']) for r in metadata['runs']] == [(i, v) for i, order in enumerate(ORDERS) for v in order]
     for variant in VARIANTS:
         assert digest(OUT / variant / 'corpus.log') == metadata['corpus_sha256']
         for file, sha in metadata['variants'][variant]['binaries'].items():
@@ -147,20 +154,20 @@ def verify():
             allocations[variant] = {row['case']: {k: int(v) for k, v in row.items() if k != 'case'}
                                     for row in csv.DictReader(source, delimiter='\t')}
     assert allocations['baseline']['oversized']['max_allocation_bytes'] == 0x1000003
-    for variant in ['bounded', 'candidate']:
+    for variant in ['bounded', 'cursor', 'candidate']:
         assert all(value == 0 for value in allocations[variant]['oversized'].values())
         assert all(value == 0 for value in allocations[variant]['partial'].values())
     for case in ['single', 'fragmented', 'trailing']:
         assert allocations['candidate'][case]['allocations'] == 1
         assert allocations['candidate'][case]['reallocations'] == 0
         assert allocations['candidate'][case]['requested_bytes'] == 11
-    summary = {'source': metadata['source'], 'baseline': metadata['baseline'], 'bounded': metadata['bounded'],
+    summary = {'source': metadata['source'], 'baseline': metadata['baseline'], 'bounded': metadata['bounded'], 'cursor': metadata['cursor'],
                'corpus_cases': metadata['corpus_cases'], 'allocations': allocations, 'cases': {},
                'max_host_steal_fraction': max(run['host_steal_fraction'] for run in metadata['runs'])}
     for case in cases:
-        row = {variant + '_ns': statistics.median(values[case][r, variant] for r in range(6)) for variant in VARIANTS}
-        for reference in ['baseline', 'bounded']:
-            paired = [values[case][r, 'candidate'] / values[case][r, reference] - 1 for r in range(6)]
+        row = {variant + '_ns': statistics.median(values[case][r, variant] for r in range(len(ORDERS))) for variant in VARIANTS}
+        for reference in ['baseline', 'bounded', 'cursor']:
+            paired = [values[case][r, 'candidate'] / values[case][r, reference] - 1 for r in range(len(ORDERS))]
             row['paired_change_vs_' + reference] = paired
             row['paired_median_vs_' + reference] = statistics.median(paired)
         summary['cases'][case] = row
@@ -173,10 +180,12 @@ if __name__ == '__main__':
     parser.add_argument('mode', choices=['build', 'measure', 'verify', 'check-source'])
     args = parser.parse_args()
     if args.mode == 'check-source':
-        revision, old, baseline, bounded, candidate = source_inputs()
+        revision, old, baseline, bounded, cursor, candidate = source_inputs()
         assert 'Vec::with_capacity(needed_handshake_len)' in baseline and 'let mut available = 0usize' in bounded
-        assert 'RecordPayload' in candidate and 'Vec::with_capacity(needed_handshake_len)' not in candidate
+        assert 'RecordPayload' in cursor and 'Vec::with_capacity(needed_handshake_len)' not in candidate
+        assert 'SMALL_FRAGMENTED_HELLO_BYTES' in candidate
         print(json.dumps({'baseline': revision,
-        'bounded': BOUNDED_REF, 'baseline_bytes': len(baseline), 'bounded_bytes': len(bounded), 'candidate_bytes': len(candidate)}))
+        'bounded': BOUNDED_REF,
+        'cursor': CURSOR_REF, 'baseline_bytes': len(baseline), 'bounded_bytes': len(bounded), 'candidate_bytes': len(candidate)}))
     else:
         globals()[args.mode]()

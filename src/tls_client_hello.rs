@@ -59,10 +59,32 @@ pub(crate) fn parse_tls_client_hello_sni(buf: &[u8]) -> ClientHelloParse {
         record_end: 5 + first_record_len,
         remaining: hello_len,
     };
+    if hello_len <= SMALL_FRAGMENTED_HELLO_BYTES {
+        return parse_small_fragmented_hello_sni(hello);
+    }
     match parse_fragmented_hello_sni(hello) {
         Some(host) => ClientHelloParse::Found(host),
         None => ClientHelloParse::NotClientHello,
     }
+}
+
+const SMALL_FRAGMENTED_HELLO_BYTES: usize = 256;
+
+// Keep the bounded scratch buffer out of the ordinary single-record frame.
+// Tiny hellos are cheaper to parse contiguously; large hellos still avoid all
+// whole-body collection, and incomplete input never reaches this function.
+#[inline(never)]
+fn parse_small_fragmented_hello_sni(mut hello: RecordPayload<'_>) -> ClientHelloParse {
+    let len = hello.remaining;
+    let mut scratch = [0u8; SMALL_FRAGMENTED_HELLO_BYTES];
+    let mut written = 0;
+    while hello.remaining > 0 {
+        let chunk = hello.chunk();
+        scratch[written..written + chunk.len()].copy_from_slice(chunk);
+        written += chunk.len();
+        hello.advance(chunk.len());
+    }
+    parse_contiguous_hello_sni(&scratch[..len])
 }
 
 fn parse_contiguous_hello_sni(hello: &[u8]) -> ClientHelloParse {
@@ -294,17 +316,32 @@ mod tests {
     }
 
     fn handshake_with_host(host: &[u8]) -> Vec<u8> {
+        handshake_with_host_and_padding(host, 0)
+    }
+
+    fn handshake_with_host_and_padding(host: &[u8], padding: usize) -> Vec<u8> {
         let mut body = vec![3, 3];
         body.extend_from_slice(&[0; 32]);
         body.extend_from_slice(&[0, 0, 2, 0x13, 1, 1, 0]);
-        body.extend_from_slice(&((9 + host.len()) as u16).to_be_bytes());
+        let padding_extension = if padding > 0 { 4 + padding } else { 0 };
+        body.extend_from_slice(&((9 + host.len() + padding_extension) as u16).to_be_bytes());
         body.extend_from_slice(&[0, 0]);
         body.extend_from_slice(&((5 + host.len()) as u16).to_be_bytes());
         body.extend_from_slice(&((3 + host.len()) as u16).to_be_bytes());
         body.push(0);
         body.extend_from_slice(&(host.len() as u16).to_be_bytes());
         body.extend_from_slice(host);
-        let mut hello = vec![1, 0, 0, body.len() as u8];
+        if padding > 0 {
+            body.extend_from_slice(&21u16.to_be_bytes());
+            body.extend_from_slice(&(padding as u16).to_be_bytes());
+            body.resize(body.len() + padding, 0);
+        }
+        let mut hello = vec![
+            1,
+            (body.len() >> 16) as u8,
+            (body.len() >> 8) as u8,
+            body.len() as u8,
+        ];
         hello.extend_from_slice(&body);
         hello
     }
@@ -326,13 +363,36 @@ mod tests {
     #[test]
     fn fragmented_utf8_empty_and_invalid_names_match_contiguous_parser() {
         for host in [&b""[..], "ÖEXAMPLE.COM".as_bytes(), &b"\xffINVALID"[..]] {
-            let hello = handshake_with_host(host);
-            let expected = parse_tls_client_hello_sni(&record(&hello));
+            for padding in [0, 512] {
+                let hello = handshake_with_host_and_padding(host, padding);
+                let expected = parse_tls_client_hello_sni(&record(&hello));
+                for split in 4..hello.len() {
+                    let mut wire = record(&hello[..split]);
+                    wire.extend_from_slice(&record(&[]));
+                    wire.extend_from_slice(&record(&hello[split..]));
+                    assert_eq!(
+                        parse_tls_client_hello_sni(&wire),
+                        expected,
+                        "split {split}, padding {padding}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn small_fragmented_scratch_boundary_preserves_all_splits() {
+        let base = handshake().len() - 4;
+        for body_len in [255, 256, 257] {
+            let hello = handshake_with_host_and_padding(b"SPLIT.EXAMPLE", body_len - base - 4);
+            assert_eq!(hello.len() - 4, body_len);
             for split in 4..hello.len() {
                 let mut wire = record(&hello[..split]);
-                wire.extend_from_slice(&record(&[]));
                 wire.extend_from_slice(&record(&hello[split..]));
-                assert_eq!(parse_tls_client_hello_sni(&wire), expected, "split {split}");
+                assert_eq!(
+                    parse_tls_client_hello_sni(&wire),
+                    ClientHelloParse::Found("split.example".into())
+                );
             }
         }
     }

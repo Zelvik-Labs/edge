@@ -2,8 +2,8 @@
 
 The production parser is shared by kernel peek and AF_XDP prefix replay. This
 probe extracts the exact old function and enum from immutable `BASE_REF`, the
-first bounded-allocation repair from `BOUNDED_REF`, and the current production
-module. Only original baseline visibility is adjusted so the same probe can
+first bounded-allocation repair from `BOUNDED_REF`, direct record reader from
+`CURSOR_REF`, and current production module. Only original baseline visibility is adjusted so the same probe can
 call it. No old upstream or vendor source is changed.
 
 GitHub Actions builds both variants with Rust 1.99.1, x86-64-v2 and opt-level 3.
@@ -16,9 +16,10 @@ and 4096 deterministic mutations, plus every supported small-hello split with
 an empty middle record and every one-bit mutation of each such wire input.
 A negative allocation control must fail on
 the old parser's untrusted 24-bit handshake length and pass on the candidate.
-All six ordering permutations of three variants are pinned to the same CPU:
-18 processes and 1800 blocks, with six matched comparisons against each prior
-implementation. Every block and
+Two four-variant Williams-design cycles are pinned to the same CPU: 32
+processes and 3200 blocks, with eight matched comparisons against each prior
+implementation. Each variant appears in every position and follows every
+other variant once per cycle. Every block and
 host steal snapshot is retained. These are parser component timings, not
 complete SNI connection or Node throughput measurements.
 
