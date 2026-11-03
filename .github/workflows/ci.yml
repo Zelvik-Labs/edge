@@ -29,6 +29,10 @@ on:
         description: Validate both XSK wake modes in the full node across protocols, IPv4/IPv6 and reload
         type: boolean
         default: false
+      xdp_udp_benchmark:
+        description: Compare release Edge wake modes with Nginx and OpenResty UDP reuse on isolated veths
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.head_ref || github.ref }}
@@ -560,4 +564,45 @@ jobs:
         with:
           name: afxdp-node-${{ github.sha }}
           path: .local/afxdp-node-ci/
+          if-no-files-found: error
+
+      - name: Cache pinned UDP comparison baselines
+        if: github.event_name == 'workflow_dispatch' && inputs.xdp_udp_benchmark
+        uses: actions/cache@v4
+        with:
+          path: .local/afxdp-udp-baselines
+          key: udp-baselines-ubuntu22-v1-${{ hashFiles('scripts/perf/afxdp-node/build-baselines.sh') }}
+
+      - name: Build all release UDP comparison binaries
+        if: github.event_name == 'workflow_dispatch' && inputs.xdp_udp_benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/afxdp-udp-ci
+          { rustc --version; cc --version; uname -a; lscpu; } > .local/afxdp-udp-ci/toolchain-host.log
+          sudo apt-get install -y --no-install-recommends iproute2 ethtool curl libssl-dev libpcre2-dev
+          cargo build --locked --release --bin Zelvik-Edge > .local/afxdp-udp-ci/edge-build.log 2>&1
+          bash scripts/perf/afxdp-node/build-baselines.sh "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines" > .local/afxdp-udp-ci/baseline-build.log 2>&1
+          cp .local/afxdp-udp-baselines/*-build.log .local/afxdp-udp-baselines/*-version.log .local/afxdp-udp-ci/
+          cc -std=gnu11 -O3 -march=x86-64-v2 -Wall -Wextra -Werror scripts/perf/afxdp-node/udp-bench.c -o .local/afxdp-udp-ci/udp-bench
+          UDP_BENCH_BINARY="$GITHUB_WORKSPACE/.local/afxdp-udp-ci/udp-bench" UDP_BENCH_TEST_OUTPUT="$GITHUB_WORKSPACE/.local/afxdp-udp-ci/loadgen-tests" python3 scripts/perf/afxdp-node/test_udp_bench.py > .local/afxdp-udp-ci/loadgen-tests.log 2>&1
+          python3 scripts/perf/afxdp-node/test_udp_summary.py > .local/afxdp-udp-ci/summary-tests.log 2>&1
+
+      - name: Compare UDP proxy implementations after all compilation
+        if: github.event_name == 'workflow_dispatch' && inputs.xdp_udp_benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          parent_net=$(readlink /proc/self/ns/net)
+          parent_mount=$(readlink /proc/self/ns/mnt)
+          sudo unshare --net --mount --propagation private -- bash scripts/perf/afxdp-node/udp-run.sh "$GITHUB_WORKSPACE/target/release/Zelvik-Edge" "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines/nginx/sbin/nginx" "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines/openresty/nginx/sbin/nginx" "$GITHUB_WORKSPACE/.local/afxdp-udp-ci/udp-bench" "$GITHUB_WORKSPACE/.local/afxdp-udp-ci/results" "$parent_net" "$parent_mount"
+
+      - name: Upload UDP comparison samples and failures
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.xdp_udp_benchmark && hashFiles('.local/afxdp-udp-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: afxdp-udp-${{ github.sha }}
+          path: |
+            .local/afxdp-udp-ci/**/*.json
+            .local/afxdp-udp-ci/**/*.log
           if-no-files-found: error

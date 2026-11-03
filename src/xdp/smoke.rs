@@ -737,6 +737,11 @@ async fn proxy_smoke_inner(
         // NIC→XSK delivery (kernel stats), TX backpressure (congested) and
         // reactor admission refusals must be visible in the report, not
         // only in a live `xdp status` snapshot.
+        "rateLimited": status.rate_limited,
+        "ratelimitMapFull": status.ratelimit_map_full,
+        "udpFwdMapFull": status.udp_fwd_map_full,
+        "snatAllocFail": status.snat_alloc_fail,
+        "l4PressureAtReport": crate::l4_defense::current_pressure_level().as_str(),
         "xskWakeMode": crate::runtime_mode::validation_xsk_wake_mode().as_str(),
         "xskQueueStats": {
             "rxDropped": queue_stats(&status).map(|q| q.rx_dropped).sum::<u64>(),
