@@ -29,7 +29,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: crates/zelvik-edge-h3-quiche -> target
-          key: h3-quiche-0.20.1
+          key: h3-quiche-0.20.0
           cache-on-failure: true
       - name: Check transport and exercise real H3 semantics
         shell: bash

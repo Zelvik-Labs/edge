@@ -223,6 +223,7 @@ async fn receive_budget_follows_bytes_clones_and_resumes_without_a_new_packet() 
         let mut fixture = Fixture::new(Limits {
             streams: 16,
             receive_bytes: 32 * 1024,
+            send_bytes: 32 * 1024,
         })
         .await;
         let (mut tx, _rx) = fixture.client.open_bi().await.unwrap();

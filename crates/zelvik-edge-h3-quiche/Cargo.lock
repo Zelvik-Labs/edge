@@ -2971,9 +2971,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-quiche"
-version = "0.20.1"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39272b0b2b311cc3e5cab36d9094bfa8e7ebc9725b4b2b4cb7a52aa57f17f075"
+checksum = "b36d680054da76b46de6f673f21a9da631cc02d1850c7550321f40065adbb31a"
 dependencies = [
  "anyhow",
  "boring",

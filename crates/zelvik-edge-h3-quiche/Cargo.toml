@@ -14,7 +14,9 @@ futures-util = "=0.3.34"
 h3 = "=0.0.8"
 parking_lot = "=0.12.5"
 tokio = { version = "=1.53.1", features = ["sync", "net", "rt-multi-thread", "macros", "time"] }
-tokio-quiche = { version = "=0.20.1", default-features = false }
+# 0.20.1 caps libc <0.2.190 for upstream iOS; Edge mace-kv needs >=0.2.191.
+# Linux experiment uses 0.20.0 with the same quiche 0.30 and 0-RTT disabled.
+tokio-quiche = { version = "=0.20.0", default-features = false }
 # Same TLS provider as tokio-quiche, exposed for prevalidated dynamic SNI contexts.
 boring = "5"
 

@@ -23,6 +23,7 @@ use tokio_quiche::{
     quiche,
 };
 
+pub mod tls;
 pub use boring;
 pub use tokio_quiche;
 const CHUNK: usize = 16 * 1024;
@@ -34,12 +35,14 @@ const CANCELLED: u64 = 0x10c; // H3_REQUEST_CANCELLED
 pub struct Limits {
     pub streams: usize,
     pub receive_bytes: usize,
+    pub send_bytes: usize,
 }
 impl Default for Limits {
     fn default() -> Self {
         Self {
             streams: 256,
             receive_bytes: 256 * 1024,
+            send_bytes: 256 * 1024,
         }
     }
 }
@@ -115,11 +118,11 @@ fn register(slot: &mut Option<Waker>, cx: &Context<'_>) {
 }
 impl State {
     fn dirty(&mut self, id: u64) {
-        if let Some(s) = self.streams.get_mut(&id) {
-            if !s.queued {
-                s.queued = true;
-                self.dirty.push_back(id);
-            }
+        if let Some(s) = self.streams.get_mut(&id)
+            && !s.queued
+        {
+            s.queued = true;
+            self.dirty.push_back(id);
         }
     }
     fn terminate(&mut self, error: ConnectionError) {
@@ -143,6 +146,9 @@ struct Shared {
     state: Mutex<State>,
     notify: Arc<Notify>,
     receive_budget: Arc<Semaphore>,
+    send_budget: Arc<Semaphore>,
+    // Erased RAII ownership only; no callbacks or request-path dynamic dispatch.
+    owner: Option<Arc<dyn Send + Sync>>,
     limits: Limits,
     handles: AtomicUsize,
 }
@@ -215,10 +221,27 @@ pub struct BidiStream {
 
 /// Server-side transport. Construction allocates no payload buffers.
 pub fn server(limits: Limits) -> Result<(Driver, Connection, CloseHandle), &'static str> {
+    create(limits, None)
+}
+
+/// Keep the node's admission/accounting owner alive through every transport
+/// handle and allocation, including buffers still retained by QUIC for ACKs.
+pub fn server_with_owner(
+    limits: Limits,
+    owner: Arc<dyn Send + Sync>,
+) -> Result<(Driver, Connection, CloseHandle), &'static str> {
+    create(limits, Some(owner))
+}
+fn create(
+    limits: Limits,
+    owner: Option<Arc<dyn Send + Sync>>,
+) -> Result<(Driver, Connection, CloseHandle), &'static str> {
     if limits.streams < 8
         || limits.streams > 65536
         || limits.receive_bytes < CHUNK
         || limits.receive_bytes > u32::MAX as usize
+        || limits.send_bytes < CHUNK
+        || limits.send_bytes > u32::MAX as usize
     {
         return Err("invalid QUIC adapter bounds");
     }
@@ -236,6 +259,8 @@ pub fn server(limits: Limits) -> Result<(Driver, Connection, CloseHandle), &'sta
         }),
         notify: Arc::new(Notify::new()),
         receive_budget: Arc::new(Semaphore::new(limits.receive_bytes)),
+        send_budget: Arc::new(Semaphore::new(limits.send_bytes)),
+        owner,
         limits,
         handles: AtomicUsize::new(0),
     });
@@ -591,17 +616,18 @@ impl quic::BidiStream<Bytes> for BidiStream {
 
 // Bytes clones retain the permit until the last clone disappears, including
 // after H3 transfers ownership to the CDN body/cache path.
-struct ReceiveAllocation {
+struct BudgetedAllocation {
     data: Vec<u8>,
     permit: OwnedSemaphorePermit,
     notify: Arc<Notify>,
+    _owner: Option<Arc<dyn Send + Sync>>,
 }
-impl AsRef<[u8]> for ReceiveAllocation {
+impl AsRef<[u8]> for BudgetedAllocation {
     fn as_ref(&self) -> &[u8] {
         &self.data
     }
 }
-impl Drop for ReceiveAllocation {
+impl Drop for BudgetedAllocation {
     fn drop(&mut self) {
         // Release before notifying: otherwise a worker can wake, find no budget,
         // and miss the only notification when the permit is dropped afterwards.
@@ -701,10 +727,11 @@ impl Driver {
                 else {
                     break;
                 };
-                let mut allocation = ReceiveAllocation {
+                let mut allocation = BudgetedAllocation {
                     data: vec![0; CHUNK],
                     permit,
                     notify: self.shared.notify.clone(),
+                    _owner: self.shared.owner.clone(),
                 };
                 match qconn.stream_recv(id, &mut allocation.data) {
                     Ok((n, fin)) => {
@@ -734,8 +761,39 @@ impl Driver {
                     if !buf.has_remaining() {
                         break;
                     }
-                    match qconn.stream_send(id, buf.chunk(), false) {
-                        Ok(n) => {
+                    let capacity = match qconn.stream_capacity(id) {
+                        Ok(capacity) => capacity,
+                        Err(quiche::Error::StreamStopped(code)) => {
+                            s.send_error = Some(code);
+                            break;
+                        }
+                        Err(e) => return Err(e.into()),
+                    };
+                    let count = buf.chunk().len().min(CHUNK).min(capacity);
+                    if count == 0 {
+                        again = false;
+                        break;
+                    }
+                    let Ok(permit) = self
+                        .shared
+                        .send_budget
+                        .clone()
+                        .try_acquire_many_owned(count as u32)
+                    else {
+                        again = false;
+                        break;
+                    };
+                    let allocation = BudgetedAllocation {
+                        data: buf.chunk()[..count].to_vec(),
+                        permit,
+                        notify: self.shared.notify.clone(),
+                        _owner: self.shared.owner.clone(),
+                    };
+                    // A single copy into an owned, budgeted buffer; quiche retains
+                    // Bytes slices for retransmission until acknowledged/reset.
+                    match qconn.stream_send_zc(id, Bytes::from_owner(allocation), false) {
+                        Ok((n, remaining)) => {
+                            drop(remaining);
                             buf.advance(n);
                             if n == 0 {
                                 break;
@@ -835,9 +893,11 @@ impl ApplicationOverQuic for Driver {
 }
 impl Drop for Driver {
     fn drop(&mut self) {
-        self.shared
-            .state
-            .lock()
-            .terminate(ConnectionError::InternalError("QUIC worker dropped".into()));
+        let mut state = self.shared.state.lock();
+        state.terminate(ConnectionError::InternalError("QUIC worker dropped".into()));
+        state.streams.clear();
+        state.dirty.clear();
+        state.pending_open.clear();
+        state.accept.iter_mut().for_each(VecDeque::clear);
     }
 }
