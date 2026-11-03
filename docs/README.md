@@ -12,6 +12,7 @@
 - [H3 传输后端](h3-transport-backends.md)：共享/原生 Quinn 与实验性 tokio-quiche 的实现、选择和功能边界。
 - [五项性能工作的交付与边界](performance-five-priorities-2026-11-04.md)：H3 回源池、WAF 内存、UDP 实验、三产品矩阵和 tokio-quiche 的实现、收益与未解决项。
 - [SNI 分片解析的分配边界与代价](performance-sni-parser-2026-11-04.md)：不完整输入零分配、完整分片扫描代价、逐输入对照和实测原始块。
+- [TCP/SNI 转发的部分写入与取消统计](performance-relay-copy-2026-11-04.md)：漏计复现、生命周期修正、计数器分配减少和短写代价。
 - [最终 H3 三后端矩阵](performance-h3-native-2026-11-04.md)：共享 Quinn、原生 Quinn、tokio-quiche 的缓存/连接对比及持续连接验收。
 - [最终独立 HTTP 状态对比](performance-http-state-2026-11-04.md)：Edge/Nginx/OpenResty 的协议、缓存、连接状态、进程 RSS 和 UDP 复测；[首轮结果](performance-http-state-2026-11-03.md)保留。
 - [功能说明](features.md)：逐项介绍协议代理、缓存、WAF、内容处理、日志统计、证书和多级分发能力。

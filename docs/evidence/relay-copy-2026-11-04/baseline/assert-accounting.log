@@ -1,0 +1,8 @@
+case	accepted	counter	flushed
+partial_error	3	0	0
+
+thread 'main' (2482) panicked at src/main.rs:272:13:
+assertion `left == right` failed: accepted partial writes must survive error or cancellation
+  left: (0, 0)
+ right: (3, 3)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
