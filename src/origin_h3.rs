@@ -1053,7 +1053,7 @@ fn build_h3_request(req: &RequestHeader) -> PingoraResult<http::Request<()>> {
         .uri(uri)
         .version(Version::HTTP_3);
     for (name, value) in &req.headers {
-        if is_h3_forbidden_header(name.as_str()) {
+        if is_h3_forbidden_header(name) {
             continue;
         }
         builder = builder.header(name, value);
@@ -1070,19 +1070,19 @@ fn build_response_header(response: Response<()>) -> PingoraResult<ResponseHeader
     let (parts, _) = response.into_parts();
     let mut header = ResponseHeader::build(parts.status, Some(parts.headers.len()))?;
     header.set_version(Version::HTTP_3);
-    for (name, value) in parts.headers {
-        if let Some(name) = name
-            && !is_h3_forbidden_header(name.as_str())
-        {
-            header.append_header(name, value)?;
+    // The owning HeaderMap iterator uses None for subsequent values of the
+    // same name. Borrowed iteration preserves every field, including Set-Cookie.
+    for (name, value) in &parts.headers {
+        if !is_h3_forbidden_header(name) {
+            header.append_header(name.clone(), value.clone())?;
         }
     }
     Ok(header)
 }
 
-fn is_h3_forbidden_header(name: &str) -> bool {
+fn is_h3_forbidden_header(name: &http::header::HeaderName) -> bool {
     matches!(
-        name.to_ascii_lowercase().as_str(),
+        name.as_str(),
         "connection"
             | "keep-alive"
             | "proxy-connection"

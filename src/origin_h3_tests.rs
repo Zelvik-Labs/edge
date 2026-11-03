@@ -4,6 +4,35 @@ use std::future::Future;
 use std::sync::atomic::AtomicUsize;
 use tokio::task::JoinSet;
 
+#[test]
+fn response_header_conversion_preserves_repeated_fields_and_filters_connection_fields() {
+    let response = http::Response::builder()
+        .status(200)
+        .header("set-cookie", "a=1")
+        .header("set-cookie", "b=2")
+        .header("x-origin-value", "first")
+        .header("x-origin-value", "second")
+        .header("CoNnEcTiOn", "keep-alive")
+        .header("keep-alive", "timeout=5")
+        .body(())
+        .unwrap();
+    let header = build_response_header(response).unwrap();
+    for (name, expected) in [
+        ("set-cookie", ["a=1", "b=2"]),
+        ("x-origin-value", ["first", "second"]),
+    ] {
+        let actual = header
+            .headers
+            .get_all(name)
+            .iter()
+            .map(|value| value.to_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected);
+    }
+    assert!(!header.headers.contains_key("connection"));
+    assert!(!header.headers.contains_key("keep-alive"));
+}
+
 fn wire_test(test: impl Future<Output = ()>) {
     // Own a controlled Kernel policy for the fixture and restore even a
     // previously uninitialized config on panic. The guard stays synchronous.
@@ -158,6 +187,10 @@ async fn serve(
                 http::Response::builder()
                     .status(200)
                     .header("content-length", response.len().to_string())
+                    .header("set-cookie", "session=abc; HttpOnly")
+                    .header("set-cookie", "theme=dark; Secure")
+                    .header("x-origin-value", "first")
+                    .header("x-origin-value", "second")
                     .body(())
                     .unwrap(),
             )
@@ -321,6 +354,19 @@ async fn read_complete(session: &mut OriginH3ClientSession, path: &str, body: &[
         assert!(trailers.is_none());
     } else {
         assert_eq!(response.as_slice(), response_bytes(path, body).as_ref());
+        let headers = &session.response_header().unwrap().headers;
+        let cookies = headers
+            .get_all("set-cookie")
+            .iter()
+            .map(|value| value.to_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(cookies, ["session=abc; HttpOnly", "theme=dark; Secure"]);
+        let repeated = headers
+            .get_all("x-origin-value")
+            .iter()
+            .map(|value| value.to_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(repeated, ["first", "second"]);
         assert_eq!(
             trailers.unwrap()["x-body-bytes"].to_str().unwrap(),
             body.len().to_string()
