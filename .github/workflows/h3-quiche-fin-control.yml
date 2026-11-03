@@ -1,6 +1,9 @@
 name: QUIC FIN upstream regression control
 on:
   workflow_dispatch:
+  push:
+    branches: [perf/five-priorities-20261103]
+    paths: [.github/workflows/h3-quiche-fin-control.yml]
 permissions:
   contents: read
 jobs:
