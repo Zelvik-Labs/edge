@@ -1,0 +1,26 @@
+{
+  "default_ci_run": 41666609860,
+  "default_source": "afd94f7099f7fe9f999089adf326c871bcdd110f",
+  "lib_passed": 1342,
+  "bin_passed": 16,
+  "lib_ignored_performance_probes": 4,
+  "native_functional_cases": 32,
+  "adapter_ci_run": 41672874554,
+  "adapter_source": "ed01addd08abcb5718f767f13704b7d19692ec55",
+  "ingress_tests": 1,
+  "wire_tests": 8,
+  "multiplex_repeats": 10,
+  "actual_loss_server_client": [
+    48,
+    46
+  ],
+  "control_setup_failure": 41672874659,
+  "control_setup_failure_reason": "offline Cargo sparse index lacked boring; neither old nor fixed test ran",
+  "warning_scope": "Default CI emits the pre-existing Cargo manifest binary-name warning for Zelvik-Edge. Do not describe the whole default CI as warning-free.",
+  "feature_ci_run": 41672874652,
+  "feature_lib_passed": 1343,
+  "feature_bin_passed": 16,
+  "final_control_ci_run": 41674107868,
+  "final_control_old_exit": 101,
+  "final_control_fixed_exit": 0
+}

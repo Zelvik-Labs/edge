@@ -74,6 +74,7 @@ quiche 的 UDP 接收上限显式设为 1350，Quinn 端点的接收上限沿用
 
 可复查的真实网络回归覆盖并行正文、重复响应头、双向 trailers、FIN、reset、预算背压、
 拒绝清理和受控双向丢包。完整节点特性检查见
-[3edfa84 CI](https://github.com/Zelvik-Labs/edge/actions/runs/41664923884)：
+[ed01add CI](https://github.com/Zelvik-Labs/edge/actions/runs/41672874652)：
 1,343 个库测试、16 个有测试的二进制用例通过；4 个性能探针保持显式 ignored，Rust warning 为零。
 短时测试不替代 24/72 小时稳定性验收。
+最终接收边界、默认路径及适配层回归见[验收报告](performance-h3-ingress-2026-11-04.md)。

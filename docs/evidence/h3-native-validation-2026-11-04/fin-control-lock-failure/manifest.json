@@ -1,0 +1,18 @@
+{
+  "artifact_id": 13249825325,
+  "archive": "raw.zip",
+  "archive_bytes": 22294,
+  "archive_sha256": "43c5bac974c71a5e4e19078d788ebd86aa3116c785f9d1bba9579d294a8119c5",
+  "files": [
+    {
+      "path": "baseline-before.lock",
+      "bytes": 90535,
+      "sha256": "61d51f15d5c1901919b0349978c82398c79ac291384bc02e165b34defa9bad5f"
+    },
+    {
+      "path": "baseline-lock.log",
+      "bytes": 362,
+      "sha256": "ec332a084862b1afd18bd7a3512561d2e6a5e02fedf1980eb6eb0777ad056360"
+    }
+  ]
+}
