@@ -9,6 +9,8 @@
 - [生产级边缘节点开发计划](../tasks/edge-node-production-plan.md)：34 个任务包、依赖、阶段门槛、验证证据和回退方法。
 - [其他模型开发交接](../tasks/edge-node-development-handoff.md)：可复制的开发与独立审阅指令，以及任务状态和证据模板。
 - [运行时说明](runtime.md)：说明进程启动、任务调度、配置热更新、证书、缓存后台任务和性能监控。
+- [H3 传输后端](h3-transport-backends.md)：共享/原生 Quinn 与实验性 tokio-quiche 的实现、选择和功能边界。
+- [独立 HTTP 状态对比](performance-http-state-2026-11-03.md)：Edge/Nginx/OpenResty 的协议、缓存和连接状态原始结果；[UDP 批处理](performance-h3-rx-batch-2026-11-03.md)另列。
 - [功能说明](features.md)：逐项介绍协议代理、缓存、WAF、内容处理、日志统计、证书和多级分发能力。
 - [配置说明](configuration.md)：说明 `configs/api_node.yaml`、运行目录、数据文件、缓存目录和控制面配置兼容。
 - [XDP/AF_XDP 旁路数据面](xdp-af-xdp.md)：说明 Linux XDP protect/proxy 配置、CLI、回退、协议接入和集成测试。
