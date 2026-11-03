@@ -177,7 +177,18 @@ jobs:
           docker build -t edge-http-state-fixture:20261103 -f scripts/perf/http-state/Dockerfile .
       - name: Run one target at a time with real HTTP3 libcurl
         run: |
-          docker run --rm --name edge-http-state-harness --network host --pid host             -e GITHUB_SHA -e EDGE_MATRIX_HARNESS_NAME=edge-http-state-harness             -v /var/run/docker.sock:/var/run/docker.sock             -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE"             edge-http-state-fixture:20261103 bash scripts/perf/http-state/run-ci.sh
+          docker run --rm --name edge-http-state-harness --network host --pid host \
+            --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
+            -e GITHUB_SHA -e EDGE_MATRIX_HARNESS_NAME=edge-http-state-harness \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
+            edge-http-state-fixture:20261103 bash scripts/perf/http-state/run-ci.sh
+      - name: Restore evidence ownership after container execution
+        if: always()
+        run: |
+          if [ -d .local/http-state-ci ]; then
+            sudo chown -R "$(id -u):$(id -g)" .local/http-state-ci
+          fi
       - name: Retain all samples and failures
         if: always()
         uses: actions/upload-artifact@v4

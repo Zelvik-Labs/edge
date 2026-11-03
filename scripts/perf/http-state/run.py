@@ -41,6 +41,7 @@ for repeat in range(2):
             manifest_path = directory / "manifest.json"
             if not manifest_path.exists():
                 save()
+                print((OUT / f"{label}.log").read_text()[-6000:], file=sys.stderr)
                 raise RuntimeError(f"fixture failed before manifest: {label}; see retained log")
             manifest = json.loads(manifest_path.read_text())
             if manifest["status"] != "completed" or manifest.get("cleanup_errors"):
