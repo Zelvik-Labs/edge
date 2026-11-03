@@ -11,6 +11,7 @@ publish = false
 [patch.crates-io]
 # Same immutable upstream FIN-acknowledgement fix as the complete Edge node.
 quiche = { git = "https://github.com/cloudflare/quiche", rev = "af8788e03413ebb3cf81123fc4f1aacea44dfc40" }
+octets = { git = "https://github.com/cloudflare/quiche", rev = "af8788e03413ebb3cf81123fc4f1aacea44dfc40" }
 
 [dependencies]
 bytes = "=1.12.1"
