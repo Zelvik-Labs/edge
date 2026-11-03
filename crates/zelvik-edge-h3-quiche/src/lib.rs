@@ -864,11 +864,11 @@ impl Driver {
             if s.claimed && s.recv_dropped && s.send_dropped {
                 if self.shared.diagnostics {
                     eprintln!(
-                        "quiche-stream-release id={id} recv_fin={} sent_fin={} send_error={:?} capacity={:?}",
+                        "quiche-stream-release id={id} recv_fin={} sent_fin={} send_error={:?} closed={}",
                         s.recv_fin,
                         s.sent_fin,
                         s.send_error,
-                        qconn.stream_capacity(id)
+                        qconn.stream_closed(id)
                     );
                 }
                 state.streams.remove(&id);
