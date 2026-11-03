@@ -29,10 +29,10 @@ impl Http3SitePorts {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn every_port_matches_range_union_at_word_boundaries() {
+        use super::Http3SitePorts;
+
         for ranges in [
             vec![],
             vec![(0, 0)],
@@ -58,6 +58,9 @@ mod tests {
 
     #[test]
     fn snapshot_clone_does_not_change_when_a_new_index_is_extended() {
+        use super::Http3SitePorts;
+        use std::sync::Arc;
+
         let mut index = Http3SitePorts::default();
         assert!(index.0.is_none());
         index.insert_range(443, 444);
