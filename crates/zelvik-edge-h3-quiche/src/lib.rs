@@ -152,6 +152,7 @@ struct Shared {
     owner: Option<Arc<dyn Send + Sync>>,
     limits: Limits,
     handles: AtomicUsize,
+    diagnostics: bool,
 }
 impl Shared {
     fn close(&self, code: u64, reason: &[u8]) {
@@ -194,6 +195,9 @@ impl CloseHandle {
     }
     pub fn buffered_receive_bytes(&self) -> usize {
         self.0.limits.receive_bytes - self.0.receive_budget.available_permits()
+    }
+    pub fn buffered_send_bytes(&self) -> usize {
+        self.0.limits.send_bytes - self.0.send_budget.available_permits()
     }
 }
 /// QUIC worker callbacks. Construct together with its H3-facing connection.
@@ -264,6 +268,7 @@ fn create(
         owner,
         limits,
         handles: AtomicUsize::new(0),
+        diagnostics: std::env::var_os("EDGE_QUICHE_DIAGNOSTICS").is_some(),
     });
     Ok((
         Driver {
@@ -839,6 +844,13 @@ impl Driver {
                 match qconn.stream_send(id, &[], true) {
                     Ok(_) => {
                         s.sent_fin = true;
+                        if self.shared.diagnostics {
+                            eprintln!(
+                                "quiche-fin-queued id={id} recv_fin={} tx_free={}",
+                                s.recv_fin,
+                                self.shared.send_budget.available_permits()
+                            );
+                        }
                         wake(&mut s.write_waker);
                     }
                     Err(quiche::Error::Done) => {}
@@ -850,6 +862,15 @@ impl Driver {
                 }
             }
             if s.claimed && s.recv_dropped && s.send_dropped {
+                if self.shared.diagnostics {
+                    eprintln!(
+                        "quiche-stream-release id={id} recv_fin={} sent_fin={} send_error={:?} capacity={:?}",
+                        s.recv_fin,
+                        s.sent_fin,
+                        s.send_error,
+                        qconn.stream_capacity(id)
+                    );
+                }
                 state.streams.remove(&id);
             } else if again {
                 state.dirty(id);
@@ -913,7 +934,7 @@ impl ApplicationOverQuic for Driver {
             ConnectionError::InternalError(format!("QUIC worker ended: {result:?}"))
         };
         let mut state = self.shared.state.lock();
-        if std::env::var_os("EDGE_QUICHE_DIAGNOSTICS").is_some() {
+        if self.shared.diagnostics {
             eprintln!(
                 "quiche-close error={error:?} rx_free={} tx_free={} quic={:?}",
                 self.shared.receive_budget.available_permits(),

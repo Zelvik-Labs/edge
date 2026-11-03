@@ -49,7 +49,11 @@ struct Fixture {
 }
 impl Fixture {
     async fn new(limits: Limits) -> Self {
-        let directory = std::env::temp_dir().join(format!(
+        let base = std::env::var_os("EDGE_QUICHE_EVIDENCE_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir);
+        std::fs::create_dir_all(&base).unwrap();
+        let directory = base.join(format!(
             "edge-quiche-test-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
@@ -95,6 +99,11 @@ impl Fixture {
         settings.initial_max_stream_data_uni = 64 * 1024;
         settings.initial_max_data = 256 * 1024;
         settings.max_idle_timeout = Some(Duration::from_secs(5));
+        if std::env::var_os("EDGE_QUICHE_EVIDENCE_DIR").is_some() {
+            let qlog = directory.join("qlog");
+            std::fs::create_dir(&qlog).unwrap();
+            settings.qlog_dir = Some(qlog.to_str().unwrap().to_string());
+        }
         let gate = HandshakeGate::new().unwrap();
         let hooks = Hooks {
             connection_hook: Some(Arc::new(AdmissionTls(gate))),
@@ -181,7 +190,12 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         self.close.close(0x100, b"test complete");
         self.endpoint.close(0_u32.into(), b"test complete");
-        std::fs::remove_dir_all(&self.directory).unwrap();
+        if std::env::var_os("EDGE_QUICHE_EVIDENCE_DIR").is_none() {
+            std::fs::remove_dir_all(&self.directory).unwrap();
+        } else {
+            // Keep wire diagnostics but never upload generated private keys.
+            std::fs::remove_file(self.directory.join("key.pem")).unwrap();
+        }
     }
 }
 

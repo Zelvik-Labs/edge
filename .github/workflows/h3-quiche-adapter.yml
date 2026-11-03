@@ -20,6 +20,7 @@ jobs:
       CARGO_BUILD_JOBS: '2'
       RUST_TEST_THREADS: '2'
       EDGE_QUICHE_DIAGNOSTICS: '1'
+      EDGE_QUICHE_EVIDENCE_DIR: .local/h3-quiche/wire
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@1.99.1
@@ -38,7 +39,12 @@ jobs:
           set -euo pipefail
           mkdir -p .local/h3-quiche
           cargo clippy --locked --manifest-path crates/zelvik-edge-h3-quiche/Cargo.toml --all-targets -- -D clippy::correctness -D clippy::suspicious > .local/h3-quiche/clippy.log 2>&1
-          cargo test --locked --manifest-path crates/zelvik-edge-h3-quiche/Cargo.toml --all-targets -- --nocapture > .local/h3-quiche/tests.log 2>&1
+          status=0
+          cargo test --locked --manifest-path crates/zelvik-edge-h3-quiche/Cargo.toml --all-targets -- --nocapture > .local/h3-quiche/tests.log 2>&1 || status=$?
+          for attempt in $(seq 1 10); do
+            cargo test --locked --manifest-path crates/zelvik-edge-h3-quiche/Cargo.toml --test wire real_h3_multiplex_preserves_body_duplicate_headers_and_both_trailers -- --exact --nocapture > ".local/h3-quiche/repeat-$attempt.log" 2>&1 || status=$?
+          done
+          exit "$status"
       - name: Retain all results and failures
         if: always()
         uses: actions/upload-artifact@v4
