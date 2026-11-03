@@ -379,25 +379,66 @@ async fn multiplex_roundtrip(loss: bool) {
 async fn fin_sent_after_all_body_bytes_are_acknowledged_still_reaches_peer() {
     tokio::time::timeout(Duration::from_secs(15), async {
         let mut fixture = Fixture::new(Limits::default()).await;
-        let (mut request, mut response) = fixture.client.open_bi().await.unwrap();
-        request.write_all(b"request").await.unwrap();
-        request.finish().unwrap();
-        let mut stream = poll_fn(|cx| fixture.server.poll_accept_bidi(cx))
+        let (_, replacement, _) = zelvik_edge_h3_quiche::server(Limits::default()).unwrap();
+        let transport = std::mem::replace(&mut fixture.server, replacement);
+        let mut server = h3::server::builder().build(transport).await.unwrap();
+        let (mut driver, mut sender) =
+            h3::client::new(h3_quinn::Connection::new(fixture.client.clone()))
+                .await
+                .unwrap();
+        let client_driver = tokio::spawn(async move { poll_fn(|cx| driver.poll_close(cx)).await });
+        let (body_read, read_complete) = tokio::sync::oneshot::channel();
+        let close = fixture.close.clone();
+        let serving = tokio::spawn(async move {
+            let (_, mut stream) = server
+                .accept()
+                .await
+                .unwrap()
+                .unwrap()
+                .resolve_request()
+                .await
+                .unwrap();
+            assert!(stream.recv_data().await.unwrap().is_none());
+            stream
+                .send_response(http::Response::builder().status(200).body(()).unwrap())
+                .await
+                .unwrap();
+            stream
+                .send_data(Bytes::from_static(b"response"))
+                .await
+                .unwrap();
+            read_complete.await.unwrap();
+            // Budgeted send buffers are released on ACK: force a late FIN
+            // instead of relying on a race with the last DATA acknowledgement.
+            while close.buffered_send_bytes() != 0 {
+                tokio::task::yield_now().await;
+            }
+            stream.finish().await.unwrap();
+            server
+        });
+        let mut stream = sender
+            .send_request(
+                http::Request::get("https://localhost/late-fin")
+                    .body(())
+                    .unwrap(),
+            )
             .await
             .unwrap();
-        while poll_fn(|cx| stream.poll_data(cx)).await.unwrap().is_some() {}
-        stream.send_data(Bytes::from_static(b"response")).unwrap();
-        poll_fn(|cx| stream.poll_ready(cx)).await.unwrap();
-        let mut body = [0; 8];
-        response.read_exact(&mut body).await.unwrap();
-        assert_eq!(&body, b"response");
-        // Budgeted send buffers are released on ACK: this forces the late-FIN
-        // ordering behind upstream quiche #2665 instead of relying on a race.
-        while fixture.close.buffered_send_bytes() != 0 {
-            tokio::task::yield_now().await;
+        stream.finish().await.unwrap();
+        assert_eq!(stream.recv_response().await.unwrap().status(), 200);
+        let mut body = Vec::new();
+        while body.len() < 8 {
+            let mut bytes = stream.recv_data().await.unwrap().unwrap();
+            body.extend_from_slice(&bytes.copy_to_bytes(bytes.remaining()));
         }
-        poll_fn(|cx| stream.poll_finish(cx)).await.unwrap();
-        assert!(response.read_to_end(0).await.unwrap().is_empty());
+        assert_eq!(body, b"response");
+        body_read.send(()).unwrap();
+        assert!(stream.recv_data().await.unwrap().is_none());
+        assert!(stream.recv_trailers().await.unwrap().is_none());
+        drop(serving.await.unwrap());
+        drop(sender);
+        client_driver.abort();
+        assert!(client_driver.await.unwrap_err().is_cancelled());
     })
     .await
     .expect("FIN after the last DATA ACK must reach the peer");
