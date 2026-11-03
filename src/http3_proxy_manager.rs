@@ -69,8 +69,27 @@ static H3_NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(0);
 /// Connections closed by an owner drain pass, cumulative.
 static H3_SHED_DRAINED: AtomicU64 = AtomicU64::new(0);
 
+enum H3LiveConnection {
+    Quinn(quinn::Connection),
+    #[cfg(feature = "h3-quiche")]
+    Quiche(zelvik_edge_h3_quiche::CloseHandle),
+}
+impl H3LiveConnection {
+    fn close(&self, reason: &[u8]) {
+        match self {
+            Self::Quinn(connection) => connection.close(
+                quinn::VarInt::from_u32(h3::error::Code::H3_NO_ERROR.value() as u32),
+                reason,
+            ),
+            #[cfg(feature = "h3-quiche")]
+            Self::Quiche(connection) => {
+                connection.close(h3::error::Code::H3_NO_ERROR.value(), reason)
+            }
+        }
+    }
+}
 struct H3ConnectionEntry {
-    connection: quinn::Connection,
+    connection: H3LiveConnection,
     accepted_at: Instant,
 }
 
@@ -90,10 +109,9 @@ pub(crate) fn drain_h3_oldest(limit: usize) -> usize {
     let mut drained = 0;
     for (_, id) in oldest {
         if let Some((_, entry)) = H3_CONNECTIONS.remove(&id) {
-            entry.connection.close(
-                quinn::VarInt::from_u32(h3::error::Code::H3_NO_ERROR.value() as u32),
-                b"hard memory exhaustion: reclaim ineffective",
-            );
+            entry
+                .connection
+                .close(b"hard memory exhaustion: reclaim ineffective");
             drained += 1;
         }
     }
@@ -115,11 +133,15 @@ struct H3ConnectionRegistration {
 
 impl H3ConnectionRegistration {
     fn register(connection: &quinn::Connection) -> Self {
+        Self::register_transport(H3LiveConnection::Quinn(connection.clone()))
+    }
+
+    fn register_transport(connection: H3LiveConnection) -> Self {
         let id = H3_NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
         H3_CONNECTIONS.insert(
             id,
             H3ConnectionEntry {
-                connection: connection.clone(),
+                connection,
                 accepted_at: Instant::now(),
             },
         );
@@ -322,6 +344,41 @@ impl Http3ProxyManager {
         self.run_endpoint(port, endpoint, shutdown_rx).await
     }
 
+    pub(crate) async fn run_native_socket(
+        self: Arc<Self>,
+        socket: tokio::net::UdpSocket,
+        shutdown: watch::Receiver<bool>,
+        backend: crate::h3_backend::H3Backend,
+    ) -> Result<()> {
+        let address = socket.local_addr()?;
+        match backend {
+            crate::h3_backend::H3Backend::QuinnNative => {
+                let config = self.build_quinn_server_config().await?;
+                let endpoint = Endpoint::new(
+                    quinn::EndpointConfig::default(),
+                    Some(config),
+                    socket.into_std()?,
+                    Arc::new(quinn::TokioRuntime),
+                )?;
+                info!("HTTP/3 experimental native Quinn listener on {address}");
+                self.run_endpoint(address.port(), endpoint, shutdown).await
+            }
+            crate::h3_backend::H3Backend::TokioQuicheNative => {
+                #[cfg(feature = "h3-quiche")]
+                {
+                    self.run_quiche_socket(socket, shutdown).await
+                }
+                #[cfg(not(feature = "h3-quiche"))]
+                {
+                    anyhow::bail!("tokio-quiche-native requires the h3-quiche build feature")
+                }
+            }
+            crate::h3_backend::H3Backend::QuinnShared => {
+                anyhow::bail!("shared Quinn requires the UDP demux")
+            }
+        }
+    }
+
     pub async fn run_endpoint(
         self: Arc<Self>,
         port: u16,
@@ -515,7 +572,7 @@ impl Http3ProxyManager {
         ));
         let per_conn_limit = MEMORY_GOVERNOR.h3_request_limit_per_connection();
         if let Some(transport_config) = Arc::get_mut(&mut server_config.transport) {
-            *transport_config = crate::quic_transport::tuned_transport_config(None);
+            *transport_config = crate::h3_backend::quinn_transport()?;
             // T5: an AF_XDP-scoped endpoint (demux-fed only) runs the
             // policy-selected controller; the kernel-socket listener
             // keeps quinn's stock controller — non-XDP contract
@@ -525,7 +582,13 @@ impl Http3ProxyManager {
                 transport_config.congestion_controller_factory(factory);
             }
             let stream_cap = per_conn_limit.min(u32::MAX as usize) as u32;
-            let uni_cap = stream_cap.clamp(32, 256);
+            let uni_cap = if crate::h3_backend::transport_profile()?
+                == crate::h3_backend::TransportProfile::Matched
+            {
+                8
+            } else {
+                stream_cap.clamp(32, 256)
+            };
             transport_config.max_concurrent_bidi_streams(stream_cap.into());
             transport_config.max_concurrent_uni_streams(uni_cap.into());
         }
@@ -548,9 +611,29 @@ impl Http3ProxyManager {
             "HTTP/3 connection accepted on port {} from {}",
             listen_port, remote_addr
         );
-        let mut h3_conn = h3::server::builder()
-            .build(h3_quinn::Connection::new(conn))
-            .await?;
+        self.serve_h3_transport(
+            h3_quinn::Connection::new(conn),
+            listen_port,
+            remote_addr,
+            proxy,
+            shutdown_rx,
+        )
+        .await
+    }
+
+    async fn serve_h3_transport<C>(
+        self: Arc<Self>,
+        transport: C,
+        listen_port: u16,
+        remote_addr: SocketAddr,
+        proxy: Arc<pingora_proxy::HttpProxy<EdgeProxy, crate::origin_h3::OriginH3Connector>>,
+        shutdown_rx: watch::Receiver<bool>,
+    ) -> Result<()>
+    where
+        C: h3::quic::Connection<Bytes> + Send + 'static,
+        <C as OpenStreams<Bytes>>::BidiStream: h3::quic::BidiStream<Bytes> + Send + 'static,
+    {
+        let mut h3_conn = h3::server::builder().build(transport).await?;
         let per_connection_limit = MEMORY_GOVERNOR.h3_request_limit_per_connection().max(1);
         let stream_semaphore = Arc::new(Semaphore::new(per_connection_limit));
         let ticket_owner = Arc::new(crate::memory_ticket::TicketBucket::new(&MEMORY_GOVERNOR));
@@ -1235,3 +1318,7 @@ mod tests {
         client.wait_idle().await;
     }
 }
+
+#[cfg(feature = "h3-quiche")]
+#[path = "http3_quiche.rs"]
+mod quiche_backend;

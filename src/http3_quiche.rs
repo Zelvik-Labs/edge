@@ -1,0 +1,215 @@
+//! Opt-in native tokio-quiche listener feeding the existing CDN/cache handler.
+use super::*;
+use futures_util::StreamExt;
+use parking_lot::Mutex;
+use tokio::net::UdpSocket;
+use zelvik_edge_h3_quiche::{
+    Limits,
+    boring::ssl::SslContextBuilder,
+    tokio_quiche::{
+        self, ConnectionParams,
+        metrics::DefaultMetrics,
+        quic::ConnectionHook,
+        settings::{CertificateKind, Hooks, QuicSettings, TlsCertificatePaths},
+    },
+};
+
+struct PreparedTls(Mutex<Option<SslContextBuilder>>);
+impl ConnectionHook for PreparedTls {
+    fn create_custom_ssl_context_builder(
+        &self,
+        _: TlsCertificatePaths<'_>,
+    ) -> Option<SslContextBuilder> {
+        Some(
+            self.0
+                .lock()
+                .take()
+                .expect("one prevalidated TLS builder per native UDP socket"),
+        )
+    }
+}
+// tokio-quiche 0.20 has a fixed 2048 x 1500-byte incoming queue. Reserve its
+// worst-case payload plus bounded adapter RX/TX, QUIC receive window and
+// metadata headroom. The token follows the worker and outstanding Bytes.
+const TRANSPORT_RESERVATION: u64 = 4 * 1024 * 1024;
+struct TransportReservation;
+impl Drop for TransportReservation {
+    fn drop(&mut self) {
+        MEMORY_GOVERNOR.workspace_refund(TRANSPORT_RESERVATION);
+    }
+}
+
+impl Http3ProxyManager {
+    fn validate_quiche_policy(&self) -> Result<()> {
+        let policy = self.config_store.get_global_http3_policy_sync();
+        anyhow::ensure!(
+            policy.as_ref().is_some_and(|p| p.address_validation_mode()
+                == crate::config_models::Http3AddressValidation::Off),
+            "tokio-quiche native experiment supports only an explicitly configured addressValidation=off; its native Retry API cannot preserve Edge's adaptive node-wide Retry budget"
+        );
+        Ok(())
+    }
+
+    pub(super) async fn run_quiche_socket(
+        self: Arc<Self>,
+        socket: UdpSocket,
+        mut shutdown: watch::Receiver<bool>,
+    ) -> Result<()> {
+        self.validate_quiche_policy()?;
+        let address = socket.local_addr()?;
+        let builder = self.cert_selector.build_quiche_ssl_builder()?;
+        let mut settings = QuicSettings::default();
+        settings.enable_dgram = false;
+        settings.enable_early_data = false;
+        settings.disable_client_ip_validation = true; // validated explicit Off policy above
+        settings.initial_max_streams_bidi =
+            MEMORY_GOVERNOR.h3_request_limit_per_connection().max(1) as u64;
+        settings.initial_max_streams_uni = 8;
+        settings.initial_max_data = 256 * 1024;
+        settings.max_connection_window = 256 * 1024;
+        settings.initial_max_stream_data_bidi_local = 64 * 1024;
+        settings.initial_max_stream_data_bidi_remote = 64 * 1024;
+        settings.initial_max_stream_data_uni = 64 * 1024;
+        settings.max_stream_window = 64 * 1024;
+        settings.handshake_timeout = Some(std::time::Duration::from_secs(10));
+        settings.max_idle_timeout = Some(std::time::Duration::from_secs(30));
+        settings.listen_backlog = 32;
+        let mut hooks = Hooks::default();
+        hooks.connection_hook = Some(Arc::new(PreparedTls(Mutex::new(Some(builder)))));
+        // The upstream hook requires Some(paths), but our prepared builder is
+        // supplied before any file lookup. No private material is written here.
+        let params = ConnectionParams::new_server(
+            settings,
+            TlsCertificatePaths {
+                cert: "dynamic-selector",
+                private_key: "dynamic-selector",
+                kind: CertificateKind::X509,
+            },
+            hooks,
+        );
+        let mut listeners = tokio_quiche::listen([socket], params, DefaultMetrics)?;
+        let mut listener = listeners.pop().context("native QUIC listener missing")?;
+        let mut logic = self.proxy_logic.clone();
+        logic.tls_downstream = true;
+        let proxy = Arc::new(http_proxy_custom(
+            &self.server_conf,
+            logic,
+            crate::origin_h3::OriginH3Connector,
+        ));
+        info!("HTTP/3 experimental tokio-quiche 0.20.0 + Hyperium h3 listener on {address}");
+        loop {
+            let incoming = tokio::select! {
+                _ = shutdown.changed() => return Ok(()),
+                incoming = listener.next() => incoming,
+            };
+            let Some(incoming) = incoming else {
+                anyhow::bail!("native QUIC listener ended unexpectedly");
+            };
+            let incoming = match incoming {
+                Ok(incoming) => incoming,
+                Err(error) => {
+                    error!("HTTP/3 native QUIC initial rejected on {address}: {error}");
+                    continue;
+                }
+            };
+            self.validate_quiche_policy()?; // a reload must never silently select a weaker Retry policy
+            let remote = incoming.peer_addr();
+            if crate::l4_defense::is_l4_blocked(
+                &self.config_store,
+                &self.proxy_logic.waf_state,
+                remote.ip(),
+            ) {
+                H3_IGNORED_INCOMING.fetch_add(1, Ordering::Relaxed);
+                drop(incoming); // no worker/handshake is started, hence no reply
+                continue;
+            }
+            let Some(connection_permit) =
+                MEMORY_GOVERNOR.try_admit(AdmissionClass::Http3Connection)
+            else {
+                self.record_l4_event(
+                    remote.ip(),
+                    L4DefenseKind::H3AdmissionReject,
+                    format!(
+                        "port={} peer={remote} class=quiche_connection",
+                        address.port()
+                    ),
+                );
+                drop(incoming);
+                continue;
+            };
+            let listener_key = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), address.port());
+            let Some(listener_permit) =
+                MEMORY_GOVERNOR.try_admit_listener(listener_key, AdmissionClass::Http3Connection)
+            else {
+                self.record_l4_event(
+                    remote.ip(),
+                    L4DefenseKind::H3AdmissionReject,
+                    format!(
+                        "port={} peer={remote} class=quiche_listener",
+                        address.port()
+                    ),
+                );
+                drop(incoming);
+                continue;
+            };
+            if !MEMORY_GOVERNOR.try_admit_workspace(TRANSPORT_RESERVATION) {
+                MEMORY_GOVERNOR.record_reject(AdmissionClass::Http3Connection);
+                self.record_l4_event(
+                    remote.ip(),
+                    L4DefenseKind::H3AdmissionReject,
+                    format!(
+                        "port={} peer={remote} class=quiche_transport_bytes",
+                        address.port()
+                    ),
+                );
+                drop(incoming);
+                continue;
+            }
+            let owner = Arc::new((
+                connection_permit,
+                listener_permit,
+                TransportReservation,
+                crate::metrics::transport_metrics_guard(
+                    crate::metrics::ShadowTransportKind::QuicConnection,
+                ),
+            ));
+            let limits = Limits {
+                streams: MEMORY_GOVERNOR.h3_request_limit_per_connection().max(1) + 16,
+                ..Limits::default()
+            };
+            let (driver, transport, close) =
+                zelvik_edge_h3_quiche::server_with_owner(limits, owner)
+                    .map_err(|error| anyhow::anyhow!(error))?;
+            let manager = self.clone();
+            let proxy = proxy.clone();
+            let mut request_shutdown = shutdown.clone();
+            tokio::spawn(async move {
+                let _drain = H3ConnectionRegistration::register_transport(
+                    H3LiveConnection::Quiche(close.clone()),
+                );
+                let handler_shutdown = request_shutdown.clone();
+                let serve = async move {
+                    let (_, worker) = incoming.handshake(driver).await?;
+                    tokio_quiche::InitialQuicConnection::resume(worker);
+                    manager
+                        .serve_h3_transport(
+                            transport,
+                            address.port(),
+                            remote,
+                            proxy,
+                            handler_shutdown,
+                        )
+                        .await
+                };
+                tokio::select! {
+                    result = serve => if let Err(error) = result { debug!("HTTP/3 native quiche connection on {address} failed: {error}"); },
+                    _ = request_shutdown.changed() => {},
+                }
+                close.close(
+                    h3::error::Code::H3_NO_ERROR.value(),
+                    b"native H3 handler ended",
+                );
+            });
+        }
+    }
+}

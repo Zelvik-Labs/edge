@@ -1189,6 +1189,23 @@ impl QuicUdpDemuxManager {
         mut shutdown_rx: watch::Receiver<bool>,
     ) -> Result<()> {
         let port = bind_addr.port();
+        let backend = crate::h3_backend::selected()?;
+        if http3_enabled && backend != crate::h3_backend::H3Backend::QuinnShared {
+            anyhow::ensure!(
+                !self.udp_manager.desired_ports().await.contains(&port)
+                    && !self.config_store.has_quic_passthrough_on_port_sync(port),
+                "native H3 experiment cannot share UDP port {port} with UDP/QUIC forwarding"
+            );
+            if let Some(runtime) = crate::runtime_mode::RuntimeConfig::current() {
+                crate::h3_backend::validate_runtime(&runtime)?;
+            }
+            let socket = bind_udp_with_retry(bind_addr, &mut shutdown_rx).await?;
+            return self
+                .http3_manager
+                .clone()
+                .run_native_socket(socket, shutdown_rx, backend)
+                .await;
+        }
         let socket = Arc::new(bind_udp_with_retry(bind_addr, &mut shutdown_rx).await?);
         let local_addr = socket.local_addr()?;
         let h3_queue_size = MEMORY_GOVERNOR.h3_datagram_queue_size();

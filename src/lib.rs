@@ -28,6 +28,7 @@ pub mod config_models;
 pub mod contracts;
 pub mod firewall;
 pub mod geo;
+pub mod h3_backend;
 pub mod h3_downstream;
 pub mod headers;
 pub mod health_manager;

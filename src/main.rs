@@ -3568,6 +3568,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
             node_paths.api_config_candidates()
         )
     })?;
+    zelvik_edge::h3_backend::validate_runtime(&runtime_config)?;
     RuntimeConfig::set_current(runtime_config.clone());
     repair_missing_xdp_ebpf_object_for_current_runtime(&node_paths);
     if runtime_config.xdp.enabled && runtime_config.xdp.interfaces.is_empty() {
