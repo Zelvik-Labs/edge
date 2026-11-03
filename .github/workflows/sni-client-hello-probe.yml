@@ -1,0 +1,36 @@
+name: SNI parser allocation and timing comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - src/tls_client_hello.rs
+      - benches/support/sni_client_hello_probe.rs
+      - scripts/perf/sni-client-hello/**
+      - .github/workflows/sni-client-hello-probe.yml
+permissions:
+  contents: read
+concurrency:
+  group: sni-parser-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  parser:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@1.99.1
+      - name: Build exact source variants and test the production parser
+        run: python3 scripts/perf/sni-client-hello/run.py build
+      - name: Compare complete output corpus and allocation failure control before timing
+        run: python3 scripts/perf/sni-client-hello/run.py measure
+      - name: Retain all samples, controls and measured executables
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sni-parser-${{ github.sha }}
+          path: .local/sni-client-hello-ci/
+          include-hidden-files: true
+          if-no-files-found: error

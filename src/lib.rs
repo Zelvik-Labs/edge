@@ -81,6 +81,7 @@ pub mod runtime_mode;
 pub mod special_defense;
 pub mod ssl;
 pub mod tcp_proxy;
+mod tls_client_hello;
 pub mod tls_crypto;
 pub mod toa;
 #[cfg(any(test, target_os = "linux"))]
