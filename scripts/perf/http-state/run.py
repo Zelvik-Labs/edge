@@ -22,10 +22,12 @@ metadata = {"source": os.environ["GITHUB_SHA"], "binary_sha256": hashes,
             "scope": "real production startup; one target/case at a time; two rounds, not long soak",
             "runs": []}
 records = []
+rx_records = []
 
 def save():
     (OUT / "suite.json").write_text(json.dumps(metadata, indent=2) + "\n")
     (OUT / "records.json").write_text(json.dumps(records, indent=2) + "\n")
+    (OUT / "rx-records.json").write_text(json.dumps(rx_records, indent=2) + "\n")
 
 for repeat in range(2):
     order = ["edge", "nginx", "openresty"] if repeat == 0 else ["openresty", "nginx", "edge"]
@@ -66,6 +68,18 @@ for repeat in range(3):
                 "--output", str(OUT / label), "--payload-size", "1024", "--protocols", "h3",
                 "--quic-rx-batch", batch, *common], stdout=log, stderr=subprocess.STDOUT)
         metadata["runs"].append({"label": label, "exit_code": process.returncode, "rx_batch": batch})
+        save()
+        path = OUT / label / 'manifest.json'
+        if not path.exists():
+            print((OUT / f'{label}.log').read_text()[-6000:], file=sys.stderr)
+            raise RuntimeError(f'RX fixture did not create a manifest: {label}')
+        manifest = json.loads(path.read_text())
+        if manifest['status'] != 'completed' or manifest.get('cleanup_errors'):
+            raise RuntimeError(f'RX fixture/cleanup failed: {label}')
+        assert manifest['source_revision'] == metadata['source']
+        assert manifest['args']['quic_rx_batch'] == batch and len(manifest['cases']) == 9
+        for case in manifest['cases']:
+            rx_records.append({'round':repeat,'rx_batch':batch,'manifest':str(path.relative_to(OUT)),**case})
         save()
 
 for path in binaries:

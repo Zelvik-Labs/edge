@@ -420,6 +420,7 @@ def run(args):
                                                'cpu_cores':idle_cpu/(idle_elapsed*1e6)}
                         refuse_compilation()
                     disk_before=filesystems(target)
+                    processes_before=docker('top',target,'-eo','pid,comm,rss,nlwp')
                     before=cgroup(target); origin_resources_before=cgroup(origin)
                     origin_before=origin_count(origin_port); cpu_before=host_cpu()
                     usage_before=resource.getrusage(resource.RUSAGE_CHILDREN); started=time.monotonic()
@@ -430,6 +431,9 @@ def run(args):
                     disk_after=filesystems(target)
                     result=parse_client(args,protocol,connection,raw,elapsed); row['native']=result
                     row.update(elapsed=elapsed,origin_requests=origin_after-origin_before-1,
+                               origin_counter_before=origin_before,origin_counter_after=origin_after,
+                               proxy_processes_before=processes_before,
+                               proxy_processes_after=docker('top',target,'-eo','pid,comm,rss,nlwp'),
                                proxy_before=before,proxy_after=after,host_cpu_before=cpu_before,host_cpu_after=cpu_after,
                                origin_before=origin_resources_before,origin_after=origin_resources_after,
                                filesystem_before=disk_before,filesystem_after=disk_after,

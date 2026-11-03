@@ -199,3 +199,14 @@ jobs:
             !.local/http-state-ci/tls/*.key
           include-hidden-files: true
           if-no-files-found: error
+      - name: Retain exact measured executables
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3-native-binaries-${{ github.sha }}
+          path: |
+            target/release/Zelvik-Edge
+            target/release/examples/issue34-controller
+            .local/http-state-ci/protocol-state-client
+          include-hidden-files: true
+          if-no-files-found: warn
