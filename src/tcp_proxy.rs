@@ -23,9 +23,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::sync::LazyLock as Lazy;
-#[cfg(target_os = "linux")]
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
@@ -2466,8 +2464,10 @@ where
 {
     let (client_reader, client_writer) = tokio::io::split(client);
     let (backend_reader, backend_writer) = tokio::io::split(backend);
-    let bytes_received_counter = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
-    let bytes_sent_counter = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    // Both direction futures are scoped to this relay; their counters do not
+    // need independent heap ownership or reference-count operations.
+    let bytes_received_counter = AtomicU64::new(0);
+    let bytes_sent_counter = AtomicU64::new(0);
     let strict_close_on_eof = options.strict_close_on_eof;
     let cancel_rx = options.cancel_rx.clone();
     let client_to_backend = copy_stream_and_count(
@@ -2475,7 +2475,7 @@ where
         StreamDirection::ClientToBackend,
         client_reader,
         backend_writer,
-        bytes_received_counter.clone(),
+        &bytes_received_counter,
         options.clone(),
     );
     let backend_to_client = copy_stream_and_count(
@@ -2483,7 +2483,7 @@ where
         StreamDirection::BackendToClient,
         backend_reader,
         client_writer,
-        bytes_sent_counter.clone(),
+        &bytes_sent_counter,
         options,
     );
 
@@ -2564,7 +2564,7 @@ async fn copy_stream_and_count<R, W>(
     direction: StreamDirection,
     mut reader: R,
     mut writer: W,
-    counter: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    counter: &AtomicU64,
     options: RelayOptions,
 ) -> DirectionTaskResult
 where
@@ -2573,8 +2573,12 @@ where
 {
     let full_buf_bytes = relay_copy_buffer_bytes();
     let mut buf = vec![0u8; full_buf_bytes];
-    let mut total = 0u64;
-    let mut unflushed = 0u64;
+    let mut progress = RelayProgress::new(
+        server_id,
+        direction,
+        counter,
+        options.enforce_pressure_idle_timeout,
+    );
 
     loop {
         // Regrow a pressure-shrunk buffer once data flows again; the shrink is
@@ -2585,13 +2589,12 @@ where
         let n = match read_with_pressure_idle_timeout(
             &mut reader,
             &mut buf,
-            options.enforce_pressure_idle_timeout,
+            progress.pressure_idle_timeout,
         )
         .await
         {
             Ok(n) => n,
             Err(err) => {
-                record_stream_metrics_delta(server_id, direction, unflushed);
                 if err.kind() == io::ErrorKind::TimedOut {
                     return Ok(DirectionSuccess {
                         close_reason: RelayCloseReason::PressureIdleTimeout,
@@ -2606,7 +2609,7 @@ where
             }
         };
         if n == 0 {
-            record_stream_metrics_delta(server_id, direction, unflushed);
+            progress.flush();
             writer
                 .shutdown()
                 .await
@@ -2617,16 +2620,26 @@ where
             });
         }
 
-        if let Err(err) = writer.write_all(&buf[..n]).await {
-            record_stream_metrics_delta(server_id, direction, unflushed);
-            return direction_error_or_benign(direction, RelayIoPhase::Write, err);
-        }
-        total += n as u64;
-        unflushed += n as u64;
-        counter.store(total, std::sync::atomic::Ordering::Relaxed);
-        if unflushed >= STREAM_METRICS_FLUSH_BYTES {
-            record_stream_metrics_delta(server_id, direction, unflushed);
-            unflushed = 0;
+        let mut remaining = &buf[..n];
+        while !remaining.is_empty() {
+            match writer.write(remaining).await {
+                Ok(0) => {
+                    return direction_error_or_benign(
+                        direction,
+                        RelayIoPhase::Write,
+                        io::Error::new(io::ErrorKind::WriteZero, "failed to write whole buffer"),
+                    );
+                }
+                Ok(written) => {
+                    // Count each successful write before another await. A
+                    // later error or cancellation cannot erase accepted bytes.
+                    progress.transferred(written);
+                    remaining = &remaining[written..];
+                }
+                Err(err) => {
+                    return direction_error_or_benign(direction, RelayIoPhase::Write, err);
+                }
+            }
         }
     }
 }
@@ -2756,6 +2769,57 @@ fn record_stream_metrics_delta(server_id: i64, direction: StreamDirection, bytes
     }
 }
 
+// Owned by its direction future, so cancellation flushes the final delta
+// as well as normal EOF/errors. The counters live in the parent future;
+// no cross-thread Arc or detached blocking task is needed.
+struct RelayProgress<'a> {
+    server_id: i64,
+    direction: StreamDirection,
+    counter: &'a AtomicU64,
+    total: u64,
+    unflushed: u64,
+    pressure_idle_timeout: bool,
+}
+
+impl<'a> RelayProgress<'a> {
+    fn new(
+        server_id: i64,
+        direction: StreamDirection,
+        counter: &'a AtomicU64,
+        pressure_idle_timeout: bool,
+    ) -> Self {
+        Self {
+            server_id,
+            direction,
+            counter,
+            total: 0,
+            unflushed: 0,
+            pressure_idle_timeout,
+        }
+    }
+    fn flush(&mut self) {
+        record_stream_metrics_delta(self.server_id, self.direction, self.unflushed);
+        self.unflushed = 0;
+    }
+}
+
+impl RelayProgress<'_> {
+    fn transferred(&mut self, bytes: usize) {
+        self.total += bytes as u64;
+        self.unflushed += bytes as u64;
+        self.counter.store(self.total, Ordering::Relaxed);
+        if self.unflushed >= STREAM_METRICS_FLUSH_BYTES {
+            self.flush();
+        }
+    }
+}
+
+impl Drop for RelayProgress<'_> {
+    fn drop(&mut self) {
+        self.flush();
+    }
+}
+
 #[cfg(target_os = "linux")]
 mod zero_copy {
     use super::*;
@@ -2794,13 +2858,13 @@ mod zero_copy {
         }
         let bytes_received = AtomicU64::new(0);
         let bytes_sent = AtomicU64::new(0);
-        let forward = Progress::new(
+        let forward = RelayProgress::new(
             server_id,
             StreamDirection::ClientToBackend,
             &bytes_received,
             options.enforce_pressure_idle_timeout,
         );
-        let reverse = Progress::new(
+        let reverse = RelayProgress::new(
             server_id,
             StreamDirection::BackendToClient,
             &bytes_sent,
@@ -2841,59 +2905,14 @@ mod zero_copy {
         ))
     }
 
-    // Owned by its direction future, so cancellation flushes the final delta
-    // as well as normal EOF/errors. The counters live in the parent future;
-    // no cross-thread Arc or detached blocking task is needed.
-    struct Progress<'a> {
-        server_id: i64,
-        direction: StreamDirection,
-        counter: &'a AtomicU64,
-        total: u64,
-        unflushed: u64,
-        pressure_idle_timeout: bool,
-    }
-
-    impl<'a> Progress<'a> {
-        fn new(
-            server_id: i64,
-            direction: StreamDirection,
-            counter: &'a AtomicU64,
-            pressure_idle_timeout: bool,
-        ) -> Self {
-            Self {
-                server_id,
-                direction,
-                counter,
-                total: 0,
-                unflushed: 0,
-                pressure_idle_timeout,
-            }
-        }
-        fn flush(&mut self) {
-            record_stream_metrics_delta(self.server_id, self.direction, self.unflushed);
-            self.unflushed = 0;
-        }
-    }
-
-    impl Observer for Progress<'_> {
+    impl Observer for RelayProgress<'_> {
         fn transferred(&mut self, bytes: usize) {
-            self.total += bytes as u64;
-            self.unflushed += bytes as u64;
-            self.counter.store(self.total, Ordering::Relaxed);
-            if self.unflushed >= STREAM_METRICS_FLUSH_BYTES {
-                self.flush();
-            }
+            RelayProgress::transferred(self, bytes);
         }
         fn read_idle_timeout(&self) -> Option<std::time::Duration> {
             self.pressure_idle_timeout
                 .then(|| MEMORY_GOVERNOR.tcp_relay_pressure_idle_timeout())
                 .flatten()
-        }
-    }
-
-    impl Drop for Progress<'_> {
-        fn drop(&mut self) {
-            self.flush();
         }
     }
 }
@@ -3323,6 +3342,196 @@ mod tests {
     use tokio::net::TcpListener;
 
     struct PendingReader;
+
+    #[derive(Clone, Copy)]
+    enum AfterPartialWrite {
+        Pending,
+        Error(io::ErrorKind),
+        Zero,
+    }
+
+    struct PartialWriter {
+        remaining: usize,
+        after: AfterPartialWrite,
+    }
+
+    impl AsyncWrite for PartialWriter {
+        fn poll_write(
+            mut self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<io::Result<usize>> {
+            if self.remaining > 0 {
+                let written = self.remaining.min(buf.len());
+                self.remaining -= written;
+                return Poll::Ready(Ok(written));
+            }
+            match self.after {
+                AfterPartialWrite::Pending => Poll::Pending,
+                AfterPartialWrite::Error(kind) => Poll::Ready(Err(io::Error::from(kind))),
+                AfterPartialWrite::Zero => Poll::Ready(Ok(0)),
+            }
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    fn copy_relay_metrics(id: i64) -> Arc<crate::metrics::ServerMetrics> {
+        let server = Arc::new(ServerConfig {
+            id: Some(id),
+            ..Default::default()
+        });
+        crate::metrics::METRICS
+            .admit_configs(std::iter::once(server.as_ref()))
+            .unwrap();
+        crate::metrics::METRICS.publish_configs(std::slice::from_ref(&server));
+        server.runtime_metrics.get()
+    }
+
+    #[tokio::test]
+    async fn copy_relay_partial_error_keeps_accepted_bytes() {
+        let id = 9_120_001;
+        let metrics = copy_relay_metrics(id);
+        let counter = AtomicU64::new(0);
+        let result = copy_stream_and_count(
+            id,
+            StreamDirection::ClientToBackend,
+            &b"abcdef"[..],
+            PartialWriter {
+                remaining: 3,
+                after: AfterPartialWrite::Error(io::ErrorKind::BrokenPipe),
+            },
+            &counter,
+            RelayOptions::sni_passthrough(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.close_reason, RelayCloseReason::BenignIo);
+        assert_eq!(counter.load(Ordering::Relaxed), 3);
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.bytes_received, 3);
+        assert_eq!(snapshot.origin_bytes_sent, 3);
+    }
+
+    #[tokio::test]
+    async fn copy_relay_partial_write_zero_stays_an_error_with_exact_bytes() {
+        let id = 9_120_002;
+        let metrics = copy_relay_metrics(id);
+        let counter = AtomicU64::new(0);
+        let error = copy_stream_and_count(
+            id,
+            StreamDirection::BackendToClient,
+            &b"abcdef"[..],
+            PartialWriter {
+                remaining: 3,
+                after: AfterPartialWrite::Zero,
+            },
+            &counter,
+            RelayOptions::sni_passthrough(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.direction, StreamDirection::BackendToClient);
+        assert_eq!(error.phase, RelayIoPhase::Write);
+        assert_eq!(error.source.kind(), io::ErrorKind::WriteZero);
+        assert_eq!(counter.load(Ordering::Relaxed), 3);
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.bytes_sent, 3);
+        assert_eq!(snapshot.origin_bytes_received, 3);
+    }
+
+    #[tokio::test]
+    async fn copy_relay_cancel_during_partial_write_flushes_once() {
+        let id = 9_120_003;
+        let metrics = copy_relay_metrics(id);
+        let counter = AtomicU64::new(0);
+        let mut transfer = Box::pin(copy_stream_and_count(
+            id,
+            StreamDirection::ClientToBackend,
+            &b"abcdef"[..],
+            PartialWriter {
+                remaining: 3,
+                after: AfterPartialWrite::Pending,
+            },
+            &counter,
+            RelayOptions::sni_passthrough(),
+        ));
+        std::future::poll_fn(|cx| {
+            assert!(std::future::Future::poll(transfer.as_mut(), cx).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+        assert_eq!(counter.load(Ordering::Relaxed), 3);
+        assert_eq!(metrics.snapshot().bytes_received, 0);
+        drop(transfer);
+        assert_eq!(metrics.snapshot().bytes_received, 3);
+        assert_eq!(metrics.snapshot().origin_bytes_sent, 3);
+    }
+
+    #[tokio::test]
+    async fn copy_relay_cancel_while_reading_flushes_previous_write() {
+        let id = 9_120_004;
+        let metrics = copy_relay_metrics(id);
+        let counter = AtomicU64::new(0);
+        let (mut input, reader) = tokio::io::duplex(64);
+        input.write_all(b"abcdef").await.unwrap();
+        let mut transfer = Box::pin(copy_stream_and_count(
+            id,
+            StreamDirection::BackendToClient,
+            reader,
+            tokio::io::sink(),
+            &counter,
+            RelayOptions::sni_passthrough(),
+        ));
+        std::future::poll_fn(|cx| {
+            assert!(std::future::Future::poll(transfer.as_mut(), cx).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+        assert_eq!(counter.load(Ordering::Relaxed), 6);
+        assert_eq!(metrics.snapshot().bytes_sent, 0);
+        drop(transfer);
+        assert_eq!(metrics.snapshot().bytes_sent, 6);
+        assert_eq!(metrics.snapshot().origin_bytes_received, 6);
+    }
+
+    #[test]
+    fn copy_relay_threshold_and_drop_do_not_duplicate_metrics() {
+        let id = 9_120_005;
+        let metrics = copy_relay_metrics(id);
+        let counter = AtomicU64::new(0);
+        let mut progress =
+            RelayProgress::new(id, StreamDirection::ClientToBackend, &counter, false);
+        progress.transferred(STREAM_METRICS_FLUSH_BYTES as usize);
+        assert_eq!(
+            metrics.snapshot().bytes_received,
+            STREAM_METRICS_FLUSH_BYTES
+        );
+        progress.transferred(7);
+        assert_eq!(
+            metrics.snapshot().bytes_received,
+            STREAM_METRICS_FLUSH_BYTES
+        );
+        drop(progress);
+        assert_eq!(
+            metrics.snapshot().bytes_received,
+            STREAM_METRICS_FLUSH_BYTES + 7
+        );
+        assert_eq!(
+            metrics.snapshot().origin_bytes_sent,
+            STREAM_METRICS_FLUSH_BYTES + 7
+        );
+        assert_eq!(
+            counter.load(Ordering::Relaxed),
+            STREAM_METRICS_FLUSH_BYTES + 7
+        );
+    }
 
     impl AsyncRead for PendingReader {
         fn poll_read(
