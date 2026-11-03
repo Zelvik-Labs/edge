@@ -1,0 +1,27 @@
+{
+  "source_commit": "4651bd39f576687240bbefe99bfee38927b96c3d",
+  "workflow": 41553649436,
+  "artifact": 13194725867,
+  "passed": true,
+  "case_order": [
+    "1-worker",
+    "1-readable",
+    "2-readable",
+    "2-worker"
+  ],
+  "same_binaries": true,
+  "h2_checks": 8,
+  "h3_quic_probe_successes": 16,
+  "all_queue_fault_counts_zero": true,
+  "all_network_cleanup_passed": true,
+  "scope": "full-node functional suites; no throughput/tail-latency/hardware-zero-copy claim",
+  "required_jobs": {
+    "Test - linux-x64": "success",
+    "Check / Clippy - linux-x64": "success"
+  },
+  "component_job": "intentionally skipped, input not selected",
+  "binary_sha256": {
+    "Zelvik-Edge": "2059310121054032b4d3266f68d9b7e2b293288da17de93f573a9d09d634dce1",
+    "h3-probe": "ea52d93abcdd32b1165786bb67f3bcc0c160dba55e7240a58570232f13cd0beb"
+  }
+}
