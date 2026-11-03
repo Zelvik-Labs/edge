@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "scope": "every ZIP entry and extracted file size/SHA256 checked against manifest",
+  "archives": [
+    "native-raw.zip",
+    "udp-raw.zip"
+  ]
+}
