@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        description: Full independent matrix or focused fresh-connection admission diagnosis
+        description: Full matrix, short admission probe, or 262144-connection churn
         type: choice
-        options: [native, native-admission]
+        options: [native, native-admission, native-churn]
         default: native
   push:
     branches: [perf/five-priorities-20261103]
