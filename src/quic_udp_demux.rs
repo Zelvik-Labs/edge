@@ -816,6 +816,44 @@ struct ProcessDatagramArgs<'a> {
     shutdown_rx: watch::Receiver<bool>,
 }
 
+#[derive(Clone, Copy)]
+struct QuicIngressObservation {
+    ingress: crate::memory_governor::QuicIngressSnapshot,
+    pressure_level: crate::l4_defense::L4PressureLevel,
+}
+
+enum QuicIngressSource {
+    Governor,
+    #[cfg(test)]
+    Fixed(QuicIngressObservation),
+}
+
+impl QuicIngressSource {
+    #[inline]
+    fn observe(self, shared: &UdpDemuxSharedState) -> QuicIngressObservation {
+        match self {
+            Self::Governor => {
+                let ingress = MEMORY_GOVERNOR.quic_ingress_snapshot();
+                let pressure_level = crate::l4_defense::pressure_level_with_quic_snapshot(
+                    ingress.pressure,
+                    shared.routes.len(),
+                    ingress.route_limit,
+                    shared.pending_routes.len(),
+                    ingress.pending_route_limit,
+                    shared.pending_reassembly_bytes.load(Ordering::Relaxed),
+                    ingress.pending_reassembly_budget_bytes,
+                );
+                QuicIngressObservation {
+                    ingress,
+                    pressure_level,
+                }
+            }
+            #[cfg(test)]
+            Self::Fixed(observation) => observation,
+        }
+    }
+}
+
 struct ClassifyRouteArgs<'a> {
     port: u16,
     client_addr: SocketAddr,
@@ -1345,6 +1383,15 @@ impl QuicUdpDemuxManager {
         &self,
         args: ProcessDatagramArgs<'_>,
     ) -> Result<UdpIngressDatagramStatus> {
+        self.process_datagram_with_ingress_source(args, QuicIngressSource::Governor)
+            .await
+    }
+
+    async fn process_datagram_with_ingress_source(
+        &self,
+        args: ProcessDatagramArgs<'_>,
+        ingress_source: QuicIngressSource,
+    ) -> Result<UdpIngressDatagramStatus> {
         let ProcessDatagramArgs {
             port,
             client_addr,
@@ -1366,17 +1413,13 @@ impl QuicUdpDemuxManager {
             return Ok(UdpIngressDatagramStatus::Blocked);
         }
 
-        let ingress = MEMORY_GOVERNOR.quic_ingress_snapshot();
+        // Materialize after the blocked-client fast path. Production reads
+        // the live governor; behavior tests supply explicit bounded inputs.
+        let QuicIngressObservation {
+            ingress,
+            pressure_level,
+        } = ingress_source.observe(shared);
         let max_routes_per_port = ingress.route_limit;
-        let pressure_level = crate::l4_defense::pressure_level_with_quic_snapshot(
-            ingress.pressure,
-            shared.routes.len(),
-            max_routes_per_port,
-            shared.pending_routes.len(),
-            ingress.pending_route_limit,
-            shared.pending_reassembly_bytes.load(Ordering::Relaxed),
-            ingress.pending_reassembly_budget_bytes,
-        );
         let max_new_routes_per_ip = crate::l4_defense::quic_new_route_limit(pressure_level);
         self.cleanup_routes_under_pressure(shared, max_routes_per_port, pressure_level);
 
@@ -2961,6 +3004,26 @@ mod tests {
         assert!(is_new_route_rate_limited(&windows, ip, high_limit));
     }
 
+    // The NAT fan-in contract is specifically the Normal-pressure path.
+    // A live host/parallel governor test can legitimately elevate pressure.
+    fn normal_test_ingress() -> QuicIngressSource {
+        QuicIngressSource::Fixed(QuicIngressObservation {
+            ingress: crate::memory_governor::QuicIngressSnapshot {
+                pressure: crate::memory_governor::L4PressureSnapshot {
+                    memory_pressure_level: crate::memory_governor::MemoryPressureLevel::Normal,
+                    connection_admission_used_bytes: 0,
+                    connection_budget_bytes: 16 * 1024 * 1024,
+                    fd_used_pct: 0,
+                },
+                route_limit: 4096,
+                pending_route_limit: 128,
+                pending_reassembly_budget_bytes: 1024 * 1024,
+                h3_datagram_queue_budget_bytes: 64 * 1024,
+            },
+            pressure_level: crate::l4_defense::L4PressureLevel::Normal,
+        })
+    }
+
     #[tokio::test]
     async fn native_h3_routes_do_not_exhaust_a_nat_address_window() {
         let manager = test_demux_manager(ConfigStore::new());
@@ -2973,19 +3036,25 @@ mod tests {
         for port in 10000..10256 {
             let peer = SocketAddr::from(([203, 0, 113, 201], port));
             let status = manager
-                .process_datagram_with_downstream(ProcessDatagramArgs {
-                    port: 443,
-                    client_addr: peer,
-                    data: Bytes::from_static(b"native QUIC"),
-                    ecn: Some(3),
-                    downstream_sender: sender.clone(),
-                    shared: &shared,
-                    http3_enabled: true,
-                    shutdown_rx: shutdown_rx.clone(),
-                })
+                .process_datagram_with_ingress_source(
+                    ProcessDatagramArgs {
+                        port: 443,
+                        client_addr: peer,
+                        data: Bytes::from_static(b"native QUIC"),
+                        ecn: Some(3),
+                        downstream_sender: sender.clone(),
+                        shared: &shared,
+                        http3_enabled: true,
+                        shutdown_rx: shutdown_rx.clone(),
+                    },
+                    normal_test_ingress(),
+                )
                 .await
                 .unwrap();
-            assert!(matches!(status, UdpIngressDatagramStatus::Sent));
+            assert!(
+                matches!(status, UdpIngressDatagramStatus::Sent),
+                "peer={peer} status={status:?}"
+            );
             let packet = h3_rx.try_recv().unwrap();
             assert_eq!(packet.from, peer);
             assert_eq!(packet.ecn, Some(3));
@@ -3001,16 +3070,19 @@ mod tests {
         let peer = "203.0.113.201:11000".parse().unwrap();
         for expected_full in [false, true] {
             let status = manager
-                .process_datagram_with_downstream(ProcessDatagramArgs {
-                    port: 443,
-                    client_addr: peer,
-                    data: Bytes::from_static(b"native QUIC"),
-                    ecn: None,
-                    downstream_sender: sender.clone(),
-                    shared: &shared,
-                    http3_enabled: true,
-                    shutdown_rx: shutdown_rx.clone(),
-                })
+                .process_datagram_with_ingress_source(
+                    ProcessDatagramArgs {
+                        port: 443,
+                        client_addr: peer,
+                        data: Bytes::from_static(b"native QUIC"),
+                        ecn: None,
+                        downstream_sender: sender.clone(),
+                        shared: &shared,
+                        http3_enabled: true,
+                        shutdown_rx: shutdown_rx.clone(),
+                    },
+                    normal_test_ingress(),
+                )
                 .await
                 .unwrap();
             assert_eq!(
@@ -3019,6 +3091,98 @@ mod tests {
             );
         }
         drop(h3_rx.try_recv().unwrap());
+        assert_eq!(shared.h3_queued_bytes.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn native_h3_high_pressure_keeps_the_per_ip_admission_limit() {
+        let manager = test_demux_manager(ConfigStore::new());
+        let (shared, mut h3_rx, _cid_rx) = new_demux_shared_state(1);
+        let (downstream_tx, _downstream_rx) = mpsc::channel(1);
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
+        let peer: SocketAddr = "203.0.113.202:10000".parse().unwrap();
+        let QuicIngressSource::Fixed(mut observation) = normal_test_ingress() else {
+            panic!("test source must be fixed")
+        };
+        observation.ingress.pressure.memory_pressure_level =
+            crate::memory_governor::MemoryPressureLevel::High;
+        observation.pressure_level = crate::l4_defense::L4PressureLevel::High;
+        let limit =
+            crate::l4_defense::quic_new_route_limit(crate::l4_defense::L4PressureLevel::High);
+        for _ in 0..limit {
+            assert!(!is_new_route_rate_limited(
+                &shared.new_route_windows,
+                peer.ip(),
+                limit
+            ));
+            record_new_route_for_ip(&shared.new_route_windows, peer.ip());
+        }
+        let status = manager
+            .process_datagram_with_ingress_source(
+                ProcessDatagramArgs {
+                    port: 443,
+                    client_addr: peer,
+                    data: Bytes::from_static(b"native QUIC"),
+                    ecn: None,
+                    downstream_sender: UdpDownstreamSender::channel(
+                        "127.0.0.1:443".parse().unwrap(),
+                        downstream_tx,
+                    ),
+                    shared: &shared,
+                    http3_enabled: true,
+                    shutdown_rx,
+                },
+                QuicIngressSource::Fixed(observation),
+            )
+            .await
+            .unwrap();
+        assert_eq!(status, UdpIngressDatagramStatus::Full);
+        assert!(shared.routes.is_empty());
+        assert!(shared.pending_routes.is_empty());
+        assert!(matches!(
+            h3_rx.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+    }
+
+    #[tokio::test]
+    async fn native_h3_keeps_the_total_route_bound() {
+        let manager = test_demux_manager(ConfigStore::new());
+        let (shared, mut h3_rx, _cid_rx) = new_demux_shared_state(1);
+        let (downstream_tx, _downstream_rx) = mpsc::channel(1);
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
+        let QuicIngressSource::Fixed(mut observation) = normal_test_ingress() else {
+            panic!("test source must be fixed")
+        };
+        observation.ingress.route_limit = 1;
+        let sender = UdpDownstreamSender::channel("127.0.0.1:443".parse().unwrap(), downstream_tx);
+        for (port, expected) in [
+            (10000, UdpIngressDatagramStatus::Sent),
+            (10001, UdpIngressDatagramStatus::Full),
+        ] {
+            let status = manager
+                .process_datagram_with_ingress_source(
+                    ProcessDatagramArgs {
+                        port: 443,
+                        client_addr: SocketAddr::from(([203, 0, 113, 203], port)),
+                        data: Bytes::from_static(b"native QUIC"),
+                        ecn: None,
+                        downstream_sender: sender.clone(),
+                        shared: &shared,
+                        http3_enabled: true,
+                        shutdown_rx: shutdown_rx.clone(),
+                    },
+                    QuicIngressSource::Fixed(observation),
+                )
+                .await
+                .unwrap();
+            assert_eq!(status, expected);
+            if expected == UdpIngressDatagramStatus::Sent {
+                drop(h3_rx.try_recv().unwrap());
+            }
+        }
+        assert_eq!(shared.routes.len(), 1);
+        assert!(shared.pending_routes.is_empty());
         assert_eq!(shared.h3_queued_bytes.load(Ordering::Acquire), 0);
     }
 

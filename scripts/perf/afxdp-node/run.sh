@@ -52,6 +52,7 @@ mount -t bpf edge-ci-bpf /sys/fs/bpf
 mount -t tmpfs edge-ci-netns /run/netns
 export ZELVIK_EDGE_XDP_PIN_DIR=/sys/fs/bpf/edge-ci
 export XDP_SMOKE_SKIP_BUILD=1 XDP_SMOKE_PROFILE=debug
+export XDP_SMOKE_NODE_BIN="$CARGO_TARGET_DIR/debug/Zelvik-Edge"
 # Prefer the distro curl with HTTP/2 over hosted-runner /usr/local/bin/curl.
 export PATH=/usr/bin:/bin:$PATH
 ip link set lo up
