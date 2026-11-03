@@ -1,0 +1,5 @@
+manifest,stem,source,target,backend,batch,payload_bytes,protocol,cache,connection,status,observation,pid,command,rss_kib,threads
+admission-quiche/manifest.json,0000-h3-hit-fresh,1911e52f0ff4835845e6d01a1bd5b65f8a5cab1c,edge,tokio-quiche-native,1,1024,h3,hit,fresh,passed,before,22871,controller,5996,2
+admission-quiche/manifest.json,0000-h3-hit-fresh,1911e52f0ff4835845e6d01a1bd5b65f8a5cab1c,edge,tokio-quiche-native,1,1024,h3,hit,fresh,passed,before,22966,Zelvik-Edge,164600,25
+admission-quiche/manifest.json,0000-h3-hit-fresh,1911e52f0ff4835845e6d01a1bd5b65f8a5cab1c,edge,tokio-quiche-native,1,1024,h3,hit,fresh,passed,after,22871,controller,6112,2
+admission-quiche/manifest.json,0000-h3-hit-fresh,1911e52f0ff4835845e6d01a1bd5b65f8a5cab1c,edge,tokio-quiche-native,1,1024,h3,hit,fresh,passed,after,22966,Zelvik-Edge,187124,25
