@@ -2,6 +2,11 @@ name: WAF state reservation probe
 
 on:
   workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: Exact 40-character baseline commit, including an earlier candidate
+        type: string
+        default: b5bc67ee7484915d7d6f86319cf239ff5d8ade38
   push:
     branches: [perf/waf-state-reservation-20261103, perf/five-priorities-20261103]
     paths:
@@ -24,6 +29,7 @@ jobs:
       CARGO_BUILD_JOBS: "2"
       RUST_TEST_THREADS: "2"
       RUSTFLAGS: "-C target-cpu=x86-64-v2"
+      WAF_BASELINE_REF: ${{ inputs.baseline_ref }}
     steps:
       - uses: actions/checkout@v5
         with:

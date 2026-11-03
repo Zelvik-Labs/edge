@@ -83,8 +83,9 @@ impl Http3ProxyManager {
         settings.handshake_timeout = Some(std::time::Duration::from_secs(10));
         settings.max_idle_timeout = Some(std::time::Duration::from_secs(30));
         settings.listen_backlog = LISTEN_BACKLOG;
-        let mut hooks = Hooks::default();
-        hooks.connection_hook = Some(Arc::new(PreparedTls(Mutex::new(Some(builder)))));
+        let hooks = Hooks {
+            connection_hook: Some(Arc::new(PreparedTls(Mutex::new(Some(builder))))),
+        };
         // The upstream hook requires Some(paths), but our prepared builder is
         // supplied before any file lookup. No private material is written here.
         let params = ConnectionParams::new_server(

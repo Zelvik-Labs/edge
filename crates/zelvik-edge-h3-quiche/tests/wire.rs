@@ -96,8 +96,9 @@ impl Fixture {
         settings.initial_max_data = 256 * 1024;
         settings.max_idle_timeout = Some(Duration::from_secs(5));
         let gate = HandshakeGate::new().unwrap();
-        let mut hooks = Hooks::default();
-        hooks.connection_hook = Some(Arc::new(AdmissionTls(gate)));
+        let hooks = Hooks {
+            connection_hook: Some(Arc::new(AdmissionTls(gate))),
+        };
         let params = ConnectionParams::new_server(
             settings,
             TlsCertificatePaths {

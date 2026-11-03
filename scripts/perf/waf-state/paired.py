@@ -9,7 +9,8 @@ import statistics
 import subprocess
 import run
 
-BASE = "b5bc67ee7484915d7d6f86319cf239ff5d8ade38"
+BASE = os.environ.get("WAF_BASELINE_REF") or "b5bc67ee7484915d7d6f86319cf239ff5d8ade38"
+assert len(BASE) == 40 and all(c in '0123456789abcdef' for c in BASE), 'baseline must be an exact commit SHA'
 ROOT = Path.cwd()
 OUT = ROOT / ".local/waf-state-paired"
 OUT.mkdir(parents=True, exist_ok=False)
