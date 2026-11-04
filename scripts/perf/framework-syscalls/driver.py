@@ -20,7 +20,7 @@ def publish(path, value):
     temporary.replace(path)
 
 
-def main():
+def main(observer_helper=None, observer_image='edge-syscall-sidecar:20261104', experiment=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=['edge', 'pingora', 'nginx', 'openresty'], required=True)
     parser.add_argument('--output', type=Path, required=True)
@@ -60,9 +60,9 @@ def main():
             '--memory', '256m', '--memory-swap', '256m', '--cap-add', 'SYS_PTRACE',
             '--security-opt', 'seccomp=unconfined',
             '--mount', f'type=bind,src={stem.parent},dst=/test',
-            '--mount', f'type=bind,src={ROOT}/scripts/perf/framework-syscalls/helper.py,dst=/tools/helper.py,readonly',
+            '--mount', f'type=bind,src={observer_helper or ROOT / "scripts/perf/framework-syscalls/helper.py"},dst=/tools/helper.py,readonly',
             '--mount', f'type=bind,src={ROOT}/scripts/perf/afxdp-node/syscall_profile.py,dst=/tools/syscall_profile.py,readonly',
-            '--entrypoint', 'python3', 'edge-syscall-sidecar:20261104', '/tools/helper.py',
+            '--entrypoint', 'python3', observer_image, '/tools/helper.py',
             '--directory', remote, '--max-seconds', '60', '--pids', *pids]
         if options.target in ['nginx', 'openresty']:
             command.append('--retain-executable')
@@ -116,7 +116,7 @@ def main():
         client_source_revision='a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a',
         protocols=['h1', 'h2'], states=['off'], connections=['reuse'], multiplex=False, seed=20261104,
         edge_image='edge-http-state-fixture:20261103', edge_backend='quinn-shared' if options.target == 'edge' else options.target,
-        experiment='counts-only ptrace with checked thread coverage and separate tracer cgroup; exclude timing from capacity ranking')
+        experiment=experiment or 'counts-only ptrace with checked thread coverage and separate tracer cgroup; exclude timing from capacity ranking')
     return matrix.run(args)
 
 

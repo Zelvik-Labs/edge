@@ -14,6 +14,11 @@ ROOT = Path(__file__).resolve().parents[3]
 PRIVATE = ROOT / '.local/framework-syscalls-private'
 PUBLIC = ROOT / '.local/framework-syscalls-ci'
 ORDERS = [['edge', 'pingora', 'nginx', 'openresty'], ['openresty', 'nginx', 'pingora', 'edge']]
+DRIVER = 'scripts/perf/framework-syscalls/driver.py'
+SCOPE = 'ptrace syscall counts only; tracer shares one client CPU but has a separate cgroup and no network; exclude all timing from capacity rankings'
+OBSERVER_SOURCES = ['scripts/perf/framework-syscalls/driver.py',
+    'scripts/perf/framework-syscalls/helper.py', 'scripts/perf/afxdp-node/syscall_profile.py']
+EXTRA_IMAGES = ['edge-syscall-sidecar:20261104']
 
 
 def module(name, relative):
@@ -39,12 +44,11 @@ def run():
     suite = {'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
         'client_source_revision': client_revision,
         'client_source_sha256': sha(source / 'protocol_state_client.c'),
-        'orders': ORDERS, 'scope': 'ptrace syscall counts only; tracer shares one client CPU but has a separate cgroup and no network; exclude all timing from capacity rankings',
-        'source_hashes': {p: sha(ROOT / p) for p in ['scripts/perf/framework-syscalls/driver.py',
-            'scripts/perf/framework-syscalls/helper.py', 'scripts/perf/afxdp-node/syscall_profile.py']},
+        'orders': ORDERS, 'scope': SCOPE,
+        'source_hashes': {p: sha(ROOT / p) for p in OBSERVER_SOURCES},
         'images': {}, 'runs': []}
     for image in ['nginx:1.28.0', 'openresty/openresty:1.27.1.2-0-bookworm-fat',
-                  'edge-http-state-fixture:20261103', 'edge-syscall-sidecar:20261104']:
+                  'edge-http-state-fixture:20261103', *EXTRA_IMAGES]:
         data = json.loads(subprocess.check_output(['docker', 'image', 'inspect', image], text=True))[0]
         suite['images'][image] = {'id': data['Id'], 'repo_digests': data['RepoDigests']}
     (PRIVATE / 'suite.json').write_text(json.dumps(suite, indent=2) + '\n')
@@ -52,7 +56,7 @@ def run():
         for target in order:
             output = PRIVATE / f'round-{number}-{target}'
             with (PRIVATE / f'{number}-{target}.driver.log').open('w') as log:
-                result = subprocess.run(['python3', 'scripts/perf/framework-syscalls/driver.py',
+                result = subprocess.run(['python3', DRIVER,
                     '--target', target, '--output', str(output), '--tls', str(PRIVATE / 'tls')],
                     stdout=log, stderr=subprocess.STDOUT)
             suite['runs'].append(dict(round=number, target=target,
