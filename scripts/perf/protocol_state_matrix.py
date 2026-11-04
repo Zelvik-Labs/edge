@@ -74,6 +74,11 @@ def cgroup(name):
     return result
 
 
+def parent_limits(args):
+    root = Path(getattr(args, 'parent_cgroup_root', '/sys/fs/cgroup'))
+    return {name: (root / name).read_text().strip() for name in ['cpu.max', 'memory.max']}
+
+
 def filesystems(name):
     lines=docker('exec',name,'df','-Pk','/node','/run/cache').splitlines()[1:]
     result={}
@@ -343,7 +348,7 @@ def run(args):
                 'cpu_assignment':args.cpu_assignment, 'protocol_capability':capability,
                 'inter_case_quiet_seconds':0.5,
                 'case_isolation':'fresh process and tmpfs for EVERY protocol/cache/connection/repeat case',
-                'parent_limits':{f:Path('/sys/fs/cgroup',f).read_text().strip() for f in ['cpu.max','memory.max']},
+                'parent_limits':parent_limits(args),
                 'images':{t:json.loads(docker('image','inspect',i))[0]['Id'] for t,i in IMAGES.items()},
                 'scope':'production Edge startup + authenticated test controller in same proxy cgroup' if args.target=='edge' else 'packaged server proxy',
                 'client_versions':{'curl':subprocess.check_output(['curl','--version'],text=True),

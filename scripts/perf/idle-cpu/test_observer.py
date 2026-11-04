@@ -2,13 +2,37 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import argparse
+import tempfile
 
 spec = importlib.util.spec_from_file_location('observer', Path(__file__).with_name('observer.py'))
 observer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(observer)
 
 
+matrix_spec = importlib.util.spec_from_file_location('idle_matrix', Path(__file__).resolve().parents[1] / 'protocol_state_matrix.py')
+matrix = importlib.util.module_from_spec(matrix_spec)
+matrix_spec.loader.exec_module(matrix)
+
+
 class CounterBoundaries(unittest.TestCase):
+    def test_host_root_without_limits_reads_actual_harness_cgroup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            child = root / 'docker' / 'harness'
+            child.mkdir(parents=True)
+            (child / 'cpu.max').write_text('max 100000\\n')
+            (child / 'memory.max').write_text('2147483648\\n')
+            self.assertFalse((root / 'cpu.max').exists())
+            self.assertEqual(matrix.parent_limits(argparse.Namespace(parent_cgroup_root=child)),
+                             {'cpu.max': 'max 100000', 'memory.max': '2147483648'})
+
+    def test_missing_actual_limit_is_not_rewritten_to_unlimited(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(FileNotFoundError):
+                matrix.parent_limits(argparse.Namespace(parent_cgroup_root=directory))
+
+
     def test_proc_stat_comm_can_contain_spaces_and_parentheses(self):
         fields = ['S'] + ['0'] * 21
         fields[11], fields[12], fields[19] = '15', '7', '900'

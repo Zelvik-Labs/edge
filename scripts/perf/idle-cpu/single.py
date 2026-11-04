@@ -134,6 +134,7 @@ args = argparse.Namespace(target=options.target, output=options.output, tls=opti
     edge_image='edge-http-state-fixture:20261103', seconds=5, repeats=1, payload_size=1024, concurrency=32,
     edge_backend='quinn-shared' if options.target == 'edge' else options.target,
     capture_proxy_process_cpu=True,
+    parent_cgroup_root=observer.cgroup_path(os.getpid()),
     cold_requests=None, fresh_requests=2048, protocols=['h1'], states=['off'],
     connections=['reuse'], multiplex=False, seed=options.seed,
     experiment='idle and loaded CPU diagnosis of fixed ELFs; observers use host counters; no subtraction or capacity ranking')
