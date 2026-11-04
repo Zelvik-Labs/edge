@@ -11,7 +11,10 @@ worker 已独占收到的事件，旧实现却借用 RequestStats，再 clone ge
 
 本轮不声称减少堆分配：Arc 的 clone/drop 主要减少原子引用计数，实际节点收益需要独立验证。
 本地不编译 Rust，完整 CI 与 Edge 前后/Nginx/OpenResty 四目标 192 格对照将通过 Actions 执行。
-当前状态：实现已写入，等待 CI 与实际二进制结果；没有新的吞吐或稳定性结论。
+[完整 CI 41769120615](https://github.com/Zelvik-Labs/edge/actions/runs/41769120615) 已通过并核验：1366 项库测试、16 项二进制测试、集成/vendor、check/Clippy，4 项库测试按既有规则忽略。
+[日志来源与校验摘要](evidence/metrics-move-2026-11-04/full-ci/verification.json)已保留。此轮未重复原生 32 组 smoke，最近一次对应 c310 的可写等待修复。
+[实际节点对照 41769127561](https://github.com/Zelvik-Labs/edge/actions/runs/41769127561) 正在运行：基线 e36710c、候选 e8d8b3a，强制仅 src/metrics.rs 生产源码不同，四目标、四协议、三缓存状态共 192 格，另有 128 项 Range 控制。
+尚无新吞吐或稳定性结论，不能把减少引用计数的操作数当成节点收益。
 
 仍未解决的节点整体差距、QUIC 客户端互操作错误与长期稳定性验证见总报告。
 未修改 vendor、配置或统计采集范围。经审批的功能降级：无。

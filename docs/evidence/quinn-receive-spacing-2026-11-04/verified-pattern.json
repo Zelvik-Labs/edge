@@ -1,0 +1,16 @@
+{
+  "source": "7df4a6e402f9421d2db030a1d79ba95dcbd5fc8d",
+  "traces": 21,
+  "errors_by_client": {
+    "unpaced": 20,
+    "paced": 1
+  },
+  "phase_one_packet_numbers": {
+    "12": 7,
+    "11": 7,
+    "10": 7
+  },
+  "received_handshake_done_before_close": 0,
+  "dropped_trace_bytes": 0,
+  "scope": "all retained local KEY_UPDATE_ERROR traces; receive spacing did not eliminate the error in this sample; no determination of the violating endpoint"
+}

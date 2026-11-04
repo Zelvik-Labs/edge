@@ -26,7 +26,7 @@
 [有界协议诊断](performance-quinn-diagnostic-2026-11-04.md)已抓到 10 次 OpenSSL 本地 `KEY_UPDATE_ERROR`，
 原因均为 `RX key update again too soon`，第二轮 29 个错误又记录到相同早期 key phase 时序。
 [同版客户端互操作](performance-quinn-interop-2026-11-04.md)中，OpenSSL 16/32768 错误、GnuTLS/ngtcp2 32768 次通过，
-四项错误 CA 验证均拒绝；同一 OpenSSL 的默认混合组 14/32768 错误、X25519 8/32768，混合组不是必要条件。这约束故障范围但不代表已修复。[收包节奏控制](performance-quinn-receive-spacing-2026-11-04.md)使用同一实际二进制与有界 relay 进一步检验接收分层假设，尚在运行。
+四项错误 CA 验证均拒绝；同一 OpenSSL 的默认混合组 14/32768 错误、X25519 8/32768，混合组不是必要条件。这约束故障范围但不代表已修复。[收包节奏控制](performance-quinn-receive-spacing-2026-11-04.md)已使用同一实际二进制与有界 relay：unpaced 20/32768 错误、100 µs paced 1/32768，均为同类本地 key-update 关闭；支持时序敏感性，仍未修复。
 共享路径两个长批次超时，部分输出和缺失的进程摘要均保留，不当成完整性能结果。
 
 首轮 Range 对比因源站启动时序失败，已保留 161 次 curl 56 与 7 次 curl 52 的全部记录；
@@ -41,7 +41,7 @@
 AF_XDP 的队列线程、运行时交接与拷贝仍有分析空间；目前没有真实 NIC zero-copy 收益，
 云 veth copy-mode 的结果不能外推到硬件。统计内置聚合仍有成本，本轮未通过停止统计提升成绩。
 
-[统计维度所有权](performance-metrics-move-2026-11-04.md)减少 worker 的冗余 Arc clone/drop，完整 CI 与隔离 192 格对照在运行；当前不预报吞吐收益。
+[统计维度所有权](performance-metrics-move-2026-11-04.md)减少 worker 的冗余 Arc clone/drop，完整 CI 已通过（1366 库测试及集成/vendor/lint）；隔离 192 格对照在运行，尚无新吞吐结论。
 [共享可写等待](performance-shared-quic-writable-2026-11-04.md)已修复队列满仍立即 Ready 及 socket 单等待者问题，1366 库测试、集成/vendor/lint 与 32 组节点验证全部通过。
 [UDP 出口复制候选](performance-udp-egress-2026-11-04.md)已测两种策略：满队列少一次分配，但普通发送分别有 5%～7% 与 1.7%～2.2% 代价，保留实验、不进入生产。
 [共享内核 GSO 候选](performance-shared-quic-tx-2026-11-04.md)通过 IPv4/IPv6 真实分段、GRO 关闭与硬错误控制，尚未接入生产或测量节点收益。
