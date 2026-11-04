@@ -20,6 +20,8 @@
 - [AF_XDP 自动绑核修复](performance-afxdp-affinity-2026-11-04.md)：继承 CPU 集合、真实线程控制与完整节点验证。
 - [Quinn GSO 隔离结果](performance-quinn-gso-2026-11-04.md)：原生新连接故障复现、GSO 开关代价与诊断边界。
 - [Quinn 新连接协议诊断](performance-quinn-diagnostic-2026-11-04.md)：有界客户端帧记录、关闭码和原始可执行文件控制。
+- [统计事件维度所有权](performance-metrics-move-2026-11-04.md)：保留全部采集与投影，减少 worker 的引用计数操作，实际节点对照进行中。
+- [Quinn 收包节奏控制](performance-quinn-receive-spacing-2026-11-04.md)：固定两端实际二进制，约束待处理 datagram 的时序并保留关停剩余。
 - [Quinn 客户端互操作](performance-quinn-interop-2026-11-04.md)：同版 libcurl 两种实现与同一 OpenSSL 默认/X25519 的完整错误对照。
 - [共享 QUIC 维护压力](performance-quic-maintenance-2026-11-04.md)：定时清理口径修正与 32 组原生节点复核。
 - [共享 QUIC 发送等待](performance-shared-quic-writable-2026-11-04.md)：队列背压、多连接独立唤醒、关闭和取消。

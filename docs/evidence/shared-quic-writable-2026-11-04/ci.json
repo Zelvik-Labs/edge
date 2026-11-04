@@ -1,0 +1,36 @@
+{
+  "run": 41765823252,
+  "source": "c31047359d14ec1a2596d244be8690960b49d7f8",
+  "jobs": [
+    {
+      "id": 126363842056,
+      "name": "Check / Clippy - linux-x64",
+      "conclusion": "success"
+    },
+    {
+      "id": 126363842484,
+      "name": "Test - linux-x64",
+      "conclusion": "success"
+    }
+  ],
+  "library_passed": 1366,
+  "binary_passed": 16,
+  "library_ignored": 4,
+  "integration_vendor": "PASS",
+  "native_combinations": 32,
+  "new_controls": [
+    "2026-11-04T03:19:15.1793166Z test quic_udp_demux::tests::shared_channel_writable_has_independent_cancellable_waiters ... ok",
+    "2026-11-04T03:19:15.1812969Z test quic_udp_demux::tests::shared_channel_writable_waits_recovers_and_reports_close ... ok",
+    "2026-11-04T03:19:15.1890749Z test quic_udp_demux::tests::shared_socket_writable_wakes_each_connection_on_initial_registration ... ok"
+  ],
+  "logs": {
+    "job.log": {
+      "bytes": 2994830,
+      "sha256": "ef213a98dd58bd4ef4bc2947ea0cbf2a1cea30284a0014ffb54bb2d3d60daba8"
+    },
+    "check.log": {
+      "bytes": 130090,
+      "sha256": "e8ffa56f407b0d0ef0d1372a9c01ebd30757d2eb056d3e10625f34f2dc2b17c9"
+    }
+  }
+}
