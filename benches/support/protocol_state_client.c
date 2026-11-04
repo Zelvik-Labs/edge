@@ -55,12 +55,13 @@ int main(int argc, char **argv) {
     const char *url=NULL, *ca=NULL, *payload_path=NULL, *protocol=NULL;
     long connections=16, request_limit=0;
     double seconds=8;
-    int fresh=0, unique=0, multiplex=0;
+    int fresh=0, unique=0, multiplex=0, fixture_ca_only=0;
     for (int i=1;i<argc;i++) {
         if (!strcmp(argv[i],"--version")) { puts(curl_version()); return 0; }
         if (!strcmp(argv[i],"--fresh")) { fresh=1; continue; }
         if (!strcmp(argv[i],"--unique")) { unique=1; continue; }
         if (!strcmp(argv[i],"--multiplex")) { multiplex=1; continue; }
+        if (!strcmp(argv[i],"--fixture-ca-only")) { fixture_ca_only=1; continue; }
         if (i+1>=argc) { fprintf(stderr,"missing value\n"); return 2; }
         const char *key=argv[i++], *value=argv[i];
         if (!strcmp(key,"--url")) url=value;
@@ -109,6 +110,9 @@ int main(int argc, char **argv) {
         SET(t->easy,CURLOPT_IPRESOLVE,(long)CURL_IPRESOLVE_V4);
         SET(t->easy,CURLOPT_USERAGENT,"edge-protocol-state-matrix/1");
         SET(t->easy,CURLOPT_CAINFO,ca);
+        /* Controlled fixture mode narrows trust to CAINFO. Keep peer and
+         * hostname verification enabled while excluding host CA-directory I/O. */
+        if (fixture_ca_only) SET(t->easy,CURLOPT_CAPATH,NULL);
         SET(t->easy,CURLOPT_SSL_VERIFYPEER,1L);
         SET(t->easy,CURLOPT_SSL_VERIFYHOST,2L);
         /* Every newly established TLS connection performs a full handshake. */

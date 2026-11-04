@@ -25,6 +25,27 @@ def main():
         return native_docker(*args)
 
     matrix.docker = docker
+    original_probe = matrix.probe
+    tls_controls = []
+
+    def probe(protocol, url, ca, payload, stem):
+        result = original_probe(protocol, url, ca, payload, stem)
+        if protocol == 'h3' and stem.name.endswith('-before'):
+            variant = stem.parent.name.rsplit('-', 1)[-1]
+            command = [str(OUT / 'clients' / variant), '--protocol', 'h3', '--url', url,
+                '--cacert', str(OUT / 'tls/wrong-ca.pem'), '--payload', str(stem.parent / 'payload'),
+                '--connections', '1', '--requests', '1', '--seconds', '5', '--fresh', '--fixture-ca-only']
+            process = subprocess.run(command, capture_output=True, text=True, timeout=20)
+            fields = process.stdout.strip().split('\t')
+            observation = {'case': stem.parent.name, 'client': variant, 'command': command,
+                'exit': process.returncode, 'stdout': process.stdout, 'stderr': process.stderr}
+            tls_controls.append(observation)
+            matrix.write(OUT / 'tls-controls.json', tls_controls)
+            if process.returncode or len(fields) != 8 or fields[0] != '0' or fields[6] != '60':
+                raise RuntimeError('wrong-CA control did not fail certificate verification; retained tls-controls.json')
+        return result
+
+    matrix.probe = probe
     build = json.loads((OUT / 'build-metadata.json').read_text())
     for name, digest in build['binaries'].items():
         assert matrix.sha(BINS / name) == digest
@@ -38,6 +59,7 @@ def main():
     suite = {'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
         'build': build, 'clients': clients, 'runs': [], 'request_limit': 16384,
         'client_package_version': json.loads((OUT / 'client-build.json').read_text())['package_version'],
+        'client_fixture_ca_only': True,
         'scope': 'client interoperability and errors; different client stacks are not a server capacity comparison',
         'client_source_sha256': matrix.sha(ROOT / 'benches/support/protocol_state_client.c')}
     matrix.write(OUT / 'suite.json', suite)
@@ -51,6 +73,7 @@ def main():
                 quinn_native_gso='auto', seconds=5, repeats=1, payload_size=32768, concurrency=32,
                 cold_requests=None, fresh_requests=16384, protocols=['h3'], states=['hit'],
                 connections=['fresh'], multiplex=False, seed=20261104,
+                fixture_ca_only=True,
                 experiment='same client source/curl package, OpenSSL QUIC versus GnuTLS/ngtcp2; no capacity ranking')
             error = None
             try:

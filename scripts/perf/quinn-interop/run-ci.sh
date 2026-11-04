@@ -10,6 +10,7 @@ cp .local/quinn-diagnostic-private/build-metadata.json "$out/build-metadata.json
 cp .local/quinn-diagnostic-private/binary-artifact.json "$out/binary-artifact.json"
 python3 scripts/perf/quinn-interop/client-build.py
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$out/tls/ca.key" -out "$out/tls/ca.pem" -days 2 -subj /CN=Edge-QUIC-Interop-CA > "$out/tls/build.log" 2>&1
+openssl req -x509 -newkey rsa:2048 -nodes -keyout "$out/tls/wrong-ca.key" -out "$out/tls/wrong-ca.pem" -days 2 -subj /CN=Edge-Wrong-CA >> "$out/tls/build.log" 2>&1
 openssl req -newkey rsa:2048 -nodes -keyout "$out/tls/server.key" -out "$out/tls/server.csr" -subj /CN=localhost >> "$out/tls/build.log" 2>&1
 cat > "$out/tls/server.ext" <<'CERT'
 subjectAltName=DNS:localhost,IP:127.0.0.1

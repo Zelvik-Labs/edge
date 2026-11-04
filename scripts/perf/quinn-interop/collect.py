@@ -11,7 +11,7 @@ PUBLIC = ROOT / '.local/quinn-interop-ci'
 PUBLIC.mkdir(parents=True, exist_ok=True)
 exact = {'build-metadata.json', 'suite.json', 'range-controls.json', 'manifest.json', 'payload',
          'curl-version.txt', 'packages.txt', 'kernel.txt', 'python-tests.log',
-         'client-build.json', 'verified-records.json', 'verified-summary.json',
+         'client-build.json', 'verified-records.json', 'verified-summary.json', 'tls-controls.json',
          'verified-traces.json', 'binary-artifact.json', 'origin-readiness.json',
          'protocol_state_client.c', 'quic_client_diagnostics.h', 'quic_diagnostic_controls.c'}
 suffixes = ('.client.tsv.gz', '.client.tsv', '.stderr', '.command.json', '.body', '.headers')

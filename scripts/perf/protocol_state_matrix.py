@@ -153,6 +153,7 @@ def run_client(args, protocol, state, connection, url, ca, stem):
         if state == 'miss': command += ['--unique']
         if connection == 'fresh': command += ['--fresh']
         if connection == 'multiplex': command += ['--multiplex']
+        if getattr(args, 'fixture_ca_only', False): command += ['--fixture-ca-only']
         commands.append(command)
         with path.open('x') as out, stem.with_suffix(f'.{shard}.stderr').open('x') as err:
             processes.append(subprocess.Popen(command, stdout=out, stderr=err))

@@ -22,3 +22,11 @@ Public evidence uses an explicit allow-list and excludes private test TLS
 material, runtime overrides, node logs and stores. Actual executables and their
 client libraries are retained in a separate artifact. No upstream/vendor code
 or production default is changed by this experiment.
+
+The first GnuTLS batches were too slow to complete and remain failed; 18,300
+retained partial records were valid, with no claim about unwritten output.
+The next control narrows both clients to the fixture CA via an explicit
+`--fixture-ca-only` option, clears the system CA directory, and retains full
+peer/hostname verification. A wrong-CA request must fail with curl 60 per case.
+Request count and deadlines stay unchanged. This isolates trust-directory
+cost without declaring the earlier incomplete batches successful.
