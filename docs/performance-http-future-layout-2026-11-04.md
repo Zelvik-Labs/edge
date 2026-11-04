@@ -53,3 +53,28 @@ request_filter 显著更大；它依次 await 十个阶段，状态对象必须�
 
 已将阶段测量入口限制在显式http-layout-probe功能和测试构建中，并由生产release的同一实际可执行文件测全部阶段和外层回调，再核对两者。
 默认业务路径不启用此诊断功能。保留测试库探针，但不再把不同构建的布局直接等同；后续继续跑完整CI和32组native。
+
+## 同一生产编译程序中的阶段结果
+
+[Actions41782934201](https://github.com/Zelvik-Labs/edge/actions/runs/41782934201)通过并已复核实际release可执行文件、源码、11阶段及全部120块/1200万次构造测量，零steal。
+在同一个启用http-layout-probe的production链接程序中，外层request_filter与阶段入口构造的外层frame均为5736字节，不再跨测试库比较。
+
+| 阶段 | 未poll状态字节数 |
+|---|---:|
+| body_waf | 5600 |
+| context | 2560 |
+| early_response | 1456 |
+| feature_policy | 1168 |
+| lightweight_waf | 1992 |
+| limits | 1912 |
+| local_service | 2280 |
+| protocol_policy | 2344 |
+| rewrite | 688 |
+| security_state | 32 |
+| status_response | 1768 |
+
+body_waf为5600字节，包含其嵌套异步状态；不能与其他阶段尺寸相加推算总帧。
+request_filter构造/销毁中位27.31ns（26.97～53.63），其他回调5.76～10.33ns，与首次结论一致：单纯大frame构造并非几十微秒差距的解释。
+未测首次poll、实际业务成本或调度成本，因此本轮没有给body_waf额外Box或跳过任何WAF。
+归档13299399781：6,976,048字节、11文件，SHA-256 `5fd607276428e26f1826e8d03d94cb2581fcb66daf06835e8ff4eefebfd386db`。
+[同构建冻结复核器](evidence/http-callback-construct-2026-11-04/phases/verify.py)保留完整证据。累计完整CI41782989939仍在执行32项native验证，诊断通过不代替功能CI。

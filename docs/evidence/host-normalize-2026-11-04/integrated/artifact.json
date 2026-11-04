@@ -1,0 +1,20 @@
+{
+  "id": 13298162717,
+  "node_id": "MDg6QXJ0aWZhY3QxMzI5ODE2MjcxNw==",
+  "name": "host-normalize-fa66baeda0486ae8c993f9591138855c23600e86",
+  "size_in_bytes": 1675383,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13298162717",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13298162717/zip",
+  "expired": false,
+  "digest": "sha256:4fbe346a374e13579d9a2508e0fe5125405adc06826fcc47baaf419da40b7ace",
+  "created_at": "2026-11-04T05:21:46Z",
+  "updated_at": "2026-11-04T05:21:46Z",
+  "expires_at": "2027-02-02T05:20:59Z",
+  "workflow_run": {
+    "id": 41778700158,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/program-wide-20261104",
+    "head_sha": "fa66baeda0486ae8c993f9591138855c23600e86"
+  }
+}

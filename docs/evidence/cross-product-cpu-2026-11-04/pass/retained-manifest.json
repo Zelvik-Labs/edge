@@ -1,0 +1,1604 @@
+{
+  "files": [
+    {
+      "path": "1-nginx.driver.log",
+      "bytes": 606,
+      "sha256": "e31c8bf5295c70f75733bc79355ebc6f31801a82b071e25eb6d7b7f8aac7b079"
+    },
+    {
+      "path": "1-edge.driver.log",
+      "bytes": 601,
+      "sha256": "99edd0b5fa4d11b3cf3bb728b4572ad87921bf209bc27dddace5841007366591"
+    },
+    {
+      "path": "verified-profiles.json",
+      "bytes": 239207,
+      "sha256": "cabc4ea3c363e7a4377ff4e90c58c169d5a156d138936ae422e245f316bfc944"
+    },
+    {
+      "path": "0-nginx.driver.log",
+      "bytes": 607,
+      "sha256": "7c71da20c515f36f60cf01574f34c2af5f2e23f4e28a74adeafd28afb65b216b"
+    },
+    {
+      "path": "0-openresty.driver.log",
+      "bytes": 623,
+      "sha256": "53f8c9c42d5f0fe647a4c79a7f6f6d41549d848f10c75768fa6df2f3b0ce9b76"
+    },
+    {
+      "path": "provenance.json",
+      "bytes": 1492,
+      "sha256": "02022063405373b83b7f485fd1ab4b6d49b7fde1c3e08eca7768d78299ee61df"
+    },
+    {
+      "path": "0-edge.driver.log",
+      "bytes": 600,
+      "sha256": "2963f250364953d1eaabd77c263f496c52323b85f26c48edd88e9cabb55c701f"
+    },
+    {
+      "path": "suite.json",
+      "bytes": 2629,
+      "sha256": "0e3af50f5915a96ad2a9a7f29bc75004d564bfb374b273a75aa130c20ddc1011"
+    },
+    {
+      "path": "1-openresty.driver.log",
+      "bytes": 622,
+      "sha256": "1ce259fa84f168db48001edd00f96a6074c434eab5041cf04fcf47b7c9e6ae26"
+    },
+    {
+      "path": "round-0-openresty/0002-h1-off-reuse.perf-callers.txt",
+      "bytes": 230992,
+      "sha256": "3b5a4c780896541d87b6eb5b8d6e9e196fb8646f919264ecfd935ec65f1bf512"
+    },
+    {
+      "path": "round-0-openresty/0001-h2-off-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "ebd219cc76b621e3e5cee2e957871897f0f818653661c2eb465984e4adf3c745"
+    },
+    {
+      "path": "round-0-openresty/0000-h2-hit-reuse.0.client.tsv.gz",
+      "bytes": 894290,
+      "sha256": "42a5a9138a8dc7ec6a89ec16dedd93ae25db4e346053aa030c39793f521fa940"
+    },
+    {
+      "path": "round-0-openresty/0000-h2-hit-reuse.stacks.txt",
+      "bytes": 2668845,
+      "sha256": "ef8c23e1b65b034b1df7c3265f544d99c6a64493b7a64f5eaba43b4c1963d6ee"
+    },
+    {
+      "path": "round-0-openresty/0001-h2-off-reuse.perf-flat.txt",
+      "bytes": 5570,
+      "sha256": "d6852a8ca05c0e3b8c72548c8f50af41c1c92b16ed01eb2fbab2f2c5d7aa742a"
+    },
+    {
+      "path": "round-0-openresty/origin-reference.1.client.tsv.gz",
+      "bytes": 1157107,
+      "sha256": "b8494f8e21315e9c4847a2072510282ff11e689bfef68444d2dd626470968f4a"
+    },
+    {
+      "path": "round-0-openresty/0003-h1-hit-reuse.command.json",
+      "bytes": 1027,
+      "sha256": "3dc552b45cecbfba5951d1af09387d89ed85b2a6d2a0909742279e6bac9b64a4"
+    },
+    {
+      "path": "round-0-openresty/0003-h1-hit-reuse.perf-record.log",
+      "bytes": 144,
+      "sha256": "9bff129da9c6790172e49903881aa24c4596ffcedad76fb10ed36571bc8ce738"
+    },
+    {
+      "path": "round-0-openresty/0001-h2-off-reuse.stacks.txt",
+      "bytes": 1826217,
+      "sha256": "d45cd46bee3e242c36f0e2a9b2a1bf88de819dbbf428a97c935d983eb528136c"
+    },
+    {
+      "path": "round-0-openresty/origin-reference.command.json",
+      "bytes": 1027,
+      "sha256": "2c367b25b334532bacb9220e2309e9ba0dbf452ab2b2e5583146a4e21f0d58ee"
+    },
+    {
+      "path": "round-0-openresty/0001-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 822087,
+      "sha256": "87965ca27c03f64e68fef3f197e0ffd1e5bb7cb1e7b242e7dd1a205866914cb1"
+    },
+    {
+      "path": "round-0-openresty/0000-h2-hit-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "247e7e0d153bf3b9f47a27a93380a84145fc0ab106c0b8cdf736dcce0dc94281"
+    },
+    {
+      "path": "round-0-openresty/0003-h1-hit-reuse.profile-target.json",
+      "bytes": 223,
+      "sha256": "0e4de4ca66f7f364aaae3e74e92a141f70167ae5b09669a1bae9d32bd3b0355d"
+    },
+    {
+      "path": "round-0-openresty/0000-h2-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "1600bd75b955d6159741a9d5abdffe48ee7b932578de4a59527d9a34406a8ada"
+    },
+    {
+      "path": "round-0-openresty/manifest.json",
+      "bytes": 43456,
+      "sha256": "507c53c0ccd54a67ffd2645ba7e194c9b0690d5e8588d770f58c8b9d29cdc43f"
+    },
+    {
+      "path": "round-0-openresty/0000-h2-hit-reuse.perf-flat.txt",
+      "bytes": 4520,
+      "sha256": "6ec034758c3d67fb7675366b33cac6271dd9b4228af6ed54daa1fc303cbc09f6"
+    },
+    {
+      "path": "round-0-openresty/0000-h2-hit-reuse.perf-callers.txt",
+      "bytes": 604753,
+      "sha256": "72e6502f8e8062c76f05de4e0d8a2d4e2a78f9e71500f8f6cc8b205e072f3d9c"
+    },
+    {
+      "path": "round-0-openresty/0002-h1-off-reuse.stacks.txt",
+      "bytes": 952356,
+      "sha256": "2f8483f4591c21d540e2df7a5935390d31662bca319d33c108e2d4984dde6267"
+    },
+    {
+      "path": "round-0-openresty/0000-h2-hit-reuse.perf-command.json",
+      "bytes": 296,
+      "sha256": "1ad2666715c51a59504943a77e1886d31816b7a476647a7224e4f49492e6d8f6"
+    },
+    {
+      "path": "round-0-openresty/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "round-0-openresty/0001-h2-off-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "f3d2e8f324df8f45b66b0a783f541960ed779d5ede669dee0c2d51dae17657f3"
+    },
+    {
+      "path": "round-0-openresty/0002-h1-off-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "065aeabeb3c5e119732ec36118fe209c6982e77dcaa51b80d6fe470ff33631fb"
+    },
+    {
+      "path": "round-0-openresty/0001-h2-off-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "39c4fe1db6113f0496444286a5d3d074d1fe537dcd3db9c53771c299782e61f2"
+    },
+    {
+      "path": "round-0-openresty/0000-h2-hit-reuse.profile-target.json",
+      "bytes": 223,
+      "sha256": "0e4de4ca66f7f364aaae3e74e92a141f70167ae5b09669a1bae9d32bd3b0355d"
+    },
+    {
+      "path": "round-0-openresty/0002-h1-off-reuse.perf-command.json",
+      "bytes": 296,
+      "sha256": "890e73159c423e0fafb79167d2c6850319c22e38cc3a89d1a0c2ba07d7ebd82d"
+    },
+    {
+      "path": "round-0-openresty/0003-h1-hit-reuse.perf-command.json",
+      "bytes": 296,
+      "sha256": "bf73cbde20783898867c5e37c2d3b65c42abf67a967d389666401a0fe38ab031"
+    },
+    {
+      "path": "round-0-openresty/0002-h1-off-reuse.profile-target.json",
+      "bytes": 223,
+      "sha256": "0e4de4ca66f7f364aaae3e74e92a141f70167ae5b09669a1bae9d32bd3b0355d"
+    },
+    {
+      "path": "round-0-openresty/origin-reference.0.stderr",
+      "bytes": 93,
+      "sha256": "f0ea76fbf1d5fc01964e9b50e3d1cebba82a0276c7d8281c20774f71c55fd899"
+    },
+    {
+      "path": "round-0-openresty/0000-h2-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "efc6e962dc612e83c3b920a33da7c91fe19e65444a664b2440a5024c456799d4"
+    },
+    {
+      "path": "round-0-openresty/0000-h2-hit-reuse.command.json",
+      "bytes": 1029,
+      "sha256": "dd5f3326e6e39e0604a5ff4ae6eae6ccd5ba2a172b5b2d04a9cf523680c034a0"
+    },
+    {
+      "path": "round-0-openresty/0002-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 1081384,
+      "sha256": "41ede4d80bfd0bc1dd173a709dbf0db526a46def69db93fef7f049d6cd050e71"
+    },
+    {
+      "path": "round-0-openresty/origin-reference.0.client.tsv.gz",
+      "bytes": 1165800,
+      "sha256": "8cee08993694aede6176242b58021dbc4bb820bdf8a126d170d56cfa3c9a010d"
+    },
+    {
+      "path": "round-0-openresty/0003-h1-hit-reuse.perf-flat.txt",
+      "bytes": 5626,
+      "sha256": "e48a7a62fc0f6888e08a372a3fe2af5b3b662e1eb0d38ab50cb6e829be4b9eeb"
+    },
+    {
+      "path": "round-0-openresty/0003-h1-hit-reuse.stacks.txt",
+      "bytes": 1222084,
+      "sha256": "0da10004e08d2aceafaba0ba97071d0ca1d48a2ba11807bf08241bba88c31fba"
+    },
+    {
+      "path": "round-0-openresty/0001-h2-off-reuse.perf-callers.txt",
+      "bytes": 458147,
+      "sha256": "9b645fd46aaef0193820da61c40533ab41f0099719c30744f074bd44e6368afd"
+    },
+    {
+      "path": "round-0-openresty/0002-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 1083679,
+      "sha256": "44169dbc2cf8812068c9375b8b8234b00082788d51a4cbc7bb99a6852cf4e86f"
+    },
+    {
+      "path": "round-0-openresty/0003-h1-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "a5d322ba6ab581d656a152e61a11631201880fffa8635f301654b674a20c0106"
+    },
+    {
+      "path": "round-0-openresty/0002-h1-off-reuse.perf-flat.txt",
+      "bytes": 6165,
+      "sha256": "c8eb63dae86682936d45632cddcda3bfcad55f60a3f442c69d9421f295ef1cbd"
+    },
+    {
+      "path": "round-0-openresty/0001-h2-off-reuse.command.json",
+      "bytes": 1029,
+      "sha256": "cbbac86cf7289c0686c0bcd01069dfd560d57d0de161e684a786394004507475"
+    },
+    {
+      "path": "round-0-openresty/0003-h1-hit-reuse.0.client.tsv.gz",
+      "bytes": 1118393,
+      "sha256": "abdeb396a1af4ab348fb922242ad618d39b4408b85b54c582d5b7a1a802e5bd4"
+    },
+    {
+      "path": "round-0-openresty/0003-h1-hit-reuse.perf-callers.txt",
+      "bytes": 312284,
+      "sha256": "dafd08bd4cb33992465358bb24ba331021eb41ae4fbf7e26643304d97a638250"
+    },
+    {
+      "path": "round-0-openresty/0002-h1-off-reuse.command.json",
+      "bytes": 1027,
+      "sha256": "6225ce07178d9fd885d18ff0bb0f4b83aa89859ce7de349b84a962606e88651f"
+    },
+    {
+      "path": "round-0-openresty/0001-h2-off-reuse.profile-target.json",
+      "bytes": 223,
+      "sha256": "0e4de4ca66f7f364aaae3e74e92a141f70167ae5b09669a1bae9d32bd3b0355d"
+    },
+    {
+      "path": "round-0-openresty/0001-h2-off-reuse.perf-command.json",
+      "bytes": 296,
+      "sha256": "73ab40ab1245bdf82a769152f2576d3b3fc500aa734a4637efb83fe1205da1fe"
+    },
+    {
+      "path": "round-0-openresty/0003-h1-hit-reuse.1.client.tsv.gz",
+      "bytes": 1128272,
+      "sha256": "647c33683fee0eef6d93665e3848b9f36877c53bc48b910349f9bbb943ef71b4"
+    },
+    {
+      "path": "round-0-openresty/0003-h1-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "156115d5d058597c995b513cfe91cf0f33cf04df912c1af98bf040c718c18739"
+    },
+    {
+      "path": "round-0-openresty/0000-h2-hit-reuse.1.client.tsv.gz",
+      "bytes": 941035,
+      "sha256": "f21167c0c9f511723e36529cbe306cef125539bac718b62253ac051029e64c74"
+    },
+    {
+      "path": "round-0-openresty/0002-h1-off-reuse.perf-record.log",
+      "bytes": 144,
+      "sha256": "c93bb6d38010bae75ca9c486f25e45bbda4dd03bcc5b599af2695ea5d9bcb7d3"
+    },
+    {
+      "path": "round-0-openresty/origin-reference.1.stderr",
+      "bytes": 93,
+      "sha256": "5324b2ef3e15d2504d55d65d487c6417c4a67e5c1b4530dffa95266011abd33d"
+    },
+    {
+      "path": "round-0-openresty/profile-executable",
+      "bytes": 2270896,
+      "sha256": "005f25b4b28324b070642e912e02352674f48be7c3d9fc1a38d0011c033e1a9f"
+    },
+    {
+      "path": "round-0-openresty/0002-h1-off-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "1b3b7fe105f52f52eb66a430fc5634e7089ccbf3e5b5c24314e8c28cc490188c"
+    },
+    {
+      "path": "round-0-openresty/0001-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 828312,
+      "sha256": "51a99f98f0f2639f0b49644943ebdfb23bac169a323e5935507ec8690c8e4cb0"
+    },
+    {
+      "path": "round-1-edge/0002-h1-off-reuse.perf-callers.txt",
+      "bytes": 874419,
+      "sha256": "7dd1b244713f897ab81018a6b60c3959980cd322b434e8253ea274a474bcd9b0"
+    },
+    {
+      "path": "round-1-edge/0001-h2-off-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "1efaf35256a2d5e52546e92576a0a6cc87d64887e844a5d1530af66e268cd128"
+    },
+    {
+      "path": "round-1-edge/0000-h2-hit-reuse.0.client.tsv.gz",
+      "bytes": 638162,
+      "sha256": "56012cd208d8f2d73c870f6eb03316d86d1eaa15b2ef9ec5ddfb39b20e122d62"
+    },
+    {
+      "path": "round-1-edge/0000-h2-hit-reuse.stacks.txt",
+      "bytes": 5626882,
+      "sha256": "c22f3eebac7faed5dc3a642ab4ffc701e0ff8e50e295dbcb2dd94e431f146719"
+    },
+    {
+      "path": "round-1-edge/0001-h2-off-reuse.perf-flat.txt",
+      "bytes": 21815,
+      "sha256": "e2724cb8d38728d83b5a6acc946a155a53b439a02fb300c21fc618f5a7b6179a"
+    },
+    {
+      "path": "round-1-edge/origin-reference.1.client.tsv.gz",
+      "bytes": 1154158,
+      "sha256": "2c916bcc6999e1abc4fb4cea392530c7c68c229eabde6162243e38de73146c9e"
+    },
+    {
+      "path": "round-1-edge/0003-h1-hit-reuse.command.json",
+      "bytes": 1017,
+      "sha256": "b216828900f5a22f5accb37b4b513dc7bde470abba6fa64b80602e48fd19a0c8"
+    },
+    {
+      "path": "round-1-edge/0003-h1-hit-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "1fe9434109a7ea508921635d9dded81a868b77c73fdfcec75d5deb205ea64732"
+    },
+    {
+      "path": "round-1-edge/0001-h2-off-reuse.stacks.txt",
+      "bytes": 6085748,
+      "sha256": "61f1ad7054f15aca5f2a11f58b9468c01d254bd393e2555a2914e287beb4819f"
+    },
+    {
+      "path": "round-1-edge/origin-reference.command.json",
+      "bytes": 1017,
+      "sha256": "6e9a6e3e84c4c560601aa991847af3349c2a2f6bb8d939e4bb27219121a4b73f"
+    },
+    {
+      "path": "round-1-edge/0001-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 412646,
+      "sha256": "e2a6a9bad47019d8bdadafe5d2c56520db71bf561dd01e3cba91b2bc42bd2275"
+    },
+    {
+      "path": "round-1-edge/0000-h2-hit-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "e70df02910f368b98cc4283f6e8983f6890b8957b09b0c0312f9ea2d1871c7b2"
+    },
+    {
+      "path": "round-1-edge/0003-h1-hit-reuse.profile-target.json",
+      "bytes": 192,
+      "sha256": "ded41bd2a34be41608568ce28c0a6f99993141b44160f02e257042812b4c902f"
+    },
+    {
+      "path": "round-1-edge/0000-h2-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "b55fab68e08e6a57022b39a7efcc1beb4147f52a9d84dbaa63dbeb89082742b2"
+    },
+    {
+      "path": "round-1-edge/manifest.json",
+      "bytes": 55284,
+      "sha256": "b52074771a4b6e6243b297b96410ca342e313299dcadaec703bd240bc87a4133"
+    },
+    {
+      "path": "round-1-edge/0000-h2-hit-reuse.perf-flat.txt",
+      "bytes": 21421,
+      "sha256": "f5d3d54a8ac8cc049edd0bf53f504f3024108bda4bfebaa501d194fa6b13df74"
+    },
+    {
+      "path": "round-1-edge/0000-h2-hit-reuse.perf-callers.txt",
+      "bytes": 599565,
+      "sha256": "4e26ccdd92103d4d90b2d3999fb2932f46fe6acafdc44015418f06be41a8035d"
+    },
+    {
+      "path": "round-1-edge/0002-h1-off-reuse.stacks.txt",
+      "bytes": 6203504,
+      "sha256": "067e1f893912989e183290cf5c6ad6db655a9f58a3fd574d1c7c7c29c98b8cb3"
+    },
+    {
+      "path": "round-1-edge/0000-h2-hit-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "929be72af4fc959ea929f1174fa60e6ac2f98b7bba31ab503bed4755fa768406"
+    },
+    {
+      "path": "round-1-edge/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "round-1-edge/0001-h2-off-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "43cb87da74c591484fb7c9f7132a37e144bc490c9ac2452aee4d0d1e0b4061d3"
+    },
+    {
+      "path": "round-1-edge/0002-h1-off-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "9e39d65e617d553dad9354b845770ef9c415c2dbf85d50bf0f5ece4c05caa264"
+    },
+    {
+      "path": "round-1-edge/0001-h2-off-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "63ad4b195e9537e1a745ab7161a3d4d411496d054568415b2b650ddcdc97e992"
+    },
+    {
+      "path": "round-1-edge/0000-h2-hit-reuse.profile-target.json",
+      "bytes": 192,
+      "sha256": "ded41bd2a34be41608568ce28c0a6f99993141b44160f02e257042812b4c902f"
+    },
+    {
+      "path": "round-1-edge/0002-h1-off-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "6a6988debb72b268604899e9ed0cc0d3e1c848dc9e7ed0bc386313895a5c6c0c"
+    },
+    {
+      "path": "round-1-edge/0003-h1-hit-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "e000020e2ff9f9f3c9f0b17249e341584c01762c29b5fb443f3014aca9c30baf"
+    },
+    {
+      "path": "round-1-edge/0002-h1-off-reuse.profile-target.json",
+      "bytes": 192,
+      "sha256": "ded41bd2a34be41608568ce28c0a6f99993141b44160f02e257042812b4c902f"
+    },
+    {
+      "path": "round-1-edge/origin-reference.0.stderr",
+      "bytes": 93,
+      "sha256": "87ccd55f3a0d8e09988235622d3bb2dbc6eeb9ea082fd4a7a22165fd54689b00"
+    },
+    {
+      "path": "round-1-edge/0000-h2-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "1147a7b60ac49027b66d54acd4f4fb260c8752449e7480aac984f49715275d69"
+    },
+    {
+      "path": "round-1-edge/0000-h2-hit-reuse.command.json",
+      "bytes": 1019,
+      "sha256": "b08ff547433e86aee16258f13806d1a4411c0afde573ac7974bf99d28dd86932"
+    },
+    {
+      "path": "round-1-edge/0002-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 428137,
+      "sha256": "6035a2a69e243b2d1df3cf46eb5d984482ca4423b5f2a8eedcc274534348f0a9"
+    },
+    {
+      "path": "round-1-edge/origin-reference.0.client.tsv.gz",
+      "bytes": 1155548,
+      "sha256": "8cb30433ab3447b0cf5eb9fa4a0f175a2b4cdab9d8a5c3e00e00603bbf03003e"
+    },
+    {
+      "path": "round-1-edge/0003-h1-hit-reuse.perf-flat.txt",
+      "bytes": 25193,
+      "sha256": "b893f2cfcd02cf98ac1161771e5325b8d627124c757acdac89db14f4555a6cfe"
+    },
+    {
+      "path": "round-1-edge/0003-h1-hit-reuse.stacks.txt",
+      "bytes": 5842055,
+      "sha256": "07d09d1f1e06f4073bbde0d60207712a9dfd20672c160c284a6a36b54340448d"
+    },
+    {
+      "path": "round-1-edge/0001-h2-off-reuse.perf-callers.txt",
+      "bytes": 625002,
+      "sha256": "1e06007b56923d295482b4de54197c485680926049249261b9a23a7b6e5a7269"
+    },
+    {
+      "path": "round-1-edge/0002-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 425340,
+      "sha256": "4c74d9bbf3a95b4b837bf29801ea6c890976342543b3adcea703fb2f01bc718c"
+    },
+    {
+      "path": "round-1-edge/0003-h1-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "066b1ae5a5d40b36fa6d08ce27ea6b46d51d1925aaafb7847e9508702c120a14"
+    },
+    {
+      "path": "round-1-edge/0002-h1-off-reuse.perf-flat.txt",
+      "bytes": 25868,
+      "sha256": "c8cf35d01047a9ec7207a5313874da4f4ab261e53c55756e4914ea8e3f163a61"
+    },
+    {
+      "path": "round-1-edge/0001-h2-off-reuse.command.json",
+      "bytes": 1019,
+      "sha256": "97e7fc9598565dbff23c18b27e21ce8788be69475b492b9d562e89205b4ac81e"
+    },
+    {
+      "path": "round-1-edge/0003-h1-hit-reuse.0.client.tsv.gz",
+      "bytes": 801264,
+      "sha256": "7bf7c84a3ff9c7d22f7f07de191a6f4fda1ed70b06e2d02b135d65e3ad0d705f"
+    },
+    {
+      "path": "round-1-edge/0003-h1-hit-reuse.perf-callers.txt",
+      "bytes": 750935,
+      "sha256": "d40f4761e965a172225e2d6741a15eb75b5a533e86df3688158a417c57d91e65"
+    },
+    {
+      "path": "round-1-edge/0002-h1-off-reuse.command.json",
+      "bytes": 1017,
+      "sha256": "45311526ea96b39293939db93eb42b8cd850e2dee1e9fea5273c4246170e7703"
+    },
+    {
+      "path": "round-1-edge/0001-h2-off-reuse.profile-target.json",
+      "bytes": 192,
+      "sha256": "ded41bd2a34be41608568ce28c0a6f99993141b44160f02e257042812b4c902f"
+    },
+    {
+      "path": "round-1-edge/0001-h2-off-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "a447674a93135606145b6ba2f647f07b031cedf6766ede2485ac83e0b7b8dfc5"
+    },
+    {
+      "path": "round-1-edge/0003-h1-hit-reuse.1.client.tsv.gz",
+      "bytes": 810071,
+      "sha256": "2687dd97715552828fcfa821f8335d402628ecac0984680d2b72346a775b9a0a"
+    },
+    {
+      "path": "round-1-edge/0003-h1-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "864e77f95efd4f7dc053b2f9c38dc62bdf225f1cb2ab1e278928891808dbdf8c"
+    },
+    {
+      "path": "round-1-edge/0000-h2-hit-reuse.1.client.tsv.gz",
+      "bytes": 652512,
+      "sha256": "67dc872a79c857594fd13a299f9e48eef5c0ba7e4e7c24d46b602daf2bbb2324"
+    },
+    {
+      "path": "round-1-edge/0002-h1-off-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "5de3ece57b2e2d3c47c376837d53a840037b83583ecfdfaf8ee53e34d4a9c48c"
+    },
+    {
+      "path": "round-1-edge/origin-reference.1.stderr",
+      "bytes": 93,
+      "sha256": "b125f6ad0eadcf305571cda6a543af92bf272a3ed58d9762d9d37fb19af4ae10"
+    },
+    {
+      "path": "round-1-edge/0002-h1-off-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "0fd1105b1a99bb90a058e645537ec7ff46512a42bf31a0af40523ba136ff2292"
+    },
+    {
+      "path": "round-1-edge/0001-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 419060,
+      "sha256": "665fc81445860131e9ac8f84614a876094898c85cae5e40063329804fbdc1c8d"
+    },
+    {
+      "path": "round-0-edge/0002-h1-off-reuse.perf-callers.txt",
+      "bytes": 905559,
+      "sha256": "35f7ce16d866ce331ea4e3c20fadb94e9cdcff3a2cad56e2e50712c3f2e314de"
+    },
+    {
+      "path": "round-0-edge/0001-h2-off-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "d7b224d663797620d16aebf66eb9569981cca921c22137f41255b0b0eec65585"
+    },
+    {
+      "path": "round-0-edge/0000-h2-hit-reuse.0.client.tsv.gz",
+      "bytes": 631376,
+      "sha256": "9e59617f5e7b8b887f83767156b5325cf469172534419bb48bcaf8e1d6d7966c"
+    },
+    {
+      "path": "round-0-edge/0000-h2-hit-reuse.stacks.txt",
+      "bytes": 5575403,
+      "sha256": "fd27b0f35e2afb4fe5d9bbb40214c469849f35c4e5d32f1b0ae7f99b997edd9d"
+    },
+    {
+      "path": "round-0-edge/0001-h2-off-reuse.perf-flat.txt",
+      "bytes": 22163,
+      "sha256": "300a8e4bc439ea1cf92965ac445ac7f95d8b44756530239dc682cf539dd3096a"
+    },
+    {
+      "path": "round-0-edge/origin-reference.1.client.tsv.gz",
+      "bytes": 1157885,
+      "sha256": "5f20bce5a51d54e2393aa8e7f154a2b98329e42277785cb90a4532e909d08267"
+    },
+    {
+      "path": "round-0-edge/0003-h1-hit-reuse.command.json",
+      "bytes": 1017,
+      "sha256": "bd25b03890c8670ac86852dc497cbd827aec834f29182610950fc435aeb7ea3e"
+    },
+    {
+      "path": "round-0-edge/0003-h1-hit-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "6e6465b5e8056c2ae149fe5a34add5e4c66347782334c6b4b677e00788dc817c"
+    },
+    {
+      "path": "round-0-edge/0001-h2-off-reuse.stacks.txt",
+      "bytes": 6296778,
+      "sha256": "398676628e5ae16b14997b51db8f236a5d5252104d9f0a24007aa05c6bbfe50f"
+    },
+    {
+      "path": "round-0-edge/origin-reference.command.json",
+      "bytes": 1017,
+      "sha256": "8f2c7cb7745e6731435889105a3454542ecfdc9ae87668c982ac1c6c48a5e492"
+    },
+    {
+      "path": "round-0-edge/0001-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 413526,
+      "sha256": "5b4705d7fd3f01ddbec98b404fd566143fa79e75caa90388aedfc8e9341a38e4"
+    },
+    {
+      "path": "round-0-edge/0000-h2-hit-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "8b1068e7f8e6f5d7f225d84c9d8f673902546ccef551c39cef7711b070832d42"
+    },
+    {
+      "path": "round-0-edge/0003-h1-hit-reuse.profile-target.json",
+      "bytes": 192,
+      "sha256": "ea03ac845dc15131ca8107153de57978f75fa0e5b3eca115176d01cdd7a3168f"
+    },
+    {
+      "path": "round-0-edge/0000-h2-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "5d7e72b63e903519f7024eae310f8992a369f0982d9b16556ec0ad21c5b1ec38"
+    },
+    {
+      "path": "round-0-edge/manifest.json",
+      "bytes": 55187,
+      "sha256": "246048a9c5cf752f69092b5962443d1169ec13c66870a8bf7c65ed601a11042b"
+    },
+    {
+      "path": "round-0-edge/0000-h2-hit-reuse.perf-flat.txt",
+      "bytes": 21131,
+      "sha256": "3c434182f750ba6dbce075f7cbab362d82a717328cb05e6adc7ef1d463dd9edb"
+    },
+    {
+      "path": "round-0-edge/0000-h2-hit-reuse.perf-callers.txt",
+      "bytes": 541171,
+      "sha256": "d4a3234002fbd90a574dd3bc485959437f34ab5a865e829dfac7538b350d72b6"
+    },
+    {
+      "path": "round-0-edge/0002-h1-off-reuse.stacks.txt",
+      "bytes": 6269785,
+      "sha256": "60fe25a70ab7deaa99a5430947d50ac9d5b3490bf294f1af64f149c15f72f7ea"
+    },
+    {
+      "path": "round-0-edge/0000-h2-hit-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "a6003889e298ad90abb2edbeae53a9fa01722b57c2f7f89baf04f6c469e5a4ba"
+    },
+    {
+      "path": "round-0-edge/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "round-0-edge/0001-h2-off-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "21732b1dbbdd8cdf3c55a64a063956b70248baf02a1f4c3b5fb1aca1433fbfb0"
+    },
+    {
+      "path": "round-0-edge/0002-h1-off-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "c31c579a4a85d0572a23784a7cc5e04b59759434fd8b09bc82af1f266ba9fec2"
+    },
+    {
+      "path": "round-0-edge/0001-h2-off-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "7a28bcbfdb71959efdd606680b216a19b89effc0c4addb9b3f04816333052bf5"
+    },
+    {
+      "path": "round-0-edge/0000-h2-hit-reuse.profile-target.json",
+      "bytes": 192,
+      "sha256": "ea03ac845dc15131ca8107153de57978f75fa0e5b3eca115176d01cdd7a3168f"
+    },
+    {
+      "path": "round-0-edge/0002-h1-off-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "d6b4f390c026e48b8e3c5cd6fe07f5b7bed645bda2493c132a58561271bd8f89"
+    },
+    {
+      "path": "round-0-edge/0003-h1-hit-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "a72c4d9e5ace67618dd3ac54f31377dd185ee8e2fa9117b6b5eecebbc13dc060"
+    },
+    {
+      "path": "round-0-edge/0002-h1-off-reuse.profile-target.json",
+      "bytes": 192,
+      "sha256": "ea03ac845dc15131ca8107153de57978f75fa0e5b3eca115176d01cdd7a3168f"
+    },
+    {
+      "path": "round-0-edge/origin-reference.0.stderr",
+      "bytes": 93,
+      "sha256": "d33965883e8d38ea7b34bb872a81e6a4205d8c9866b39e1e3ef0d87c1c277554"
+    },
+    {
+      "path": "round-0-edge/0000-h2-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "333617f4f31707b61f881221a66b145eab29d116d4d1f6ad2b6aad260429d3c8"
+    },
+    {
+      "path": "round-0-edge/0000-h2-hit-reuse.command.json",
+      "bytes": 1019,
+      "sha256": "7924c5dd57d0c78d044a0cc324773a171d7fa6b88c5bad4e5cdcad1c5b39ca1b"
+    },
+    {
+      "path": "round-0-edge/0002-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 427445,
+      "sha256": "1e0bc16f661127bafc70c98a7ff76a0fc314cd4f9333d07a07be6213cb867ccb"
+    },
+    {
+      "path": "round-0-edge/origin-reference.0.client.tsv.gz",
+      "bytes": 1167406,
+      "sha256": "1e03c3b6fbbe569b4df8aa2d6cbe5b539f8a4be36dfb3f04b1dc873dc61d7093"
+    },
+    {
+      "path": "round-0-edge/0003-h1-hit-reuse.perf-flat.txt",
+      "bytes": 25409,
+      "sha256": "1093e2cc494dad6514c0d6b9fdaa138df1801b1591d323db2557bc0ccdffdfb0"
+    },
+    {
+      "path": "round-0-edge/0003-h1-hit-reuse.stacks.txt",
+      "bytes": 5818023,
+      "sha256": "4e19d35d0bdaf521ff686cb40ac7af29fbdfce0011d2af3af6e7a0e39678587b"
+    },
+    {
+      "path": "round-0-edge/0001-h2-off-reuse.perf-callers.txt",
+      "bytes": 675944,
+      "sha256": "56370fb936023335e18bb16d3e81a023b084e6ef06f9af6938bca16362e25bfb"
+    },
+    {
+      "path": "round-0-edge/0002-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 424962,
+      "sha256": "e006b31382aea6040a3bd1c1972ba18b2c4a88b7f4c222d9c87ff3555981e8ba"
+    },
+    {
+      "path": "round-0-edge/0003-h1-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "9d0c6d78c7ac1f27326d66ff65d13e85cd1fa8d15fe296fd8ea8a1c949dd2faa"
+    },
+    {
+      "path": "round-0-edge/0002-h1-off-reuse.perf-flat.txt",
+      "bytes": 26571,
+      "sha256": "f25c9f603cc64d21c56edd621f1e7cd0aab0bd992dd35fd75eb4458030655a2a"
+    },
+    {
+      "path": "round-0-edge/0001-h2-off-reuse.command.json",
+      "bytes": 1019,
+      "sha256": "3a57b03610afdce72d02545f02e02489c4c47c4f1353126d2c97c7c61ccc71df"
+    },
+    {
+      "path": "round-0-edge/0003-h1-hit-reuse.0.client.tsv.gz",
+      "bytes": 783613,
+      "sha256": "ff1fefd10e0126a9d84d4173de5d16628b2ed8f93cc9d9696afd87f29ef34dfe"
+    },
+    {
+      "path": "round-0-edge/0003-h1-hit-reuse.perf-callers.txt",
+      "bytes": 727091,
+      "sha256": "4f7fdf5a2f61d3d0625f63f41d3281934bd9fca9b41d4ddb553c8d33a62b2205"
+    },
+    {
+      "path": "round-0-edge/0002-h1-off-reuse.command.json",
+      "bytes": 1017,
+      "sha256": "74f95565366d75741508fc788808ce436f9128157c9918a41a574753834ad842"
+    },
+    {
+      "path": "round-0-edge/0001-h2-off-reuse.profile-target.json",
+      "bytes": 192,
+      "sha256": "ea03ac845dc15131ca8107153de57978f75fa0e5b3eca115176d01cdd7a3168f"
+    },
+    {
+      "path": "round-0-edge/0001-h2-off-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "75d4b0f30374c0690cd34e16249a148883f515f28c5dc97c28ed04b779e2d1be"
+    },
+    {
+      "path": "round-0-edge/0003-h1-hit-reuse.1.client.tsv.gz",
+      "bytes": 794779,
+      "sha256": "b79b53f96df49e330679581e133523c8ed80de8a3e4a3da70c22eef09ea96d9a"
+    },
+    {
+      "path": "round-0-edge/0003-h1-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "922d6e04cef8c0f26b4004cf94a3dca98ff20a72ead930dad3c99d364444c88f"
+    },
+    {
+      "path": "round-0-edge/0000-h2-hit-reuse.1.client.tsv.gz",
+      "bytes": 643150,
+      "sha256": "a1e4be6587beba23a46740942fe83123d6f4ce11618de0ecd433c9335af09ad8"
+    },
+    {
+      "path": "round-0-edge/0002-h1-off-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "a6ddb9e8795e668db543a91d1dd916f38a1b1c06865d6810e76a9f6c54c56130"
+    },
+    {
+      "path": "round-0-edge/origin-reference.1.stderr",
+      "bytes": 93,
+      "sha256": "080ec0152e384132f6d97416b3c7aa569d6d8be8a867eeb6214e9d23793c2818"
+    },
+    {
+      "path": "round-0-edge/0002-h1-off-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "334d7e1b9fae998647c222223806a298c050f438f305daa2c88349d515fc94c0"
+    },
+    {
+      "path": "round-0-edge/0001-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 420907,
+      "sha256": "56d859d38754e9ec0b4e207f726265646bd149f7439b2c22a62e7631684fca5d"
+    },
+    {
+      "path": "round-1-nginx/0002-h1-off-reuse.perf-callers.txt",
+      "bytes": 201279,
+      "sha256": "a7d787c3f09a1ae1c671842783447e0d3f235eff3879e319e5768a8766fe1178"
+    },
+    {
+      "path": "round-1-nginx/0001-h2-off-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "f2e33c25f5c6efc3810101248915f230514d2ca989a3636bb78c7095a423d712"
+    },
+    {
+      "path": "round-1-nginx/0000-h2-hit-reuse.0.client.tsv.gz",
+      "bytes": 864105,
+      "sha256": "17108e82baaa7b401b5a6017a952d1251b5848232828c041ce680e130004807e"
+    },
+    {
+      "path": "round-1-nginx/0000-h2-hit-reuse.stacks.txt",
+      "bytes": 2130363,
+      "sha256": "c2fc0f94614553168bd6f201f406ced4695510fad4064915d8e2a4c33bbfa50b"
+    },
+    {
+      "path": "round-1-nginx/0001-h2-off-reuse.perf-flat.txt",
+      "bytes": 5995,
+      "sha256": "ef7a95bea3ee4518a5a1b9e607123b910c58c4e1414b4eb4671cfcef9ca708e7"
+    },
+    {
+      "path": "round-1-nginx/origin-reference.1.client.tsv.gz",
+      "bytes": 1144615,
+      "sha256": "6983b39824b5a75990f899065cec57987a788dfddd3b64160b718289e55e3d60"
+    },
+    {
+      "path": "round-1-nginx/0003-h1-hit-reuse.command.json",
+      "bytes": 1019,
+      "sha256": "bb56dd878d773bac0d8751f63a719ef3924056d39c5c8678173fba51aaae66bf"
+    },
+    {
+      "path": "round-1-nginx/0003-h1-hit-reuse.perf-record.log",
+      "bytes": 144,
+      "sha256": "9ba91f28497e0ebc29652460295208f626bd7ac97e215c379911bd6d88110fb9"
+    },
+    {
+      "path": "round-1-nginx/0001-h2-off-reuse.stacks.txt",
+      "bytes": 1446111,
+      "sha256": "8992a4b99e65712966c6fe8c1c2a3fcb99658dd2fc349d0f0e68b5aeacb61f44"
+    },
+    {
+      "path": "round-1-nginx/origin-reference.command.json",
+      "bytes": 1019,
+      "sha256": "7128b500cbca298fb9d3d2ddea4fb6e2785900205b712bf35afc2f04854841ed"
+    },
+    {
+      "path": "round-1-nginx/0001-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 808801,
+      "sha256": "d5aa19351975e146cced271bfe879836f6e501227e06e222e31a19e151761830"
+    },
+    {
+      "path": "round-1-nginx/0000-h2-hit-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "e9926207f771f6f8a18ebd405a225be8d4f2c4187ffe52c5924e3c199f9c1045"
+    },
+    {
+      "path": "round-1-nginx/0003-h1-hit-reuse.profile-target.json",
+      "bytes": 215,
+      "sha256": "b02a4059ae87393aad918abbcb7942101beffe23a6ff769a40d73516e567ad62"
+    },
+    {
+      "path": "round-1-nginx/0000-h2-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "ee257e2f3d06da2ca5e82429837d587bba4a719e013da4512b050f6873c1c4a3"
+    },
+    {
+      "path": "round-1-nginx/manifest.json",
+      "bytes": 42947,
+      "sha256": "3f5ac8978171f2e4035259b387c736a094c898b5be7741c7e027fb33fed72871"
+    },
+    {
+      "path": "round-1-nginx/0000-h2-hit-reuse.perf-flat.txt",
+      "bytes": 5158,
+      "sha256": "1482cc7fa0695dfdef96d3f35acf48a8831daefc1cae7faa2a9d6ba1f626238f"
+    },
+    {
+      "path": "round-1-nginx/0000-h2-hit-reuse.perf-callers.txt",
+      "bytes": 674030,
+      "sha256": "f4da84f0e480784f0a1ae8031749e9f820a6d5ae95c0b71c4c62bebf1ce74c62"
+    },
+    {
+      "path": "round-1-nginx/0002-h1-off-reuse.stacks.txt",
+      "bytes": 752298,
+      "sha256": "5f60f3307cda62b7a4dea9a6582be137a6230bef6d1fd4154fa6a5b86e8a09e1"
+    },
+    {
+      "path": "round-1-nginx/0000-h2-hit-reuse.perf-command.json",
+      "bytes": 292,
+      "sha256": "803522f0a4fa6cf1e2f630cd5b4381b2d77b943e537d395313ac95917515adba"
+    },
+    {
+      "path": "round-1-nginx/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "round-1-nginx/0001-h2-off-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "35e8ff2d39b6e3d7e634714ecc5ef28654d8e2b72755b26d5095214a3df56157"
+    },
+    {
+      "path": "round-1-nginx/0002-h1-off-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "cdf79a60617be8e2944e8f97c6009fdf7886dc3c0b50d65f8d00a941cf01fc93"
+    },
+    {
+      "path": "round-1-nginx/0001-h2-off-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "6d6970bcc024b07ca1d6d7dd1b59b024ab13d312c802755b72a60459d4617e4c"
+    },
+    {
+      "path": "round-1-nginx/0000-h2-hit-reuse.profile-target.json",
+      "bytes": 215,
+      "sha256": "b02a4059ae87393aad918abbcb7942101beffe23a6ff769a40d73516e567ad62"
+    },
+    {
+      "path": "round-1-nginx/0002-h1-off-reuse.perf-command.json",
+      "bytes": 292,
+      "sha256": "c7707bc30196efe1a272d4ed18548792ddb5e038944914ba6e76b96eee49719c"
+    },
+    {
+      "path": "round-1-nginx/0003-h1-hit-reuse.perf-command.json",
+      "bytes": 292,
+      "sha256": "49bf26b68b5b0a8f546229bd9874476b1c77b14132b9fdc6e40634ad2482eb50"
+    },
+    {
+      "path": "round-1-nginx/0002-h1-off-reuse.profile-target.json",
+      "bytes": 215,
+      "sha256": "b02a4059ae87393aad918abbcb7942101beffe23a6ff769a40d73516e567ad62"
+    },
+    {
+      "path": "round-1-nginx/origin-reference.0.stderr",
+      "bytes": 93,
+      "sha256": "f9493d69673bff601c9ddf6aa0c6fb90c63418061ff2aae07c64e0f405e83c63"
+    },
+    {
+      "path": "round-1-nginx/0000-h2-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "67a9e161dd5fb8eadef8e62645da51b13d1d642158c53d26555b27f96c534959"
+    },
+    {
+      "path": "round-1-nginx/0000-h2-hit-reuse.command.json",
+      "bytes": 1021,
+      "sha256": "78228cb1352453f2d08fb28ceb77d0349f473cdb3af635cbb3775b52bb319512"
+    },
+    {
+      "path": "round-1-nginx/0002-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 1094658,
+      "sha256": "e011dbd397a8248253bb2034275c59a052fd8ea1cffd0e2f068a1f1b9aa5147d"
+    },
+    {
+      "path": "round-1-nginx/origin-reference.0.client.tsv.gz",
+      "bytes": 1149814,
+      "sha256": "79700387653a16ae841c80852fbddec87d7a0d8eef77227095b0c25690a5cca4"
+    },
+    {
+      "path": "round-1-nginx/0003-h1-hit-reuse.perf-flat.txt",
+      "bytes": 7326,
+      "sha256": "7494eeb75c55b506b655dbe415ec38727d253a07c7f46f8da9490bedaeb8c9a1"
+    },
+    {
+      "path": "round-1-nginx/0003-h1-hit-reuse.stacks.txt",
+      "bytes": 1062819,
+      "sha256": "de32492dfbf4b86d961f50ca7d45d5fda7a334cf26e7aa46db50b4ce06b83c44"
+    },
+    {
+      "path": "round-1-nginx/0001-h2-off-reuse.perf-callers.txt",
+      "bytes": 482722,
+      "sha256": "a7590dda49e618cb1f802a5030e716c8aaec781720482a38006bf1b0d4dae236"
+    },
+    {
+      "path": "round-1-nginx/0002-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 1091257,
+      "sha256": "f84bd749c097a86ba459dda4416173101f5ba30b2494362c8c0c99b8de2c39ba"
+    },
+    {
+      "path": "round-1-nginx/0003-h1-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "43a9ef00a3bec64b7401c0452bee6e5efb6d4619cbbd2a35dc2261c2c3345d01"
+    },
+    {
+      "path": "round-1-nginx/0002-h1-off-reuse.perf-flat.txt",
+      "bytes": 6690,
+      "sha256": "5fa459aca9d031330d6d78bcf093a5ddd4a9183dd7a762f414ec5e14fe21986d"
+    },
+    {
+      "path": "round-1-nginx/0001-h2-off-reuse.command.json",
+      "bytes": 1021,
+      "sha256": "4ea59b44349a21d4d77d9324a8f3494cead044f449c04d59e773741369093cf0"
+    },
+    {
+      "path": "round-1-nginx/0003-h1-hit-reuse.0.client.tsv.gz",
+      "bytes": 1149530,
+      "sha256": "2e9cdbd8fca73594e4dca6beb8658e96a598b3b07d8c7b0b606c7c3bd17f7896"
+    },
+    {
+      "path": "round-1-nginx/0003-h1-hit-reuse.perf-callers.txt",
+      "bytes": 357548,
+      "sha256": "905b7a9694924b37e353c80892be6746a8e7dfb6679ae326b02fb7717e6c3850"
+    },
+    {
+      "path": "round-1-nginx/0002-h1-off-reuse.command.json",
+      "bytes": 1019,
+      "sha256": "7ce28e32291e61ddd9b53ea78cf0ba01d5ab428708abd227641da658e30d885f"
+    },
+    {
+      "path": "round-1-nginx/0001-h2-off-reuse.profile-target.json",
+      "bytes": 215,
+      "sha256": "b02a4059ae87393aad918abbcb7942101beffe23a6ff769a40d73516e567ad62"
+    },
+    {
+      "path": "round-1-nginx/0001-h2-off-reuse.perf-command.json",
+      "bytes": 292,
+      "sha256": "d6e1a27e017913ccb9e529b7ff7e723f37727de8defb9b655cf398201f8adbe5"
+    },
+    {
+      "path": "round-1-nginx/0003-h1-hit-reuse.1.client.tsv.gz",
+      "bytes": 1157767,
+      "sha256": "72ee25874fb5c998c797c262c11d5fae62ccacec6953733cd1ba09206898fe7d"
+    },
+    {
+      "path": "round-1-nginx/0003-h1-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "b8343d5777ee37956c88baa41b7a93288e51b8257e8066fb3e6b1f4f7f90e4b5"
+    },
+    {
+      "path": "round-1-nginx/0000-h2-hit-reuse.1.client.tsv.gz",
+      "bytes": 913592,
+      "sha256": "20ea775152a509897454da546f1560acdd6468bb35c3adaed526c9c4a0d9d5ca"
+    },
+    {
+      "path": "round-1-nginx/0002-h1-off-reuse.perf-record.log",
+      "bytes": 144,
+      "sha256": "2e1ea41f9b9257b7a4382a18509994dd80f6cc5c88a9e52e08c31ebca5015886"
+    },
+    {
+      "path": "round-1-nginx/origin-reference.1.stderr",
+      "bytes": 93,
+      "sha256": "738e78f977a5021ac6eaba53b3f45e1d240075645d619c7eb2e19fde60dbac09"
+    },
+    {
+      "path": "round-1-nginx/profile-executable",
+      "bytes": 1592504,
+      "sha256": "7b9544766afdaf9674cf139bea598d5f14fae36b69182e03acb1d0f1587da9bd"
+    },
+    {
+      "path": "round-1-nginx/0002-h1-off-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "68436bc7a74a1fb30010f881ee1b610f5d4da58db446cf041fc49689e368df98"
+    },
+    {
+      "path": "round-1-nginx/0001-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 821855,
+      "sha256": "bf792340f5089971ec7b1672f48db88c11c1c72337e90175477a6d1171718109"
+    },
+    {
+      "path": "round-1-openresty/0002-h1-off-reuse.perf-callers.txt",
+      "bytes": 240328,
+      "sha256": "48840e302f7edf1ef0d5019f7f5c63ae076efbb4f92247e63f32a092fa11b6c8"
+    },
+    {
+      "path": "round-1-openresty/0001-h2-off-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "d4632d6f6c238c929776439b26d3f597d38a34b7ec474a49587d537ddbe2b4b5"
+    },
+    {
+      "path": "round-1-openresty/0000-h2-hit-reuse.0.client.tsv.gz",
+      "bytes": 894547,
+      "sha256": "b202bd4242a784a2ee4e7685a03dc0e395f30a6b66b2d2a416c56b7f1ea61aa7"
+    },
+    {
+      "path": "round-1-openresty/0000-h2-hit-reuse.stacks.txt",
+      "bytes": 2575610,
+      "sha256": "c452b5055b4598a96f2cde67406aec3217b0c4d2bcd58cb7ea40da2c7c09e82e"
+    },
+    {
+      "path": "round-1-openresty/0001-h2-off-reuse.perf-flat.txt",
+      "bytes": 5996,
+      "sha256": "1e5aebab94e122ebb7e424ed71f16a14b94031b9411029412c0ee403dec19670"
+    },
+    {
+      "path": "round-1-openresty/origin-reference.1.client.tsv.gz",
+      "bytes": 1138723,
+      "sha256": "14e2e53c777e4ce29fbb8dc2318ea49ae9e0f87e145224c0a2a1013530e54ec9"
+    },
+    {
+      "path": "round-1-openresty/0003-h1-hit-reuse.command.json",
+      "bytes": 1027,
+      "sha256": "5d2feaadf3b6a69939a0c8a85287ef0689e35fca6cf9698feb3a3a426913f481"
+    },
+    {
+      "path": "round-1-openresty/0003-h1-hit-reuse.perf-record.log",
+      "bytes": 144,
+      "sha256": "7aecb71e2dfe85f12c250721a7c3fc59206686b560442bc81e6d544ef1cbc6ba"
+    },
+    {
+      "path": "round-1-openresty/0001-h2-off-reuse.stacks.txt",
+      "bytes": 1829008,
+      "sha256": "02e8f751a4657826d5f60e97678d46d77a90e01d1bdbf51a5f86839866c87777"
+    },
+    {
+      "path": "round-1-openresty/origin-reference.command.json",
+      "bytes": 1027,
+      "sha256": "aa8974895552a7a4e1377acb0c5709da65650ed48688009e0ab1861eb8dfdc66"
+    },
+    {
+      "path": "round-1-openresty/0001-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 825409,
+      "sha256": "bb37a5968f137ae47f4943ff0ebff7905ded3537de25d75bdacdca0567e26c07"
+    },
+    {
+      "path": "round-1-openresty/0000-h2-hit-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "aad60393cf855cd49985700817ff9a33c89ae0b5e7ba4a7de818c1dbb370e510"
+    },
+    {
+      "path": "round-1-openresty/0003-h1-hit-reuse.profile-target.json",
+      "bytes": 223,
+      "sha256": "44dfa1d9914d0dabdce51ab0f6de6777317193012fd06d53f5b20a930b9b3a2a"
+    },
+    {
+      "path": "round-1-openresty/0000-h2-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "59744909379bce29e4181b077e457cea0a39dd58f2425120f6ae3cc73a72dd00"
+    },
+    {
+      "path": "round-1-openresty/manifest.json",
+      "bytes": 43502,
+      "sha256": "8b4d36e097e145f12e63f32ba1b398a7ec9af6189d6422e10aa04764c7a9bcb0"
+    },
+    {
+      "path": "round-1-openresty/0000-h2-hit-reuse.perf-flat.txt",
+      "bytes": 4222,
+      "sha256": "64c966511f9d408e6936b0f0693596fbd218db3ec0533b099e7a43ba04d91da6"
+    },
+    {
+      "path": "round-1-openresty/0000-h2-hit-reuse.perf-callers.txt",
+      "bytes": 571303,
+      "sha256": "b7b1c9a4083dd5e0d9b74d51bda7d03f5e33e0ccd35bfcdb8a6c8cf55d2faad1"
+    },
+    {
+      "path": "round-1-openresty/0002-h1-off-reuse.stacks.txt",
+      "bytes": 938243,
+      "sha256": "85ccc96e00d48974ce900d7a03022ff4812b6b35cc0f359ce87c2cd326611cd7"
+    },
+    {
+      "path": "round-1-openresty/0000-h2-hit-reuse.perf-command.json",
+      "bytes": 296,
+      "sha256": "b79f53d0a5c12091356d59114c0fb794177f4cdbe0fe03157da4b9927b835490"
+    },
+    {
+      "path": "round-1-openresty/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "round-1-openresty/0001-h2-off-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "a43d849e351d81f10b604b9717b47c05282d56905f2bb96a89cc4209204373ba"
+    },
+    {
+      "path": "round-1-openresty/0002-h1-off-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "86c5b54534fd5d8b77087bd8ed5f1bd6eebc3da9a6dd7f3256f8bfc9c71d349d"
+    },
+    {
+      "path": "round-1-openresty/0001-h2-off-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "770ca2ac9e04fa0e13b58c2704b53c6b360a24a83a8d6ac0b2524b004ce4bdcf"
+    },
+    {
+      "path": "round-1-openresty/0000-h2-hit-reuse.profile-target.json",
+      "bytes": 223,
+      "sha256": "44dfa1d9914d0dabdce51ab0f6de6777317193012fd06d53f5b20a930b9b3a2a"
+    },
+    {
+      "path": "round-1-openresty/0002-h1-off-reuse.perf-command.json",
+      "bytes": 296,
+      "sha256": "a5b09cd55b45144790a6969ac001b7ca052ad3fcf37c46e55dbad56a9b53187a"
+    },
+    {
+      "path": "round-1-openresty/0003-h1-hit-reuse.perf-command.json",
+      "bytes": 296,
+      "sha256": "e4aa88790ab6e9cd5b4b37b5f659d6ed71de83cf343d6a7933316a84f6c924fb"
+    },
+    {
+      "path": "round-1-openresty/0002-h1-off-reuse.profile-target.json",
+      "bytes": 223,
+      "sha256": "44dfa1d9914d0dabdce51ab0f6de6777317193012fd06d53f5b20a930b9b3a2a"
+    },
+    {
+      "path": "round-1-openresty/origin-reference.0.stderr",
+      "bytes": 93,
+      "sha256": "4dd826204c266b9a66ad76d0e2266e2134486bbf2afdd6ddcdf10f76ae08e8cd"
+    },
+    {
+      "path": "round-1-openresty/0000-h2-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "01d6174412f1ced8b7f5309cfd0ed66ee8772c2863cf230dcd0e92cafc383a7d"
+    },
+    {
+      "path": "round-1-openresty/0000-h2-hit-reuse.command.json",
+      "bytes": 1029,
+      "sha256": "e9c9d77d2c06c5887a1a71ca9e6468547f8eb10fc14ea35e347e9dd919be36a7"
+    },
+    {
+      "path": "round-1-openresty/0002-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 1084809,
+      "sha256": "20cff641d620be5ada34cc63b0d557533629d2319ed310ed95c527b764b83071"
+    },
+    {
+      "path": "round-1-openresty/origin-reference.0.client.tsv.gz",
+      "bytes": 1147217,
+      "sha256": "585e596cb12b8e88e0bfbaaef6208ca9d8abf1ce6700f56a60b547c2ea17b2f2"
+    },
+    {
+      "path": "round-1-openresty/0003-h1-hit-reuse.perf-flat.txt",
+      "bytes": 6150,
+      "sha256": "a00d0b2d4f4ebbcf645c5ed8b58d804571a03466a8970672c76a10fdbb5ba29f"
+    },
+    {
+      "path": "round-1-openresty/0003-h1-hit-reuse.stacks.txt",
+      "bytes": 1388109,
+      "sha256": "826389c468b8002eb6501257c4338aff38ac82e9ac1ebbc637b2fc7833ad6b3c"
+    },
+    {
+      "path": "round-1-openresty/0001-h2-off-reuse.perf-callers.txt",
+      "bytes": 432319,
+      "sha256": "43d12d07060dce05f7b9a92209f4f05675952fdfac69abcd50ae5b8c6cfa83a6"
+    },
+    {
+      "path": "round-1-openresty/0002-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 1082767,
+      "sha256": "8ae50ef29c9746810e7538bb4beed4050477c0baef16281bfbbd9d54467d6f36"
+    },
+    {
+      "path": "round-1-openresty/0003-h1-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "cf160537ba32b01e2f9041d3e477998c68b2da0ab5c20aa25ce3bc02ccde3335"
+    },
+    {
+      "path": "round-1-openresty/0002-h1-off-reuse.perf-flat.txt",
+      "bytes": 6642,
+      "sha256": "3d655aa6f773549f8e8c1491517c4c4d5c067ed0a35a804caa8943af62a01c02"
+    },
+    {
+      "path": "round-1-openresty/0001-h2-off-reuse.command.json",
+      "bytes": 1029,
+      "sha256": "9efff83ab3ff766da8745011e6d17459c45eab1a688e1996fe0117ab2cd7d3f1"
+    },
+    {
+      "path": "round-1-openresty/0003-h1-hit-reuse.0.client.tsv.gz",
+      "bytes": 1112631,
+      "sha256": "b8b5623c091a0e1fd2eebbea1f66603a0755339a75c5dea180d0bd5ccc96fd50"
+    },
+    {
+      "path": "round-1-openresty/0003-h1-hit-reuse.perf-callers.txt",
+      "bytes": 318221,
+      "sha256": "27337093e616d5ea62b35e24fc17cd1c863fbf2514264789f8a8d7df4a5c44a3"
+    },
+    {
+      "path": "round-1-openresty/0002-h1-off-reuse.command.json",
+      "bytes": 1027,
+      "sha256": "a8d02d1d6a18cac47d69dbeb8657eceef792d8895e8f442e63d9786484cdbfa1"
+    },
+    {
+      "path": "round-1-openresty/0001-h2-off-reuse.profile-target.json",
+      "bytes": 224,
+      "sha256": "227ef3c67cac901ecd85dfbd0bcbe6c8337daaa3ef255ec099a3991e206da4de"
+    },
+    {
+      "path": "round-1-openresty/0001-h2-off-reuse.perf-command.json",
+      "bytes": 297,
+      "sha256": "cdb88310ed3b95cc270b73c2bb3de987a7f0b70fb8d6dcfb3a7b71ef68bee215"
+    },
+    {
+      "path": "round-1-openresty/0003-h1-hit-reuse.1.client.tsv.gz",
+      "bytes": 1115188,
+      "sha256": "a3e435d17c3c1a8fc40030170face4407094435d85b3c578f423cc1b02fbb1e7"
+    },
+    {
+      "path": "round-1-openresty/0003-h1-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "f75de460c5f21f78acf2ad37ad6bb23a522d1890d21d934f4eabb2c30afcc6a1"
+    },
+    {
+      "path": "round-1-openresty/0000-h2-hit-reuse.1.client.tsv.gz",
+      "bytes": 948387,
+      "sha256": "af1f8c1a8e64886947951dea4b21b00dc8c9858ca52d4b9c0bbfaa7ccf0ecade"
+    },
+    {
+      "path": "round-1-openresty/0002-h1-off-reuse.perf-record.log",
+      "bytes": 143,
+      "sha256": "0332577989a1e8944aaae919ac6e6e7a0e61d1a95539ae7cb6d700b0e16df027"
+    },
+    {
+      "path": "round-1-openresty/origin-reference.1.stderr",
+      "bytes": 93,
+      "sha256": "c9f9a8235b8904e1aad808e6c68535d80caa09ec4918ab1b08b20d1dbd1bee2f"
+    },
+    {
+      "path": "round-1-openresty/profile-executable",
+      "bytes": 2270896,
+      "sha256": "005f25b4b28324b070642e912e02352674f48be7c3d9fc1a38d0011c033e1a9f"
+    },
+    {
+      "path": "round-1-openresty/0002-h1-off-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "057285e441cd7036c0d3d681a945b1b543cd109530844d3843c88bc81c477bb7"
+    },
+    {
+      "path": "round-1-openresty/0001-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 835017,
+      "sha256": "754c353b530213861de58292fe2580f7c136944dced8a3c8ba15dde00ab721a4"
+    },
+    {
+      "path": "round-0-nginx/0002-h1-off-reuse.perf-callers.txt",
+      "bytes": 219151,
+      "sha256": "6073763dd9b72034c1961f6e249f66564daafd580242734c274ee65fe4131a97"
+    },
+    {
+      "path": "round-0-nginx/0001-h2-off-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "3fe8fd3618686dd8d0af8b63892daf668190d587682aac00a775c0378788b319"
+    },
+    {
+      "path": "round-0-nginx/0000-h2-hit-reuse.0.client.tsv.gz",
+      "bytes": 850298,
+      "sha256": "f9cecac1eea60e9a49dee2728dce0be13c95f1df360fc81b9e3cba3a0ab12740"
+    },
+    {
+      "path": "round-0-nginx/0000-h2-hit-reuse.stacks.txt",
+      "bytes": 2202804,
+      "sha256": "3807ca79376de9ea0302e94b89d945a5d4718b69a4ee686c6d836c62d25a118f"
+    },
+    {
+      "path": "round-0-nginx/0001-h2-off-reuse.perf-flat.txt",
+      "bytes": 6148,
+      "sha256": "fee5449110a25cc074b2278bebc37d7b62886340b15ebb418f52ccbb3a025f18"
+    },
+    {
+      "path": "round-0-nginx/origin-reference.1.client.tsv.gz",
+      "bytes": 1144595,
+      "sha256": "bc133d4bb43a43f2eb2556351e4ebce625145a426653d2f2198b8ac3e0c0f48a"
+    },
+    {
+      "path": "round-0-nginx/0003-h1-hit-reuse.command.json",
+      "bytes": 1019,
+      "sha256": "3b9a03bec6a72054e5383a22cc2b65c6bafc4d0321fb7d34c8fd12c4a6344f7a"
+    },
+    {
+      "path": "round-0-nginx/0003-h1-hit-reuse.perf-record.log",
+      "bytes": 144,
+      "sha256": "d3dad5363b9720283f6659efb4c65d58cba67b30887e1b345bd6f150b8d204fe"
+    },
+    {
+      "path": "round-0-nginx/0001-h2-off-reuse.stacks.txt",
+      "bytes": 1516036,
+      "sha256": "382bb24ce9ad0e443c05cd7fc6fb817019640dc481a7a2f1c29ad585090e3927"
+    },
+    {
+      "path": "round-0-nginx/origin-reference.command.json",
+      "bytes": 1019,
+      "sha256": "da3c02aadf88544654f93846e8ac5512b2aa22343327eabb8a41712c1b1b8e71"
+    },
+    {
+      "path": "round-0-nginx/0001-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 808624,
+      "sha256": "f5dafc85f8703d2db4da528f1d5bb0f842393798e20e5b6b4df89d6b81ff17ae"
+    },
+    {
+      "path": "round-0-nginx/0000-h2-hit-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "702d8d54b5277dd78119e8d14336955e3144d8d9404338bce7b64ecb43b7cd2f"
+    },
+    {
+      "path": "round-0-nginx/0003-h1-hit-reuse.profile-target.json",
+      "bytes": 215,
+      "sha256": "93b880a5b53dcaf6c657d7bd9a20c126528c87cb4edb153e82193c0b2d3c0b17"
+    },
+    {
+      "path": "round-0-nginx/0000-h2-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "f8f5a2252ec78a4fd63a95fc1683a3991557ac2a2f60321a9e192f7606f3cb21"
+    },
+    {
+      "path": "round-0-nginx/manifest.json",
+      "bytes": 42885,
+      "sha256": "49b4ec2c77e7e9bd5d86969c605ffa87f50b072b57af8e635063aef2ded166e6"
+    },
+    {
+      "path": "round-0-nginx/0000-h2-hit-reuse.perf-flat.txt",
+      "bytes": 5056,
+      "sha256": "cc674635f6697b6439389b9c3baaeefe229befa44bd5e6f668aaf9537428aa31"
+    },
+    {
+      "path": "round-0-nginx/0000-h2-hit-reuse.perf-callers.txt",
+      "bytes": 707050,
+      "sha256": "848453e5ea26b3f06fce6ce0190d605145ac8622b0e5e64fcd916bdbe2734471"
+    },
+    {
+      "path": "round-0-nginx/0002-h1-off-reuse.stacks.txt",
+      "bytes": 726501,
+      "sha256": "c0968d36900a0f6506ac120965ea6c59ed46e7d2d79c90f14072583045eace49"
+    },
+    {
+      "path": "round-0-nginx/0000-h2-hit-reuse.perf-command.json",
+      "bytes": 292,
+      "sha256": "37aa2c93f93a2effab32c38a679d413781bdfaadb7f8da41974448ede89ba538"
+    },
+    {
+      "path": "round-0-nginx/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "round-0-nginx/0001-h2-off-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "b875e50e4da2793707db694955c9e77599b595241fca47ccdee75638633ef952"
+    },
+    {
+      "path": "round-0-nginx/0002-h1-off-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "b52f3770ed0d7dcb9f4ac9a60c5d6e93bffe9d71635f2c3634f86232221e1ca3"
+    },
+    {
+      "path": "round-0-nginx/0001-h2-off-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "c8eab310ab3b8c011a285f4e6a49bd91131212718f3af1b4e34ab79be68d04c5"
+    },
+    {
+      "path": "round-0-nginx/0000-h2-hit-reuse.profile-target.json",
+      "bytes": 215,
+      "sha256": "93b880a5b53dcaf6c657d7bd9a20c126528c87cb4edb153e82193c0b2d3c0b17"
+    },
+    {
+      "path": "round-0-nginx/0002-h1-off-reuse.perf-command.json",
+      "bytes": 292,
+      "sha256": "713fdc99710fdec0f1869b2f642fef852913a163c75cf51002b1c0fe4849471c"
+    },
+    {
+      "path": "round-0-nginx/0003-h1-hit-reuse.perf-command.json",
+      "bytes": 292,
+      "sha256": "eb7d0534ae079b69dafd73bb751b2859a3ac50886794662351d1875ca5a3645b"
+    },
+    {
+      "path": "round-0-nginx/0002-h1-off-reuse.profile-target.json",
+      "bytes": 215,
+      "sha256": "93b880a5b53dcaf6c657d7bd9a20c126528c87cb4edb153e82193c0b2d3c0b17"
+    },
+    {
+      "path": "round-0-nginx/origin-reference.0.stderr",
+      "bytes": 93,
+      "sha256": "2d5e9f85e6a52092f7019659cff66cfceb964359d47fe42c01ecd50e4f2352a8"
+    },
+    {
+      "path": "round-0-nginx/0000-h2-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "e062bead4fd094691fc02a04b73471801258798d1e1ce42f6aac7ca568dd2a36"
+    },
+    {
+      "path": "round-0-nginx/0000-h2-hit-reuse.command.json",
+      "bytes": 1021,
+      "sha256": "9d51fdc930f06fa2d0eac166496ddb12116f51f6067d31a5455eb1bb7815ef4c"
+    },
+    {
+      "path": "round-0-nginx/0002-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 1087154,
+      "sha256": "47f82885a28f5c1ebba216898f656b60bcd66842fd8f0784630b8d81ec71f8e6"
+    },
+    {
+      "path": "round-0-nginx/origin-reference.0.client.tsv.gz",
+      "bytes": 1148230,
+      "sha256": "4ec248268fa88229cc158ac06253c378edc9c89a76a9220aa3d0d2340ad3b004"
+    },
+    {
+      "path": "round-0-nginx/0003-h1-hit-reuse.perf-flat.txt",
+      "bytes": 6290,
+      "sha256": "8de3058f4e4aa6baf1f00fdafbe3f68a1ab664c84cae5634b637da79796499d2"
+    },
+    {
+      "path": "round-0-nginx/0003-h1-hit-reuse.stacks.txt",
+      "bytes": 999992,
+      "sha256": "cf3fa53fd9db527652fb8632b5fde55c27509ef6e2d03279fedc216a533f7445"
+    },
+    {
+      "path": "round-0-nginx/0001-h2-off-reuse.perf-callers.txt",
+      "bytes": 500044,
+      "sha256": "23347b3c6115e9508df62e4cb034981a693fc166cafd6ff2e6f97b5b01c54ee8"
+    },
+    {
+      "path": "round-0-nginx/0002-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 1084507,
+      "sha256": "c1b2435243a8679a0c0a11a2e121c38759a865cdb9a1c5d8510dedb0491d266d"
+    },
+    {
+      "path": "round-0-nginx/0003-h1-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "f0cfe457a9db1636709786424ab60d11427b2af945a6223e8df6551058bac3ff"
+    },
+    {
+      "path": "round-0-nginx/0002-h1-off-reuse.perf-flat.txt",
+      "bytes": 6509,
+      "sha256": "737840e123a49778ac3eefb4b597a8f568bb380ea3748e22596bc6ceccf186fe"
+    },
+    {
+      "path": "round-0-nginx/0001-h2-off-reuse.command.json",
+      "bytes": 1021,
+      "sha256": "1d1460682d21b6e906f736c949dd1d031aea14d34796112727f5a16ad8b148dd"
+    },
+    {
+      "path": "round-0-nginx/0003-h1-hit-reuse.0.client.tsv.gz",
+      "bytes": 1112211,
+      "sha256": "5c51ce48ecd13ea3ccd9be3097012d68790cead2d696398b457788cf65e39f3d"
+    },
+    {
+      "path": "round-0-nginx/0003-h1-hit-reuse.perf-callers.txt",
+      "bytes": 286066,
+      "sha256": "acea7d1b884f12b94c06005120e532b6b60079b108bf997e6c25ad1bd65ad532"
+    },
+    {
+      "path": "round-0-nginx/0002-h1-off-reuse.command.json",
+      "bytes": 1019,
+      "sha256": "a62565c34c7e9ec5cd99f05191046c13c496ca20dd4c99f36ebbd652a7b9038a"
+    },
+    {
+      "path": "round-0-nginx/0001-h2-off-reuse.profile-target.json",
+      "bytes": 215,
+      "sha256": "93b880a5b53dcaf6c657d7bd9a20c126528c87cb4edb153e82193c0b2d3c0b17"
+    },
+    {
+      "path": "round-0-nginx/0001-h2-off-reuse.perf-command.json",
+      "bytes": 292,
+      "sha256": "6d75855467252f7ac1bdfdf857dabf0e696233c8341d8f500f9b2a7ea1f3d2c6"
+    },
+    {
+      "path": "round-0-nginx/0003-h1-hit-reuse.1.client.tsv.gz",
+      "bytes": 1119411,
+      "sha256": "8ad1452d54cbc1f63f8ff3acee148cb3b473e3d9fd9a35b2f7ec1a8723993063"
+    },
+    {
+      "path": "round-0-nginx/0003-h1-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "723e46693a8a8fc5ffe57e7322fe0decfbe30d134e46b2d8c16a4b02dbced636"
+    },
+    {
+      "path": "round-0-nginx/0000-h2-hit-reuse.1.client.tsv.gz",
+      "bytes": 896392,
+      "sha256": "9a659de6685bdbe0896df765c97d409ef62478de8ccd6aa2770b841695ef23c2"
+    },
+    {
+      "path": "round-0-nginx/0002-h1-off-reuse.perf-record.log",
+      "bytes": 144,
+      "sha256": "0b27b217aed4a3adb1224aac97bad1b64b793d8906bfc99a9732865ccbb61b4d"
+    },
+    {
+      "path": "round-0-nginx/origin-reference.1.stderr",
+      "bytes": 93,
+      "sha256": "c83f417ab528739a5aeddf9955a4fcb3b2577d0f437435b01e519dc9f65f52e4"
+    },
+    {
+      "path": "round-0-nginx/profile-executable",
+      "bytes": 1592504,
+      "sha256": "7b9544766afdaf9674cf139bea598d5f14fae36b69182e03acb1d0f1587da9bd"
+    },
+    {
+      "path": "round-0-nginx/0002-h1-off-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "183fa29133b2996b9785ed97e1e58e824c81c3797c19ace6cec7b1d933878c1a"
+    },
+    {
+      "path": "round-0-nginx/0001-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 821561,
+      "sha256": "b993faab5c9afa91c858b58ef2ecf0e1f7c99022924e728e4c379f3e4779ebb7"
+    }
+  ],
+  "excluded": [
+    "raw perf.data and stack memory",
+    "TLS private keys",
+    "runtime snapshots and stores"
+  ]
+}

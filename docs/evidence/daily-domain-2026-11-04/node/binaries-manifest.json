@@ -1,0 +1,38 @@
+{
+  "artifact_id": 13300435561,
+  "archive": "raw.zip",
+  "archive_bytes": 38780411,
+  "archive_sha256": "f8fd8efeb1258bc7c7833203480754dd7406c0f2d434c300109ff1b9d6cd1029",
+  "files": [
+    {
+      "path": "cache-range-binaries/after/Zelvik-Edge",
+      "bytes": 45061736,
+      "sha256": "46aac14341a2b896102b014f85d53682ece8dc2f6894198bfb38ef7325291186"
+    },
+    {
+      "path": "cache-range-binaries/after/issue34-controller",
+      "bytes": 4326224,
+      "sha256": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2"
+    },
+    {
+      "path": "cache-range-binaries/before/Zelvik-Edge",
+      "bytes": 45061280,
+      "sha256": "1e485492e7c8627127a56ca63c5f264483d92d001c9e912b6d374d0f5ffe51a6"
+    },
+    {
+      "path": "cache-range-binaries/before/issue34-controller",
+      "bytes": 4326224,
+      "sha256": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2"
+    },
+    {
+      "path": "cache-range-binaries/build-metadata.json",
+      "bytes": 2179,
+      "sha256": "8591195b9e59845981dfe86b3a8ee1d46b921c0be01b48d21eda89da64c6a604"
+    },
+    {
+      "path": "cache-range-private/protocol-state-client",
+      "bytes": 22456,
+      "sha256": "f3030d25671016111072d971c5aa57a6f8931500458374f18f5fbe29196715bc"
+    }
+  ]
+}
