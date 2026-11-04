@@ -256,6 +256,26 @@ def inspect(label, run, source, kind, summary_name, header_hashes, temporary, de
             check_inputs(work / 'records', header_hashes, tree)
             for name, expected in build['sources'].items():
                 assert sha(work / 'source' / name) == expected
+                source_name = name
+                if name == 'root-Cargo.lock':
+                    source_name = 'Cargo.lock'
+                elif kind == 'pingora-buffers':
+                    source_name = {
+                        'bare_pingora_proxy.rs': 'benches/support/bare_pingora_proxy.rs',
+                        'Cargo.toml': 'scripts/perf/bare-pingora/Cargo.toml',
+                        'Cargo.lock': 'scripts/perf/bare-pingora/Cargo.lock',
+                    }[name]
+                source_bytes = subprocess.check_output(['git', 'show', source + ':' + source_name], cwd=tree)
+                assert hashlib.sha256(source_bytes).hexdigest() == expected
+            assignments = [json.loads(path.read_text())['cpu_assignment']
+                           for path in sorted((work / 'records').glob('round-*/manifest.json'))]
+            assert assignments and all(row == assignments[0] for row in assignments)
+            assignment = assignments[0]
+            flat_cpus = [cpu for cpus in assignment.values() for cpu in cpus]
+            assert len(flat_cpus) == len(set(flat_cpus))
+            assert len(assignment['proxy']) in [1, 2] and len(assignment['client']) == 2 and len(assignment['origin']) == 1
+            result['cpu_assignment'] = assignment
+            result['bare_binary'] = build['bare_binary']
             if kind == 'bare-hyper':
                 assert sha(work / 'bare-pingora-proxy') == build['pingora_binary']['sha256'] == '1a5439941c53dc32044b665013add230ac8a2062ab34e72f92dfde7799d093c2'
         else:
@@ -297,6 +317,8 @@ def render_report(output, failures):
     for result in output:
         lines += [f"## {result['label']}", '',
                   f"Run {result['run']}, source {result['source']}, cells {result['cells']}, successful {result['successful']}, failed {result['failed']}.", '']
+        if 'cpu_assignment' in result:
+            lines += ['CPU assignment: ' + json.dumps(result['cpu_assignment']), '']
         if 'medians' in result and all('rps' in row for row in result['medians']):
             lines += ['| protocol | target | RPS | CPU us/response | P99 ms | client CPU | proxy CPU | origin CPU |',
                       '|---|---|---:|---:|---:|---:|---:|---:|']
