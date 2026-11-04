@@ -1,6 +1,12 @@
 name: UDP downstream allocation and rejection component
 on:
   workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - benches/support/udp_egress_*.rs
+      - scripts/perf/udp-egress/**
+      - .github/workflows/udp-egress.yml
 permissions:
   contents: read
 concurrency:
