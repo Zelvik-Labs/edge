@@ -1,0 +1,42 @@
+name: Small HeaderMap client IP lookup candidate
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - benches/support/client_ip_candidate.rs
+      - benches/support/client_ip_probe.rs
+      - scripts/perf/client-ip/**
+      - .github/workflows/client-ip.yml
+permissions:
+  contents: read
+concurrency:
+  group: client-ip-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  compare:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      CARGO_BUILD_JOBS: "2"
+      RUST_TEST_THREADS: "2"
+      RUSTFLAGS: "-C target-cpu=x86-64-v2 -D warnings"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Fetch immutable original IP resolver
+        run: git fetch --depth=1 origin c8df43c099200aff5aefcbb2858d64fb64aa9d69
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: clippy
+      - name: Build separate timing and allocation executables
+        run: python3 scripts/perf/client-ip/run.py build
+      - name: Differential semantics, allocation counts and alternating timing blocks
+        run: python3 scripts/perf/client-ip/run.py measure
+      - name: Retain sources, actual executables, every comparison and failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-ip-${{ github.sha }}
+          path: .local/client-ip-ci/
+          include-hidden-files: true
+          if-no-files-found: error
