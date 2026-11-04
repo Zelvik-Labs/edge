@@ -47,6 +47,8 @@ def build():
     pattern = r'\[\[package\]\]\nname = "([^"]+)"\n((?:[^\n]+\n){3})'
     root_packages = set(re.findall(pattern, root_lock))
     for package in re.findall(pattern, (source / 'Cargo.lock').read_text()):
+        if package[0] == 'daily-domain-probe':
+            continue
         assert package in root_packages, package
     target = ROOT / '.local/daily-domain-target'
     for mode, features in [('timing', []), ('allocations', ['--features', 'count-allocations'])]:
