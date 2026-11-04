@@ -44,3 +44,7 @@ with tempfile.TemporaryDirectory() as directory:
     suite.verify()
 for name in ['verified-records.json', 'verified-summary.json']:
     assert json.loads((root / name).read_text()) == json.loads((HERE / name).read_text())
+spec = importlib.util.spec_from_file_location('bare_cpu_budget', HERE / 'cpu_budget.py')
+budget = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(budget)
+assert budget.inspect(root) == json.loads((HERE / 'cpu-budget.json').read_text())

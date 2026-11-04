@@ -1,0 +1,523 @@
+{
+  "scope": "same-run proxy cgroup CPU per successful response; includes controller for Edge; medians need not add",
+  "records": [
+    {
+      "round": 0,
+      "target": "edge",
+      "protocol": "h1-tls",
+      "successful": 25811,
+      "usage_usec": 182.34783619387082,
+      "user_usec": 108.7637053969238,
+      "system_usec": 73.58416954011855
+    },
+    {
+      "round": 0,
+      "target": "edge",
+      "protocol": "h1",
+      "successful": 29426,
+      "usage_usec": 162.90855026167335,
+      "user_usec": 92.22826751852104,
+      "system_usec": 70.68024875960036
+    },
+    {
+      "round": 0,
+      "target": "edge",
+      "protocol": "h2",
+      "successful": 29460,
+      "usage_usec": 166.8071283095723,
+      "user_usec": 110.07583163611677,
+      "system_usec": 56.73133061778683
+    },
+    {
+      "round": 0,
+      "target": "pingora",
+      "protocol": "h1-tls",
+      "successful": 49692,
+      "usage_usec": 92.80954680833938,
+      "user_usec": 44.89889720679385,
+      "system_usec": 47.91064960154552
+    },
+    {
+      "round": 0,
+      "target": "pingora",
+      "protocol": "h1",
+      "successful": 58857,
+      "usage_usec": 78.0355267852592,
+      "user_usec": 35.532969740217816,
+      "system_usec": 42.50255704504137
+    },
+    {
+      "round": 0,
+      "target": "pingora",
+      "protocol": "h2",
+      "successful": 47499,
+      "usage_usec": 99.26764773995242,
+      "user_usec": 53.17177203730605,
+      "system_usec": 46.095875702646374
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "successful": 59780,
+      "usage_usec": 76.07589494814319,
+      "user_usec": 30.580528604884577,
+      "system_usec": 45.495383071261294
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "protocol": "h1",
+      "successful": 79923,
+      "usage_usec": 54.71689000663138,
+      "user_usec": 15.48165108917333,
+      "system_usec": 39.23522640541521
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "protocol": "h2",
+      "successful": 54907,
+      "usage_usec": 82.99023803886571,
+      "user_usec": 34.593458029030906,
+      "system_usec": 48.396761797220755
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "successful": 62107,
+      "usage_usec": 72.17109182539811,
+      "user_usec": 28.500684302896612,
+      "system_usec": 43.67040752250149
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "protocol": "h1",
+      "successful": 79690,
+      "usage_usec": 54.725812523528674,
+      "user_usec": 15.56964487388631,
+      "system_usec": 39.15616764964236
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "protocol": "h2",
+      "successful": 56876,
+      "usage_usec": 79.52841268724946,
+      "user_usec": 32.75441310922006,
+      "system_usec": 46.7739995780294
+    },
+    {
+      "round": 1,
+      "target": "pingora",
+      "protocol": "h1-tls",
+      "successful": 50328,
+      "usage_usec": 91.38612700683517,
+      "user_usec": 44.86488634557304,
+      "system_usec": 46.52122079160706
+    },
+    {
+      "round": 1,
+      "target": "pingora",
+      "protocol": "h2",
+      "successful": 47621,
+      "usage_usec": 99.67111148442913,
+      "user_usec": 51.88089288339178,
+      "system_usec": 47.79023960017639
+    },
+    {
+      "round": 1,
+      "target": "pingora",
+      "protocol": "h1",
+      "successful": 58865,
+      "usage_usec": 78.19313683852884,
+      "user_usec": 34.71198505053937,
+      "system_usec": 43.48115178798947
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "successful": 62863,
+      "usage_usec": 72.2125733738447,
+      "user_usec": 27.14315256987417,
+      "system_usec": 45.06943671157915
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "protocol": "h2",
+      "successful": 56229,
+      "usage_usec": 80.58491170036814,
+      "user_usec": 32.94412136086361,
+      "system_usec": 47.64079033950453
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "protocol": "h1",
+      "successful": 79524,
+      "usage_usec": 54.60848297369348,
+      "user_usec": 14.300538202303708,
+      "system_usec": 40.307957346209946
+    },
+    {
+      "round": 1,
+      "target": "edge",
+      "protocol": "h1-tls",
+      "successful": 25547,
+      "usage_usec": 184.59275061651076,
+      "user_usec": 109.24445140329588,
+      "system_usec": 75.34829921321486
+    },
+    {
+      "round": 1,
+      "target": "edge",
+      "protocol": "h2",
+      "successful": 29377,
+      "usage_usec": 166.38441638016135,
+      "user_usec": 111.40892534976342,
+      "system_usec": 54.97549103039793
+    },
+    {
+      "round": 1,
+      "target": "edge",
+      "protocol": "h1",
+      "successful": 29195,
+      "usage_usec": 163.8775132728207,
+      "user_usec": 93.31118342181881,
+      "system_usec": 70.5662955985614
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "successful": 60341,
+      "usage_usec": 75.66493760461378,
+      "user_usec": 30.684261115990786,
+      "system_usec": 44.98067648862299
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "protocol": "h2",
+      "successful": 54914,
+      "usage_usec": 82.75048257275012,
+      "user_usec": 35.552172487890154,
+      "system_usec": 47.19832829515242
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "protocol": "h1",
+      "successful": 79468,
+      "usage_usec": 54.735465847888456,
+      "user_usec": 15.165802587204913,
+      "system_usec": 39.56967584436503
+    },
+    {
+      "round": 2,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "successful": 61286,
+      "usage_usec": 74.56730737852038,
+      "user_usec": 29.007571060274778,
+      "system_usec": 45.55972000130536
+    },
+    {
+      "round": 2,
+      "target": "nginx",
+      "protocol": "h1",
+      "successful": 79364,
+      "usage_usec": 54.7901063454463,
+      "user_usec": 15.121075046620634,
+      "system_usec": 39.6690186986543
+    },
+    {
+      "round": 2,
+      "target": "nginx",
+      "protocol": "h2",
+      "successful": 54688,
+      "usage_usec": 83.25791764189584,
+      "user_usec": 35.593987712112344,
+      "system_usec": 47.6639299297835
+    },
+    {
+      "round": 2,
+      "target": "edge",
+      "protocol": "h1-tls",
+      "successful": 25656,
+      "usage_usec": 183.68334892422826,
+      "user_usec": 108.14027907701902,
+      "system_usec": 75.54303086997194
+    },
+    {
+      "round": 2,
+      "target": "edge",
+      "protocol": "h1",
+      "successful": 29050,
+      "usage_usec": 165.32802065404476,
+      "user_usec": 91.92096385542169,
+      "system_usec": 73.40709122203099
+    },
+    {
+      "round": 2,
+      "target": "edge",
+      "protocol": "h2",
+      "successful": 29572,
+      "usage_usec": 166.28489787636954,
+      "user_usec": 109.50879210063573,
+      "system_usec": 56.776105775733804
+    },
+    {
+      "round": 2,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "successful": 63984,
+      "usage_usec": 71.65049074768692,
+      "user_usec": 28.211380970242562,
+      "system_usec": 43.43910977744436
+    },
+    {
+      "round": 2,
+      "target": "openresty",
+      "protocol": "h1",
+      "successful": 79218,
+      "usage_usec": 54.62507258451362,
+      "user_usec": 15.52356787598778,
+      "system_usec": 39.101492085132165
+    },
+    {
+      "round": 2,
+      "target": "openresty",
+      "protocol": "h2",
+      "successful": 57136,
+      "usage_usec": 79.13536124334921,
+      "user_usec": 32.89244959395128,
+      "system_usec": 46.242911649397925
+    },
+    {
+      "round": 2,
+      "target": "pingora",
+      "protocol": "h1-tls",
+      "successful": 50267,
+      "usage_usec": 91.54403485388028,
+      "user_usec": 44.41392961585135,
+      "system_usec": 47.130085344261644
+    },
+    {
+      "round": 2,
+      "target": "pingora",
+      "protocol": "h1",
+      "successful": 59341,
+      "usage_usec": 77.37660302320486,
+      "user_usec": 35.01354881110868,
+      "system_usec": 42.36303736034108
+    },
+    {
+      "round": 2,
+      "target": "pingora",
+      "protocol": "h2",
+      "successful": 47509,
+      "usage_usec": 99.72024248037214,
+      "user_usec": 52.99059125639353,
+      "system_usec": 46.7296301753352
+    },
+    {
+      "round": 3,
+      "target": "openresty",
+      "protocol": "h1",
+      "successful": 79867,
+      "usage_usec": 54.32441433883832,
+      "user_usec": 15.556462619104261,
+      "system_usec": 38.7679391989182
+    },
+    {
+      "round": 3,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "successful": 62991,
+      "usage_usec": 72.35641599593593,
+      "user_usec": 27.428267530282103,
+      "system_usec": 44.92814846565383
+    },
+    {
+      "round": 3,
+      "target": "openresty",
+      "protocol": "h2",
+      "successful": 56879,
+      "usage_usec": 79.71803301745811,
+      "user_usec": 32.05453682378382,
+      "system_usec": 47.66349619367429
+    },
+    {
+      "round": 3,
+      "target": "nginx",
+      "protocol": "h1",
+      "successful": 79928,
+      "usage_usec": 54.80307276548894,
+      "user_usec": 15.80605044540086,
+      "system_usec": 38.99702232008808
+    },
+    {
+      "round": 3,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "successful": 60383,
+      "usage_usec": 75.5584187602471,
+      "user_usec": 31.204378715863736,
+      "system_usec": 44.35405660533594
+    },
+    {
+      "round": 3,
+      "target": "nginx",
+      "protocol": "h2",
+      "successful": 54900,
+      "usage_usec": 82.88151183970857,
+      "user_usec": 35.821384335154825,
+      "system_usec": 47.060109289617486
+    },
+    {
+      "round": 3,
+      "target": "pingora",
+      "protocol": "h1",
+      "successful": 58634,
+      "usage_usec": 78.61010676399358,
+      "user_usec": 34.705614489886415,
+      "system_usec": 43.90449227410717
+    },
+    {
+      "round": 3,
+      "target": "pingora",
+      "protocol": "h1-tls",
+      "successful": 50128,
+      "usage_usec": 91.87944861155442,
+      "user_usec": 44.76280721353336,
+      "system_usec": 47.116641398021066
+    },
+    {
+      "round": 3,
+      "target": "pingora",
+      "protocol": "h2",
+      "successful": 47639,
+      "usage_usec": 99.20252314280316,
+      "user_usec": 51.166733138814834,
+      "system_usec": 48.03579000398833
+    },
+    {
+      "round": 3,
+      "target": "edge",
+      "protocol": "h1",
+      "successful": 29626,
+      "usage_usec": 161.983190440829,
+      "user_usec": 94.21433875649767,
+      "system_usec": 67.76885168433132
+    },
+    {
+      "round": 3,
+      "target": "edge",
+      "protocol": "h1-tls",
+      "successful": 25926,
+      "usage_usec": 181.85832754763558,
+      "user_usec": 106.66905808840546,
+      "system_usec": 75.18930803054849
+    },
+    {
+      "round": 3,
+      "target": "edge",
+      "protocol": "h2",
+      "successful": 29547,
+      "usage_usec": 166.4108708159881,
+      "user_usec": 110.17240328967408,
+      "system_usec": 56.23846752631401
+    }
+  ],
+  "medians": [
+    {
+      "target": "edge",
+      "protocol": "h1",
+      "usage_usec": 163.393031767247,
+      "user_usec": 92.76972547016993,
+      "system_usec": 70.62327217908089
+    },
+    {
+      "target": "edge",
+      "protocol": "h1-tls",
+      "usage_usec": 183.01559255904954,
+      "user_usec": 108.4519922369714,
+      "system_usec": 75.26880362188167
+    },
+    {
+      "target": "edge",
+      "protocol": "h2",
+      "usage_usec": 166.39764359807472,
+      "user_usec": 110.12411746289543,
+      "system_usec": 56.484899072050425
+    },
+    {
+      "target": "nginx",
+      "protocol": "h1",
+      "usage_usec": 54.76278609666738,
+      "user_usec": 15.32372683818912,
+      "system_usec": 39.40245112489012
+    },
+    {
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "usage_usec": 75.61167818243044,
+      "user_usec": 30.63239486043768,
+      "system_usec": 45.23802977994214
+    },
+    {
+      "target": "nginx",
+      "protocol": "h2",
+      "usage_usec": 82.93587493928715,
+      "user_usec": 35.57308010000125,
+      "system_usec": 47.43112911246796
+    },
+    {
+      "target": "openresty",
+      "protocol": "h1",
+      "usage_usec": 54.61677777910354,
+      "user_usec": 15.54001524754602,
+      "system_usec": 39.12882986738727
+    },
+    {
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "usage_usec": 72.1918325996214,
+      "user_usec": 27.819824250262332,
+      "system_usec": 44.299277994077656
+    },
+    {
+      "target": "openresty",
+      "protocol": "h2",
+      "usage_usec": 79.62322285235379,
+      "user_usec": 32.82343135158567,
+      "system_usec": 47.20739495876696
+    },
+    {
+      "target": "pingora",
+      "protocol": "h1",
+      "usage_usec": 78.11433181189402,
+      "user_usec": 34.86276693082402,
+      "system_usec": 42.99185441651542
+    },
+    {
+      "target": "pingora",
+      "protocol": "h1-tls",
+      "usage_usec": 91.71174173271734,
+      "user_usec": 44.8138467795532,
+      "system_usec": 47.12336337114135
+    },
+    {
+      "target": "pingora",
+      "protocol": "h2",
+      "usage_usec": 99.46937961219078,
+      "user_usec": 52.435742069892655,
+      "system_usec": 47.2599348877558
+    }
+  ]
+}
