@@ -109,8 +109,9 @@ def verify(root, binaries):
                                  args['cpu_assignment']['origin'][0])
             expected_url = f"https://localhost:{case['ports']['19443/udp']}/hit/payload"
             assert relay['target_url'] == expected_url
-            for shard in range(2):
-                command = json.loads((path.parent / (case['stem'] + f'.{shard}.command.json')).read_text())
+            commands = json.loads((path.parent / (case['stem'] + '.command.json')).read_text())
+            assert len(commands) == 2
+            for command in commands:
                 assert command[command.index('--url') + 1] == relay['client_url']
         if case.get('native') is not None:
             assert row.get('successful', 0) + row.get('failed', 0) == 16384
