@@ -407,6 +407,11 @@ def run(args):
                         '--entrypoint', framework_entry, IMAGES[args.target],
                         '--origin', 'origin:8081', '--cert', '/tls/server.pem', '--key', '/tls/server.key',
                         '--threads', str(len(args.cpu_assignment['proxy'])), '--pool', '256']
+            if args.target == 'pingora':
+                for name in ['read', 'write']:
+                    value = getattr(args, 'bare_' + name + '_buffer', None)
+                    if value is not None:
+                        command += ['--' + name + '-buffer', str(value)]
         else:
             executable='openresty' if args.target=='openresty' else 'nginx'
             command+=['--entrypoint',executable,IMAGES[args.target],'-c','/test/proxy.conf','-g','daemon off;']

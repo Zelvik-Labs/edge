@@ -1,6 +1,7 @@
 //! Diagnostic OFF-only framework control, never a replacement Edge runtime.
 use anyhow::{Context, bail, ensure};
 use async_trait::async_trait;
+use pingora::listeners::{L4BufferSettings, ListenerConfig};
 use pingora::proxy::{ProxyHttp, Session};
 use pingora::server::Server;
 use pingora::server::configuration::ServerConf;
@@ -34,6 +35,8 @@ fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
     let (mut origin, mut cert, mut key) = (None, None, None);
     let (mut threads, mut pool) = (1, 256);
+    let mut read_buffer: Option<usize> = None;
+    let mut write_buffer: Option<usize> = None;
     while let Some(arg) = args.next() {
         if arg == "--version" {
             println!(
@@ -50,6 +53,8 @@ fn main() -> anyhow::Result<()> {
             "--key" => key = Some(value),
             "--threads" => threads = value.parse()?,
             "--pool" => pool = value.parse()?,
+            "--read-buffer" => read_buffer = Some(value.parse()?),
+            "--write-buffer" => write_buffer = Some(value.parse()?),
             _ => bail!("unknown argument {arg}"),
         }
     }
@@ -84,10 +89,23 @@ fn main() -> anyhow::Result<()> {
         user_timeout: Duration::ZERO,
     });
     let mut service = pingora::proxy::http_proxy_service(&server.configuration, BareProxy { peer });
-    service.add_tcp("0.0.0.0:19080");
+    let buffers = L4BufferSettings {
+        read: read_buffer,
+        write: write_buffer,
+    };
+    println!(
+        "bare-pingora buffers read={} write={}",
+        buffers.read_capacity(),
+        buffers.write_capacity()
+    );
+    service.add_listener(ListenerConfig::tcp("0.0.0.0:19080").l4_buffer(buffers));
     let mut tls = pingora::listeners::tls::TlsSettings::intermediate(&cert, &key)?;
     tls.enable_h2();
-    service.add_tls_with_settings("0.0.0.0:19443", None, tls);
+    service.add_listener(
+        ListenerConfig::tcp("0.0.0.0:19443")
+            .tls(tls)
+            .l4_buffer(buffers),
+    );
     server.add_service(service);
     server.run_forever();
 }
