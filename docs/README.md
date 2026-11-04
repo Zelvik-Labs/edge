@@ -16,6 +16,7 @@
 - [用户态/内核态 CPU 差距与 H3 客户端预算](performance-http-cpu-budget-2026-11-04.md)：从 192 格原始账本复核优化方向，识别客户端容量限制。
 - [实际 HTTP 回调 future 布局](performance-http-future-layout-2026-11-04.md)：release 实际回调的状态大小，结构测量不等于 CPU 归因。
 - [小头表客户端 IP 查找](performance-client-ip-scan-2026-11-04.md)：75,923 组差分、全部十二种转发头及局部代价。
+- [主机名规范化候选](performance-host-normalize-2026-11-04.md)：去端口借用原输入，验证一次输出分配与原始边界行为。
 - [UDP 出口候选的收益与退步](performance-udp-egress-2026-11-04.md)：两种复制策略未采纳；错误载荷方案每次拒绝少两次分配，已进入性能分支。
 - [实际 HTTP CPU 归因](performance-http-cpu-2026-11-04.md)：生产二进制采样、热点与可复核证据。
 - [Range 缓存预检查优化与四目标对比](performance-range-preflight-2026-11-04.md)：192 个独立单元、前后 Edge/Nginx/OpenResty 吞吐、CPU 与延迟。

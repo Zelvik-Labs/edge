@@ -1,0 +1,14 @@
+[package]
+name = "host-normalize-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[features]
+count-allocations = []
+
+[[bin]]
+name = "host-normalize-probe"
+path = "../../../benches/support/host_normalize_probe.rs"
