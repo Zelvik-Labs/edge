@@ -14,7 +14,11 @@ Close frames decode transport/application code, triggering frame and up to
 256 reason bytes; the full reason length and hex prefix are preserved.
 
 Native/shared/shared/native order runs four independent 32KiB HIT cases,
-16,384 fresh attempts each, same matched settings, Retry off and GSO auto.
+16,384 native fresh attempts and 64 shared health-control attempts per case,
+same matched settings, Retry off and GSO auto. The first run used 16,384
+for shared too and both controls timed out; partial records remain verified.
+Packet callbacks retain only unprotected header flags and truncated packet
+numbers, explicitly marked as unauthenticated; no payload or token is recorded.
 The verifier proves the context and QUIC-frame callbacks actually ran, checks
 actual executables and all transfer records, and retains missing diagnoses.
 Errors still fail the workflow. Instrumented RPS/P99 are excluded from capacity

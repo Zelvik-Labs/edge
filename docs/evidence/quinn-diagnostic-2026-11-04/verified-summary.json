@@ -1,0 +1,72 @@
+{
+  "source": "2ca3975b84b802957d85d27248c4411784daf473",
+  "runtime_source": "82e3cf0db722497fb594acdcfabc645a6deb2b56",
+  "scope": "instrumented protocol diagnosis only; no capacity or latency comparison",
+  "cases": 4,
+  "statuses": {
+    "traffic-errors": 2,
+    "failed": 2
+  },
+  "successful": 32758,
+  "failed": 10,
+  "infrastructure_failures": [],
+  "error_traces": 266,
+  "incomplete_processes": [
+    {
+      "backend": "quinn-shared",
+      "round": 0,
+      "shard": 0,
+      "retained_records": 2260,
+      "valid_records": 1802,
+      "error_distribution": {
+        "curl_28/http_0/v_0": 458
+      },
+      "trailing_partial_bytes": 4,
+      "process_summary_present": false,
+      "scope": "incomplete killed process; excluded from complete counts and all capacity comparisons"
+    },
+    {
+      "backend": "quinn-shared",
+      "round": 0,
+      "shard": 1,
+      "retained_records": 2353,
+      "valid_records": 1874,
+      "error_distribution": {
+        "curl_28/http_0/v_0": 479
+      },
+      "trailing_partial_bytes": 20,
+      "process_summary_present": false,
+      "scope": "incomplete killed process; excluded from complete counts and all capacity comparisons"
+    },
+    {
+      "backend": "quinn-shared",
+      "round": 1,
+      "shard": 0,
+      "retained_records": 2354,
+      "valid_records": 1865,
+      "error_distribution": {
+        "curl_28/http_0/v_0": 489
+      },
+      "trailing_partial_bytes": 25,
+      "process_summary_present": false,
+      "scope": "incomplete killed process; excluded from complete counts and all capacity comparisons"
+    },
+    {
+      "backend": "quinn-shared",
+      "round": 1,
+      "shard": 1,
+      "retained_records": 2351,
+      "valid_records": 1889,
+      "error_distribution": {
+        "curl_28/http_0/v_0": 462
+      },
+      "trailing_partial_bytes": 25,
+      "process_summary_present": false,
+      "scope": "incomplete killed process; excluded from complete counts and all capacity comparisons"
+    }
+  ],
+  "traces_with_close_frame": 10,
+  "close_reasons": {
+    "{\"code\": 14, \"direction\": \"write\", \"frame\": 0, \"reason\": \"RX key update again too soon\", \"reason_bytes\": 28, \"reason_hex\": \"5258206b65792075706461746520616761696e20746f6f20736f6f6e\", \"transport\": true, \"truncated\": false}": 10
+  }
+}

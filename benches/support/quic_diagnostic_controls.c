@@ -10,6 +10,10 @@ int main(void) {
     QuicDiagnostic d = {0};
     d.bytes = malloc(DIAG_CAPACITY);
     assert(d.bytes);
+    const unsigned char packet_header[] = {0x45, 0x12, 0x34};
+    diagnostic_message(0, 0, SSL3_RT_QUIC_PACKET, packet_header, sizeof(packet_header), NULL, &d);
+    d.bytes[d.used] = 0;
+    assert(strstr(d.bytes, "short=1 key_phase=1 pn_truncated=4660 pn_bytes=2 length=3 authenticated=false"));
     /* Type 0x1c, PROTOCOL_VIOLATION, triggering ACK, three-byte reason. */
     const unsigned char close[] = {28, 10, 2, 3, 'b', 'a', 'd'};
     diagnostic_message(1, 0, SSL3_RT_QUIC_FRAME_FULL, close, sizeof(close), NULL, &d);

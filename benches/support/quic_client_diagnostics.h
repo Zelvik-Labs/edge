@@ -48,6 +48,21 @@ static void diagnostic_message(int writing, int version, int type,
     (void)version;
     (void)ssl;
     d->messages++;
+    if (type == SSL3_RT_QUIC_PACKET && length) {
+        /* OpenSSL 3.5.7 QRX supplies only the unprotected packet header, before
+         * payload authentication. Record flags and truncated PN, never payload
+         * or tokens. The event alone is not proof of an authenticated packet. */
+        char line[256];
+        unsigned pn_bytes = (bytes[0] & 3) + 1;
+        uint64_t pn = 0;
+        if (length < pn_bytes) return;
+        for (size_t i = length - pn_bytes; i < length; ++i) pn = (pn << 8) | bytes[i];
+        int written = snprintf(line, sizeof(line), "quic_packet_header direction=%s short=%d key_phase=%u pn_truncated=%" PRIu64 " pn_bytes=%u length=%zu authenticated=false\n",
+            writing ? "write" : "read", !(bytes[0] & 128), !!(bytes[0] & 4), pn, pn_bytes, length);
+        if (written < 0 || (size_t)written >= sizeof(line)) abort();
+        diagnostic_append(d, line, (size_t)written);
+        return;
+    }
     if (type != SSL3_RT_QUIC_FRAME_FULL && type != SSL3_RT_QUIC_FRAME_HEADER) return;
     d->frames++;
     char line[1024];

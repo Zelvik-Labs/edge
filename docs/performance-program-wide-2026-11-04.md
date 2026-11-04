@@ -21,7 +21,9 @@
 [Quinn GSO 对照](performance-quinn-gso-2026-11-04.md)稳定复现原生 Quinn 的新连接错误：
 262,144 次 fresh 尝试中 77 次失败。auto 50 次、off 27 次，关闭 GSO 未消除故障。
 复用控制中关闭 GSO 使吞吐下降约 13%～21%，继续保留 auto 默认值。
-[有界协议诊断](performance-quinn-diagnostic-2026-11-04.md)已实现并启动 Actions，捕获关闭原因后再决定修复 Edge 适配层、客户端兼容还是依赖问题。
+[有界协议诊断](performance-quinn-diagnostic-2026-11-04.md)已抓到 10 次 OpenSSL 本地 `KEY_UPDATE_ERROR`，
+原因均为 `RX key update again too soon`，正在进一步检查握手确认与 key phase 时序。
+共享路径两个长批次超时，部分输出和缺失的进程摘要均保留，不当成完整性能结果。
 
 首轮 Range 对比因源站启动时序失败，已保留 161 次 curl 56 与 7 次 curl 52 的全部记录；
 修复的是计时前源站就绪检查。复测重新执行完整矩阵，未重试或抹掉计时阶段的错误。

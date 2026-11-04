@@ -1,7 +1,8 @@
 # Quinn 新连接错误：协议关闭原因诊断
 
 [GSO 实验](performance-quinn-gso-2026-11-04.md)已经稳定复现 77 次 fresh 错误，关闭 GSO 未消除。
-当前开始捕获协议关闭码与触发帧；尚未据此定位根因或宣称修复。
+第一轮诊断已捕获 10 次客户端本地 `KEY_UPDATE_ERROR (0x0e)`，原因均为 `RX key update again too soon`。
+这是已定位的失败类别；尚未确认双方谁违反协议，也未宣称修复。
 
 诊断直接复用该实验的原始 Edge 可执行文件，运行时源码固定为 `82e3cf0`。
 显式诊断客户端通过 OpenSSL 公共回调观察控制帧及 stream/CRYPTO 头，不更改 TLS 验证、正文校验、超时或重试。
@@ -9,7 +10,8 @@
 默认压测客户端不启用该构建开关。未修改 vendored/upstream 代码。
 
 本地 C 编译与 ASan/UBSan 控制已通过，覆盖关闭帧、截断、62-bit varint、内存边界与公开回调。
-[Actions 41757176129](https://github.com/Zelvik-Labs/edge/actions/runs/41757176129) 正在依次测试 native/shared/shared/native，共 65,536 次 fresh 尝试、32 KiB HIT，使用相同 matched 参数。
+[Actions 41757176129](https://github.com/Zelvik-Labs/edge/actions/runs/41757176129) 已依次执行 native/shared/shared/native、32 KiB HIT、相同 matched 参数。
+原生两轮完整完成 32,768 次尝试，其中 32,758 次成功、10 次 curl 56；共享两轮均超时，未完成计划批次。
 复核要求实际回调运行、完整逐传输计数和二进制哈希；协议错误仍令工作流失败并保留。
 
 诊断开销会改变时序，相关吞吐/延迟不参与容量排名。没有关闭帧或不再复现都不能当成修复证据。
@@ -17,3 +19,36 @@
 经审批的功能降级：无；本轮仅增加测试诊断，不改生产 Edge。
 
 [运行及复核说明](../scripts/perf/quinn-diagnostic/README.md)
+
+
+## 第一轮可复核结果
+
+原生 10 项失败全部有本地发出的 transport close，码 14、触发 frame 0、完整原因长度 28 字节。
+10 条有界 trace 均未记录到已解析的 HANDSHAKE_DONE；跟踪无丢弃字节。
+OpenSSL 3.5.7 的 `rxku_allowed` 要求本地 `handshake_confirmed` 且不处于 `rxku_pending_confirm`，
+任一条件不满足都会产生该字符串。因此现阶段收敛到握手确认与密钥更新时序，不能凭原因字符串判定已经出现第二次更新。
+
+Quinn 0.11.17 初始 key phase 的触发阈值随机取 10～999 个包，此后的阈值恢复为密码套件的使用界限。
+0.11.19 的初始策略相同；单凭升级版本不能预报修复。Edge 没有应用层主动 `force_key_update` 调用。
+[OpenSSL 固定版本片段](evidence/quinn-diagnostic-2026-11-04/openssl-source.json)和
+[Quinn 来源](evidence/quinn-diagnostic-2026-11-04/quinn-source.json)保留引用及哈希。
+
+共享两轮的客户端在 163.84 秒后被测试框架终止，四个进程合计保留 9,318 条完整输出记录，
+其中 7,430 条有效响应、1,888 条超时；另有 74 字节未完成行，不补成完整记录。
+这些只是被终止进程已写出的部分数据，不代表完整请求计数或吞吐。
+共享路径有路由生命周期、压力预算及自适应每 IP 门控；正常压力下纯 H3 会绕过常规门控，
+所以不能仅拿固定 128/10 秒解释超时。还需要服务端压力和拒绝计数观测。
+本轮保留这项稳定性问题，不通过扩大超时或关闭防护生成成功结果。
+
+原校验器错误地要求每格都完成 16,384 条记录，因此也报错。修正后的离线校验器明确保留超时格、
+四份部分输出、缺失的进程摘要与所有错误 trace；完整原生计数和部分共享计数分别报告。
+公开证据 artifact `13288394781`：100 文件、2,368,188 字节；实际可执行文件 artifact `13289415868`：19,390,741 字节。
+[可移植校验器](evidence/quinn-diagnostic-2026-11-04/verify.py)已核对两个 archive、实际客户端/服务端和原始记录。
+
+## 下一项诊断
+
+记录 OpenSSL 公共回调提供的包头 key phase 与截断包号，判断首次 key phase 变化和 HANDSHAKE_DONE 的先后。
+QRX 在正文认证前产生该包头回调，所以包头日志明确标注未经认证；不从单个包头推断已认证行为。
+回调只取 flags 和包号，不输出 payload 或令牌。关闭码及原因以实际捕获的关闭帧为准。
+共享对照缩为每实例 64 次 fresh 健康检查，原生仍每格 16,384 次；不同请求量不做性能比较，旧超时批次完整保留。
+还需要独立客户端后端或受控互操作测试，以区分对端实现与服务端适配问题。

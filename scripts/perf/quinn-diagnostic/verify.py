@@ -23,7 +23,7 @@ def verify(root, binaries):
     assert len(suite['runs']) == 4
     assert [(r['round'], r['backend']) for r in suite['runs']] == [
         (0, 'quinn-native'), (0, 'quinn-shared'), (1, 'quinn-shared'), (1, 'quinn-native')]
-    rows, traces = [], []
+    rows, traces, partial = [], [], []
     infrastructure = []
     for run in suite['runs']:
         if run['infrastructure_error']:
@@ -43,16 +43,44 @@ def verify(root, binaries):
         assert len(records) == 1
         row = records[0]
         assert row['payload_bytes'] == 32768 and row['protocol'] == 'h3' and row['cache'] == 'hit' and row['connection'] == 'fresh'
-        assert row.get('successful', 0) + row.get('failed', 0) == 16384
+        limit = manifest['args']['fresh_requests']
+        if 'request_limit' in run:
+            assert limit == run['request_limit'] == (16384 if run['backend'] == 'quinn-native' else 64)
+        else:
+            assert limit == 16384  # Retain the original timed-out control run.
         row.update(round=run['round'], backend=run['backend'])
         rows.append(row)
         case = manifest['cases'][0]
+        complete = case.get('native') is not None
+        if complete:
+            assert row.get('successful', 0) + row.get('failed', 0) == limit
+        else:
+            assert row['status'] == 'failed' and row['error']
         for shard in range(2):
             text = (path.parent / (case['stem'] + f'.{shard}.stderr')).read_text()
             hooks = re.findall(r'quic_diagnostic_summary contexts=(\d+) messages=(\d+) frames=(\d+) close_frames=(\d+)', text)
-            assert len(hooks) == 1
-            contexts, messages, frames, _ = map(int, hooks[0])
-            assert contexts >= 8192 and messages > 0 and frames > 0, hooks
+            assert len(hooks) <= 1 and (hooks or not complete)
+            if hooks:
+                contexts, messages, frames, _ = map(int, hooks[0])
+                assert contexts >= limit // 2 and messages > 0 and frames > 0, hooks
+            if not complete:
+                raw = path.parent / (case['stem'] + f'.{shard}.client.tsv')
+                lines = raw.read_text().splitlines(keepends=True) if raw.exists() else []
+                trailing_bytes = 0
+                if lines and not lines[-1].endswith('\n'):
+                    trailing_bytes = len(lines.pop().encode())
+                seen = []
+                for line in lines:
+                    fields = line.strip().split('\t')
+                    assert len(fields) == 8
+                    code, version, connects, received, seconds, first, error, connection = fields
+                    int(connects), float(seconds), float(first), int(connection)
+                    seen.append((int(code), version, int(received), int(error)))
+                partial.append({'backend': run['backend'], 'round': run['round'], 'shard': shard,
+                    'retained_records': len(seen), 'valid_records': sum(c == 200 and v == '3' and b == 32768 and e == 0 for c, v, b, e in seen),
+                    'error_distribution': dict(Counter(f'curl_{e}/http_{c}/v_{v}' for c, v, _, e in seen if c != 200 or v != '3' or e)),
+                    'trailing_partial_bytes': trailing_bytes, 'process_summary_present': bool(hooks),
+                    'scope': 'incomplete killed process; excluded from complete counts and all capacity comparisons'})
             blocks = re.findall(r'quic_trace_begin connection=(-?\d+) dropped_bytes=(\d+) close_frames=(\d+)\n(.*?)\nquic_trace_end connection=\1', text, re.S)
             errors = re.findall(r'^transfer_error ', text, re.M)
             assert len(blocks) == len(errors)
@@ -67,11 +95,17 @@ def verify(root, binaries):
                         'reason_bytes': int(length), 'reason_hex': raw, 'truncated': len(reason) < int(length)})
                 traces.append({'backend': run['backend'], 'round': run['round'], 'shard': shard,
                     'connection': int(connection), 'dropped_trace_bytes': int(dropped),
-                    'close_frame_count': int(closes), 'closes': reasons})
+                    'close_frame_count': int(closes), 'closes': reasons,
+                    'received_handshake_done_before_close': bool(re.search(r'quic_frame direction=read kind=full type=30 ', content)),
+                    'unverified_received_short_headers': [
+                        {'key_phase': int(phase), 'pn_truncated': int(pn), 'pn_bytes': int(size)}
+                        for phase, pn, size in re.findall(
+                            r'quic_packet_header direction=read short=1 key_phase=(\d+) pn_truncated=(\d+) pn_bytes=(\d+)', content)]})
     summary = {'source': suite['source'], 'runtime_source': suite['build']['runtime_source'],
         'scope': suite['scope'], 'cases': len(rows), 'statuses': dict(Counter(r['status'] for r in rows)),
         'successful': sum(r.get('successful', 0) for r in rows), 'failed': sum(r.get('failed', 0) for r in rows),
         'infrastructure_failures': infrastructure, 'error_traces': len(traces),
+        'incomplete_processes': partial,
         'traces_with_close_frame': sum(bool(t['closes']) for t in traces),
         'close_reasons': dict(Counter(json.dumps(c, sort_keys=True) for t in traces for c in t['closes']))}
     (root / 'verified-records.json').write_text(json.dumps(rows, indent=2) + '\n')

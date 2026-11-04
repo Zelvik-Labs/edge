@@ -1,0 +1,22 @@
+[
+  {
+    "version": "0.11.17",
+    "path_in_vcs": "quinn-proto",
+    "git": {
+      "sha1": "0343120eb7ccdd067a7e975613b96190c8562bf7"
+    },
+    "file_sha256": "357b3cc0ddcc71d4047c51b5543651eabf3bcb6f02ef161b479377a89698cf14",
+    "snippet_start_line": 293,
+    "snippet": "            zero_rtt_crypto: None,\n            key_phase: false,\n            // A small initial key phase size ensures peers that don't handle key updates correctly\n            // fail sooner rather than later. It's okay for both peers to do this, as the first one\n            // to perform an update will reset the other's key phase size in `update_keys`, and a\n            // simultaneous key update by both is just like a regular key update with a really fast\n            // response. Inspired by quic-go's similar behavior of performing the first key update\n            // at the 100th short-header packet.\n            key_phase_size: rng.random_range(10..1000),\n"
+  },
+  {
+    "version": "0.11.19",
+    "path_in_vcs": "quinn-proto",
+    "git": {
+      "sha1": "8192ed399a26a6e8f0aba43d10ec8badaa5b905e"
+    },
+    "file_sha256": "dc94645f5ada5beca1ebab0f435eb8ea682fc5f60797db3c75fe43e9a2b451ab",
+    "snippet_start_line": 300,
+    "snippet": "            zero_rtt_crypto: None,\n            key_phase: false,\n            // A small initial key phase size ensures peers that don't handle key updates correctly\n            // fail sooner rather than later. It's okay for both peers to do this, as the first one\n            // to perform an update will reset the other's key phase size in `update_keys`, and a\n            // simultaneous key update by both is just like a regular key update with a really fast\n            // response. Inspired by quic-go's similar behavior of performing the first key update\n            // at the 100th short-header packet.\n            key_phase_size: rng.random_range(10..1000),\n"
+  }
+]
