@@ -21,8 +21,8 @@ class CounterBoundaries(unittest.TestCase):
             root = Path(directory)
             child = root / 'docker' / 'harness'
             child.mkdir(parents=True)
-            (child / 'cpu.max').write_text('max 100000\\n')
-            (child / 'memory.max').write_text('2147483648\\n')
+            (child / 'cpu.max').write_text('max 100000\n')
+            (child / 'memory.max').write_text('2147483648\n')
             self.assertFalse((root / 'cpu.max').exists())
             self.assertEqual(matrix.parent_limits(argparse.Namespace(parent_cgroup_root=child)),
                              {'cpu.max': 'max 100000', 'memory.max': '2147483648'})
