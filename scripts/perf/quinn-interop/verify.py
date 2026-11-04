@@ -25,9 +25,14 @@ def verify(root, binaries):
     assert build.get('client_mode', 'tls-backend') == mode
     if mode == 'tls-backend':
         plans = {'openssl': {'binary': 'openssl', 'curves': None}, 'gnutls': {'binary': 'gnutls', 'curves': None}}
-    else:
-        assert mode == 'groups'
+    elif mode == 'groups':
         plans = {'default': {'binary': 'openssl', 'curves': None}, 'x25519': {'binary': 'openssl', 'curves': 'X25519'}}
+    else:
+        assert mode == 'pacing'
+        plans = {'unpaced': {'binary': 'openssl', 'curves': None, 'interval_us': 0},
+                 'paced': {'binary': 'openssl', 'curves': None, 'interval_us': 100}}
+        assert digest(root / 'source/relay.py') == suite['relay_source_sha256']
+    if mode in ['groups', 'pacing']:
         assert digest(root / 'source/quic_client_diagnostics.h') == build['diagnostic_header_sha256']
         assert '-DEDGE_QUIC_DIAGNOSTICS' in build['clients']['openssl']['command']
     if mode == 'tls-backend':
@@ -49,10 +54,33 @@ def verify(root, binaries):
         actual = suite['clients'][label]
         assert expected['sha256'] == actual['sha256'] and expected['version'] == actual['version']
         assert actual.get('binary', label) == plan['binary'] and actual.get('curves') == plan['curves']
+        if mode == 'pacing':
+            assert actual['interval_us'] == plan['interval_us']
+    if mode in ['groups', 'pacing']:
+        assert len({row['sha256'] for row in suite['clients'].values()}) == 1
     labels = list(plans)
     assert [(r['round'], r['client']) for r in suite['runs']] == [
         (i, label) for i, order in enumerate([labels, list(reversed(labels))]) for label in order]
-    records, infrastructure, partial, groups = [], [], [], []
+    records, infrastructure, partial, groups, relays = [], [], [], [], []
+
+    def verify_relay(path, client, cpu):
+        relay = json.loads(path.read_text())
+        assert relay['source_sha256'] == suite['relay_source_sha256']
+        assert relay['error'] is None
+        interval = plans[client]['interval_us']
+        assert relay['interval_us'] == interval
+        assert relay['affinity'] == [relay['cpu']] == [cpu]
+        assert relay['wall_ns'] > 0 and relay['thread_cpu_ns'] > 0
+        assert 0 < relay['flows'] <= 20_000
+        assert relay['received_client'] == relay['forwarded_client'] > 0
+        assert relay['received_server'] >= relay['forwarded_server'] > 0
+        assert relay['received_server'] - relay['forwarded_server'] == relay['queued_at_shutdown']
+        assert 0 <= relay['queued_at_shutdown'] <= relay['peak_queued'] <= 32_768
+        assert 0 <= relay['bytes_at_shutdown'] <= relay['peak_bytes'] <= 64 * 1024 * 1024
+        if relay['forwarded_server'] > 1:
+            assert relay['minimum_server_send_interval_ns'] >= interval * 1000
+        relays.append({'client': client, 'file': str(path.relative_to(root)), **relay})
+        return relay
     for run in suite['runs']:
         if run['infrastructure_error']:
             infrastructure.append(run)
@@ -76,9 +104,17 @@ def verify(root, binaries):
         assert row['payload_bytes'] == 32768 and row['protocol'] == 'h3' and row['cache'] == 'hit' and row['connection'] == 'fresh'
         row.update(round=run['round'], client=run['client'])
         case = manifest['cases'][0]
+        if mode == 'pacing':
+            relay = verify_relay(path.parent / (case['stem'] + '.relay.json'), run['client'],
+                                 args['cpu_assignment']['origin'][0])
+            expected_url = f"https://localhost:{case['ports']['19443/udp']}/hit/payload"
+            assert relay['target_url'] == expected_url
+            for shard in range(2):
+                command = json.loads((path.parent / (case['stem'] + f'.{shard}.command.json')).read_text())
+                assert command[command.index('--url') + 1] == relay['client_url']
         if case.get('native') is not None:
             assert row.get('successful', 0) + row.get('failed', 0) == 16384
-            if mode == 'groups':
+            if mode in ['groups', 'pacing']:
                 observations = 0
                 for shard in range(2):
                     text = (path.parent / (case['stem'] + f'.{shard}.stderr')).read_text()
@@ -127,6 +163,12 @@ def verify(root, binaries):
             if plans[control['client']]['curves']:
                 position = control['command'].index('--curves')
                 assert control['command'][position + 1] == plans[control['client']]['curves']
+            if mode == 'pacing':
+                paths = list((root / control['case']).glob('*.wrong-ca-relay.json'))
+                assert len(paths) == 1
+                relay = json.loads(paths[0].read_text())
+                verify_relay(paths[0], control['client'], relay['cpu'])
+                assert control['command'][control['command'].index('--url') + 1] == relay['client_url']
     by_client = defaultdict(list)
     for row in records:
         by_client[row['client']].append(row)
@@ -134,6 +176,8 @@ def verify(root, binaries):
         'scope': suite['scope'], 'cases': len(records), 'infrastructure_failures': infrastructure,
         'incomplete_processes': partial, 'wrong_ca_rejections': len(controls), 'group_observations': groups,
         'client_mode': mode, 'clients': {}}
+    if mode == 'pacing':
+        summary['relay_observations'] = relays
     for client, rows in by_client.items():
         summary['clients'][client] = {'statuses': dict(Counter(r['status'] for r in rows)),
             'successful': sum(r.get('successful', 0) for r in rows), 'failed': sum(r.get('failed', 0) for r in rows),

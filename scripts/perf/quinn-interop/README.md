@@ -38,3 +38,14 @@ summaries prove observed group IDs; X25519 cases require ID 29. The parser is
 metadata-only and does not validate cryptographic key material. This does not
 change production crypto policy. Both modes are dispatched explicitly to avoid
 rerunning a different experiment on documentation or shared harness changes.
+
+Manual `pacing` mode keeps one diagnostic OpenSSL client and the original
+server/controller. Both variants traverse the same bounded IPv4 loopback
+relay, with server-to-client spacing0/100us in balanced order. The relay
+is pinned to the formal HIT fixture's origin core; thread CPU, real minimum
+send interval, queue peaks and shutdown leftovers are retained. Actual
+client internal batching remains unknown. No relay/perf numbers are used
+as server capacity. All16384 attempts/case and wrong-CA controls remain.
+If the unpaced relay cannot reproduce the error, paced success does not
+establish a fix. The relay forwards bytes unchanged and retains no payloads
+in public metadata; bounds and I/O failures remain explicit failures.

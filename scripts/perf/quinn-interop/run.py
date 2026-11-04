@@ -7,6 +7,9 @@ import os
 from pathlib import Path
 import re
 import subprocess
+from contextlib import nullcontext
+
+from relay import UdpRelay
 
 ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / '.local/quinn-interop-private'
@@ -19,6 +22,9 @@ def main():
         plans = {'openssl': {'binary': 'openssl', 'curves': None}, 'gnutls': {'binary': 'gnutls', 'curves': None}}
     elif mode == 'groups':
         plans = {'default': {'binary': 'openssl', 'curves': None}, 'x25519': {'binary': 'openssl', 'curves': 'X25519'}}
+    elif mode == 'pacing':
+        plans = {'unpaced': {'binary': 'openssl', 'curves': None, 'interval_us': 0},
+                 'paced': {'binary': 'openssl', 'curves': None, 'interval_us': 100}}
     else:
         raise ValueError('unknown interoperability mode: ' + mode)
     spec = importlib.util.spec_from_file_location('interop_matrix', ROOT / 'scripts/perf/protocol_state_matrix.py')
@@ -34,7 +40,22 @@ def main():
 
     matrix.docker = docker
     original_probe = matrix.probe
+    original_client = matrix.run_client
     tls_controls = []
+
+    def relay_for(url, variant, output, cpu):
+        if mode == 'pacing':
+            return UdpRelay(url, plans[variant]['interval_us'], output, cpu)
+        return nullcontext(None)
+
+    def run_client(args, protocol, state, connection, url, ca, stem):
+        if mode != 'pacing' or protocol != 'h3':
+            return original_client(args, protocol, state, connection, url, ca, stem)
+        variant = stem.parent.name.rsplit('-', 1)[-1]
+        with relay_for(url, variant, Path(str(stem) + '.relay.json'), args.cpu_assignment['origin'][0]) as relay:
+            return original_client(args, protocol, state, connection, relay.url, ca, stem)
+
+    matrix.run_client = run_client
 
     def probe(protocol, url, ca, payload, stem):
         result = original_probe(protocol, url, ca, payload, stem)
@@ -45,7 +66,13 @@ def main():
                 '--connections', '1', '--requests', '1', '--seconds', '5', '--fresh', '--fixture-ca-only']
             if plans[variant]['curves']:
                 command += ['--curves', plans[variant]['curves']]
-            process = subprocess.run(command, capture_output=True, text=True, timeout=20)
+            # The negative trust control uses the same relay condition, while
+            # ordinary cache priming remains on the original fixture URL.
+            with relay_for(url, variant, Path(str(stem) + '.wrong-ca-relay.json'),
+                           max(os.sched_getaffinity(0))) as relay:
+                if relay is not None:
+                    command[command.index('--url') + 1] = relay.url
+                process = subprocess.run(command, capture_output=True, text=True, timeout=20)
             fields = process.stdout.strip().split('\t')
             observation = {'case': stem.parent.name, 'client': variant, 'command': command,
                 'exit': process.returncode, 'stdout': process.stdout, 'stderr': process.stderr}
@@ -68,15 +95,19 @@ def main():
         assert 'OpenSSL/' in clients['openssl']['version']
         assert 'GnuTLS/' in clients['gnutls']['version'] and 'ngtcp2/' in clients['gnutls']['version']
     else:
-        assert clients['default']['sha256'] == clients['x25519']['sha256']
+        assert len({row['sha256'] for row in clients.values()}) == 1
         assert all('OpenSSL/' in row['version'] for row in clients.values())
     suite = {'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
         'build': build, 'clients': clients, 'runs': [], 'request_limit': 16384, 'client_mode': mode,
         'client_package_version': json.loads((OUT / 'client-build.json').read_text())['package_version'],
         'client_fixture_ca_only': True,
-        'scope': 'client interoperability/group diagnosis; no server capacity comparison; group mode is instrumented',
+        'scope': 'client interoperability/group/receive-spacing diagnosis; no capacity ranking; groups/pacing are instrumented',
         'client_source_sha256': matrix.sha(ROOT / 'benches/support/protocol_state_client.c')}
     matrix.write(OUT / 'suite.json', suite)
+    if mode == 'pacing':
+        suite['relay_source_sha256'] = matrix.sha(ROOT / 'scripts/perf/quinn-interop/relay.py')
+        (OUT / 'source' / 'relay.py').write_bytes((ROOT / 'scripts/perf/quinn-interop/relay.py').read_bytes())
+        matrix.write(OUT / 'suite.json', suite)
     labels = list(plans)
     for repeat, order in enumerate([labels, list(reversed(labels))]):
         for variant in order:

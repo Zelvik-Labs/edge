@@ -14,7 +14,7 @@ OUT = ROOT / '.local/quinn-interop-private'
 
 def main():
     mode = os.environ.get('EDGE_QUIC_INTEROP_MODE', 'tls-backend')
-    assert mode in ['tls-backend', 'groups']
+    assert mode in ['tls-backend', 'groups', 'pacing']
     versions = {name: subprocess.check_output(['dpkg-query', '-W', '-f=${Version}', name], text=True)
         for name in ['libcurl4t64', 'libcurl3t64-gnutls']}
     assert len(set(versions.values())) == 1, versions
@@ -23,9 +23,9 @@ def main():
     flags = subprocess.check_output(['pkg-config', '--cflags', 'libcurl'], text=True).split()
     library_flags = subprocess.check_output(['pkg-config', '--libs', 'libcurl'], text=True).split()
     metadata = {'package_version': versions, 'source_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
-                'instrumentation': 'OpenSSL diagnostic callback in groups mode only',
+                'instrumentation': 'OpenSSL diagnostic callback in groups/pacing modes only',
                 'client_mode': mode, 'clients': {}}
-    if mode == 'groups':
+    if mode in ['groups', 'pacing']:
         header = ROOT / 'benches/support/quic_client_diagnostics.h'
         metadata['diagnostic_header_sha256'] = hashlib.sha256(header.read_bytes()).hexdigest()
         (OUT / 'source').mkdir(exist_ok=True)
@@ -33,7 +33,7 @@ def main():
     for variant, libs in [('openssl', library_flags), ('gnutls', ['-Wl,-l:libcurl-gnutls.so.4'])]:
         binary = OUT / 'clients' / variant
         extra, linked = [], list(libs)
-        if mode == 'groups' and variant == 'openssl':
+        if mode in ['groups', 'pacing'] and variant == 'openssl':
             extra = ['-DEDGE_QUIC_DIAGNOSTICS']
             linked += subprocess.check_output(['pkg-config', '--libs', 'openssl'], text=True).split()
         command = ['cc', '-O3', '-march=x86-64-v2', '-Wall', '-Wextra', '-Werror', *extra, str(source), *flags, *linked, '-o', str(binary)]

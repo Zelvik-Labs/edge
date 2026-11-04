@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Compare QUIC backends or one OpenSSL binary with default versus X25519 groups
+        description: Compare TLS backends, selected groups, or same-client receive spacing
         type: choice
-        options: [tls-backend, groups]
+        options: [tls-backend, groups, pacing]
         default: tls-backend
 permissions:
   contents: read
