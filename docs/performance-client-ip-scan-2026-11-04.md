@@ -42,8 +42,10 @@ private 无转发三字段为 168.34→52.97 ns，八轮配对中位 −68.91%�
 | Fastly-Client-IP / Ali-CDN-Real-IP / Source-IP / Forwarded | −55.14% / −56.46% / −60.24% / −60.27% |
 
 保留公网极短分支和大头表的退步，未推算节点收益。生产函数逐字对应被测候选，仅入口函数改名；新增真实 H1 会话回归覆盖四/五字段边界、重复非法首值、映射地址与公网来源。
-[完整 CI 41774460518](https://github.com/Zelvik-Labs/edge/actions/runs/41774460518) 正在核验累计实现。
+[完整 CI 41774460518](https://github.com/Zelvik-Labs/edge/actions/runs/41774460518) 已通过并核验：1367库测试、16二进制测试、集成/vendor/check/Clippy、32组AF_XDP节点及清理；4项库探针按既有规则忽略。[冻结完整CI证据](evidence/ip-udp-full-ci-2026-11-04/README.md)。
 组件构建器另增加实际源码对应断言，后续归档同时保留集成源码，避免候选与实际路径漂移。
 
 归档 `13295990766`：803,711 字节、35 文件，SHA-256 `efb4fa286fd9cb56bead1f1af8c48a4923cc7c8f6c11984e6897e9da86db3027`。
 [冻结复核器](evidence/client-ip-scan-2026-11-04/verify.py)使用 `refined DOWNLOAD`，核验原 ZIP、全部文件、实际计时/分配二进制与差分记录。
+集成源码对应的[复测41775869185](https://github.com/Zelvik-Labs/edge/actions/runs/41775869185)也通过并核验，复核器使用 `integrated DOWNLOAD`。
+无转发头组件−75.38%，公网极短分支+11.22%，最高优先级头+0.41%、次级−1.60%，两个大头表−0.61%/+0.75%，全部十九种结果和逐轮比值保留。

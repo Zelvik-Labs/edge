@@ -5,7 +5,7 @@
 
 原 helper 对括号 IPv6、单个/多个冒号、畸形方括号和非数字端口的行为全部保留；
 userinfo 仍取最后一个 @ 后片段，Unicode trim、尾点和 ASCII 大小写转换顺序保持。
-现有 String 入口保留并调用借用 helper；被测实现已接入性能分支，完整 CI 待执行，未部署。
+现有 String 入口保留并调用借用 helper；被测实现已接入性能分支fa66bae，[完整CI41778723854](https://github.com/Zelvik-Labs/edge/actions/runs/41778723854)已启动，未部署。
 
 不可变基线为 4ed5200，直接提取实际 strip_addr_port 和 normalize_request_host。
 组件在 GitHub Actions 做 65,567 组确定性差分，同时核对原始去端口函数；包含 Unicode、控制字符、IPv6、畸形输入和长主机名。

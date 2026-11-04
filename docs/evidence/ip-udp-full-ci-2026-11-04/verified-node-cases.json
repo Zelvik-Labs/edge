@@ -1,0 +1,1058 @@
+[
+  {
+    "label": "copied-cooperative-bridge-1-readable",
+    "wake": "readable",
+    "rx_stats": "bridge",
+    "idle_yield": "cooperative",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.62189316749573,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "copied-cooperative-bridge-1-worker",
+    "wake": "worker",
+    "rx_stats": "bridge",
+    "idle_yield": "cooperative",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 57.88049387931824,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "copied-cooperative-bridge-2-readable",
+    "wake": "readable",
+    "rx_stats": "bridge",
+    "idle_yield": "cooperative",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 57.78280591964722,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "copied-cooperative-bridge-2-worker",
+    "wake": "worker",
+    "rx_stats": "bridge",
+    "idle_yield": "cooperative",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.54276990890503,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "copied-cooperative-full-1-readable",
+    "wake": "readable",
+    "rx_stats": "full",
+    "idle_yield": "cooperative",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.344818353652954,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "copied-cooperative-full-1-worker",
+    "wake": "worker",
+    "rx_stats": "full",
+    "idle_yield": "cooperative",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.06461977958679,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "copied-cooperative-full-2-readable",
+    "wake": "readable",
+    "rx_stats": "full",
+    "idle_yield": "cooperative",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.078693866729736,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "copied-cooperative-full-2-worker",
+    "wake": "worker",
+    "rx_stats": "full",
+    "idle_yield": "cooperative",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.22213649749756,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "copied-eager-bridge-1-readable",
+    "wake": "readable",
+    "rx_stats": "bridge",
+    "idle_yield": "eager",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.500840187072754,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "copied-eager-bridge-1-worker",
+    "wake": "worker",
+    "rx_stats": "bridge",
+    "idle_yield": "eager",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.72872447967529,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "copied-eager-bridge-2-readable",
+    "wake": "readable",
+    "rx_stats": "bridge",
+    "idle_yield": "eager",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 57.84629249572754,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "copied-eager-bridge-2-worker",
+    "wake": "worker",
+    "rx_stats": "bridge",
+    "idle_yield": "eager",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.56662940979004,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "copied-eager-full-1-readable",
+    "wake": "readable",
+    "rx_stats": "full",
+    "idle_yield": "eager",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.24239253997803,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "copied-eager-full-1-worker",
+    "wake": "worker",
+    "rx_stats": "full",
+    "idle_yield": "eager",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.9073646068573,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "copied-eager-full-2-readable",
+    "wake": "readable",
+    "rx_stats": "full",
+    "idle_yield": "eager",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.02915716171265,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "copied-eager-full-2-worker",
+    "wake": "worker",
+    "rx_stats": "full",
+    "idle_yield": "eager",
+    "udp_payload": "copied",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.313581228256226,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-cooperative-bridge-1-readable",
+    "wake": "readable",
+    "rx_stats": "bridge",
+    "idle_yield": "cooperative",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.371010303497314,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-cooperative-bridge-1-worker",
+    "wake": "worker",
+    "rx_stats": "bridge",
+    "idle_yield": "cooperative",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.61880970001221,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-cooperative-bridge-2-readable",
+    "wake": "readable",
+    "rx_stats": "bridge",
+    "idle_yield": "cooperative",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.59811496734619,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-cooperative-bridge-2-worker",
+    "wake": "worker",
+    "rx_stats": "bridge",
+    "idle_yield": "cooperative",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.31710076332092,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-cooperative-full-1-readable",
+    "wake": "readable",
+    "rx_stats": "full",
+    "idle_yield": "cooperative",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.112483739852905,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-cooperative-full-1-worker",
+    "wake": "worker",
+    "rx_stats": "full",
+    "idle_yield": "cooperative",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 57.80178427696228,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-cooperative-full-2-readable",
+    "wake": "readable",
+    "rx_stats": "full",
+    "idle_yield": "cooperative",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 57.84699058532715,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-cooperative-full-2-worker",
+    "wake": "worker",
+    "rx_stats": "full",
+    "idle_yield": "cooperative",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.05717658996582,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-eager-bridge-1-readable",
+    "wake": "readable",
+    "rx_stats": "bridge",
+    "idle_yield": "eager",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.44075608253479,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-eager-bridge-1-worker",
+    "wake": "worker",
+    "rx_stats": "bridge",
+    "idle_yield": "eager",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.71622061729431,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-eager-bridge-2-readable",
+    "wake": "readable",
+    "rx_stats": "bridge",
+    "idle_yield": "eager",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.627074003219604,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-eager-bridge-2-worker",
+    "wake": "worker",
+    "rx_stats": "bridge",
+    "idle_yield": "eager",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.34298038482666,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-eager-full-1-readable",
+    "wake": "readable",
+    "rx_stats": "full",
+    "idle_yield": "eager",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.16105794906616,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-eager-full-1-worker",
+    "wake": "worker",
+    "rx_stats": "full",
+    "idle_yield": "eager",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 57.9705708026886,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-eager-full-2-readable",
+    "wake": "readable",
+    "rx_stats": "full",
+    "idle_yield": "eager",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 57.85342884063721,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  },
+  {
+    "label": "owned-eager-full-2-worker",
+    "wake": "worker",
+    "rx_stats": "full",
+    "idle_yield": "eager",
+    "udp_payload": "owned",
+    "exit_code": 0,
+    "passed": true,
+    "network_cleanup_ok": true,
+    "remaining_links": [
+      {
+        "ifindex": 1,
+        "ifname": "lo",
+        "flags": [
+          "LOOPBACK",
+          "UP",
+          "LOWER_UP"
+        ],
+        "mtu": 65536,
+        "qdisc": "noqueue",
+        "operstate": "UNKNOWN",
+        "linkmode": "DEFAULT",
+        "group": "default",
+        "txqlen": 1000,
+        "link_type": "loopback",
+        "address": "00:00:00:00:00:00",
+        "broadcast": "00:00:00:00:00:00"
+      }
+    ],
+    "remaining_namespaces": "",
+    "elapsed_seconds": 58.06696629524231,
+    "timing_kind": "functional suite wall time, not throughput or latency"
+  }
+]

@@ -10,7 +10,7 @@ probe 链接实际 EdgeProxy，以解析过的本地 HTTP/1 会话与默认上�
 这是结构测量，不是 CPU/耗时、分配次数、分配器实际块尺寸或节点容量。小 frame 仍可能执行很多工作，
 大 frame 也不能单凭尺寸解释吞吐差距。只有在看到具体布局后才选择并测试后续结构改动。
 
-实际 [CI 41774460518](https://github.com/Zelvik-Labs/edge/actions/runs/41774460518) 的 release probe 已完成并核验实际可执行文件，完整节点 smoke 仍在进行。
+实际 [CI 41774460518](https://github.com/Zelvik-Labs/edge/actions/runs/41774460518) 的 release probe 已完成并核验实际可执行文件；完整1367库测试、集成/vendor/lint及32组节点也已通过并核验。
 
 | 实际回调 | future 字节数 | 对齐 |
 |---|---:|---:|
@@ -37,4 +37,4 @@ request_filter 显著更大；它依次 await 十个阶段，状态对象必须�
 使用 black_box 保留 future 的可见地址，所有 future 仍不 poll；Unix 会话、默认上下文与响应 fixture 在计时前构造。
 编译结束后绑单核执行，记录宿主 steal 与全部块，保留实际 probe 二进制和源码。
 这能检验大 frame 是否连构造都很昂贵，不能覆盖首次 poll 初始化、业务执行或挂起/唤醒成本，也不直接计算节点可回收比例。
-在有这组绝对耗时之前，不把 5736 字节当成性能差距的根因。状态：诊断 Actions 待运行。
+在有这组绝对耗时之前，不把 5736 字节当成性能差距的根因。[诊断Actions41779412321](https://github.com/Zelvik-Labs/edge/actions/runs/41779412321)已启动；该工作流只验证诊断构建/Clippy和测量，不冒充完整功能CI。

@@ -76,8 +76,10 @@ owned 的小幅波动不解释为源码已优化，第二轮与第一轮的不�
 
 第三项保留成功发送体和顺序，Ready 的微小波动仍完整记录；没有由组件耗时推断节点、H3 或真实 XDP 吞吐收益。
 错误文本、Debug、ErrorKind、无 OS errno、地址/正文/指针、排空恢复与关闭控制均保持。
-同一私有错误类型也用于可写等待的关闭错误；[完整 CI 41774460518](https://github.com/Zelvik-Labs/edge/actions/runs/41774460518) 正在验证累计实现。
+同一私有错误类型也用于可写等待的关闭错误；[完整 CI 41774460518](https://github.com/Zelvik-Labs/edge/actions/runs/41774460518) 已通过并核验1367库测试、16二进制测试、集成/vendor/check/Clippy及32组AF_XDP节点与清理。[冻结完整CI证据](evidence/ip-udp-full-ci-2026-11-04/README.md)。
 组件构建器增加实际发送区域逐字对应断言，继续保留集成源码与实际探针。
 
 归档 `13295453856`：538,439 字节、37 文件，SHA-256 `13d22f8d9671ca9cd23687886643fdf0da65ccb3acce40e76f55bd3a17e32e41`。
 [冻结复核器](evidence/udp-egress-2026-11-04/verify.py)使用 `errors DOWNLOAD` 重算全部控制、分配与八轮配对结果。
+与实际源码对应的[复测41775869307](https://github.com/Zelvik-Labs/edge/actions/runs/41775869307)也已核验；使用 `integrated DOWNLOAD`。
+Ready 配对为copied64 +0.86%、1200 +0.04%、65507 −0.02%、owned +0.34%；全部Full/Closed仍减少两次分配，微小波动保留。
