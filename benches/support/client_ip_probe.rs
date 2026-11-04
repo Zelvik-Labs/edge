@@ -63,7 +63,7 @@ fn fixtures() -> Vec<(&'static str, Session, IpAddr)> {
         "x-forwarded-for",
         http::HeaderValue::from_static("203.0.113.5"),
     );
-    vec![
+    let mut cases = vec![
         (
             "public-small",
             session(&common),
@@ -100,7 +100,23 @@ fn fixtures() -> Vec<(&'static str, Session, IpAddr)> {
             session(&forwarded),
             "::ffff:10.0.0.1".parse().unwrap(),
         ),
-    ]
+    ];
+    for (name, header) in [
+        ("private-cf4", "cf-connecting-ip"),
+        ("private-true4", "true-client-ip"),
+        ("private-client4", "x-client-ip"),
+        ("private-original4", "x-original-forwarded-for"),
+        ("private-cluster4", "x-cluster-client-ip"),
+        ("private-fastly4", "fastly-client-ip"),
+        ("private-ali4", "ali-cdn-real-ip"),
+        ("private-source4", "cdn-src-ip"),
+        ("private-forwarded-standard4", "forwarded"),
+    ] {
+        let mut fields = common.to_vec();
+        fields.push((header, b"203.0.113.4"));
+        cases.push((name, session(&fields), private));
+    }
+    cases
 }
 
 fn verify() {

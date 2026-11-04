@@ -17,7 +17,9 @@ OUT = ROOT / '.local/client-ip-ci'
 BASE = 'c8df43c099200aff5aefcbb2858d64fb64aa9d69'
 CASES = ['public-small', 'private-no-forward3', 'private-first4', 'private-second4',
          'private-forwarded4', 'private-invalid4', 'private-priority4', 'private-large27',
-         'private-large-forward28', 'mapped-private4']
+         'private-large-forward28', 'mapped-private4', 'private-cf4', 'private-true4',
+         'private-client4', 'private-original4', 'private-cluster4', 'private-fastly4',
+         'private-ali4', 'private-source4', 'private-forwarded-standard4']
 
 
 def sha(path):
@@ -123,7 +125,7 @@ def verify():
     for name, value in metadata['sources'].items():
         assert sha(OUT / 'source' / name) == value
     controls = read(OUT / 'controls.tsv')
-    assert len(controls) == 75914
+    assert len(controls) == 75923
     assert all(int(row['case']) == i and row['baseline'] == row['candidate'] 
                for i, row in enumerate(controls))
     assert len(metadata['runs']) == 16
@@ -136,14 +138,14 @@ def verify():
         assert all(int(r[k]) == 0 for r in rows for k in ['allocations', 'reallocations', 'bytes', 'largest'])
     for run in metadata['runs']:
         rows = read(OUT / run['file'])
-        assert len(rows) == 200 and {r['case'] for r in rows} == set(CASES)
+        assert len(rows) == 380 and {r['case'] for r in rows} == set(CASES)
         for case in CASES:
             selected = [row for row in rows if row['case'] == case]
             assert [int(row['block']) for row in selected] == list(range(20))
             assert all(int(row['iterations']) > 0 and int(row['nanoseconds']) > 0 for row in selected)
             values[case][run['round'], run['variant']] = sum(int(row['nanoseconds']) for row in selected) / sum(int(row['iterations']) for row in selected)
     summary = {'source': metadata['source'], 'baseline': BASE, 'differential_inputs': len(controls),
-        'raw_blocks': 3200,
+        'raw_blocks': 6080,
         'max_host_steal_fraction': max(r['host_steal_fraction'] for r in metadata['runs']),
         'allocations': allocations, 'cases': {}}
     for case in CASES:

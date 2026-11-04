@@ -4,20 +4,26 @@ fn candidate(session: &Session, raw_ip: IpAddr) -> IpAddr {
     }
     let headers = &session.req_header().headers;
     if headers.len() <= 4 {
-        // Preserve the highest-priority header's cheap existing lookup.
-        if let Some(value) = headers
-            .get(&FALLBACK_IP_HEADERS[0])
-            .and_then(|value| value.to_str().ok())
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            && let Some(ip) = parse_candidate_ip(value)
-        {
-            return canonicalize_ip(ip);
+        // Preserve cheap lookups for the two highest-priority headers.
+        for header in &FALLBACK_IP_HEADERS[..2] {
+            if let Some(value) = headers
+                .get(header)
+                .and_then(|value| value.to_str().ok())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                && let Some(ip) = parse_candidate_ip(value)
+            {
+                return canonicalize_ip(ip);
+            }
         }
-        let mut seen = 1u16;
+        let mut seen = 3u16;
         let mut best = FALLBACK_IP_HEADERS.len();
         let mut result = raw_ip;
         for (name, value) in headers {
+            // These standard fields are never sources in the fixed IP list.
+            if matches!(name.as_str(), "host" | "user-agent" | "accept") {
+                continue;
+            }
             let Some(priority) = FALLBACK_IP_HEADERS.iter().position(|header| header == name)
             else {
                 continue;
