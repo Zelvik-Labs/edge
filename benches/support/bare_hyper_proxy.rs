@@ -9,7 +9,6 @@ use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder;
-use std::convert::Infallible;
 use std::fs::File;
 use std::io::BufReader;
 use std::net::ToSocketAddrs;
@@ -87,7 +86,7 @@ async fn accept(
     tls: Option<TlsAcceptor>,
     client: OriginClient,
     authority: Authority,
-) -> anyhow::Result<Infallible> {
+) -> anyhow::Result<()> {
     loop {
         let (socket, _) = listener.accept().await?;
         socket.set_nodelay(true)?;
@@ -134,7 +133,7 @@ fn main() -> anyhow::Result<()> {
         .to_socket_addrs()?
         .next()
         .context("origin resolved to no address")?;
-    let authority = origin.to_string().parse()?;
+    let authority: Authority = origin.to_string().parse()?;
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
         .map_err(|_| anyhow::anyhow!("TLS provider already installed"))?;
@@ -160,19 +159,15 @@ fn main() -> anyhow::Result<()> {
         connector.set_nodelay(true);
         connector.set_connect_timeout(Some(Duration::from_secs(15)));
         connector.set_keepalive(Some(Duration::from_secs(60)));
-        let client = Client::builder(TokioExecutor::new())
+        let client: OriginClient = Client::builder(TokioExecutor::new())
             .pool_max_idle_per_host(pool)
             .pool_idle_timeout(Duration::from_secs(120))
             .build(connector);
         let plain = TcpListener::bind("0.0.0.0:19080").await?;
         let secure = TcpListener::bind("0.0.0.0:19443").await?;
-        let first = tokio::select! {
+        tokio::select! {
             result = accept(plain, None, client.clone(), authority.clone()) => result,
             result = accept(secure, Some(tls), client, authority) => result,
-        };
-        match first {
-            Ok(never) => match never {},
-            Err(error) => Err(error),
         }
     })
 }
