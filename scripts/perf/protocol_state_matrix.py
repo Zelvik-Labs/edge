@@ -324,11 +324,20 @@ def run(args):
         args.supports_h3 = '--with-http_v3_module' in capability
     out = args.output.resolve(); out.mkdir(parents=True, exist_ok=False); out.chmod(0o755)
     tls = args.tls.resolve(); payload = prepare(args, out, tls)
+    client_source = ROOT / 'benches/support/protocol_state_client.c'
+    source_revision = getattr(args, 'client_source_revision', None)
+    source_sha = sha(client_source)
+    if source_revision:
+        if len(source_revision) != 40 or any(c not in '0123456789abcdef' for c in source_revision):
+            raise ValueError('client source revision must be a complete immutable commit SHA')
+        source_sha = hashlib.sha256(subprocess.check_output(
+            ['git', 'show', source_revision + ':benches/support/protocol_state_client.c'], cwd=ROOT)).hexdigest()
     manifest = {'target':args.target,'started_at':time.time(),'cases':[], 'status':'running',
                 'args':{k:str(v) if isinstance(v,Path) else v for k,v in vars(args).items()},
                 'source_revision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
                 'driver_sha256':sha(__file__),'client_sha256':sha(args.client),
-                'client_source_sha256':sha(ROOT/'benches/support/protocol_state_client.c'),'payload_sha256':sha(out/'payload'),
+                'client_source_sha256':source_sha, 'client_source_revision':source_revision,
+                'harness_client_source_sha256':sha(client_source),'payload_sha256':sha(out/'payload'),
                 'cpu_assignment':args.cpu_assignment, 'protocol_capability':capability,
                 'inter_case_quiet_seconds':0.5,
                 'case_isolation':'fresh process and tmpfs for EVERY protocol/cache/connection/repeat case',
@@ -547,6 +556,7 @@ if __name__=='__main__':
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--tls',type=Path,required=True)
     p.add_argument('--client',type=Path,required=True)
+    p.add_argument('--client-source-revision',help='immutable source commit for a retained client binary')
     p.add_argument('--edge-binary',type=Path,default=Path('/workspace/edge/target/release/Zelvik-Edge'))
     p.add_argument('--controller',type=Path,default=Path('/workspace/edge/target/release/examples/issue34-controller'))
     p.add_argument('--bare-pingora-binary',type=Path,default=Path('/workspace/edge/.local/bare-pingora-ci/bare-pingora-proxy'))
