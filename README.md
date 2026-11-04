@@ -1,6 +1,8 @@
 # Zelvik Edge
 
-Zelvik Edge 是一个基于 [Pingora](https://github.com/cloudflare/pingora) 构建的高性能 CDN 边缘节点。它面向生产环境中的站点加速、多级分发、动态配置、边缘安全、访问日志和统计上报场景，而不是一个最小化代理示例。
+Zelvik Edge 是独立的高性能 CDN 边缘产品，基于 [Pingora](https://github.com/cloudflare/pingora) 构建，拥有自己的产品路线、版本和发布周期。它面向生产环境中的站点加速、多级分发、动态配置、边缘安全、访问日志和统计上报场景。
+
+本产品不是 cloud-node-rust 的替代品或重命名发行版。历史代码来源、迁移信息和协议兼容字段仅用于审计与兼容性维护，详见 [来源记录](ORIGIN.md) 和 [版本规则](docs/versioning.md)。
 
 项目的核心目标是用 Rust 运行时承载完整边缘节点能力：从控制面协议同步配置，到 L7/L4 代理、缓存、WAF、证书、日志、统计和本地可观测性，尽量让节点在高并发和复杂站点策略下保持稳定、可解释、可运维。
 
@@ -70,6 +72,8 @@ curl -fsSL https://cp.example.com/install/edge.sh | sudo bash -s -- \
 
 发布说明：
 
+- [26.11.1.1](release-notes/v26.11.1.1.md)
+- [26.11.1](release-notes/v26.11.1.md)
 - [26.10.4.9](release-notes/v26.10.4.9.md)
 - [26.10.4.8](release-notes/v26.10.4.8.md)
 - [26.10.4.6](release-notes/v26.10.4.6.md)

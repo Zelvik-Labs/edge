@@ -172,6 +172,7 @@ jobs:
       # (observed twice compiling pingora-pool). RUSTFLAGS env overrides
       # config.toml; pin the CI baseline to the minimum release target.
       RUSTFLAGS: "-C target-cpu=x86-64-v2"
+      CARGO_BUILD_JOBS: "2"
       # cargo 默认用内置 git 后端，**不读** GIT_CONFIG_COUNT/KEY/VALUE 环境变量；
       # 凭据步骤靠 url.*.insteadOf 把 https 改写成 ssh，必须切到 git CLI 后端才生效。
       # 暖缓存命中（rust-cache 里已有 ~/.cargo/git/db）时不会暴露，冷缓存才失败。
@@ -355,6 +356,7 @@ jobs:
       # 「runner 失联」，连失败原因都留不下来。
       # 限到 2 个并发：不改产物、不降可调试性，只是构建慢一些。
       CARGO_BUILD_JOBS: "2"
+      RUST_TEST_THREADS: "2"
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -661,7 +663,7 @@ jobs:
           if-no-files-found: error
 
       - name: Build matching full-node XSK validation binaries
-        if: github.event_name == 'workflow_dispatch' && inputs.xdp_node_smoke
+        if: ((github.event_name == 'workflow_dispatch' && inputs.xdp_node_smoke) || (github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/')))
         shell: bash
         run: |
           set -euo pipefail
@@ -671,7 +673,7 @@ jobs:
           python3 scripts/perf/afxdp-node/test_corrupt_udp.py > .local/afxdp-node-ci/wire-control-tests.log 2>&1
 
       - name: Validate XSK wake modes in isolated full nodes
-        if: github.event_name == 'workflow_dispatch' && inputs.xdp_node_smoke
+        if: ((github.event_name == 'workflow_dispatch' && inputs.xdp_node_smoke) || (github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/')))
         shell: bash
         run: |
           set -euo pipefail
@@ -680,7 +682,7 @@ jobs:
           sudo unshare --net --mount --propagation private -- bash scripts/perf/afxdp-node/run.sh "$GITHUB_WORKSPACE/target" "$GITHUB_WORKSPACE/.local/afxdp-node-ci" "$parent_net" "$parent_mount"
 
       - name: Upload full-node validation and failures
-        if: always() && github.event_name == 'workflow_dispatch' && inputs.xdp_node_smoke && hashFiles('.local/afxdp-node-ci/**') != ''
+        if: always() && ((github.event_name == 'workflow_dispatch' && inputs.xdp_node_smoke) || (github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/'))) && hashFiles('.local/afxdp-node-ci/**') != ''
         uses: actions/upload-artifact@v4
         with:
           name: afxdp-node-${{ github.sha }}
