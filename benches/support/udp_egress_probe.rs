@@ -109,7 +109,7 @@ impl<S: Sender> Fixture<S> {
 }
 
 fn controls<S: Sender>() {
-    println!("case\tstatus\tbytes\towned_pointer\trecovered\tclosed");
+    println!("case\tstatus\tbytes\towned_pointer_checked\trecovered\tclosed");
     for case in cases() {
         let mut fixture = Fixture::<S>::new(&case);
         let before = udp_activity_now_ms();
@@ -146,8 +146,15 @@ fn controls<S: Sender>() {
             io::ErrorKind::BrokenPipe
         );
         println!(
-            "{}\tPASS\t{}\t{}\ttrue\ttrue",
-            case.name, case.size, case.owned
+            "{}\tPASS\t{}\t{}\t{}\ttrue",
+            case.name,
+            case.size,
+            case.owned,
+            if case.state == State::Full {
+                "true"
+            } else {
+                "n/a"
+            }
         );
     }
 }

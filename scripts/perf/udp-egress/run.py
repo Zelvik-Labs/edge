@@ -119,7 +119,9 @@ def verify():
     for variant in ['baseline', 'candidate']:
         controls[variant] = read(OUT / (variant + '-controls.tsv'))
         assert [r['case'] for r in controls[variant]] == CASES
-        assert all(r['status'] == 'PASS' and r['recovered'] == r['closed'] == 'true' for r in controls[variant])
+        assert all(r['status'] == 'PASS' and r['closed'] == 'true' and
+                   r['recovered'] == ('true' if r['case'].endswith('full') else 'n/a')
+                   for r in controls[variant])
         rows = read(OUT / (variant + '-allocations.tsv'))
         assert [r['case'] for r in rows] == CASES
         allocations[variant] = {r['case']: {k: int(v) for k, v in r.items() if k != 'case'} for r in rows}
