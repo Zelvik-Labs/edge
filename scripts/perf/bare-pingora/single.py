@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""Use the independent full wire fixture and observe origin connection reuse."""
+import argparse
+import importlib.util
+import json
+from pathlib import Path
+import subprocess
+import time
+
+ROOT = Path(__file__).resolve().parents[3]
+spec = importlib.util.spec_from_file_location('bare_matrix', ROOT / 'scripts/perf/protocol_state_matrix.py')
+matrix = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(matrix)
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--target', choices=['edge', 'pingora', 'nginx', 'openresty'], required=True)
+parser.add_argument('--output', type=Path, required=True)
+parser.add_argument('--tls', type=Path, required=True)
+parser.add_argument('--seed', type=int, required=True)
+options = parser.parse_args()
+observations = []
+tls_controls = []
+
+
+def origin_count(port):
+    accepted, handled, requests = map(int, matrix.raw_curl(f'http://127.0.0.1:{port}/_stats').decode().splitlines()[2].split())
+    observations.append(dict(port=port, accepted=accepted, handled=handled, requests=requests, observed_at=time.time()))
+    matrix.write(options.output / 'origin-connections.json', observations)
+    return requests
+
+
+original_probe = matrix.probe
+
+
+def probe(protocol, url, ca, payload, stem):
+    result = original_probe(protocol, url, ca, payload, stem)
+    if protocol in ['h1-tls', 'h2'] and protocol not in {r['protocol'] for r in tls_controls}:
+        command = ['curl', '--noproxy', '*', '--silent', '--show-error', '--max-time', '20',
+                   matrix.FLAGS[protocol], '--cacert', str(options.tls / 'wrong-ca.pem'), url]
+        negative = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        tls_controls.append({'protocol': protocol, 'exit': negative.returncode, 'command': command,
+                             'stdout_bytes': len(negative.stdout), 'stderr': negative.stderr.decode()})
+        matrix.write(options.output / 'tls-controls.json', tls_controls)
+        assert negative.returncode == 60, tls_controls[-1]
+    return result
+
+
+matrix.origin_count = origin_count
+matrix.probe = probe
+bins = ROOT / '.local/bare-pingora-binaries'
+args = argparse.Namespace(target=options.target, output=options.output, tls=options.tls,
+    client=bins / 'protocol-state-client', edge_binary=bins / 'Zelvik-Edge', controller=bins / 'issue34-controller',
+    bare_pingora_binary=ROOT / '.local/bare-pingora-ci/bare-pingora-proxy',
+    edge_image='edge-http-state-fixture:20261103', seconds=5, repeats=1, payload_size=1024, concurrency=32,
+    edge_backend='quinn-shared' if options.target == 'edge' else options.target,
+    capture_proxy_process_cpu=True,
+    cold_requests=None, fresh_requests=2048, protocols=['h1', 'h1-tls', 'h2'], states=['off'],
+    connections=['reuse'], multiplex=False, seed=options.seed,
+    experiment='OFF-only framework control with immutable Edge; compare resource and wire conditions, not business feature equivalence')
+raise SystemExit(matrix.run(args))

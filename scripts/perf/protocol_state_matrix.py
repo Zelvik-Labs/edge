@@ -93,6 +93,25 @@ def origin_count(port):
     return int(raw_curl(f'http://127.0.0.1:{port}/_stats').decode().splitlines()[2].split()[2])
 
 
+def process_cpu_snapshot(processes):
+    """Optional Linux host-PID observation, outside the measured client call."""
+    rows = []
+    for line in processes.splitlines():
+        fields = line.split()
+        if not fields or not fields[0].isdigit():
+            continue
+        pid = int(fields[0])
+        raw = Path(f'/proc/{pid}/stat').read_text()
+        end = raw.rindex(')')
+        values = raw[end + 2:].split()
+        rows.append({'pid': pid, 'comm': raw[raw.index('(') + 1:end],
+                     'ppid': int(values[1]), 'start_ticks': int(values[19]),
+                     'user_ticks': int(values[11]), 'system_ticks': int(values[12])})
+    if not rows:
+        raise RuntimeError('process CPU observation requires Linux host PID namespace')
+    return {'clock_ticks_per_second': os.sysconf('SC_CLK_TCK'), 'processes': rows}
+
+
 def checked_curl_rows(path, protocol, size, expected, fresh=True):
     rows = []
     for line in path.read_text().splitlines():
@@ -288,9 +307,18 @@ def run(args):
     if any(name != harness for name in running):
         raise RuntimeError('independent benchmark requires no other running containers')
     if getattr(args, 'edge_image', None): IMAGES['edge'] = args.edge_image
+    if args.target == 'pingora':
+        if args.states != ['off'] or not args.protocols or 'h3' in args.protocols:
+            raise ValueError('bare Pingora diagnostic supports explicit H1/H1-TLS/H2 OFF only')
+        IMAGES['pingora'] = IMAGES['edge']
     args.supports_h3 = True
     capability = 'Edge Quinn H3 enabled in this build'
-    if args.target != 'edge':
+    if args.target == 'pingora':
+        capability = docker('run', '--rm', '--mount',
+            f'type=bind,src={args.bare_pingora_binary.resolve()},dst=/tools/bare-pingora,readonly',
+            '--entrypoint', '/tools/bare-pingora', IMAGES['pingora'], '--version')
+        args.supports_h3 = False
+    elif args.target != 'edge':
         executable = 'openresty' if args.target == 'openresty' else 'nginx'
         capability = docker('run', '--rm', '--entrypoint', executable, IMAGES[args.target], '-V')
         args.supports_h3 = '--with-http_v3_module' in capability
@@ -311,6 +339,9 @@ def run(args):
                                    'native_libcurl':subprocess.check_output([str(args.client),'--version'],text=True)}}
     if args.target == 'edge':
         manifest['binaries']={str(p):sha(p) for p in [args.edge_binary,args.controller]}
+    elif args.target == 'pingora':
+        manifest['binaries'] = {str(args.bare_pingora_binary): sha(args.bare_pingora_binary)}
+        manifest['scope'] = 'OFF-only framework diagnostic; no Edge business policies or telemetry'
     def save(): write(out/'manifest.json',manifest)
     save(); prefix='edge-state-'+uuid.uuid4().hex[:10]; net=prefix+'-net'; names=[]; made_net=False
     try:
@@ -360,6 +391,11 @@ def run(args):
                         '--status-file','/test/controller-status.json',
                         '--ready-file','/test/edge-ready.json','--telemetry-mode','success',
                         '--telemetry-store','/node/accepted.bin']
+        elif args.target == 'pingora':
+            command += ['--mount', f'type=bind,src={args.bare_pingora_binary.resolve()},dst=/tools/bare-pingora,readonly',
+                        '--entrypoint', '/tools/bare-pingora', IMAGES['pingora'],
+                        '--origin', 'origin:8081', '--cert', '/tls/server.pem', '--key', '/tls/server.key',
+                        '--threads', str(len(args.cpu_assignment['proxy'])), '--pool', '256']
         else:
             executable='openresty' if args.target=='openresty' else 'nginx'
             command+=['--entrypoint',executable,IMAGES[args.target],'-c','/test/proxy.conf','-g','daemon off;']
@@ -387,9 +423,10 @@ def run(args):
                     time.sleep(.5)
         endpoints=wait_ready()
         manifest['inspect']={n:json.loads(docker('inspect',n))[0]['HostConfig'] for n in names}
-        manifest['server_version']=docker('exec',target,
-            '/tools/Zelvik-Edge' if args.target=='edge' else 'openresty' if args.target=='openresty' else 'nginx',
-            '--version' if args.target=='edge' else '-V')
+        executable = {'edge': '/tools/Zelvik-Edge', 'pingora': '/tools/bare-pingora',
+                      'openresty': 'openresty', 'nginx': 'nginx'}[args.target]
+        manifest['server_version'] = docker('exec', target, executable,
+            '--version' if args.target in {'edge', 'pingora'} else '-V')
         rng=random.Random(args.seed)
         for repeat in range(args.repeats):
             cases=[(p,s,c) for p in VERSIONS for s in args.states for c in args.connections]
@@ -450,9 +487,11 @@ def run(args):
                     processes_before=docker('top',target,'-eo','pid,comm,rss,nlwp')
                     before=cgroup(target); origin_resources_before=cgroup(origin)
                     origin_before=origin_count(origin_port); cpu_before=host_cpu()
+                    process_before = process_cpu_snapshot(processes_before) if getattr(args, 'capture_proxy_process_cpu', False) else None
                     usage_before=resource.getrusage(resource.RUSAGE_CHILDREN); started=time.monotonic()
                     raw=run_client(args,protocol,state,connection,url,tls/'ca.pem',stem)
                     elapsed=time.monotonic()-started; usage_after=resource.getrusage(resource.RUSAGE_CHILDREN)
+                    process_after = process_cpu_snapshot(processes_before) if process_before is not None else None
                     cpu_after=host_cpu(); origin_after=origin_count(origin_port); after=cgroup(target)
                     origin_resources_after=cgroup(origin)
                     disk_after=filesystems(target)
@@ -465,6 +504,8 @@ def run(args):
                                origin_before=origin_resources_before,origin_after=origin_resources_after,
                                filesystem_before=disk_before,filesystem_after=disk_after,
                                client_cpu_seconds=usage_after.ru_utime+usage_after.ru_stime-usage_before.ru_utime-usage_before.ru_stime)
+                    if process_before is not None:
+                        row.update(proxy_process_cpu_before=process_before, proxy_process_cpu_after=process_after)
                     cpu_usec=after['cpu.stat']['usage_usec']-before['cpu.stat']['usage_usec']
                     row['proxy_cpu_usec_per_200']=cpu_usec/result['successful'] if result['successful'] else None
                     cache_contract(state,row['origin_requests'],result['successful'],bool(result['failed']))
@@ -502,12 +543,14 @@ def run(args):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--target',choices=list(IMAGES),required=True)
+    p.add_argument('--target',choices=[*IMAGES, 'pingora'],required=True)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--tls',type=Path,required=True)
     p.add_argument('--client',type=Path,required=True)
     p.add_argument('--edge-binary',type=Path,default=Path('/workspace/edge/target/release/Zelvik-Edge'))
     p.add_argument('--controller',type=Path,default=Path('/workspace/edge/target/release/examples/issue34-controller'))
+    p.add_argument('--bare-pingora-binary',type=Path,default=Path('/workspace/edge/.local/bare-pingora-ci/bare-pingora-proxy'))
+    p.add_argument('--capture-proxy-process-cpu',action='store_true')
     p.add_argument('--edge-image')
     p.add_argument('--quic-rx-batch', choices=['1','32'], default='1')
     p.add_argument('--edge-backend', choices=['quinn-shared','quinn-native','tokio-quiche-native'], default='quinn-shared')

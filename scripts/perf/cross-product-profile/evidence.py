@@ -120,7 +120,7 @@ def collect():
     PUBLIC.mkdir(parents=True, exist_ok=True)
     exact = {'suite.json', 'provenance.json', 'verified-profiles.json', 'manifest.json', 'payload', 'profile-executable'}
     suffixes = ('.perf-flat.txt', '.perf-callers.txt', '.stacks.txt', '.perf-record.log', '.perf-command.json',
-                '.client.tsv.gz', '.stderr', '.command.json', '.profile-target.json', '.driver.log',
+                '.client.tsv.gz', '.client.tsv', '.stderr', '.command.json', '.profile-target.json', '.driver.log',
                 '.perf-flat-error.txt', '.perf-callers-error.txt')
     retained = []
     if PRIVATE.exists():
