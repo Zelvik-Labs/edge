@@ -15,6 +15,7 @@ PRIVATE = ROOT / '.local/futex-sampled-private'
 PUBLIC = ROOT / '.local/futex-sampled-ci'
 ORDERS = [['edge'], ['edge']]
 EVENT = 'syscalls:sys_enter_futex'
+PERIOD = 512
 
 
 def module(name, relative):
@@ -45,7 +46,7 @@ def profile(path):
         operations={str(key): value for key, value in operations.items()},
         chains=[dict(operation=op, frames=list(frames), samples=count)
                 for (op, frames), count in chains.most_common()],
-        sampling_period=64, sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+        sampling_period=PERIOD, sha256=hashlib.sha256(path.read_bytes()).hexdigest())
 
 
 def run():
@@ -54,7 +55,7 @@ def run():
     original.prepare()
     bins = ROOT / '.local/architecture-profile-binaries'
     suite = dict(source=subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
-        orders=ORDERS, runs=[], event=EVENT, period=64,
+        orders=ORDERS, runs=[], event=EVENT, period=PERIOD,
         scope='sampled futex callsites of fixed ba474 Edge; raw payload excluded; no CPU, wait time or capacity attribution',
         source_hashes={name: original.sha(ROOT / name) for name in ['scripts/perf/profile_architecture.py',
             'scripts/perf/futex-sampled/evidence.py']})
@@ -70,7 +71,7 @@ def run():
                     '--controller', str(bins / 'target/release/examples/issue34-controller'),
                     '--profiler-image', 'edge-architecture-profiler:20261104',
                     '--protocols', 'h1', 'h2', '--states', 'off', '--repeats', '1',
-                    '--seconds', '20', '--event', EVENT, '--period', '64'],
+                    '--seconds', '20', '--event', EVENT, '--period', str(PERIOD)],
                     stdout=log, stderr=subprocess.STDOUT)
             suite['runs'].append(dict(round=number, target=target,
                 manifest=str(output.relative_to(PRIVATE) / 'manifest.json'), exit=result.returncode))
@@ -81,6 +82,7 @@ def run():
 
 def verify():
     http = module('sampled_futex_http', 'scripts/perf/http-state/verify.py')
+    driver = module('sampled_futex_driver', 'scripts/perf/profile_architecture.py')
     suite = json.loads((PRIVATE / 'suite.json').read_text())
     provenance = json.loads((PRIVATE / 'provenance.json').read_text())
     assert [(run['round'], run['target']) for run in suite['runs']] == [(i, t) for i, order in enumerate(ORDERS) for t in order]
@@ -90,7 +92,7 @@ def verify():
         path = PRIVATE / run['manifest']
         data = json.loads(path.read_text())
         assert data['source_revision'] == suite['source'] and data['args']['profile_event'] == EVENT
-        assert data['args']['profile_period'] == 64
+        assert data['args']['profile_period'] == PERIOD
         assert data['client_sha256'] == provenance['expected_binaries']['.local/http-state-ci/protocol-state-client']
         assert data['client_source_revision'] == 'a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a'
         checked = http.validate(path, PRIVATE)
@@ -104,7 +106,9 @@ def verify():
             row = profile(Path(str(stem) + '.stacks.txt'))
             row.update(round=run['round'], protocol=case['protocol'])
             command = json.loads(Path(str(stem) + '.perf-command.json').read_text())
-            assert command[command.index('-e') + 1] == EVENT and command[command.index('-c') + 1] == '64'
+            assert command[command.index('-e') + 1] == f'{EVENT}/period={PERIOD}/'
+            for suffix in ['.perf-preflight.txt', '.perf-effective.txt']:
+                driver.verify_effective_period(Path(str(stem) + suffix).read_text(), PERIOD)
             rows.append(row)
     assert len(rows) == 4
     summary = dict(source=suite['source'], scope=suite['scope'], cells=len(rows),
@@ -118,13 +122,16 @@ def collect():
     original = module('sampled_futex_collector', 'scripts/perf/framework-profile/evidence.py')
     original.PRIVATE, original.PUBLIC = PRIVATE, PUBLIC
     original.collect()
-    source = PRIVATE / 'verified-futex-sampled.json'
-    if source.exists():
-        shutil.copy2(source, PUBLIC / source.name)
-        path = PUBLIC / 'retained-manifest.json'
-        manifest = json.loads(path.read_text())
-        manifest['files'].append(dict(path=source.name, bytes=source.stat().st_size, sha256=original.sha(source)))
-        path.write_text(json.dumps(manifest, indent=2) + '\n')
+    path = PUBLIC / 'retained-manifest.json'
+    manifest = json.loads(path.read_text())
+    for source in PRIVATE.rglob('*'):
+        if source.is_file() and (source.name == 'verified-futex-sampled.json' or source.name.endswith(('.perf-preflight.txt', '.perf-effective.txt', '.perf-preflight.log'))):
+            relative = source.relative_to(PRIVATE)
+            output = PUBLIC / relative
+            output.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, output)
+            manifest['files'].append(dict(path=str(relative), bytes=source.stat().st_size, sha256=original.sha(source)))
+    path.write_text(json.dumps(manifest, indent=2) + '\n')
 
 
 if __name__ == '__main__':

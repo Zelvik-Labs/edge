@@ -20,5 +20,12 @@ class FormatTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             module.sanitize_futex_script('Edge 1: syscalls:sys_enter_futex: unknown payload')
 
+    def test_effective_kernel_attributes_are_required(self):
+        for attribute in ['sample_period: 512', '{sample_period,sample_freq} = 512']:
+            module.verify_effective_period(attribute + ', freq: 0', 512)
+        for report in ['sample_period: 1, freq: 0', 'sample_period: 512, freq: 1', 'missing attrs']:
+            with self.assertRaises(AssertionError):
+                module.verify_effective_period(report, 512)
+
 if __name__ == '__main__':
     unittest.main()

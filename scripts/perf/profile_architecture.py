@@ -30,6 +30,12 @@ def sanitize_futex_script(stacks):
     return '\n'.join(public)
 
 
+def verify_effective_period(report, period):
+    values = re.findall(r'sample_period(?:,\s*sample_freq)?\}?\s*[:=]\s*(\d+)', report)
+    assert values and all(int(value) == period for value in values), 'effective tracepoint period differs'
+    assert re.search(r'\bfreq\s*[:=]\s*0\b', report), 'tracepoint configured in frequency mode'
+
+
 def main(options):
     original_docker = matrix.docker
     original_client = matrix.run_client
@@ -73,12 +79,22 @@ def main(options):
                      {'target': options.target, 'container': target, 'container_pids': pids,
                       'executable_sha256': identity})
         remote = '/test/' + stem.name
-        sampling = ['-F', str(options.frequency)] if options.event == 'cpu-clock:u' else ['-c', str(options.period)]
+        sampling = ['-F', str(options.frequency)] if options.event == 'cpu-clock:u' else []
+        event = options.event if options.event == 'cpu-clock:u' else f'{options.event}/period={options.period}/'
         command = [*matrix.DOCKER, 'exec', target, 'perf', 'record', *sampling,
-                   '-e', options.event, '--call-graph',
+                   '-e', event, '--call-graph',
                    'dwarf,32768', '-p', ','.join(map(str, pids)), '-o', remote + '.perf.data',
                    '--', 'sleep', str(options.seconds)]
         matrix.write(Path(str(stem) + '.perf-command.json'), command)
+        if options.event == 'syscalls:sys_enter_futex':
+            preflight = command.copy()
+            preflight[preflight.index('-o') + 1] = remote + '.preflight.perf.data'
+            preflight[-1] = '.1'
+            with Path(str(stem) + '.perf-preflight.log').open('w') as log:
+                subprocess.run(preflight, env=matrix.ENV, stdout=log, stderr=subprocess.STDOUT, check=True)
+            effective = original_docker('exec', target, 'perf', 'evlist', '-v', '-i', remote + '.preflight.perf.data')
+            Path(str(stem) + '.perf-preflight.txt').write_text(effective + '\n')
+            verify_effective_period(effective, options.period)
         with Path(str(stem) + '.perf-record.log').open('x') as log:
             recorder = subprocess.Popen(command, env=matrix.ENV, stdout=log,
                                         stderr=subprocess.STDOUT)
@@ -88,6 +104,10 @@ def main(options):
                 code = recorder.wait(timeout=options.seconds + 10)
             if code:
                 raise RuntimeError('perf record failed; see instrumented run log')
+        if options.event == 'syscalls:sys_enter_futex':
+            effective = original_docker('exec', target, 'perf', 'evlist', '-v', '-i', remote + '.perf.data')
+            Path(str(stem) + '.perf-effective.txt').write_text(effective + '\n')
+            verify_effective_period(effective, options.period)
         for label, flags in [('flat', ['--no-children', '--call-graph', 'none']),
                              ('callers', ['--children', '--call-graph', 'graph,0.5,caller'])]:
             try:
