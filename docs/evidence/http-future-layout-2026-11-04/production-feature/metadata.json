@@ -1,0 +1,11 @@
+{
+  "source": "11d4d6f7420d853f34161a472804179002d7d11e",
+  "rustflags": "-C target-cpu=x86-64-v2",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "example_sha256": "d4f7db6082110026b9fd6e86189f4dc293d3b57bc4e86889a005fe0a779fb13b",
+  "binary_sha256": "ff0ee689797f576ecb9fa6df590c33196eb3f986b56486189949d376548d48dc",
+  "scope": "unpolled real callback layouts and construction/drop; not request execution, allocation counts or throughput",
+  "features": [
+    "http-layout-probe"
+  ]
+}

@@ -78,3 +78,6 @@ request_filter构造/销毁中位27.31ns（26.97～53.63），其他回调5.76�
 未测首次poll、实际业务成本或调度成本，因此本轮没有给body_waf额外Box或跳过任何WAF。
 归档13299399781：6,976,048字节、11文件，SHA-256 `5fd607276428e26f1826e8d03d94cb2581fcb66daf06835e8ff4eefebfd386db`。
 [同构建冻结复核器](evidence/http-callback-construct-2026-11-04/phases/verify.py)保留完整证据。累计完整CI41782989939仍在执行32项native验证，诊断通过不代替功能CI。
+
+累计[CI41782989939](https://github.com/Zelvik-Labs/edge/actions/runs/41782989939)现已完整通过并复核：1369库测试、16二进制测试、5项ignored、集成/vendor/check/Clippy、同生产编译方式的布局与32项native节点控制。
+[归档和原始日志摘要](evidence/http-future-layout-2026-11-04/full-ci/ci.json)明确：native归档69文件全量校验，未包含节点实际ELF，属于正确性证据，不作为可执行文件字节身份或吞吐证明。

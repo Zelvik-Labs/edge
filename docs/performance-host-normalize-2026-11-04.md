@@ -60,3 +60,6 @@ userinfo 仍取最后一个 @ 后片段，Unicode trim、尾点和 ASCII 大小�
 正常输入仍为2→1次分配，仅点号1→0，空输入0→0，无realloc。与前次绝对ns不同的运行器结果不作为时间趋势。
 归档13298162717：1,675,383字节、38文件，SHA-256 `4fbe346a374e13579d9a2508e0fe5125405adc06826fcc47baaf419da40b7ace`。
 [集成冻结复核器](evidence/host-normalize-2026-11-04/integrated/verify.py)检查每个归档字节、实际二进制和源码等同，再重算全部配对结果；仍不声称节点吞吐提升。
+
+累计[CI41782989939](https://github.com/Zelvik-Labs/edge/actions/runs/41782989939)现已完整通过并复核：1369库测试、16二进制测试、5项ignored、集成/vendor/check/Clippy、同生产编译方式的布局与32项native节点控制。
+[归档和原始日志摘要](evidence/http-future-layout-2026-11-04/full-ci/ci.json)明确：native归档69文件全量校验，未包含节点实际ELF，属于正确性证据，不作为可执行文件字节身份或吞吐证明。

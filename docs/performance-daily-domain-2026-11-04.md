@@ -100,3 +100,6 @@ H3 HIT的Edge后客户端占两CPU约95.6%，代理单CPU约89.0%；RPS高于竞
 证据归档13300370590：58,256,713字节/2316文件，SHA-256 `ee5663e64dbba96388711b7fe423185f5b9f481ea70cd65509ffd1d3bc59e06e`。
 二进制归档13300435561：38,780,411字节/6文件，SHA-256 `f8fd8efeb1258bc7c7833203480754dd7406c0f2d434c300109ff1b9d6cd1029`。
 结果支持减少已有key的无效工作，但整体差距仍大，H3回退需要保留观察；本轮没有功能删除、配置变化或已批准降级。
+
+累计[CI41782989939](https://github.com/Zelvik-Labs/edge/actions/runs/41782989939)现已完整通过并复核：1369库测试、16二进制测试、5项ignored、集成/vendor/check/Clippy、同生产编译方式的布局与32项native节点控制。
+[归档和原始日志摘要](evidence/http-future-layout-2026-11-04/full-ci/ci.json)明确：native归档69文件全量校验，未包含节点实际ELF，属于正确性证据，不作为可执行文件字节身份或吞吐证明。
