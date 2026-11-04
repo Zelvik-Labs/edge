@@ -1,2 +1,0 @@
-{"target": "edge", "protocol": "h3", "cache": "miss", "connection": "reuse", "repeat": 0, "status": "passed", "rps": 770.5077329374046, "error": null}
-{"target": "edge", "protocol": "h3", "cache": "hit", "connection": "reuse", "repeat": 0, "status": "passed", "rps": 6265.706070143888, "error": null}

@@ -1,7 +1,0 @@
-{
-  "reason": "intended hotpath_bench executable completed; Cargo SIGINT left its extra dev main compiler running",
-  "initial_cargo_pid": 804802,
-  "cancelled_dev_rustc_pid": 805781,
-  "signal": "SIGTERM",
-  "release_build_already_completed": true
-}

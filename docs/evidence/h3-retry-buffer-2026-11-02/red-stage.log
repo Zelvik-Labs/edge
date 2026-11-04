@@ -1,1 +1,0 @@
-Expected old behavior failures reproduced ['h3_downstream::tests::h3_retry_regression_truncation_never_exposes_a_partial_replay', 'proxy::tests::h3_retry_regression_final_empty_chunk_is_a_body_end']

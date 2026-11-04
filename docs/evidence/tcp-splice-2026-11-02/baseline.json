@@ -1,6 +1,0 @@
-{
-  "commit": "6f942440df52b7797fbb46cec86cef916681deef",
-  "ci_run": 41497645026,
-  "source": "src/tcp_proxy.rs::zero_copy",
-  "reason": "two blocking workers per relay and full shutdown after first EOF"
-}

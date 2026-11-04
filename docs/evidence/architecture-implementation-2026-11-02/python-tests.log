@@ -1,7 +1,0 @@
-..............
-----------------------------------------------------------------------
-Ran 14 tests in 2.672s
-
-OK
-{"cases": 12, "passed": 9, "groups": 2, "report": "/tmp/tmpd61kqc10/report.md"}
-{"cases": 4, "passed": 2, "groups": 2, "report": "/tmp/tmp4sjrdn1f/report.md"}

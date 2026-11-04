@@ -1,0 +1,193 @@
+{
+  "schema": 1,
+  "repository": "Zelvik-Labs/edge",
+  "archived_at": "2026-11-04T14:22:55.291783+00:00",
+  "archive_tag": "archive/branches-2026-11-04",
+  "main_at_snapshot": "21e01923ea5daf31152dfee18d72bf5697ed6029",
+  "release_tag": "v26.11.1.1",
+  "release_commit": "21e01923ea5daf31152dfee18d72bf5697ed6029",
+  "history_roots": [
+    "428b390c2473130d704eed1318312fcc6d140a6c",
+    "4a643080981f55493328392e8250d92207b4c6a7",
+    "5346efb340a132bccdc3da393725558e1b27e084",
+    "cdbc583c4201ecf5cf76ab51424a22a0cd4f6e7e",
+    "ebd34770a817b68bd833f876918fc660a0089f49"
+  ],
+  "branches": [
+    {
+      "name": "fix/issue34-memory",
+      "head": "4a643080981f55493328392e8250d92207b4c6a7",
+      "classification": "historical memory branch; not claimed ancestry-merged"
+    },
+    {
+      "name": "perf/cache-context-20261104",
+      "head": "a79b20d22c32e2b77c926e2335792b874b1d8bc8",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/cache-workspace-20261103",
+      "head": "4329abf34a304f3dc380e7d5b4f4b21a11aeb96c",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/config-host-ci-20261104",
+      "head": "436e8fdd81919f2d35f292c2519c0383805f5fb3",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/daily-domain-ci-20261104",
+      "head": "4ed520090c4b26260e6a9acdbc8ecca939e5c845",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/five-priorities-20261103",
+      "head": "cdbc583c4201ecf5cf76ab51424a22a0cd4f6e7e",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/full-stack-20261102",
+      "head": "1252e5f1cd0c38c186ad5a09f7e13c17af234428",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/h3-admission-gates-matrix-20261104",
+      "head": "562d49c1b1dc2f754acaa33f842bb266911fbcfb",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/h3-bounded-matrix-20261104",
+      "head": "ed01addd08abcb5718f767f13704b7d19692ec55",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/h3-origin-headers-20261103",
+      "head": "6b383588d293f88a92afed391fe871f301a5d750",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/h3-origin-reuse-20261103",
+      "head": "2fc04fc97e4492355abe53f06ccd163d0cdfc7f5",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/h3-pool-sweep-20261103",
+      "head": "dd7a0cae0f6b08dfd3fd884244612539d0b4a3c2",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/h3-port-index-20261103",
+      "head": "6f6a6bce454ae0c431b00bef0c895fcf8cfa401d",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/h3-shared-capacity-matrix-20261104",
+      "head": "b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/h3-sustained-churn-20261104",
+      "head": "1911e52f0ff4835845e6d01a1bd5b65f8a5cab1c",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/host-normalize-ci-20261104",
+      "head": "fa66baeda0486ae8c993f9591138855c23600e86",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/idle-yield-20261103",
+      "head": "b29f38182ed1028b3a708f64a0466c2ac610a020",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/io-uring-20261102",
+      "head": "fa2c2cbc429ff41a61039103db2cd622a5ea76be",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/io-wq-bounded-20261102",
+      "head": "428b390c2473130d704eed1318312fcc6d140a6c",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/metrics-move-20261104",
+      "head": "e8d8b3abd57389e692e1777aa5910938efa0e160",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/program-wide-20261104",
+      "head": "ebd34770a817b68bd833f876918fc660a0089f49",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/queue-health-20261103",
+      "head": "f5f3e3abb8fbbde1a98e1becc52110ab3f802924",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/relay-progress-20261104",
+      "head": "e11422cf59678efda70f4468e71af17e3d31c510",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/rx-stats-20261103",
+      "head": "1c0dcbd91e6fa5de48ce37965d4e88a5388d4075",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/sni-cursor-20261104",
+      "head": "52687f97a1134d063384c7ecd7bf49c9a8f0083a",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/sni-hybrid-20261104",
+      "head": "471f95a5d108bad4e0238444e7cdc1443449f90a",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/udp-dataplane-20261103",
+      "head": "e1c35a02d787cc9f2d34251bdffa2e9fac54de5e",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/udp-owned-payload-20261103",
+      "head": "cafacb436dc829caf7b73427bbe6368836480698",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/udp-port-query-20261103",
+      "head": "d5cac2b8e25d03c29a0d1ee501309613d93f876f",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/udp-syscalls-20261103",
+      "head": "d30b4ab9a253fefd91038f273a4b8d35ac7f6f6f",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/waf-state-reservation-20261103",
+      "head": "6e8ce38bb8433c41ad8b11c41b610924e5525eae",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/xdp-tokio-20261102",
+      "head": "4b29028edb47e6a038392d066eee747e2f34d3f7",
+      "classification": "performance history"
+    },
+    {
+      "name": "perf/xdp-wake-20261102",
+      "head": "edd7f234519fac4d329ff3b914c1e226f57d3084",
+      "classification": "performance history"
+    },
+    {
+      "name": "release/evidence-26.11.1.1",
+      "head": "5346efb340a132bccdc3da393725558e1b27e084",
+      "classification": "publication tools only"
+    },
+    {
+      "name": "release/26.11.1.1",
+      "head": "21e01923ea5daf31152dfee18d72bf5697ed6029",
+      "classification": "retired release pointer"
+    }
+  ]
+}

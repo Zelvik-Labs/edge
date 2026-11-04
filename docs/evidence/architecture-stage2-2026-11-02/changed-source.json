@@ -1,9 +1,0 @@
-[
-  "src/cache/mod.rs",
-  "src/cache_hybrid.rs",
-  "src/lb_factory.rs",
-  "src/metrics.rs",
-  "src/metrics/analyzer.rs",
-  "src/metrics/plan.rs",
-  "src/proxy.rs"
-]

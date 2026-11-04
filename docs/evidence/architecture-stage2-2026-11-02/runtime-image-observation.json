@@ -1,7 +1,0 @@
-{
-  "recorded_at": 1793614475.04205,
-  "profiler_image_tag": "edge-gap-profiler:20261101",
-  "observed_image_id": "sha256:89c848b31e42078cd75ce8007debe00fa49fd5e312d21c3c261ace6adae8063c",
-  "image_created": "2026-11-01T12:15:18.960939582Z",
-  "timing": "Post-run observation of local image tag; profile driver records this tag and substitutes it for normal edge runtime image. Original profile manifest images.edge is the normal runtime image, not the profiler image. This does not backfill an at-run digest."
-}

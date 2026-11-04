@@ -1,5 +1,0 @@
-Traceback (most recent call last):
-  File "/workspace/edge/.worktrees/perf-next/.local/h3-recv-ablation/postprocess.py", line 8, in <module>
-    if 'Traceback (most recent call last)' in log:raise RuntimeError('Ablation failed; investigate before summarizing')
-                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-RuntimeError: Ablation failed; investigate before summarizing
