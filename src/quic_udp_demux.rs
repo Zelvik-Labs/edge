@@ -25,7 +25,7 @@ use crate::net_bind::{bind_udp_socket, dual_stack_bind_addrs};
 use crate::quic_probe::{QuicCryptoFragment, QuicProbeFragmentResult};
 use crate::udp_proxy::{
     DownstreamUdpDatagram, UdpDownstreamSender, UdpIngressDatagramStatus, UdpProxyManager,
-    UdpSession, UdpSessionQuicCid, UdpSessionSendStatus, udp_activity_is_alive,
+    UdpSession, UdpSessionQuicCid, UdpSessionSendStatus,
     udp_activity_now_ms,
 };
 
@@ -599,15 +599,19 @@ fn route_kind_same(left: &RouteKind, right: &RouteKind) -> bool {
 fn route_kind_is_active_with_pressure(
     route: &RouteKind,
     pressure_level: crate::l4_defense::L4PressureLevel,
+    now_ms: u64,
 ) -> bool {
-    match route {
-        RouteKind::Http3(last_activity_ms) => {
-            udp_activity_is_alive(last_activity_ms, h3_route_idle_timeout(pressure_level))
-        }
+    let (last_activity_ms, timeout) = match route {
+        RouteKind::Http3(last_activity_ms) => (
+            last_activity_ms.as_ref(),
+            h3_route_idle_timeout(pressure_level),
+        ),
         RouteKind::Passthrough(session) => {
-            udp_activity_is_alive(&session.last_activity_ms, UDP_SESSION_IDLE_TIMEOUT)
+            (session.last_activity_ms.as_ref(), UDP_SESSION_IDLE_TIMEOUT)
         }
-    }
+    };
+    now_ms.saturating_sub(last_activity_ms.load(Ordering::Relaxed))
+        < timeout.as_millis().min(u64::MAX as u128) as u64
 }
 
 fn h3_route_idle_timeout(pressure_level: crate::l4_defense::L4PressureLevel) -> Duration {
@@ -619,22 +623,18 @@ fn h3_route_idle_timeout(pressure_level: crate::l4_defense::L4PressureLevel) -> 
     }
 }
 
-fn cleanup_routes(
-    udp_manager: &UdpProxyManager,
-    routes: &DashMap<SocketAddr, RouteKind>,
-    cid_routes: &CidRoutes,
-    pending_routes: &DashMap<SocketAddr, PendingQuicRoute>,
-    pending_reassembly_bytes: &AtomicUsize,
-    session_routes: &SessionRoutes,
-) {
+fn cleanup_routes(udp_manager: &UdpProxyManager, shared: &UdpDemuxSharedState) {
+    // Admission already includes route/pending/reassembly occupancy. Use the
+    // same observation here, even when global memory and FD pressure are low.
+    let observation = QuicIngressSource::Governor.observe(shared);
     cleanup_routes_with_pressure(
         udp_manager,
-        routes,
-        cid_routes,
-        pending_routes,
-        pending_reassembly_bytes,
-        session_routes,
-        crate::l4_defense::current_pressure_level(),
+        &shared.routes,
+        &shared.cid_routes,
+        &shared.pending_routes,
+        &shared.pending_reassembly_bytes,
+        &shared.session_routes,
+        observation.pressure_level,
     );
 }
 
@@ -655,10 +655,27 @@ fn cleanup_routes_with_pressure(
         crate::l4_defense::quic_pending_route_timeout(pressure_level),
     );
     udp_manager.cleanup_idle_sessions(UDP_SESSION_IDLE_TIMEOUT);
-    routes.retain(|_, route| route_kind_is_active_with_pressure(route, pressure_level));
-    session_routes.retain(|_, route| route_kind_is_active_with_pressure(route, pressure_level));
+    prune_route_indexes_at(
+        routes,
+        cid_routes,
+        session_routes,
+        pressure_level,
+        udp_activity_now_ms(),
+    );
+}
+
+fn prune_route_indexes_at(
+    routes: &DashMap<SocketAddr, RouteKind>,
+    cid_routes: &CidRoutes,
+    session_routes: &SessionRoutes,
+    pressure_level: crate::l4_defense::L4PressureLevel,
+    now_ms: u64,
+) {
+    routes.retain(|_, route| route_kind_is_active_with_pressure(route, pressure_level, now_ms));
+    session_routes
+        .retain(|_, route| route_kind_is_active_with_pressure(route, pressure_level, now_ms));
     cid_routes.retain(|_, bucket| {
-        bucket.retain(|_, route| route_kind_is_active_with_pressure(route, pressure_level));
+        bucket.retain(|_, route| route_kind_is_active_with_pressure(route, pressure_level, now_ms));
         !bucket.is_empty()
     });
 }
@@ -830,6 +847,25 @@ struct QuicIngressObservation {
     pressure_level: crate::l4_defense::L4PressureLevel,
 }
 
+fn observe_quic_ingress(
+    ingress: crate::memory_governor::QuicIngressSnapshot,
+    shared: &UdpDemuxSharedState,
+) -> QuicIngressObservation {
+    let pressure_level = crate::l4_defense::pressure_level_with_quic_snapshot(
+        ingress.pressure,
+        shared.routes.len(),
+        ingress.route_limit,
+        shared.pending_routes.len(),
+        ingress.pending_route_limit,
+        shared.pending_reassembly_bytes.load(Ordering::Relaxed),
+        ingress.pending_reassembly_budget_bytes,
+    );
+    QuicIngressObservation {
+        ingress,
+        pressure_level,
+    }
+}
+
 enum QuicIngressSource {
     Governor,
     #[cfg(test)]
@@ -840,22 +876,7 @@ impl QuicIngressSource {
     #[inline]
     fn observe(self, shared: &UdpDemuxSharedState) -> QuicIngressObservation {
         match self {
-            Self::Governor => {
-                let ingress = MEMORY_GOVERNOR.quic_ingress_snapshot();
-                let pressure_level = crate::l4_defense::pressure_level_with_quic_snapshot(
-                    ingress.pressure,
-                    shared.routes.len(),
-                    ingress.route_limit,
-                    shared.pending_routes.len(),
-                    ingress.pending_route_limit,
-                    shared.pending_reassembly_bytes.load(Ordering::Relaxed),
-                    ingress.pending_reassembly_budget_bytes,
-                );
-                QuicIngressObservation {
-                    ingress,
-                    pressure_level,
-                }
-            }
+            Self::Governor => observe_quic_ingress(MEMORY_GOVERNOR.quic_ingress_snapshot(), shared),
             #[cfg(test)]
             Self::Fixed(observation) => observation,
         }
@@ -1327,14 +1348,7 @@ impl QuicUdpDemuxManager {
                         return;
                     }
                     _ = cleanup_tick.tick() => {
-                        cleanup_routes(
-                            &udp_manager,
-                            &shared.routes,
-                            &shared.cid_routes,
-                            &shared.pending_routes,
-                            &shared.pending_reassembly_bytes,
-                            &shared.session_routes,
-                        );
+                        cleanup_routes(&udp_manager, &shared);
                         cleanup_new_route_windows(&shared.new_route_windows);
                     }
                     update = quic_cid_rx.recv() => {
@@ -3174,6 +3188,66 @@ mod tests {
             },
             pressure_level: crate::l4_defense::L4PressureLevel::Normal,
         })
+    }
+
+    #[test]
+    fn local_route_pressure_prunes_expired_h3_aliases_with_healthy_global_memory() {
+        use crate::l4_defense::L4PressureLevel;
+
+        let (shared, _h3_rx, _cid_rx) = new_demux_shared_state(1);
+        let now_ms = 100_000;
+        let expired = RouteKind::Http3(Arc::new(AtomicU64::new(25_000)));
+        let active = RouteKind::Http3(Arc::new(AtomicU64::new(99_000)));
+        for port in 10000..10014 {
+            shared.routes.insert(
+                SocketAddr::from(([203, 0, 113, 202], port)),
+                if port < 10012 {
+                    expired.clone()
+                } else {
+                    active.clone()
+                },
+            );
+        }
+        insert_cid_route(
+            &shared.cid_routes,
+            QuicConnectionId(vec![1, 2, 3, 4]),
+            expired,
+        );
+        insert_cid_route(
+            &shared.cid_routes,
+            QuicConnectionId(vec![5, 6, 7, 8]),
+            active,
+        );
+
+        let QuicIngressSource::Fixed(mut healthy) = normal_test_ingress() else {
+            unreachable!("test uses an explicit healthy snapshot");
+        };
+        healthy.ingress.route_limit = 20;
+        let observation = observe_quic_ingress(healthy.ingress, &shared);
+        assert_eq!(observation.pressure_level, L4PressureLevel::Elevated);
+
+        // The previous global-only maintenance policy retains 75-second-old
+        // metadata, although the same route occupancy already limits admission.
+        prune_route_indexes_at(
+            &shared.routes,
+            &shared.cid_routes,
+            &shared.session_routes,
+            L4PressureLevel::Normal,
+            now_ms,
+        );
+        assert_eq!(shared.routes.len(), 14);
+        assert!(lookup_cid_route(&shared.cid_routes, &[0x40, 1, 2, 3, 4, 0]).is_some());
+
+        prune_route_indexes_at(
+            &shared.routes,
+            &shared.cid_routes,
+            &shared.session_routes,
+            observation.pressure_level,
+            now_ms,
+        );
+        assert_eq!(shared.routes.len(), 2);
+        assert!(lookup_cid_route(&shared.cid_routes, &[0x40, 1, 2, 3, 4, 0]).is_none());
+        assert!(lookup_cid_route(&shared.cid_routes, &[0x40, 5, 6, 7, 8, 0]).is_some());
     }
 
     #[tokio::test]
