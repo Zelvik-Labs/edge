@@ -611,7 +611,9 @@ const UDP_FD_BUDGET_PCT: u64 = 25;
 const ORIGIN_FD_BUDGET_PCT: u64 = 25;
 const KEEPALIVE_FD_BUDGET_PCT: u64 = 10;
 
-const HTTP_CONN_ESTIMATED_BYTES: u64 = 32 * 1024;
+/// Kernel HTTP transports own this write buffer for the connection lifetime.
+pub(crate) const HTTP_DOWNSTREAM_WRITE_BUFFER_BYTES: usize = 1460;
+const HTTP_CONN_ESTIMATED_BYTES: u64 = 32 * 1024 + HTTP_DOWNSTREAM_WRITE_BUFFER_BYTES as u64;
 const TCP_CONN_ESTIMATED_BYTES: u64 = 24 * 1024;
 const SNI_RELAY_ESTIMATED_BYTES: u64 = 256 * 1024;
 const H3_CONN_ESTIMATED_BYTES: u64 = 48 * 1024;

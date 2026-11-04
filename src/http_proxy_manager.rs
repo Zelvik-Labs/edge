@@ -2949,7 +2949,13 @@ fn is_benign_tls_accept_error(message: &str) -> bool {
 }
 
 fn stream_with_socket_digest(client_stream: TcpStream, client_addr: SocketAddr) -> L4Stream {
-    let mut stream = L4Stream::from(client_stream);
+    let mut stream = L4Stream::from_tcp_with_buffer(
+        client_stream,
+        pingora_core::protocols::l4::stream::L4BufferSettings::new(
+            0,
+            crate::memory_governor::HTTP_DOWNSTREAM_WRITE_BUFFER_BYTES,
+        ),
+    );
     #[cfg(unix)]
     let digest = SocketDigest::from_raw_fd(stream.as_raw_fd());
     #[cfg(windows)]
@@ -3231,6 +3237,31 @@ fn starts_with_ascii_ci(value: &[u8], prefix: &[u8]) -> bool {
 mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[tokio::test]
+    async fn buffered_kernel_stream_preserves_peer_and_flushes_response() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let (client, accepted) = tokio::join!(
+            TcpStream::connect(listener.local_addr().unwrap()),
+            listener.accept()
+        );
+        let mut client = client.unwrap();
+        let (server, peer) = accepted.unwrap();
+        let mut stream = stream_with_socket_digest(server, peer);
+        let observed_peer = stream
+            .get_socket_digest()
+            .and_then(|digest| digest.peer_addr().cloned())
+            .and_then(|addr| addr.as_inet().copied());
+        assert_eq!(observed_peer, Some(client.local_addr().unwrap()));
+        stream.write_all(b"response header\r\n").await.unwrap();
+        stream.write_all(b"response body").await.unwrap();
+        stream.flush().await.unwrap();
+        let mut received = [0; 30];
+        client.read_exact(&mut received).await.unwrap();
+        assert_eq!(&received, b"response header\r\nresponse body");
+        let boxed: pingora_core::protocols::Stream = Box::new(stream);
+        assert!(boxed.as_any().is::<L4Stream>());
+    }
 
     #[test]
     fn shared_sni_listener_merges_optional_proxy_protocol_in_both_orders() {

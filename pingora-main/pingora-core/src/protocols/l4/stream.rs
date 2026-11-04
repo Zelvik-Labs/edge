@@ -445,6 +445,17 @@ pub struct Stream {
 }
 
 impl Stream {
+    /// Create a TCP stream with buffers set before any application IO.
+    ///
+    /// Buffered output must be flushed before relying on its delivery. Unlike
+    /// reconfiguring an existing stream, construction cannot discard unread or
+    /// unwritten bytes. The concrete stream type and sendfile support are kept.
+    pub fn from_tcp_with_buffer(stream: TcpStream, buffer: L4BufferSettings) -> Self {
+        let mut stream = Self::from(stream);
+        stream.set_buffer(buffer);
+        stream
+    }
+
     fn stream(&self) -> &BufStream<RawStreamWrapper> {
         self.stream.as_ref().expect("stream should always be set")
     }
@@ -955,6 +966,123 @@ mod tests {
     use tokio::io::AsyncWriteExt;
     use tokio::net::TcpListener;
     use tokio::sync::Notify;
+
+    async fn tcp_pair() -> (TcpStream, TcpStream) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let (client, accepted) = tokio::join!(
+            TcpStream::connect(listener.local_addr().unwrap()),
+            listener.accept()
+        );
+        (client.unwrap(), accepted.unwrap().0)
+    }
+
+    #[tokio::test]
+    async fn tcp_buffered_constructor_flushes_without_hiding_native_stream() {
+        let (mut client, server) = tcp_pair().await;
+        let stream = Stream::from_tcp_with_buffer(server, L4BufferSettings::new(0, 1460));
+        let mut stream: crate::protocols::Stream = Box::new(stream);
+        assert!(stream.as_any().is::<Stream>());
+        assert!(
+            stream
+                .as_any()
+                .downcast_ref::<Stream>()
+                .unwrap()
+                .accepts_sendfile()
+        );
+        stream.write_all(b"header").await.unwrap();
+        stream.write_all(b"body").await.unwrap();
+        stream.flush().await.unwrap();
+        let mut received = [0; 10];
+        client.read_exact(&mut received).await.unwrap();
+        assert_eq!(&received, b"headerbody");
+    }
+
+    #[tokio::test]
+    async fn tcp_unbuffered_constructors_do_not_require_flush() {
+        for explicit in [false, true] {
+            let (mut client, server) = tcp_pair().await;
+            let mut stream = if explicit {
+                Stream::from_tcp_with_buffer(server, L4BufferSettings::unbuffered())
+            } else {
+                Stream::from(server)
+            };
+            stream.write_all(b"unbuffered").await.unwrap();
+            let mut received = [0; 10];
+            tokio::time::timeout(Duration::from_secs(1), client.read_exact(&mut received))
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(&received, b"unbuffered");
+        }
+    }
+
+    #[tokio::test]
+    async fn tcp_buffered_constructor_resumes_partial_write_after_cancellation() {
+        let (mut client, server) = tcp_pair().await;
+        nix::sys::socket::setsockopt(&server, nix::sys::socket::sockopt::SndBuf, &4096).unwrap();
+        let mut stream = Stream::from_tcp_with_buffer(server, L4BufferSettings::new(0, 1460));
+        stream.set_nodelay().unwrap();
+        let payload: Vec<u8> = (0..4 * 1024 * 1024).map(|i| (i % 251) as u8).collect();
+        let mut written = 0;
+        let blocked = tokio::time::timeout(Duration::from_millis(25), async {
+            while written < payload.len() {
+                let n = stream.write(&payload[written..]).await.unwrap();
+                assert!(n > 0);
+                written += n;
+            }
+        })
+        .await;
+        assert!(blocked.is_err(), "a paused reader must apply backpressure");
+        assert!(written > 0 && written < payload.len());
+        let reader = tokio::spawn(async move {
+            let mut received = Vec::new();
+            client.read_to_end(&mut received).await.unwrap();
+            received
+        });
+        stream.write_all(&payload[written..]).await.unwrap();
+        stream.flush().await.unwrap();
+        AsyncWriteExt::shutdown(&mut stream).await.unwrap();
+        assert_eq!(reader.await.unwrap(), payload);
+    }
+
+    #[tokio::test]
+    async fn tcp_buffered_constructor_sendfile_flushes_header_before_body() {
+        let (mut client, server) = tcp_pair().await;
+        let mut stream = Stream::from_tcp_with_buffer(server, L4BufferSettings::new(0, 1460));
+        let body: Vec<u8> = (0..128 * 1024).map(|i| (i % 251) as u8).collect();
+        let path = std::env::temp_dir().join(format!(
+            "pingora-buffer-sendfile-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut file = std::fs::File::options()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap();
+        std::fs::remove_file(path).unwrap();
+        std::io::Write::write_all(&mut file, &body).unwrap();
+        let reader = tokio::spawn(async move {
+            let mut received = Vec::new();
+            client.read_to_end(&mut received).await.unwrap();
+            received
+        });
+        let header = b"header-before-file\n";
+        stream.write_all(header).await.unwrap();
+        let file_len = (body.len() - 14) as u64;
+        assert_eq!(
+            stream.sendfile_from(&file, 7, file_len).await.unwrap(),
+            Some(file_len)
+        );
+        AsyncWriteExt::shutdown(&mut stream).await.unwrap();
+        let mut expected = header.to_vec();
+        expected.extend_from_slice(&body[7..body.len() - 7]);
+        assert_eq!(reader.await.unwrap(), expected);
+    }
 
     #[cfg(target_os = "linux")]
     #[tokio::test]
