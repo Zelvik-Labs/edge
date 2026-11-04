@@ -48,3 +48,8 @@ Loom使用同一候选函数体替换原子实现，单writer穷举调度、两w
 与首轮绝对ns不同不解释为生产趋势；这轮修正有微小协议成本，不能称为性能加速。
 归档13302209229：591,643字节、33文件，SHA-256 `66bdebd2e06d93b93beb6fb5e138d96b0cfab06af46a471ca28487d1fd3e6d08`；[集成冻结复核器](evidence/snapshot-publication-2026-11-04/integrated/verify.py)保留全部字节与实际源码检查。
 完整[CI41789512638](https://github.com/Zelvik-Labs/edge/actions/runs/41789512638)已通过新增三项实际governor回归及check/Clippy，native矩阵仍在执行；未部署。
+
+累计CI41789512638现已完整通过并复核：1372库测试、16二进制测试、5项ignored、集成/vendor/check/Clippy与32项native，新增三项真实governor回归均通过。
+原始35条测试汇总与两个job日志SHA见[完整CI证据](evidence/snapshot-publication-2026-11-04/full-ci/ci.json)。
+native归档13305280036：137,152字节、69文件，SHA-256 `3370570fd882a8aa131cf699c43a059fd45fb8e1d0f1b5f79d36ba629cf9a7d0`；全部文件/退出码/网络清理复核，无节点ELF下载身份或性能声明。
+后续Config分支发现的H3测试源站竞态独立保留并补强，不能据该次1c通过就忽略其他CI失败。

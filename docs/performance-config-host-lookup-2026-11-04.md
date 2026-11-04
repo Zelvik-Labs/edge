@@ -88,3 +88,29 @@ Proxy已经规范化主机名，get_request_context_sync在持读锁时还会调
 现让replacement完整发送/接收正文与trailers，再验证旧context不能删除新登记、旧活动请求不被取消，以及两连接均关闭、三请求均解析。
 不忽略任何正常/异常关闭，不放宽原超时，不修改实际H3复用实现；原失败[日志复核器](evidence/config-host-lookup-2026-11-04/first-full-ci/verify.py)保留。
 新增显式CI输入h3_origin_drain_repeat，在完整库门通过后64次实际loopback复查，失败不重试替换，并继续累计完整CI/native32。
+
+## 实际ConfigStore源码的集成复测
+
+[41793615340](https://github.com/Zelvik-Labs/edge/actions/runs/41793615340)通过并复核36文件、两种实际probe、实际Config helper token等同与65831组控制/5120块，零steal。
+
+| 场景 | 原→集成 ns/次 | 八轮配对变化 |
+|---|---:|---:|
+| lower | 31.90→12.86 | -59.72% |
+| mixed | 31.77→23.99 | -24.30% |
+| port | 42.94→33.25 | -23.00% |
+| tail-dots | 39.06→28.75 | -26.13% |
+| userinfo | 44.84→36.11 | -19.18% |
+| ipv6-bracket | 32.03→22.50 | -29.84% |
+| ipv6-bare | 32.77→23.35 | -28.39% |
+| unmatched | 30.46→23.45 | -23.29% |
+| unicode | 32.85→23.87 | -27.31% |
+| long-upper | 51.28→41.00 | -19.82% |
+| long-lower | 51.55→32.51 | -37.27% |
+| empty | 8.12→8.12 | +0.13% |
+| spaces | 23.92→9.09 | -61.88% |
+| all-dots | 15.92→9.10 | -42.90% |
+| reparsed-colon | 26.15→11.08 | -57.75% |
+| bracket-non-ip | 24.31→18.82 | -22.49% |
+
+分配计数保持正常小写2→0、需要变换的输出2→1、空输入0→0与仅点号1→0，无realloc；不因组件正向结果将首次完整CI失败改为成功。
+归档13304252445：5,587,332字节、36文件，SHA-256 `994dd552d34abe58f6915fd282f48cbdb2e4e5f2ab3bb4b8ca6fae5897c3523b`；[集成冻结复核器](evidence/config-host-lookup-2026-11-04/integrated/verify.py)独立重算。
