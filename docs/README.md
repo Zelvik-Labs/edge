@@ -13,14 +13,17 @@
 - [五项性能工作的交付与边界](performance-five-priorities-2026-11-04.md)：H3 回源池、WAF 内存、UDP 实验、三产品矩阵和 tokio-quiche 的实现、收益与未解决项。
 - [全程序性能优化进度](performance-program-wide-2026-11-04.md)：缓存、SNI/TCP、统计、XDP 与 io_uring 的本轮交付、收益与未解决项。
 - [缓存优化后的实际 CPU 复核](performance-http-cpu-after-cache-2026-11-04.md)：实际 ba474 二进制的 18 个条件、496 万次响应与 43,074 个样本。
-- [UDP 出口候选的收益与退步](performance-udp-egress-2026-11-04.md)：避免失败前复制的两种方案及正常发送代价，均未接入生产。
+- [用户态/内核态 CPU 差距与 H3 客户端预算](performance-http-cpu-budget-2026-11-04.md)：从 192 格原始账本复核优化方向，识别客户端容量限制。
+- [实际 HTTP 回调 future 布局](performance-http-future-layout-2026-11-04.md)：release 实际回调的状态大小，结构测量不等于 CPU 归因。
+- [小头表客户端 IP 查找](performance-client-ip-scan-2026-11-04.md)：75,923 组差分、全部十二种转发头及局部代价。
+- [UDP 出口候选的收益与退步](performance-udp-egress-2026-11-04.md)：两种复制策略未采纳；错误载荷方案每次拒绝少两次分配，已进入性能分支。
 - [实际 HTTP CPU 归因](performance-http-cpu-2026-11-04.md)：生产二进制采样、热点与可复核证据。
 - [Range 缓存预检查优化与四目标对比](performance-range-preflight-2026-11-04.md)：192 个独立单元、前后 Edge/Nginx/OpenResty 吞吐、CPU 与延迟。
 - [已存响应头校验优化](performance-stored-headers-2026-11-04.md)：三万多组语义差分、组件计时及 192 格真实节点前后/Nginx/OpenResty 对比。
 - [AF_XDP 自动绑核修复](performance-afxdp-affinity-2026-11-04.md)：继承 CPU 集合、真实线程控制与完整节点验证。
 - [Quinn GSO 隔离结果](performance-quinn-gso-2026-11-04.md)：原生新连接故障复现、GSO 开关代价与诊断边界。
 - [Quinn 新连接协议诊断](performance-quinn-diagnostic-2026-11-04.md)：有界客户端帧记录、关闭码和原始可执行文件控制。
-- [统计事件维度所有权](performance-metrics-move-2026-11-04.md)：保留全部采集与投影，减少 worker 的引用计数操作，实际节点对照进行中。
+- [统计事件维度所有权](performance-metrics-move-2026-11-04.md)：192 格、1102 万次响应，未测出稳定提升，保留退步与全部原始比值。
 - [Quinn 收包节奏控制](performance-quinn-receive-spacing-2026-11-04.md)：固定两端实际二进制，约束待处理 datagram 的时序并保留关停剩余。
 - [Quinn 客户端互操作](performance-quinn-interop-2026-11-04.md)：同版 libcurl 两种实现与同一 OpenSSL 默认/X25519 的完整错误对照。
 - [共享 QUIC 维护压力](performance-quic-maintenance-2026-11-04.md)：定时清理口径修正与 32 组原生节点复核。

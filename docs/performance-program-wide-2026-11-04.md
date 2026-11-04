@@ -9,6 +9,7 @@
 | 工作 | 变化与证据 | 结论边界 |
 |---|---|---|
 | [缓存优化后 CPU 复核](performance-http-cpu-after-cache-2026-11-04.md) | 实际 ba474 二进制，18 条件、496 万次响应、43,074 样本、零错/丢样/steal；H1 HIT 请求过滤约 17%、头处理 15%、维度处理 8% | 包含式归因可重叠；下一轮定位正常路径，不将采样吞吐排名 |
+| [用户态/内核态账本](performance-http-cpu-budget-2026-11-04.md) | 完整重核原 192 格；H1/H3 HIT 差距主要在用户态，内核态已低于 Nginx | H3 HIT 客户端用到两核预算约 96%～97%，观测 RPS 不是代理饱和容量 |
 | [实际 HTTP CPU 归因](performance-http-cpu-2026-11-04.md) | 18 个真实节点条件、328 万次响应、38,922 个 CPU 样本；定位缓存准入、头处理、分配与统计成本 | 采样流量不做容量排名，包含占比不相加 |
 | [Range 缓存准入](performance-range-preflight-2026-11-04.md) | 无 Range 时跳过冗余完整对象预检查；192/192 对比通过、821 万次响应；HIT 吞吐配对 +3.95%～+10.08% | H1/H2 仍低于 Nginx/OpenResty，MISS 改善不稳定 |
 | [已存响应头校验](performance-stored-headers-2026-11-04.md) | 31,981 组差分全等；典型 6 字段组件耗时约 −35%、分配 8→6；保留原解析器和安全检查 | 大于 32 字段使用旧路径；192 格节点约 0～1% 吞吐变化，部分 CPU 略退步；完整 CI 已通过 |
@@ -41,9 +42,11 @@
 AF_XDP 的队列线程、运行时交接与拷贝仍有分析空间；目前没有真实 NIC zero-copy 收益，
 云 veth copy-mode 的结果不能外推到硬件。统计内置聚合仍有成本，本轮未通过停止统计提升成绩。
 
-[统计维度所有权](performance-metrics-move-2026-11-04.md)减少 worker 的冗余 Arc clone/drop，完整 CI 已通过（1366 库测试及集成/vendor/lint）；隔离 192 格对照在运行，尚无新吞吐结论。
+[统计维度所有权](performance-metrics-move-2026-11-04.md)减少 worker 的冗余 Arc clone/drop，完整 CI 已通过（1366 库测试及集成/vendor/lint）；隔离 192 格、1102 万次响应通过，但未测出稳定提升，多数条件略退步，TLS HIT 四轮吞吐下降，未计作有效收益。
 [共享可写等待](performance-shared-quic-writable-2026-11-04.md)已修复队列满仍立即 Ready 及 socket 单等待者问题，1366 库测试、集成/vendor/lint 与 32 组节点验证全部通过。
-[UDP 出口复制候选](performance-udp-egress-2026-11-04.md)已测两种策略：满队列少一次分配，但普通发送分别有 5%～7% 与 1.7%～2.2% 代价，保留实验、不进入生产。
+[UDP 出口候选](performance-udp-egress-2026-11-04.md)前两种复制策略的普通发送有 5%～7% 与 1.7%～2.2% 代价，保留实验；第三种保持发送顺序，只改变错误载荷，每次拒绝少两次分配，已集成到分支 `20e56ff`，完整 CI 进行中。
+[小头表 IP 查找](performance-client-ip-scan-2026-11-04.md)调整后 75,923 组差分全等；私网无转发头组件约 −76%，公网极短分支约 +0.22 ns、大头表小幅退步保留，已集成同一分支，尚无节点收益。
+[实际 HTTP 回调布局](performance-http-future-layout-2026-11-04.md)通过 release probe 直接测状态大小，等待 Actions 输出；不从 frame 大小推断 CPU 或吞吐。
 [共享内核 GSO 候选](performance-shared-quic-tx-2026-11-04.md)通过 IPv4/IPv6 真实分段、GRO 关闭与硬错误控制，尚未接入生产或测量节点收益。
 
 响应头真实节点收益已核验，组件快约 35% 未转化为同量级节点收益。仍需真实 SNI 端到端吞吐，以及 24/72 小时稳定性和受控弱网。

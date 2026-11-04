@@ -44,6 +44,10 @@ def build():
     (source / 'original.rs').write_text(extracted)
     (source / 'original-full.rs').write_text(original)
     candidate = (ROOT / 'benches/support/client_ip_candidate.rs').read_text()
+    integrated = (ROOT / 'src/client_ip.rs').read_text()
+    assert function(integrated, 'pub fn fallback_client_ip(').replace(
+        'pub fn fallback_client_ip(', 'fn candidate(', 1).strip() == candidate.strip()
+    (source / 'integrated-full.rs').write_text(integrated)
     tail = function(original, 'pub fn fallback_client_ip(')
     tail = tail[tail.index('    for header in FALLBACK_IP_HEADERS.iter()'):]
     assert candidate[candidate.index('    for header in FALLBACK_IP_HEADERS.iter()'):].strip() == tail.strip()
@@ -124,6 +128,9 @@ def verify():
         assert sha(OUT / name) == value
     for name, value in metadata['sources'].items():
         assert sha(OUT / 'source' / name) == value
+    integrated = (OUT / 'source/integrated-full.rs').read_text()
+    assert function(integrated, 'pub fn fallback_client_ip(').replace(
+        'pub fn fallback_client_ip(', 'fn candidate(', 1).strip() == (OUT / 'source/candidate.rs').read_text().strip()
     controls = read(OUT / 'controls.tsv')
     assert len(controls) == 75923
     assert all(int(row['case']) == i and row['baseline'] == row['candidate'] 

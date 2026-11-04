@@ -1,0 +1,560 @@
+{
+  "source": "dd56643ae69331d4ad85fc2ff300e69f3d5c7329",
+  "baseline": "c31047359d14ec1a2596d244be8690960b49d7f8",
+  "scope": "bounded downstream send component; no node throughput or real AF_XDP ring claim",
+  "controls": {
+    "baseline": [
+      {
+        "case": "copied-64-ready",
+        "status": "PASS",
+        "bytes": "64",
+        "owned_pointer_checked": "false",
+        "recovered": "n/a",
+        "closed": "true"
+      },
+      {
+        "case": "copied-64-full",
+        "status": "PASS",
+        "bytes": "64",
+        "owned_pointer_checked": "false",
+        "recovered": "true",
+        "closed": "true"
+      },
+      {
+        "case": "copied-64-closed",
+        "status": "PASS",
+        "bytes": "64",
+        "owned_pointer_checked": "false",
+        "recovered": "n/a",
+        "closed": "true"
+      },
+      {
+        "case": "copied-1200-ready",
+        "status": "PASS",
+        "bytes": "1200",
+        "owned_pointer_checked": "false",
+        "recovered": "n/a",
+        "closed": "true"
+      },
+      {
+        "case": "copied-1200-full",
+        "status": "PASS",
+        "bytes": "1200",
+        "owned_pointer_checked": "false",
+        "recovered": "true",
+        "closed": "true"
+      },
+      {
+        "case": "copied-1200-closed",
+        "status": "PASS",
+        "bytes": "1200",
+        "owned_pointer_checked": "false",
+        "recovered": "n/a",
+        "closed": "true"
+      },
+      {
+        "case": "copied-65507-ready",
+        "status": "PASS",
+        "bytes": "65507",
+        "owned_pointer_checked": "false",
+        "recovered": "n/a",
+        "closed": "true"
+      },
+      {
+        "case": "copied-65507-full",
+        "status": "PASS",
+        "bytes": "65507",
+        "owned_pointer_checked": "false",
+        "recovered": "true",
+        "closed": "true"
+      },
+      {
+        "case": "copied-65507-closed",
+        "status": "PASS",
+        "bytes": "65507",
+        "owned_pointer_checked": "false",
+        "recovered": "n/a",
+        "closed": "true"
+      },
+      {
+        "case": "owned-1200-ready",
+        "status": "PASS",
+        "bytes": "1200",
+        "owned_pointer_checked": "true",
+        "recovered": "n/a",
+        "closed": "true"
+      },
+      {
+        "case": "owned-1200-full",
+        "status": "PASS",
+        "bytes": "1200",
+        "owned_pointer_checked": "true",
+        "recovered": "true",
+        "closed": "true"
+      },
+      {
+        "case": "owned-1200-closed",
+        "status": "PASS",
+        "bytes": "1200",
+        "owned_pointer_checked": "true",
+        "recovered": "n/a",
+        "closed": "true"
+      }
+    ],
+    "candidate": [
+      {
+        "case": "copied-64-ready",
+        "status": "PASS",
+        "bytes": "64",
+        "owned_pointer_checked": "false",
+        "recovered": "n/a",
+        "closed": "true"
+      },
+      {
+        "case": "copied-64-full",
+        "status": "PASS",
+        "bytes": "64",
+        "owned_pointer_checked": "false",
+        "recovered": "true",
+        "closed": "true"
+      },
+      {
+        "case": "copied-64-closed",
+        "status": "PASS",
+        "bytes": "64",
+        "owned_pointer_checked": "false",
+        "recovered": "n/a",
+        "closed": "true"
+      },
+      {
+        "case": "copied-1200-ready",
+        "status": "PASS",
+        "bytes": "1200",
+        "owned_pointer_checked": "false",
+        "recovered": "n/a",
+        "closed": "true"
+      },
+      {
+        "case": "copied-1200-full",
+        "status": "PASS",
+        "bytes": "1200",
+        "owned_pointer_checked": "false",
+        "recovered": "true",
+        "closed": "true"
+      },
+      {
+        "case": "copied-1200-closed",
+        "status": "PASS",
+        "bytes": "1200",
+        "owned_pointer_checked": "false",
+        "recovered": "n/a",
+        "closed": "true"
+      },
+      {
+        "case": "copied-65507-ready",
+        "status": "PASS",
+        "bytes": "65507",
+        "owned_pointer_checked": "false",
+        "recovered": "n/a",
+        "closed": "true"
+      },
+      {
+        "case": "copied-65507-full",
+        "status": "PASS",
+        "bytes": "65507",
+        "owned_pointer_checked": "false",
+        "recovered": "true",
+        "closed": "true"
+      },
+      {
+        "case": "copied-65507-closed",
+        "status": "PASS",
+        "bytes": "65507",
+        "owned_pointer_checked": "false",
+        "recovered": "n/a",
+        "closed": "true"
+      },
+      {
+        "case": "owned-1200-ready",
+        "status": "PASS",
+        "bytes": "1200",
+        "owned_pointer_checked": "true",
+        "recovered": "n/a",
+        "closed": "true"
+      },
+      {
+        "case": "owned-1200-full",
+        "status": "PASS",
+        "bytes": "1200",
+        "owned_pointer_checked": "true",
+        "recovered": "true",
+        "closed": "true"
+      },
+      {
+        "case": "owned-1200-closed",
+        "status": "PASS",
+        "bytes": "1200",
+        "owned_pointer_checked": "true",
+        "recovered": "n/a",
+        "closed": "true"
+      }
+    ]
+  },
+  "allocations": {
+    "baseline": {
+      "copied-64-ready": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 64000,
+        "largest": 64
+      },
+      "copied-64-full": {
+        "iterations": 1000,
+        "allocations": 4000,
+        "reallocations": 0,
+        "bytes": 158000,
+        "largest": 64
+      },
+      "copied-64-closed": {
+        "iterations": 1000,
+        "allocations": 4000,
+        "reallocations": 0,
+        "bytes": 160000,
+        "largest": 64
+      },
+      "copied-1200-ready": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 1200000,
+        "largest": 1200
+      },
+      "copied-1200-full": {
+        "iterations": 1000,
+        "allocations": 4000,
+        "reallocations": 0,
+        "bytes": 1294000,
+        "largest": 1200
+      },
+      "copied-1200-closed": {
+        "iterations": 1000,
+        "allocations": 4000,
+        "reallocations": 0,
+        "bytes": 1296000,
+        "largest": 1200
+      },
+      "copied-65507-ready": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 65507000,
+        "largest": 65507
+      },
+      "copied-65507-full": {
+        "iterations": 1000,
+        "allocations": 4000,
+        "reallocations": 0,
+        "bytes": 65601000,
+        "largest": 65507
+      },
+      "copied-65507-closed": {
+        "iterations": 1000,
+        "allocations": 4000,
+        "reallocations": 0,
+        "bytes": 65603000,
+        "largest": 65507
+      },
+      "owned-1200-ready": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0
+      },
+      "owned-1200-full": {
+        "iterations": 1000,
+        "allocations": 3000,
+        "reallocations": 0,
+        "bytes": 94000,
+        "largest": 40
+      },
+      "owned-1200-closed": {
+        "iterations": 1000,
+        "allocations": 3000,
+        "reallocations": 0,
+        "bytes": 96000,
+        "largest": 40
+      }
+    },
+    "candidate": {
+      "copied-64-ready": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 64000,
+        "largest": 64
+      },
+      "copied-64-full": {
+        "iterations": 1000,
+        "allocations": 2000,
+        "reallocations": 0,
+        "bytes": 104000,
+        "largest": 64
+      },
+      "copied-64-closed": {
+        "iterations": 1000,
+        "allocations": 2000,
+        "reallocations": 0,
+        "bytes": 104000,
+        "largest": 64
+      },
+      "copied-1200-ready": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 1200000,
+        "largest": 1200
+      },
+      "copied-1200-full": {
+        "iterations": 1000,
+        "allocations": 2000,
+        "reallocations": 0,
+        "bytes": 1240000,
+        "largest": 1200
+      },
+      "copied-1200-closed": {
+        "iterations": 1000,
+        "allocations": 2000,
+        "reallocations": 0,
+        "bytes": 1240000,
+        "largest": 1200
+      },
+      "copied-65507-ready": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 65507000,
+        "largest": 65507
+      },
+      "copied-65507-full": {
+        "iterations": 1000,
+        "allocations": 2000,
+        "reallocations": 0,
+        "bytes": 65547000,
+        "largest": 65507
+      },
+      "copied-65507-closed": {
+        "iterations": 1000,
+        "allocations": 2000,
+        "reallocations": 0,
+        "bytes": 65547000,
+        "largest": 65507
+      },
+      "owned-1200-ready": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0
+      },
+      "owned-1200-full": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 40000,
+        "largest": 40
+      },
+      "owned-1200-closed": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 40000,
+        "largest": 40
+      }
+    }
+  },
+  "cases": {
+    "copied-64-ready": {
+      "baseline_ns": 111.4588645,
+      "candidate_ns": 111.86872,
+      "paired_percent_changes": [
+        0.955850994889551,
+        -4.365160608664665,
+        -1.1899994971101058,
+        0.17442119386119614,
+        0.7806371100682385,
+        0.26893163312895485,
+        0.4953532772130176,
+        -1.254418965460169
+      ],
+      "paired_median_percent": 0.2216764134950755
+    },
+    "copied-64-full": {
+      "baseline_ns": 112.84874049999999,
+      "candidate_ns": 88.4347535,
+      "paired_percent_changes": [
+        -21.572840991753772,
+        -20.98828066807964,
+        -21.544574178711372,
+        -21.218812793582387,
+        -22.02864523364534,
+        -21.8668312370629,
+        -22.44193386881077,
+        -21.58232932861295
+      ],
+      "paired_median_percent": -21.57758516018336
+    },
+    "copied-64-closed": {
+      "baseline_ns": 113.06187800000001,
+      "candidate_ns": 88.612348,
+      "paired_percent_changes": [
+        -21.417521951688613,
+        -22.18414490088364,
+        -20.42170409112336,
+        -22.537276988428644,
+        -21.64617056484267,
+        -21.77405431816354,
+        -21.982288175823683,
+        -21.79205167582381
+      ],
+      "paired_median_percent": -21.783052996993675
+    },
+    "copied-1200-ready": {
+      "baseline_ns": 131.447178,
+      "candidate_ns": 131.911725,
+      "paired_percent_changes": [
+        -0.314021094310446,
+        0.5592863833763895,
+        1.1719684991546853,
+        -1.437763347616683,
+        1.650589062627561,
+        2.2189801489047145,
+        -2.18395790543936,
+        -2.095864103173406
+      ],
+      "paired_median_percent": 0.12263264453297174
+    },
+    "copied-1200-full": {
+      "baseline_ns": 137.910425,
+      "candidate_ns": 113.4336135,
+      "paired_percent_changes": [
+        -17.04295697416398,
+        -16.628987302684116,
+        -17.287724583272592,
+        -17.223120155738748,
+        -17.16474362781556,
+        -20.520754590733205,
+        -18.823996834829426,
+        -20.251689501131743
+      ],
+      "paired_median_percent": -17.25542236950567
+    },
+    "copied-1200-closed": {
+      "baseline_ns": 135.539592,
+      "candidate_ns": 113.571451,
+      "paired_percent_changes": [
+        -19.01465503077693,
+        -15.881249888053494,
+        -15.538702444920006,
+        -14.576774896872614,
+        -16.262816646556534,
+        -34.28626500431544,
+        -16.008193428276172,
+        -16.511033704678745
+      ],
+      "paired_median_percent": -16.13550503741635
+    },
+    "copied-65507-ready": {
+      "baseline_ns": 1598.01885,
+      "candidate_ns": 1595.6556799999998,
+      "paired_percent_changes": [
+        -0.6581142327794831,
+        0.3601730913893375,
+        -0.2931749135636985,
+        0.2782947931759372,
+        0.0013701993619497088,
+        -2.5923258305331265,
+        -1.081283887774076,
+        -1.5800482259772153
+      ],
+      "paired_median_percent": -0.4756445731715908
+    },
+    "copied-65507-full": {
+      "baseline_ns": 1588.205545,
+      "candidate_ns": 1558.5497500000001,
+      "paired_percent_changes": [
+        -1.7234781002984034,
+        -1.1686730485905183,
+        -1.7936679660628174,
+        -1.263339184791401,
+        -3.3107781008800297,
+        3.0599775732380374,
+        -2.0435817386720734,
+        -3.3172717105708904
+      ],
+      "paired_median_percent": -1.7585730331806104
+    },
+    "copied-65507-closed": {
+      "baseline_ns": 1576.9352749999998,
+      "candidate_ns": 1548.47558,
+      "paired_percent_changes": [
+        -1.9432347974718822,
+        -1.3017725181170614,
+        -1.868137662737046,
+        -1.5095300244726717,
+        -1.513406150583907,
+        -4.027504180044417,
+        -1.6528536345221445,
+        -3.032125570033972
+      ],
+      "paired_median_percent": -1.7604956486295953
+    },
+    "owned-1200-ready": {
+      "baseline_ns": 99.1093055,
+      "candidate_ns": 99.32827599999999,
+      "paired_percent_changes": [
+        2.0899441988463385,
+        0.15824769830539154,
+        0.019594878190209997,
+        0.14272132025863193,
+        0.2836433094841606,
+        -0.4616654345750981,
+        0.14987953414655752,
+        0.17248499732065437
+      ],
+      "paired_median_percent": 0.15406361622597453
+    },
+    "owned-1200-full": {
+      "baseline_ns": 97.46674300000001,
+      "candidate_ns": 76.8514855,
+      "paired_percent_changes": [
+        -20.526752218235234,
+        -20.16743892527724,
+        -24.675784019535797,
+        -20.733635989778954,
+        -20.570634849867233,
+        -25.142192255305318,
+        -21.439307631369065,
+        -22.179842719898367
+      ],
+      "paired_median_percent": -21.08647181057401
+    },
+    "owned-1200-closed": {
+      "baseline_ns": 97.72356350000001,
+      "candidate_ns": 76.658475,
+      "paired_percent_changes": [
+        -20.382567285625143,
+        -20.493171521958097,
+        -24.19451469044729,
+        -21.501525717026638,
+        -20.763020636285255,
+        -23.55514974690678,
+        -21.384595547067654,
+        -44.979657253929126
+      ],
+      "paired_median_percent": -21.443060632047146
+    }
+  },
+  "max_host_steal_fraction": 0.0
+}

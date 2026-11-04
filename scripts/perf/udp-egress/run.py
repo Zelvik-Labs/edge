@@ -39,6 +39,10 @@ def build():
     (source / 'common.rs').write_text(baseline[start:end] + '\n' + clock)
     old = baseline[end:baseline.index('fn udp_socket_downstream(', end)]
     new = (ROOT / 'benches/support/udp_egress_candidate.rs').read_text()
+    integrated = (ROOT / 'src/udp_proxy.rs').read_text()
+    marker = '// Zero-sized error payloads keep the existing Display and Debug text.'
+    assert integrated[integrated.index(marker):integrated.index('fn udp_socket_downstream(')].strip() == new.strip()
+    (source / 'integrated-full.rs').write_text(integrated)
     methods = '''
 impl Sender for ChannelUdpDownstreamSender {
     fn new(listen_addr: SocketAddr, tx: mpsc::Sender<DownstreamUdpDatagram>) -> Self { Self { listen_addr, tx } }
@@ -118,6 +122,12 @@ def verify():
         assert sha(OUT / name) == expected
     for name, expected in metadata['sources'].items():
         assert sha(OUT / 'source' / name) == expected
+    integrated = (OUT / 'source/integrated-full.rs').read_text()
+    marker = '// Zero-sized error payloads keep the existing Display and Debug text.'
+    actual = integrated[integrated.index(marker):integrated.index('fn udp_socket_downstream(')].strip()
+    candidate = (OUT / 'source/candidate.rs').read_text()
+    assert candidate.startswith('use super::*;\n')
+    assert candidate.removeprefix('use super::*;\n').split('\nimpl Sender for ', 1)[0].strip() == actual
     controls, allocations = {}, {}
     for variant in ['baseline', 'candidate']:
         controls[variant] = read(OUT / (variant + '-controls.tsv'))
