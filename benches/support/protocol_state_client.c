@@ -8,6 +8,9 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef EDGE_QUIC_DIAGNOSTICS
+#include "quic_client_diagnostics.h"
+#endif
 
 typedef struct {
     CURL *easy;
@@ -16,6 +19,9 @@ typedef struct {
     size_t payload_size, received;
     int invalid_body;
     char error[CURL_ERROR_SIZE];
+#ifdef EDGE_QUIC_DIAGNOSTICS
+    QuicDiagnostic diagnostic;
+#endif
 } Transfer;
 
 static double monotonic(void) {
@@ -117,6 +123,15 @@ int main(int argc, char **argv) {
         SET(t->easy,CURLOPT_WRITEDATA,t);
         SET(t->easy,CURLOPT_PRIVATE,t);
         SET(t->easy,CURLOPT_ERRORBUFFER,t->error);
+#ifdef EDGE_QUIC_DIAGNOSTICS
+        t->diagnostic.bytes = malloc(DIAG_CAPACITY);
+        if (!t->diagnostic.bytes) { perror("diagnostic buffer"); return 2; }
+        SET(t->easy,CURLOPT_SSL_CTX_FUNCTION,diagnostic_context);
+        SET(t->easy,CURLOPT_SSL_CTX_DATA,&t->diagnostic);
+        SET(t->easy,CURLOPT_VERBOSE,1L);
+        SET(t->easy,CURLOPT_DEBUGFUNCTION,diagnostic_debug);
+        SET(t->easy,CURLOPT_DEBUGDATA,&t->diagnostic);
+#endif
         if (!request_limit || issued<request_limit) {
             int n=unique ? snprintf(t->url,sizeof(t->url),"%s/%ld-%ld",url,(long)getpid(),issued) :
                            snprintf(t->url,sizeof(t->url),"%s",url);
@@ -151,6 +166,9 @@ int main(int argc, char **argv) {
             if (result && completed-good<64) {
                 fprintf(stderr,"transfer_error curl=%d http=%ld connection=%lld detail=%s\n",
                         result,code,(long long)connection_id,t->error);
+#ifdef EDGE_QUIC_DIAGNOSTICS
+                diagnostic_dump(&t->diagnostic,connection_id);
+#endif
             }
             completed++; new_connections+=connects;
             if (!result && code==200 && actual_version==version) good++;
@@ -160,6 +178,9 @@ int main(int argc, char **argv) {
             multi_option(curl_multi_remove_handle(multi,t->easy)); active--;
             if ((request_limit && issued<request_limit) || (!request_limit && monotonic()<deadline)) {
                 t->received=0; t->invalid_body=0; t->error[0]='\0';
+#ifdef EDGE_QUIC_DIAGNOSTICS
+                t->diagnostic.used=0; t->diagnostic.dropped=0; t->diagnostic.current_closes=0;
+#endif
                 int n=unique ? snprintf(t->url,sizeof(t->url),"%s/%ld-%ld",url,(long)getpid(),issued) :
                                snprintf(t->url,sizeof(t->url),"%s",url);
                 if (n<0 || (size_t)n>=sizeof(t->url)) { fprintf(stderr,"URL too long\n"); return 2; }
@@ -172,7 +193,21 @@ int main(int argc, char **argv) {
     double elapsed=monotonic()-started;
     fprintf(stderr,"{\"completed\":%ld,\"http200_valid_body\":%ld,\"new_connections\":%ld,\"seconds\":%.9f}\n",
             completed,good,new_connections,elapsed);
+#ifdef EDGE_QUIC_DIAGNOSTICS
+    uint64_t contexts=0, messages=0, frames=0, closes=0;
+    for (long i=0;i<connections;i++) {
+        contexts+=slots[i].diagnostic.contexts;
+        messages+=slots[i].diagnostic.messages;
+        frames+=slots[i].diagnostic.frames;
+        closes+=slots[i].diagnostic.closes;
+    }
+    fprintf(stderr,"quic_diagnostic_summary contexts=%" PRIu64 " messages=%" PRIu64 " frames=%" PRIu64 " close_frames=%" PRIu64 "\n",
+            contexts,messages,frames,closes);
+#endif
     for (long i=0;i<connections;i++) curl_easy_cleanup(slots[i].easy);
+#ifdef EDGE_QUIC_DIAGNOSTICS
+    for (long i=0;i<connections;i++) free(slots[i].diagnostic.bytes);
+#endif
     free(slots); curl_multi_cleanup(multi); curl_global_cleanup(); free(payload);
     return 0;
 }
