@@ -65,7 +65,7 @@ def run():
     bins = ROOT / '.local/architecture-profile-binaries'
     suite = dict(source=subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
         orders=ORDERS, runs=[], event=EVENT, period=PERIOD, record_seconds=RECORD_SECONDS,
-        scope='bounded 100ms futex callsite windows of fixed ba474 Edge during 20s load; raw payload excluded; no CPU, wait time or capacity attribution',
+        scope='bounded 100ms futex callsite windows after both native clients publish completion records during 20s load; fixed ba474 Edge; raw payload excluded; no CPU, wait time or capacity attribution',
         source_hashes={name: original.sha(ROOT / name) for name in ['scripts/perf/profile_architecture.py',
             'scripts/perf/futex-sampled/evidence.py']})
     (PRIVATE / 'suite.json').write_text(json.dumps(suite, indent=2) + '\n')
@@ -121,6 +121,11 @@ def verify():
             assert command.index('-c') > command.index('-e')
             assert command[command.index('-c') + 1] == str(PERIOD)
             assert command[-1] == str(RECORD_SECONDS)
+            window = json.loads(Path(str(stem) + '.perf-load-window.json').read_text())
+            assert window['complete'] and window['exit'] == 0
+            assert window['stopped_monotonic_ns'] > window['started_monotonic_ns']
+            assert len(window['client_record_paths']) == len(window['bytes_before']) == len(window['bytes_after']) == 2
+            assert all(b > a > 0 for a, b in zip(window['bytes_before'], window['bytes_after']))
             for suffix in ['.perf-preflight.txt', '.perf-effective.txt']:
                 driver.verify_effective_period(Path(str(stem) + suffix).read_text(), PERIOD)
             rows.append(row)
@@ -139,7 +144,7 @@ def collect():
     path = PUBLIC / 'retained-manifest.json'
     manifest = json.loads(path.read_text())
     for source in PRIVATE.rglob('*'):
-        if source.is_file() and (source.name == 'verified-futex-sampled.json' or source.name.endswith(('.perf-preflight.txt', '.perf-effective.txt', '.perf-preflight.log'))):
+        if source.is_file() and (source.name == 'verified-futex-sampled.json' or source.name.endswith(('.perf-preflight.txt', '.perf-effective.txt', '.perf-preflight.log', '.perf-load-window.json'))):
             relative = source.relative_to(PRIVATE)
             output = PUBLIC / relative
             output.parent.mkdir(parents=True, exist_ok=True)

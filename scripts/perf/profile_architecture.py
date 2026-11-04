@@ -5,11 +5,14 @@ These instrumented runs diagnose CPU cost; they are not capacity results.
 Raw perf.data (which includes stack memory) stays under the ignored output tree.
 """
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import importlib.util
 import json
 from pathlib import Path
 import re
 import subprocess
+import threading
+import time
 
 
 spec = importlib.util.spec_from_file_location(
@@ -100,15 +103,46 @@ def main(options):
             effective += '\n' + original_docker('exec', target, 'perf', 'evlist', '-F', '-i', remote + '.preflight.perf.data')
             Path(str(stem) + '.perf-preflight.txt').write_text(effective + '\n')
             verify_effective_period(effective, options.period)
-        with Path(str(stem) + '.perf-record.log').open('x') as log:
-            recorder = subprocess.Popen(command, env=matrix.ENV, stdout=log,
-                                        stderr=subprocess.STDOUT)
-            try:
-                result = original_client(args, protocol, state, connection, url, ca, stem)
-            finally:
-                code = recorder.wait(timeout=options.seconds + 10)
-            if code:
-                raise RuntimeError('perf record failed; see instrumented run log')
+        if options.event == 'syscalls:sys_enter_futex':
+            client_ended = threading.Event()
+
+            def capture_after_client_progress():
+                paths = [stem.with_suffix(f'.{shard}.client.tsv') for shard in range(2)]
+                deadline = time.monotonic() + options.seconds
+                while not all(path.exists() and path.stat().st_size > 0 for path in paths):
+                    assert not client_ended.is_set(), 'client ended before completing records'
+                    assert time.monotonic() < deadline, 'client never published completion records'
+                    time.sleep(.002)
+                before = [path.stat().st_size for path in paths]
+                window = dict(client_record_paths=[path.name for path in paths], bytes_before=before,
+                    started_monotonic_ns=time.monotonic_ns(), complete=False)
+                matrix.write(Path(str(stem) + '.perf-load-window.json'), window)
+                with Path(str(stem) + '.perf-record.log').open('x') as log:
+                    recorder = subprocess.Popen(command, env=matrix.ENV, stdout=log, stderr=subprocess.STDOUT)
+                    code = recorder.wait(timeout=options.seconds + 10)
+                after = [path.stat().st_size for path in paths]
+                window.update(bytes_after=after, stopped_monotonic_ns=time.monotonic_ns(), exit=code,
+                    complete=code == 0 and all(b > a > 0 for a, b in zip(before, after)))
+                matrix.write(Path(str(stem) + '.perf-load-window.json'), window)
+                assert window['complete'], 'capture failed or client records did not grow during its lifetime'
+
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                capture = executor.submit(capture_after_client_progress)
+                try:
+                    result = original_client(args, protocol, state, connection, url, ca, stem)
+                finally:
+                    client_ended.set()
+                    capture.result(timeout=options.seconds + 10)
+        else:
+            with Path(str(stem) + '.perf-record.log').open('x') as log:
+                recorder = subprocess.Popen(command, env=matrix.ENV, stdout=log,
+                                            stderr=subprocess.STDOUT)
+                try:
+                    result = original_client(args, protocol, state, connection, url, ca, stem)
+                finally:
+                    code = recorder.wait(timeout=options.seconds + 10)
+                if code:
+                    raise RuntimeError('perf record failed; see instrumented run log')
         if options.event == 'syscalls:sys_enter_futex':
             effective = original_docker('exec', target, 'perf', 'evlist', '-v', '-i', remote + '.perf.data')
             effective += '\n' + original_docker('exec', target, 'perf', 'evlist', '-F', '-i', remote + '.perf.data')
