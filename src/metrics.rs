@@ -1910,25 +1910,18 @@ pub mod record {
             return;
         }
 
-        let analyzed_owned;
-        let analyzed = if let Some(ref analyzed) = event.analyzed {
+        let analyzed = if let Some(analyzed) = event.analyzed {
             analyzed
+        } else if event.category.as_ref() == METRIC_CATEGORY_HTTP
+            || event.plan.needs_analysis_for(&event.category)
+        {
+            crate::metrics::analyzer::analyze_request(event.client_ip, event.user_agent.as_ref())
         } else {
-            analyzed_owned = if event.category.as_ref() == METRIC_CATEGORY_HTTP
-                || event.plan.needs_analysis_for(&event.category)
-            {
-                crate::metrics::analyzer::analyze_request(
-                    event.client_ip,
-                    event.user_agent.as_ref(),
-                )
-            } else {
-                crate::metrics::analyzer::without_analysis()
-            };
-            &analyzed_owned
+            crate::metrics::analyzer::without_analysis()
         };
 
         let (country, country_id, province, province_id, city, city_id, provider) =
-            analyzed.geo.as_ref().map_or_else(
+            analyzed.geo.map_or_else(
                 || {
                     (
                         Arc::clone(&EMPTY_ARC_STR),
@@ -1942,13 +1935,13 @@ pub mod record {
                 },
                 |geo| {
                     (
-                        geo.country.clone(),
+                        geo.country,
                         geo.country_id,
-                        geo.region.clone(),
+                        geo.region,
                         geo.region_id,
-                        geo.city.clone(),
+                        geo.city,
                         geo.city_id,
-                        geo.provider.clone(),
+                        geo.provider,
                     )
                 },
             );
@@ -1959,26 +1952,27 @@ pub mod record {
         } else {
             0
         };
+        // This worker owns the event and analysis. Custom projections borrow
+        // these dimensions before the built-in aggregator takes ownership.
+        let is_attack = event.waf_action.is_some();
         let dimensions = crate::metrics::projection::ResolvedDimensions {
-            country: Arc::clone(&country),
+            country,
             country_id,
-            province: Arc::clone(&province),
+            province,
             province_id,
-            city: Arc::clone(&city),
+            city,
             city_id,
-            provider: Arc::clone(&provider),
+            provider,
             provider_id,
-            browser: analyzed.browser.clone(),
-            browser_version: analyzed.browser_version.clone(),
-            os: analyzed.os.clone(),
-            os_version: analyzed.os_version.clone(),
+            browser: analyzed.browser,
+            browser_version: analyzed.browser_version,
+            os: analyzed.os,
+            os_version: analyzed.os_version,
             waf_group_id: event.waf_group_id,
             waf_action: event
                 .waf_action
-                .clone()
                 .unwrap_or_else(|| Arc::clone(&EMPTY_ARC_STR)),
         };
-        let is_attack = event.waf_action.is_some();
 
         // Custom metric projections: only enabled items of this category, only
         // variables the item actually references, and captured under the plan
@@ -2011,16 +2005,16 @@ pub mod record {
 
         if event.category.as_ref() == crate::metrics::METRIC_CATEGORY_HTTP {
             let key = crate::metrics::aggregator::AggregationKey {
-                category: event.category.clone(),
+                category: event.category,
                 server_id: event.server_id,
                 window_start: event.event_time_millis.div_euclid(60_000) * 60,
-                country,
+                country: dimensions.country,
                 country_id,
-                province,
+                province: dimensions.province,
                 province_id,
-                city,
+                city: dimensions.city,
                 city_id,
-                provider,
+                provider: dimensions.provider,
                 browser: dimensions.browser,
                 os: dimensions.os,
                 waf_group_id: event.waf_group_id,
