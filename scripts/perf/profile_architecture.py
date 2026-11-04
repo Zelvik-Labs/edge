@@ -88,12 +88,12 @@ def main(options):
         command = [*matrix.DOCKER, 'exec', target, 'perf', 'record', *sampling,
                    '-e', event, *event_options, '--call-graph',
                    'dwarf,32768', '-p', ','.join(map(str, pids)), '-o', remote + '.perf.data',
-                   '--', 'sleep', str(options.seconds)]
+                   '--', 'sleep', str(options.record_seconds or options.seconds)]
         matrix.write(Path(str(stem) + '.perf-command.json'), command)
         if options.event == 'syscalls:sys_enter_futex':
             preflight = command.copy()
             preflight[preflight.index('-o') + 1] = remote + '.preflight.perf.data'
-            preflight[-1] = '.1'
+            preflight[-1] = '.01'
             with Path(str(stem) + '.perf-preflight.log').open('w') as log:
                 subprocess.run(preflight, env=matrix.ENV, stdout=log, stderr=subprocess.STDOUT, check=True)
             effective = original_docker('exec', target, 'perf', 'evlist', '-v', '-i', remote + '.preflight.perf.data')
@@ -143,6 +143,7 @@ def main(options):
         states=options.states, connections=['reuse'], multiplex=False, seed=20261102,
         experiment='instrumented ' + options.event + ' call chains; exclude from capacity comparison',
         profile_event=options.event, profile_period=options.period if options.event != 'cpu-clock:u' else None,
+        profile_record_seconds=options.record_seconds or options.seconds,
         client_source_revision='a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a',
         edge_image=options.profiler_image if options.target in {'edge', 'pingora'} else options.edge_image,
         profiler_image=options.profiler_image,
@@ -164,6 +165,7 @@ if __name__ == '__main__':
     parser.add_argument('--frequency', type=int, default=199)
     parser.add_argument('--event', choices=['cpu-clock:u', 'syscalls:sys_enter_futex'], default='cpu-clock:u')
     parser.add_argument('--period', type=int, default=64)
+    parser.add_argument('--record-seconds', type=float)
     parser.add_argument('--seconds', type=int, default=15)
     parser.add_argument('--cold-requests', type=int, default=8192)
     parser.add_argument('--timed-misses', action='store_true', help='Use the same timed client window for unique MISS requests')
