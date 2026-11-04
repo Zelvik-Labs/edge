@@ -11,6 +11,7 @@ import shutil
 import statistics
 import subprocess
 import tempfile
+import traceback
 import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -229,9 +230,9 @@ def inspect(label, run, source, kind, summary_name, header_hashes, temporary, de
         helpers.mkdir(parents=True)
         shutil.copy2(tree / 'scripts/perf/http-state/verify.py', helpers / 'http_verify.py')
         shutil.copy2(tree / 'scripts/perf/summarize_architecture.py', helpers / 'profile_summary.py')
-        rebuilt = wrapper.inspect(work, helpers, False)
+        rebuilt = json.loads(json.dumps(wrapper.inspect(work, helpers, False)))
         stored = json.loads((original / summary_name).read_text())
-        assert stored['source'] == source and stored['cells'] == rebuilt['complete_cells'] == 24
+        assert stored['source'] == source and stored['complete_cells'] == rebuilt['complete_cells'] == 24
         assert stored['successful'] == rebuilt['successful'] and stored['samples'] == rebuilt['samples']
         assert stored['failed'] == stored['lost_samples'] == rebuilt['lost_samples'] == 0
         def key(row):
@@ -293,14 +294,23 @@ def inspect(label, run, source, kind, summary_name, header_hashes, temporary, de
 def main():
     OUT.mkdir(parents=True, exist_ok=False)
     output = []
+    failures = []
     deadline = time.monotonic() + 40 * 60
     with tempfile.TemporaryDirectory() as folder:
         temporary = Path(folder)
         header, _ = download(41757321970, '4171ea700386d8ed7c755255c7eeccb7e804d644', 'header-node-binaries-', temporary)
         inputs = input_hashes(header)
         for spec in SPECS:
-            output.append(inspect(*spec, inputs, temporary, deadline))
-    write(OUT / 'verification.json', dict(results=output, all_completed=True,
+            try:
+                output.append(inspect(*spec, inputs, temporary, deadline))
+            except Exception as error:
+                failure = dict(label=spec[0], run=spec[1], source=spec[2],
+                               error_type=type(error).__name__, error=str(error))
+                failures.append(failure)
+                write(OUT / 'runs' / spec[0] / 'review-failure.json', failure)
+                traceback.print_exc()
+                print('PERF_REVIEW_FAILURE ' + json.dumps(failure), flush=True)
+    write(OUT / 'verification.json', dict(results=output, failures=failures, all_completed=not failures,
         scope='original archives, immutable verifier sources, actual input ELF bytes and complete retained HTTP records; no performance rerun or deployment'))
     lines = ['# Retained performance evidence review', '',
              'ZIP/API digests, source-pinned verifiers, fixed input ELFs and retained transfer records were checked. Original failures are never replaced by retries.', '']
@@ -316,10 +326,16 @@ def main():
         if 'groups' in result:
             lines.append(json.dumps(result['groups']))
             lines += ['', 'Short event windows identify callers only; event attributes do not establish delivery decimation or CPU/response percentages.', '']
+    if failures:
+        lines += ['## Failed reviews', '']
+        for failure in failures:
+            lines += [f"- {failure['label']}: {failure['error_type']}: {failure['error']}", '']
     report = '\n'.join(lines) + '\n'
     (OUT / 'report.md').write_text(report)
     with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as summary:
         summary.write(report)
+    if failures:
+        raise RuntimeError(f'{len(failures)} evidence reviews failed; original archives and per-stage failures retained')
 
 
 if __name__ == '__main__':
