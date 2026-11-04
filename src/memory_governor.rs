@@ -6,6 +6,9 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
+mod snapshot_sequence;
+use snapshot_sequence::SnapshotSequence;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AdmissionClass {
     HttpConnection,
@@ -978,6 +981,7 @@ pub struct MemoryGovernor {
     cached_fd_used: AtomicU64,
     cached_fd_used_at_millis: AtomicU64,
     cached_at_millis: AtomicU64,
+    snapshot_sequence: SnapshotSequence,
     /// True only on the process-global `MEMORY_GOVERNOR`: a dedicated
     /// refresher thread republishes the snapshot every SNAPSHOT_TTL_MS,
     /// so readers serve the cache up to SNAPSHOT_HARD_STALE_MS old
@@ -989,8 +993,8 @@ pub struct MemoryGovernor {
     /// (refresher-internal reads excluded via `MEMGOV_REFRESHING`).
     /// Drives the refresher's idle backoff.
     snapshot_consumer_at_millis: AtomicU64,
-    /// Serializes cache refreshers; readers use `cached_at_millis` as a
-    /// seqlock version (0 = update in progress).
+    /// Serializes refreshers; readers validate the independent snapshot
+    /// sequence. The timestamp is only the freshness clock.
     snapshot_update: Mutex<()>,
     cached_cgroup_managed: AtomicU64,
     cached_cgroup_memory_max_bytes: AtomicU64,
@@ -1552,6 +1556,7 @@ impl MemoryGovernor {
             cached_fd_used: AtomicU64::new(0),
             cached_fd_used_at_millis: AtomicU64::new(0),
             cached_at_millis: AtomicU64::new(0),
+            snapshot_sequence: SnapshotSequence::new(),
             refresher_owned: AtomicBool::new(false),
             snapshot_consumer_at_millis: AtomicU64::new(0),
             snapshot_update: Mutex::new(()),
@@ -2044,6 +2049,8 @@ impl MemoryGovernor {
         fd_used: u64,
         now_ms: u64,
     ) {
+        let _update = lock_recover(&self.snapshot_update);
+        let version = self.snapshot_sequence.begin_write();
         self.cached_total_bytes
             .store(total_bytes, Ordering::Release);
         self.cached_used_bytes.store(
@@ -2062,6 +2069,7 @@ impl MemoryGovernor {
         self.cached_fd_used_at_millis
             .store(now_ms, Ordering::Release);
         self.cached_at_millis.store(now_ms, Ordering::Release);
+        self.snapshot_sequence.finish_write(version);
         self.cached_generation.fetch_add(1, Ordering::Release);
     }
 
@@ -3713,29 +3721,30 @@ impl MemoryGovernor {
         );
     }
 
+    #[inline]
+    fn try_cached_memory_snapshot(&self, now: i64) -> Option<BudgetedMemorySnapshot> {
+        let version = self.snapshot_sequence.begin_read()?;
+        let cached_at = self.cached_at_millis.load(Ordering::Acquire) as i64;
+        if !self.snapshot_usable(now, cached_at) {
+            return None;
+        }
+        let mem = self.budgeted_from_cached();
+        self.snapshot_sequence.read_valid(version).then_some(mem)
+    }
+
     fn memory_snapshot(&self) -> BudgetedMemorySnapshot {
         self.note_snapshot_consumer();
         let now = crate::utils::time::system_timestamp_millis();
-        let cached_at = self.cached_at_millis.load(Ordering::Acquire) as i64;
-        if self.snapshot_usable(now, cached_at) {
-            let mem = self.budgeted_from_cached();
-            // Seqlock validation: a writer marks the timestamp 0 while it
-            // updates the fields, so if it changed mid-read this snapshot is
-            // torn — take the refresh path instead of returning it.
-            if self.cached_at_millis.load(Ordering::Acquire) as i64 == cached_at {
-                notify_pressure_reclaim(memory_pressure_level(&mem));
-                return mem;
-            }
+        if let Some(mem) = self.try_cached_memory_snapshot(now) {
+            notify_pressure_reclaim(memory_pressure_level(&mem));
+            return mem;
         }
 
-        // Serialize refreshers: without this lock, two readers that both see
-        // an expired TTL can interleave their per-field stores and leave a
-        // permanently torn cached snapshot until the next refresh.
+        // The writer mutex also lets a refresh recover a publication that
+        // panicked with an odd sequence. A fresh timestamp alone is not enough.
         let _update = lock_recover(&self.snapshot_update);
         let now = crate::utils::time::system_timestamp_millis();
-        let cached_at = self.cached_at_millis.load(Ordering::Relaxed) as i64;
-        if self.snapshot_usable(now, cached_at) {
-            let mem = self.budgeted_from_cached();
+        if let Some(mem) = self.try_cached_memory_snapshot(now) {
             notify_pressure_reclaim(memory_pressure_level(&mem));
             return mem;
         }
@@ -3755,8 +3764,9 @@ impl MemoryGovernor {
             .account_committed_unconfirmed_bytes
             .load(Ordering::Acquire);
         let snapshot = read_memory_snapshot();
-        // Mark the update in progress before storing fields so concurrent
-        // seqlock readers detect the tear and retry.
+        // A separate sequence cannot repeat just because two samples have
+        // the same millisecond. Its fences publish the relaxed atomic fields.
+        let version = self.snapshot_sequence.begin_write();
         self.cached_at_millis.store(0, Ordering::Relaxed);
         self.cached_total_bytes
             .store(snapshot.total_bytes, Ordering::Relaxed);
@@ -3811,6 +3821,7 @@ impl MemoryGovernor {
         self.cached_psi_full_avg10_x100
             .store(snapshot.psi_full_avg10_x100 as u64, Ordering::Relaxed);
         self.cached_at_millis.store(now as u64, Ordering::Relaxed);
+        self.snapshot_sequence.finish_write(version);
         // New inputs → new limits epoch. Acquirers pair this with the
         // Acquire load in `limits()` so a rebuilt table is never stamped
         // with a generation older than its inputs.
@@ -5548,6 +5559,105 @@ fn read_current_fd_count() -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snapshot_publication_rejects_partial_fields_and_same_millisecond_aba() {
+        let governor = MemoryGovernor::new();
+        let now = crate::utils::time::system_timestamp_millis();
+        governor.seed_cached_for_test(64 << 30, 32 << 30, 1024, 4, now as u64);
+        let old_version = governor.snapshot_sequence.begin_read().unwrap();
+        let _update = lock_recover(&governor.snapshot_update);
+        let version = governor.snapshot_sequence.begin_write();
+        governor
+            .cached_used_bytes
+            .store(48 << 30, Ordering::Relaxed);
+        assert!(governor.try_cached_memory_snapshot(now).is_none());
+        governor
+            .cached_available_bytes
+            .store(16 << 30, Ordering::Relaxed);
+        governor.snapshot_sequence.finish_write(version);
+        assert_eq!(
+            governor.cached_at_millis.load(Ordering::Relaxed),
+            now as u64
+        );
+        assert!(!governor.snapshot_sequence.read_valid(old_version));
+        let published = governor.try_cached_memory_snapshot(now).unwrap();
+        assert_eq!(published.total_bytes, 64 << 30);
+        assert_eq!(published.used_bytes, 48 << 30);
+        assert_eq!(published.available_bytes, 16 << 30);
+        governor.invalidate_snapshot_cache();
+        assert!(governor.try_cached_memory_snapshot(now).is_none());
+    }
+
+    #[test]
+    fn snapshot_refresh_recovers_interrupted_publication_despite_fresh_timestamp() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(64 << 30, 32 << 30, 1024, 4, i64::MAX as u64);
+        {
+            let _update = lock_recover(&governor.snapshot_update);
+            let _unfinished = governor.snapshot_sequence.begin_write();
+            governor
+                .cached_total_bytes
+                .store(u64::MAX, Ordering::Relaxed);
+        }
+        // The mutex is available and the timestamp still looks fresh, but the
+        // half-written fields must force an actual refresh before returning.
+        let recovered = governor.memory_snapshot();
+        assert_ne!(recovered.total_bytes, u64::MAX);
+        assert!(governor.snapshot_sequence.begin_read().is_some());
+    }
+
+    #[test]
+    fn concurrent_cached_snapshots_keep_total_used_and_available_in_one_publication() {
+        let governor = std::sync::Arc::new(MemoryGovernor::new());
+        governor.seed_cached_for_test(64 << 30, 32 << 30, 1024, 4, i64::MAX as u64);
+        let start = std::sync::Arc::new(std::sync::Barrier::new(5));
+        let readers: Vec<_> = (0..4)
+            .map(|_| {
+                let governor = governor.clone();
+                let start = start.clone();
+                std::thread::spawn(move || {
+                    start.wait();
+                    for _ in 0..10_000 {
+                        if let Some(snapshot) = governor.try_cached_memory_snapshot(1) {
+                            assert_eq!(
+                                snapshot.total_bytes,
+                                snapshot.used_bytes + snapshot.available_bytes
+                            );
+                            assert!(
+                                snapshot.total_bytes == 64 << 30
+                                    || snapshot.total_bytes == 16 << 30
+                            );
+                        }
+                    }
+                })
+            })
+            .collect();
+        start.wait();
+        for update in 0..10_000 {
+            let _guard = lock_recover(&governor.snapshot_update);
+            let version = governor.snapshot_sequence.begin_write();
+            let (total, used, available) = if update % 2 == 0 {
+                (16 << 30, 12 << 30, 4 << 30)
+            } else {
+                (64 << 30, 32 << 30, 32 << 30)
+            };
+            governor.cached_total_bytes.store(total, Ordering::Relaxed);
+            governor.cached_used_bytes.store(used, Ordering::Relaxed);
+            governor
+                .cached_available_bytes
+                .store(available, Ordering::Relaxed);
+            governor.snapshot_sequence.finish_write(version);
+        }
+        for reader in readers {
+            reader.join().unwrap();
+        }
+        let final_snapshot = governor.try_cached_memory_snapshot(1).unwrap();
+        assert_eq!(
+            final_snapshot.total_bytes,
+            final_snapshot.used_bytes + final_snapshot.available_bytes
+        );
+    }
 
     fn borrowing_inputs() -> BorrowingInputs {
         BorrowingInputs {

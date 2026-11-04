@@ -31,6 +31,10 @@ def run():
     source.mkdir()
     for name in ['snapshot_sequence_candidate.rs', 'snapshot_sequence_probe.rs', 'snapshot_sequence_model.rs']:
         shutil.copy2(ROOT / 'benches/support' / name, source / name)
+    integrated = (ROOT / 'src/memory_governor/snapshot_sequence.rs').read_text()
+    assert integrated == 'use std::sync::atomic::{AtomicU64, Ordering, fence};\n\n' + (source / 'snapshot_sequence_candidate.rs').read_text()
+    (source / 'integrated-sequence.rs').write_text(integrated)
+    shutil.copy2(ROOT / 'src/memory_governor.rs', source / 'integrated-memory-governor.rs')
     original = subprocess.check_output(['git', 'show', 'fa66baeda0486ae8c993f9591138855c23600e86:src/memory_governor.rs'], text=True)
     (source / 'original-memory-governor.rs').write_text(original)
     assert 'if self.cached_at_millis.load(Ordering::Acquire) as i64 == cached_at' in original
@@ -90,11 +94,13 @@ def verify():
         assert sha(OUT / 'source' / name) == expected
     for name, expected in metadata['binaries'].items():
         assert sha(OUT / name) == expected
+    assert (OUT / 'source/integrated-sequence.rs').read_text() == 'use std::sync::atomic::{AtomicU64, Ordering, fence};\n\n' + (OUT / 'source/snapshot_sequence_candidate.rs').read_text()
     assert metadata['model_exit'] == 0
     models = [json.loads(line) for line in (OUT / 'models.jsonl').read_text().splitlines()]
     assert models[:2] == [{'case': 'timestamp-ABA', 'expected_counterexample': True},
                           {'case': 'version-without-fences', 'expected_counterexample': True}]
     assert len(models) == 4
+    assert (OUT / 'models.log').read_text().count('accepted torn snapshot') == 2
     for row, writers, bound in zip(models[2:], [1, 2], [None, 2]):
         assert row['case'] == 'versioned' and row['writers'] == writers and row['preemption_bound'] == bound and row['schedules'] > 0
     assert (OUT / 'controls.tsv').read_text().splitlines() == [

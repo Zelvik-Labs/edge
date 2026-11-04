@@ -91,7 +91,16 @@ fn main() {
         ("version-without-fences", Protocol::Unfenced),
     ] {
         let failure = std::panic::catch_unwind(|| check(protocol, 1));
-        assert!(failure.is_err(), "negative control did not expose {name}");
+        let failure = failure.expect_err("negative control must expose a torn snapshot");
+        let message = failure
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| failure.downcast_ref::<&str>().copied())
+            .expect("negative control must return an assertion message");
+        assert!(
+            message.contains("accepted torn snapshot"),
+            "unexpected failure in {name}: {message}"
+        );
         println!("{{\"case\":\"{name}\",\"expected_counterexample\":true}}");
     }
     for writers in [1, 2] {

@@ -7,6 +7,8 @@ on:
       - benches/support/snapshot_sequence_*.rs
       - scripts/perf/snapshot-sequence/**
       - .github/workflows/snapshot-sequence.yml
+      - src/memory_governor/snapshot_sequence.rs
+      - src/memory_governor.rs
 permissions:
   contents: read
 concurrency:
