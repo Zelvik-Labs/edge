@@ -35,10 +35,12 @@ Original, unmodified ZIPs are version attachments:
 
 `pass/` and `binaries/` retain each artifact's API digest and per-file extraction
 manifest. Save each downloaded ZIP as `raw.zip` beside the matching metadata in
-a separate work directory, and extract it to `extracted/`. With full repository
-history including `perf/program-wide-20261104`, run:
+a separate work directory, and extract it to `extracted/`. Fetch the consolidated
+history archive before replay; see the
+[branch archive and recovery guide](../../branch-archive-2026-11-04.md).
 
 ```bash
+git fetch origin tag archive/branches-2026-11-04
 python3 docs/evidence/downstream-buffer-2026-11-04/pass/replay.py DATA_DOWNLOAD BINARY_DOWNLOAD
 ```
 

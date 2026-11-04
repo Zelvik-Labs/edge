@@ -14,12 +14,15 @@ Original ZIP bytes are published as version attachments
 and [`evidence-header-binaries-41757321970.zip`](https://github.com/Zelvik-Labs/edge/releases/download/v26.11.1.1/evidence-header-binaries-41757321970.zip).
 Save each as `raw.zip` in a separate download directory with the matching
 metadata from `pass/` or `input-binaries/`, and extract it to `extracted/`.
-Replay requires full Git history including the
-preserved `perf/program-wide-20261104` branch. Each input directory must contain
+Replay requires the original Git history, retained by the consolidated archive
+`archive/branches-2026-11-04`. Fetch it before replay; see the
+[branch archive and recovery guide](../../branch-archive-2026-11-04.md).
+Each input directory must contain
 `raw.zip`, its original `artifact.json`, its extraction `manifest.json`, and
 an `extracted/` directory with all original entries. No measured executable runs.
 
 ```bash
+git fetch origin tag archive/branches-2026-11-04
 python3 docs/evidence/idle-cpu-2026-11-04/pass/verify.py IDLE_DOWNLOAD HEADER_BINARY_DOWNLOAD
 ```
 
