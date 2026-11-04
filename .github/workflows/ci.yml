@@ -9,6 +9,10 @@ on:
         description: Run isolated blocking/readiness splice component comparison
         type: boolean
         default: false
+      http_future_layout:
+        description: Inspect real release HTTP callback future frames without polling request logic
+        type: boolean
+        default: false
       io_uring_benchmark:
         description: Test io_uring splice against readiness and default io-wq limits at 1 and 16 connections
         type: boolean
@@ -555,6 +559,39 @@ jobs:
           mkdir -p .local/splice-ci
           cargo test --locked -p zelvik-edge-io --features io-uring > .local/splice-ci/uring-tests.log 2>&1
           cargo clippy --locked -p zelvik-edge-io --features io-uring --all-targets -- -D clippy::correctness -D clippy::suspicious > .local/splice-ci/uring-clippy.log 2>&1
+
+      - name: Inspect real release HTTP callback future layouts
+        if: github.event_name == 'workflow_dispatch' && inputs.http_future_layout
+        run: |
+          mkdir -p .local/http-future-layout-ci
+          cargo build --locked --release --example http-future-layout > .local/http-future-layout-ci/build.log 2>&1
+          target/release/examples/http-future-layout > .local/http-future-layout-ci/layout.json
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          root = pathlib.Path('.local/http-future-layout-ci')
+          binary = pathlib.Path('target/release/examples/http-future-layout')
+          source = pathlib.Path('examples/http-future-layout.rs')
+          layout = json.loads((root / 'layout.json').read_text())
+          assert len(layout['callbacks']) == 6
+          assert all(row['frame_bytes'] > 0 and row['alignment'] > 0 for row in layout['callbacks'].values())
+          meta = {'source': os.environ['GITHUB_SHA'], 'rustflags': os.environ['RUSTFLAGS'],
+              'rustc': subprocess.check_output(['rustc', '-vV'], text=True),
+              'example_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
+              'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
+              'scope': layout['scope']}
+          (root / 'metadata.json').write_text(json.dumps(meta, indent=2) + '\n')
+          PY
+
+      - name: Retain callback layouts and actual release probe
+        if: always() && inputs.http_future_layout
+        uses: actions/upload-artifact@v4
+        with:
+          name: http-future-layout-${{ github.sha }}
+          path: |
+            .local/http-future-layout-ci/
+            target/release/examples/http-future-layout
+          include-hidden-files: true
+          if-no-files-found: error
 
       - name: Build splice component benchmark
         if: github.event_name == 'workflow_dispatch' && (inputs.splice_benchmark || inputs.io_uring_benchmark)
