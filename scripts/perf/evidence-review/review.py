@@ -291,6 +291,29 @@ def inspect(label, run, source, kind, summary_name, header_hashes, temporary, de
     return result
 
 
+def render_report(output, failures):
+    lines = ['# Retained performance evidence review', '',
+             'ZIP/API digests, source-pinned verifiers, fixed input ELFs and retained transfer records were checked. Original failures are never replaced by retries.', '']
+    for result in output:
+        lines += [f"## {result['label']}", '',
+                  f"Run {result['run']}, source {result['source']}, cells {result['cells']}, successful {result['successful']}, failed {result['failed']}.", '']
+        if 'medians' in result and all('rps' in row for row in result['medians']):
+            lines += ['| protocol | target | RPS | CPU us/response | P99 ms | client CPU | proxy CPU | origin CPU |',
+                      '|---|---|---:|---:|---:|---:|---:|---:|']
+            for row in result['medians']:
+                lines.append(f"| {row['protocol']} | {row['target']} | {row['rps']:.2f} | {row.get('cpu_usec_per_request', 0):.3f} | {row.get('p99_ms', 0):.3f} | {row.get('client_cpu_fraction', 0):.3f} | {row.get('proxy_cpu_fraction', 0):.3f} | {row.get('origin_cpu_fraction', 0):.3f} |")
+            lines.append('')
+        if 'groups' in result:
+            lines.append(json.dumps(result['groups']))
+            lines += ['', 'Short event windows identify callers only; event attributes do not establish delivery decimation or CPU/response percentages.', '']
+    if failures:
+        lines += ['## Failed reviews', '']
+        for failure in failures:
+            lines += [f"- {failure['label']}: {failure['error_type']}: {failure['error']}", '']
+    report = '\n'.join(lines) + '\n'
+    return report
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=False)
     output = []
@@ -312,25 +335,7 @@ def main():
                 print('PERF_REVIEW_FAILURE ' + json.dumps(failure), flush=True)
     write(OUT / 'verification.json', dict(results=output, failures=failures, all_completed=not failures,
         scope='original archives, immutable verifier sources, actual input ELF bytes and complete retained HTTP records; no performance rerun or deployment'))
-    lines = ['# Retained performance evidence review', '',
-             'ZIP/API digests, source-pinned verifiers, fixed input ELFs and retained transfer records were checked. Original failures are never replaced by retries.', '']
-    for result in output:
-        lines += [f"## {result['label']}", '',
-                  f"Run {result['run']}, source {result['source']}, cells {result['cells']}, successful {result['successful']}, failed {result['failed']}.", '']
-        if 'medians' in result:
-            lines += ['| protocol | target | RPS | CPU us/response | P99 ms | client CPU | proxy CPU | origin CPU |',
-                      '|---|---|---:|---:|---:|---:|---:|---:|']
-            for row in result['medians']:
-                lines.append(f"| {row['protocol']} | {row['target']} | {row['rps']:.2f} | {row.get('cpu_usec_per_request', 0):.3f} | {row.get('p99_ms', 0):.3f} | {row.get('client_cpu_fraction', 0):.3f} | {row.get('proxy_cpu_fraction', 0):.3f} | {row.get('origin_cpu_fraction', 0):.3f} |")
-            lines.append('')
-        if 'groups' in result:
-            lines.append(json.dumps(result['groups']))
-            lines += ['', 'Short event windows identify callers only; event attributes do not establish delivery decimation or CPU/response percentages.', '']
-    if failures:
-        lines += ['## Failed reviews', '']
-        for failure in failures:
-            lines += [f"- {failure['label']}: {failure['error_type']}: {failure['error']}", '']
-    report = '\n'.join(lines) + '\n'
+    report = render_report(output, failures)
     (OUT / 'report.md').write_text(report)
     with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as summary:
         summary.write(report)

@@ -24,7 +24,9 @@ jobs:
       - name: Verify original archives and source-pinned records without compilation
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/perf/evidence-review/review.py
+        run: |
+          python3 -m unittest discover -s scripts/perf/evidence-review -p 'test_*.py' -v
+          python3 scripts/perf/evidence-review/review.py
       - name: Preserve original ZIPs, API provenance and recomputed results
         if: always()
         uses: actions/upload-artifact@v4
