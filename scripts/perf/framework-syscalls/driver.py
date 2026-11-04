@@ -51,17 +51,6 @@ def main():
                 'case "$n" in nginx|openresty) echo "$p";; esac; done').splitlines()
             pids = [str(pid) for pid in sorted({int(Path(p).parent.name) for p in paths})]
         assert pids
-        identities = {pid: original_docker('exec', target, 'sha256sum', f'/proc/{pid}/exe').split()[0] for pid in pids}
-        assert len(set(identities.values())) == 1
-        matrix.write(Path(str(stem) + '.trace-target.json'), dict(target=options.target,
-            container=target, container_pids=list(map(int, pids)), executable_sha256=next(iter(identities.values()))))
-        if options.target in ['nginx', 'openresty']:
-            executable = stem.parent / 'server-executable'
-            if not executable.exists():
-                remote = original_docker('exec', target, 'readlink', f'/proc/{pids[0]}/exe')
-                assert remote.startswith('/') and not remote.endswith(' (deleted)')
-                subprocess.run([*matrix.DOCKER, 'cp', target + ':' + remote, str(executable)], env=matrix.ENV, check=True)
-            assert matrix.sha(executable) == next(iter(identities.values()))
         trace = Path(str(stem) + '.trace')
         trace.mkdir()
         remote = '/test/' + trace.name
@@ -75,6 +64,8 @@ def main():
             '--mount', f'type=bind,src={ROOT}/scripts/perf/afxdp-node/syscall_profile.py,dst=/tools/syscall_profile.py,readonly',
             '--entrypoint', 'python3', 'edge-syscall-sidecar:20261104', '/tools/helper.py',
             '--directory', remote, '--max-seconds', '60', '--pids', *pids]
+        if options.target in ['nginx', 'openresty']:
+            command.append('--retain-executable')
         matrix.write(trace / 'sidecar-command.json', [*matrix.DOCKER, *command])
         ended = False
         try:
@@ -86,6 +77,13 @@ def main():
                 if status != 'running':
                     raise RuntimeError('sidecar failed attachment: ' + original_docker('logs', sidecar)[-2000:])
                 time.sleep(.02)
+            identities = json.loads((trace / 'ready.json').read_text())['executable_sha256_by_pid']
+            assert set(identities) == set(pids) and len(set(identities.values())) == 1
+            matrix.write(Path(str(stem) + '.trace-target.json'), dict(target=options.target,
+                container=target, container_pids=list(map(int, pids)),
+                executable_sha256=next(iter(identities.values()))))
+            if options.target in ['nginx', 'openresty']:
+                assert matrix.sha(trace / 'server-executable') == next(iter(identities.values()))
             started = time.monotonic_ns()
             result = original_client(args, protocol, state, connection, url, ca, stem)
             publish(trace / 'load-ended.json', dict(completed=True, started_ns=started, ended_ns=time.monotonic_ns()))

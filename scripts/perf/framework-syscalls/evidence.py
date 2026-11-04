@@ -103,7 +103,9 @@ def verify():
             assert command[command.index('--cpuset-cpus') + 1] == str(manifest['cpu_assignment']['client'][0])
             identity = json.loads(Path(str(stem) + '.trace-target.json').read_text())
             assert identity['container_pids'] == report['pids']
-            expected = provenance['expected_binaries']['target/release/Zelvik-Edge'] if run_data['target'] == 'edge' else bare['bare_binary']['sha256'] if run_data['target'] == 'pingora' else sha(path.parent / 'server-executable')
+            expected = provenance['expected_binaries']['target/release/Zelvik-Edge'] if run_data['target'] == 'edge' else bare['bare_binary']['sha256'] if run_data['target'] == 'pingora' else sha(trace / 'server-executable')
+            assert set(ready['executable_sha256_by_pid']) == {str(pid) for pid in report['pids']}
+            assert set(ready['executable_sha256_by_pid'].values()) == {expected}
             assert identity['target'] == run_data['target'] and identity['executable_sha256'] == expected
             assert identity['container'] == command[command.index('--pid') + 1].removeprefix('container:')
             assert cases[row['stem']]['status'] == 'passed'
