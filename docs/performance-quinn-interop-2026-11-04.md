@@ -10,7 +10,7 @@ OpenSSL/GnuTLS/GnuTLS/OpenSSL 顺序各独立执行 32 KiB HIT、16,384 次 fres
 两种客户端均不启用诊断 trace，错误继续保留并导致工作流失败。
 
 本地已成功编译两种客户端并验证分别加载 OpenSSL 原生 QUIC、GnuTLS + ngtcp2；这只证明构建与后端选择，
-不是 H3 网络验证。Actions 负责真实生产节点、协议/正文/连接计数与回源契约的复核。
+不是 H3 网络验证。[Actions 41759827134](https://github.com/Zelvik-Labs/edge/actions/runs/41759827134) 正在负责真实生产节点、协议/正文/连接计数与回源契约的复核。
 不同客户端实现不做服务端吞吐排名，也不据零错误宣称长期稳定。
 
 仍待完成：Actions 原始数据、错误归类及与 key phase/HANDSHAKE_DONE 诊断相互验证。

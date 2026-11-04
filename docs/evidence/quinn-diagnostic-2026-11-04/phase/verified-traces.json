@@ -1,0 +1,2584 @@
+[
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 0,
+    "connection": 260,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 0,
+    "connection": 373,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 0,
+    "connection": 1353,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 0,
+    "connection": 2829,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 0,
+    "connection": 3339,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 0,
+    "connection": 4425,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 0,
+    "connection": 6012,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 32,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 0,
+    "connection": 6051,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 31,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 0,
+    "connection": 6200,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 0,
+    "connection": 7483,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 13,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 0,
+    "connection": 8070,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 13,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 0,
+    "connection": 8085,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 13,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 1,
+    "connection": 1152,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 1,
+    "connection": 3353,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 1,
+    "connection": 6290,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 32,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 1,
+    "connection": 7664,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 0,
+    "shard": 1,
+    "connection": 8075,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 1,
+    "shard": 0,
+    "connection": 1016,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 1,
+    "shard": 0,
+    "connection": 2977,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 32,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 1,
+    "shard": 0,
+    "connection": 3634,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 1,
+    "shard": 0,
+    "connection": 4357,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 32,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 1,
+    "shard": 0,
+    "connection": 5394,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 1,
+    "shard": 0,
+    "connection": 5808,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 1,
+    "shard": 0,
+    "connection": 7394,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 13,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 1,
+    "shard": 0,
+    "connection": 7660,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 13,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 1,
+    "shard": 0,
+    "connection": 7997,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 13,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 1,
+    "shard": 1,
+    "connection": 2021,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 1,
+    "shard": 1,
+    "connection": 4234,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  },
+  {
+    "backend": "quinn-native",
+    "round": 1,
+    "shard": 1,
+    "connection": 4711,
+    "dropped_trace_bytes": 0,
+    "close_frame_count": 1,
+    "closes": [
+      {
+        "direction": "write",
+        "transport": true,
+        "code": 14,
+        "frame": 0,
+        "reason": "RX key update again too soon",
+        "reason_bytes": 28,
+        "reason_hex": "5258206b65792075706461746520616761696e20746f6f20736f6f6e",
+        "truncated": false
+      }
+    ],
+    "received_handshake_done_before_close": false,
+    "unverified_received_short_headers": [
+      {
+        "key_phase": 0,
+        "pn_truncated": 0,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 1,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 2,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 3,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 4,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 5,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 6,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 7,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 8,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 9,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 0,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "key_phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ]
+  }
+]
