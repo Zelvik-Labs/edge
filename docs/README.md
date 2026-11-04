@@ -17,6 +17,7 @@
 - [已存响应头校验优化](performance-stored-headers-2026-11-04.md)：三万多组语义差分、分配与组件计时，以及生产集成验证。
 - [AF_XDP 自动绑核修复](performance-afxdp-affinity-2026-11-04.md)：继承 CPU 集合、真实线程控制与完整节点验证。
 - [Quinn GSO 隔离结果](performance-quinn-gso-2026-11-04.md)：原生新连接故障复现、GSO 开关代价与诊断边界。
+- [Quinn 新连接协议诊断](performance-quinn-diagnostic-2026-11-04.md)：有界客户端帧记录、关闭码和原始可执行文件控制。
 - [io_uring splice 架构审计](performance-io-uring-architecture-2026-11-04.md)：强制异步路径的上游源码证据和后续实现方向。
 - [SNI 分片解析的分配边界与代价](performance-sni-parser-2026-11-04.md)：不完整输入零分配、完整分片扫描代价、逐输入对照和实测原始块。
 - [SNI 跨记录读取与小正文栈缓冲](performance-sni-cursor-2026-11-04.md)：四版本同机对照、大分片复制消除、完整边界结果和局部取舍。

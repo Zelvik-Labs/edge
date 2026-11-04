@@ -9,7 +9,7 @@
 默认压测客户端不启用该构建开关。未修改 vendored/upstream 代码。
 
 本地 C 编译与 ASan/UBSan 控制已通过，覆盖关闭帧、截断、62-bit varint、内存边界与公开回调。
-Actions 计划依次测试 native/shared/shared/native，共 65,536 次 fresh 尝试、32 KiB HIT，使用相同 matched 参数。
+[Actions 41757176129](https://github.com/Zelvik-Labs/edge/actions/runs/41757176129) 正在依次测试 native/shared/shared/native，共 65,536 次 fresh 尝试、32 KiB HIT，使用相同 matched 参数。
 复核要求实际回调运行、完整逐传输计数和二进制哈希；协议错误仍令工作流失败并保留。
 
 诊断开销会改变时序，相关吞吐/延迟不参与容量排名。没有关闭帧或不再复现都不能当成修复证据。

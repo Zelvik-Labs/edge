@@ -10,7 +10,7 @@
 |---|---|---|
 | [实际 HTTP CPU 归因](performance-http-cpu-2026-11-04.md) | 18 个真实节点条件、328 万次响应、38,922 个 CPU 样本；定位缓存准入、头处理、分配与统计成本 | 采样流量不做容量排名，包含占比不相加 |
 | [Range 缓存准入](performance-range-preflight-2026-11-04.md) | 无 Range 时跳过冗余完整对象预检查；192/192 对比通过、821 万次响应；HIT 吞吐配对 +3.95%～+10.08% | H1/H2 仍低于 Nginx/OpenResty，MISS 改善不稳定 |
-| [已存响应头校验](performance-stored-headers-2026-11-04.md) | 31,981 组差分全等；典型 6 字段组件耗时约 −35%、分配 8→6；保留原解析器和安全检查 | 大于 32 字段使用旧路径；节点收益待测，完整 CI 见专项报告 |
+| [已存响应头校验](performance-stored-headers-2026-11-04.md) | 31,981 组差分全等；典型 6 字段组件耗时约 −35%、分配 8→6；保留原解析器和安全检查 | 大于 32 字段使用旧路径；节点收益正在测，完整 CI 已通过（1362 库测试及集成/vendor/lint） |
 | 缓存上下文所有权 | `a79b20d` 将冗余 clone 改为 move，避免复制字符串和增加 Arc 引用；[CI 41715819291](https://github.com/Zelvik-Labs/edge/actions/runs/41715819291) 的 1361 项库测试、16 项二进制测试及集成/vendor/check/Clippy 通过 | 没有单独吞吐数字；[日志摘要](evidence/cache-context-2026-11-04/verification.json) |
 | [SNI 解析](performance-sni-cursor-2026-11-04.md) | 不完整输入零分配；大分片跨记录读取、小正文栈缓冲；完整 CI 和 32 组原生节点通过 | 组件大分片约 −45%，仍需真实 SNI 端到端吞吐；局部退步保留 |
 | [TCP/SNI 统计](performance-relay-copy-2026-11-04.md) | 取消与部分写入按实际接受字节结算，减少一个方向的一次计数器分配；组件与完整 CI 通过 | 64 字节短写组件约 +3.81%，不隐藏该代价 |
@@ -21,7 +21,7 @@
 [Quinn GSO 对照](performance-quinn-gso-2026-11-04.md)稳定复现原生 Quinn 的新连接错误：
 262,144 次 fresh 尝试中 77 次失败。auto 50 次、off 27 次，关闭 GSO 未消除故障。
 复用控制中关闭 GSO 使吞吐下降约 13%～21%，继续保留 auto 默认值。
-下一阶段捕获协议关闭原因，再决定修复 Edge 适配层、客户端兼容还是依赖问题。
+[有界协议诊断](performance-quinn-diagnostic-2026-11-04.md)已实现并启动 Actions，捕获关闭原因后再决定修复 Edge 适配层、客户端兼容还是依赖问题。
 
 首轮 Range 对比因源站启动时序失败，已保留 161 次 curl 56 与 7 次 curl 52 的全部记录；
 修复的是计时前源站就绪检查。复测重新执行完整矩阵，未重试或抹掉计时阶段的错误。

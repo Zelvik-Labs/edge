@@ -1,6 +1,6 @@
 # 已存缓存响应头：直接逐字段验证候选
 
-组件试验已通过并核验，当前已将相同实现移入生产路径，完整 CI 待完成。节点吞吐收益尚未测量。
+组件试验已通过并核验，当前已将相同实现移入生产路径，完整 CI 已通过。节点吞吐收益尚未测量。
 
 此前 CPU 采样指出缓存准入和已存响应头校验有可见开销。Range 分支已经单独减少普通请求的预检查；
 本轮针对仍必须执行的校验本身。旧实现把所有字符串还原成临时 `HeaderMap`，再检查共享缓存与响应边界。
@@ -33,8 +33,18 @@
 原测量源码为 `13b375c3c556a09028a7b84f2f55cc4d6ac45d26`，不包含后续生产集成提交。
 [集成后组件复核 41719473526](https://github.com/Zelvik-Labs/edge/actions/runs/41719473526) 已再次通过 31,981 组差分与 2560 个计时块，
 典型 6 字段 −35.26%、16 字段 −30.11%、33 字段回退 −0.18%，分配计数一致；两个实验不合并计时。
-[完整 CI 41755592327](https://github.com/Zelvik-Labs/edge/actions/runs/41755592327) 正在验证生产集成。
+[完整 CI 41755592327](https://github.com/Zelvik-Labs/edge/actions/runs/41755592327) 已通过生产集成：1362 项库测试、16 项二进制测试、集成/vendor、check/Clippy；
+4 项库测试按既有规则忽略。[日志校验摘要](evidence/stored-headers-2026-11-04/full-ci/verification.json)已保留。
+本轮未重复原生 XDP 节点 smoke，最近一次 32 组节点证据来自 Range/affinity 累计版本。
 两轮原始证据与[可移植复核器](evidence/stored-headers-2026-11-04/verify.py)已保留。
 组件收益不能等同节点吞吐；旧版的大容量 HeaderMap 限制也不会由该候选解决。经审批的功能降级：无。
 
 [运行与复核说明](../scripts/perf/stored-headers/README.md)
+
+
+## 实际节点收益验证
+
+[Actions 41757321970](https://github.com/Zelvik-Labs/edge/actions/runs/41757321970) 已启动独立节点对比。
+基线 `a79b20d`、候选 `ba47474`，构建器强制两版生产源码仅 `src/cache/mod.rs` 不同。
+复用同机四目标、四种 HTTP 协议、三种缓存状态、均衡顺序及 128 项真实 Range 控制，计划 192 格。
+该轮不会混入 Range 预检查或缓存上下文变化；结果待原始记录核验，当前不预报收益。
