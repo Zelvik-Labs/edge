@@ -44,4 +44,6 @@ HTTP Kernel 上游连接从 UpstreamL4Stream 直接拆出 Pingora TcpStream，�
 ## 观察器复测的线程退出竞态
 
 41804384847 完成 Edge 两格（99,992 成功、零 HTTP 错误）后，裸 Pingora 的短生命周期线程 51 在枚举 /proc/1/task 后、读取 status 前退出，观察器抛 FileNotFoundError，整轮失败。归档 13309526019（7,844,034 字节、79 文件，SHA-256 `38d1aa0d8ce30bb76cc7bf25b2070639e8e15d79d56592427221e5d22c385021`）及[冻结记录](evidence/framework-syscalls-2026-11-04/compatibility-failure/verification.json) 保留，没有把未完成裸框架格算通过。
-观察器现在只接受已经消失的线程，同时要求目标进程仍存活且 starttime 相同；记录退出 TID/阶段，活线程的 status 缺失、未附加、权限错误和 PID 复用仍失败。四项边界测试通过并加入 Actions。修正后运行 41806190842 已显示通过，原始归档复核尚在收尾。
+观察器现在只接受已经消失的线程，同时要求目标进程仍存活且 starttime 相同；记录退出 TID/阶段，活线程的 status 缺失、未附加、权限错误和 PID 复用仍失败。四项边界测试通过并加入 Actions。修正后 [41806190842](https://github.com/Zelvik-Labs/edge/actions/runs/41806190842) 已通过并独立复核 16 格、328,115 次有效响应、零 HTTP 错误；全部选定 PID 的 starttime 与实际 ELF、活线程附加覆盖、已退出线程记录和前后/脱离阶段均重算。原归档 13310875447（17,029,156 字节、382 文件，SHA-256 `e7e2de8b4e0c4cd8bc265efc37906c1339efe79e08a13b97b52b6edb9772480f`）保留。
+
+复测 Edge H1/H2 所有调用/响应中位数 8.478/7.357，futex 1.954/1.812，H1 sendto 3.000；方向与首个完整对照相同，仍不是未插桩 CPU 或容量成绩。[完整重放结果](evidence/performance-review-2026-11-04/verification.json) 与 [复核入口](../scripts/perf/evidence-review/review.py) 可检查。进一步的调用者采样主要见到 Mace 后台等待，不能把这里的 futex/响应比值解释成每请求统计锁；见 [futex 报告](performance-futex-stacks-2026-11-04.md)。

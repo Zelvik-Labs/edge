@@ -30,3 +30,11 @@
 已完成：同一基础库的匹配路径诊断。仍未解决：逐模块因果成本与整体超越目标。
 设计限制：短云窗口、OFF三协议和符号化用户态采样，不覆盖HIT/H3/新连接，也不是长期稳定性证明。
 经审批的功能降级：无。
+
+## 历史客户端源码身份补正后的复测
+
+[41807179554](https://github.com/Zelvik-Labs/edge/actions/runs/41807179554) 已通过并独立重算：12 格、1,613,653 次有效响应、20,878 用户态样本，零 HTTP 错误、丢样和 steal。仍是相同 ba474 Edge/3b25 裸 Pingora 实际 ELF，没有新的运行时收益。
+
+本轮 manifest 明确历史 C 客户端源 a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a，复核实际历史源码 SHA 与实际客户端 ELF；另存当前 harness C 源身份。旧归档中 client_source_sha256 曾标当时 harness C 源，实际 ELF 一直相同且已核验，但不能把那个旧字段当作历史 C 源证明；旧 ZIP 不重写。
+
+归档 13310711965：29,226,318 字节、235 文件，SHA-256 `79209f56798591e41bbbc0103a124519ab84b05fa38f0a930aaaaed60d132866`。已用固定该运行源码的验证器复算全部 HTTP 与采样记录，[完整重放结果](evidence/performance-review-2026-11-04/verification.json) 保存；不把不同 runner 的样本占比当作前后性能变化。

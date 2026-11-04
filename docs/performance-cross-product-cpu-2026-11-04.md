@@ -70,4 +70,12 @@ Edge包含Rust http头表/hash、mimalloc、业务过滤与异步H2状态机；�
 两轮均继续固定同一 ba474 Edge、实际客户端和 nginx/OpenResty ELF，分别确认失败前未压缩记录的 collector 留存以及新增裸 Pingora target 接口对原三产品流程的兼容。已独立核对全部 ZIP/解压字节、实际输入 ELF、每个 HTTP 记录、24 个采样及失样计数，新增冻结 stage retention-repeat / compatibility-repeat 可重算。不是新的业务运行时容量，也不把不同 runner 的样本占比当版本收益。
 归档分别为 13301488681（51,919,573 字节、320 文件，SHA-256 `0b817f1a5df03094087938cdf169da5b87ca714f2bf08771dde00d3e0dfc82f0`）和 13303971109（74,528,923 字节、320 文件，SHA-256 `c70103b5e76a632e6fa4308a289324e89982be703f1d5e5bda0c7192cdcf4618`）。
 
-后续共同 driver 补正历史 C 客户端源码身份时，41805597108 / 41806679966 因旧 workflow 浅克隆缺历史文件而在首目标测量前失败，不能视为性能回退。43958aa 失败归档 13310246681 的[冻结记录](evidence/cross-product-cpu-2026-11-04/source-checkout-failure/verification.json) 保留；公共[失败复核器](evidence/verify_diagnostic_failure.py)检查该原始归档。两个 CPU workflow 现显式 fetch-depth: 0，修复后重复仍待 Actions 结果。旧归档的客户端 ELF 已核验正确，但旧 client_source_sha256 标的是当时 harness C 源；不能据其证明历史 C 源，旧 ZIP 不重写。
+后续共同 driver 补正历史 C 客户端源码身份时，41805597108 / 41806679966 因旧 workflow 浅克隆缺历史文件而在首目标测量前失败，不能视为性能回退。43958aa 失败归档 13310246681 的[冻结记录](evidence/cross-product-cpu-2026-11-04/source-checkout-failure/verification.json) 保留；公共[失败复核器](evidence/verify_diagnostic_failure.py)检查该原始归档。两个 CPU workflow 现显式 fetch-depth: 0，修复后的独立重复已完成，见下节。旧归档的客户端 ELF 已核验正确，但旧 client_source_sha256 标的是当时 harness C 源；不能据其证明历史 C 源，旧 ZIP 不重写。
+
+## 完整历史源码 checkout 的复测
+
+[41807179846](https://github.com/Zelvik-Labs/edge/actions/runs/41807179846) 通过并独立重算 24 格、23,958,632 次有效响应、40,741 用户态样本，零 HTTP 错误、丢样和 steal。固定同一实际 Edge/controller/client，核验历史 C 源 revision 与 SHA、全部 HTTP 记录、竞品实际 ELF、每个调用栈文件及失样计数；已保留源站/客户端瓶颈与未知符号限制，诊断 RPS 不进入容量排名。
+
+归档 13310877744：159,995,290 字节、320 文件，SHA-256 `6d1f74815a860ae189ce8a183a4a29f0e8afb8a95fc623c42b7b130c333675e5`。复核使用 89bc26be 的原始汇总器及冻结交叉检查，规范化派生 JSON 的整数字典键后逐格核对采样内容，不重写原 ZIP。[重放结果](evidence/performance-review-2026-11-04/verification.json) 与 [统一复核入口](../scripts/perf/evidence-review/review.py) 可检查。
+
+后续共同 driver 变更触发的 41808935660 / 41812436171 在 GitHub Actions 显示通过，但本节数字只来自已收齐原始归档并复算的 41807179846，不将其他轮次并入新性能结论。此前所有失败继续保留。
