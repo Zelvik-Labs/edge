@@ -26,6 +26,9 @@ def sha(path):
 
 def build():
     OUT.mkdir(parents=True, exist_ok=False)
+    (OUT / 'setup.json').write_text(json.dumps({
+        'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+        'baseline': BASE, 'scope': 'setup provenance; not a completed measurement'}, indent=2) + '\n')
     source = OUT / 'source'
     source.mkdir()
     baseline = subprocess.check_output(['git', 'show', BASE + ':src/udp_proxy.rs'], text=True)
