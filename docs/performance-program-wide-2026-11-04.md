@@ -46,8 +46,8 @@ AF_XDP 的队列线程、运行时交接与拷贝仍有分析空间；目前没�
 [共享可写等待](performance-shared-quic-writable-2026-11-04.md)已修复队列满仍立即 Ready 及 socket 单等待者问题，1366 库测试、集成/vendor/lint 与 32 组节点验证全部通过。
 [UDP 出口候选](performance-udp-egress-2026-11-04.md)前两种复制策略的普通发送有 5%～7% 与 1.7%～2.2% 代价，保留实验；第三种保持发送顺序，只改变错误载荷，每次拒绝少两次分配，已集成到分支 `20e56ff`，累计完整CI1367库测试、16二进制测试、集成/vendor/lint及32组节点通过并核验。
 [小头表 IP 查找](performance-client-ip-scan-2026-11-04.md)调整后 75,923 组差分全等；私网无转发头组件约 −76%，公网极短分支约 +0.22 ns、大头表小幅退步保留，已集成同一分支，尚无节点收益。
-[每日域名统计](performance-daily-domain-2026-11-04.md)复用事件域名并先更新现有key；20566控制、2560块和集成源码对应复测通过，热key组件约−54%、每事件避免String分配；兼容入口的分配字节代价保留，真实192格节点对照及完整CI进行中。
-[主机名规范化](performance-host-normalize-2026-11-04.md)保持原语义，65567差分/3840块通过，普通输出分配2→1，组件约−18%～−36%；已集成，完整CI进行中。
+[每日域名统计](performance-daily-domain-2026-11-04.md)复用事件域名并先更新现有key；20566控制、2560块和集成源码对应复测通过，热key组件约−54%、每事件避免String分配；兼容入口的分配字节代价保留，真实192格节点对照进行中，累计完整CI1369库测试及集成/vendor/lint已通过。
+[主机名规范化](performance-host-normalize-2026-11-04.md)保持原语义，65567差分/3840块通过，普通输出分配2→1，组件约−18%～−36%；已集成，同一累计完整CI通过。节点收益尚未测出。
 [实际 HTTP 回调布局](performance-http-future-layout-2026-11-04.md)已核验实际release二进制：request_filter为5736字节，其余五个32～40字节；阶段尺寸与实际构造/销毁耗时正在测量，不由frame大小推断CPU或吞吐。
 [三产品CPU路径](performance-cross-product-cpu-2026-11-04.md)启动相同H1/H2 HIT/OFF用户态采样，固定已有实际Edge二进制并保留竞品ELF，采样吞吐不参加容量排名。
 [共享内核 GSO 候选](performance-shared-quic-tx-2026-11-04.md)通过 IPv4/IPv6 真实分段、GRO 关闭与硬错误控制，尚未接入生产或测量节点收益。

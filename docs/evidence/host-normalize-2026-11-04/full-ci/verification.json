@@ -1,0 +1,70 @@
+{
+  "run": 41778723854,
+  "source": "fa66baeda0486ae8c993f9591138855c23600e86",
+  "runtime_changes": [
+    "daily shared domains and lazy capacity",
+    "borrowed host normalization"
+  ],
+  "jobs": [
+    {
+      "id": 126405056332,
+      "conclusion": "success"
+    },
+    {
+      "id": 126405056747,
+      "conclusion": "success"
+    }
+  ],
+  "test_results": [
+    "2026-11-04T05:30:20.7924387Z test result: ok. 1369 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 61.82s",
+    "2026-11-04T05:30:20.9903930Z test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+    "2026-11-04T05:30:20.9960112Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "2026-11-04T05:30:20.9988739Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "2026-11-04T05:30:21.0015998Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "2026-11-04T05:30:21.0060788Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "2026-11-04T05:30:21.0086075Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "2026-11-04T05:30:21.0106660Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "2026-11-04T05:30:21.0136310Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "2026-11-04T05:30:21.0157129Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "2026-11-04T05:30:21.0184300Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "2026-11-04T05:31:28.4953840Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "2026-11-04T05:31:28.5206829Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+    "2026-11-04T05:31:28.5258419Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "2026-11-04T05:31:32.8552098Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.31s",
+    "2026-11-04T05:31:32.9124647Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+    "2026-11-04T05:31:32.9379685Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+    "2026-11-04T05:31:34.3376868Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.39s",
+    "2026-11-04T05:31:34.3837617Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+    "2026-11-04T05:31:34.3912831Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "2026-11-04T05:31:34.5215959Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s",
+    "2026-11-04T05:31:37.8945304Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.37s",
+    "2026-11-04T05:31:54.3965907Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.49s",
+    "2026-11-04T05:31:54.4570480Z test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+    "2026-11-04T05:31:59.2456547Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.69s",
+    "2026-11-04T05:32:00.1307563Z test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s",
+    "2026-11-04T05:32:00.1395012Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "2026-11-04T05:32:00.1446286Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "2026-11-04T05:32:00.1734018Z test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+    "2026-11-04T05:32:01.1152707Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.94s",
+    "2026-11-04T05:32:01.1795073Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+    "2026-11-04T05:32:01.1921075Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "2026-11-04T05:34:40.2671750Z test result: ok. 189 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.17s",
+    "2026-11-04T05:35:09.3209622Z test result: ok. 577 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 29.05s",
+    "2026-11-04T05:35:09.3292666Z test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+  ],
+  "new_controls": [
+    "2026-11-04T05:29:51.4927287Z test metrics::daily::tests::existing_and_invalid_daily_keys_do_not_consult_capacity ... ok",
+    "2026-11-04T05:29:51.4930515Z test metrics::daily::tests::shared_domain_keeps_ownership_and_all_counters_through_flush ... ok"
+  ],
+  "native_32_in_this_run": false,
+  "logs": {
+    "test.log": {
+      "bytes": 3075638,
+      "sha256": "766cfccaa3a2902469b61f492d147fb4587b456e5f5c855fda66578b511a6122"
+    },
+    "check.log": {
+      "bytes": 218054,
+      "sha256": "697d5be5a45e2d87573c76ac41ce02b953766c251ae446ad281c035e60f4dd44"
+    }
+  }
+}

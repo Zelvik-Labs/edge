@@ -41,6 +41,9 @@ flush 时将共享域名转为输出 String；它的分配与新 key/兼容入�
 现将被测 tracker 原样接入性能分支，worker 把已有 event.domain 移给 record_shared；公开借用入口继续可用。
 补充实际所有权、全部计数、兼容入口、flush 边界、动态容量和无效 key 的回归。
 [完整 CI 41777560016](https://github.com/Zelvik-Labs/edge/actions/runs/41777560016) 与 [192 格四目标对照 41777536889](https://github.com/Zelvik-Labs/edge/actions/runs/41777536889) 已启动；节点前后严格仅 src/metrics.rs 与 src/metrics/daily.rs 不同。
+随后包含主机名优化的累计[CI41778723854](https://github.com/Zelvik-Labs/edge/actions/runs/41778723854)已通过并复核：1369库测试、16二进制测试、集成/vendor/check/Clippy，5项显式ignored（新增一项布局探针）。
+[冻结日志来源和摘要](evidence/host-normalize-2026-11-04/full-ci/verification.json)包含两项实际tracker回归的通过记录。
+此轮未重复32组native；独立的41777560016另运行该矩阵与阶段布局，结果待收集。
 构建器同时断言实际 tracker 与被测区域一致，后续归档保留实际源码。
 [集成复测 41777467367](https://github.com/Zelvik-Labs/edge/actions/runs/41777467367) 已通过并核验实际 tracker 源码、二进制、全部控制和计时块；冻结复核器支持 integrated 阶段。
 归档 `13297941325`：682,775字节、37文件，SHA-256 `0c5d89ce0a4cdfc8269388d0f1cd1b4789a075c8112a700ec8af63976b0b3eb9`。
