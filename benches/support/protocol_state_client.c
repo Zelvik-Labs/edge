@@ -52,7 +52,7 @@ static void multi_option(CURLMcode result) {
 }
 
 int main(int argc, char **argv) {
-    const char *url=NULL, *ca=NULL, *payload_path=NULL, *protocol=NULL;
+    const char *url=NULL, *ca=NULL, *payload_path=NULL, *protocol=NULL, *curves=NULL;
     long connections=16, request_limit=0;
     double seconds=8;
     int fresh=0, unique=0, multiplex=0, fixture_ca_only=0;
@@ -68,6 +68,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(key,"--cacert")) ca=value;
         else if (!strcmp(key,"--payload")) payload_path=value;
         else if (!strcmp(key,"--protocol")) protocol=value;
+        else if (!strcmp(key,"--curves")) curves=value;
         else if (!strcmp(key,"--connections")) connections=strtol(value,NULL,10);
         else if (!strcmp(key,"--requests")) request_limit=strtol(value,NULL,10);
         else if (!strcmp(key,"--seconds")) seconds=strtod(value,NULL);
@@ -113,6 +114,7 @@ int main(int argc, char **argv) {
         /* Controlled fixture mode narrows trust to CAINFO. Keep peer and
          * hostname verification enabled while excluding host CA-directory I/O. */
         if (fixture_ca_only) SET(t->easy,CURLOPT_CAPATH,NULL);
+        if (curves) SET(t->easy,CURLOPT_SSL_EC_CURVES,curves);
         SET(t->easy,CURLOPT_SSL_VERIFYPEER,1L);
         SET(t->easy,CURLOPT_SSL_VERIFYHOST,2L);
         /* Every newly established TLS connection performs a full handshake. */
@@ -184,6 +186,7 @@ int main(int argc, char **argv) {
                 t->received=0; t->invalid_body=0; t->error[0]='\0';
 #ifdef EDGE_QUIC_DIAGNOSTICS
                 t->diagnostic.used=0; t->diagnostic.dropped=0; t->diagnostic.current_closes=0;
+                t->diagnostic.current_group=0;
 #endif
                 int n=unique ? snprintf(t->url,sizeof(t->url),"%s/%ld-%ld",url,(long)getpid(),issued) :
                                snprintf(t->url,sizeof(t->url),"%s",url);
@@ -207,6 +210,11 @@ int main(int argc, char **argv) {
     }
     fprintf(stderr,"quic_diagnostic_summary contexts=%" PRIu64 " messages=%" PRIu64 " frames=%" PRIu64 " close_frames=%" PRIu64 "\n",
             contexts,messages,frames,closes);
+    for (long i=0;i<connections;i++) {
+        QuicDiagnostic *d=&slots[i].diagnostic;
+        fprintf(stderr,"quic_group_summary slot=%ld observations=%" PRIu64 " last_group=%u changed=%" PRIu64 "\n",
+                i,d->group_observations,(unsigned)d->last_group,d->group_changes);
+    }
 #endif
     for (long i=0;i<connections;i++) curl_easy_cleanup(slots[i].easy);
 #ifdef EDGE_QUIC_DIAGNOSTICS

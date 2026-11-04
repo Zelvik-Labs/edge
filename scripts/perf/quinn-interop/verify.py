@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -20,6 +21,17 @@ def verify(root, binaries):
     spec.loader.exec_module(http)
     suite = json.loads((root / 'suite.json').read_text())
     build = json.loads((root / 'client-build.json').read_text())
+    mode = suite.get('client_mode', 'tls-backend')
+    assert build.get('client_mode', 'tls-backend') == mode
+    if mode == 'tls-backend':
+        plans = {'openssl': {'binary': 'openssl', 'curves': None}, 'gnutls': {'binary': 'gnutls', 'curves': None}}
+    else:
+        assert mode == 'groups'
+        plans = {'default': {'binary': 'openssl', 'curves': None}, 'x25519': {'binary': 'openssl', 'curves': 'X25519'}}
+        assert digest(root / 'source/quic_client_diagnostics.h') == build['diagnostic_header_sha256']
+        assert '-DEDGE_QUIC_DIAGNOSTICS' in build['clients']['openssl']['command']
+    if mode == 'tls-backend':
+        assert all('-DEDGE_QUIC_DIAGNOSTICS' not in row['command'] for row in build['clients'].values())
     assert suite['client_package_version'] == build['package_version']
     assert len(set(build['package_version'].values())) == 1
     assert build['source_sha256'] == suite['client_source_sha256']
@@ -27,14 +39,20 @@ def verify(root, binaries):
     for name, expected in suite['build']['binaries'].items():
         assert digest(binaries / name) == expected
     for name, expected in build['clients'].items():
-        assert expected['sha256'] == suite['clients'][name]['sha256']
-        assert expected['version'] == suite['clients'][name]['version']
         assert digest(binaries.parent / 'quinn-interop-private/clients' / name) == expected['sha256']
         for path, details in expected['libraries'].items():
             library = binaries.parent / 'quinn-interop-private/client-libraries' / Path(path).name
             assert library.stat().st_size == details['bytes'] and digest(library) == details['sha256']
-    assert [(r['round'], r['client']) for r in suite['runs']] == [(0, 'openssl'), (0, 'gnutls'), (1, 'gnutls'), (1, 'openssl')]
-    records, infrastructure, partial = [], [], []
+    assert set(suite['clients']) == set(plans)
+    for label, plan in plans.items():
+        expected = build['clients'][plan['binary']]
+        actual = suite['clients'][label]
+        assert expected['sha256'] == actual['sha256'] and expected['version'] == actual['version']
+        assert actual.get('binary', label) == plan['binary'] and actual.get('curves') == plan['curves']
+    labels = list(plans)
+    assert [(r['round'], r['client']) for r in suite['runs']] == [
+        (i, label) for i, order in enumerate([labels, list(reversed(labels))]) for label in order]
+    records, infrastructure, partial, groups = [], [], [], []
     for run in suite['runs']:
         if run['infrastructure_error']:
             infrastructure.append(run)
@@ -46,6 +64,7 @@ def verify(root, binaries):
         assert manifest['client_sha256'] == suite['clients'][run['client']]['sha256']
         assert run['native_listener_startup'] and all('gso=Auto' in x for x in run['native_listener_startup'])
         args = manifest['args']
+        assert args.get('client_curves') == plans[run['client']]['curves']
         assert args.get('fixture_ca_only', False) == suite.get('client_fixture_ca_only', False)
         assert args['edge_backend'] == 'quinn-native' and args['transport_profile'] == 'matched'
         assert args['address_validation'] == 'off' and args['quinn_native_gso'] == 'auto'
@@ -59,6 +78,20 @@ def verify(root, binaries):
         case = manifest['cases'][0]
         if case.get('native') is not None:
             assert row.get('successful', 0) + row.get('failed', 0) == 16384
+            if mode == 'groups':
+                observations = 0
+                for shard in range(2):
+                    text = (path.parent / (case['stem'] + f'.{shard}.stderr')).read_text()
+                    slots = re.findall(r'quic_group_summary slot=(\d+) observations=(\d+) last_group=(\d+) changed=(\d+)', text)
+                    assert len(slots) == 16 and {int(s[0]) for s in slots} == set(range(16))
+                    slots = [{'slot': int(s), 'observations': int(n), 'last_group': int(g), 'changed': int(c)} for s, n, g, c in slots]
+                    observations += sum(s['observations'] for s in slots)
+                    assert all(s['last_group'] > 0 for s in slots if s['observations'])
+                    if run['client'] == 'x25519':
+                        assert all(s['last_group'] == 29 and s['changed'] == 0 for s in slots if s['observations'])
+                    groups.append({'client': run['client'], 'round': run['round'], 'shard': shard, 'slots': slots,
+                        'scope': 'wire-observed selected key-share group; not authentication on its own'})
+                assert observations >= row['successful'] and observations <= 16384
         else:
             assert row['status'] == 'failed' and row['error']
             for shard in range(2):
@@ -91,12 +124,16 @@ def verify(root, binaries):
             fields = control['stdout'].strip().split('\t')
             assert control['exit'] == 0 and len(fields) == 8 and fields[0] == '0' and fields[6] == '60'
             assert '--fixture-ca-only' in control['command'] and 'wrong-ca.pem' in ' '.join(control['command'])
+            if plans[control['client']]['curves']:
+                position = control['command'].index('--curves')
+                assert control['command'][position + 1] == plans[control['client']]['curves']
     by_client = defaultdict(list)
     for row in records:
         by_client[row['client']].append(row)
     summary = {'source': suite['source'], 'runtime_source': suite['build']['runtime_source'],
         'scope': suite['scope'], 'cases': len(records), 'infrastructure_failures': infrastructure,
-        'incomplete_processes': partial, 'wrong_ca_rejections': len(controls), 'clients': {}}
+        'incomplete_processes': partial, 'wrong_ca_rejections': len(controls), 'group_observations': groups,
+        'client_mode': mode, 'clients': {}}
     for client, rows in by_client.items():
         summary['clients'][client] = {'statuses': dict(Counter(r['status'] for r in rows)),
             'successful': sum(r.get('successful', 0) for r in rows), 'failed': sum(r.get('failed', 0) for r in rows),

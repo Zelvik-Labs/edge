@@ -1,13 +1,6 @@
 name: Quinn fresh-connection protocol diagnosis
 on:
   workflow_dispatch:
-  push:
-    branches: [perf/program-wide-20261104]
-    paths:
-      - .github/workflows/quinn-diagnostic.yml
-      - scripts/perf/quinn-diagnostic/**
-      - benches/support/quic_client_diagnostics.h
-      - benches/support/quic_diagnostic_controls.c
 permissions:
   contents: read
   actions: read

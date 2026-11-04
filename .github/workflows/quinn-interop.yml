@@ -1,11 +1,12 @@
 name: Quinn same-version client interoperability
 on:
   workflow_dispatch:
-  push:
-    branches: [perf/program-wide-20261104]
-    paths:
-      - .github/workflows/quinn-interop.yml
-      - scripts/perf/quinn-interop/**
+    inputs:
+      mode:
+        description: Compare QUIC backends or one OpenSSL binary with default versus X25519 groups
+        type: choice
+        options: [tls-backend, groups]
+        default: tls-backend
 permissions:
   contents: read
   actions: read
@@ -33,6 +34,7 @@ jobs:
           docker run --rm --name edge-quinn-interop-harness --network host --pid host \
             --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
             -e GITHUB_SHA -e EDGE_MATRIX_HARNESS_NAME=edge-quinn-interop-harness \
+            -e EDGE_QUIC_INTEROP_MODE="${{ inputs.mode }}" \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
             edge-quinn-interop-fixture:20261104 bash scripts/perf/quinn-interop/run-ci.sh

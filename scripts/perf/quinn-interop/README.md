@@ -30,3 +30,11 @@ The next control narrows both clients to the fixture CA via an explicit
 peer/hostname verification. A wrong-CA request must fail with curl 60 per case.
 Request count and deadlines stay unchanged. This isolates trust-directory
 cost without declaring the earlier incomplete batches successful.
+
+Manual `groups` mode uses the same diagnostic OpenSSL executable for default
+versus X25519-supported groups. Group selection comes from bounded ServerHello
+key_share metadata parsing, not a recursive SSL getter in a callback. Slot
+summaries prove observed group IDs; X25519 cases require ID 29. The parser is
+metadata-only and does not validate cryptographic key material. This does not
+change production crypto policy. Both modes are dispatched explicitly to avoid
+rerunning a different experiment on documentation or shared harness changes.

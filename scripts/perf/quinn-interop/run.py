@@ -3,6 +3,7 @@
 import argparse
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -13,6 +14,13 @@ BINS = ROOT / '.local/quinn-diagnostic-binaries'
 
 
 def main():
+    mode = os.environ.get('EDGE_QUIC_INTEROP_MODE', 'tls-backend')
+    if mode == 'tls-backend':
+        plans = {'openssl': {'binary': 'openssl', 'curves': None}, 'gnutls': {'binary': 'gnutls', 'curves': None}}
+    elif mode == 'groups':
+        plans = {'default': {'binary': 'openssl', 'curves': None}, 'x25519': {'binary': 'openssl', 'curves': 'X25519'}}
+    else:
+        raise ValueError('unknown interoperability mode: ' + mode)
     spec = importlib.util.spec_from_file_location('interop_matrix', ROOT / 'scripts/perf/protocol_state_matrix.py')
     matrix = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(matrix)
@@ -32,9 +40,11 @@ def main():
         result = original_probe(protocol, url, ca, payload, stem)
         if protocol == 'h3' and stem.name.endswith('-before'):
             variant = stem.parent.name.rsplit('-', 1)[-1]
-            command = [str(OUT / 'clients' / variant), '--protocol', 'h3', '--url', url,
+            command = [str(OUT / 'clients' / plans[variant]['binary']), '--protocol', 'h3', '--url', url,
                 '--cacert', str(OUT / 'tls/wrong-ca.pem'), '--payload', str(stem.parent / 'payload'),
                 '--connections', '1', '--requests', '1', '--seconds', '5', '--fresh', '--fixture-ca-only']
+            if plans[variant]['curves']:
+                command += ['--curves', plans[variant]['curves']]
             process = subprocess.run(command, capture_output=True, text=True, timeout=20)
             fields = process.stdout.strip().split('\t')
             observation = {'case': stem.parent.name, 'client': variant, 'command': command,
@@ -50,31 +60,37 @@ def main():
     for name, digest in build['binaries'].items():
         assert matrix.sha(BINS / name) == digest
     clients = {}
-    for variant in ['openssl', 'gnutls']:
-        client = OUT / 'clients' / variant
-        clients[variant] = {'sha256': matrix.sha(client),
+    for variant, plan in plans.items():
+        client = OUT / 'clients' / plan['binary']
+        clients[variant] = {**plan, 'sha256': matrix.sha(client),
             'version': subprocess.check_output([str(client), '--version'], text=True).strip()}
-    assert 'OpenSSL/' in clients['openssl']['version']
-    assert 'GnuTLS/' in clients['gnutls']['version'] and 'ngtcp2/' in clients['gnutls']['version']
+    if mode == 'tls-backend':
+        assert 'OpenSSL/' in clients['openssl']['version']
+        assert 'GnuTLS/' in clients['gnutls']['version'] and 'ngtcp2/' in clients['gnutls']['version']
+    else:
+        assert clients['default']['sha256'] == clients['x25519']['sha256']
+        assert all('OpenSSL/' in row['version'] for row in clients.values())
     suite = {'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
-        'build': build, 'clients': clients, 'runs': [], 'request_limit': 16384,
+        'build': build, 'clients': clients, 'runs': [], 'request_limit': 16384, 'client_mode': mode,
         'client_package_version': json.loads((OUT / 'client-build.json').read_text())['package_version'],
         'client_fixture_ca_only': True,
-        'scope': 'client interoperability and errors; different client stacks are not a server capacity comparison',
+        'scope': 'client interoperability/group diagnosis; no server capacity comparison; group mode is instrumented',
         'client_source_sha256': matrix.sha(ROOT / 'benches/support/protocol_state_client.c')}
     matrix.write(OUT / 'suite.json', suite)
-    for repeat, order in enumerate([['openssl', 'gnutls'], ['gnutls', 'openssl']]):
+    labels = list(plans)
+    for repeat, order in enumerate([labels, list(reversed(labels))]):
         for variant in order:
             directory = OUT / f'round-{repeat}-{variant}'
             args = argparse.Namespace(target='edge', output=directory, tls=OUT / 'tls',
-                client=OUT / 'clients' / variant, edge_binary=BINS / 'Zelvik-Edge',
+                client=OUT / 'clients' / plans[variant]['binary'], edge_binary=BINS / 'Zelvik-Edge',
                 controller=BINS / 'issue34-controller', edge_image='edge-http-state-fixture:20261103',
                 edge_backend='quinn-native', transport_profile='matched', address_validation='off',
                 quinn_native_gso='auto', seconds=5, repeats=1, payload_size=32768, concurrency=32,
                 cold_requests=None, fresh_requests=16384, protocols=['h3'], states=['hit'],
                 connections=['fresh'], multiplex=False, seed=20261104,
                 fixture_ca_only=True,
-                experiment='same client source/curl package, OpenSSL QUIC versus GnuTLS/ngtcp2; no capacity ranking')
+                client_curves=plans[variant]['curves'],
+                experiment='same server; client-mode=' + mode + '; compatibility only, no capacity ranking')
             error = None
             try:
                 code = matrix.run(args)

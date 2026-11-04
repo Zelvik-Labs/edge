@@ -10,6 +10,20 @@ int main(void) {
     QuicDiagnostic d = {0};
     d.bytes = malloc(DIAG_CAPACITY);
     assert(d.bytes);
+    unsigned char hello[84] = {2, 0, 0, 80, 3, 3};
+    hello[39] = 0x13; hello[40] = 1; /* cipher suite after empty session ID */
+    hello[43] = 40; /* extension list length */
+    hello[44] = 0; hello[45] = 51; hello[46] = 0; hello[47] = 36;
+    hello[48] = 0; hello[49] = 29; hello[50] = 0; hello[51] = 32;
+    assert(diagnostic_server_group(hello, sizeof(hello)) == 29);
+    for (size_t n = 0; n < sizeof(hello); ++n) assert(!diagnostic_server_group(hello, n));
+    diagnostic_message(0, 0, SSL3_RT_HANDSHAKE, hello, sizeof(hello), NULL, &d);
+    assert(d.group_observations == 1 && d.current_group == 29);
+    d.current_group = 0; hello[48] = 0x11; hello[49] = 0xec;
+    diagnostic_message(0, 0, SSL3_RT_HANDSHAKE, hello, sizeof(hello), NULL, &d);
+    assert(d.group_observations == 2 && d.last_group == 4588 && d.group_changes == 1);
+    hello[51] = 31;
+    assert(!diagnostic_server_group(hello, sizeof(hello)));
     const unsigned char packet_header[] = {0x45, 0x12, 0x34};
     diagnostic_message(0, 0, SSL3_RT_QUIC_PACKET, packet_header, sizeof(packet_header), NULL, &d);
     d.bytes[d.used] = 0;

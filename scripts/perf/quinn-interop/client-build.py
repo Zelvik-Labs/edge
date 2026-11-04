@@ -2,6 +2,7 @@
 """Build identical clients against same-version Debian libcurl TLS variants."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -12,6 +13,8 @@ OUT = ROOT / '.local/quinn-interop-private'
 
 
 def main():
+    mode = os.environ.get('EDGE_QUIC_INTEROP_MODE', 'tls-backend')
+    assert mode in ['tls-backend', 'groups']
     versions = {name: subprocess.check_output(['dpkg-query', '-W', '-f=${Version}', name], text=True)
         for name in ['libcurl4t64', 'libcurl3t64-gnutls']}
     assert len(set(versions.values())) == 1, versions
@@ -20,10 +23,20 @@ def main():
     flags = subprocess.check_output(['pkg-config', '--cflags', 'libcurl'], text=True).split()
     library_flags = subprocess.check_output(['pkg-config', '--libs', 'libcurl'], text=True).split()
     metadata = {'package_version': versions, 'source_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
-                'instrumentation': 'EDGE_QUIC_DIAGNOSTICS absent in both builds', 'clients': {}}
+                'instrumentation': 'OpenSSL diagnostic callback in groups mode only',
+                'client_mode': mode, 'clients': {}}
+    if mode == 'groups':
+        header = ROOT / 'benches/support/quic_client_diagnostics.h'
+        metadata['diagnostic_header_sha256'] = hashlib.sha256(header.read_bytes()).hexdigest()
+        (OUT / 'source').mkdir(exist_ok=True)
+        shutil.copy2(header, OUT / 'source' / header.name)
     for variant, libs in [('openssl', library_flags), ('gnutls', ['-Wl,-l:libcurl-gnutls.so.4'])]:
         binary = OUT / 'clients' / variant
-        command = ['cc', '-O3', '-march=x86-64-v2', '-Wall', '-Wextra', '-Werror', str(source), *flags, *libs, '-o', str(binary)]
+        extra, linked = [], list(libs)
+        if mode == 'groups' and variant == 'openssl':
+            extra = ['-DEDGE_QUIC_DIAGNOSTICS']
+            linked += subprocess.check_output(['pkg-config', '--libs', 'openssl'], text=True).split()
+        command = ['cc', '-O3', '-march=x86-64-v2', '-Wall', '-Wextra', '-Werror', *extra, str(source), *flags, *linked, '-o', str(binary)]
         subprocess.run(command, check=True)
         linkage = subprocess.check_output(['ldd', str(binary)], text=True)
         (OUT / 'clients' / (variant + '.ldd')).write_text(linkage)
