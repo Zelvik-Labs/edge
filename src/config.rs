@@ -609,7 +609,7 @@ impl ConfigStore {
     ) {
         let lock = self.inner.read();
         let hot_path = Self::build_hot_path_snapshot(&lock);
-        let normalized = Self::normalize_host(host);
+        let normalized = Self::normalize_host_for_lookup(host);
 
         (
             hot_path,
@@ -622,6 +622,23 @@ impl ConfigStore {
         crate::lb_factory::strip_addr_port(host)
             .trim_end_matches('.')
             .to_ascii_lowercase()
+    }
+
+    fn normalize_host_for_lookup(host: &str) -> std::borrow::Cow<'_, str> {
+        let normalized = crate::lb_factory::strip_addr_port_ref(host).trim_end_matches('.');
+        let (chunks, remainder) = normalized.as_bytes().as_chunks::<32>();
+        let has_uppercase = chunks.iter().any(|chunk| {
+            chunk
+                .iter()
+                .fold(false, |found, byte| found | byte.is_ascii_uppercase())
+        }) || remainder
+            .iter()
+            .fold(false, |found, byte| found | byte.is_ascii_uppercase());
+        if has_uppercase {
+            std::borrow::Cow::Owned(normalized.to_ascii_lowercase())
+        } else {
+            std::borrow::Cow::Borrowed(normalized)
+        }
     }
 
     fn find_server_locked(lock: &NodeConfig, normalized_host: &str) -> Option<Arc<ServerConfig>> {
@@ -2382,6 +2399,54 @@ mod tests {
         TLSExhaustionAttackConfig, UDPConfig,
     };
     use serde_json::json;
+
+    #[test]
+    fn borrowed_lookup_normalization_preserves_legacy_output_and_ownership() {
+        for (host, borrowed) in [
+            ("cdn.example.com", true),
+            ("CDN.Example.COM:443", false),
+            ("a:b", true),
+            ("[A:B]:443", false),
+            ("[::1]:443", true),
+            ("...", true),
+            ("", true),
+            ("  ", true),
+            ("é.test", true),
+            ("ÉXAMPLE.İ.TEST:443", false),
+        ] {
+            let actual = ConfigStore::normalize_host_for_lookup(host);
+            assert_eq!(actual.as_ref(), ConfigStore::normalize_host(host));
+            assert_eq!(matches!(actual, std::borrow::Cow::Borrowed(_)), borrowed);
+        }
+    }
+
+    #[test]
+    fn borrowed_request_lookup_preserves_reparse_and_wildcard_routes() {
+        let store = ConfigStore::new();
+        {
+            let mut config = store.inner.write();
+            for (host, id) in [("a", 1), ("a:b", 2), ("*.example.test", 3)] {
+                config.servers.insert(
+                    host.to_string(),
+                    Arc::new(ServerConfig {
+                        id: Some(id),
+                        ..Default::default()
+                    }),
+                );
+            }
+        }
+        for (host, expected) in [("a:b", 1), ("[A:B]:443", 2), ("WWW.EXAMPLE.TEST:443", 3)] {
+            let (_, server, upstream) = store.get_request_context_sync(host);
+            assert_eq!(server.unwrap().id, Some(expected));
+            assert!(upstream.is_none());
+        }
+        assert!(
+            store
+                .get_request_context_sync("missing.invalid")
+                .1
+                .is_none()
+        );
+    }
 
     fn http3_index_server(id: i64, user: i64, range: &str) -> Arc<ServerConfig> {
         Arc::new(

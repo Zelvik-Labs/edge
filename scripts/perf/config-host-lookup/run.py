@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import statistics
 import subprocess
@@ -35,6 +36,12 @@ def lookup_function(config):
         'crate::lb_factory::strip_addr_port_ref(', 'candidate_strip_addr_port(').strip()
 
 
+def rust_tokens(source):
+    # This narrow helper has ordinary string/character literals. Preserve
+    # literal whitespace while allowing rustfmt to wrap the longer crate path.
+    return re.findall(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])\'|[A-Za-z_][A-Za-z_0-9]*|[0-9]+|\S', source)
+
+
 def build():
     OUT.mkdir(parents=True, exist_ok=False)
     source = OUT / 'source'
@@ -58,7 +65,7 @@ def build():
     current = (ROOT / 'src/config.rs').read_text()
     integrated = '    fn normalize_host_for_lookup(' in current
     if integrated:
-        assert lookup_function(current) == (source / 'candidate.rs').read_text().strip()
+        assert rust_tokens(lookup_function(current)) == rust_tokens((source / 'candidate.rs').read_text())
         (source / 'integrated-config.rs').write_text(current)
     shutil.copy2(ROOT / 'benches/support/config_host_lookup_probe.rs', source / 'main.rs')
     allocator = (ROOT / 'benches/support/sni_client_hello_probe.rs').read_text()
@@ -130,7 +137,7 @@ def verify():
     for name, value in metadata['sources'].items():
         assert sha(OUT / 'source' / name) == value
     if metadata['integrated']:
-        assert lookup_function((OUT / 'source/integrated-config.rs').read_text()) == (OUT / 'source/candidate.rs').read_text().strip()
+        assert rust_tokens(lookup_function((OUT / 'source/integrated-config.rs').read_text())) == rust_tokens((OUT / 'source/candidate.rs').read_text())
     controls = read(OUT / 'controls.tsv')
     assert len(controls) == 65831
     assert all(int(row['case']) == i and row['baseline'] == row['candidate'] 
