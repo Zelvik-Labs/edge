@@ -1,0 +1,175 @@
+{
+  "source": "82e3cf0db722497fb594acdcfabc645a6deb2b56",
+  "cases": 32,
+  "statuses": {
+    "passed": 17,
+    "traffic-errors": 15
+  },
+  "successful": 639803,
+  "failed": 77,
+  "fresh_successful": 262067,
+  "max_host_steal_fraction": 0.0,
+  "comparisons": [
+    {
+      "bytes": 32768,
+      "cache": "hit",
+      "connection": "fresh",
+      "modes": {
+        "auto": {
+          "statuses": {
+            "traffic-errors": 4
+          },
+          "successful": 65496,
+          "failed": 40
+        },
+        "off": {
+          "statuses": {
+            "traffic-errors": 4
+          },
+          "successful": 65512,
+          "failed": 24
+        }
+      }
+    },
+    {
+      "bytes": 32768,
+      "cache": "hit",
+      "connection": "reuse",
+      "modes": {
+        "auto": {
+          "statuses": {
+            "passed": 4
+          },
+          "successful": 168899,
+          "failed": 0,
+          "independent_medians": {
+            "rps": 8437.308864077186,
+            "p99_ms": 8.2475,
+            "cpu_usec_per_request": 81.42814569619028,
+            "cgroup_peak_mib": 149.93359375,
+            "client_cpu_fraction": 0.9542367914000681,
+            "origin_cpu_fraction": 0.002698348666950031,
+            "proxy_cpu_fraction": 0.6817138222909316
+          }
+        },
+        "off": {
+          "statuses": {
+            "passed": 4
+          },
+          "successful": 133283,
+          "failed": 0,
+          "independent_medians": {
+            "rps": 6612.264465853272,
+            "p99_ms": 6.115,
+            "cpu_usec_per_request": 144.94433784485142,
+            "cgroup_peak_mib": 147.05078125,
+            "client_cpu_fraction": 0.8735035962372522,
+            "origin_cpu_fraction": 0.0028230888041505626,
+            "proxy_cpu_fraction": 0.9595293319644437
+          }
+        }
+      },
+      "paired_off_auto": {
+        "rps": [
+          -21.19028573161116,
+          -21.11626435719176,
+          -19.206695350755098,
+          -22.82729731736579
+        ],
+        "cpu_usec_per_request": [
+          79.14725135052427,
+          78.00027164717707,
+          74.635733914748,
+          79.01918468003714
+        ],
+        "p99_ms": [
+          -26.203467927731307,
+          -23.91221616135988,
+          -25.509214354995148,
+          -24.836680377449795
+        ]
+      }
+    },
+    {
+      "bytes": 131072,
+      "cache": "off",
+      "connection": "fresh",
+      "modes": {
+        "auto": {
+          "statuses": {
+            "traffic-errors": 4
+          },
+          "successful": 65526,
+          "failed": 10
+        },
+        "off": {
+          "statuses": {
+            "traffic-errors": 3,
+            "passed": 1
+          },
+          "successful": 65533,
+          "failed": 3
+        }
+      }
+    },
+    {
+      "bytes": 131072,
+      "cache": "off",
+      "connection": "reuse",
+      "modes": {
+        "auto": {
+          "statuses": {
+            "passed": 4
+          },
+          "successful": 40493,
+          "failed": 0,
+          "independent_medians": {
+            "rps": 1990.9193535078653,
+            "p99_ms": 51.019,
+            "cpu_usec_per_request": 338.7122501279173,
+            "cgroup_peak_mib": 151.91796875,
+            "client_cpu_fraction": 0.859851578372647,
+            "origin_cpu_fraction": 0.06563180985244683,
+            "proxy_cpu_fraction": 0.6771477789373841
+          }
+        },
+        "off": {
+          "statuses": {
+            "passed": 4
+          },
+          "successful": 35061,
+          "failed": 0,
+          "independent_medians": {
+            "rps": 1759.3823129229777,
+            "p99_ms": 22.686500000000002,
+            "cpu_usec_per_request": 544.4492380216933,
+            "cgroup_peak_mib": 153.73828125,
+            "client_cpu_fraction": 0.9012746988639682,
+            "origin_cpu_fraction": 0.05261387571751605,
+            "proxy_cpu_fraction": 0.955428331158594
+          }
+        }
+      },
+      "paired_off_auto": {
+        "rps": [
+          -12.11923406763782,
+          -11.138575898875104,
+          -15.553664683164925,
+          -14.332406857606095
+        ],
+        "cpu_usec_per_request": [
+          60.91391881237289,
+          60.56576275301553,
+          66.55676714387117,
+          65.13588601333021
+        ],
+        "p99_ms": [
+          -54.97027676075745,
+          -56.091420095245525,
+          -54.869349609002484,
+          -55.12467633086631
+        ]
+      }
+    }
+  ]
+}

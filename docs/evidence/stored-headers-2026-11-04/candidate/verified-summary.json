@@ -1,0 +1,248 @@
+{
+  "source": "13b375c3c556a09028a7b84f2f55cc4d6ac45d26",
+  "baseline": "a79b20d22c32e2b77c926e2335792b874b1d8bc8",
+  "differential_inputs": 31981,
+  "accepted_inputs": 3424,
+  "raw_blocks": 2560,
+  "max_host_steal_fraction": 0.0,
+  "allocations": {
+    "baseline": [
+      {
+        "case": "empty",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "typical6",
+        "allocations": "8",
+        "reallocations": "0",
+        "bytes": "771",
+        "largest": "624"
+      },
+      {
+        "case": "custom16",
+        "allocations": "28",
+        "reallocations": "0",
+        "bytes": "4169",
+        "largest": "2496"
+      },
+      {
+        "case": "private_tail",
+        "allocations": "10",
+        "reallocations": "0",
+        "bytes": "1738",
+        "largest": "1248"
+      },
+      {
+        "case": "duplicate_length",
+        "allocations": "11",
+        "reallocations": "0",
+        "bytes": "1725",
+        "largest": "1248"
+      },
+      {
+        "case": "framing_reject",
+        "allocations": "3",
+        "reallocations": "0",
+        "bytes": "115",
+        "largest": "104"
+      },
+      {
+        "case": "boundary32",
+        "allocations": "66",
+        "reallocations": "0",
+        "bytes": "5526",
+        "largest": "4992"
+      },
+      {
+        "case": "fallback33",
+        "allocations": "68",
+        "reallocations": "0",
+        "bytes": "5535",
+        "largest": "4992"
+      }
+    ],
+    "candidate": [
+      {
+        "case": "empty",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "typical6",
+        "allocations": "6",
+        "reallocations": "0",
+        "bytes": "115",
+        "largest": "29"
+      },
+      {
+        "case": "custom16",
+        "allocations": "26",
+        "reallocations": "0",
+        "bytes": "1545",
+        "largest": "128"
+      },
+      {
+        "case": "private_tail",
+        "allocations": "7",
+        "reallocations": "0",
+        "bytes": "138",
+        "largest": "29"
+      },
+      {
+        "case": "duplicate_length",
+        "allocations": "8",
+        "reallocations": "0",
+        "bytes": "125",
+        "largest": "29"
+      },
+      {
+        "case": "framing_reject",
+        "allocations": "1",
+        "reallocations": "0",
+        "bytes": "7",
+        "largest": "7"
+      },
+      {
+        "case": "boundary32",
+        "allocations": "64",
+        "reallocations": "0",
+        "bytes": "278",
+        "largest": "5"
+      },
+      {
+        "case": "fallback33",
+        "allocations": "68",
+        "reallocations": "0",
+        "bytes": "5535",
+        "largest": "4992"
+      }
+    ]
+  },
+  "cases": {
+    "empty": {
+      "baseline_ns": 41.078863724442115,
+      "candidate_ns": 3.2082751771662616,
+      "paired_changes": [
+        -0.9219786513898883,
+        -0.9232224933345154,
+        -0.9219648763811272,
+        -0.918036271962777,
+        -0.9217036899908219,
+        -0.9223349053816962,
+        -0.920172272136875,
+        -0.9219841930874755
+      ],
+      "paired_median": -0.9219717638855078
+    },
+    "typical6": {
+      "baseline_ns": 607.3777286526599,
+      "candidate_ns": 391.59979959736984,
+      "paired_changes": [
+        -0.31832699913291373,
+        -0.35386026166305484,
+        -0.35641715032562116,
+        -0.3378908918728034,
+        -0.3549700058298644,
+        -0.35086402916850135,
+        -0.35946732257942493,
+        -0.3455463572189088
+      ],
+      "paired_median": -0.3523621454157781
+    },
+    "custom16": {
+      "baseline_ns": 1810.0571752267388,
+      "candidate_ns": 1268.897345644134,
+      "paired_changes": [
+        -0.3054575877767355,
+        -0.2925514578534668,
+        -0.3011656479298339,
+        -0.2857944602468566,
+        -0.2845026432178993,
+        -0.29939384858950624,
+        -0.3021419959504589,
+        -0.29501751389987696
+      ],
+      "paired_median": -0.2972056812446916
+    },
+    "private_tail": {
+      "baseline_ns": 817.0815273739172,
+      "candidate_ns": 513.1106613774703,
+      "paired_changes": [
+        -0.36992884886527777,
+        -0.37844377200327894,
+        -0.3717064954142941,
+        -0.38021432264319865,
+        -0.3682745867381778,
+        -0.3753139248584457,
+        -0.41189889801614543,
+        -0.37336502015253725
+      ],
+      "paired_median": -0.3743394725054915
+    },
+    "duplicate_length": {
+      "baseline_ns": 897.033877498478,
+      "candidate_ns": 535.579562521215,
+      "paired_changes": [
+        -0.4052857815252733,
+        -0.4087154550372436,
+        -0.4036897201632622,
+        -0.40112210550181504,
+        -0.4037326345148975,
+        -0.4054819561682358,
+        -0.4313022469584029,
+        -0.39470808090749854
+      ],
+      "paired_median": -0.4045092080200854
+    },
+    "framing_reject": {
+      "baseline_ns": 82.30025098470745,
+      "candidate_ns": 53.22253513910537,
+      "paired_changes": [
+        -0.34650123574900205,
+        -0.3563238539434056,
+        -0.35493512297524066,
+        -0.35007022677411503,
+        -0.35157553417217335,
+        -0.35455666201155633,
+        -0.3855575193924138,
+        -0.3523609861706003
+      ],
+      "paired_median": -0.3534588240910783
+    },
+    "boundary32": {
+      "baseline_ns": 3756.9832563920454,
+      "candidate_ns": 1957.3934687790068,
+      "paired_changes": [
+        -0.4795916740798821,
+        -0.47577642707538426,
+        -0.47871983288256625,
+        -0.47627788659579373,
+        -0.4775719482969848,
+        -0.47774873714849264,
+        -0.4892863686207769,
+        -0.4815624402392287
+      ],
+      "paired_median": -0.47823428501552945
+    },
+    "fallback33": {
+      "baseline_ns": 3884.3484889777133,
+      "candidate_ns": 3908.799432487376,
+      "paired_changes": [
+        0.009757154166706528,
+        -0.0002299533133477416,
+        0.1718749371936692,
+        0.01012022677864266,
+        -0.009814197408735792,
+        0.001086116359765521,
+        -0.02113154020801855,
+        -0.000850510243004754
+      ],
+      "paired_median": 0.0004280815232088897
+    }
+  }
+}

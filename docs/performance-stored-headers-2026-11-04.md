@@ -31,7 +31,10 @@
 
 生产集成逐字核对了候选函数与原始回退函数，仅重命名入口；回归覆盖 2/32/33 个字段的隐私与 framing 边界。
 原测量源码为 `13b375c3c556a09028a7b84f2f55cc4d6ac45d26`，不包含后续生产集成提交。
-完整 CI 和集成后再次组件复核待完成。
+[集成后组件复核 41719473526](https://github.com/Zelvik-Labs/edge/actions/runs/41719473526) 已再次通过 31,981 组差分与 2560 个计时块，
+典型 6 字段 −35.26%、16 字段 −30.11%、33 字段回退 −0.18%，分配计数一致；两个实验不合并计时。
+[完整 CI 41755592327](https://github.com/Zelvik-Labs/edge/actions/runs/41755592327) 正在验证生产集成。
+两轮原始证据与[可移植复核器](evidence/stored-headers-2026-11-04/verify.py)已保留。
 组件收益不能等同节点吞吐；旧版的大容量 HeaderMap 限制也不会由该候选解决。经审批的功能降级：无。
 
 [运行与复核说明](../scripts/perf/stored-headers/README.md)

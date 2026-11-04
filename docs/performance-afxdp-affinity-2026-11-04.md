@@ -6,7 +6,9 @@
 
 运行时 `a5098908d49a8610be9654e176b4a22d0efba10f`；
 [Actions 41710360453](https://github.com/Zelvik-Labs/edge/actions/runs/41710360453) 已通过。
-当前证据是提取生产函数的原生 Linux 回归，完整节点 CI 需要在后续累计版本中验证。
+后续累计版本 `fe89411` 的[完整 CI 41712030753](https://github.com/Zelvik-Labs/edge/actions/runs/41712030753) 也已通过：
+1360 项库测试、16 项二进制测试、集成/vendor、check/Clippy 以及 32 项完整 AF_XDP 节点组合。
+[完整节点证据](evidence/range-preflight-2026-11-04/full-ci/)已校验来源、文件哈希、运行后清理及测试摘要。
 
 ## 已修复
 

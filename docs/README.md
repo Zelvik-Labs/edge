@@ -11,6 +11,13 @@
 - [运行时说明](runtime.md)：说明进程启动、任务调度、配置热更新、证书、缓存后台任务和性能监控。
 - [H3 传输后端](h3-transport-backends.md)：共享/原生 Quinn 与实验性 tokio-quiche 的实现、选择和功能边界。
 - [五项性能工作的交付与边界](performance-five-priorities-2026-11-04.md)：H3 回源池、WAF 内存、UDP 实验、三产品矩阵和 tokio-quiche 的实现、收益与未解决项。
+- [全程序性能优化进度](performance-program-wide-2026-11-04.md)：缓存、SNI/TCP、统计、XDP 与 io_uring 的本轮交付、收益与未解决项。
+- [实际 HTTP CPU 归因](performance-http-cpu-2026-11-04.md)：生产二进制采样、热点与可复核证据。
+- [Range 缓存预检查优化与四目标对比](performance-range-preflight-2026-11-04.md)：192 个独立单元、前后 Edge/Nginx/OpenResty 吞吐、CPU 与延迟。
+- [已存响应头校验优化](performance-stored-headers-2026-11-04.md)：三万多组语义差分、分配与组件计时，以及生产集成验证。
+- [AF_XDP 自动绑核修复](performance-afxdp-affinity-2026-11-04.md)：继承 CPU 集合、真实线程控制与完整节点验证。
+- [Quinn GSO 隔离结果](performance-quinn-gso-2026-11-04.md)：原生新连接故障复现、GSO 开关代价与诊断边界。
+- [io_uring splice 架构审计](performance-io-uring-architecture-2026-11-04.md)：强制异步路径的上游源码证据和后续实现方向。
 - [SNI 分片解析的分配边界与代价](performance-sni-parser-2026-11-04.md)：不完整输入零分配、完整分片扫描代价、逐输入对照和实测原始块。
 - [SNI 跨记录读取与小正文栈缓冲](performance-sni-cursor-2026-11-04.md)：四版本同机对照、大分片复制消除、完整边界结果和局部取舍。
 - [TCP/SNI 转发的部分写入与取消统计](performance-relay-copy-2026-11-04.md)：漏计复现、生命周期修正、计数器分配减少和短写代价。

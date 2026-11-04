@@ -46,7 +46,7 @@ python3 scripts/perf/cache-range/verify.py /path/to/extracted-evidence \
 ```
 
 The first run (41712678098) stopped at the second origin capacity reference:
-168 startup curl 56 errors, before the candidate Edge was measured. The
+168 startup transfer errors (161 curl 56 and 7 curl 52), before the candidate Edge was measured. The
 `cache-range-reuse.yml` workflow verifies archive 13269688187 and its actual
 executables, then repeats the full experiment without rebuilding the variants.
 The current harness revision and original binary revisions are separate fields.
