@@ -21,6 +21,8 @@ jobs:
       EDGE_PROFILE_RUNTIME: headers
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - name: Download the exact final HTTP matrix executables
         uses: actions/download-artifact@v4
         with:

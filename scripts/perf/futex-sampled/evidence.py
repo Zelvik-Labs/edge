@@ -106,7 +106,9 @@ def verify():
             row = profile(Path(str(stem) + '.stacks.txt'))
             row.update(round=run['round'], protocol=case['protocol'])
             command = json.loads(Path(str(stem) + '.perf-command.json').read_text())
-            assert command[command.index('-e') + 1] == f'{EVENT}/period={PERIOD}/'
+            assert command[command.index('-e') + 1] == EVENT
+            assert command.index('-c') > command.index('-e')
+            assert command[command.index('-c') + 1] == str(PERIOD)
             for suffix in ['.perf-preflight.txt', '.perf-effective.txt']:
                 driver.verify_effective_period(Path(str(stem) + suffix).read_text(), PERIOD)
             rows.append(row)

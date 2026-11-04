@@ -80,9 +80,10 @@ def main(options):
                       'executable_sha256': identity})
         remote = '/test/' + stem.name
         sampling = ['-F', str(options.frequency)] if options.event == 'cpu-clock:u' else []
-        event = options.event if options.event == 'cpu-clock:u' else f'{options.event}/period={options.period}/'
+        event = options.event
+        event_options = [] if options.event == 'cpu-clock:u' else ['-c', str(options.period)]
         command = [*matrix.DOCKER, 'exec', target, 'perf', 'record', *sampling,
-                   '-e', event, '--call-graph',
+                   '-e', event, *event_options, '--call-graph',
                    'dwarf,32768', '-p', ','.join(map(str, pids)), '-o', remote + '.perf.data',
                    '--', 'sleep', str(options.seconds)]
         matrix.write(Path(str(stem) + '.perf-command.json'), command)
