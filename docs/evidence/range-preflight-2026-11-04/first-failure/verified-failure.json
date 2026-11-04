@@ -1,0 +1,39 @@
+{
+  "run": 41712678098,
+  "source": "0cf22db48e2e6a64c34f82599b6285d0efc90de5",
+  "before_completed_cells": 12,
+  "before_successful": 497522,
+  "candidate_cells": 0,
+  "failed_origin_reference": [
+    {
+      "shard": 0,
+      "transfers": 71522,
+      "startup_failures": 85,
+      "curl_errors": {
+        "56": 83,
+        "52": 2
+      },
+      "error_indices": [
+        0,
+        84
+      ],
+      "later_transfers_all_valid": true
+    },
+    {
+      "shard": 1,
+      "transfers": 71109,
+      "startup_failures": 83,
+      "curl_errors": {
+        "56": 78,
+        "52": 5
+      },
+      "error_indices": [
+        0,
+        82
+      ],
+      "later_transfers_all_valid": true
+    }
+  ],
+  "actual_executables_verified": 4,
+  "scope": "failed startup evidence; no before/after ranking"
+}

@@ -1,0 +1,77 @@
+{
+  "all_passed": true,
+  "comparisons": [
+    {
+      "bytes": 1024,
+      "pairs": [
+        {
+          "round": 1,
+          "blocking": 32688.800972939098,
+          "readiness": 20735.91310414612,
+          "readiness_vs_blocking_percent": -36.56569685345139
+        },
+        {
+          "round": 2,
+          "readiness": 20939.534142885714,
+          "blocking": 33730.98303989692,
+          "readiness_vs_blocking_percent": -37.92195703837482
+        },
+        {
+          "round": 3,
+          "blocking": 34694.870889051446,
+          "readiness": 21528.570944559535,
+          "readiness_vs_blocking_percent": -37.94883683699414
+        }
+      ],
+      "median_percent": -37.92195703837482
+    },
+    {
+      "bytes": 65536,
+      "pairs": [
+        {
+          "round": 1,
+          "blocking": 56363.26159892256,
+          "readiness": 52293.5339451174,
+          "readiness_vs_blocking_percent": -7.2205325567655905
+        },
+        {
+          "round": 2,
+          "readiness": 52947.72536957072,
+          "blocking": 57531.12057530647,
+          "readiness_vs_blocking_percent": -7.9668102409655495
+        },
+        {
+          "round": 3,
+          "blocking": 57496.97774442274,
+          "readiness": 52139.841539033296,
+          "readiness_vs_blocking_percent": -9.317248341647122
+        }
+      ],
+      "median_percent": -7.9668102409655495
+    },
+    {
+      "bytes": 1048576,
+      "pairs": [
+        {
+          "round": 1,
+          "blocking": 508653.33054723433,
+          "readiness": 515938.9040494502,
+          "readiness_vs_blocking_percent": 1.4323259211490136
+        },
+        {
+          "round": 2,
+          "readiness": 527575.2791865664,
+          "blocking": 509450.50737609045,
+          "readiness_vs_blocking_percent": 3.5577100322908617
+        },
+        {
+          "round": 3,
+          "blocking": 523069.21065857296,
+          "readiness": 512155.9746683164,
+          "readiness_vs_blocking_percent": -2.0863847016566295
+        }
+      ],
+      "median_percent": 1.4323259211490136
+    }
+  ]
+}

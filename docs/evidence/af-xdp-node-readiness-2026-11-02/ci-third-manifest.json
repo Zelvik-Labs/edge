@@ -1,0 +1,19 @@
+{
+  "sha256": "e64cfeafac3de6187b9e151884aa4f51676dade1960c72bcd47408e2e563612f",
+  "bytes": 185632,
+  "scope": "complete returned job log and job metadata; Rust unit failure, no native suite",
+  "files": {
+    "ci-third-test-job.log": {
+      "bytes": 2830499,
+      "sha256": "fb7e2f009cc659366a567d5a8543ec9b5b5bb6b6eb3d6c8f846e8ba3dd161be2"
+    },
+    "ci-third-jobs.json": {
+      "bytes": 7171,
+      "sha256": "7475158428325943ea7f6fa55b428dd4ee120cb4495217aef837c65b91cab58a"
+    },
+    "ci-third-artifacts.json": {
+      "bytes": 22,
+      "sha256": "fb09a9699b26ad536855bb4263ff01baa31a107d9af48b348e96cb4a9eb2b8d9"
+    }
+  }
+}

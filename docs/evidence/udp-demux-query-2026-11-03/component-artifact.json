@@ -1,0 +1,19 @@
+{
+  "id": 13206359179,
+  "name": "udp-demux-1fbca822e49c3242edf89c7fd1a134de81ab3b27",
+  "size_in_bytes": 183783,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13206359179",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13206359179/zip",
+  "expired": false,
+  "created_at": "2026-11-03T05:21:13Z",
+  "expires_at": "2027-02-01T04:35:51Z",
+  "updated_at": "2026-11-03T05:21:13Z",
+  "digest": "sha256:2d9529f4f67b3a0150ccb7553ee1667af05abba29328a8e37ca2b434dd67fbdc",
+  "workflow_run": {
+    "id": 41579056235,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/udp-port-query-20261103",
+    "head_sha": "1fbca822e49c3242edf89c7fd1a134de81ab3b27"
+  }
+}

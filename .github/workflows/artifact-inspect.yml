@@ -1,0 +1,47 @@
+name: Inspect retained diagnostic text
+on:
+  workflow_dispatch:
+    inputs:
+      run:
+        description: Original run ID
+        default: '41819185620'
+        type: string
+      source:
+        description: Full original source SHA
+        default: '86d37d7d550dfa216f0764799ca2bb11d015f041'
+        type: string
+      prefix:
+        description: Unique artifact prefix
+        default: idle-cpu-
+        type: string
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - .github/workflows/artifact-inspect.yml
+      - scripts/perf/artifact-inspect/**
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify raw ZIP and read bounded text without executing retained files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INSPECT_RUN: ${{ inputs.run }}
+          INSPECT_SOURCE: ${{ inputs.source }}
+          INSPECT_PREFIX: ${{ inputs.prefix }}
+        run: python3 scripts/perf/artifact-inspect/inspect.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: artifact-inspect-${{ github.sha }}
+          path: .local/artifact-inspect/
+          include-hidden-files: true
+          if-no-files-found: error

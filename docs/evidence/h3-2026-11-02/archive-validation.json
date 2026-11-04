@@ -1,0 +1,12 @@
+{
+  "frozen_files_verified": 176,
+  "binaries_verified": 4,
+  "harness_files_verified": 4,
+  "all_candidate_contracts_passed": true,
+  "portable_indices_resolve": true,
+  "report_links_exist": true,
+  "raw_hashes_match": true,
+  "recomputed_h3_identical": true,
+  "runtime_secrets_excluded": true,
+  "all_failed_baseline_and_competitor_cases_retained": true
+}

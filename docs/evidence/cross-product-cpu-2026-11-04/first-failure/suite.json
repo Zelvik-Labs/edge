@@ -1,0 +1,54 @@
+{
+  "source": "58edf8630bee9b0dbe4a42a6514a1c0367c9bbc1",
+  "scope": "user CPU stacks only; all instrumented timing and normalized CPU excluded from capacity rankings",
+  "orders": [
+    [
+      "edge",
+      "nginx",
+      "openresty"
+    ],
+    [
+      "openresty",
+      "nginx",
+      "edge"
+    ]
+  ],
+  "images": {
+    "edge": {
+      "ref": "edge-architecture-profiler:20261104",
+      "id": "sha256:18125e7e2e02c40424dd22197c83a30401fb53109bf6832fb37294fd185e1f2d",
+      "repo_digests": []
+    },
+    "nginx": {
+      "ref": "edge-nginx-profiler:20261104",
+      "id": "sha256:dfb1c079ec168f4405f16d4c8f508bd9ec51048045d315919ab1facd7ec9c2e0",
+      "repo_digests": []
+    },
+    "openresty": {
+      "ref": "edge-openresty-profiler:20261104",
+      "id": "sha256:acef98e31584ce123422294f39927fb1263d4ada0880006b3cb1e003d059374d",
+      "repo_digests": []
+    },
+    "origin": {
+      "ref": "nginx:1.28.0",
+      "id": "sha256:34e04bb6b4bb37d45845842374be0cd181723daffb230849b1984aaeaa96faba",
+      "repo_digests": [
+        "nginx@sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609"
+      ]
+    }
+  },
+  "runs": [
+    {
+      "round": 0,
+      "target": "edge",
+      "manifest": "round-0-edge/manifest.json",
+      "exit": 0
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "manifest": "round-0-nginx/manifest.json",
+      "exit": 1
+    }
+  ]
+}

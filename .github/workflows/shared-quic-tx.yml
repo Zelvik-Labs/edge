@@ -1,0 +1,38 @@
+name: Shared QUIC kernel TX component controls
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - benches/support/quic_shared_tx_candidate.rs
+      - benches/support/quic_shared_tx_probe.rs
+      - scripts/perf/shared-quic-tx/**
+      - .github/workflows/shared-quic-tx.yml
+permissions:
+  contents: read
+concurrency:
+  group: shared-quic-tx-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  controls:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      CARGO_BUILD_JOBS: "2"
+      RUST_TEST_THREADS: "2"
+      RUSTFLAGS: "-C target-cpu=x86-64-v2 -D warnings"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: clippy
+      - name: Test real GSO, GRO isolation, readiness and hard errors
+        run: python3 scripts/perf/shared-quic-tx/run.py build
+      - name: Retain sources, actual binary, controls and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-quic-tx-${{ github.sha }}
+          path: .local/shared-quic-tx-ci/
+          include-hidden-files: true
+          if-no-files-found: error

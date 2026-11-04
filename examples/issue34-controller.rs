@@ -42,19 +42,14 @@ use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
-use zelvik_edge::node_control::proto::node_control_server::{
-    NodeControl, NodeControlServer,
-};
+use zelvik_edge::node_control::proto::node_control_server::{NodeControl, NodeControlServer};
 use zelvik_edge::node_control::proto::{
     ApplyReleaseRequest, ApplyReleaseResponse, EnvelopeMeta, GetDesiredReleaseRequest,
-    GetDesiredReleaseResponse, RegisterNodeRequest, RegisterNodeResponse,
-    ReportNodeHealthRequest, ReportNodeHealthResponse, StreamEventsRequest,
-    StreamEventsResponse,
-};
-use zelvik_suite::pb::control::v1::control_channel_server::{
-    ControlChannel, ControlChannelServer,
+    GetDesiredReleaseResponse, RegisterNodeRequest, RegisterNodeResponse, ReportNodeHealthRequest,
+    ReportNodeHealthResponse, StreamEventsRequest, StreamEventsResponse,
 };
 use zelvik_edge::pb::{TelemetryBatch, TelemetryReceipt};
+use zelvik_suite::pb::control::v1::control_channel_server::{ControlChannel, ControlChannelServer};
 use zelvik_suite::pb::control::v1::{
     HeartbeatRequest, HeartbeatResponse, RegisterInstanceRequest, RegisterInstanceResponse,
     RotateCredentialRequest, RotateCredentialResponse,
@@ -83,6 +78,8 @@ pub struct Options {
     pub tls_port: u16,
     pub tls_host: String,
     pub origin: String,
+    /// Test-only top-level snapshot replacements for protocol/cache matrices.
+    pub snapshot_overrides: Option<PathBuf>,
     pub cert_dir: Option<PathBuf>,
     pub ca_file: Option<PathBuf>,
     pub cert_file: Option<PathBuf>,
@@ -117,6 +114,7 @@ impl Options {
             tls_port: 0,
             tls_host: "localhost".into(),
             origin: "auto".into(),
+            snapshot_overrides: None,
             cert_dir: None,
             ca_file: None,
             cert_file: None,
@@ -159,15 +157,16 @@ impl Options {
             };
             match flag.as_str() {
                 "--home" => opts.home = PathBuf::from(value("--home")?),
-                "--edge-binary" => {
-                    opts.edge_binary = Some(PathBuf::from(value("--edge-binary")?))
-                }
+                "--edge-binary" => opts.edge_binary = Some(PathBuf::from(value("--edge-binary")?)),
                 "--edge-arg" => opts.edge_arg = value("--edge-arg")?,
                 "--grpc-listen" => opts.grpc_listen = value("--grpc-listen")?,
                 "--status-listen" => opts.status_listen = value("--status-listen")?,
                 "--tls-port" => opts.tls_port = value("--tls-port")?.parse()?,
                 "--tls-host" => opts.tls_host = value("--tls-host")?,
                 "--origin" => opts.origin = value("--origin")?,
+                "--snapshot-overrides" => {
+                    opts.snapshot_overrides = Some(PathBuf::from(value("--snapshot-overrides")?))
+                }
                 "--cert-dir" => opts.cert_dir = Some(PathBuf::from(value("--cert-dir")?)),
                 "--ca-file" => opts.ca_file = Some(PathBuf::from(value("--ca-file")?)),
                 "--cert-file" => opts.cert_file = Some(PathBuf::from(value("--cert-file")?)),
@@ -177,9 +176,7 @@ impl Options {
                 "--version" => opts.version = value("--version")?.parse()?,
                 "--status-file" => opts.status_file = Some(PathBuf::from(value("--status-file")?)),
                 "--ready-file" => opts.ready_file = Some(PathBuf::from(value("--ready-file")?)),
-                "--report-file" => {
-                    opts.report_file = Some(PathBuf::from(value("--report-file")?))
-                }
+                "--report-file" => opts.report_file = Some(PathBuf::from(value("--report-file")?)),
                 "--edge-log" => opts.edge_log = Some(PathBuf::from(value("--edge-log")?)),
                 "--telemetry-mode" => opts.telemetry_mode = value("--telemetry-mode")?,
                 "--telemetry-mode-file" => {
@@ -189,7 +186,8 @@ impl Options {
                     opts.telemetry_store = Some(PathBuf::from(value("--telemetry-store")?))
                 }
                 "--telemetry-store-max-bytes" => {
-                    opts.telemetry_store_max_bytes = value("--telemetry-store-max-bytes")?.parse()?
+                    opts.telemetry_store_max_bytes =
+                        value("--telemetry-store-max-bytes")?.parse()?
                 }
                 "--spawn-edge" => opts.spawn_edge = true,
                 "--smoke" => opts.smoke = true,
@@ -224,7 +222,8 @@ fn print_help() {
     println!(
         "issue34-controller [--home DIR] [--edge-binary PATH] [--spawn-edge] [--smoke]\n\
          [--grpc-listen ADDR] [--status-listen ADDR] [--tls-port PORT] [--tls-host HOST]\n\
-         [--origin auto|http://HOST:PORT] [--cert-dir DIR] [--status-file FILE]\n\
+         [--origin auto|http://HOST:PORT] [--snapshot-overrides FILE]\n\
+         [--cert-dir DIR] [--status-file FILE]\n\
          [--ready-file FILE] [--report-file FILE] [--edge-log FILE]\n\
          [--telemetry-mode unavailable|unimplemented|success]\n\
          [--telemetry-mode-file FILE] [--telemetry-store FILE]\n\
@@ -356,7 +355,10 @@ impl TelemetryStore {
 }
 
 fn is_core_telemetry_kind(kind: &str) -> bool {
-    matches!(kind, "bandwidth" | "node_metric" | "gap" | "alert" | "daily" | "unique_ip")
+    matches!(
+        kind,
+        "bandwidth" | "node_metric" | "gap" | "alert" | "daily" | "unique_ip"
+    )
 }
 
 #[derive(Default)]
@@ -389,13 +391,12 @@ impl TelemetryCounters {
             self.detail_max_sequence
                 .fetch_max(batch.sequence, Ordering::Relaxed);
         }
-        self.max_batch_bytes.fetch_max(
-            batch.encoded_len() as u64,
-            Ordering::Relaxed,
-        );
+        self.max_batch_bytes
+            .fetch_max(batch.encoded_len() as u64, Ordering::Relaxed);
         self.total_batch_bytes
             .fetch_add(batch.encoded_len() as u64, Ordering::Relaxed);
-        self.max_pending.fetch_max(self.pending(), Ordering::Relaxed);
+        self.max_pending
+            .fetch_max(self.pending(), Ordering::Relaxed);
     }
 
     fn ack(&self, batch: &TelemetryBatch) {
@@ -722,8 +723,7 @@ impl NodeControl for Controller {
         }))
     }
 
-    type StreamEventsStream =
-        tokio_stream::Empty<Result<StreamEventsResponse, Status>>;
+    type StreamEventsStream = tokio_stream::Empty<Result<StreamEventsResponse, Status>>;
 
     async fn stream_events(
         &self,
@@ -902,14 +902,9 @@ where
             struct UploadBatchSvc(Arc<Controller>);
             impl tonic::server::UnaryService<TelemetryBatch> for UploadBatchSvc {
                 type Response = TelemetryReceipt;
-                type Future = tonic::codegen::BoxFuture<
-                    tonic::Response<Self::Response>,
-                    tonic::Status,
-                >;
-                fn call(
-                    &mut self,
-                    request: tonic::Request<TelemetryBatch>,
-                ) -> Self::Future {
+                type Future =
+                    tonic::codegen::BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                fn call(&mut self, request: tonic::Request<TelemetryBatch>) -> Self::Future {
                     let inner = Arc::clone(&self.0);
                     Box::pin(async move { inner.upload_batch(request).await })
                 }
@@ -919,14 +914,12 @@ where
                 let codec = tonic_prost::ProstCodec::default();
                 // The Edge compresses telemetry requests with gzip; accept it
                 // exactly like the generated NodeControl server does.
-                let mut accept =
-                    tonic::codegen::EnabledCompressionEncodings::default();
+                let mut accept = tonic::codegen::EnabledCompressionEncodings::default();
                 accept.enable(tonic::codegen::CompressionEncoding::Gzip);
-                let mut grpc = tonic::server::Grpc::new(codec)
-                    .apply_compression_config(
-                        accept,
-                        tonic::codegen::EnabledCompressionEncodings::default(),
-                    );
+                let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                    accept,
+                    tonic::codegen::EnabledCompressionEncodings::default(),
+                );
                 Ok(grpc.unary(method, req).await)
             })
         } else {
@@ -1006,7 +999,11 @@ fn reserve_port() -> anyhow::Result<u16> {
 }
 
 fn openssl() -> anyhow::Result<PathBuf> {
-    for candidate in ["/usr/bin/openssl", "/usr/local/bin/openssl", "/opt/homebrew/bin/openssl"] {
+    for candidate in [
+        "/usr/bin/openssl",
+        "/usr/local/bin/openssl",
+        "/opt/homebrew/bin/openssl",
+    ] {
         if Path::new(candidate).is_file() {
             return Ok(PathBuf::from(candidate));
         }
@@ -1038,11 +1035,13 @@ fn run_openssl(openssl: &Path, args: &[String]) -> anyhow::Result<()> {
 }
 
 pub fn resolve_certs(opts: &Options) -> anyhow::Result<Certs> {
-    if let (Some(ca), Some(cert), Some(key)) =
-        (&opts.ca_file, &opts.cert_file, &opts.key_file)
-    {
+    if let (Some(ca), Some(cert), Some(key)) = (&opts.ca_file, &opts.cert_file, &opts.key_file) {
         for path in [ca, cert, key] {
-            anyhow::ensure!(path.is_file(), "certificate file missing: {}", path.display());
+            anyhow::ensure!(
+                path.is_file(),
+                "certificate file missing: {}",
+                path.display()
+            );
         }
         return Ok(Certs {
             ca: ca.clone(),
@@ -1158,7 +1157,7 @@ pub fn build_snapshot(
 ) -> anyhow::Result<Vec<u8>> {
     let cert_pem = fs::read_to_string(&certs.cert)?;
     let key_pem = fs::read_to_string(&certs.key)?;
-    let snapshot = json!({
+    let mut snapshot = json!({
         "id": 1,
         "nodeId": opts.instance_id,
         "version": opts.version,
@@ -1245,6 +1244,19 @@ pub fn build_snapshot(
             "web": {"isOn": true},
         }],
     });
+    if let Some(path) = &opts.snapshot_overrides {
+        let overrides: Value = serde_json::from_slice(
+            &fs::read(path)
+                .with_context(|| format!("read snapshot overrides {}", path.display()))?,
+        )?;
+        let replacements = overrides
+            .as_object()
+            .context("snapshot overrides must be a JSON object of top-level replacements")?;
+        snapshot
+            .as_object_mut()
+            .context("fixture snapshot must be an object")?
+            .extend(replacements.clone());
+    }
     Ok(serde_json::to_vec(&snapshot)?)
 }
 
@@ -1257,9 +1269,11 @@ fn write_home(opts: &Options, grpc_addr: &str, snapshot: &[u8]) -> anyhow::Resul
     if !marker.exists() {
         let existing = fs::read_dir(&opts.home)
             .map(|entries| {
-                entries
-                    .flatten()
-                    .any(|entry| entry.file_name() != "configs" && entry.file_name() != "data" && entry.file_name() != "logs")
+                entries.flatten().any(|entry| {
+                    entry.file_name() != "configs"
+                        && entry.file_name() != "data"
+                        && entry.file_name() != "logs"
+                })
             })
             .unwrap_or(false);
         anyhow::ensure!(
@@ -1273,7 +1287,10 @@ fn write_home(opts: &Options, grpc_addr: &str, snapshot: &[u8]) -> anyhow::Resul
         "instanceId: \"{}\"\nsecret: \"{}\"\nrpc.endpoints:\n  - \"http://{}\"\ncommMode: \"plaintext\"\ngcloudNodeId: \"1\"\nrpc.disableUpdate: true\nxdp:\n  enabled: false\n",
         opts.instance_id, opts.secret, grpc_addr
     );
-    atomic_write(&opts.home.join("configs").join("api_node.yaml"), yaml.as_bytes())?;
+    atomic_write(
+        &opts.home.join("configs").join("api_node.yaml"),
+        yaml.as_bytes(),
+    )?;
     let snapshot_path = opts.home.join("data").join("issue34-snapshot.json");
     atomic_write(&snapshot_path, snapshot)?;
     Ok(snapshot_path)
@@ -1323,7 +1340,11 @@ fn wait_tcp(host: &str, port: u16, timeout: Duration) -> anyhow::Result<()> {
     )
 }
 
-fn wait_health(controller: &Controller, child: &mut Child, timeout: Duration) -> anyhow::Result<()> {
+fn wait_health(
+    controller: &Controller,
+    child: &mut Child,
+    timeout: Duration,
+) -> anyhow::Result<()> {
     let deadline = Instant::now() + timeout;
     loop {
         if controller.health_value().is_some() {
@@ -1353,24 +1374,20 @@ fn spawn_edge(opts: &Options) -> anyhow::Result<Child> {
         if let Some(parent) = log.parent() {
             fs::create_dir_all(parent)?;
         }
-        let file = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(log)?;
+        let file = fs::OpenOptions::new().create(true).append(true).open(log)?;
         let stderr = file.try_clone()?;
-        command.stdout(Stdio::from(file)).stderr(Stdio::from(stderr));
+        command
+            .stdout(Stdio::from(file))
+            .stderr(Stdio::from(stderr));
         if file_size(log) > MAX_EDGE_LOG_BYTES {
             bail!("edge log {} is over the bounded size", log.display());
         }
     } else {
         command.stdout(Stdio::null()).stderr(Stdio::null());
     }
-    command.spawn().with_context(|| {
-        format!(
-            "spawn the production Edge binary {}",
-            binary.display()
-        )
-    })
+    command
+        .spawn()
+        .with_context(|| format!("spawn the production Edge binary {}", binary.display()))
 }
 
 fn file_size(path: &Path) -> u64 {
@@ -1533,7 +1550,11 @@ async fn serve_origin(listener: TcpListener) {
                 .next()
                 .map(|line| line.starts_with("POST "))
                 .unwrap_or(false);
-            let response = if is_post { body } else { deterministic_payload() };
+            let response = if is_post {
+                body
+            } else {
+                deterministic_payload()
+            };
             let header = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                 response.len()
@@ -1661,11 +1682,10 @@ fn openssl_alpn_check(ca: &Path, host: &str, port: u16) -> anyhow::Result<Value>
 }
 
 async fn telemetry_reject_check(grpc_addr: &str) -> anyhow::Result<Value> {
-    let mut client =
-        zelvik_edge::pb::telemetry_service_client::TelemetryServiceClient::connect(format!(
-            "http://{grpc_addr}"
-        ))
-        .await?;
+    let mut client = zelvik_edge::pb::telemetry_service_client::TelemetryServiceClient::connect(
+        format!("http://{grpc_addr}"),
+    )
+    .await?;
     let error = client
         .upload_batch(zelvik_edge::pb::TelemetryBatch::default())
         .await
@@ -1885,10 +1905,10 @@ pub async fn run(opts: Options) -> anyhow::Result<Value> {
     fs::create_dir_all(&home)?;
     // A smoke run always has a durable store so it can prove recovery from
     // retryable telemetry failures with a real receipt, not a fake ack.
-    let telemetry_store_path = opts
-        .telemetry_store
-        .clone()
-        .or_else(|| opts.smoke.then(|| home.join("data").join("telemetry-store.bin")));
+    let telemetry_store_path = opts.telemetry_store.clone().or_else(|| {
+        opts.smoke
+            .then(|| home.join("data").join("telemetry-store.bin"))
+    });
     let certs = resolve_certs(&opts)?;
 
     let mut origin_task = None;
@@ -1920,7 +1940,11 @@ pub async fn run(opts: Options) -> anyhow::Result<Value> {
     };
     let status_url = status_listener
         .as_ref()
-        .map(|listener| listener.local_addr().map(|addr| format!("http://{addr}/status")))
+        .map(|listener| {
+            listener
+                .local_addr()
+                .map(|addr| format!("http://{addr}/status"))
+        })
         .transpose()?;
 
     let telemetry_mode = TelemetryMode::parse(&opts.telemetry_mode)?;
@@ -2066,7 +2090,15 @@ pub async fn run(opts: Options) -> anyhow::Result<Value> {
                 ("http1-post", "--http1.1", "1.1"),
                 ("http2-post", "--http2", "2"),
             ] {
-                match curl_check(&tmp, name, &certs.ca, &opts.tls_host, tls_port, flag, &payload) {
+                match curl_check(
+                    &tmp,
+                    name,
+                    &certs.ca,
+                    &opts.tls_host,
+                    tls_port,
+                    flag,
+                    &payload,
+                ) {
                     Ok(mut result) => {
                         let version = result["http_version"]
                             .as_str()
@@ -2335,6 +2367,50 @@ async fn main() -> anyhow::Result<()> {
 #[cfg(test)]
 mod receipt_tests {
     use super::*;
+
+    #[test]
+    fn matrix_snapshot_replaces_selected_fields_and_rejects_invalid_input() -> anyhow::Result<()> {
+        let home = std::env::temp_dir().join(format!("issue34-matrix-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&home)?;
+        let certs = Certs {
+            ca: home.join("ca.pem"),
+            cert: home.join("cert.pem"),
+            key: home.join("key.pem"),
+        };
+        fs::write(&certs.cert, "fixture cert")?;
+        fs::write(&certs.key, "fixture key")?;
+        let mut opts = Options::fixture(&home, "Zelvik-Edge");
+        let original: Value = serde_json::from_slice(&build_snapshot(
+            &opts,
+            &certs,
+            8443,
+            "http://127.0.0.1:8081",
+        )?)?;
+        let path = home.join("overrides.json");
+        fs::write(
+            &path,
+            br#"{"metricItems":[],"http3Policies":{"1":{"isOn":true,"port":8443}}}"#,
+        )?;
+        opts.snapshot_overrides = Some(path.clone());
+        let changed: Value = serde_json::from_slice(&build_snapshot(
+            &opts,
+            &certs,
+            8443,
+            "http://127.0.0.1:8081",
+        )?)?;
+        assert_eq!(changed["servers"], original["servers"]);
+        assert_eq!(changed["version"], original["version"]);
+        assert_eq!(changed["metricItems"], json!([]));
+        assert_eq!(changed["http3Policies"]["1"]["port"], 8443);
+        for invalid in ["[]", "null", "{broken"] {
+            fs::write(&path, invalid)?;
+            assert!(build_snapshot(&opts, &certs, 8443, "http://127.0.0.1:8081").is_err());
+        }
+        fs::remove_file(&path)?;
+        assert!(build_snapshot(&opts, &certs, 8443, "http://127.0.0.1:8081").is_err());
+        fs::remove_dir_all(home)?;
+        Ok(())
+    }
 
     #[tokio::test]
     async fn durable_fixture_receipt_retires_the_real_edge_spool() -> anyhow::Result<()> {

@@ -1,0 +1,80 @@
+name: QUIC FIN upstream regression control
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/five-priorities-20261103]
+    paths: [.github/workflows/h3-quiche-fin-control.yml]
+permissions:
+  contents: read
+jobs:
+  fin-control:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    env:
+      RUSTFLAGS: '-C target-cpu=x86-64-v2'
+      CARGO_BUILD_JOBS: '2'
+      RUST_TEST_THREADS: '2'
+      EDGE_QUICHE_DIAGNOSTICS: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.99.1
+      - name: Install BoringSSL prerequisites
+        run: sudo apt-get update && sudo apt-get install -y cmake clang libclang-dev build-essential pkg-config perl openssl
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/zelvik-edge-h3-quiche -> target
+          key: h3-quiche-0.20.0
+          cache-on-failure: true
+      - name: Compare identical adapter and late-FIN fixture with old and fixed upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/h3-fin-control .local/h3-fin-old
+          git fetch --depth=1 origin e193f11aa935b0019a4b19638f64db7217d9581b
+          git show e193f11aa935b0019a4b19638f64db7217d9581b:crates/zelvik-edge-h3-quiche/Cargo.toml > .local/h3-fin-old/Cargo.toml
+          git show e193f11aa935b0019a4b19638f64db7217d9581b:crates/zelvik-edge-h3-quiche/Cargo.lock > .local/h3-fin-old/Cargo.lock
+          # The current adapter now uses the already-locked libc directly for
+          # bounded Linux ingress. Preserve all baseline dependency identities.
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.local/h3-fin-old/Cargo.toml')
+          path.write_text(path.read_text().replace('[dependencies]\n', '[dependencies]\nlibc = "=0.2.191"\n'))
+          PY
+          cp -a crates/zelvik-edge-h3-quiche/src crates/zelvik-edge-h3-quiche/tests .local/h3-fin-old/
+          cp .local/h3-fin-old/Cargo.lock .local/h3-fin-control/baseline-before.lock
+          # A restored Cargo cache need not contain all sparse-index entries.
+          # Resolve with network access, then reject any package identity drift.
+          cargo update --manifest-path .local/h3-fin-old/Cargo.toml -p zelvik-edge-h3-quiche > .local/h3-fin-control/baseline-lock.log 2>&1
+          cp .local/h3-fin-old/Cargo.lock .local/h3-fin-control/baseline-after.lock
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          def identities(name):
+              text = Path('.local/h3-fin-control', name).read_text()
+              return {tuple(re.findall(r'^(?:name|version|source) = (.*)$', section, re.M)) for section in text.split('[[package]]')[1:]}
+          assert identities('baseline-before.lock') == identities('baseline-after.lock')
+          PY
+          export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/crates/zelvik-edge-h3-quiche/target"
+          test_name=queued_fin_survives_ack_before_first_transmit
+          old_status=0
+          EDGE_QUICHE_EVIDENCE_DIR="$GITHUB_WORKSPACE/.local/h3-fin-control/old-wire" cargo test --locked --manifest-path .local/h3-fin-old/Cargo.toml --test wire "$test_name" -- --exact --nocapture > .local/h3-fin-control/old.log 2>&1 || old_status=$?
+          fixed_status=0
+          EDGE_QUICHE_EVIDENCE_DIR="$GITHUB_WORKSPACE/.local/h3-fin-control/fixed-wire" cargo test --locked --manifest-path crates/zelvik-edge-h3-quiche/Cargo.toml --test wire "$test_name" -- --exact --nocapture > .local/h3-fin-control/fixed.log 2>&1 || fixed_status=$?
+          printf '%s\n' "old_status=$old_status" "fixed_status=$fixed_status" > .local/h3-fin-control/status.txt
+          # Only the specific lost-FIN assertion is a valid old-upstream control.
+          # Compile failures, unrelated failures and unexpected passes fail the job.
+          test "$old_status" -ne 0
+          grep -F 'test result: FAILED. 0 passed; 1 failed' .local/h3-fin-control/old.log
+          grep -F 'queued FIN was discarded before its first packet was sent' .local/h3-fin-control/old.log
+          test "$fixed_status" -eq 0
+          grep -F 'test result: ok. 1 passed; 0 failed' .local/h3-fin-control/fixed.log
+      - name: Retain both outcomes and packet evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3-fin-control-${{ github.sha }}
+          path: |
+            .local/h3-fin-control/
+            !.local/h3-fin-control/**/key.pem
+          include-hidden-files: true
+          if-no-files-found: error

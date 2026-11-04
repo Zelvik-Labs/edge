@@ -1,0 +1,10 @@
+{
+  "source": "27a47d67d54c95087af7c2f24ef0cc844a0e192e",
+  "scope": "Linux loopback TX candidate correctness; no production integration or throughput claim",
+  "controls": [
+    "family=IPv4 segments=64 gro=false fragmentation=false delivered=16x1200 initial_readiness=PASS oversize_errno=90",
+    "family=IPv6 segments=64 gro=false fragmentation=false delivered=16x1200 initial_readiness=PASS oversize_errno=90",
+    "PASS: candidate only; no production integration or throughput claim"
+  ],
+  "result": "PASS"
+}

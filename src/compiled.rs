@@ -159,6 +159,10 @@ impl CompiledServerFeaturePlan {
         self.hls_encrypting.is_some()
     }
 
+    pub fn has_webp(&self) -> bool {
+        self.webp.is_some()
+    }
+
     pub fn hls_encrypting_matches(&self, request_url: &str) -> bool {
         self.hls_encrypting
             .as_ref()

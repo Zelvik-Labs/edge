@@ -1,0 +1,38 @@
+{
+  "run": 41782989939,
+  "source": "11d4d6f7420d853f34161a472804179002d7d11e",
+  "jobs": [
+    {
+      "id": 126418615578,
+      "name": "Test - linux-x64",
+      "conclusion": "success"
+    },
+    {
+      "id": 126418615986,
+      "name": "Check / Clippy - linux-x64",
+      "conclusion": "success"
+    },
+    {
+      "id": 126418616903,
+      "name": "Isolated BPF / AF_XDP capability",
+      "conclusion": "skipped"
+    }
+  ],
+  "logs": {
+    "test.log": {
+      "bytes": 3009036,
+      "sha256": "c36b6d51ee449200f7d18e5d90c5891548c56c63a1a3dd683da56eceff63a0e0"
+    },
+    "check.log": {
+      "bytes": 136229,
+      "sha256": "eba64f813d8f49b654265c87d1300c2d3c0af8a69c3042034ed8d3eb27e257bf"
+    }
+  },
+  "library_tests": 1369,
+  "binary_tests": 16,
+  "library_ignored": 5,
+  "integration_and_vendor_pass": true,
+  "phase_feature": "http-layout-probe",
+  "native_cases": 32,
+  "native_scope": "veth copy-mode correctness; actual node executables not present in this artifact"
+}

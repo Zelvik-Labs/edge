@@ -1,0 +1,26 @@
+[
+  {
+    "binary": "original",
+    "sections": {
+      ".text": "250d966baa50d901b37c4574774fdde854acc3c05dbf531b14ca565f0bc40b73",
+      ".rodata": "1c6afe9fef577876a031afd33e108f60959def238fa07404fcf729ca9462eafa",
+      ".eh_frame": "f0744ff4d8261bcd363d130492f9bf0eac3163be0acefc8e6d48b1208e332f97"
+    }
+  },
+  {
+    "binary": "baseline_rebuilt",
+    "sections": {
+      ".text": "c25aec7e22d5a3dbcf11859ab9bf1e90ffd7d62dde9fb4526d87c94d3391aba4",
+      ".rodata": "babf9e5099e73bc934b5d74f42c697bff0f3ab176fd5e133296b3bffb5337bcd",
+      ".eh_frame": "53b6b50f27cc5d80a4808d1da7574678f7e3d34d7d92810d45c0d32cf22dc640"
+    }
+  },
+  {
+    "binary": "candidate",
+    "sections": {
+      ".text": "8c8d58fac7f255c157758774f304739cfb302731049594f03530804517af223c",
+      ".rodata": "876fe0c318aeab124eb5a7feabd4b7b17dd42b321d228db7a4ba15f28046b9d1",
+      ".eh_frame": "a6dc200bc1028f0129dd9856a760442184016f79db31b435d8c85ae659a93d44"
+    }
+  }
+]

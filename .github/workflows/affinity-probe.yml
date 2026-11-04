@@ -1,0 +1,38 @@
+name: AF_XDP inherited CPU affinity regression
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - src/xdp/af_xdp/affinity.rs
+      - benches/support/affinity_probe.rs
+      - scripts/perf/affinity-probe/**
+      - .github/workflows/affinity-probe.yml
+permissions:
+  contents: read
+concurrency:
+  group: affinity-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  affinity:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      CARGO_BUILD_JOBS: "2"
+      RUST_TEST_THREADS: "2"
+      RUSTFLAGS: "-C target-cpu=x86-64-v2 -D warnings"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Fetch immutable old selection source
+        run: git fetch --depth=1 origin 5740a0e26581d9d06b56c22278f1c9059823d05c
+      - uses: dtolnay/rust-toolchain@1.99.1
+      - name: Require the old placement failure and verify native worker pinning
+        run: python3 scripts/perf/affinity-probe/run.py
+      - name: Retain sources, actual executable, controls and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: affinity-${{ github.sha }}
+          path: .local/affinity-ci/
+          include-hidden-files: true
+          if-no-files-found: error

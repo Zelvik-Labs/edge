@@ -1,0 +1,9 @@
+{
+  "rust_compilation": "not started, free disk below 6GiB start floor",
+  "rustfmt": "pass for new/changed code; no unrelated edits",
+  "python_ast": "pass",
+  "workflow_yaml": "pass",
+  "inputs": 10,
+  "diff_whitespace": "pass",
+  "cache_policy": "cloud physical capacity; automatic GC disabled"
+}

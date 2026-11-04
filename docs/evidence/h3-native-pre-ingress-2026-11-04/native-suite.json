@@ -1,0 +1,197 @@
+{
+  "source": "a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a",
+  "binary_sha256": "ca5b4e2dca600455b2b324a80ac5254d00c04064654b6f896afca908043b1ccd",
+  "scope": "same complete CDN/cache node, matched transport; explicit Retry off; no native UDP multiplexing or XDP",
+  "profile": "256KiB receive/send;64KiB stream;MTU1350;uni8;idle30s;Cubic initial13500;PMTU off;migration off;TLS providers differ",
+  "runs": [
+    {
+      "label": "native-0-quinn-shared-1024",
+      "exit_code": 0,
+      "backend": "quinn-shared",
+      "size": 1024,
+      "round": 0
+    },
+    {
+      "label": "native-0-quinn-native-1024",
+      "exit_code": 0,
+      "backend": "quinn-native",
+      "size": 1024,
+      "round": 0
+    },
+    {
+      "label": "native-0-tokio-quiche-native-1024",
+      "exit_code": 1,
+      "backend": "tokio-quiche-native",
+      "size": 1024,
+      "round": 0
+    },
+    {
+      "label": "native-0-quinn-shared-32768",
+      "exit_code": 0,
+      "backend": "quinn-shared",
+      "size": 32768,
+      "round": 0
+    },
+    {
+      "label": "native-0-quinn-native-32768",
+      "exit_code": 0,
+      "backend": "quinn-native",
+      "size": 32768,
+      "round": 0
+    },
+    {
+      "label": "native-0-tokio-quiche-native-32768",
+      "exit_code": 1,
+      "backend": "tokio-quiche-native",
+      "size": 32768,
+      "round": 0
+    },
+    {
+      "label": "native-0-quinn-shared-131072",
+      "exit_code": 0,
+      "backend": "quinn-shared",
+      "size": 131072,
+      "round": 0
+    },
+    {
+      "label": "native-0-quinn-native-131072",
+      "exit_code": 1,
+      "backend": "quinn-native",
+      "size": 131072,
+      "round": 0
+    },
+    {
+      "label": "native-0-tokio-quiche-native-131072",
+      "exit_code": 1,
+      "backend": "tokio-quiche-native",
+      "size": 131072,
+      "round": 0
+    },
+    {
+      "label": "native-1-quinn-native-1024",
+      "exit_code": 0,
+      "backend": "quinn-native",
+      "size": 1024,
+      "round": 1
+    },
+    {
+      "label": "native-1-tokio-quiche-native-1024",
+      "exit_code": 1,
+      "backend": "tokio-quiche-native",
+      "size": 1024,
+      "round": 1
+    },
+    {
+      "label": "native-1-quinn-shared-1024",
+      "exit_code": 0,
+      "backend": "quinn-shared",
+      "size": 1024,
+      "round": 1
+    },
+    {
+      "label": "native-1-quinn-native-32768",
+      "exit_code": 0,
+      "backend": "quinn-native",
+      "size": 32768,
+      "round": 1
+    },
+    {
+      "label": "native-1-tokio-quiche-native-32768",
+      "exit_code": 1,
+      "backend": "tokio-quiche-native",
+      "size": 32768,
+      "round": 1
+    },
+    {
+      "label": "native-1-quinn-shared-32768",
+      "exit_code": 0,
+      "backend": "quinn-shared",
+      "size": 32768,
+      "round": 1
+    },
+    {
+      "label": "native-1-quinn-native-131072",
+      "exit_code": 0,
+      "backend": "quinn-native",
+      "size": 131072,
+      "round": 1
+    },
+    {
+      "label": "native-1-tokio-quiche-native-131072",
+      "exit_code": 1,
+      "backend": "tokio-quiche-native",
+      "size": 131072,
+      "round": 1
+    },
+    {
+      "label": "native-1-quinn-shared-131072",
+      "exit_code": 0,
+      "backend": "quinn-shared",
+      "size": 131072,
+      "round": 1
+    },
+    {
+      "label": "native-2-tokio-quiche-native-1024",
+      "exit_code": 1,
+      "backend": "tokio-quiche-native",
+      "size": 1024,
+      "round": 2
+    },
+    {
+      "label": "native-2-quinn-shared-1024",
+      "exit_code": 0,
+      "backend": "quinn-shared",
+      "size": 1024,
+      "round": 2
+    },
+    {
+      "label": "native-2-quinn-native-1024",
+      "exit_code": 0,
+      "backend": "quinn-native",
+      "size": 1024,
+      "round": 2
+    },
+    {
+      "label": "native-2-tokio-quiche-native-32768",
+      "exit_code": 1,
+      "backend": "tokio-quiche-native",
+      "size": 32768,
+      "round": 2
+    },
+    {
+      "label": "native-2-quinn-shared-32768",
+      "exit_code": 0,
+      "backend": "quinn-shared",
+      "size": 32768,
+      "round": 2
+    },
+    {
+      "label": "native-2-quinn-native-32768",
+      "exit_code": 0,
+      "backend": "quinn-native",
+      "size": 32768,
+      "round": 2
+    },
+    {
+      "label": "native-2-tokio-quiche-native-131072",
+      "exit_code": 1,
+      "backend": "tokio-quiche-native",
+      "size": 131072,
+      "round": 2
+    },
+    {
+      "label": "native-2-quinn-shared-131072",
+      "exit_code": 0,
+      "backend": "quinn-shared",
+      "size": 131072,
+      "round": 2
+    },
+    {
+      "label": "native-2-quinn-native-131072",
+      "exit_code": 0,
+      "backend": "quinn-native",
+      "size": 131072,
+      "round": 2
+    }
+  ]
+}

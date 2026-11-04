@@ -1,0 +1,17 @@
+[
+  {
+    "group": "comparison-tls-h2",
+    "returncode": 1,
+    "all_cases_passed": false
+  },
+  {
+    "group": "comparison-cold-long",
+    "returncode": 0,
+    "all_cases_passed": true
+  },
+  {
+    "group": "comparison-32k",
+    "returncode": 0,
+    "all_cases_passed": true
+  }
+]

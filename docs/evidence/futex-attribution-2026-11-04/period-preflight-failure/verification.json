@@ -1,0 +1,27 @@
+{
+  "source": "43958aa66304d09f82f3718d1d727b9fc99a94b6",
+  "stage": "period-preflight-failure",
+  "runs": [
+    {
+      "path": "round-0-edge/manifest.json",
+      "status": "completed",
+      "cases": [
+        {
+          "stem": "0000-h2-off-reuse",
+          "status": "failed",
+          "successful": null,
+          "failed": null,
+          "error": "Command '['docker', '--host=unix:///var/run/docker.sock', 'exec', 'edge-state-f50c1ea18a-edge', 'perf', 'record', '-e', 'syscalls:sys_enter_futex/period=512/', '--call-graph', 'dwarf,32768', '-p', '8', '-o', '/test/0000-h2-off-reuse.preflight.perf.data', '--', 'sleep', '.1']' returned non-zero exit status 129."
+        },
+        {
+          "stem": "0001-h1-off-reuse",
+          "status": "failed",
+          "successful": null,
+          "failed": null,
+          "error": "Command '['docker', '--host=unix:///var/run/docker.sock', 'exec', 'edge-state-f50c1ea18a-edge', 'perf', 'record', '-e', 'syscalls:sys_enter_futex/period=512/', '--call-graph', 'dwarf,32768', '-p', '8', '-o', '/test/0001-h1-off-reuse.preflight.perf.data', '--', 'sleep', '.1']' returned non-zero exit status 129."
+        }
+      ]
+    }
+  ],
+  "entire_run_passed": false
+}

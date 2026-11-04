@@ -1,0 +1,19 @@
+{
+  "id": 13266591907,
+  "name": "architecture-profile-797a7b686a157a74c721b4d8b43651705eb8d045",
+  "size_in_bytes": 28493369,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13266591907",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13266591907/zip",
+  "expired": false,
+  "created_at": "2026-11-03T20:04:56Z",
+  "expires_at": "2027-02-01T19:52:48Z",
+  "updated_at": "2026-11-03T20:04:56Z",
+  "digest": "sha256:ac3831e3c56ba21eaa6ee0448e21bf514653abcd3509969ba4a09170d511a0b8",
+  "workflow_run": {
+    "id": 41707363787,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/program-wide-20261104",
+    "head_sha": "797a7b686a157a74c721b4d8b43651705eb8d045"
+  }
+}

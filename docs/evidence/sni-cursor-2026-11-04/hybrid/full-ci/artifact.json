@@ -1,0 +1,19 @@
+{
+  "id": 13269182054,
+  "name": "afxdp-node-471f95a5d108bad4e0238444e7cdc1443449f90a",
+  "size_in_bytes": 137435,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13269182054",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13269182054/zip",
+  "expired": false,
+  "created_at": "2026-11-03T20:42:44Z",
+  "expires_at": "2027-02-01T19:54:49Z",
+  "updated_at": "2026-11-03T20:42:44Z",
+  "digest": "sha256:7e50a4bc952a76851aeb41aac0b8f6b681bf740d35c2411db7b0e44e7fe7e35a",
+  "workflow_run": {
+    "id": 41707676325,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/sni-hybrid-20261104",
+    "head_sha": "471f95a5d108bad4e0238444e7cdc1443449f90a"
+  }
+}

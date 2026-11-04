@@ -1,0 +1,169 @@
+{
+  "1": {
+    "metadata": {
+      "source_commit": "07021fe84f976795f28771c255243b6f6f7c21ee",
+      "binaries": {
+        "edge": "9ade2dbb4b4c31697a49e66aa95a52476c131b849b7dc7f303f83a50e5b2b9df",
+        "nginx": "5e06a61af70cf1a37fb6b023155fb37fe818072e5441b434cefa589ee4e26e87",
+        "openresty": "ba7393cac684b88566c9ab52cdfd1b9a1ccdbb2d2a4319d191f380ae60525059",
+        "loadgen": "2ddcb7e4a190219ef996b973a4398197dd70c0f943dda0f9cf27066544826146"
+      },
+      "sources": {
+        "src/xdp/af_xdp/bridge.rs": "dd9d761ec630c56f3bca1a168488d45998e1d4fc278047b1b17a30ef3df65009",
+        "src/xdp/af_xdp/readiness.rs": "0f9fec3aa5ac3b7e58e6f9ee7a07f1ebe3974e5d4e16b3fb97160ea255634814",
+        "src/xdp/af_xdp/wake.rs": "38b077c37687956a286df528a93a8a68c66552bfcd756b23c76217fa5d3a347f",
+        "src/xdp/smoke.rs": "f2fbaf4b395bc474df3fd36eb11b15aba5e4fef9d87e240e3ac1edd7489f5e32",
+        "benches/support/udp-bench.c": "96e8a40d43ec8fd6d2ff79bb4843301d486cb05daa1a79b2c83db02d66367be4",
+        "src/xdp/linux.rs": "6c5a1aa9d98144a18b15e459e2b2b45d26673bee75064dcd1b0c7f70843cf759",
+        "src/runtime_mode.rs": "5c69346ff84947ceddc85b83e7cba8e665aa1e9f7e86cafbfb25736e41ddcd14",
+        "src/main.rs": "68bd121c77c6f0394bd349abb2b2a6356a960e305640308fc6d5d9d507f37089",
+        "scripts/xdp-netns-smoke.sh": "b0a2f49e7bc0bb51ec68ed77de2cb5b60cca4a5f92e42141a21e6d3c6fd7e300",
+        "scripts/perf/afxdp-node/README.md": "bfb054435110a2da94c58f0a2a9b2f79eee2f3ee82287afd7bbaf59fcb5a2e65",
+        "scripts/perf/afxdp-node/build-baselines.sh": "2eace14454312383716f6a1fb5ca1c087e82f6821f89b3d8afcbceb558fe5c92",
+        "scripts/perf/afxdp-node/corrupt_udp.py": "3765c57c147ed2e566ed3ffafe79e75355d4a3e2e9ebd28317fd2487e7867c50",
+        "scripts/perf/afxdp-node/run.sh": "eb7732f1e26a05657819797f6addcc3d26a155efba7acbdf6cedff5780eced19",
+        "scripts/perf/afxdp-node/test_corrupt_udp.py": "fc338065ca442e26e9222bce9013b401d7a78436440c6e93c5431512d3e49288",
+        "scripts/perf/afxdp-node/test_udp_bench.py": "528cd03dd2bfe9da17608ecf310d5c7eb00fe7cf587259b97159bdee10335623",
+        "scripts/perf/afxdp-node/test_udp_summary.py": "8278314162bbf6ba92ceb464ac13d2d35132b25653e14413ed59d62cd750ed64",
+        "scripts/perf/afxdp-node/udp-compare.py": "b7b2b4e9961a14d2103de0724f024b019fd68b054c79c250da606d4646cd2efc",
+        "scripts/perf/afxdp-node/udp-run.sh": "8cdbdf734daeebd629968361dda12a8394378e3e7e08f0da0e61181841da9fd5",
+        "scripts/perf/afxdp-node/udp_summary.py": "3e121ec80056cc8be8ab8bebb64898ad7ba2e60beb9680f98fd9d1b95ec37bb9"
+      },
+      "cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "uname": {
+        "system": "Linux",
+        "node": "runnervmcwoy2",
+        "release": "6.8.0-1070-azure",
+        "version": "#78~22.04.1-Ubuntu SMP Thu Sep 24 18:46:45 UTC 2026",
+        "machine": "x86_64",
+        "processor": "x86_64"
+      },
+      "clock_ticks": 100,
+      "scope": "IPv4 UDP steady-flow reuse; single XSK queue, 1 proxy CPUs, separate client and remote origin CPUs; no HTTP/cache/hardware-zero-copy claim",
+      "comparison": "rx-stats",
+      "targets": [
+        "full-stats",
+        "bridge-stats",
+        "nginx",
+        "openresty"
+      ],
+      "node_modes": {
+        "full-stats": [
+          "worker",
+          "full"
+        ],
+        "bridge-stats": [
+          "worker",
+          "bridge"
+        ]
+      },
+      "proxy_cpus": [
+        0
+      ],
+      "single_flow_iterations": 40000,
+      "iterations": 10000,
+      "warmup": 1000,
+      "rounds": 4,
+      "nginx_udp_policy": "proxy_requests 0; proxy_responses 2147483647; proxy_timeout 60s; actual peer ports verified"
+    },
+    "cleanup": {
+      "cleanup_passed": true,
+      "exit_code": 0
+    },
+    "namespaces": {
+      "network_namespace": "net:[4026532204]",
+      "parent_network_namespace": "net:[4026531840]",
+      "mount_namespace": "mnt:[4026532200]",
+      "parent_mount_namespace": "mnt:[4026531841]"
+    }
+  },
+  "2": {
+    "metadata": {
+      "source_commit": "07021fe84f976795f28771c255243b6f6f7c21ee",
+      "binaries": {
+        "edge": "9ade2dbb4b4c31697a49e66aa95a52476c131b849b7dc7f303f83a50e5b2b9df",
+        "nginx": "5e06a61af70cf1a37fb6b023155fb37fe818072e5441b434cefa589ee4e26e87",
+        "openresty": "ba7393cac684b88566c9ab52cdfd1b9a1ccdbb2d2a4319d191f380ae60525059",
+        "loadgen": "2ddcb7e4a190219ef996b973a4398197dd70c0f943dda0f9cf27066544826146"
+      },
+      "sources": {
+        "src/xdp/af_xdp/bridge.rs": "dd9d761ec630c56f3bca1a168488d45998e1d4fc278047b1b17a30ef3df65009",
+        "src/xdp/af_xdp/readiness.rs": "0f9fec3aa5ac3b7e58e6f9ee7a07f1ebe3974e5d4e16b3fb97160ea255634814",
+        "src/xdp/af_xdp/wake.rs": "38b077c37687956a286df528a93a8a68c66552bfcd756b23c76217fa5d3a347f",
+        "src/xdp/smoke.rs": "f2fbaf4b395bc474df3fd36eb11b15aba5e4fef9d87e240e3ac1edd7489f5e32",
+        "benches/support/udp-bench.c": "96e8a40d43ec8fd6d2ff79bb4843301d486cb05daa1a79b2c83db02d66367be4",
+        "src/xdp/linux.rs": "6c5a1aa9d98144a18b15e459e2b2b45d26673bee75064dcd1b0c7f70843cf759",
+        "src/runtime_mode.rs": "5c69346ff84947ceddc85b83e7cba8e665aa1e9f7e86cafbfb25736e41ddcd14",
+        "src/main.rs": "68bd121c77c6f0394bd349abb2b2a6356a960e305640308fc6d5d9d507f37089",
+        "scripts/xdp-netns-smoke.sh": "b0a2f49e7bc0bb51ec68ed77de2cb5b60cca4a5f92e42141a21e6d3c6fd7e300",
+        "scripts/perf/afxdp-node/README.md": "bfb054435110a2da94c58f0a2a9b2f79eee2f3ee82287afd7bbaf59fcb5a2e65",
+        "scripts/perf/afxdp-node/build-baselines.sh": "2eace14454312383716f6a1fb5ca1c087e82f6821f89b3d8afcbceb558fe5c92",
+        "scripts/perf/afxdp-node/corrupt_udp.py": "3765c57c147ed2e566ed3ffafe79e75355d4a3e2e9ebd28317fd2487e7867c50",
+        "scripts/perf/afxdp-node/run.sh": "eb7732f1e26a05657819797f6addcc3d26a155efba7acbdf6cedff5780eced19",
+        "scripts/perf/afxdp-node/test_corrupt_udp.py": "fc338065ca442e26e9222bce9013b401d7a78436440c6e93c5431512d3e49288",
+        "scripts/perf/afxdp-node/test_udp_bench.py": "528cd03dd2bfe9da17608ecf310d5c7eb00fe7cf587259b97159bdee10335623",
+        "scripts/perf/afxdp-node/test_udp_summary.py": "8278314162bbf6ba92ceb464ac13d2d35132b25653e14413ed59d62cd750ed64",
+        "scripts/perf/afxdp-node/udp-compare.py": "b7b2b4e9961a14d2103de0724f024b019fd68b054c79c250da606d4646cd2efc",
+        "scripts/perf/afxdp-node/udp-run.sh": "8cdbdf734daeebd629968361dda12a8394378e3e7e08f0da0e61181841da9fd5",
+        "scripts/perf/afxdp-node/udp_summary.py": "3e121ec80056cc8be8ab8bebb64898ad7ba2e60beb9680f98fd9d1b95ec37bb9"
+      },
+      "cpus": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "uname": {
+        "system": "Linux",
+        "node": "runnervmcwoy2",
+        "release": "6.8.0-1070-azure",
+        "version": "#78~22.04.1-Ubuntu SMP Thu Sep 24 18:46:45 UTC 2026",
+        "machine": "x86_64",
+        "processor": "x86_64"
+      },
+      "clock_ticks": 100,
+      "scope": "IPv4 UDP steady-flow reuse; single XSK queue, 2 proxy CPUs, separate client and remote origin CPUs; no HTTP/cache/hardware-zero-copy claim",
+      "comparison": "rx-stats",
+      "targets": [
+        "full-stats",
+        "bridge-stats",
+        "nginx",
+        "openresty"
+      ],
+      "node_modes": {
+        "full-stats": [
+          "worker",
+          "full"
+        ],
+        "bridge-stats": [
+          "worker",
+          "bridge"
+        ]
+      },
+      "proxy_cpus": [
+        0,
+        1
+      ],
+      "single_flow_iterations": 40000,
+      "iterations": 10000,
+      "warmup": 1000,
+      "rounds": 4,
+      "nginx_udp_policy": "proxy_requests 0; proxy_responses 2147483647; proxy_timeout 60s; actual peer ports verified"
+    },
+    "cleanup": {
+      "cleanup_passed": true,
+      "exit_code": 0
+    },
+    "namespaces": {
+      "network_namespace": "net:[4026532369]",
+      "parent_network_namespace": "net:[4026531840]",
+      "mount_namespace": "mnt:[4026532200]",
+      "parent_mount_namespace": "mnt:[4026531841]"
+    }
+  }
+}

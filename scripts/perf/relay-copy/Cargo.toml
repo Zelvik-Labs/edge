@@ -1,0 +1,18 @@
+[package]
+name = "edge-relay-copy-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[features]
+count-allocations = []
+
+[dependencies]
+tokio = { version = "=1.53.1", features = ["io-util"] }
+libc = "=0.2.191"
+
+[[bin]]
+name = "relay-copy-probe"
+path = "../../../benches/support/relay_copy_probe.rs"

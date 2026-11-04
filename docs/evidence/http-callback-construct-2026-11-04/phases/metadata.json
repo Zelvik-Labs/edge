@@ -1,0 +1,43 @@
+{
+  "source": "11d4d6f7420d853f34161a472804179002d7d11e",
+  "scope": "unpolled real callback construction/drop only; not request execution, allocation counts or node capacity",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "rustflags": "-C target-cpu=x86-64-v2",
+  "sources": {
+    "http_callback_construct.rs": "225ff70bb9d82343a1603f873b32f707c3eeb0c91d7454675284c6333f3ac98c",
+    "http-future-layout.rs": "d4f7db6082110026b9fd6e86189f4dc293d3b57bc4e86889a005fe0a779fb13b",
+    "proxy.rs": "03a84d9e0e4e654340eeb14fd321ed9899fa845b26f267b6376d8074f0fd6347",
+    "Cargo.toml": "61f466f9bbb9aaf1db34a6c25d494649ae2579be72237e14769caf747f3c5e22"
+  },
+  "features": [
+    "http-layout-probe"
+  ],
+  "binary_sha256": "1b7887b257d5a76c1b08c7e8191d118e4c441052ad50ab9797de9791c891bd88",
+  "cpu": 0,
+  "cpu_before": [
+    16278,
+    131,
+    2515,
+    117457,
+    608,
+    0,
+    48,
+    0,
+    0,
+    0
+  ],
+  "run_exit": 0,
+  "cpu_after": [
+    16291,
+    131,
+    2516,
+    117459,
+    608,
+    0,
+    48,
+    0,
+    0,
+    0
+  ],
+  "host_steal_fraction": 0.0
+}

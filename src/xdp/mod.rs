@@ -1032,27 +1032,36 @@ impl XdpManager {
             return false;
         }
         let statuses = self.xsk_status.read();
-        let proxy_interfaces = self
+        // Called every bridge round: borrow the interfaces without allocating.
+        let mut has_healthy_queue = false;
+        for interface in self
             .config
             .interfaces
             .iter()
             .filter(|interface| interface.mode == XdpRuntimeMode::Proxy)
-            .collect::<Vec<_>>();
-        !proxy_interfaces.is_empty()
-            && proxy_interfaces.iter().all(|interface| {
-                !interface.queues.is_empty()
-                    && interface.queues.iter().all(|queue| {
-                        statuses.iter().any(|status| {
-                            status.interface == interface.name
-                                && status.queue == *queue
-                                // A faulted queue is deliberately withdrawn:
-                                // its slots are gone and its traffic takes the
-                                // explicit dataplane fallback, so it must not
-                                // stall readiness for surviving queues.
-                                && (status.ready || status.faulted)
-                        })
-                    })
-            })
+        {
+            if interface.queues.is_empty() {
+                return false;
+            }
+            for queue in &interface.queues {
+                let Some(status) = statuses
+                    .iter()
+                    .find(|status| status.interface == interface.name && status.queue == *queue)
+                else {
+                    return false;
+                };
+                // Withdrawn queues must not block healthy siblings, but a
+                // generation with no healthy configured queue cannot serve.
+                if status.faulted {
+                    continue;
+                }
+                if !status.ready {
+                    return false;
+                }
+                has_healthy_queue = true;
+            }
+        }
+        has_healthy_queue
     }
 
     fn proxy_redirect_ready(&self) -> bool {

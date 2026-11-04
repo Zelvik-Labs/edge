@@ -1,0 +1,511 @@
+{
+  "source": "1aa475239ab40859a7d97bae8fa2ac284b3a3950",
+  "baseline": "1c441cea3b416f2d4316abed4ec1863e4666852f",
+  "differential_inputs": 65571,
+  "raw_blocks": 5120,
+  "max_host_steal_fraction": 0.0,
+  "allocations": {
+    "baseline": [
+      {
+        "case": "lower",
+        "iterations": "1000",
+        "allocations": "2000",
+        "reallocations": "0",
+        "bytes": "30000",
+        "largest": "15"
+      },
+      {
+        "case": "mixed",
+        "iterations": "1000",
+        "allocations": "2000",
+        "reallocations": "0",
+        "bytes": "30000",
+        "largest": "15"
+      },
+      {
+        "case": "port",
+        "iterations": "1000",
+        "allocations": "2000",
+        "reallocations": "0",
+        "bytes": "30000",
+        "largest": "15"
+      },
+      {
+        "case": "tail-dots",
+        "iterations": "1000",
+        "allocations": "2000",
+        "reallocations": "0",
+        "bytes": "33000",
+        "largest": "18"
+      },
+      {
+        "case": "userinfo",
+        "iterations": "1000",
+        "allocations": "2000",
+        "reallocations": "0",
+        "bytes": "57000",
+        "largest": "29"
+      },
+      {
+        "case": "ipv6-bracket",
+        "iterations": "1000",
+        "allocations": "2000",
+        "reallocations": "0",
+        "bytes": "24000",
+        "largest": "12"
+      },
+      {
+        "case": "ipv6-bare",
+        "iterations": "1000",
+        "allocations": "2000",
+        "reallocations": "0",
+        "bytes": "24000",
+        "largest": "12"
+      },
+      {
+        "case": "unmatched",
+        "iterations": "1000",
+        "allocations": "2000",
+        "reallocations": "0",
+        "bytes": "4000",
+        "largest": "2"
+      },
+      {
+        "case": "unicode",
+        "iterations": "1000",
+        "allocations": "2000",
+        "reallocations": "0",
+        "bytes": "32000",
+        "largest": "16"
+      },
+      {
+        "case": "long-upper",
+        "iterations": "1000",
+        "allocations": "2000",
+        "reallocations": "0",
+        "bytes": "504000",
+        "largest": "252"
+      },
+      {
+        "case": "long-lower",
+        "iterations": "1000",
+        "allocations": "2000",
+        "reallocations": "0",
+        "bytes": "504000",
+        "largest": "252"
+      },
+      {
+        "case": "empty",
+        "iterations": "1000",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "spaces",
+        "iterations": "1000",
+        "allocations": "2000",
+        "reallocations": "0",
+        "bytes": "4000",
+        "largest": "2"
+      },
+      {
+        "case": "all-dots",
+        "iterations": "1000",
+        "allocations": "1000",
+        "reallocations": "0",
+        "bytes": "3000",
+        "largest": "3"
+      },
+      {
+        "case": "reparsed-colon",
+        "iterations": "1000",
+        "allocations": "2000",
+        "reallocations": "0",
+        "bytes": "2000",
+        "largest": "1"
+      },
+      {
+        "case": "bracket-non-ip",
+        "iterations": "1000",
+        "allocations": "2000",
+        "reallocations": "0",
+        "bytes": "6000",
+        "largest": "3"
+      }
+    ],
+    "candidate": [
+      {
+        "case": "lower",
+        "iterations": "1000",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "mixed",
+        "iterations": "1000",
+        "allocations": "1000",
+        "reallocations": "0",
+        "bytes": "15000",
+        "largest": "15"
+      },
+      {
+        "case": "port",
+        "iterations": "1000",
+        "allocations": "1000",
+        "reallocations": "0",
+        "bytes": "15000",
+        "largest": "15"
+      },
+      {
+        "case": "tail-dots",
+        "iterations": "1000",
+        "allocations": "1000",
+        "reallocations": "0",
+        "bytes": "15000",
+        "largest": "15"
+      },
+      {
+        "case": "userinfo",
+        "iterations": "1000",
+        "allocations": "1000",
+        "reallocations": "0",
+        "bytes": "28000",
+        "largest": "28"
+      },
+      {
+        "case": "ipv6-bracket",
+        "iterations": "1000",
+        "allocations": "1000",
+        "reallocations": "0",
+        "bytes": "12000",
+        "largest": "12"
+      },
+      {
+        "case": "ipv6-bare",
+        "iterations": "1000",
+        "allocations": "1000",
+        "reallocations": "0",
+        "bytes": "12000",
+        "largest": "12"
+      },
+      {
+        "case": "unmatched",
+        "iterations": "1000",
+        "allocations": "1000",
+        "reallocations": "0",
+        "bytes": "2000",
+        "largest": "2"
+      },
+      {
+        "case": "unicode",
+        "iterations": "1000",
+        "allocations": "1000",
+        "reallocations": "0",
+        "bytes": "16000",
+        "largest": "16"
+      },
+      {
+        "case": "long-upper",
+        "iterations": "1000",
+        "allocations": "1000",
+        "reallocations": "0",
+        "bytes": "252000",
+        "largest": "252"
+      },
+      {
+        "case": "long-lower",
+        "iterations": "1000",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "empty",
+        "iterations": "1000",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "spaces",
+        "iterations": "1000",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "all-dots",
+        "iterations": "1000",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "reparsed-colon",
+        "iterations": "1000",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "bracket-non-ip",
+        "iterations": "1000",
+        "allocations": "1000",
+        "reallocations": "0",
+        "bytes": "3000",
+        "largest": "3"
+      }
+    ]
+  },
+  "cases": {
+    "lower": {
+      "baseline_ns": 49.04567875,
+      "candidate_ns": 23.04161075,
+      "paired_changes": [
+        -0.521088179099418,
+        -0.5214687238673594,
+        -0.5215930953357966,
+        -0.5351823779802404,
+        -0.5220331092000117,
+        -0.5420395738718857,
+        -0.542554421656182,
+        -0.5386470281206537
+      ],
+      "paired_median": -0.528607743590126
+    },
+    "mixed": {
+      "baseline_ns": 48.94133,
+      "candidate_ns": 32.209307249999995,
+      "paired_changes": [
+        -0.3413356037369174,
+        -0.3534457424702838,
+        -0.3362745331407505,
+        -0.3387182945092999,
+        -0.33948746724475587,
+        -0.34560862464862774,
+        -0.32294489383154246,
+        -0.34289985425620806
+      ],
+      "paired_median": -0.34041153549083664
+    },
+    "port": {
+      "baseline_ns": 61.071612,
+      "candidate_ns": 43.586700500000006,
+      "paired_changes": [
+        -0.28256492133184785,
+        -0.293764418027084,
+        -0.29174143650938034,
+        -0.30616250784123267,
+        -0.2744056159993927,
+        -0.2740986799753026,
+        -0.26151095286623727,
+        -0.3080676171424369
+      ],
+      "paired_median": -0.2871531789206141
+    },
+    "tail-dots": {
+      "baseline_ns": 56.27624025,
+      "candidate_ns": 38.498729499999996,
+      "paired_changes": [
+        -0.31099852576814935,
+        -0.3183970427338567,
+        -0.31546494200017705,
+        -0.31764259405886375,
+        -0.2990278562416592,
+        -0.3164818819213825,
+        -0.31936409094438756,
+        -0.3153571488966175
+      ],
+      "paired_median": -0.31597341196077977
+    },
+    "userinfo": {
+      "baseline_ns": 63.78573675,
+      "candidate_ns": 52.1137085,
+      "paired_changes": [
+        -0.1809621596098464,
+        -0.13623977111844177,
+        -0.19810053764404534,
+        -0.18547201321644824,
+        -0.17956883812291513,
+        -0.16642414522137228,
+        -0.18107068943227322,
+        -0.1812239583909694
+      ],
+      "paired_median": -0.18101642452105982
+    },
+    "ipv6-bracket": {
+      "baseline_ns": 48.1909855,
+      "candidate_ns": 35.60761225,
+      "paired_changes": [
+        -0.2608684254393926,
+        -0.3084618783688651,
+        -0.23759523352999756,
+        -0.284331716404147,
+        -0.2597255335713744,
+        -0.2579973756889964,
+        -0.28353736694215637,
+        -0.2567542438479439
+      ],
+      "paired_median": -0.2602969795053835
+    },
+    "ipv6-bare": {
+      "baseline_ns": 48.18201175,
+      "candidate_ns": 35.81925925,
+      "paired_changes": [
+        -0.2546509812009531,
+        -0.2663147621303489,
+        -0.25845440247010354,
+        -0.25833642538084056,
+        -0.2562206005112385,
+        -0.2678868531684492,
+        -0.2524087134387023,
+        -0.25745083837388516
+      ],
+      "paired_median": -0.25789363187736286
+    },
+    "unmatched": {
+      "baseline_ns": 46.34043525,
+      "candidate_ns": 34.16734825,
+      "paired_changes": [
+        -0.27097841025882574,
+        -0.2629607499434624,
+        -0.27000439460312764,
+        -0.26615704446971034,
+        -0.2597732971012846,
+        -0.25383217016145954,
+        -0.2586065106390105,
+        -0.2600955947430974
+      ],
+      "paired_median": -0.2615281723432799
+    },
+    "unicode": {
+      "baseline_ns": 47.897287500000004,
+      "candidate_ns": 34.861545250000006,
+      "paired_changes": [
+        -0.28399434742610785,
+        -0.2672648494876385,
+        -0.29329422527913096,
+        -0.27481090812123066,
+        -0.26892018026779996,
+        -0.2669980609240923,
+        -0.2720969717303109,
+        -0.26901488441533405
+      ],
+      "paired_median": -0.27055592807282247
+    },
+    "long-upper": {
+      "baseline_ns": 69.59960875,
+      "candidate_ns": 55.307599249999996,
+      "paired_changes": [
+        -0.20192059482293867,
+        -0.15706331689124142,
+        -0.20148423524242864,
+        -0.207416580465129,
+        -0.20737226096415928,
+        -0.21131889478888388,
+        -0.20930443076111183,
+        -0.20271441944622126
+      ],
+      "paired_median": -0.20504334020519027
+    },
+    "long-lower": {
+      "baseline_ns": 69.5653035,
+      "candidate_ns": 127.304273,
+      "paired_changes": [
+        0.8527752120508971,
+        0.840785007190666,
+        0.8226668303655185,
+        0.8288250107279787,
+        0.823402727449386,
+        0.8137001359593012,
+        0.8239145923123556,
+        0.8186201064339655
+      ],
+      "paired_median": 0.8236586598808708
+    },
+    "empty": {
+      "baseline_ns": 10.7814125,
+      "candidate_ns": 10.469497,
+      "paired_changes": [
+        -0.029809399796817626,
+        -0.03120375781085505,
+        -0.016827447231120063,
+        -0.029378303888887625,
+        -0.024032468872021262,
+        -0.027445253567301653,
+        -0.03173601131783477,
+        -0.033555701946938354
+      ],
+      "paired_median": -0.029593851842852625
+    },
+    "spaces": {
+      "baseline_ns": 33.05062825,
+      "candidate_ns": 11.4069145,
+      "paired_changes": [
+        -0.6484646109148793,
+        -0.6520541172371142,
+        -0.6551696666459097,
+        -0.6567703001109451,
+        -0.6537154931933278,
+        -0.6564924846570044,
+        -0.6561205358652643,
+        -0.6538103991234119
+      ],
+      "paired_median": -0.6544900328846608
+    },
+    "all-dots": {
+      "baseline_ns": 24.099491,
+      "candidate_ns": 12.09702575,
+      "paired_changes": [
+        -0.4995707886408177,
+        -0.48734480686393133,
+        -0.49729105572502064,
+        -0.49840614778957926,
+        -0.49601941374379577,
+        -0.49332696040596,
+        -0.502785955862673,
+        -0.5009156151834337
+      ],
+      "paired_median": -0.49784860175729995
+    },
+    "reparsed-colon": {
+      "baseline_ns": 38.681760749999995,
+      "candidate_ns": 14.040085,
+      "paired_changes": [
+        -0.6360780733209508,
+        -0.6380592455299554,
+        -0.6430814579499202,
+        -0.6371100586968919,
+        -0.6354754451751001,
+        -0.6391067512968154,
+        -0.6384295646248022,
+        -0.6375392702312406
+      ],
+      "paired_median": -0.637799257880598
+    },
+    "bracket-non-ip": {
+      "baseline_ns": 35.24968174999999,
+      "candidate_ns": 23.82880325,
+      "paired_changes": [
+        -0.3067009612656011,
+        -0.31548122172388127,
+        -0.3297449621797619,
+        -0.33353260228900294,
+        -0.3203367887838634,
+        -0.3168215456806971,
+        -0.32646276532272744,
+        -0.33339504972572875
+      ],
+      "paired_median": -0.3233997770532954
+    }
+  }
+}

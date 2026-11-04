@@ -1,0 +1,48 @@
+{
+  "artifact_id": 13234231088,
+  "archive": "raw.zip",
+  "archive_bytes": 264076,
+  "archive_sha256": "37d28f118ffc6faf4ee37b6fc355ce1991164aea66b21d26e471a4c2c8dce83f",
+  "files": [
+    {
+      "path": "baseline-build.log",
+      "bytes": 182,
+      "sha256": "361812d55e94c79f1cf0d5172df0a73833f1f9f8d2e90db7ffee41728703a1c2"
+    },
+    {
+      "path": "baseline-clippy.log",
+      "bytes": 192,
+      "sha256": "1a8c1864b4ecca339f896d1ee35bf06fd046e9acd45b383acaa0d322eb842441"
+    },
+    {
+      "path": "baseline-probe",
+      "bytes": 593752,
+      "sha256": "85cea27cfc1db4ea0888d84747f17115ec13204f4e5a1fad6ced889840aa9305"
+    },
+    {
+      "path": "baseline-source.rs",
+      "bytes": 15124,
+      "sha256": "18c1290becaf477bc7dfc13adbc0819dfee45c1530b0317d33a368ea29eccc15"
+    },
+    {
+      "path": "baseline-test.log",
+      "bytes": 1325,
+      "sha256": "0059ef4337e8fad4ae8ab9da8187c0cb36c955060a10340899b73d8b6928f0b3"
+    },
+    {
+      "path": "build.json",
+      "bytes": 445,
+      "sha256": "cfccb06cf513c0027819f530eb3ab9ebc0d538c020923c2430d2e53d68ed58aa"
+    },
+    {
+      "path": "candidate-source.rs",
+      "bytes": 20474,
+      "sha256": "2d7978200b67272d1654c2247d068a0d56c4b93aac9e2bea1de233fca41b245d"
+    },
+    {
+      "path": "candidate-test.log",
+      "bytes": 2216,
+      "sha256": "a0d90611fb7c90226b9cec52de9dddaddfa1d3fa6051c42c28ca9aa1018ec823"
+    }
+  ]
+}

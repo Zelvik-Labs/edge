@@ -1,0 +1,41 @@
+      ┌─────────┐  mr boxington
+     ╱ ═══════ ╱│
+    ╱─────────╱ │
+    │ •    (◉)│≡│
+    │  ◟▄▄▄◞  │ ╱
+    │   ◀◆▶   │╱
+    └─────────┘
+   Compiling libc v0.2.191
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.47
+   Compiling cfg-if v1.0.4
+   Compiling syn v2.0.119
+   Compiling syn v3.0.3
+mbx[progress]: 15s elapsed; 0 hits, 11 misses, 0 bypassed, 1 not looked up; ~0.0s compiler work saved
+   Compiling jobserver v0.1.35
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.11
+   Compiling cc v1.4.3
+   Compiling smallvec v1.15.2
+   Compiling memchr v2.8.3
+   Compiling scopeguard v1.2.0
+   Compiling parking_lot_core v0.9.12
+   Compiling lock_api v0.4.14
+   Compiling pin-project-lite v0.2.17
+   Compiling once_cell v1.21.4
+   Compiling pkg-config v0.3.34
+   Compiling parking_lot v0.12.5
+   Compiling bytes v1.12.1
+   Compiling log v0.4.34
+   Compiling foldhash v0.2.0
+   Compiling rand_core v0.10.1
+   Compiling futures-core v0.3.34
+   Compiling synstructure v0.13.2
+   Compiling errno v0.3.14
+   Compiling socket2 v0.6.5
+   Compiling equivalent v1.0.2
+   Compiling getrandom v0.4.3
+   Compiling autocfg v1.5.1
+   Compiling signal-hook-registry v1.4.8
+local-storage: terminating build: budget exceeded: mbx 12.01 GiB exceeds 12.00 GiB

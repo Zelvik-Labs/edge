@@ -1,0 +1,18 @@
+{
+  "commit": "d73308e04d8ffeeece0eb2dbc422e32a9d4fd28e",
+  "cache_hit": "false",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "rustflags": "-C target-cpu=x86-64-v2",
+  "uname": {
+    "system": "Linux",
+    "node": "runnervmcwoy2",
+    "release": "6.8.0-1070-azure",
+    "version": "#78~22.04.1-Ubuntu SMP Thu Sep 24 18:46:45 UTC 2026",
+    "machine": "x86_64",
+    "processor": "x86_64"
+  },
+  "source_v1_sha256": "1ddf026d62031ab43e6096cf90d32423485d1dceeb1b9e203c795946953f83a9",
+  "initial_source_mtime_ns": 1793683540817767876,
+  "restored_fingerprints": {},
+  "scope": "compiler cache correctness/reuse only, not Edge runtime performance"
+}

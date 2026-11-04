@@ -116,7 +116,8 @@ pub struct XdpInterfaceConfig {
     #[serde(default)]
     pub queues: Vec<u32>,
     /// Optional CPU ids aligned index-wise with `queues`; pins each per-queue
-    /// AF_XDP reactor thread. Empty = auto round-robin across online CPUs.
+    /// AF_XDP reactor thread. Empty = auto round-robin across the supervisor's
+    /// inherited CPU affinity, preserving sparse taskset/cpuset identities.
     #[serde(default)]
     pub cpus: Vec<u32>,
     #[serde(default)]
@@ -566,6 +567,149 @@ pub fn set_validation_transport_controller(controller: XdpTransportController) {
     );
 }
 
+/// Process-scoped wake selection for explicit validation commands. This is
+/// deliberately absent from production configuration and defaults to Worker.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum XdpValidationWakeMode {
+    Worker,
+    Readable,
+}
+
+static VALIDATION_XSK_READINESS: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_validation_xsk_wake_mode(mode: XdpValidationWakeMode) {
+    VALIDATION_XSK_READINESS.store(
+        mode == XdpValidationWakeMode::Readable,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn validation_xsk_wake_mode() -> XdpValidationWakeMode {
+    if VALIDATION_XSK_READINESS.load(std::sync::atomic::Ordering::Relaxed) {
+        XdpValidationWakeMode::Readable
+    } else {
+        XdpValidationWakeMode::Worker
+    }
+}
+
+impl XdpValidationWakeMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Worker => "worker",
+            Self::Readable => "readable",
+        }
+    }
+}
+
+/// Validation-only control for measuring the legacy classification pass.
+/// Production bridge polling uses only RX ownership/readiness observations;
+/// raw diagnostic polling always retains its complete statistics.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum XdpValidationRxStats {
+    Full,
+    Bridge,
+}
+
+static VALIDATION_XSK_FULL_STATS: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_validation_xsk_rx_stats(mode: XdpValidationRxStats) {
+    VALIDATION_XSK_FULL_STATS.store(
+        mode == XdpValidationRxStats::Full,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn validation_xsk_rx_stats() -> XdpValidationRxStats {
+    if VALIDATION_XSK_FULL_STATS.load(std::sync::atomic::Ordering::Relaxed) {
+        XdpValidationRxStats::Full
+    } else {
+        XdpValidationRxStats::Bridge
+    }
+}
+
+impl XdpValidationRxStats {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Bridge => "bridge",
+        }
+    }
+}
+
+/// Validation-only idle-round cooperation. Production retains eager yields.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum XdpValidationIdleYield {
+    Eager,
+    Cooperative,
+}
+
+static VALIDATION_COOPERATIVE_IDLE_YIELD: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_validation_idle_yield(mode: XdpValidationIdleYield) {
+    VALIDATION_COOPERATIVE_IDLE_YIELD.store(
+        mode == XdpValidationIdleYield::Cooperative,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn validation_idle_yield() -> XdpValidationIdleYield {
+    if VALIDATION_COOPERATIVE_IDLE_YIELD.load(std::sync::atomic::Ordering::Relaxed) {
+        XdpValidationIdleYield::Cooperative
+    } else {
+        XdpValidationIdleYield::Eager
+    }
+}
+
+impl XdpValidationIdleYield {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Eager => "eager",
+            Self::Cooperative => "cooperative",
+        }
+    }
+}
+
+/// Validation-only ownership comparison; normal serving keeps the copied path.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum XdpValidationUdpPayload {
+    Copied,
+    Owned,
+}
+
+static VALIDATION_OWNED_UDP_PAYLOAD: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_validation_udp_payload(mode: XdpValidationUdpPayload) {
+    VALIDATION_OWNED_UDP_PAYLOAD.store(
+        mode == XdpValidationUdpPayload::Owned,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn validation_udp_payload() -> XdpValidationUdpPayload {
+    if VALIDATION_OWNED_UDP_PAYLOAD.load(std::sync::atomic::Ordering::Relaxed) {
+        XdpValidationUdpPayload::Owned
+    } else {
+        XdpValidationUdpPayload::Copied
+    }
+}
+
+impl XdpValidationUdpPayload {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Copied => "copied",
+            Self::Owned => "owned",
+        }
+    }
+}
+
 fn validation_transport_controller() -> Option<XdpTransportController> {
     transport_controller_from_index(
         VALIDATION_TRANSPORT_CONTROLLER.load(std::sync::atomic::Ordering::Relaxed),
@@ -938,6 +1082,29 @@ pub(crate) fn runtime_config_test_guard() -> parking_lot::MutexGuard<'static, ()
     RUNTIME_CONFIG_TEST_LOCK
         .get_or_init(|| parking_lot::Mutex::new(()))
         .lock()
+}
+
+#[cfg(test)]
+pub(crate) fn with_runtime_config_for_test<T>(
+    config: RuntimeConfig,
+    test: impl FnOnce() -> T,
+) -> T {
+    let _guard = runtime_config_test_guard();
+    let current = RUNTIME_CONFIG.get_or_init(|| parking_lot::RwLock::new(None));
+    struct Restore {
+        current: &'static parking_lot::RwLock<Option<RuntimeConfig>>,
+        previous: Option<RuntimeConfig>,
+    }
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            *self.current.write() = self.previous.take();
+        }
+    }
+    let _restore = Restore {
+        current,
+        previous: current.write().replace(config),
+    };
+    test()
 }
 
 #[cfg(test)]

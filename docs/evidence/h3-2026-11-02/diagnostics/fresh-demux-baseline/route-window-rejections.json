@@ -1,0 +1,12 @@
+{
+  "messages": 313,
+  "first_messages": [
+    "\u001b[2m2026-11-02T11:05:09.046000+00:00\u001b[0m \u001b[34mDEBUG\u001b[0m \u001b[2mzelvik_edge::quic_udp_demux\u001b[0m\u001b[2m:\u001b[0m QUIC UDP demux: new route rate limit reached for 172.18.0.1 on port 19443",
+    "\u001b[2m2026-11-02T11:05:09.046000+00:00\u001b[0m \u001b[34mDEBUG\u001b[0m \u001b[2mzelvik_edge::quic_udp_demux\u001b[0m\u001b[2m:\u001b[0m QUIC UDP demux: new route rate limit reached for 172.18.0.1 on port 19443",
+    "\u001b[2m2026-11-02T11:05:09.062000+00:00\u001b[0m \u001b[34mDEBUG\u001b[0m \u001b[2mzelvik_edge::quic_udp_demux\u001b[0m\u001b[2m:\u001b[0m QUIC UDP demux: new route rate limit reached for 172.18.0.1 on port 19443",
+    "\u001b[2m2026-11-02T11:05:09.062000+00:00\u001b[0m \u001b[34mDEBUG\u001b[0m \u001b[2mzelvik_edge::quic_udp_demux\u001b[0m\u001b[2m:\u001b[0m QUIC UDP demux: new route rate limit reached for 172.18.0.1 on port 19443"
+  ],
+  "normal_per_ip_routes": 128,
+  "window_seconds": 10,
+  "full_log_sha256": "beb981452a81791ac048ed51a2557709d07ceb2e902b7a051d01ec65478f33ac"
+}

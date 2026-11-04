@@ -1,0 +1,9 @@
+{
+  "runtime_source": "82e3cf0db722497fb594acdcfabc645a6deb2b56",
+  "binaries": {
+    "Zelvik-Edge": "0ba4c5d56b52540f327a55478bd036a7e9516c72933aea4f5aa2da69f09b6aa6",
+    "issue34-controller": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2"
+  },
+  "archive_sha256": "2045fa18ed0085a1092208de2ba359b5ce977289673137e60883d3006a168078",
+  "build": "reuse exact original executables; no Rust compilation"
+}

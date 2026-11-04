@@ -1,0 +1,7490 @@
+[
+  {
+    "budget": 1,
+    "case": "c1-b64-afxdp-r1",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "47965",
+            "tid": 47965
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 59,
+        "system_ticks": 59,
+        "tids": [
+          {
+            "pid": "47965",
+            "tid": 47966
+          }
+        ],
+        "user_us_per_timed_rtt": 7.375,
+        "system_us_per_timed_rtt": 7.375,
+        "cpu_us_per_timed_rtt": 14.75
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 7,
+        "tids": [
+          {
+            "pid": "47965",
+            "tid": 47967
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.875,
+        "cpu_us_per_timed_rtt": 0.875
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 263,
+        "system_ticks": 351,
+        "tids": [
+          {
+            "pid": "47965",
+            "tid": 47975
+          }
+        ],
+        "user_us_per_timed_rtt": 32.875,
+        "system_us_per_timed_rtt": 43.875,
+        "cpu_us_per_timed_rtt": 76.75
+      },
+      "xsk-wake-0": {
+        "user_ticks": 47,
+        "system_ticks": 172,
+        "tids": [
+          {
+            "pid": "47965",
+            "tid": 47976
+          }
+        ],
+        "user_us_per_timed_rtt": 5.875,
+        "system_us_per_timed_rtt": 21.5,
+        "cpu_us_per_timed_rtt": 27.375
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "47965",
+        "tid": 47985,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 47985,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 288605,
+          "read_before_ns": 2886207174516,
+          "read_after_ns": 2886207208629
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b64-afxdp-r2",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48068",
+            "tid": 48068
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 58,
+        "system_ticks": 56,
+        "tids": [
+          {
+            "pid": "48068",
+            "tid": 48069
+          }
+        ],
+        "user_us_per_timed_rtt": 7.25,
+        "system_us_per_timed_rtt": 7.0,
+        "cpu_us_per_timed_rtt": 14.25
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 7,
+        "tids": [
+          {
+            "pid": "48068",
+            "tid": 48070
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.875,
+        "cpu_us_per_timed_rtt": 0.875
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 252,
+        "system_ticks": 352,
+        "tids": [
+          {
+            "pid": "48068",
+            "tid": 48080
+          }
+        ],
+        "user_us_per_timed_rtt": 31.5,
+        "system_us_per_timed_rtt": 44.0,
+        "cpu_us_per_timed_rtt": 75.5
+      },
+      "xsk-wake-0": {
+        "user_ticks": 43,
+        "system_ticks": 171,
+        "tids": [
+          {
+            "pid": "48068",
+            "tid": 48081
+          }
+        ],
+        "user_us_per_timed_rtt": 5.375,
+        "system_us_per_timed_rtt": 21.375,
+        "cpu_us_per_timed_rtt": 26.75
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "48068",
+        "tid": 48090,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 48090,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 293995,
+          "read_before_ns": 2940098709928,
+          "read_after_ns": 2940098743630
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b64-afxdp-r3",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48151",
+            "tid": 48151
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 56,
+        "system_ticks": 57,
+        "tids": [
+          {
+            "pid": "48151",
+            "tid": 48152
+          }
+        ],
+        "user_us_per_timed_rtt": 7.0,
+        "system_us_per_timed_rtt": 7.125,
+        "cpu_us_per_timed_rtt": 14.125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 7,
+        "tids": [
+          {
+            "pid": "48151",
+            "tid": 48153
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.875,
+        "cpu_us_per_timed_rtt": 0.875
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 246,
+        "system_ticks": 351,
+        "tids": [
+          {
+            "pid": "48151",
+            "tid": 48162
+          }
+        ],
+        "user_us_per_timed_rtt": 30.75,
+        "system_us_per_timed_rtt": 43.875,
+        "cpu_us_per_timed_rtt": 74.625
+      },
+      "xsk-wake-0": {
+        "user_ticks": 47,
+        "system_ticks": 168,
+        "tids": [
+          {
+            "pid": "48151",
+            "tid": 48163
+          }
+        ],
+        "user_us_per_timed_rtt": 5.875,
+        "system_us_per_timed_rtt": 21.0,
+        "cpu_us_per_timed_rtt": 26.875
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "48151",
+        "tid": 48172,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 48172,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 298545,
+          "read_before_ns": 2985606135471,
+          "read_after_ns": 2985606167891
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b64-afxdp-r4",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48194",
+            "tid": 48194
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 59,
+        "system_ticks": 56,
+        "tids": [
+          {
+            "pid": "48194",
+            "tid": 48195
+          }
+        ],
+        "user_us_per_timed_rtt": 7.375,
+        "system_us_per_timed_rtt": 7.0,
+        "cpu_us_per_timed_rtt": 14.375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 7,
+        "tids": [
+          {
+            "pid": "48194",
+            "tid": 48196
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.875,
+        "cpu_us_per_timed_rtt": 0.875
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 254,
+        "system_ticks": 347,
+        "tids": [
+          {
+            "pid": "48194",
+            "tid": 48204
+          }
+        ],
+        "user_us_per_timed_rtt": 31.75,
+        "system_us_per_timed_rtt": 43.375,
+        "cpu_us_per_timed_rtt": 75.125
+      },
+      "xsk-wake-0": {
+        "user_ticks": 43,
+        "system_ticks": 174,
+        "tids": [
+          {
+            "pid": "48194",
+            "tid": 48205
+          }
+        ],
+        "user_us_per_timed_rtt": 5.375,
+        "system_us_per_timed_rtt": 21.75,
+        "cpu_us_per_timed_rtt": 27.125
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "48194",
+        "tid": 48214,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 48214,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 300813,
+          "read_before_ns": 3008283002370,
+          "read_after_ns": 3008283060919
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b64-kernel-r1",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48000",
+            "tid": 48000
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 104,
+        "system_ticks": 244,
+        "tids": [
+          {
+            "pid": "48000",
+            "tid": 48001
+          }
+        ],
+        "user_us_per_timed_rtt": 13.0,
+        "system_us_per_timed_rtt": 30.5,
+        "cpu_us_per_timed_rtt": 43.5
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 2,
+        "tids": [
+          {
+            "pid": "48000",
+            "tid": 48002
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.25,
+        "cpu_us_per_timed_rtt": 0.25
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b64-kernel-r2",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48043",
+            "tid": 48043
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 98,
+        "system_ticks": 245,
+        "tids": [
+          {
+            "pid": "48043",
+            "tid": 48044
+          }
+        ],
+        "user_us_per_timed_rtt": 12.25,
+        "system_us_per_timed_rtt": 30.625,
+        "cpu_us_per_timed_rtt": 42.875
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 2,
+        "tids": [
+          {
+            "pid": "48043",
+            "tid": 48045
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.25,
+        "cpu_us_per_timed_rtt": 0.25
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b64-kernel-r3",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48138",
+            "tid": 48138
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 97,
+        "system_ticks": 250,
+        "tids": [
+          {
+            "pid": "48138",
+            "tid": 48139
+          }
+        ],
+        "user_us_per_timed_rtt": 12.125,
+        "system_us_per_timed_rtt": 31.25,
+        "cpu_us_per_timed_rtt": 43.375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 2,
+        "tids": [
+          {
+            "pid": "48138",
+            "tid": 48140
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.25,
+        "cpu_us_per_timed_rtt": 0.25
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b64-kernel-r4",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48239",
+            "tid": 48239
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 99,
+        "system_ticks": 244,
+        "tids": [
+          {
+            "pid": "48239",
+            "tid": 48240
+          }
+        ],
+        "user_us_per_timed_rtt": 12.375,
+        "system_us_per_timed_rtt": 30.5,
+        "cpu_us_per_timed_rtt": 42.875
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 2,
+        "tids": [
+          {
+            "pid": "48239",
+            "tid": 48241
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.25,
+        "cpu_us_per_timed_rtt": 0.25
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b64-nginx-r1",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 38,
+        "system_ticks": 218,
+        "tids": [
+          {
+            "pid": "48031",
+            "tid": 48031
+          },
+          {
+            "pid": "48032",
+            "tid": 48032
+          }
+        ],
+        "user_us_per_timed_rtt": 4.75,
+        "system_us_per_timed_rtt": 27.25,
+        "cpu_us_per_timed_rtt": 32.0
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b64-nginx-r2",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 35,
+        "system_ticks": 222,
+        "tids": [
+          {
+            "pid": "48056",
+            "tid": 48056
+          },
+          {
+            "pid": "48057",
+            "tid": 48057
+          }
+        ],
+        "user_us_per_timed_rtt": 4.375,
+        "system_us_per_timed_rtt": 27.75,
+        "cpu_us_per_timed_rtt": 32.125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b64-nginx-r3",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 37,
+        "system_ticks": 220,
+        "tids": [
+          {
+            "pid": "48114",
+            "tid": 48114
+          },
+          {
+            "pid": "48115",
+            "tid": 48115
+          }
+        ],
+        "user_us_per_timed_rtt": 4.625,
+        "system_us_per_timed_rtt": 27.5,
+        "cpu_us_per_timed_rtt": 32.125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b64-nginx-r4",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 38,
+        "system_ticks": 219,
+        "tids": [
+          {
+            "pid": "48226",
+            "tid": 48226
+          },
+          {
+            "pid": "48228",
+            "tid": 48228
+          }
+        ],
+        "user_us_per_timed_rtt": 4.75,
+        "system_us_per_timed_rtt": 27.375,
+        "cpu_us_per_timed_rtt": 32.125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b64-openresty-r1",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 37,
+        "system_ticks": 218,
+        "tids": [
+          {
+            "pid": "48018",
+            "tid": 48018
+          },
+          {
+            "pid": "48019",
+            "tid": 48019
+          }
+        ],
+        "user_us_per_timed_rtt": 4.625,
+        "system_us_per_timed_rtt": 27.25,
+        "cpu_us_per_timed_rtt": 31.875
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b64-openresty-r2",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 34,
+        "system_ticks": 228,
+        "tids": [
+          {
+            "pid": "48098",
+            "tid": 48098
+          },
+          {
+            "pid": "48099",
+            "tid": 48099
+          }
+        ],
+        "user_us_per_timed_rtt": 4.25,
+        "system_us_per_timed_rtt": 28.5,
+        "cpu_us_per_timed_rtt": 32.75
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b64-openresty-r3",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 34,
+        "system_ticks": 223,
+        "tids": [
+          {
+            "pid": "48126",
+            "tid": 48126
+          },
+          {
+            "pid": "48127",
+            "tid": 48127
+          }
+        ],
+        "user_us_per_timed_rtt": 4.25,
+        "system_us_per_timed_rtt": 27.875,
+        "cpu_us_per_timed_rtt": 32.125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b64-openresty-r4",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 42,
+        "system_ticks": 218,
+        "tids": [
+          {
+            "pid": "48180",
+            "tid": 48180
+          },
+          {
+            "pid": "48181",
+            "tid": 48181
+          }
+        ],
+        "user_us_per_timed_rtt": 5.25,
+        "system_us_per_timed_rtt": 27.25,
+        "cpu_us_per_timed_rtt": 32.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-afxdp-r1",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48263",
+            "tid": 48263
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 62,
+        "system_ticks": 53,
+        "tids": [
+          {
+            "pid": "48263",
+            "tid": 48264
+          }
+        ],
+        "user_us_per_timed_rtt": 7.75,
+        "system_us_per_timed_rtt": 6.625,
+        "cpu_us_per_timed_rtt": 14.375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 7,
+        "tids": [
+          {
+            "pid": "48263",
+            "tid": 48265
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.875,
+        "cpu_us_per_timed_rtt": 0.875
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 251,
+        "system_ticks": 354,
+        "tids": [
+          {
+            "pid": "48263",
+            "tid": 48273
+          }
+        ],
+        "user_us_per_timed_rtt": 31.375,
+        "system_us_per_timed_rtt": 44.25,
+        "cpu_us_per_timed_rtt": 75.625
+      },
+      "xsk-wake-0": {
+        "user_ticks": 43,
+        "system_ticks": 173,
+        "tids": [
+          {
+            "pid": "48263",
+            "tid": 48274
+          }
+        ],
+        "user_us_per_timed_rtt": 5.375,
+        "system_us_per_timed_rtt": 21.625,
+        "cpu_us_per_timed_rtt": 27.0
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "48263",
+        "tid": 48283,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 48283,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 304173,
+          "read_before_ns": 3041886577090,
+          "read_after_ns": 3041886609190
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-afxdp-r2",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48356",
+            "tid": 48356
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 61,
+        "system_ticks": 54,
+        "tids": [
+          {
+            "pid": "48356",
+            "tid": 48357
+          }
+        ],
+        "user_us_per_timed_rtt": 7.625,
+        "system_us_per_timed_rtt": 6.75,
+        "cpu_us_per_timed_rtt": 14.375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 7,
+        "tids": [
+          {
+            "pid": "48356",
+            "tid": 48358
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.875,
+        "cpu_us_per_timed_rtt": 0.875
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 266,
+        "system_ticks": 342,
+        "tids": [
+          {
+            "pid": "48356",
+            "tid": 48366
+          }
+        ],
+        "user_us_per_timed_rtt": 33.25,
+        "system_us_per_timed_rtt": 42.75,
+        "cpu_us_per_timed_rtt": 76.0
+      },
+      "xsk-wake-0": {
+        "user_ticks": 42,
+        "system_ticks": 174,
+        "tids": [
+          {
+            "pid": "48356",
+            "tid": 48367
+          }
+        ],
+        "user_us_per_timed_rtt": 5.25,
+        "system_us_per_timed_rtt": 21.75,
+        "cpu_us_per_timed_rtt": 27.0
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "48356",
+        "tid": 48376,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 48376,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 309564,
+          "read_before_ns": 3095793103620,
+          "read_after_ns": 3095793136201
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-afxdp-r3",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48436",
+            "tid": 48436
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 59,
+        "system_ticks": 56,
+        "tids": [
+          {
+            "pid": "48436",
+            "tid": 48437
+          }
+        ],
+        "user_us_per_timed_rtt": 7.375,
+        "system_us_per_timed_rtt": 7.0,
+        "cpu_us_per_timed_rtt": 14.375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 7,
+        "tids": [
+          {
+            "pid": "48436",
+            "tid": 48438
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.875,
+        "cpu_us_per_timed_rtt": 0.875
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 259,
+        "system_ticks": 353,
+        "tids": [
+          {
+            "pid": "48436",
+            "tid": 48446
+          }
+        ],
+        "user_us_per_timed_rtt": 32.375,
+        "system_us_per_timed_rtt": 44.125,
+        "cpu_us_per_timed_rtt": 76.5
+      },
+      "xsk-wake-0": {
+        "user_ticks": 49,
+        "system_ticks": 169,
+        "tids": [
+          {
+            "pid": "48436",
+            "tid": 48447
+          }
+        ],
+        "user_us_per_timed_rtt": 6.125,
+        "system_us_per_timed_rtt": 21.125,
+        "cpu_us_per_timed_rtt": 27.25
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "48436",
+        "tid": 48456,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 48456,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 314142,
+          "read_before_ns": 3141574711696,
+          "read_after_ns": 3141574744207
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-afxdp-r4",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48476",
+            "tid": 48476
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 55,
+        "system_ticks": 58,
+        "tids": [
+          {
+            "pid": "48476",
+            "tid": 48477
+          }
+        ],
+        "user_us_per_timed_rtt": 6.875,
+        "system_us_per_timed_rtt": 7.25,
+        "cpu_us_per_timed_rtt": 14.125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 7,
+        "tids": [
+          {
+            "pid": "48476",
+            "tid": 48478
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.875,
+        "cpu_us_per_timed_rtt": 0.875
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 258,
+        "system_ticks": 347,
+        "tids": [
+          {
+            "pid": "48476",
+            "tid": 48486
+          }
+        ],
+        "user_us_per_timed_rtt": 32.25,
+        "system_us_per_timed_rtt": 43.375,
+        "cpu_us_per_timed_rtt": 75.625
+      },
+      "xsk-wake-0": {
+        "user_ticks": 40,
+        "system_ticks": 174,
+        "tids": [
+          {
+            "pid": "48476",
+            "tid": 48487
+          }
+        ],
+        "user_us_per_timed_rtt": 5.0,
+        "system_us_per_timed_rtt": 21.75,
+        "cpu_us_per_timed_rtt": 26.75
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "48476",
+        "tid": 48496,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 48496,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 316437,
+          "read_before_ns": 3164527790052,
+          "read_after_ns": 3164527823595
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-kernel-r1",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48291",
+            "tid": 48291
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 102,
+        "system_ticks": 251,
+        "tids": [
+          {
+            "pid": "48291",
+            "tid": 48292
+          }
+        ],
+        "user_us_per_timed_rtt": 12.75,
+        "system_us_per_timed_rtt": 31.375,
+        "cpu_us_per_timed_rtt": 44.125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 2,
+        "tids": [
+          {
+            "pid": "48291",
+            "tid": 48293
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.25,
+        "cpu_us_per_timed_rtt": 0.25
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-kernel-r2",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48331",
+            "tid": 48331
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 98,
+        "system_ticks": 251,
+        "tids": [
+          {
+            "pid": "48331",
+            "tid": 48332
+          }
+        ],
+        "user_us_per_timed_rtt": 12.25,
+        "system_us_per_timed_rtt": 31.375,
+        "cpu_us_per_timed_rtt": 43.625
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 2,
+        "tids": [
+          {
+            "pid": "48331",
+            "tid": 48333
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.25,
+        "cpu_us_per_timed_rtt": 0.25
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-kernel-r3",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48422",
+            "tid": 48422
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 103,
+        "system_ticks": 251,
+        "tids": [
+          {
+            "pid": "48422",
+            "tid": 48423
+          }
+        ],
+        "user_us_per_timed_rtt": 12.875,
+        "system_us_per_timed_rtt": 31.375,
+        "cpu_us_per_timed_rtt": 44.25
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 2,
+        "tids": [
+          {
+            "pid": "48422",
+            "tid": 48424
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.25,
+        "cpu_us_per_timed_rtt": 0.25
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-kernel-r4",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48517",
+            "tid": 48517
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 106,
+        "system_ticks": 243,
+        "tids": [
+          {
+            "pid": "48517",
+            "tid": 48518
+          }
+        ],
+        "user_us_per_timed_rtt": 13.25,
+        "system_us_per_timed_rtt": 30.375,
+        "cpu_us_per_timed_rtt": 43.625
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 1,
+        "tids": [
+          {
+            "pid": "48517",
+            "tid": 48519
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.125,
+        "cpu_us_per_timed_rtt": 0.125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-nginx-r1",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 37,
+        "system_ticks": 221,
+        "tids": [
+          {
+            "pid": "48318",
+            "tid": 48318
+          },
+          {
+            "pid": "48319",
+            "tid": 48319
+          }
+        ],
+        "user_us_per_timed_rtt": 4.625,
+        "system_us_per_timed_rtt": 27.625,
+        "cpu_us_per_timed_rtt": 32.25
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-nginx-r2",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 42,
+        "system_ticks": 218,
+        "tids": [
+          {
+            "pid": "48344",
+            "tid": 48344
+          },
+          {
+            "pid": "48345",
+            "tid": 48345
+          }
+        ],
+        "user_us_per_timed_rtt": 5.25,
+        "system_us_per_timed_rtt": 27.25,
+        "cpu_us_per_timed_rtt": 32.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-nginx-r3",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 40,
+        "system_ticks": 220,
+        "tids": [
+          {
+            "pid": "48396",
+            "tid": 48396
+          },
+          {
+            "pid": "48397",
+            "tid": 48397
+          }
+        ],
+        "user_us_per_timed_rtt": 5.0,
+        "system_us_per_timed_rtt": 27.5,
+        "cpu_us_per_timed_rtt": 32.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-nginx-r4",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 39,
+        "system_ticks": 220,
+        "tids": [
+          {
+            "pid": "48504",
+            "tid": 48504
+          },
+          {
+            "pid": "48505",
+            "tid": 48505
+          }
+        ],
+        "user_us_per_timed_rtt": 4.875,
+        "system_us_per_timed_rtt": 27.5,
+        "cpu_us_per_timed_rtt": 32.375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-openresty-r1",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 38,
+        "system_ticks": 220,
+        "tids": [
+          {
+            "pid": "48306",
+            "tid": 48306
+          },
+          {
+            "pid": "48307",
+            "tid": 48307
+          }
+        ],
+        "user_us_per_timed_rtt": 4.75,
+        "system_us_per_timed_rtt": 27.5,
+        "cpu_us_per_timed_rtt": 32.25
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-openresty-r2",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 39,
+        "system_ticks": 220,
+        "tids": [
+          {
+            "pid": "48384",
+            "tid": 48384
+          },
+          {
+            "pid": "48385",
+            "tid": 48385
+          }
+        ],
+        "user_us_per_timed_rtt": 4.875,
+        "system_us_per_timed_rtt": 27.5,
+        "cpu_us_per_timed_rtt": 32.375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-openresty-r3",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 40,
+        "system_ticks": 221,
+        "tids": [
+          {
+            "pid": "48410",
+            "tid": 48410
+          },
+          {
+            "pid": "48411",
+            "tid": 48411
+          }
+        ],
+        "user_us_per_timed_rtt": 5.0,
+        "system_us_per_timed_rtt": 27.625,
+        "cpu_us_per_timed_rtt": 32.625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c1-b1200-openresty-r4",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 41,
+        "system_ticks": 220,
+        "tids": [
+          {
+            "pid": "48464",
+            "tid": 48464
+          },
+          {
+            "pid": "48465",
+            "tid": 48465
+          }
+        ],
+        "user_us_per_timed_rtt": 5.125,
+        "system_us_per_timed_rtt": 27.5,
+        "cpu_us_per_timed_rtt": 32.625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-afxdp-r1",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48541",
+            "tid": 48541
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 117,
+        "system_ticks": 70,
+        "tids": [
+          {
+            "pid": "48541",
+            "tid": 48542
+          },
+          {
+            "pid": "48541",
+            "tid": 48561
+          },
+          {
+            "pid": "48541",
+            "tid": 48562
+          },
+          {
+            "pid": "48541",
+            "tid": 48563
+          },
+          {
+            "pid": "48541",
+            "tid": 48564
+          },
+          {
+            "pid": "48541",
+            "tid": 48565
+          },
+          {
+            "pid": "48541",
+            "tid": 48566
+          },
+          {
+            "pid": "48541",
+            "tid": 48567
+          },
+          {
+            "pid": "48541",
+            "tid": 48568
+          },
+          {
+            "pid": "48541",
+            "tid": 48569
+          },
+          {
+            "pid": "48541",
+            "tid": 48570
+          },
+          {
+            "pid": "48541",
+            "tid": 48571
+          },
+          {
+            "pid": "48541",
+            "tid": 48572
+          },
+          {
+            "pid": "48541",
+            "tid": 48573
+          },
+          {
+            "pid": "48541",
+            "tid": 48574
+          },
+          {
+            "pid": "48541",
+            "tid": 48575
+          },
+          {
+            "pid": "48541",
+            "tid": 48576
+          }
+        ],
+        "user_us_per_timed_rtt": 3.65625,
+        "system_us_per_timed_rtt": 2.1875,
+        "cpu_us_per_timed_rtt": 5.84375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "48541",
+            "tid": 48543
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.125,
+        "cpu_us_per_timed_rtt": 0.125
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 176,
+        "system_ticks": 277,
+        "tids": [
+          {
+            "pid": "48541",
+            "tid": 48551
+          }
+        ],
+        "user_us_per_timed_rtt": 5.5,
+        "system_us_per_timed_rtt": 8.65625,
+        "cpu_us_per_timed_rtt": 14.15625
+      },
+      "xsk-wake-0": {
+        "user_ticks": 9,
+        "system_ticks": 26,
+        "tids": [
+          {
+            "pid": "48541",
+            "tid": 48552
+          }
+        ],
+        "user_us_per_timed_rtt": 0.28125,
+        "system_us_per_timed_rtt": 0.8125,
+        "cpu_us_per_timed_rtt": 1.09375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-afxdp-r2",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48697",
+            "tid": 48697
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 115,
+        "system_ticks": 70,
+        "tids": [
+          {
+            "pid": "48697",
+            "tid": 48698
+          },
+          {
+            "pid": "48697",
+            "tid": 48717
+          },
+          {
+            "pid": "48697",
+            "tid": 48718
+          },
+          {
+            "pid": "48697",
+            "tid": 48719
+          },
+          {
+            "pid": "48697",
+            "tid": 48720
+          },
+          {
+            "pid": "48697",
+            "tid": 48721
+          },
+          {
+            "pid": "48697",
+            "tid": 48722
+          },
+          {
+            "pid": "48697",
+            "tid": 48723
+          },
+          {
+            "pid": "48697",
+            "tid": 48724
+          },
+          {
+            "pid": "48697",
+            "tid": 48725
+          },
+          {
+            "pid": "48697",
+            "tid": 48726
+          },
+          {
+            "pid": "48697",
+            "tid": 48727
+          },
+          {
+            "pid": "48697",
+            "tid": 48728
+          },
+          {
+            "pid": "48697",
+            "tid": 48729
+          },
+          {
+            "pid": "48697",
+            "tid": 48730
+          },
+          {
+            "pid": "48697",
+            "tid": 48731
+          },
+          {
+            "pid": "48697",
+            "tid": 48732
+          }
+        ],
+        "user_us_per_timed_rtt": 3.59375,
+        "system_us_per_timed_rtt": 2.1875,
+        "cpu_us_per_timed_rtt": 5.78125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 5,
+        "tids": [
+          {
+            "pid": "48697",
+            "tid": 48699
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.15625,
+        "cpu_us_per_timed_rtt": 0.15625
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 172,
+        "system_ticks": 277,
+        "tids": [
+          {
+            "pid": "48697",
+            "tid": 48707
+          }
+        ],
+        "user_us_per_timed_rtt": 5.375,
+        "system_us_per_timed_rtt": 8.65625,
+        "cpu_us_per_timed_rtt": 14.03125
+      },
+      "xsk-wake-0": {
+        "user_ticks": 10,
+        "system_ticks": 24,
+        "tids": [
+          {
+            "pid": "48697",
+            "tid": 48708
+          }
+        ],
+        "user_us_per_timed_rtt": 0.3125,
+        "system_us_per_timed_rtt": 0.75,
+        "cpu_us_per_timed_rtt": 1.0625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-afxdp-r3",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48836",
+            "tid": 48836
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 116,
+        "system_ticks": 71,
+        "tids": [
+          {
+            "pid": "48836",
+            "tid": 48837
+          },
+          {
+            "pid": "48836",
+            "tid": 48856
+          },
+          {
+            "pid": "48836",
+            "tid": 48857
+          },
+          {
+            "pid": "48836",
+            "tid": 48858
+          },
+          {
+            "pid": "48836",
+            "tid": 48859
+          },
+          {
+            "pid": "48836",
+            "tid": 48860
+          },
+          {
+            "pid": "48836",
+            "tid": 48861
+          },
+          {
+            "pid": "48836",
+            "tid": 48862
+          },
+          {
+            "pid": "48836",
+            "tid": 48863
+          },
+          {
+            "pid": "48836",
+            "tid": 48864
+          },
+          {
+            "pid": "48836",
+            "tid": 48865
+          },
+          {
+            "pid": "48836",
+            "tid": 48866
+          },
+          {
+            "pid": "48836",
+            "tid": 48867
+          },
+          {
+            "pid": "48836",
+            "tid": 48868
+          },
+          {
+            "pid": "48836",
+            "tid": 48869
+          },
+          {
+            "pid": "48836",
+            "tid": 48870
+          },
+          {
+            "pid": "48836",
+            "tid": 48871
+          }
+        ],
+        "user_us_per_timed_rtt": 3.625,
+        "system_us_per_timed_rtt": 2.21875,
+        "cpu_us_per_timed_rtt": 5.84375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "48836",
+            "tid": 48838
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.125,
+        "cpu_us_per_timed_rtt": 0.125
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 173,
+        "system_ticks": 276,
+        "tids": [
+          {
+            "pid": "48836",
+            "tid": 48846
+          }
+        ],
+        "user_us_per_timed_rtt": 5.40625,
+        "system_us_per_timed_rtt": 8.625,
+        "cpu_us_per_timed_rtt": 14.03125
+      },
+      "xsk-wake-0": {
+        "user_ticks": 9,
+        "system_ticks": 25,
+        "tids": [
+          {
+            "pid": "48836",
+            "tid": 48847
+          }
+        ],
+        "user_us_per_timed_rtt": 0.28125,
+        "system_us_per_timed_rtt": 0.78125,
+        "cpu_us_per_timed_rtt": 1.0625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-afxdp-r4",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48941",
+            "tid": 48941
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 112,
+        "system_ticks": 74,
+        "tids": [
+          {
+            "pid": "48941",
+            "tid": 48942
+          },
+          {
+            "pid": "48941",
+            "tid": 48961
+          },
+          {
+            "pid": "48941",
+            "tid": 48962
+          },
+          {
+            "pid": "48941",
+            "tid": 48963
+          },
+          {
+            "pid": "48941",
+            "tid": 48964
+          },
+          {
+            "pid": "48941",
+            "tid": 48965
+          },
+          {
+            "pid": "48941",
+            "tid": 48966
+          },
+          {
+            "pid": "48941",
+            "tid": 48967
+          },
+          {
+            "pid": "48941",
+            "tid": 48968
+          },
+          {
+            "pid": "48941",
+            "tid": 48969
+          },
+          {
+            "pid": "48941",
+            "tid": 48970
+          },
+          {
+            "pid": "48941",
+            "tid": 48971
+          },
+          {
+            "pid": "48941",
+            "tid": 48972
+          },
+          {
+            "pid": "48941",
+            "tid": 48973
+          },
+          {
+            "pid": "48941",
+            "tid": 48974
+          },
+          {
+            "pid": "48941",
+            "tid": 48975
+          },
+          {
+            "pid": "48941",
+            "tid": 48976
+          }
+        ],
+        "user_us_per_timed_rtt": 3.5,
+        "system_us_per_timed_rtt": 2.3125,
+        "cpu_us_per_timed_rtt": 5.8125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "48941",
+            "tid": 48943
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.125,
+        "cpu_us_per_timed_rtt": 0.125
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 177,
+        "system_ticks": 275,
+        "tids": [
+          {
+            "pid": "48941",
+            "tid": 48951
+          }
+        ],
+        "user_us_per_timed_rtt": 5.53125,
+        "system_us_per_timed_rtt": 8.59375,
+        "cpu_us_per_timed_rtt": 14.125
+      },
+      "xsk-wake-0": {
+        "user_ticks": 8,
+        "system_ticks": 26,
+        "tids": [
+          {
+            "pid": "48941",
+            "tid": 48952
+          }
+        ],
+        "user_us_per_timed_rtt": 0.25,
+        "system_us_per_timed_rtt": 0.8125,
+        "cpu_us_per_timed_rtt": 1.0625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-kernel-r1",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48631",
+            "tid": 48631
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 167,
+        "system_ticks": 407,
+        "tids": [
+          {
+            "pid": "48631",
+            "tid": 48632
+          }
+        ],
+        "user_us_per_timed_rtt": 5.21875,
+        "system_us_per_timed_rtt": 12.718750000000002,
+        "cpu_us_per_timed_rtt": 17.9375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 2,
+        "tids": [
+          {
+            "pid": "48631",
+            "tid": 48633
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0625,
+        "cpu_us_per_timed_rtt": 0.0625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-kernel-r2",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48670",
+            "tid": 48670
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 172,
+        "system_ticks": 397,
+        "tids": [
+          {
+            "pid": "48670",
+            "tid": 48671
+          }
+        ],
+        "user_us_per_timed_rtt": 5.375,
+        "system_us_per_timed_rtt": 12.40625,
+        "cpu_us_per_timed_rtt": 17.78125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 2,
+        "tids": [
+          {
+            "pid": "48670",
+            "tid": 48672
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0625,
+        "cpu_us_per_timed_rtt": 0.0625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-kernel-r3",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "48823",
+            "tid": 48823
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 166,
+        "system_ticks": 402,
+        "tids": [
+          {
+            "pid": "48823",
+            "tid": 48824
+          }
+        ],
+        "user_us_per_timed_rtt": 5.1875,
+        "system_us_per_timed_rtt": 12.562499999999998,
+        "cpu_us_per_timed_rtt": 17.75
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 2,
+        "tids": [
+          {
+            "pid": "48823",
+            "tid": 48825
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0625,
+        "cpu_us_per_timed_rtt": 0.0625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-kernel-r4",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49041",
+            "tid": 49041
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 169,
+        "system_ticks": 381,
+        "tids": [
+          {
+            "pid": "49041",
+            "tid": 49042
+          }
+        ],
+        "user_us_per_timed_rtt": 5.28125,
+        "system_us_per_timed_rtt": 11.90625,
+        "cpu_us_per_timed_rtt": 17.1875
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 2,
+        "tids": [
+          {
+            "pid": "49041",
+            "tid": 49043
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0625,
+        "cpu_us_per_timed_rtt": 0.0625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-nginx-r1",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 90,
+        "system_ticks": 437,
+        "tids": [
+          {
+            "pid": "48658",
+            "tid": 48658
+          },
+          {
+            "pid": "48659",
+            "tid": 48659
+          }
+        ],
+        "user_us_per_timed_rtt": 2.8125,
+        "system_us_per_timed_rtt": 13.65625,
+        "cpu_us_per_timed_rtt": 16.46875
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-nginx-r2",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 89,
+        "system_ticks": 436,
+        "tids": [
+          {
+            "pid": "48685",
+            "tid": 48685
+          },
+          {
+            "pid": "48686",
+            "tid": 48686
+          }
+        ],
+        "user_us_per_timed_rtt": 2.78125,
+        "system_us_per_timed_rtt": 13.625,
+        "cpu_us_per_timed_rtt": 16.40625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-nginx-r3",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 90,
+        "system_ticks": 435,
+        "tids": [
+          {
+            "pid": "48798",
+            "tid": 48798
+          },
+          {
+            "pid": "48799",
+            "tid": 48799
+          }
+        ],
+        "user_us_per_timed_rtt": 2.8125,
+        "system_us_per_timed_rtt": 13.59375,
+        "cpu_us_per_timed_rtt": 16.40625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-nginx-r4",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 94,
+        "system_ticks": 432,
+        "tids": [
+          {
+            "pid": "49028",
+            "tid": 49028
+          },
+          {
+            "pid": "49029",
+            "tid": 49029
+          }
+        ],
+        "user_us_per_timed_rtt": 2.9375,
+        "system_us_per_timed_rtt": 13.5,
+        "cpu_us_per_timed_rtt": 16.4375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-openresty-r1",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 88,
+        "system_ticks": 443,
+        "tids": [
+          {
+            "pid": "48646",
+            "tid": 48646
+          },
+          {
+            "pid": "48647",
+            "tid": 48647
+          }
+        ],
+        "user_us_per_timed_rtt": 2.75,
+        "system_us_per_timed_rtt": 13.84375,
+        "cpu_us_per_timed_rtt": 16.59375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-openresty-r2",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 87,
+        "system_ticks": 443,
+        "tids": [
+          {
+            "pid": "48785",
+            "tid": 48785
+          },
+          {
+            "pid": "48786",
+            "tid": 48786
+          }
+        ],
+        "user_us_per_timed_rtt": 2.71875,
+        "system_us_per_timed_rtt": 13.84375,
+        "cpu_us_per_timed_rtt": 16.5625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-openresty-r3",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 88,
+        "system_ticks": 436,
+        "tids": [
+          {
+            "pid": "48810",
+            "tid": 48810
+          },
+          {
+            "pid": "48811",
+            "tid": 48811
+          }
+        ],
+        "user_us_per_timed_rtt": 2.75,
+        "system_us_per_timed_rtt": 13.625,
+        "cpu_us_per_timed_rtt": 16.375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b64-openresty-r4",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 94,
+        "system_ticks": 441,
+        "tids": [
+          {
+            "pid": "48924",
+            "tid": 48924
+          },
+          {
+            "pid": "48925",
+            "tid": 48925
+          }
+        ],
+        "user_us_per_timed_rtt": 2.9375,
+        "system_us_per_timed_rtt": 13.78125,
+        "cpu_us_per_timed_rtt": 16.71875
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-afxdp-r1",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49064",
+            "tid": 49064
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 121,
+        "system_ticks": 75,
+        "tids": [
+          {
+            "pid": "49064",
+            "tid": 49065
+          },
+          {
+            "pid": "49064",
+            "tid": 49084
+          },
+          {
+            "pid": "49064",
+            "tid": 49085
+          },
+          {
+            "pid": "49064",
+            "tid": 49086
+          },
+          {
+            "pid": "49064",
+            "tid": 49087
+          },
+          {
+            "pid": "49064",
+            "tid": 49088
+          },
+          {
+            "pid": "49064",
+            "tid": 49089
+          },
+          {
+            "pid": "49064",
+            "tid": 49090
+          },
+          {
+            "pid": "49064",
+            "tid": 49091
+          },
+          {
+            "pid": "49064",
+            "tid": 49092
+          },
+          {
+            "pid": "49064",
+            "tid": 49093
+          },
+          {
+            "pid": "49064",
+            "tid": 49094
+          },
+          {
+            "pid": "49064",
+            "tid": 49095
+          },
+          {
+            "pid": "49064",
+            "tid": 49096
+          },
+          {
+            "pid": "49064",
+            "tid": 49097
+          },
+          {
+            "pid": "49064",
+            "tid": 49098
+          },
+          {
+            "pid": "49064",
+            "tid": 49099
+          }
+        ],
+        "user_us_per_timed_rtt": 3.78125,
+        "system_us_per_timed_rtt": 2.34375,
+        "cpu_us_per_timed_rtt": 6.125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "49064",
+            "tid": 49066
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.125,
+        "cpu_us_per_timed_rtt": 0.125
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 185,
+        "system_ticks": 291,
+        "tids": [
+          {
+            "pid": "49064",
+            "tid": 49074
+          }
+        ],
+        "user_us_per_timed_rtt": 5.78125,
+        "system_us_per_timed_rtt": 9.09375,
+        "cpu_us_per_timed_rtt": 14.875
+      },
+      "xsk-wake-0": {
+        "user_ticks": 11,
+        "system_ticks": 24,
+        "tids": [
+          {
+            "pid": "49064",
+            "tid": 49075
+          }
+        ],
+        "user_us_per_timed_rtt": 0.34375,
+        "system_us_per_timed_rtt": 0.75,
+        "cpu_us_per_timed_rtt": 1.09375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-afxdp-r2",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49216",
+            "tid": 49216
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 121,
+        "system_ticks": 74,
+        "tids": [
+          {
+            "pid": "49216",
+            "tid": 49217
+          },
+          {
+            "pid": "49216",
+            "tid": 49236
+          },
+          {
+            "pid": "49216",
+            "tid": 49237
+          },
+          {
+            "pid": "49216",
+            "tid": 49238
+          },
+          {
+            "pid": "49216",
+            "tid": 49239
+          },
+          {
+            "pid": "49216",
+            "tid": 49240
+          },
+          {
+            "pid": "49216",
+            "tid": 49241
+          },
+          {
+            "pid": "49216",
+            "tid": 49242
+          },
+          {
+            "pid": "49216",
+            "tid": 49243
+          },
+          {
+            "pid": "49216",
+            "tid": 49244
+          },
+          {
+            "pid": "49216",
+            "tid": 49245
+          },
+          {
+            "pid": "49216",
+            "tid": 49246
+          },
+          {
+            "pid": "49216",
+            "tid": 49247
+          },
+          {
+            "pid": "49216",
+            "tid": 49248
+          },
+          {
+            "pid": "49216",
+            "tid": 49249
+          },
+          {
+            "pid": "49216",
+            "tid": 49250
+          },
+          {
+            "pid": "49216",
+            "tid": 49251
+          }
+        ],
+        "user_us_per_timed_rtt": 3.78125,
+        "system_us_per_timed_rtt": 2.3125,
+        "cpu_us_per_timed_rtt": 6.09375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "49216",
+            "tid": 49218
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.125,
+        "cpu_us_per_timed_rtt": 0.125
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 189,
+        "system_ticks": 289,
+        "tids": [
+          {
+            "pid": "49216",
+            "tid": 49226
+          }
+        ],
+        "user_us_per_timed_rtt": 5.90625,
+        "system_us_per_timed_rtt": 9.03125,
+        "cpu_us_per_timed_rtt": 14.9375
+      },
+      "xsk-wake-0": {
+        "user_ticks": 10,
+        "system_ticks": 25,
+        "tids": [
+          {
+            "pid": "49216",
+            "tid": 49227
+          }
+        ],
+        "user_us_per_timed_rtt": 0.3125,
+        "system_us_per_timed_rtt": 0.78125,
+        "cpu_us_per_timed_rtt": 1.09375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-afxdp-r3",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49358",
+            "tid": 49358
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 122,
+        "system_ticks": 73,
+        "tids": [
+          {
+            "pid": "49358",
+            "tid": 49359
+          },
+          {
+            "pid": "49358",
+            "tid": 49378
+          },
+          {
+            "pid": "49358",
+            "tid": 49379
+          },
+          {
+            "pid": "49358",
+            "tid": 49380
+          },
+          {
+            "pid": "49358",
+            "tid": 49381
+          },
+          {
+            "pid": "49358",
+            "tid": 49382
+          },
+          {
+            "pid": "49358",
+            "tid": 49383
+          },
+          {
+            "pid": "49358",
+            "tid": 49384
+          },
+          {
+            "pid": "49358",
+            "tid": 49385
+          },
+          {
+            "pid": "49358",
+            "tid": 49386
+          },
+          {
+            "pid": "49358",
+            "tid": 49387
+          },
+          {
+            "pid": "49358",
+            "tid": 49388
+          },
+          {
+            "pid": "49358",
+            "tid": 49389
+          },
+          {
+            "pid": "49358",
+            "tid": 49390
+          },
+          {
+            "pid": "49358",
+            "tid": 49391
+          },
+          {
+            "pid": "49358",
+            "tid": 49392
+          },
+          {
+            "pid": "49358",
+            "tid": 49393
+          }
+        ],
+        "user_us_per_timed_rtt": 3.8125,
+        "system_us_per_timed_rtt": 2.28125,
+        "cpu_us_per_timed_rtt": 6.09375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "49358",
+            "tid": 49360
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.125,
+        "cpu_us_per_timed_rtt": 0.125
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 192,
+        "system_ticks": 287,
+        "tids": [
+          {
+            "pid": "49358",
+            "tid": 49368
+          }
+        ],
+        "user_us_per_timed_rtt": 6.0,
+        "system_us_per_timed_rtt": 8.96875,
+        "cpu_us_per_timed_rtt": 14.96875
+      },
+      "xsk-wake-0": {
+        "user_ticks": 8,
+        "system_ticks": 27,
+        "tids": [
+          {
+            "pid": "49358",
+            "tid": 49369
+          }
+        ],
+        "user_us_per_timed_rtt": 0.25,
+        "system_us_per_timed_rtt": 0.84375,
+        "cpu_us_per_timed_rtt": 1.09375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-afxdp-r4",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49458",
+            "tid": 49458
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 128,
+        "system_ticks": 66,
+        "tids": [
+          {
+            "pid": "49458",
+            "tid": 49459
+          },
+          {
+            "pid": "49458",
+            "tid": 49478
+          },
+          {
+            "pid": "49458",
+            "tid": 49479
+          },
+          {
+            "pid": "49458",
+            "tid": 49480
+          },
+          {
+            "pid": "49458",
+            "tid": 49481
+          },
+          {
+            "pid": "49458",
+            "tid": 49482
+          },
+          {
+            "pid": "49458",
+            "tid": 49483
+          },
+          {
+            "pid": "49458",
+            "tid": 49484
+          },
+          {
+            "pid": "49458",
+            "tid": 49485
+          },
+          {
+            "pid": "49458",
+            "tid": 49486
+          },
+          {
+            "pid": "49458",
+            "tid": 49487
+          },
+          {
+            "pid": "49458",
+            "tid": 49488
+          },
+          {
+            "pid": "49458",
+            "tid": 49489
+          },
+          {
+            "pid": "49458",
+            "tid": 49490
+          },
+          {
+            "pid": "49458",
+            "tid": 49491
+          },
+          {
+            "pid": "49458",
+            "tid": 49492
+          },
+          {
+            "pid": "49458",
+            "tid": 49493
+          }
+        ],
+        "user_us_per_timed_rtt": 4.0,
+        "system_us_per_timed_rtt": 2.0625,
+        "cpu_us_per_timed_rtt": 6.0625
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 5,
+        "tids": [
+          {
+            "pid": "49458",
+            "tid": 49460
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.15625,
+        "cpu_us_per_timed_rtt": 0.15625
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 182,
+        "system_ticks": 294,
+        "tids": [
+          {
+            "pid": "49458",
+            "tid": 49468
+          }
+        ],
+        "user_us_per_timed_rtt": 5.6875,
+        "system_us_per_timed_rtt": 9.1875,
+        "cpu_us_per_timed_rtt": 14.875
+      },
+      "xsk-wake-0": {
+        "user_ticks": 8,
+        "system_ticks": 26,
+        "tids": [
+          {
+            "pid": "49458",
+            "tid": 49469
+          }
+        ],
+        "user_us_per_timed_rtt": 0.25,
+        "system_us_per_timed_rtt": 0.8125,
+        "cpu_us_per_timed_rtt": 1.0625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-kernel-r1",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49152",
+            "tid": 49152
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 173,
+        "system_ticks": 420,
+        "tids": [
+          {
+            "pid": "49152",
+            "tid": 49153
+          }
+        ],
+        "user_us_per_timed_rtt": 5.40625,
+        "system_us_per_timed_rtt": 13.125,
+        "cpu_us_per_timed_rtt": 18.53125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 3,
+        "tids": [
+          {
+            "pid": "49152",
+            "tid": 49154
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.09375,
+        "cpu_us_per_timed_rtt": 0.09375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-kernel-r2",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49190",
+            "tid": 49190
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 170,
+        "system_ticks": 418,
+        "tids": [
+          {
+            "pid": "49190",
+            "tid": 49191
+          }
+        ],
+        "user_us_per_timed_rtt": 5.3125,
+        "system_us_per_timed_rtt": 13.062499999999998,
+        "cpu_us_per_timed_rtt": 18.375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 3,
+        "tids": [
+          {
+            "pid": "49190",
+            "tid": 49192
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.09375,
+        "cpu_us_per_timed_rtt": 0.09375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-kernel-r3",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49344",
+            "tid": 49344
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 177,
+        "system_ticks": 410,
+        "tids": [
+          {
+            "pid": "49344",
+            "tid": 49345
+          }
+        ],
+        "user_us_per_timed_rtt": 5.53125,
+        "system_us_per_timed_rtt": 12.812499999999998,
+        "cpu_us_per_timed_rtt": 18.34375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 3,
+        "tids": [
+          {
+            "pid": "49344",
+            "tid": 49346
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.09375,
+        "cpu_us_per_timed_rtt": 0.09375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-kernel-r4",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49559",
+            "tid": 49559
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 173,
+        "system_ticks": 412,
+        "tids": [
+          {
+            "pid": "49559",
+            "tid": 49560
+          }
+        ],
+        "user_us_per_timed_rtt": 5.40625,
+        "system_us_per_timed_rtt": 12.875,
+        "cpu_us_per_timed_rtt": 18.28125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 2,
+        "tids": [
+          {
+            "pid": "49559",
+            "tid": 49561
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0625,
+        "cpu_us_per_timed_rtt": 0.0625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-nginx-r1",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 88,
+        "system_ticks": 453,
+        "tids": [
+          {
+            "pid": "49178",
+            "tid": 49178
+          },
+          {
+            "pid": "49179",
+            "tid": 49179
+          }
+        ],
+        "user_us_per_timed_rtt": 2.75,
+        "system_us_per_timed_rtt": 14.15625,
+        "cpu_us_per_timed_rtt": 16.90625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-nginx-r2",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 93,
+        "system_ticks": 451,
+        "tids": [
+          {
+            "pid": "49203",
+            "tid": 49203
+          },
+          {
+            "pid": "49204",
+            "tid": 49204
+          }
+        ],
+        "user_us_per_timed_rtt": 2.90625,
+        "system_us_per_timed_rtt": 14.09375,
+        "cpu_us_per_timed_rtt": 17.0
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-nginx-r3",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 93,
+        "system_ticks": 444,
+        "tids": [
+          {
+            "pid": "49318",
+            "tid": 49318
+          },
+          {
+            "pid": "49319",
+            "tid": 49319
+          }
+        ],
+        "user_us_per_timed_rtt": 2.90625,
+        "system_us_per_timed_rtt": 13.875,
+        "cpu_us_per_timed_rtt": 16.78125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-nginx-r4",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 92,
+        "system_ticks": 449,
+        "tids": [
+          {
+            "pid": "49546",
+            "tid": 49546
+          },
+          {
+            "pid": "49547",
+            "tid": 49547
+          }
+        ],
+        "user_us_per_timed_rtt": 2.875,
+        "system_us_per_timed_rtt": 14.03125,
+        "cpu_us_per_timed_rtt": 16.90625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-openresty-r1",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 98,
+        "system_ticks": 447,
+        "tids": [
+          {
+            "pid": "49166",
+            "tid": 49166
+          },
+          {
+            "pid": "49167",
+            "tid": 49167
+          }
+        ],
+        "user_us_per_timed_rtt": 3.0625,
+        "system_us_per_timed_rtt": 13.96875,
+        "cpu_us_per_timed_rtt": 17.03125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-openresty-r2",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 92,
+        "system_ticks": 452,
+        "tids": [
+          {
+            "pid": "49305",
+            "tid": 49305
+          },
+          {
+            "pid": "49306",
+            "tid": 49306
+          }
+        ],
+        "user_us_per_timed_rtt": 2.875,
+        "system_us_per_timed_rtt": 14.125,
+        "cpu_us_per_timed_rtt": 17.0
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-openresty-r3",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 92,
+        "system_ticks": 446,
+        "tids": [
+          {
+            "pid": "49332",
+            "tid": 49332
+          },
+          {
+            "pid": "49333",
+            "tid": 49333
+          }
+        ],
+        "user_us_per_timed_rtt": 2.875,
+        "system_us_per_timed_rtt": 13.9375,
+        "cpu_us_per_timed_rtt": 16.8125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 1,
+    "case": "c16-b1200-openresty-r4",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 89,
+        "system_ticks": 451,
+        "tids": [
+          {
+            "pid": "49446",
+            "tid": 49446
+          },
+          {
+            "pid": "49447",
+            "tid": 49447
+          }
+        ],
+        "user_us_per_timed_rtt": 2.78125,
+        "system_us_per_timed_rtt": 14.09375,
+        "cpu_us_per_timed_rtt": 16.875
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-afxdp-r1",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49608",
+            "tid": 49608
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 118,
+        "system_ticks": 227,
+        "tids": [
+          {
+            "pid": "49608",
+            "tid": 49609
+          },
+          {
+            "pid": "49608",
+            "tid": 49610
+          }
+        ],
+        "user_us_per_timed_rtt": 14.75,
+        "system_us_per_timed_rtt": 28.375,
+        "cpu_us_per_timed_rtt": 43.125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 8,
+        "tids": [
+          {
+            "pid": "49608",
+            "tid": 49611
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 1.0,
+        "cpu_us_per_timed_rtt": 1.0
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 402,
+        "system_ticks": 467,
+        "tids": [
+          {
+            "pid": "49608",
+            "tid": 49619
+          }
+        ],
+        "user_us_per_timed_rtt": 50.24999999999999,
+        "system_us_per_timed_rtt": 58.375,
+        "cpu_us_per_timed_rtt": 108.625
+      },
+      "xsk-wake-0": {
+        "user_ticks": 45,
+        "system_ticks": 176,
+        "tids": [
+          {
+            "pid": "49608",
+            "tid": 49620
+          }
+        ],
+        "user_us_per_timed_rtt": 5.625,
+        "system_us_per_timed_rtt": 22.0,
+        "cpu_us_per_timed_rtt": 27.625
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "49608",
+        "tid": 49629,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 49629,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 349572,
+          "read_before_ns": 3495896369629,
+          "read_after_ns": 3495896403131
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-afxdp-r2",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49716",
+            "tid": 49716
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 117,
+        "system_ticks": 226,
+        "tids": [
+          {
+            "pid": "49716",
+            "tid": 49717
+          },
+          {
+            "pid": "49716",
+            "tid": 49718
+          }
+        ],
+        "user_us_per_timed_rtt": 14.625,
+        "system_us_per_timed_rtt": 28.25,
+        "cpu_us_per_timed_rtt": 42.875
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 8,
+        "tids": [
+          {
+            "pid": "49716",
+            "tid": 49719
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 1.0,
+        "cpu_us_per_timed_rtt": 1.0
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 419,
+        "system_ticks": 457,
+        "tids": [
+          {
+            "pid": "49716",
+            "tid": 49727
+          }
+        ],
+        "user_us_per_timed_rtt": 52.37500000000001,
+        "system_us_per_timed_rtt": 57.125,
+        "cpu_us_per_timed_rtt": 109.5
+      },
+      "xsk-wake-0": {
+        "user_ticks": 48,
+        "system_ticks": 173,
+        "tids": [
+          {
+            "pid": "49716",
+            "tid": 49728
+          }
+        ],
+        "user_us_per_timed_rtt": 6.0,
+        "system_us_per_timed_rtt": 21.625,
+        "cpu_us_per_timed_rtt": 27.625
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "49716",
+        "tid": 49737,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 49737,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 355108,
+          "read_before_ns": 3551253567358,
+          "read_after_ns": 3551253599367
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-afxdp-r3",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49800",
+            "tid": 49800
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 119,
+        "system_ticks": 226,
+        "tids": [
+          {
+            "pid": "49800",
+            "tid": 49801
+          },
+          {
+            "pid": "49800",
+            "tid": 49802
+          }
+        ],
+        "user_us_per_timed_rtt": 14.875,
+        "system_us_per_timed_rtt": 28.25,
+        "cpu_us_per_timed_rtt": 43.125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 8,
+        "tids": [
+          {
+            "pid": "49800",
+            "tid": 49803
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 1.0,
+        "cpu_us_per_timed_rtt": 1.0
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 403,
+        "system_ticks": 464,
+        "tids": [
+          {
+            "pid": "49800",
+            "tid": 49811
+          }
+        ],
+        "user_us_per_timed_rtt": 50.37500000000001,
+        "system_us_per_timed_rtt": 58.0,
+        "cpu_us_per_timed_rtt": 108.375
+      },
+      "xsk-wake-0": {
+        "user_ticks": 46,
+        "system_ticks": 177,
+        "tids": [
+          {
+            "pid": "49800",
+            "tid": 49812
+          }
+        ],
+        "user_us_per_timed_rtt": 5.75,
+        "system_us_per_timed_rtt": 22.125,
+        "cpu_us_per_timed_rtt": 27.875
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "49800",
+        "tid": 49821,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 49821,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 359831,
+          "read_before_ns": 3598478936648,
+          "read_after_ns": 3598478969098
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-afxdp-r4",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49850",
+            "tid": 49850
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 121,
+        "system_ticks": 220,
+        "tids": [
+          {
+            "pid": "49850",
+            "tid": 49851
+          },
+          {
+            "pid": "49850",
+            "tid": 49852
+          }
+        ],
+        "user_us_per_timed_rtt": 15.125,
+        "system_us_per_timed_rtt": 27.5,
+        "cpu_us_per_timed_rtt": 42.625
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 7,
+        "tids": [
+          {
+            "pid": "49850",
+            "tid": 49853
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.875,
+        "cpu_us_per_timed_rtt": 0.875
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 405,
+        "system_ticks": 462,
+        "tids": [
+          {
+            "pid": "49850",
+            "tid": 49861
+          }
+        ],
+        "user_us_per_timed_rtt": 50.625,
+        "system_us_per_timed_rtt": 57.75,
+        "cpu_us_per_timed_rtt": 108.375
+      },
+      "xsk-wake-0": {
+        "user_ticks": 47,
+        "system_ticks": 174,
+        "tids": [
+          {
+            "pid": "49850",
+            "tid": 49862
+          }
+        ],
+        "user_us_per_timed_rtt": 5.875,
+        "system_us_per_timed_rtt": 21.75,
+        "cpu_us_per_timed_rtt": 27.625
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "49850",
+        "tid": 49871,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 49871,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 362273,
+          "read_before_ns": 3622902331290,
+          "read_after_ns": 3622902363129
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-kernel-r1",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49647",
+            "tid": 49647
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 104,
+        "system_ticks": 248,
+        "tids": [
+          {
+            "pid": "49647",
+            "tid": 49648
+          },
+          {
+            "pid": "49647",
+            "tid": 49649
+          }
+        ],
+        "user_us_per_timed_rtt": 13.0,
+        "system_us_per_timed_rtt": 31.0,
+        "cpu_us_per_timed_rtt": 44.0
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "49647",
+            "tid": 49650
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.5,
+        "cpu_us_per_timed_rtt": 0.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-kernel-r2",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49687",
+            "tid": 49687
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 102,
+        "system_ticks": 242,
+        "tids": [
+          {
+            "pid": "49687",
+            "tid": 49688
+          },
+          {
+            "pid": "49687",
+            "tid": 49689
+          }
+        ],
+        "user_us_per_timed_rtt": 12.75,
+        "system_us_per_timed_rtt": 30.25,
+        "cpu_us_per_timed_rtt": 43.0
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "49687",
+            "tid": 49690
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.5,
+        "cpu_us_per_timed_rtt": 0.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-kernel-r3",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49786",
+            "tid": 49786
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 96,
+        "system_ticks": 244,
+        "tids": [
+          {
+            "pid": "49786",
+            "tid": 49787
+          },
+          {
+            "pid": "49786",
+            "tid": 49788
+          }
+        ],
+        "user_us_per_timed_rtt": 12.0,
+        "system_us_per_timed_rtt": 30.5,
+        "cpu_us_per_timed_rtt": 42.5
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "49786",
+            "tid": 49789
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.5,
+        "cpu_us_per_timed_rtt": 0.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-kernel-r4",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49894",
+            "tid": 49894
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 97,
+        "system_ticks": 252,
+        "tids": [
+          {
+            "pid": "49894",
+            "tid": 49895
+          },
+          {
+            "pid": "49894",
+            "tid": 49896
+          }
+        ],
+        "user_us_per_timed_rtt": 12.125,
+        "system_us_per_timed_rtt": 31.5,
+        "cpu_us_per_timed_rtt": 43.625
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "49894",
+            "tid": 49897
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.5,
+        "cpu_us_per_timed_rtt": 0.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-nginx-r1",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 38,
+        "system_ticks": 222,
+        "tids": [
+          {
+            "pid": "49674",
+            "tid": 49674
+          },
+          {
+            "pid": "49675",
+            "tid": 49675
+          },
+          {
+            "pid": "49676",
+            "tid": 49676
+          }
+        ],
+        "user_us_per_timed_rtt": 4.75,
+        "system_us_per_timed_rtt": 27.75,
+        "cpu_us_per_timed_rtt": 32.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-nginx-r2",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 35,
+        "system_ticks": 224,
+        "tids": [
+          {
+            "pid": "49702",
+            "tid": 49702
+          },
+          {
+            "pid": "49703",
+            "tid": 49703
+          },
+          {
+            "pid": "49704",
+            "tid": 49704
+          }
+        ],
+        "user_us_per_timed_rtt": 4.375,
+        "system_us_per_timed_rtt": 28.0,
+        "cpu_us_per_timed_rtt": 32.375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-nginx-r3",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 40,
+        "system_ticks": 219,
+        "tids": [
+          {
+            "pid": "49759",
+            "tid": 49759
+          },
+          {
+            "pid": "49760",
+            "tid": 49760
+          },
+          {
+            "pid": "49761",
+            "tid": 49761
+          }
+        ],
+        "user_us_per_timed_rtt": 5.0,
+        "system_us_per_timed_rtt": 27.375,
+        "cpu_us_per_timed_rtt": 32.375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-nginx-r4",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 42,
+        "system_ticks": 215,
+        "tids": [
+          {
+            "pid": "49880",
+            "tid": 49880
+          },
+          {
+            "pid": "49881",
+            "tid": 49881
+          },
+          {
+            "pid": "49882",
+            "tid": 49882
+          }
+        ],
+        "user_us_per_timed_rtt": 5.25,
+        "system_us_per_timed_rtt": 26.875,
+        "cpu_us_per_timed_rtt": 32.125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-openresty-r1",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 33,
+        "system_ticks": 224,
+        "tids": [
+          {
+            "pid": "49661",
+            "tid": 49661
+          },
+          {
+            "pid": "49662",
+            "tid": 49662
+          },
+          {
+            "pid": "49663",
+            "tid": 49663
+          }
+        ],
+        "user_us_per_timed_rtt": 4.125,
+        "system_us_per_timed_rtt": 28.0,
+        "cpu_us_per_timed_rtt": 32.125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-openresty-r2",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 40,
+        "system_ticks": 218,
+        "tids": [
+          {
+            "pid": "49746",
+            "tid": 49746
+          },
+          {
+            "pid": "49747",
+            "tid": 49747
+          },
+          {
+            "pid": "49748",
+            "tid": 49748
+          }
+        ],
+        "user_us_per_timed_rtt": 5.0,
+        "system_us_per_timed_rtt": 27.25,
+        "cpu_us_per_timed_rtt": 32.25
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-openresty-r3",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 38,
+        "system_ticks": 219,
+        "tids": [
+          {
+            "pid": "49772",
+            "tid": 49772
+          },
+          {
+            "pid": "49773",
+            "tid": 49773
+          },
+          {
+            "pid": "49774",
+            "tid": 49774
+          }
+        ],
+        "user_us_per_timed_rtt": 4.75,
+        "system_us_per_timed_rtt": 27.375,
+        "cpu_us_per_timed_rtt": 32.125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b64-openresty-r4",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 37,
+        "system_ticks": 218,
+        "tids": [
+          {
+            "pid": "49837",
+            "tid": 49837
+          },
+          {
+            "pid": "49838",
+            "tid": 49838
+          },
+          {
+            "pid": "49839",
+            "tid": 49839
+          }
+        ],
+        "user_us_per_timed_rtt": 4.625,
+        "system_us_per_timed_rtt": 27.25,
+        "cpu_us_per_timed_rtt": 31.875
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-afxdp-r1",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49918",
+            "tid": 49918
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 125,
+        "system_ticks": 225,
+        "tids": [
+          {
+            "pid": "49918",
+            "tid": 49919
+          },
+          {
+            "pid": "49918",
+            "tid": 49920
+          }
+        ],
+        "user_us_per_timed_rtt": 15.625,
+        "system_us_per_timed_rtt": 28.125,
+        "cpu_us_per_timed_rtt": 43.75
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 8,
+        "tids": [
+          {
+            "pid": "49918",
+            "tid": 49921
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 1.0,
+        "cpu_us_per_timed_rtt": 1.0
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 410,
+        "system_ticks": 470,
+        "tids": [
+          {
+            "pid": "49918",
+            "tid": 49929
+          }
+        ],
+        "user_us_per_timed_rtt": 51.24999999999999,
+        "system_us_per_timed_rtt": 58.75,
+        "cpu_us_per_timed_rtt": 110.0
+      },
+      "xsk-wake-0": {
+        "user_ticks": 53,
+        "system_ticks": 178,
+        "tids": [
+          {
+            "pid": "49918",
+            "tid": 49930
+          }
+        ],
+        "user_us_per_timed_rtt": 6.625,
+        "system_us_per_timed_rtt": 22.25,
+        "cpu_us_per_timed_rtt": 28.875
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "49918",
+        "tid": 49939,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 49939,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 365808,
+          "read_before_ns": 3658266306186,
+          "read_after_ns": 3658266338897
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-afxdp-r2",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50018",
+            "tid": 50018
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 119,
+        "system_ticks": 227,
+        "tids": [
+          {
+            "pid": "50018",
+            "tid": 50019
+          },
+          {
+            "pid": "50018",
+            "tid": 50020
+          }
+        ],
+        "user_us_per_timed_rtt": 14.875,
+        "system_us_per_timed_rtt": 28.375,
+        "cpu_us_per_timed_rtt": 43.25
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 8,
+        "tids": [
+          {
+            "pid": "50018",
+            "tid": 50021
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 1.0,
+        "cpu_us_per_timed_rtt": 1.0
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 417,
+        "system_ticks": 463,
+        "tids": [
+          {
+            "pid": "50018",
+            "tid": 50029
+          }
+        ],
+        "user_us_per_timed_rtt": 52.125,
+        "system_us_per_timed_rtt": 57.875,
+        "cpu_us_per_timed_rtt": 110.0
+      },
+      "xsk-wake-0": {
+        "user_ticks": 49,
+        "system_ticks": 177,
+        "tids": [
+          {
+            "pid": "50018",
+            "tid": 50030
+          }
+        ],
+        "user_us_per_timed_rtt": 6.125,
+        "system_us_per_timed_rtt": 22.125,
+        "cpu_us_per_timed_rtt": 28.25
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "50018",
+        "tid": 50039,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 50039,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 371401,
+          "read_before_ns": 3714192679603,
+          "read_after_ns": 3714192711612
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-afxdp-r3",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50105",
+            "tid": 50105
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 120,
+        "system_ticks": 226,
+        "tids": [
+          {
+            "pid": "50105",
+            "tid": 50106
+          },
+          {
+            "pid": "50105",
+            "tid": 50107
+          }
+        ],
+        "user_us_per_timed_rtt": 15.0,
+        "system_us_per_timed_rtt": 28.25,
+        "cpu_us_per_timed_rtt": 43.25
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 8,
+        "tids": [
+          {
+            "pid": "50105",
+            "tid": 50108
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 1.0,
+        "cpu_us_per_timed_rtt": 1.0
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 419,
+        "system_ticks": 466,
+        "tids": [
+          {
+            "pid": "50105",
+            "tid": 50116
+          }
+        ],
+        "user_us_per_timed_rtt": 52.37500000000001,
+        "system_us_per_timed_rtt": 58.25,
+        "cpu_us_per_timed_rtt": 110.625
+      },
+      "xsk-wake-0": {
+        "user_ticks": 47,
+        "system_ticks": 176,
+        "tids": [
+          {
+            "pid": "50105",
+            "tid": 50117
+          }
+        ],
+        "user_us_per_timed_rtt": 5.875,
+        "system_us_per_timed_rtt": 22.0,
+        "cpu_us_per_timed_rtt": 27.875
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "50105",
+        "tid": 50126,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 50126,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 376191,
+          "read_before_ns": 3762104616413,
+          "read_after_ns": 3762104649465
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-afxdp-r4",
+    "target": "afxdp",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": false,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50149",
+            "tid": 50149
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 121,
+        "system_ticks": 227,
+        "tids": [
+          {
+            "pid": "50149",
+            "tid": 50150
+          },
+          {
+            "pid": "50149",
+            "tid": 50151
+          }
+        ],
+        "user_us_per_timed_rtt": 15.125,
+        "system_us_per_timed_rtt": 28.375,
+        "cpu_us_per_timed_rtt": 43.5
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 8,
+        "tids": [
+          {
+            "pid": "50149",
+            "tid": 50152
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 1.0,
+        "cpu_us_per_timed_rtt": 1.0
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 428,
+        "system_ticks": 452,
+        "tids": [
+          {
+            "pid": "50149",
+            "tid": 50160
+          }
+        ],
+        "user_us_per_timed_rtt": 53.5,
+        "system_us_per_timed_rtt": 56.5,
+        "cpu_us_per_timed_rtt": 110.0
+      },
+      "xsk-wake-0": {
+        "user_ticks": 48,
+        "system_ticks": 175,
+        "tids": [
+          {
+            "pid": "50149",
+            "tid": 50161
+          }
+        ],
+        "user_us_per_timed_rtt": 6.0,
+        "system_us_per_timed_rtt": 21.875,
+        "cpu_us_per_timed_rtt": 27.875
+      }
+    },
+    "unknown_rows": [
+      {
+        "pid": "50149",
+        "tid": 50170,
+        "status": "no_longer_observed",
+        "cpu_ticks": null,
+        "before": {
+          "pid": 50170,
+          "comm": "tokio-rt-worker",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "start_ticks": 378670,
+          "read_before_ns": 3786873223636,
+          "read_after_ns": 3786873256888
+        }
+      }
+    ],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-kernel-r1",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49949",
+            "tid": 49949
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 101,
+        "system_ticks": 243,
+        "tids": [
+          {
+            "pid": "49949",
+            "tid": 49950
+          },
+          {
+            "pid": "49949",
+            "tid": 49951
+          }
+        ],
+        "user_us_per_timed_rtt": 12.625,
+        "system_us_per_timed_rtt": 30.375,
+        "cpu_us_per_timed_rtt": 43.0
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 2,
+        "tids": [
+          {
+            "pid": "49949",
+            "tid": 49952
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.25,
+        "cpu_us_per_timed_rtt": 0.25
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-kernel-r2",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "49991",
+            "tid": 49991
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 96,
+        "system_ticks": 249,
+        "tids": [
+          {
+            "pid": "49991",
+            "tid": 49992
+          },
+          {
+            "pid": "49991",
+            "tid": 49993
+          }
+        ],
+        "user_us_per_timed_rtt": 12.0,
+        "system_us_per_timed_rtt": 31.125,
+        "cpu_us_per_timed_rtt": 43.125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "49991",
+            "tid": 49994
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.5,
+        "cpu_us_per_timed_rtt": 0.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-kernel-r3",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50090",
+            "tid": 50090
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 102,
+        "system_ticks": 249,
+        "tids": [
+          {
+            "pid": "50090",
+            "tid": 50091
+          },
+          {
+            "pid": "50090",
+            "tid": 50092
+          }
+        ],
+        "user_us_per_timed_rtt": 12.75,
+        "system_us_per_timed_rtt": 31.125,
+        "cpu_us_per_timed_rtt": 43.875
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "50090",
+            "tid": 50093
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.5,
+        "cpu_us_per_timed_rtt": 0.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-kernel-r4",
+    "target": "kernel",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50196",
+            "tid": 50196
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 100,
+        "system_ticks": 249,
+        "tids": [
+          {
+            "pid": "50196",
+            "tid": 50197
+          },
+          {
+            "pid": "50196",
+            "tid": 50198
+          }
+        ],
+        "user_us_per_timed_rtt": 12.5,
+        "system_us_per_timed_rtt": 31.125,
+        "cpu_us_per_timed_rtt": 43.625
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "50196",
+            "tid": 50199
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.5,
+        "cpu_us_per_timed_rtt": 0.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-nginx-r1",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 39,
+        "system_ticks": 221,
+        "tids": [
+          {
+            "pid": "49978",
+            "tid": 49978
+          },
+          {
+            "pid": "49979",
+            "tid": 49979
+          },
+          {
+            "pid": "49980",
+            "tid": 49980
+          }
+        ],
+        "user_us_per_timed_rtt": 4.875,
+        "system_us_per_timed_rtt": 27.625,
+        "cpu_us_per_timed_rtt": 32.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-nginx-r2",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 37,
+        "system_ticks": 222,
+        "tids": [
+          {
+            "pid": "50005",
+            "tid": 50005
+          },
+          {
+            "pid": "50006",
+            "tid": 50006
+          },
+          {
+            "pid": "50007",
+            "tid": 50007
+          }
+        ],
+        "user_us_per_timed_rtt": 4.625,
+        "system_us_per_timed_rtt": 27.75,
+        "cpu_us_per_timed_rtt": 32.375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-nginx-r3",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 38,
+        "system_ticks": 221,
+        "tids": [
+          {
+            "pid": "50064",
+            "tid": 50064
+          },
+          {
+            "pid": "50065",
+            "tid": 50065
+          },
+          {
+            "pid": "50066",
+            "tid": 50066
+          }
+        ],
+        "user_us_per_timed_rtt": 4.75,
+        "system_us_per_timed_rtt": 27.625,
+        "cpu_us_per_timed_rtt": 32.375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-nginx-r4",
+    "target": "nginx",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 40,
+        "system_ticks": 220,
+        "tids": [
+          {
+            "pid": "50179",
+            "tid": 50179
+          },
+          {
+            "pid": "50180",
+            "tid": 50180
+          },
+          {
+            "pid": "50181",
+            "tid": 50181
+          }
+        ],
+        "user_us_per_timed_rtt": 5.0,
+        "system_us_per_timed_rtt": 27.5,
+        "cpu_us_per_timed_rtt": 32.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-openresty-r1",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 40,
+        "system_ticks": 220,
+        "tids": [
+          {
+            "pid": "49963",
+            "tid": 49963
+          },
+          {
+            "pid": "49964",
+            "tid": 49964
+          },
+          {
+            "pid": "49965",
+            "tid": 49965
+          }
+        ],
+        "user_us_per_timed_rtt": 5.0,
+        "system_us_per_timed_rtt": 27.5,
+        "cpu_us_per_timed_rtt": 32.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-openresty-r2",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 39,
+        "system_ticks": 222,
+        "tids": [
+          {
+            "pid": "50050",
+            "tid": 50050
+          },
+          {
+            "pid": "50051",
+            "tid": 50051
+          },
+          {
+            "pid": "50052",
+            "tid": 50052
+          }
+        ],
+        "user_us_per_timed_rtt": 4.875,
+        "system_us_per_timed_rtt": 27.75,
+        "cpu_us_per_timed_rtt": 32.625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-openresty-r3",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 38,
+        "system_ticks": 220,
+        "tids": [
+          {
+            "pid": "50077",
+            "tid": 50077
+          },
+          {
+            "pid": "50078",
+            "tid": 50078
+          },
+          {
+            "pid": "50079",
+            "tid": 50079
+          }
+        ],
+        "user_us_per_timed_rtt": 4.75,
+        "system_us_per_timed_rtt": 27.5,
+        "cpu_us_per_timed_rtt": 32.25
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c1-b1200-openresty-r4",
+    "target": "openresty",
+    "concurrency": 1,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 39,
+        "system_ticks": 222,
+        "tids": [
+          {
+            "pid": "50136",
+            "tid": 50136
+          },
+          {
+            "pid": "50137",
+            "tid": 50137
+          },
+          {
+            "pid": "50138",
+            "tid": 50138
+          }
+        ],
+        "user_us_per_timed_rtt": 4.875,
+        "system_us_per_timed_rtt": 27.75,
+        "cpu_us_per_timed_rtt": 32.625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-afxdp-r1",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50222",
+            "tid": 50222
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 157,
+        "system_ticks": 147,
+        "tids": [
+          {
+            "pid": "50222",
+            "tid": 50223
+          },
+          {
+            "pid": "50222",
+            "tid": 50224
+          },
+          {
+            "pid": "50222",
+            "tid": 50243
+          },
+          {
+            "pid": "50222",
+            "tid": 50244
+          },
+          {
+            "pid": "50222",
+            "tid": 50245
+          },
+          {
+            "pid": "50222",
+            "tid": 50247
+          },
+          {
+            "pid": "50222",
+            "tid": 50248
+          },
+          {
+            "pid": "50222",
+            "tid": 50249
+          },
+          {
+            "pid": "50222",
+            "tid": 50250
+          },
+          {
+            "pid": "50222",
+            "tid": 50251
+          },
+          {
+            "pid": "50222",
+            "tid": 50252
+          },
+          {
+            "pid": "50222",
+            "tid": 50253
+          },
+          {
+            "pid": "50222",
+            "tid": 50254
+          },
+          {
+            "pid": "50222",
+            "tid": 50255
+          },
+          {
+            "pid": "50222",
+            "tid": 50256
+          },
+          {
+            "pid": "50222",
+            "tid": 50257
+          },
+          {
+            "pid": "50222",
+            "tid": 50258
+          },
+          {
+            "pid": "50222",
+            "tid": 50259
+          }
+        ],
+        "user_us_per_timed_rtt": 4.90625,
+        "system_us_per_timed_rtt": 4.59375,
+        "cpu_us_per_timed_rtt": 9.5
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "50222",
+            "tid": 50225
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.125,
+        "cpu_us_per_timed_rtt": 0.125
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 226,
+        "system_ticks": 310,
+        "tids": [
+          {
+            "pid": "50222",
+            "tid": 50233
+          }
+        ],
+        "user_us_per_timed_rtt": 7.0625,
+        "system_us_per_timed_rtt": 9.6875,
+        "cpu_us_per_timed_rtt": 16.75
+      },
+      "xsk-wake-0": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50222",
+            "tid": 50234
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-afxdp-r2",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50380",
+            "tid": 50380
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 161,
+        "system_ticks": 141,
+        "tids": [
+          {
+            "pid": "50380",
+            "tid": 50381
+          },
+          {
+            "pid": "50380",
+            "tid": 50382
+          },
+          {
+            "pid": "50380",
+            "tid": 50401
+          },
+          {
+            "pid": "50380",
+            "tid": 50402
+          },
+          {
+            "pid": "50380",
+            "tid": 50403
+          },
+          {
+            "pid": "50380",
+            "tid": 50405
+          },
+          {
+            "pid": "50380",
+            "tid": 50406
+          },
+          {
+            "pid": "50380",
+            "tid": 50407
+          },
+          {
+            "pid": "50380",
+            "tid": 50408
+          },
+          {
+            "pid": "50380",
+            "tid": 50409
+          },
+          {
+            "pid": "50380",
+            "tid": 50410
+          },
+          {
+            "pid": "50380",
+            "tid": 50411
+          },
+          {
+            "pid": "50380",
+            "tid": 50412
+          },
+          {
+            "pid": "50380",
+            "tid": 50413
+          },
+          {
+            "pid": "50380",
+            "tid": 50414
+          },
+          {
+            "pid": "50380",
+            "tid": 50415
+          },
+          {
+            "pid": "50380",
+            "tid": 50416
+          },
+          {
+            "pid": "50380",
+            "tid": 50417
+          }
+        ],
+        "user_us_per_timed_rtt": 5.03125,
+        "system_us_per_timed_rtt": 4.40625,
+        "cpu_us_per_timed_rtt": 9.4375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "50380",
+            "tid": 50383
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.125,
+        "cpu_us_per_timed_rtt": 0.125
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 226,
+        "system_ticks": 306,
+        "tids": [
+          {
+            "pid": "50380",
+            "tid": 50391
+          }
+        ],
+        "user_us_per_timed_rtt": 7.0625,
+        "system_us_per_timed_rtt": 9.5625,
+        "cpu_us_per_timed_rtt": 16.625
+      },
+      "xsk-wake-0": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50380",
+            "tid": 50392
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-afxdp-r3",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50526",
+            "tid": 50526
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 158,
+        "system_ticks": 143,
+        "tids": [
+          {
+            "pid": "50526",
+            "tid": 50527
+          },
+          {
+            "pid": "50526",
+            "tid": 50528
+          },
+          {
+            "pid": "50526",
+            "tid": 50547
+          },
+          {
+            "pid": "50526",
+            "tid": 50548
+          },
+          {
+            "pid": "50526",
+            "tid": 50549
+          },
+          {
+            "pid": "50526",
+            "tid": 50550
+          },
+          {
+            "pid": "50526",
+            "tid": 50551
+          },
+          {
+            "pid": "50526",
+            "tid": 50552
+          },
+          {
+            "pid": "50526",
+            "tid": 50553
+          },
+          {
+            "pid": "50526",
+            "tid": 50554
+          },
+          {
+            "pid": "50526",
+            "tid": 50555
+          },
+          {
+            "pid": "50526",
+            "tid": 50556
+          },
+          {
+            "pid": "50526",
+            "tid": 50558
+          },
+          {
+            "pid": "50526",
+            "tid": 50559
+          },
+          {
+            "pid": "50526",
+            "tid": 50560
+          },
+          {
+            "pid": "50526",
+            "tid": 50561
+          },
+          {
+            "pid": "50526",
+            "tid": 50573
+          },
+          {
+            "pid": "50526",
+            "tid": 50582
+          }
+        ],
+        "user_us_per_timed_rtt": 4.9375,
+        "system_us_per_timed_rtt": 4.46875,
+        "cpu_us_per_timed_rtt": 9.40625
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "50526",
+            "tid": 50529
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.125,
+        "cpu_us_per_timed_rtt": 0.125
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 226,
+        "system_ticks": 304,
+        "tids": [
+          {
+            "pid": "50526",
+            "tid": 50537
+          }
+        ],
+        "user_us_per_timed_rtt": 7.0625,
+        "system_us_per_timed_rtt": 9.5,
+        "cpu_us_per_timed_rtt": 16.5625
+      },
+      "xsk-wake-0": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50526",
+            "tid": 50538
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-afxdp-r4",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50632",
+            "tid": 50632
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 155,
+        "system_ticks": 147,
+        "tids": [
+          {
+            "pid": "50632",
+            "tid": 50633
+          },
+          {
+            "pid": "50632",
+            "tid": 50634
+          },
+          {
+            "pid": "50632",
+            "tid": 50653
+          },
+          {
+            "pid": "50632",
+            "tid": 50654
+          },
+          {
+            "pid": "50632",
+            "tid": 50655
+          },
+          {
+            "pid": "50632",
+            "tid": 50657
+          },
+          {
+            "pid": "50632",
+            "tid": 50658
+          },
+          {
+            "pid": "50632",
+            "tid": 50659
+          },
+          {
+            "pid": "50632",
+            "tid": 50660
+          },
+          {
+            "pid": "50632",
+            "tid": 50661
+          },
+          {
+            "pid": "50632",
+            "tid": 50662
+          },
+          {
+            "pid": "50632",
+            "tid": 50663
+          },
+          {
+            "pid": "50632",
+            "tid": 50664
+          },
+          {
+            "pid": "50632",
+            "tid": 50665
+          },
+          {
+            "pid": "50632",
+            "tid": 50666
+          },
+          {
+            "pid": "50632",
+            "tid": 50667
+          },
+          {
+            "pid": "50632",
+            "tid": 50668
+          },
+          {
+            "pid": "50632",
+            "tid": 50679
+          }
+        ],
+        "user_us_per_timed_rtt": 4.84375,
+        "system_us_per_timed_rtt": 4.59375,
+        "cpu_us_per_timed_rtt": 9.4375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "50632",
+            "tid": 50635
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.125,
+        "cpu_us_per_timed_rtt": 0.125
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 227,
+        "system_ticks": 306,
+        "tids": [
+          {
+            "pid": "50632",
+            "tid": 50643
+          }
+        ],
+        "user_us_per_timed_rtt": 7.09375,
+        "system_us_per_timed_rtt": 9.5625,
+        "cpu_us_per_timed_rtt": 16.65625
+      },
+      "xsk-wake-0": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50632",
+            "tid": 50644
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-kernel-r1",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50310",
+            "tid": 50310
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 266,
+        "system_ticks": 550,
+        "tids": [
+          {
+            "pid": "50310",
+            "tid": 50311
+          },
+          {
+            "pid": "50310",
+            "tid": 50312
+          }
+        ],
+        "user_us_per_timed_rtt": 8.3125,
+        "system_us_per_timed_rtt": 17.1875,
+        "cpu_us_per_timed_rtt": 25.5
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 2,
+        "tids": [
+          {
+            "pid": "50310",
+            "tid": 50313
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0625,
+        "cpu_us_per_timed_rtt": 0.0625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-kernel-r2",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50353",
+            "tid": 50353
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 263,
+        "system_ticks": 547,
+        "tids": [
+          {
+            "pid": "50353",
+            "tid": 50354
+          },
+          {
+            "pid": "50353",
+            "tid": 50355
+          }
+        ],
+        "user_us_per_timed_rtt": 8.21875,
+        "system_us_per_timed_rtt": 17.09375,
+        "cpu_us_per_timed_rtt": 25.3125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 2,
+        "tids": [
+          {
+            "pid": "50353",
+            "tid": 50356
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0625,
+        "cpu_us_per_timed_rtt": 0.0625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-kernel-r3",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50512",
+            "tid": 50512
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 266,
+        "system_ticks": 544,
+        "tids": [
+          {
+            "pid": "50512",
+            "tid": 50513
+          },
+          {
+            "pid": "50512",
+            "tid": 50514
+          }
+        ],
+        "user_us_per_timed_rtt": 8.3125,
+        "system_us_per_timed_rtt": 17.0,
+        "cpu_us_per_timed_rtt": 25.3125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 3,
+        "tids": [
+          {
+            "pid": "50512",
+            "tid": 50515
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.09375,
+        "cpu_us_per_timed_rtt": 0.09375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-kernel-r4",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50745",
+            "tid": 50745
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 268,
+        "system_ticks": 543,
+        "tids": [
+          {
+            "pid": "50745",
+            "tid": 50746
+          },
+          {
+            "pid": "50745",
+            "tid": 50747
+          }
+        ],
+        "user_us_per_timed_rtt": 8.375,
+        "system_us_per_timed_rtt": 16.96875,
+        "cpu_us_per_timed_rtt": 25.34375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 3,
+        "tids": [
+          {
+            "pid": "50745",
+            "tid": 50748
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.09375,
+        "cpu_us_per_timed_rtt": 0.09375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-nginx-r1",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 125,
+        "system_ticks": 532,
+        "tids": [
+          {
+            "pid": "50340",
+            "tid": 50340
+          },
+          {
+            "pid": "50341",
+            "tid": 50341
+          },
+          {
+            "pid": "50342",
+            "tid": 50342
+          }
+        ],
+        "user_us_per_timed_rtt": 3.90625,
+        "system_us_per_timed_rtt": 16.625,
+        "cpu_us_per_timed_rtt": 20.53125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-nginx-r2",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 132,
+        "system_ticks": 531,
+        "tids": [
+          {
+            "pid": "50367",
+            "tid": 50367
+          },
+          {
+            "pid": "50368",
+            "tid": 50368
+          },
+          {
+            "pid": "50369",
+            "tid": 50369
+          }
+        ],
+        "user_us_per_timed_rtt": 4.125,
+        "system_us_per_timed_rtt": 16.59375,
+        "cpu_us_per_timed_rtt": 20.71875
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-nginx-r3",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 116,
+        "system_ticks": 514,
+        "tids": [
+          {
+            "pid": "50482",
+            "tid": 50482
+          },
+          {
+            "pid": "50483",
+            "tid": 50483
+          },
+          {
+            "pid": "50484",
+            "tid": 50484
+          }
+        ],
+        "user_us_per_timed_rtt": 3.625,
+        "system_us_per_timed_rtt": 16.0625,
+        "cpu_us_per_timed_rtt": 19.6875
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-nginx-r4",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 116,
+        "system_ticks": 518,
+        "tids": [
+          {
+            "pid": "50723",
+            "tid": 50723
+          },
+          {
+            "pid": "50724",
+            "tid": 50724
+          },
+          {
+            "pid": "50725",
+            "tid": 50725
+          }
+        ],
+        "user_us_per_timed_rtt": 3.625,
+        "system_us_per_timed_rtt": 16.1875,
+        "cpu_us_per_timed_rtt": 19.8125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-openresty-r1",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 122,
+        "system_ticks": 522,
+        "tids": [
+          {
+            "pid": "50326",
+            "tid": 50326
+          },
+          {
+            "pid": "50327",
+            "tid": 50327
+          },
+          {
+            "pid": "50328",
+            "tid": 50328
+          }
+        ],
+        "user_us_per_timed_rtt": 3.8125,
+        "system_us_per_timed_rtt": 16.3125,
+        "cpu_us_per_timed_rtt": 20.125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-openresty-r2",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 117,
+        "system_ticks": 512,
+        "tids": [
+          {
+            "pid": "50469",
+            "tid": 50469
+          },
+          {
+            "pid": "50470",
+            "tid": 50470
+          },
+          {
+            "pid": "50471",
+            "tid": 50471
+          }
+        ],
+        "user_us_per_timed_rtt": 3.65625,
+        "system_us_per_timed_rtt": 16.0,
+        "cpu_us_per_timed_rtt": 19.65625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-openresty-r3",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 121,
+        "system_ticks": 520,
+        "tids": [
+          {
+            "pid": "50498",
+            "tid": 50498
+          },
+          {
+            "pid": "50499",
+            "tid": 50499
+          },
+          {
+            "pid": "50500",
+            "tid": 50500
+          }
+        ],
+        "user_us_per_timed_rtt": 3.78125,
+        "system_us_per_timed_rtt": 16.25,
+        "cpu_us_per_timed_rtt": 20.03125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b64-openresty-r4",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 64,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 127,
+        "system_ticks": 521,
+        "tids": [
+          {
+            "pid": "50615",
+            "tid": 50615
+          },
+          {
+            "pid": "50616",
+            "tid": 50616
+          },
+          {
+            "pid": "50617",
+            "tid": 50617
+          }
+        ],
+        "user_us_per_timed_rtt": 3.96875,
+        "system_us_per_timed_rtt": 16.28125,
+        "cpu_us_per_timed_rtt": 20.25
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-afxdp-r1",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50769",
+            "tid": 50769
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 168,
+        "system_ticks": 148,
+        "tids": [
+          {
+            "pid": "50769",
+            "tid": 50770
+          },
+          {
+            "pid": "50769",
+            "tid": 50771
+          },
+          {
+            "pid": "50769",
+            "tid": 50790
+          },
+          {
+            "pid": "50769",
+            "tid": 50791
+          },
+          {
+            "pid": "50769",
+            "tid": 50792
+          },
+          {
+            "pid": "50769",
+            "tid": 50793
+          },
+          {
+            "pid": "50769",
+            "tid": 50795
+          },
+          {
+            "pid": "50769",
+            "tid": 50796
+          },
+          {
+            "pid": "50769",
+            "tid": 50797
+          },
+          {
+            "pid": "50769",
+            "tid": 50798
+          },
+          {
+            "pid": "50769",
+            "tid": 50799
+          },
+          {
+            "pid": "50769",
+            "tid": 50800
+          },
+          {
+            "pid": "50769",
+            "tid": 50801
+          },
+          {
+            "pid": "50769",
+            "tid": 50802
+          },
+          {
+            "pid": "50769",
+            "tid": 50803
+          },
+          {
+            "pid": "50769",
+            "tid": 50804
+          },
+          {
+            "pid": "50769",
+            "tid": 50805
+          },
+          {
+            "pid": "50769",
+            "tid": 50816
+          }
+        ],
+        "user_us_per_timed_rtt": 5.25,
+        "system_us_per_timed_rtt": 4.625,
+        "cpu_us_per_timed_rtt": 9.875
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "50769",
+            "tid": 50772
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.125,
+        "cpu_us_per_timed_rtt": 0.125
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 257,
+        "system_ticks": 323,
+        "tids": [
+          {
+            "pid": "50769",
+            "tid": 50780
+          }
+        ],
+        "user_us_per_timed_rtt": 8.03125,
+        "system_us_per_timed_rtt": 10.09375,
+        "cpu_us_per_timed_rtt": 18.125
+      },
+      "xsk-wake-0": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50769",
+            "tid": 50781
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-afxdp-r2",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50928",
+            "tid": 50928
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 179,
+        "system_ticks": 142,
+        "tids": [
+          {
+            "pid": "50928",
+            "tid": 50929
+          },
+          {
+            "pid": "50928",
+            "tid": 50930
+          },
+          {
+            "pid": "50928",
+            "tid": 50949
+          },
+          {
+            "pid": "50928",
+            "tid": 50950
+          },
+          {
+            "pid": "50928",
+            "tid": 50951
+          },
+          {
+            "pid": "50928",
+            "tid": 50953
+          },
+          {
+            "pid": "50928",
+            "tid": 50954
+          },
+          {
+            "pid": "50928",
+            "tid": 50955
+          },
+          {
+            "pid": "50928",
+            "tid": 50956
+          },
+          {
+            "pid": "50928",
+            "tid": 50957
+          },
+          {
+            "pid": "50928",
+            "tid": 50958
+          },
+          {
+            "pid": "50928",
+            "tid": 50959
+          },
+          {
+            "pid": "50928",
+            "tid": 50960
+          },
+          {
+            "pid": "50928",
+            "tid": 50961
+          },
+          {
+            "pid": "50928",
+            "tid": 50962
+          },
+          {
+            "pid": "50928",
+            "tid": 50963
+          },
+          {
+            "pid": "50928",
+            "tid": 50964
+          },
+          {
+            "pid": "50928",
+            "tid": 50978
+          }
+        ],
+        "user_us_per_timed_rtt": 5.59375,
+        "system_us_per_timed_rtt": 4.4375,
+        "cpu_us_per_timed_rtt": 10.03125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "50928",
+            "tid": 50931
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.125,
+        "cpu_us_per_timed_rtt": 0.125
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 264,
+        "system_ticks": 321,
+        "tids": [
+          {
+            "pid": "50928",
+            "tid": 50939
+          }
+        ],
+        "user_us_per_timed_rtt": 8.25,
+        "system_us_per_timed_rtt": 10.03125,
+        "cpu_us_per_timed_rtt": 18.28125
+      },
+      "xsk-wake-0": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50928",
+            "tid": 50940
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-afxdp-r3",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "51070",
+            "tid": 51070
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 174,
+        "system_ticks": 147,
+        "tids": [
+          {
+            "pid": "51070",
+            "tid": 51071
+          },
+          {
+            "pid": "51070",
+            "tid": 51072
+          },
+          {
+            "pid": "51070",
+            "tid": 51091
+          },
+          {
+            "pid": "51070",
+            "tid": 51092
+          },
+          {
+            "pid": "51070",
+            "tid": 51093
+          },
+          {
+            "pid": "51070",
+            "tid": 51094
+          },
+          {
+            "pid": "51070",
+            "tid": 51096
+          },
+          {
+            "pid": "51070",
+            "tid": 51097
+          },
+          {
+            "pid": "51070",
+            "tid": 51098
+          },
+          {
+            "pid": "51070",
+            "tid": 51099
+          },
+          {
+            "pid": "51070",
+            "tid": 51100
+          },
+          {
+            "pid": "51070",
+            "tid": 51101
+          },
+          {
+            "pid": "51070",
+            "tid": 51102
+          },
+          {
+            "pid": "51070",
+            "tid": 51103
+          },
+          {
+            "pid": "51070",
+            "tid": 51104
+          },
+          {
+            "pid": "51070",
+            "tid": 51105
+          },
+          {
+            "pid": "51070",
+            "tid": 51106
+          },
+          {
+            "pid": "51070",
+            "tid": 51122
+          }
+        ],
+        "user_us_per_timed_rtt": 5.4375,
+        "system_us_per_timed_rtt": 4.59375,
+        "cpu_us_per_timed_rtt": 10.03125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 5,
+        "tids": [
+          {
+            "pid": "51070",
+            "tid": 51073
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.15625,
+        "cpu_us_per_timed_rtt": 0.15625
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 262,
+        "system_ticks": 317,
+        "tids": [
+          {
+            "pid": "51070",
+            "tid": 51081
+          }
+        ],
+        "user_us_per_timed_rtt": 8.1875,
+        "system_us_per_timed_rtt": 9.90625,
+        "cpu_us_per_timed_rtt": 18.09375
+      },
+      "xsk-wake-0": {
+        "user_ticks": 0,
+        "system_ticks": 1,
+        "tids": [
+          {
+            "pid": "51070",
+            "tid": 51082
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.03125,
+        "cpu_us_per_timed_rtt": 0.03125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-afxdp-r4",
+    "target": "afxdp",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "51171",
+            "tid": 51171
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 181,
+        "system_ticks": 141,
+        "tids": [
+          {
+            "pid": "51171",
+            "tid": 51172
+          },
+          {
+            "pid": "51171",
+            "tid": 51173
+          },
+          {
+            "pid": "51171",
+            "tid": 51192
+          },
+          {
+            "pid": "51171",
+            "tid": 51193
+          },
+          {
+            "pid": "51171",
+            "tid": 51194
+          },
+          {
+            "pid": "51171",
+            "tid": 51195
+          },
+          {
+            "pid": "51171",
+            "tid": 51197
+          },
+          {
+            "pid": "51171",
+            "tid": 51198
+          },
+          {
+            "pid": "51171",
+            "tid": 51199
+          },
+          {
+            "pid": "51171",
+            "tid": 51200
+          },
+          {
+            "pid": "51171",
+            "tid": 51201
+          },
+          {
+            "pid": "51171",
+            "tid": 51202
+          },
+          {
+            "pid": "51171",
+            "tid": 51203
+          },
+          {
+            "pid": "51171",
+            "tid": 51204
+          },
+          {
+            "pid": "51171",
+            "tid": 51205
+          },
+          {
+            "pid": "51171",
+            "tid": 51206
+          },
+          {
+            "pid": "51171",
+            "tid": 51207
+          },
+          {
+            "pid": "51171",
+            "tid": 51208
+          }
+        ],
+        "user_us_per_timed_rtt": 5.65625,
+        "system_us_per_timed_rtt": 4.40625,
+        "cpu_us_per_timed_rtt": 10.0625
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 4,
+        "tids": [
+          {
+            "pid": "51171",
+            "tid": 51174
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.125,
+        "cpu_us_per_timed_rtt": 0.125
+      },
+      "afxdp-eup-node-": {
+        "user_ticks": 253,
+        "system_ticks": 327,
+        "tids": [
+          {
+            "pid": "51171",
+            "tid": 51182
+          }
+        ],
+        "user_us_per_timed_rtt": 7.90625,
+        "system_us_per_timed_rtt": 10.21875,
+        "cpu_us_per_timed_rtt": 18.125
+      },
+      "xsk-wake-0": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "51171",
+            "tid": 51183
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-kernel-r1",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50858",
+            "tid": 50858
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 259,
+        "system_ticks": 590,
+        "tids": [
+          {
+            "pid": "50858",
+            "tid": 50859
+          },
+          {
+            "pid": "50858",
+            "tid": 50860
+          }
+        ],
+        "user_us_per_timed_rtt": 8.09375,
+        "system_us_per_timed_rtt": 18.4375,
+        "cpu_us_per_timed_rtt": 26.53125
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 3,
+        "tids": [
+          {
+            "pid": "50858",
+            "tid": 50861
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.09375,
+        "cpu_us_per_timed_rtt": 0.09375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-kernel-r2",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "50900",
+            "tid": 50900
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 277,
+        "system_ticks": 574,
+        "tids": [
+          {
+            "pid": "50900",
+            "tid": 50901
+          },
+          {
+            "pid": "50900",
+            "tid": 50902
+          }
+        ],
+        "user_us_per_timed_rtt": 8.65625,
+        "system_us_per_timed_rtt": 17.9375,
+        "cpu_us_per_timed_rtt": 26.59375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 3,
+        "tids": [
+          {
+            "pid": "50900",
+            "tid": 50903
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.09375,
+        "cpu_us_per_timed_rtt": 0.09375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-kernel-r3",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "51056",
+            "tid": 51056
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 270,
+        "system_ticks": 576,
+        "tids": [
+          {
+            "pid": "51056",
+            "tid": 51057
+          },
+          {
+            "pid": "51056",
+            "tid": 51058
+          }
+        ],
+        "user_us_per_timed_rtt": 8.4375,
+        "system_us_per_timed_rtt": 18.0,
+        "cpu_us_per_timed_rtt": 26.4375
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 3,
+        "tids": [
+          {
+            "pid": "51056",
+            "tid": 51059
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.09375,
+        "cpu_us_per_timed_rtt": 0.09375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-kernel-r4",
+    "target": "kernel",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "Zelvik-Edge": {
+        "user_ticks": 0,
+        "system_ticks": 0,
+        "tids": [
+          {
+            "pid": "51333",
+            "tid": 51333
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.0,
+        "cpu_us_per_timed_rtt": 0.0
+      },
+      "tokio-rt-worker": {
+        "user_ticks": 266,
+        "system_ticks": 572,
+        "tids": [
+          {
+            "pid": "51333",
+            "tid": 51334
+          },
+          {
+            "pid": "51333",
+            "tid": 51335
+          }
+        ],
+        "user_us_per_timed_rtt": 8.3125,
+        "system_us_per_timed_rtt": 17.875,
+        "cpu_us_per_timed_rtt": 26.1875
+      },
+      "memgov-snapshot": {
+        "user_ticks": 0,
+        "system_ticks": 3,
+        "tids": [
+          {
+            "pid": "51333",
+            "tid": 51336
+          }
+        ],
+        "user_us_per_timed_rtt": 0.0,
+        "system_us_per_timed_rtt": 0.09375,
+        "cpu_us_per_timed_rtt": 0.09375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-nginx-r1",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 119,
+        "system_ticks": 532,
+        "tids": [
+          {
+            "pid": "50886",
+            "tid": 50886
+          },
+          {
+            "pid": "50887",
+            "tid": 50887
+          },
+          {
+            "pid": "50888",
+            "tid": 50888
+          }
+        ],
+        "user_us_per_timed_rtt": 3.71875,
+        "system_us_per_timed_rtt": 16.625,
+        "cpu_us_per_timed_rtt": 20.34375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-nginx-r2",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 122,
+        "system_ticks": 534,
+        "tids": [
+          {
+            "pid": "50914",
+            "tid": 50914
+          },
+          {
+            "pid": "50915",
+            "tid": 50915
+          },
+          {
+            "pid": "50916",
+            "tid": 50916
+          }
+        ],
+        "user_us_per_timed_rtt": 3.8125,
+        "system_us_per_timed_rtt": 16.6875,
+        "cpu_us_per_timed_rtt": 20.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-nginx-r3",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 122,
+        "system_ticks": 547,
+        "tids": [
+          {
+            "pid": "51030",
+            "tid": 51030
+          },
+          {
+            "pid": "51031",
+            "tid": 51031
+          },
+          {
+            "pid": "51032",
+            "tid": 51032
+          }
+        ],
+        "user_us_per_timed_rtt": 3.8125,
+        "system_us_per_timed_rtt": 17.09375,
+        "cpu_us_per_timed_rtt": 20.90625
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-nginx-r4",
+    "target": "nginx",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 129,
+        "system_ticks": 551,
+        "tids": [
+          {
+            "pid": "51261",
+            "tid": 51261
+          },
+          {
+            "pid": "51262",
+            "tid": 51262
+          },
+          {
+            "pid": "51263",
+            "tid": 51263
+          }
+        ],
+        "user_us_per_timed_rtt": 4.03125,
+        "system_us_per_timed_rtt": 17.21875,
+        "cpu_us_per_timed_rtt": 21.25
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-openresty-r1",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 122,
+        "system_ticks": 550,
+        "tids": [
+          {
+            "pid": "50872",
+            "tid": 50872
+          },
+          {
+            "pid": "50873",
+            "tid": 50873
+          },
+          {
+            "pid": "50874",
+            "tid": 50874
+          }
+        ],
+        "user_us_per_timed_rtt": 3.8125,
+        "system_us_per_timed_rtt": 17.1875,
+        "cpu_us_per_timed_rtt": 21.0
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-openresty-r2",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 120,
+        "system_ticks": 536,
+        "tids": [
+          {
+            "pid": "51017",
+            "tid": 51017
+          },
+          {
+            "pid": "51018",
+            "tid": 51018
+          },
+          {
+            "pid": "51019",
+            "tid": 51019
+          }
+        ],
+        "user_us_per_timed_rtt": 3.75,
+        "system_us_per_timed_rtt": 16.75,
+        "cpu_us_per_timed_rtt": 20.5
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-openresty-r3",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 121,
+        "system_ticks": 570,
+        "tids": [
+          {
+            "pid": "51043",
+            "tid": 51043
+          },
+          {
+            "pid": "51044",
+            "tid": 51044
+          },
+          {
+            "pid": "51045",
+            "tid": 51045
+          }
+        ],
+        "user_us_per_timed_rtt": 3.78125,
+        "system_us_per_timed_rtt": 17.8125,
+        "cpu_us_per_timed_rtt": 21.59375
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  },
+  {
+    "budget": 2,
+    "case": "c16-b1200-openresty-r4",
+    "target": "openresty",
+    "concurrency": 16,
+    "payload": 1200,
+    "complete_identity_coverage": true,
+    "known_matched_by_comm": {
+      "nginx": {
+        "user_ticks": 129,
+        "system_ticks": 537,
+        "tids": [
+          {
+            "pid": "51158",
+            "tid": 51158
+          },
+          {
+            "pid": "51159",
+            "tid": 51159
+          },
+          {
+            "pid": "51160",
+            "tid": 51160
+          }
+        ],
+        "user_us_per_timed_rtt": 4.03125,
+        "system_us_per_timed_rtt": 16.78125,
+        "cpu_us_per_timed_rtt": 20.8125
+      }
+    },
+    "unknown_rows": [],
+    "scope": "matched native CPU counters; sequential read windows, not function attribution; unknown rows excluded from named matched sums but retained explicitly"
+  }
+]

@@ -1,0 +1,81 @@
+{
+  "source_commit": "81f970c5580140fd89ab248a4ea2b031b551b1d5",
+  "run_id": 41531098471,
+  "job_id": 125571192972,
+  "native_job_conclusion": "success",
+  "other_jobs": "all three workflow jobs completed successfully",
+  "metadata": {
+    "commit": "81f970c5580140fd89ab248a4ea2b031b551b1d5",
+    "kernel": {
+      "system": "Linux",
+      "node": "runnervm48cm3",
+      "release": "7.0.0-1017-azure",
+      "version": "#17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026",
+      "machine": "x86_64",
+      "processor": "x86_64"
+    },
+    "cpus": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "source_sha256": "0794e9cc09093e6c3bb873a31595a5c820c226431d460da02dfc8f6b02672564",
+    "compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "scope": "minimal XDP_PASS load/close and AF_XDP socket open/close; no attachment or traffic"
+  },
+  "wake_metadata": {
+    "sources": {
+      "scripts/perf/afxdp-wake.c": "cebf2924c68897aa7534ec728fcc364466766f3cfbdeed0acb2afdcf9e7f8ed6",
+      "scripts/perf/afxdp-wake.sh": "824002b1dc4c498f9ffac3e5553d2d12473e7206709abb222126c72869c97e82"
+    },
+    "library_versions": [
+      "1.4.2",
+      "1.3.0"
+    ],
+    "scope": "veth SKB / forced copy mode; no hardware zero-copy or Tokio throughput claim"
+  },
+  "cycles": [
+    {
+      "passed": true,
+      "failure_stage": "none",
+      "errno": 0,
+      "cleanup_errno": 0,
+      "received_frames": 65,
+      "transmitted_frames": 1,
+      "mode": "veth-skb-copy",
+      "fill_kicks": 0
+    },
+    {
+      "passed": true,
+      "failure_stage": "none",
+      "errno": 0,
+      "cleanup_errno": 0,
+      "received_frames": 65,
+      "transmitted_frames": 1,
+      "mode": "veth-skb-copy",
+      "fill_kicks": 0
+    },
+    {
+      "passed": true,
+      "failure_stage": "none",
+      "errno": 0,
+      "cleanup_errno": 0,
+      "received_frames": 65,
+      "transmitted_frames": 1,
+      "mode": "veth-skb-copy",
+      "fill_kicks": 0
+    }
+  ],
+  "namespace": {
+    "network_namespace": "net:[4026532270]",
+    "parent_network_namespace": "net:[4026531833]"
+  },
+  "logs": {
+    "wake-1": "read_write_edge_initial_events=4\nread_write_edge_idle_followup_events=0\nidle_readable_only_cpu_seconds=0.000036448\npartial_drain_second_edge_events=0\nstarvation_rx_drop_delta=1 fill_kicks=0\n",
+    "wake-2": "read_write_edge_initial_events=4\nread_write_edge_idle_followup_events=0\nidle_readable_only_cpu_seconds=0.000040906\npartial_drain_second_edge_events=0\nstarvation_rx_drop_delta=1 fill_kicks=0\n",
+    "wake-3": "read_write_edge_initial_events=4\nread_write_edge_idle_followup_events=0\nidle_readable_only_cpu_seconds=0.000037410\npartial_drain_second_edge_events=0\nstarvation_rx_drop_delta=1 fill_kicks=0\n"
+  },
+  "interface_cleanup": true,
+  "workflow_conclusion": "success"
+}

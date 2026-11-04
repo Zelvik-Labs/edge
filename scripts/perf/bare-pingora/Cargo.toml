@@ -1,0 +1,26 @@
+[package]
+name = "bare-pingora-proxy"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+anyhow = "=1.0.104"
+async-trait = "=0.1.92"
+mimalloc = "=0.1.52"
+libmimalloc-sys = { version = "=0.1.49", features = ["extended"] }
+pingora = { version = "=0.9.0", path = "../../../pingora-main/pingora", features = ["proxy", "cache", "rustls"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["aws-lc-rs", "std"] }
+tokio = { version = "=1.53.1", features = ["full"] }
+
+[[bin]]
+name = "bare-pingora-proxy"
+path = "../../../benches/support/bare_pingora_proxy.rs"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+opt-level = 3

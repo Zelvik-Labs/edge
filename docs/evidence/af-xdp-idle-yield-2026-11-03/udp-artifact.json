@@ -1,0 +1,19 @@
+{
+  "id": 13212652932,
+  "name": "afxdp-udp-8851c119d8e0f160cb10cdb347b9acb0943c3c7d",
+  "size_in_bytes": 38146992,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13212652932",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13212652932/zip",
+  "expired": false,
+  "created_at": "2026-11-03T07:32:20Z",
+  "expires_at": "2027-02-01T06:32:22Z",
+  "updated_at": "2026-11-03T07:32:20Z",
+  "digest": "sha256:1f5efd42f6026a9c53675f0092a011475d8286db4f82e5bb7fcf683d9af75c92",
+  "workflow_run": {
+    "id": 41590512929,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/idle-yield-20261103",
+    "head_sha": "8851c119d8e0f160cb10cdb347b9acb0943c3c7d"
+  }
+}

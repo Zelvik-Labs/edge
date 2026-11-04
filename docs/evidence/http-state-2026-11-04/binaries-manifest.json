@@ -1,0 +1,23 @@
+{
+  "artifact_id": 13250758275,
+  "archive": "raw.zip",
+  "archive_bytes": 19390739,
+  "archive_sha256": "ba422c56d099b1978e075d2ec8d3d39b344b55bd75f3b87639daf555a95b0478",
+  "files": [
+    {
+      "path": "target/release/Zelvik-Edge",
+      "bytes": 45050152,
+      "sha256": "291c5cae4857d20c3f945d99e01a909740bfe0e54687e5cef4e131b817812c25"
+    },
+    {
+      "path": "target/release/examples/issue34-controller",
+      "bytes": 4326224,
+      "sha256": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2"
+    },
+    {
+      "path": ".local/http-state-ci/protocol-state-client",
+      "bytes": 22456,
+      "sha256": "368312b058eb6a98373260a6b4977beb1655744418406c7c1c1bcedce92b3c1b"
+    }
+  ]
+}

@@ -1,0 +1,132 @@
+# 配置查询借用主机名，保留重复解析语义
+
+Proxy已经规范化主机名，get_request_context_sync在持读锁时还会调用ConfigStore::normalize_host，先为去端口结果分配String，再为ASCII小写分配String。
+这轮候选仍执行相同的ConfigStore规范化，但对无需ASCII变换的结果借用原输入片段；需要转小写时只生成一个Owned结果。
+普通已经小写的主机名预期可由两次临时分配变为零；先通过独立实测确认，未据此预测节点收益。
+
+没有直接跳过第二次规范化。现有畸形地址可能不满足幂等，例如Proxy把[A:B]:443解析为a:b，Config查询继续解析为a；跳过会改变实际路由键。
+保留这种既有行为，未扩展接受的主机名、变更路由优先级、缓存已编译路由或影响配置热更新。
+原持锁原子快照与公开方法返回类型保持；组件不测整个getter的Arc克隆、锁竞争和路由表工作。
+
+不可变基线1c441ce，提取实际ConfigStore::normalize_host和两个去端口helper。
+65571组确定性差分，包括16场景、19边界与65536生成输入，额外核对Cow借用/拥有条件。
+16场景各8轮平衡顺序、20块，共5120块；System分配器，计时和分配计数分别构建，保留长输入和大写回退成本。
+全部Rust编译、严格Clippy和测量在GitHub Actions执行，无本地编译。
+
+状态：隔离候选，尚未接入实际配置查询，暂无性能结论。
+已完成：候选和测量设计。仍未解决：实际getter/节点成本与整体差距。
+设计限制：单线程字符串组件，不覆盖锁竞争、TLS、缓存、统计或完整请求。
+经审批的功能降级：无。
+
+## 首轮完整结果：长小写字符串回退，暂不集成
+
+[Actions41791072260](https://github.com/Zelvik-Labs/edge/actions/runs/41791072260)通过并离线复核35文件、两个实际二进制、65571组等价与借用检查、5120块计时，零steal。
+普通小写/长小写/空白/重新解析a:b均为0次候选分配；需要ASCII小写的结果2→1，空输入0→0，仅点号1→0。
+
+| 场景 | 原→候选 ns/次 | 八轮配对耗时变化 |
+|---|---:|---:|
+| lower | 49.05→23.04 | -52.86% |
+| mixed | 48.94→32.21 | -34.04% |
+| port | 61.07→43.59 | -28.72% |
+| tail-dots | 56.28→38.50 | -31.60% |
+| userinfo | 63.79→52.11 | -18.10% |
+| ipv6-bracket | 48.19→35.61 | -26.03% |
+| ipv6-bare | 48.18→35.82 | -25.79% |
+| unmatched | 46.34→34.17 | -26.15% |
+| unicode | 47.90→34.86 | -27.06% |
+| long-upper | 69.60→55.31 | -20.50% |
+| long-lower | 69.57→127.30 | +82.37% |
+| empty | 10.78→10.47 | -2.96% |
+| spaces | 33.05→11.41 | -65.45% |
+| all-dots | 24.10→12.10 | -49.78% |
+| reparsed-colon | 38.68→14.04 | -63.78% |
+| bracket-non-ip | 35.25→23.83 | -32.34% |
+
+长小写场景八轮均回退（约+81%～85%），不能用平均值或零分配掩盖；当前不接入生产。
+逐字节短路扫描大写会完整走过长小写字符串，而原标准库ASCII转换有不同优化路径。下一候选以32字节分块、块内无短路归约检测大写，仍需实际编译/测量，暂不宣称向量化收益。
+追加258组逐位置大写以及两组258字节纯小写/非ASCII边界，共65831组；旧65571组与35文件归档保持。
+归档13303626493：5,558,815字节、35文件，SHA-256 `262fb2d1429d790410971384e4158195b0cf796dce6305056d8c4a4c2d79fbb9`；[首轮冻结复核器](evidence/config-host-lookup-2026-11-04/first/verify.py)重算原始结果。
+
+第二候选[41791850347](https://github.com/Zelvik-Labs/edge/actions/runs/41791850347)在严格Clippy构建阶段失败：固定32字节chunks_exact应使用as_chunks::<32>()，未产生二进制或计时。
+采用固定数组切片API修正，不抑制lint、不放宽任何检查；原失败9文件归档13304255000（39,619字节，SHA-256 `8862c227c77576d81fca5178b279341e6e618b68d84789765b995751ec5bc4d9`）独立保留。
+
+## 分块候选通过，接入实际查询
+
+[Actions41792193682](https://github.com/Zelvik-Labs/edge/actions/runs/41792193682)严格Clippy及测量通过并复核：65831组差分/借用控制、5120块、两个实际二进制，零steal。
+
+| 场景 | 原→分块候选 ns/次 | 八轮配对耗时变化 |
+|---|---:|---:|
+| lower | 41.28→17.25 | -58.34% |
+| mixed | 41.23→32.28 | -21.68% |
+| port | 52.78→45.71 | -13.32% |
+| tail-dots | 50.97→40.52 | -20.40% |
+| userinfo | 58.51→48.04 | -17.76% |
+| ipv6-bracket | 45.17→34.30 | -23.21% |
+| ipv6-bare | 44.66→32.23 | -27.08% |
+| unmatched | 41.66→31.58 | -24.17% |
+| unicode | 44.11→31.17 | -29.23% |
+| long-upper | 74.81→60.52 | -19.02% |
+| long-lower | 74.47→44.78 | -39.84% |
+| empty | 9.52→9.82 | +3.13% |
+| spaces | 30.02→10.99 | -63.34% |
+| all-dots | 20.96→11.25 | -46.07% |
+| reparsed-colon | 35.03→14.02 | -60.11% |
+| bracket-non-ip | 32.49→24.88 | -23.15% |
+
+普通小写2→0次输出分配，需要转小写的结果2→1，长小写已不再回退；空输入9.52→9.82ns（约+0.30ns、配对+3.13%）保持可见。
+两个运行器的绝对ns不同不解释为版本趋势；不能从本表预报全节点吞吐。
+现在仅get_request_context_sync使用被测Cow helper，保持旧normalize_host供其他入口，未跳过二次解析或改变锁/路由/热更新语义。
+新增真实ConfigStore差分/借用与畸形地址重新解析、通配符路由回归；构建器按Rust token核对实际helper与候选，仅忽略排版空白并保留字面量空白。
+归档13303343065：5,564,339字节、35文件，SHA-256 `cfe802bdf258a1a143d78f2c31f885bea051a21b2865173fc0cea1f86d95d648`；[分块冻结复核器](evidence/config-host-lookup-2026-11-04/chunked/verify.py)保留全部原始结果。
+将独立执行累计完整CI、集成组件复测和当前分支节点矩阵，未部署。已修复：普通配置查询的临时字符串分配。仍未解决：整体性能差距。经审批的功能降级：无。
+
+## 首次累计CI的H3 fixture失败
+
+[41793784516](https://github.com/Zelvik-Labs/edge/actions/runs/41793784516)库测试1373通过/1失败/5ignored；两项新增Config回归与三项governor回归均通过，check/Clippy通过，后续native矩阵未运行。
+失败发生在failed_stream_drains_new_reuse_without_cancelling_an_active_peer的测试源站关闭join，收到Remote error: ApplicationClose: H3_NO_ERROR。
+该fixture新建replacement后未发送任何请求就释放，可与服务端H3控制流初始化竞争；既有capacity fixture在9164578已修过相同类型的未用连接竞态，本处仍缺就绪交互。
+现让replacement完整发送/接收正文与trailers，再验证旧context不能删除新登记、旧活动请求不被取消，以及两连接均关闭、三请求均解析。
+不忽略任何正常/异常关闭，不放宽原超时，不修改实际H3复用实现；原失败[日志复核器](evidence/config-host-lookup-2026-11-04/first-full-ci/verify.py)保留。
+新增显式CI输入h3_origin_drain_repeat，在完整库门通过后64次实际loopback复查，失败不重试替换，并继续累计完整CI/native32。
+
+## 实际ConfigStore源码的集成复测
+
+[41793615340](https://github.com/Zelvik-Labs/edge/actions/runs/41793615340)通过并复核36文件、两种实际probe、实际Config helper token等同与65831组控制/5120块，零steal。
+
+| 场景 | 原→集成 ns/次 | 八轮配对变化 |
+|---|---:|---:|
+| lower | 31.90→12.86 | -59.72% |
+| mixed | 31.77→23.99 | -24.30% |
+| port | 42.94→33.25 | -23.00% |
+| tail-dots | 39.06→28.75 | -26.13% |
+| userinfo | 44.84→36.11 | -19.18% |
+| ipv6-bracket | 32.03→22.50 | -29.84% |
+| ipv6-bare | 32.77→23.35 | -28.39% |
+| unmatched | 30.46→23.45 | -23.29% |
+| unicode | 32.85→23.87 | -27.31% |
+| long-upper | 51.28→41.00 | -19.82% |
+| long-lower | 51.55→32.51 | -37.27% |
+| empty | 8.12→8.12 | +0.13% |
+| spaces | 23.92→9.09 | -61.88% |
+| all-dots | 15.92→9.10 | -42.90% |
+| reparsed-colon | 26.15→11.08 | -57.75% |
+| bracket-non-ip | 24.31→18.82 | -22.49% |
+
+分配计数保持正常小写2→0、需要变换的输出2→1、空输入0→0与仅点号1→0，无realloc；不因组件正向结果将首次完整CI失败改为成功。
+归档13304252445：5,587,332字节、36文件，SHA-256 `994dd552d34abe58f6915fd282f48cbdb2e4e5f2ab3bb4b8ca6fae5897c3523b`；[集成冻结复核器](evidence/config-host-lookup-2026-11-04/integrated/verify.py)独立重算。
+
+
+## H3 生命周期补强的 64 次实际重复
+
+[Actions 41797920565](https://github.com/Zelvik-Labs/edge/actions/runs/41797920565) 的独立重复步骤成功。归档 13306447163（86,840 字节、132 文件，SHA-256 `f3b60a4a4eb603257d5fecf33633163b4654db862649703912ac50f9451feecf`）已逐字节复核。
+64 次真实内核 loopback H3 回归全部保留，无失败替换重试；每次要求两连接都接受并关闭、三个请求都解析，总计 128 连接、192 请求。修补只补足测试 fixture 的 replacement 请求/正文/trailers，不改变生产池逻辑或超时。
+[冻结复核器](evidence/config-host-lookup-2026-11-04/h3-repeat/verify.py) 核对每份日志、wire JSON、源码身份及汇总；归档未包含实际 libtest ELF，不能宣称校验了该 ELF 字节。该运行的库/二进制/integration/vendor 与 check/Clippy 步骤已成功，但完整 native32 gate 仍在执行，尚不记为全部 CI 通过。
+
+累计节点结果见 [同批四目标协议和缓存报告](performance-cumulative-node-2026-11-04.md)：192 格及全部控制通过，但累计吞吐收益很小，H3 MISS 四轮均负向；不能把上面的 helper 改善外推为节点收益。
+
+
+## 修正 fixture 后的完整默认 CI 通过
+
+[41797920565](https://github.com/Zelvik-Labs/edge/actions/runs/41797920565) 已全部完成：1374 库测试、16 二进制测试、integration、vendored Pingora、all-targets check/Clippy 及 native32 均通过，5 ignored 保持原设置。源 436e8fdd81919f2d35f292c2519c0383805f5fb3，业务实现仍为 59b，之后只补强 H3 测试和可选重复工具。
+已核对实际 test/check 日志身份、35 条原始测试汇总，以及 native 归档 13308014961 的 69 文件/32 组合、退出状态、完成标记、无残留网络空间和退出后链接。归档 SHA-256 `5f2561e1d2421dfd77db8435a2bdf11e1d66e3af077a04a6444fe191f9459dbe`，137,480 字节。[冻结 CI 复核器](evidence/config-host-lookup-2026-11-04/full-ci/verify_ci.py) 可独立检查。
+正确性门通过并不改变累计节点收益小的结论。native 归档未包含实际节点 ELF，故只证明记录的一致性与正确性检查；实际累计节点对照另行下载并核对了被测 ELF。最初失败的 59b CI 仍保留，不改写为通过。后续 feature-only phase poll 探针在独立 Actions 构建，不能将该默认 CI 视为其编译证明。

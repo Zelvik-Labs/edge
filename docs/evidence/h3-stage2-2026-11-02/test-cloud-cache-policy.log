@@ -1,0 +1,32 @@
+test_category_budgets_sum_to_total_cap (__main__.BudgetConstantsTest.test_category_budgets_sum_to_total_cap) ... ok
+test_exit_code (__main__.BudgetConstantsTest.test_exit_code) ... ok
+test_explicit_budgets (__main__.BudgetConstantsTest.test_explicit_budgets) ... ok
+test_format_bytes (__main__.BudgetConstantsTest.test_format_bytes) ... ok
+test_check_state (__main__.BudgetEvaluationTest.test_check_state) ... ok
+test_empty_sizes_are_ok (__main__.BudgetEvaluationTest.test_empty_sizes_are_ok) ... ok
+test_free_floor_and_start_margin (__main__.BudgetEvaluationTest.test_free_floor_and_start_margin) ... ok
+test_single_category_over_budget (__main__.BudgetEvaluationTest.test_single_category_over_budget) ... ok
+test_total_over_cap (__main__.BudgetEvaluationTest.test_total_over_cap) ... ok
+test_cloud_keeps_large_caches_until_disk_headroom_is_exhausted (__main__.CloudBudgetProfileTest.test_cloud_keeps_large_caches_until_disk_headroom_is_exhausted) ... ok
+test_invalid_profile_is_rejected_without_changing_budgets (__main__.CloudBudgetProfileTest.test_invalid_profile_is_rejected_without_changing_budgets) ... ok
+test_local_profile_restores_laptop_quotas (__main__.CloudBudgetProfileTest.test_local_profile_restores_laptop_quotas) ... ok
+test_workspace_cloud_selection_persists_but_explicit_local_wins (__main__.CloudBudgetProfileTest.test_workspace_cloud_selection_persists_but_explicit_local_wins) ... ok
+test_keeps_newest_files_and_never_follows_symlinks (__main__.ColdCacheEvictionTest.test_keeps_newest_files_and_never_follows_symlinks) ... ok
+test_discovery_finds_outputs_and_skips_source_areas (__main__.DiscoveryTest.test_discovery_finds_outputs_and_skips_source_areas) ... ok
+test_discovery_marks_target_symlink_without_following (__main__.DiscoveryTest.test_discovery_marks_target_symlink_without_following) ... ok
+test_discovery_records_broken_target_symlink (__main__.DiscoveryTest.test_discovery_records_broken_target_symlink) ... ok
+test_repository_roots_excludes_non_repo_directories (__main__.DiscoveryTest.test_repository_roots_excludes_non_repo_directories) ... ok
+test_measure_deduplicates_paths (__main__.MeasurementTest.test_measure_deduplicates_paths) ... ok
+test_measure_file (__main__.MeasurementTest.test_measure_file) ... ok
+test_measure_skips_symlinks_and_missing_paths (__main__.MeasurementTest.test_measure_skips_symlinks_and_missing_paths) ... ok
+test_dist_and_target_are_allowed (__main__.TrimSafetyTest.test_dist_and_target_are_allowed) ... ok
+test_escaping_parent_symlink_is_rejected (__main__.TrimSafetyTest.test_escaping_parent_symlink_is_rejected) ... ok
+test_git_tracked_output_is_detected (__main__.TrimSafetyTest.test_git_tracked_output_is_detected) ... ok
+test_node_modules_and_workspace_root_are_rejected (__main__.TrimSafetyTest.test_node_modules_and_workspace_root_are_rejected) ... ok
+test_symlinked_target_is_rejected (__main__.TrimSafetyTest.test_symlinked_target_is_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 26 tests in 0.098s
+
+OK
+removed 1 oldest cache files (8 KiB); keep newer files

@@ -1,0 +1,23 @@
+{
+  "artifact_id": 13271188885,
+  "archive": "raw.zip",
+  "archive_bytes": 19388352,
+  "archive_sha256": "2045fa18ed0085a1092208de2ba359b5ce977289673137e60883d3006a168078",
+  "files": [
+    {
+      "path": "quinn-gso-binaries/Zelvik-Edge",
+      "bytes": 45052168,
+      "sha256": "0ba4c5d56b52540f327a55478bd036a7e9516c72933aea4f5aa2da69f09b6aa6"
+    },
+    {
+      "path": "quinn-gso-binaries/issue34-controller",
+      "bytes": 4326224,
+      "sha256": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2"
+    },
+    {
+      "path": "quinn-gso-private/protocol-state-client",
+      "bytes": 22456,
+      "sha256": "368312b058eb6a98373260a6b4977beb1655744418406c7c1c1bcedce92b3c1b"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "source": "a79b20d22c32e2b77c926e2335792b874b1d8bc8",
+  "run": 41715819291,
+  "logs": {
+    "test.log": {
+      "sha256": "a03fe6c26858e12eb7f31f20266f49677565f90dfedf31a3ec1716c10e5b5757",
+      "bytes": 3547306,
+      "test_results": [
+        "2026-11-03T20:57:10.6151470Z test result: ok. 1361 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 47.22s",
+        "2026-11-03T20:57:10.8012545Z test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "2026-11-03T20:57:10.8064699Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "2026-11-03T20:57:10.8089559Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "2026-11-03T20:57:10.8105484Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "2026-11-03T20:57:10.8132020Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "2026-11-03T20:57:10.8154040Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "2026-11-03T20:57:10.8173071Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "2026-11-03T20:57:10.8189823Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "2026-11-03T20:57:10.8213671Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "2026-11-03T20:57:10.8240480Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "2026-11-03T20:58:46.5168868Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+        "2026-11-03T20:58:46.5411892Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+        "2026-11-03T20:58:46.5443566Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "2026-11-03T20:58:49.6844013Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.01s",
+        "2026-11-03T20:58:49.7300587Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+        "2026-11-03T20:58:49.7535368Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+        "2026-11-03T20:58:50.9322763Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.10s",
+        "2026-11-03T20:58:51.0972302Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+        "2026-11-03T20:58:51.0988853Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "2026-11-03T20:58:51.2386446Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s",
+        "2026-11-03T20:58:53.7237010Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.48s",
+        "2026-11-03T20:59:08.7120563Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.98s",
+        "2026-11-03T20:59:08.7699825Z test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+        "2026-11-03T20:59:12.2619005Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.49s",
+        "2026-11-03T20:59:12.9788359Z test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s",
+        "2026-11-03T20:59:12.9857356Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "2026-11-03T20:59:12.9893731Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "2026-11-03T20:59:13.1101411Z test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "2026-11-03T20:59:14.1566184Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s",
+        "2026-11-03T20:59:14.2105116Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+        "2026-11-03T20:59:14.3347565Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "2026-11-03T21:01:27.8495008Z test result: ok. 189 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.17s",
+        "2026-11-03T21:01:56.9012132Z test result: ok. 577 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 29.05s",
+        "2026-11-03T21:01:56.9076729Z test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "source_present": true
+    },
+    "check.log": {
+      "sha256": "8f7a314fd67d17b8a2ee5d45fc7298266fdb0e25ab50b4c3661bafdeead12711",
+      "bytes": 218068,
+      "test_results": [],
+      "source_present": true
+    }
+  },
+  "jobs": [
+    {
+      "id": 126195401504,
+      "name": "Test - linux-x64",
+      "conclusion": "success"
+    },
+    {
+      "id": 126195402144,
+      "name": "Check / Clippy - linux-x64",
+      "conclusion": "success"
+    },
+    {
+      "id": 126195404300,
+      "name": "Isolated BPF / AF_XDP capability",
+      "conclusion": "skipped"
+    }
+  ],
+  "native_node_smoke": false
+}

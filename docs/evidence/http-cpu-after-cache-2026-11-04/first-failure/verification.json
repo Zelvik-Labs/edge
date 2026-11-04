@@ -1,0 +1,10 @@
+{
+  "run": 41766617084,
+  "source": "7546a2da100e78352e8b150692ee81a667e809c5",
+  "files": 13,
+  "profile_cases": 0,
+  "status": "failed-before-profile",
+  "exit": 126,
+  "origin_reference_successful": 348746,
+  "scope": "no timed node sample; archive bytes and setup provenance verified"
+}

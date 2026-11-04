@@ -1,0 +1,46 @@
+      ┌─────────┐  mr boxington
+     ╱ ═══════ ╱│
+    ╱─────────╱ │
+    │ •    (◉)│≡│
+    │  ◟▄▄▄◞  │ ╱
+    │   ◀◆▶   │╱
+    └─────────┘
+    Checking pingora-error v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-error)
+    Checking pingora-timeout v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-timeout)
+    Checking pingora-http v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-http)
+    Checking pingora-rustls v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-rustls)
+    Checking pingora-pool v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-pool)
+    Checking pingora-runtime v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-runtime)
+    Checking pingora-lru v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-lru)
+    Checking pingora-core v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-core)
+    Checking pingora-header-serde v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-header-serde)
+    Checking TinyUFO v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/tinyufo)
+   Compiling zelvik-edge v26.11.1 (/workspace/edge/.worktrees/perf-next)
+    Checking pingora-ketama v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-ketama)
+    Checking zelvik-edge-transport v0.1.0 (/workspace/edge/.worktrees/perf-next/crates/zelvik-edge-transport)
+    Checking smoltcp v0.14.0 (/workspace/edge/.worktrees/perf-next/vendor/smoltcp-edge)
+mbx[warning]: cc cache bypassed: compiler invocation names no output file
+    Checking pingora-cache v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-cache)
+    Checking pingora-load-balancing v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-load-balancing)
+mbx[progress]: 15s elapsed; 0 hits, 14 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+    Checking pingora-proxy v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-proxy)
+    Checking pingora-memory-cache v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora-memory-cache)
+    Checking zelvik-geo-runtime v26.10.3 (/workspace/edge/.worktrees/dns/crates/zelvik-geo-runtime)
+mbx[warning]: prediction was not restored: absolute path has no stable cache mapping: /workspace/edge/.worktrees/dns/crates/zelvik-geo-runtime/src/lib.rs
+mbx[warning]: result was not stored: absolute path has no stable cache mapping: /workspace/edge/.worktrees/dns/crates/zelvik-geo-runtime/src/lib.rs
+    Checking zelvik-edge-xdp-common v0.1.0 (/workspace/edge/.worktrees/perf-next/crates/zelvik-edge-xdp-common)
+    Checking libinjectionrs v0.1.1 (/workspace/edge/.worktrees/perf-next/vendor/libinjectionrs)
+    Checking pingora v0.9.0 (/workspace/edge/.worktrees/perf-next/pingora-main/pingora)
+mbx[progress]: 30s elapsed; 0 hits, 21 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 21 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 60s elapsed; 0 hits, 21 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 75s elapsed; 0 hits, 21 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 90s elapsed; 0 hits, 21 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 105s elapsed; 0 hits, 21 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 120s elapsed; 0 hits, 21 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 135s elapsed; 0 hits, 21 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 150s elapsed; 0 hits, 21 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 165s elapsed; 0 hits, 36 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+    Finished `dev` profile [optimized] target(s) in 2m 52s
+mbx[cache]: 0 hits, 53 misses, 2 bypassed; 0 B downloaded, 0 B uploaded, 86.3 MiB stored locally
+mbx[savings]: disposed of 10.9 GiB logical without being asked. that is rather the point.

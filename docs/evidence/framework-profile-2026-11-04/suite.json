@@ -1,0 +1,42 @@
+{
+  "source": "95906b87b190f1756bb758be4904a58172e7f467",
+  "orders": [
+    [
+      "edge",
+      "pingora"
+    ],
+    [
+      "pingora",
+      "edge"
+    ]
+  ],
+  "bare_sha256": "1a5439941c53dc32044b665013add230ac8a2062ab34e72f92dfde7799d093c2",
+  "runs": [
+    {
+      "round": 0,
+      "target": "edge",
+      "manifest": "round-0-edge/manifest.json",
+      "exit": 0
+    },
+    {
+      "round": 0,
+      "target": "pingora",
+      "manifest": "round-0-pingora/manifest.json",
+      "exit": 0
+    },
+    {
+      "round": 1,
+      "target": "pingora",
+      "manifest": "round-1-pingora/manifest.json",
+      "exit": 0
+    },
+    {
+      "round": 1,
+      "target": "edge",
+      "manifest": "round-1-edge/manifest.json",
+      "exit": 0
+    }
+  ],
+  "scope": "OFF-only user CPU paths of fixed ba474 Edge vs fixed bare Pingora; instrumented timing excluded from capacity ranking",
+  "image": "sha256:8ef08b556601c8fa49be13307b5894d69f7257ce5bcb4457822366eac1e03deb"
+}

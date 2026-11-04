@@ -1,0 +1,29 @@
+[package]
+name = "bare-hyper-proxy"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+anyhow = "=1.0.104"
+http = "=1.5.0"
+hyper = { version = "=1.11.0", features = ["full"] }
+hyper-util = { version = "=0.1.20", features = ["client-legacy", "server-auto", "tokio", "http1", "http2"] }
+mimalloc = "=0.1.52"
+libmimalloc-sys = { version = "=0.1.49", features = ["extended"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["aws-lc-rs", "std"] }
+rustls-pemfile = "=2.2.0"
+tokio = { version = "=1.53.1", features = ["full"] }
+tokio-rustls = "=0.26.4"
+
+[[bin]]
+name = "bare-hyper-proxy"
+path = "../../../benches/support/bare_hyper_proxy.rs"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+opt-level = 3

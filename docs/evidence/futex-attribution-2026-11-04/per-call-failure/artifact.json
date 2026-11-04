@@ -1,0 +1,20 @@
+{
+  "id": 13308782863,
+  "node_id": "MDg6QXJ0aWZhY3QxMzMwODc4Mjg2Mw==",
+  "name": "futex-stacks-2fde11a06f315aa35482aebb294cf206c4c8254f",
+  "size_in_bytes": 1066716,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13308782863",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13308782863/zip",
+  "expired": false,
+  "digest": "sha256:a96b022ecc893f7d5b072e1e7f4cc741915138fcfb4d36beacca8357a777fb17",
+  "created_at": "2026-11-04T09:06:04Z",
+  "updated_at": "2026-11-04T09:06:04Z",
+  "expires_at": "2027-02-02T09:04:00Z",
+  "workflow_run": {
+    "id": 41804385041,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/program-wide-20261104",
+    "head_sha": "2fde11a06f315aa35482aebb294cf206c4c8254f"
+  }
+}

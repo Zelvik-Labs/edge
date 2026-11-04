@@ -1,0 +1,40 @@
+name: Daily domain ownership and existing-key component
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - benches/support/daily_domain_*.rs
+      - scripts/perf/daily-domain/**
+      - .github/workflows/daily-domain.yml
+permissions:
+  contents: read
+concurrency:
+  group: daily-domain-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  compare:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      CARGO_BUILD_JOBS: "2"
+      RUSTFLAGS: "-C target-cpu=x86-64-v2 -D warnings"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: clippy
+      - name: Build exact map helpers with separate timing and allocation binaries
+        run: python3 scripts/perf/daily-domain/run.py build
+      - name: Verify cap, all counters and concurrent flush then measure balanced blocks
+        run: python3 scripts/perf/daily-domain/run.py measure
+      - name: Retain source, actual binaries, controls and every block including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-domain-${{ github.sha }}
+          path: .local/daily-domain-ci/
+          include-hidden-files: true
+          if-no-files-found: error

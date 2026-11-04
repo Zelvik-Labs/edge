@@ -1,0 +1,2174 @@
+{
+  "files": [
+    {
+      "path": "records/1-nginx.driver.log",
+      "bytes": 460,
+      "sha256": "b9f5717700c1adccda942a520f7077f2aad49277ab6273951422a89017cb72ea"
+    },
+    {
+      "path": "records/1-edge.driver.log",
+      "bytes": 455,
+      "sha256": "834116a40f9a760f635d89f5ae0efb2e0d980d05417249cb41945d82132d27ad"
+    },
+    {
+      "path": "records/3-edge.driver.log",
+      "bytes": 454,
+      "sha256": "5d3444960b5f2020e962d5679cc72968e73c4f3272ed6bff750f263e55777e37"
+    },
+    {
+      "path": "records/2-pingora.driver.log",
+      "bytes": 463,
+      "sha256": "b0d984b344b64ff409adc1658ea5fb4954debe87914b20a60b99f56dcde671e6"
+    },
+    {
+      "path": "records/1-pingora.driver.log",
+      "bytes": 463,
+      "sha256": "9e69584619f87d57117e21c0b686d67b94577c568f0c6dbefd3289a222535d3e"
+    },
+    {
+      "path": "records/2-nginx.driver.log",
+      "bytes": 460,
+      "sha256": "3534a80b9d17fea2b765304c76e5438a06174f822a0181e07f901703eafc38d2"
+    },
+    {
+      "path": "records/2-edge.driver.log",
+      "bytes": 452,
+      "sha256": "aac3daff8df63fd439b97faa773a1ddbc2db1efa4cbe780752836f78f2957605"
+    },
+    {
+      "path": "records/3-pingora.driver.log",
+      "bytes": 463,
+      "sha256": "e4fd6536b6d858fdc486eb497380077ddc3211175aa21291f1423cd4fd07b3ae"
+    },
+    {
+      "path": "records/0-pingora.driver.log",
+      "bytes": 464,
+      "sha256": "8a7e774c00f8295d4a2e571b5cb52eed89a4a1330c1f51952b3d1b915b34adab"
+    },
+    {
+      "path": "records/0-nginx.driver.log",
+      "bytes": 459,
+      "sha256": "c6643937e8bbc4aaf0363dd37758561c599d0080382dc05e358cb555f858ab9c"
+    },
+    {
+      "path": "records/3-nginx.driver.log",
+      "bytes": 460,
+      "sha256": "5e857e45bd324691457eecbb268e3935416668951244593604eab3f4c743fd8d"
+    },
+    {
+      "path": "records/0-openresty.driver.log",
+      "bytes": 472,
+      "sha256": "ec71a8b458279d1dc800c70e6045d315c3bf8a2ec4c2422f3b60935e74429e8f"
+    },
+    {
+      "path": "records/2-openresty.driver.log",
+      "bytes": 472,
+      "sha256": "eda0cabef8c85966a9d371f42b0f53519480ab37a46d4d588905186330805f20"
+    },
+    {
+      "path": "records/3-openresty.driver.log",
+      "bytes": 471,
+      "sha256": "69a711b5c30d78575c3462a42acb21fbbd898db5d5b9df1d5666b840a99caf43"
+    },
+    {
+      "path": "records/0-edge.driver.log",
+      "bytes": 454,
+      "sha256": "207268ee8f18266477423f8ae9e39eb2a0001c6c09b32f999086ba485ffc6b10"
+    },
+    {
+      "path": "records/suite.json",
+      "bytes": 2377,
+      "sha256": "95cd82777b5466130eddd95499b4d330eb525e7403308cfc5bb72dd7b6ae25ff"
+    },
+    {
+      "path": "records/1-openresty.driver.log",
+      "bytes": 472,
+      "sha256": "4fa0c4b5322aef21eb9c67f87741130e3c5fa5d2b85060519c96d65b6268033c"
+    },
+    {
+      "path": "records/round-0-openresty/origin-reference.1.client.tsv.gz",
+      "bytes": 248277,
+      "sha256": "0279ed18eb753f278b7dad32887bc2dc79d8e71f324cbc784b5f82765789b19b"
+    },
+    {
+      "path": "records/round-0-openresty/0001-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 234687,
+      "sha256": "4699e34717f7fceea94910c72e2dbfb0fd5655a5e849e433b37fec3a009f50c1"
+    },
+    {
+      "path": "records/round-0-openresty/origin-reference.command.json",
+      "bytes": 931,
+      "sha256": "72f7471ff2b498160ba5e29ab980c33e9b7f38cd524af2143ae13cd71624df38"
+    },
+    {
+      "path": "records/round-0-openresty/0001-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 235000,
+      "sha256": "86d5c7d1ca0fd541ffed2f4f0092c29d95ce8b816477872dbac325b40413f182"
+    },
+    {
+      "path": "records/round-0-openresty/manifest.json",
+      "bytes": 41755,
+      "sha256": "2fb14fb367973b8af43748f7767baed304e308e3db12573f5f8e63e9077e8a8a"
+    },
+    {
+      "path": "records/round-0-openresty/0001-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "5a80a12ad133725a2b5d98ba8bb4c9dcae60885f8bca1118488c4b54ec025dd3"
+    },
+    {
+      "path": "records/round-0-openresty/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-0-openresty/0002-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 173464,
+      "sha256": "b1ae0da55d9d2beea646b17f202cd7512ade549c553c418eda8839a225bea5af"
+    },
+    {
+      "path": "records/round-0-openresty/0000-h1-tls-off-reuse.command.json",
+      "bytes": 941,
+      "sha256": "13a3f7930e5fa12f8dca7040fbb08c87e8b1aaba56c94f337aef0356e8eca7f2"
+    },
+    {
+      "path": "records/round-0-openresty/0002-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "2e60c21d7f0b20e629dd901a8cc49760a26b4cdc9315e29ec52968dfe90949a6"
+    },
+    {
+      "path": "records/round-0-openresty/0001-h1-off-reuse.command.json",
+      "bytes": 931,
+      "sha256": "d72e9fa28f9c1d3de49fa4381815a1e97453007d14e9e9ac820a76999ab7ec27"
+    },
+    {
+      "path": "records/round-0-openresty/0002-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "394b4cf8bc29d0fa9ea68704d2627587914a874aa9e2826723bcdf279c641551"
+    },
+    {
+      "path": "records/round-0-openresty/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "6185a0f6c73f606a02ea70d278a7ecc44e36e779a43b291cff2f72ba45b96cde"
+    },
+    {
+      "path": "records/round-0-openresty/origin-reference.0.client.tsv.gz",
+      "bytes": 250268,
+      "sha256": "9c856a7d604c96fcde0dc70eda2acb82d510d0216d5b6daae99e60a408427075"
+    },
+    {
+      "path": "records/round-0-openresty/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-0-openresty/proxy.conf",
+      "bytes": 1109,
+      "sha256": "9dbaceeabf738fe6d68918116682bada6bd36f2e930ebcb0f237bd883770ebe2"
+    },
+    {
+      "path": "records/round-0-openresty/origin-connections.json",
+      "bytes": 783,
+      "sha256": "06dccfe8a83c293c7925dd84c0e841494d63c325c9fbad11ff0bd9d787d823a3"
+    },
+    {
+      "path": "records/round-0-openresty/0002-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 169430,
+      "sha256": "853365cd30f84b6b43f60754f46559abc1e5e44439dc016f8f6d43ccabe0d6b6"
+    },
+    {
+      "path": "records/round-0-openresty/0002-h2-off-reuse.command.json",
+      "bytes": 933,
+      "sha256": "39d268b68b1447fd20b0a5392baf97cf2b04047d3496dd8631d12d575985a75e"
+    },
+    {
+      "path": "records/round-0-openresty/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "90415226606ed41b69bc6b3c56d8d138eeee5c7187b36dbe897c59854e334145"
+    },
+    {
+      "path": "records/round-0-openresty/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "de65fe9fc8675ab2733f6f3a91ab286286149387d5ac166fc2de222f71767116"
+    },
+    {
+      "path": "records/round-0-openresty/0000-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 189912,
+      "sha256": "bd375ef37c00e4eda97c5999f56fe9fe95bd9c953a8b2f89a4e9fe8021d7de1e"
+    },
+    {
+      "path": "records/round-0-openresty/0000-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 187053,
+      "sha256": "5752143dee5d401f8f376f68962e5135831beaa645591415f960cc119a79e5df"
+    },
+    {
+      "path": "records/round-0-openresty/0000-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "b1ec0c093a84d69006d24d53dc318ad36c25d169f129b4d64abbd3ca316182a7"
+    },
+    {
+      "path": "records/round-0-openresty/0000-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "26d12f3e207e295696a9b6072dce183e87be3bb696485e4f86a569973cdd3423"
+    },
+    {
+      "path": "records/round-0-openresty/0001-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "902563302342acacc83488ee1419a3c4def2eec34f399f24a14b49829745296f"
+    },
+    {
+      "path": "records/round-1-edge/0001-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "8a7fcf2c865d1d295dce47b064da08cb3a84ee5b996df0449e0964798a2e0c66"
+    },
+    {
+      "path": "records/round-1-edge/origin-reference.1.client.tsv.gz",
+      "bytes": 245544,
+      "sha256": "b6012f6e4b4bbcb002f4bd3628d0b264aa3286fbe4ec1b3a08fcedeb2474bf50"
+    },
+    {
+      "path": "records/round-1-edge/origin-reference.command.json",
+      "bytes": 921,
+      "sha256": "19fbb0b9eaf2ed8f5b8c9709117d81525bae9d810c2e73c586ee856358fb64d4"
+    },
+    {
+      "path": "records/round-1-edge/0001-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 90594,
+      "sha256": "89f96d7a896881f4851ddd8d12c7813a9e5766dabb7ed032a42eb1f45a4ee525"
+    },
+    {
+      "path": "records/round-1-edge/manifest.json",
+      "bytes": 51247,
+      "sha256": "a8cedc7c3589eab00b376dc50cdfef8915379cb3f4695de63b5a1cb2cfbf817a"
+    },
+    {
+      "path": "records/round-1-edge/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-1-edge/0000-h1-tls-off-reuse.command.json",
+      "bytes": 931,
+      "sha256": "146bf8df27de405e0610b23b0039c412134a06b66e40c7029f09449c0f3d9ddd"
+    },
+    {
+      "path": "records/round-1-edge/0002-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "14b69073e22300657f49ebd6e467dda332ac8e8ea8659f4faafc7dcbf2354766"
+    },
+    {
+      "path": "records/round-1-edge/0001-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "df63d7e427618895f2508ced178f7b9ffecd5783d0663628abbd4bc38ee0bd61"
+    },
+    {
+      "path": "records/round-1-edge/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "f8c9ffd2064785ef9b05b9ffb60aad6e528354b771b73f413fe0b0bcd8725376"
+    },
+    {
+      "path": "records/round-1-edge/0002-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 91252,
+      "sha256": "34052040f54655e6ad0c963e3a7a61a9f68a32df5f8fea1624b778fa7f95f946"
+    },
+    {
+      "path": "records/round-1-edge/origin-reference.0.client.tsv.gz",
+      "bytes": 248376,
+      "sha256": "7cf5ffb709e43e55d4ed7a42a947d9bdf4695101bc8b36bec17de485b2981bdb"
+    },
+    {
+      "path": "records/round-1-edge/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-1-edge/proxy.conf",
+      "bytes": 1109,
+      "sha256": "9dbaceeabf738fe6d68918116682bada6bd36f2e930ebcb0f237bd883770ebe2"
+    },
+    {
+      "path": "records/round-1-edge/origin-connections.json",
+      "bytes": 782,
+      "sha256": "d6dc4e8f10b8ea1a4cca1cf98ec5e53c75e35879b315da762d8b8e4bc34489fd"
+    },
+    {
+      "path": "records/round-1-edge/0002-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 90848,
+      "sha256": "0e70d7c592040a31206253b832b0b6651693a5c23353478ccff1549fad24ca27"
+    },
+    {
+      "path": "records/round-1-edge/0001-h2-off-reuse.command.json",
+      "bytes": 923,
+      "sha256": "91d9dc39d4d903b928069fb3b9cf03df39eba408c975c1bcd8d1b5998040e639"
+    },
+    {
+      "path": "records/round-1-edge/0002-h1-off-reuse.command.json",
+      "bytes": 921,
+      "sha256": "2347de4a0eb40dd9923050fbd6cdde9f98bf7cd2b012b7117eb40213a1849b9f"
+    },
+    {
+      "path": "records/round-1-edge/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "63ea0aa0c5d6c0fabbde3849b207cb78009da96bf31022139d662001d711d9e0"
+    },
+    {
+      "path": "records/round-1-edge/0002-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "053d739dd79ad85f58a5a3564a5c7bcf7d4476de4d15e5761ec019086506526b"
+    },
+    {
+      "path": "records/round-1-edge/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "329cf84c26cc92f5afcfb3646a9395119572fc43f1ad269ddb57312b5bad32a7"
+    },
+    {
+      "path": "records/round-1-edge/0000-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 80732,
+      "sha256": "f37133b80efb7bd60d1d28a88d3823250438b0a6cb44ded461f86385d719e7e4"
+    },
+    {
+      "path": "records/round-1-edge/0000-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 80022,
+      "sha256": "1072868510ff5142c505c1415fba01d884f9889b13625cb20337a35a27a8d2f3"
+    },
+    {
+      "path": "records/round-1-edge/0000-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "aa050156403a77171c14350893cdf54c9f0488be62f29b29c7d01b84f90c9b13"
+    },
+    {
+      "path": "records/round-1-edge/0000-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "cd34bbecd2b19e61478d5e51aab5c536b032790dda039f020d355bae171cb273"
+    },
+    {
+      "path": "records/round-1-edge/0001-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 92037,
+      "sha256": "6b2d6c37309e7fafd93b714c9e57062e4353700ce7cae7b86a2810f6921dc6c8"
+    },
+    {
+      "path": "records/round-0-edge/origin-reference.1.client.tsv.gz",
+      "bytes": 248668,
+      "sha256": "dee9e5f7ddd8d8f56225fe9edabd1aac9f81b15db5e801566887084694800c01"
+    },
+    {
+      "path": "records/round-0-edge/0001-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 91764,
+      "sha256": "5cc1cd6c54a56b737c86588220ccddccd0d544463f1e491446677cdc2eca2127"
+    },
+    {
+      "path": "records/round-0-edge/origin-reference.command.json",
+      "bytes": 921,
+      "sha256": "ce0d23ee9e4bc244fc1571d059de0d8e2f910146e0520f7d3d182f3ee23f28dc"
+    },
+    {
+      "path": "records/round-0-edge/0001-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 92710,
+      "sha256": "ed9d520c2d9bc13cd5bb1b1c92049c24243352d2ef527f42f739b1adab4b632e"
+    },
+    {
+      "path": "records/round-0-edge/manifest.json",
+      "bytes": 51188,
+      "sha256": "43b61f7e139d26767f6b6c7799bea3907aea3bd8e695a2261c0472754970d29f"
+    },
+    {
+      "path": "records/round-0-edge/0001-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "791213b6f6d892440022299cbc261131a74192577ce0cf1984b2425fda57ded3"
+    },
+    {
+      "path": "records/round-0-edge/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-0-edge/0002-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 92238,
+      "sha256": "f2f8bc60b3adbebf264bc357555bc54905d1845b76285a685c29d3f30660e61d"
+    },
+    {
+      "path": "records/round-0-edge/0000-h1-tls-off-reuse.command.json",
+      "bytes": 931,
+      "sha256": "2f94f0771778a91e5af887150e4e9dd3557f425dc7b1697b20125df2e9da36f6"
+    },
+    {
+      "path": "records/round-0-edge/0002-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "1e534f65efd80736536fea5026df8e51fa93c042f416ec6d3d2c35981e5f9cb5"
+    },
+    {
+      "path": "records/round-0-edge/0001-h1-off-reuse.command.json",
+      "bytes": 921,
+      "sha256": "8ebbb16c32bf3d246c1515081985a911a5ca2dcc658fc6ca318889f0fe24d87c"
+    },
+    {
+      "path": "records/round-0-edge/0002-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "8fd4cc554aab0404a2853568784f6fd7f152fc8807ecaf602624a869b7baebf6"
+    },
+    {
+      "path": "records/round-0-edge/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "7ccd845c2ee22f1320f8725e6c1ca5998f0948adf4d829a6eaab4da2f9326369"
+    },
+    {
+      "path": "records/round-0-edge/origin-reference.0.client.tsv.gz",
+      "bytes": 251967,
+      "sha256": "d1fb0c2958a9f3781e32bc3e999984abfa8e18851e1ba1013f72eb243a369328"
+    },
+    {
+      "path": "records/round-0-edge/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-0-edge/proxy.conf",
+      "bytes": 1109,
+      "sha256": "9dbaceeabf738fe6d68918116682bada6bd36f2e930ebcb0f237bd883770ebe2"
+    },
+    {
+      "path": "records/round-0-edge/origin-connections.json",
+      "bytes": 780,
+      "sha256": "b5202a64fe2b6d98a0683aeea1060d15631c937c1dcd048acf3200c1ea52b2b1"
+    },
+    {
+      "path": "records/round-0-edge/0002-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 90814,
+      "sha256": "113986198cf1dde82e3caf8bc700c1bf8f7d0e1f79a27de3e29a620ec605b0af"
+    },
+    {
+      "path": "records/round-0-edge/0002-h2-off-reuse.command.json",
+      "bytes": 923,
+      "sha256": "185fdd0acb71139357b73c07a6cfa5c0a6f1c94c1b2ec50e64b7ed03b23099ed"
+    },
+    {
+      "path": "records/round-0-edge/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "d3e347ab3eaa9e391018b6e5097a31f1ae1d680072fa3a457fa0588c467059d5"
+    },
+    {
+      "path": "records/round-0-edge/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "aca677e34085ca6b42ea40461f56d031328955d78407d646f03789ad58e16469"
+    },
+    {
+      "path": "records/round-0-edge/0000-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 81535,
+      "sha256": "a3051dca140be4aefbd6630d83980cb42b9b3d0154ea368734d7e476358f4c36"
+    },
+    {
+      "path": "records/round-0-edge/0000-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 80468,
+      "sha256": "608e7ae54c65b5ee9fce9e2979a7788cb3f1f0cffab53c22c8e2b57cfbbf6dc5"
+    },
+    {
+      "path": "records/round-0-edge/0000-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "b1013581a7c92c6399a5760ac1d299e55d331fd97fa7f25d8c32154fc16e2610"
+    },
+    {
+      "path": "records/round-0-edge/0000-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "67dcda0129d448043ec17bbad40bcc3c30e1121ed930148637432daf8dc9fa31"
+    },
+    {
+      "path": "records/round-0-edge/0001-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "68400246e8ee55c35005adbeb14706cc1e49f46fb691248f9b46e63ecf1e8543"
+    },
+    {
+      "path": "records/round-3-nginx/0001-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "f3c8b98b4ab8161e14cb1c017266eedf0faf250048da060e6685886c13bbb5e8"
+    },
+    {
+      "path": "records/round-3-nginx/0000-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 235865,
+      "sha256": "7b3cd3469be892a803f0c9c36980549a78d064cc1973008eae605ad3421641ea"
+    },
+    {
+      "path": "records/round-3-nginx/0001-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 184834,
+      "sha256": "7e58addee0551fda82cec1de21e67b4624b39ee717c8e3fddccb68716ec6a28e"
+    },
+    {
+      "path": "records/round-3-nginx/origin-reference.1.client.tsv.gz",
+      "bytes": 251154,
+      "sha256": "628c47df481ee8d434b8af34fc3ada54b54b8f11829a2a810382d400622d3f2f"
+    },
+    {
+      "path": "records/round-3-nginx/0000-h1-off-reuse.command.json",
+      "bytes": 923,
+      "sha256": "476fd2d4a139c93a03bbe0e70a1168ba4f3e5f97fc9b48ca7486cc585b9ab971"
+    },
+    {
+      "path": "records/round-3-nginx/origin-reference.command.json",
+      "bytes": 923,
+      "sha256": "f83552917c60b6b7b53e286a4108b38c77938a2a91948904ea08c922c7aef953"
+    },
+    {
+      "path": "records/round-3-nginx/manifest.json",
+      "bytes": 41177,
+      "sha256": "ab4248386b09d13d18453e1acdead9fed1aea852b8857013c7f5164faee3a35e"
+    },
+    {
+      "path": "records/round-3-nginx/0000-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "0213f1c65a1f1469388dbe2a33f6f2571356cb32c5a7fae15963b7f9a0fa79d1"
+    },
+    {
+      "path": "records/round-3-nginx/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-3-nginx/0002-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 168006,
+      "sha256": "98956db260fc6a0fd03a532136f557a061da3cac41b495222a59e6a5e7fd172b"
+    },
+    {
+      "path": "records/round-3-nginx/0000-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "15d8d1363563c924aa0c1c9d18849ea24909aa75b7ad79b6a92b08261f51ba6e"
+    },
+    {
+      "path": "records/round-3-nginx/0002-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "f59af81bc8ab3c93d4c6c63e11c9b2b8f756f08d3cec6db5fca9d25d84cb3b3e"
+    },
+    {
+      "path": "records/round-3-nginx/0002-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "e057620c00a07fb04a558f8284103f1868c9f4642645c5b318fa3c5b8bf4a3d9"
+    },
+    {
+      "path": "records/round-3-nginx/0000-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 235392,
+      "sha256": "eb21bb6c6a736ca8ba96b2fc952ec33d6bb1dd7effbf9c94a315c4558497f8c4"
+    },
+    {
+      "path": "records/round-3-nginx/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "3c94cd14e508aea71cd2e8948a5771f6b881a3b84ab70f21af0077fd0f140a13"
+    },
+    {
+      "path": "records/round-3-nginx/origin-reference.0.client.tsv.gz",
+      "bytes": 253960,
+      "sha256": "18609dc3f8a26b4f3da25fae023975c1b28cc66c0030c5420e3d103a2731d46d"
+    },
+    {
+      "path": "records/round-3-nginx/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-3-nginx/proxy.conf",
+      "bytes": 1109,
+      "sha256": "9dbaceeabf738fe6d68918116682bada6bd36f2e930ebcb0f237bd883770ebe2"
+    },
+    {
+      "path": "records/round-3-nginx/origin-connections.json",
+      "bytes": 785,
+      "sha256": "c57baebb6748d81ad3eb435976058dccb6ef99555b0ee58582e5de0bcaca8c46"
+    },
+    {
+      "path": "records/round-3-nginx/0001-h1-tls-off-reuse.command.json",
+      "bytes": 933,
+      "sha256": "b07243f26aa90ee4f6208c442f1ff5ee2797275f86c1fc6653a3b279c1de789b"
+    },
+    {
+      "path": "records/round-3-nginx/0002-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 163691,
+      "sha256": "0ad9fc9a6268b2f69e364ecc38429fb0abbdce2e16c88f8f6dab2228766848c6"
+    },
+    {
+      "path": "records/round-3-nginx/0001-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 181717,
+      "sha256": "02f8454627b912460622b0e9757f0a3b543b0665510bb87d8111b51b7ece5455"
+    },
+    {
+      "path": "records/round-3-nginx/0001-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "d1db5e894c3ce558355b94d129f302441f2cbf841f7918f7d242afa6860d86c3"
+    },
+    {
+      "path": "records/round-3-nginx/0002-h2-off-reuse.command.json",
+      "bytes": 925,
+      "sha256": "8bf418c564f763d0960b6b21c30c8581e814f451d5170a99be96ccd42fcb7035"
+    },
+    {
+      "path": "records/round-3-nginx/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "2954e86afadad860539fc62b236a03d642a132d65997a8ef0099126724a79272"
+    },
+    {
+      "path": "records/round-3-nginx/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "12dfd416ae43e79b8259b0f018b6c00f5a49160492887d4f7acb147ae4d50b98"
+    },
+    {
+      "path": "records/round-2-openresty/origin-reference.1.client.tsv.gz",
+      "bytes": 245857,
+      "sha256": "e9c07a64dffc0afcea35abeb3ee89acf519c3ff1eaedae6ad336f11e8dfc9ec9"
+    },
+    {
+      "path": "records/round-2-openresty/0001-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 234333,
+      "sha256": "7df729a4f250d403cae9fcd4709d98bba8f24baf1fbb34a66ae759d3ededaecf"
+    },
+    {
+      "path": "records/round-2-openresty/origin-reference.command.json",
+      "bytes": 931,
+      "sha256": "538b8d4b6de6f0b550b000657d33f5f7992473cd2c29e946b4c4efe847f5c2d7"
+    },
+    {
+      "path": "records/round-2-openresty/0001-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 234159,
+      "sha256": "eafb0981e809d63584c149707dc827b7ba54da49b85618b3fa62a2e3429ce547"
+    },
+    {
+      "path": "records/round-2-openresty/manifest.json",
+      "bytes": 41783,
+      "sha256": "6bb42581ad1d97c0145e632b97196e922256eb331e657db74613ed6454d15206"
+    },
+    {
+      "path": "records/round-2-openresty/0001-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "7d4398956699ec39254adf1565e9f92a9a217275da8fcd76093c326457b51f86"
+    },
+    {
+      "path": "records/round-2-openresty/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-2-openresty/0002-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 174065,
+      "sha256": "39cb5b82c088e480bd99e757194b5610df0cb29d515ce3c28f083d2866d198fe"
+    },
+    {
+      "path": "records/round-2-openresty/0000-h1-tls-off-reuse.command.json",
+      "bytes": 941,
+      "sha256": "03403ad1a710021f9937d19fd131d75b525225ba2f8b8f4a77e57ab6d5f49d19"
+    },
+    {
+      "path": "records/round-2-openresty/0002-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "96a2ce0a917fe2eb5e29a9705bc8ef14c431d26e45d13f277e81eb21f6818d77"
+    },
+    {
+      "path": "records/round-2-openresty/0001-h1-off-reuse.command.json",
+      "bytes": 931,
+      "sha256": "d46d6ed0bb64cb2dd468b4af0c8b957c3d2c9225ff082417e3750ab2dba0af98"
+    },
+    {
+      "path": "records/round-2-openresty/0002-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "0e5f57762f979146b4833be3d4a7f52bdf71cbfd59ea96ca301eb7a2d4e6591b"
+    },
+    {
+      "path": "records/round-2-openresty/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "31e9c72249611184f3160cf879a623dd79b63e937987c52bf791dd31f0d4eaba"
+    },
+    {
+      "path": "records/round-2-openresty/origin-reference.0.client.tsv.gz",
+      "bytes": 249107,
+      "sha256": "0b406faa7355e1bca4b4989be886105eb48e8a63fd53d135ef1712084a25570f"
+    },
+    {
+      "path": "records/round-2-openresty/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-2-openresty/proxy.conf",
+      "bytes": 1109,
+      "sha256": "9dbaceeabf738fe6d68918116682bada6bd36f2e930ebcb0f237bd883770ebe2"
+    },
+    {
+      "path": "records/round-2-openresty/origin-connections.json",
+      "bytes": 786,
+      "sha256": "72e194a3662379efa2f3d6d5f670898b847a809fd7c1ba3b0f4e78c537ad7f89"
+    },
+    {
+      "path": "records/round-2-openresty/0002-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 170275,
+      "sha256": "40880b13d0e29977ad3b74a673d5d1ca14fb23d58a90b886a5038b49f573ab39"
+    },
+    {
+      "path": "records/round-2-openresty/0002-h2-off-reuse.command.json",
+      "bytes": 933,
+      "sha256": "fc772984034072b17a54bb5929448976d50a3bc735e45046e49dbc33ee30f967"
+    },
+    {
+      "path": "records/round-2-openresty/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "3c8c6a757a9d4e4d8ee1d437830fcdca905a9a4575811f6b46ca080e78a91287"
+    },
+    {
+      "path": "records/round-2-openresty/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "6959a6c03f868fb4b433f21f0fc8d2b6cdb9437b7ba857820fd029c37d519ff4"
+    },
+    {
+      "path": "records/round-2-openresty/0000-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 194323,
+      "sha256": "663627352c388b4eb0de32f79c4fec222a54e4a6edcc3ea9d84f6a61517d220c"
+    },
+    {
+      "path": "records/round-2-openresty/0000-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 191634,
+      "sha256": "0225d44e7f56a0b8bf28f8ddeb730f5ab012aeb12e350fdb93299d5ef98aed13"
+    },
+    {
+      "path": "records/round-2-openresty/0000-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "01d6758295f94fc8b9f9c6b0d89bce5503a86bcccf0629316684c541e4b4fb5a"
+    },
+    {
+      "path": "records/round-2-openresty/0000-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "5e1150f1d6590e04bc31aff8612d3e88ebcdbffbbecbef478284d4e1862ebcc5"
+    },
+    {
+      "path": "records/round-2-openresty/0001-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "0e7d4393e528348edb5e91311f32eec735b052976d97be9df47983aa10b4a13a"
+    },
+    {
+      "path": "records/round-2-edge/origin-reference.1.client.tsv.gz",
+      "bytes": 243126,
+      "sha256": "d23f2c1b79296aefd9a51e8b9c1b2e9e35edb4be3fdb9cc6d321d24a2b91bdbc"
+    },
+    {
+      "path": "records/round-2-edge/0001-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 89774,
+      "sha256": "51954f33cff4d92f5b8c48d340d49e861aaf1a1d7edfa6c0686d5576828f601d"
+    },
+    {
+      "path": "records/round-2-edge/origin-reference.command.json",
+      "bytes": 921,
+      "sha256": "506ad06dda466e5958f8ccf5a94b5263bbf61514e4ee724cdbafe945b4319484"
+    },
+    {
+      "path": "records/round-2-edge/0001-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 90513,
+      "sha256": "ccbfeab93095bf5ae9c5dce7cc8fb3717fe53276508cd8d9b2787e1fee4872c5"
+    },
+    {
+      "path": "records/round-2-edge/manifest.json",
+      "bytes": 51279,
+      "sha256": "98f84c1184dea4fe70ccc38d37670f361cea20e85fabea4f26041ce345aaa33d"
+    },
+    {
+      "path": "records/round-2-edge/0001-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "de8bca77fcdb16e2477bfb861caa8584aac6ebebdee2c9d373942d3c8f37f9a7"
+    },
+    {
+      "path": "records/round-2-edge/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-2-edge/0002-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 92500,
+      "sha256": "ab0eb3dec09ee897daaeca27474ac50c1d839fef491315f71b11198dc0e4cd93"
+    },
+    {
+      "path": "records/round-2-edge/0000-h1-tls-off-reuse.command.json",
+      "bytes": 931,
+      "sha256": "4c4df5839b3cb0baefdee6e66a368a827ea13b24a0c8b10dc21898f556113eb6"
+    },
+    {
+      "path": "records/round-2-edge/0002-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "3f681dcc59271d7a64ba25f60bf0facd47d7e0146efc5ff6b5ee1929853a3f7c"
+    },
+    {
+      "path": "records/round-2-edge/0001-h1-off-reuse.command.json",
+      "bytes": 921,
+      "sha256": "14f8914e785ccf54a671ee211edc4a38577881a472f4fb9a512e2b4d657e3c15"
+    },
+    {
+      "path": "records/round-2-edge/0002-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "8136a7b1f6d88af3597da8e0257099c5a891099efbd2b7856dbb3fc84d055236"
+    },
+    {
+      "path": "records/round-2-edge/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "11c341f1a44735f3cdcb5a294b161dd16be6b5e69a384de9ce7434d5fc76aa1f"
+    },
+    {
+      "path": "records/round-2-edge/origin-reference.0.client.tsv.gz",
+      "bytes": 246216,
+      "sha256": "a9fdce54455bc17c0a36c3bb3fe3b110f92cfacb385da5c703f6592337154057"
+    },
+    {
+      "path": "records/round-2-edge/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-2-edge/proxy.conf",
+      "bytes": 1109,
+      "sha256": "9dbaceeabf738fe6d68918116682bada6bd36f2e930ebcb0f237bd883770ebe2"
+    },
+    {
+      "path": "records/round-2-edge/origin-connections.json",
+      "bytes": 782,
+      "sha256": "4a9f48d3a7d66fa9d5421b80984d65690f832eac74db5b47febe30c966dd7762"
+    },
+    {
+      "path": "records/round-2-edge/0002-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 90811,
+      "sha256": "56fe1c322e11cf64b0d2b5f8c24c006c356d05fc06d4a6f199ce01588e3b2a7e"
+    },
+    {
+      "path": "records/round-2-edge/0002-h2-off-reuse.command.json",
+      "bytes": 923,
+      "sha256": "a5748debd1b17250af6064671f7b78d6a17fd110b87098a3272256b64d51cd37"
+    },
+    {
+      "path": "records/round-2-edge/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "c63cfe8fc34c1e47f429410c7f0c4deacac1e60d89dc0629742d6d93b7091c9d"
+    },
+    {
+      "path": "records/round-2-edge/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "a5cbbd4a5a1068ca04d4e1f6bd9aad27169bdc693cfdfb0f637b21b76c21a62a"
+    },
+    {
+      "path": "records/round-2-edge/0000-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 81191,
+      "sha256": "6e3a3060791cef2aad6987a2e2210ab7138a9873551f93ea3d97b19a10515955"
+    },
+    {
+      "path": "records/round-2-edge/0000-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 80609,
+      "sha256": "81d11fff16b6fa8a88b22bfa22e9e2a7b3558adf2d4b0bdc4d1054b61398c5e2"
+    },
+    {
+      "path": "records/round-2-edge/0000-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "72bfc635be43468506e9c91d7c59a87ee2fe46a8151baab11eba526d23099aa5"
+    },
+    {
+      "path": "records/round-2-edge/0000-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "1afe5e4f8f4084cacf713256c10bff15e980ee2134ba4d8b7ffc310a9c7e124e"
+    },
+    {
+      "path": "records/round-2-edge/0001-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "db72661eab5e607a7c719976e36b4b73c23fd4f7a65dfd82863487d24f913fc9"
+    },
+    {
+      "path": "records/round-1-nginx/0001-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "0a29848c269a0932a7ed5457304e8e7315b5f82092de7ad6b5f0939219570e77"
+    },
+    {
+      "path": "records/round-1-nginx/origin-reference.1.client.tsv.gz",
+      "bytes": 245290,
+      "sha256": "3af0ed651b586f15cc38a76b8cc4faa45c5fc224fbe4391cc0c63e09152967d4"
+    },
+    {
+      "path": "records/round-1-nginx/origin-reference.command.json",
+      "bytes": 923,
+      "sha256": "df02d7cc45e7ce34a6702e994cd2e37ac0d128d96104590502a834b6207e0d8d"
+    },
+    {
+      "path": "records/round-1-nginx/0001-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 164797,
+      "sha256": "397735d0b54ed1bf5db7237450fd7dd818082cfbfb998db54cc567215847c82c"
+    },
+    {
+      "path": "records/round-1-nginx/manifest.json",
+      "bytes": 41123,
+      "sha256": "739759b10e5357fc4d6bf946dea83fe2003806850f3bbfac7982252bc304a866"
+    },
+    {
+      "path": "records/round-1-nginx/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-1-nginx/0000-h1-tls-off-reuse.command.json",
+      "bytes": 933,
+      "sha256": "84db6751dee2239f300801047f6cc27343512bcaf185bbc0816e16c6c1ad54db"
+    },
+    {
+      "path": "records/round-1-nginx/0002-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "1296fe44747e4a5121a03ec3a4e938df9768ad6495cb790129e3cbdbfccc1418"
+    },
+    {
+      "path": "records/round-1-nginx/0001-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "8a0c7daef579aac3efb172e0655cf8d19ef3badcfd56f0458c97330d256a52ef"
+    },
+    {
+      "path": "records/round-1-nginx/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "50ffdbccf3aa8615f3f78ef3627f81ec487eaaceded6ba31c794cb5fa694b284"
+    },
+    {
+      "path": "records/round-1-nginx/0002-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 234146,
+      "sha256": "2d88bdd18180a37c9ba1040a1b0e728651deb8192e9b718ff85e51f29c656c5e"
+    },
+    {
+      "path": "records/round-1-nginx/origin-reference.0.client.tsv.gz",
+      "bytes": 248761,
+      "sha256": "635e49bf66893e69918dd202aab4ea8385c404c7043df7f13c8f6ab1863a4f2d"
+    },
+    {
+      "path": "records/round-1-nginx/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-1-nginx/proxy.conf",
+      "bytes": 1109,
+      "sha256": "9dbaceeabf738fe6d68918116682bada6bd36f2e930ebcb0f237bd883770ebe2"
+    },
+    {
+      "path": "records/round-1-nginx/origin-connections.json",
+      "bytes": 785,
+      "sha256": "dc418026510107722ccc929dd1f8ab4303d775c3dbaae83132b2b40bbc3451bf"
+    },
+    {
+      "path": "records/round-1-nginx/0002-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 234979,
+      "sha256": "336b3e652523a9ca3effcc02d27a4f6e7f7d53b04bcd410c731d726a187ba73f"
+    },
+    {
+      "path": "records/round-1-nginx/0001-h2-off-reuse.command.json",
+      "bytes": 925,
+      "sha256": "9227c4bfd6e90aaf8395672eb8b9996ce2666163f4106d7527db99de6c4129b3"
+    },
+    {
+      "path": "records/round-1-nginx/0002-h1-off-reuse.command.json",
+      "bytes": 923,
+      "sha256": "100b03562430907d88f90cfbcba5d80cd5c425b3124e851474a0dd09ce9f1d5e"
+    },
+    {
+      "path": "records/round-1-nginx/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "67d69bbfe0494afad1b0192f9ae001ca6cef3fe900ce0f8fbb97e68c52e5059c"
+    },
+    {
+      "path": "records/round-1-nginx/0002-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "1245262a5bc0bd5b026c896258a9e8a0d8c5bb75fa3fb64214b621976df131ac"
+    },
+    {
+      "path": "records/round-1-nginx/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "eb53f13b7f84a460b6408285038864dcd0bae5c5d14c30c36df7f47fab44a367"
+    },
+    {
+      "path": "records/round-1-nginx/0000-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 184471,
+      "sha256": "f7e860e3b051615d9abbbd6248621ea563ac181df77693e35cbf1b67976e6b8e"
+    },
+    {
+      "path": "records/round-1-nginx/0000-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 181867,
+      "sha256": "c24759808b0f2c2b5c426494b592456504cfc73a35c9405ed70e73be86b0b02a"
+    },
+    {
+      "path": "records/round-1-nginx/0000-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "0fd1e62535b5a567c4c9012c338f2c9d54d2f1f70d733f9ec651f6400ba0fa2a"
+    },
+    {
+      "path": "records/round-1-nginx/0000-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "0c3707e98db7de6315a887a44fd75549f601fa753ebb7218cfb4361dab0f16ca"
+    },
+    {
+      "path": "records/round-1-nginx/0001-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 167146,
+      "sha256": "838ad92e626f40ff909bdb5c08bed3a13daffe52d972f0883a992d64ae40c7e3"
+    },
+    {
+      "path": "records/round-2-pingora/origin-reference.1.client.tsv.gz",
+      "bytes": 247444,
+      "sha256": "c19903660a624c7f141424e779db90a07f423f541c72a16e81ebf0ad513b6473"
+    },
+    {
+      "path": "records/round-2-pingora/0001-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 181184,
+      "sha256": "7039ca58a0b35b5ff08af5ffbeacfe0dce2d823c48d1993c9ff8db908a1ae260"
+    },
+    {
+      "path": "records/round-2-pingora/origin-reference.command.json",
+      "bytes": 927,
+      "sha256": "7c5b8faffeebcbdc2507c37dd63ec829181c846093a98de18c494ceb2ecd5b08"
+    },
+    {
+      "path": "records/round-2-pingora/0001-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 184346,
+      "sha256": "9348d98f4efc2d8803459df093c68a621769ab070c55600cc2bca6cf203340b5"
+    },
+    {
+      "path": "records/round-2-pingora/manifest.json",
+      "bytes": 33708,
+      "sha256": "6e7c4acdb66a7d7206f4ae51c5829a0da01f2ba0d2de2dcf47674f2dac49c2eb"
+    },
+    {
+      "path": "records/round-2-pingora/0001-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "f97383d5cab206604e1e297e0645a9bb10a013bc4e9b0f811531d51c49f6ace1"
+    },
+    {
+      "path": "records/round-2-pingora/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-2-pingora/0002-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 147567,
+      "sha256": "e467e3a41a7448085dc1dba81ff8888a37c2b4ac5522223c6a69df57230ee604"
+    },
+    {
+      "path": "records/round-2-pingora/0000-h1-tls-off-reuse.command.json",
+      "bytes": 937,
+      "sha256": "3d1bca1e3553594eb7625babe8584e3c7fbe9c68bc0634323fc07fd75642f483"
+    },
+    {
+      "path": "records/round-2-pingora/0002-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "b45f2a835287c7b07ec496acfbdd576e0d719d3d08f9447a8a8be014df84864a"
+    },
+    {
+      "path": "records/round-2-pingora/0001-h1-off-reuse.command.json",
+      "bytes": 927,
+      "sha256": "cb11c8bc665e042e506a2a48aaecb1ef8476775c62332e3fa859bc6a6fd63519"
+    },
+    {
+      "path": "records/round-2-pingora/0002-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "6704adfa5550fa1c0b11f754961680b4c7829cdf14025692c8d8f45e18086bfb"
+    },
+    {
+      "path": "records/round-2-pingora/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "dfec12f28677b00d86b2d9234895e3c08accdc100bfc420d546a6d09910e1b80"
+    },
+    {
+      "path": "records/round-2-pingora/origin-reference.0.client.tsv.gz",
+      "bytes": 250982,
+      "sha256": "0ceea0547632138b5b39245847f2400cbd9b531d59f0e57d8890daf1569a2c0f"
+    },
+    {
+      "path": "records/round-2-pingora/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-2-pingora/proxy.conf",
+      "bytes": 1081,
+      "sha256": "a7b343fb5ef6438f7cf7920a70ca10779475734799aafd73b587ab3900850fec"
+    },
+    {
+      "path": "records/round-2-pingora/origin-connections.json",
+      "bytes": 781,
+      "sha256": "f6beb76ccdcadbd3e08c6aeec4c0b35948c87da0351074698b76dc4033303ee0"
+    },
+    {
+      "path": "records/round-2-pingora/0002-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 143380,
+      "sha256": "6f76ed5b0105db2b09e88097c4eaaf5b589be45e0463dd59ac49cdb01a139819"
+    },
+    {
+      "path": "records/round-2-pingora/0002-h2-off-reuse.command.json",
+      "bytes": 929,
+      "sha256": "39be8584eaade8bdbd553d91667007a5b570b4c2046415ae62858f5b8dc40a4b"
+    },
+    {
+      "path": "records/round-2-pingora/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "b14623c3f0ef9e8d71caf46f3ce26f50e4e4541510a5cec56d8a4f2421417e9f"
+    },
+    {
+      "path": "records/round-2-pingora/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "82cc9c21fca249632c17a1cd69c214cc8a092b100dbe39a22235d95c1a24bc41"
+    },
+    {
+      "path": "records/round-2-pingora/0000-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 158552,
+      "sha256": "6ee380f4f485702c738e1f0ae160bff804f20ad6713cb6a0dfd7e249cf40b531"
+    },
+    {
+      "path": "records/round-2-pingora/0000-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 154122,
+      "sha256": "82ae86a88b16558e1bc1a2049b94095d28e10e0e3c762dd79224235678d10c3a"
+    },
+    {
+      "path": "records/round-2-pingora/0000-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "97780141f16d0e6f5ee34b95d03519fcde46f6ce4dbbdd4f8290eb0e086496c6"
+    },
+    {
+      "path": "records/round-2-pingora/0000-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "0b2254dc4499bf04fc4b0a5b22f92ce4ba95e586659243422456ebdddf006ea6"
+    },
+    {
+      "path": "records/round-2-pingora/0001-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "e6fb382a64536f0259fb6ab4f87a35b70b08893afd4e94ea74399b1ab90792ae"
+    },
+    {
+      "path": "records/round-3-edge/0001-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "e4bcdafb91251d697342994e89b20759529278f7f58683f471998bbb9065b211"
+    },
+    {
+      "path": "records/round-3-edge/0000-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 92436,
+      "sha256": "87edc37aed1c630a46bb3ab53c1560afc6b10208b41f243c3193810382c54dee"
+    },
+    {
+      "path": "records/round-3-edge/0001-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 82395,
+      "sha256": "5366ca8e259d5a8041b5906f9951561e958d477e037f5faece435587311d6dff"
+    },
+    {
+      "path": "records/round-3-edge/origin-reference.1.client.tsv.gz",
+      "bytes": 247039,
+      "sha256": "d4df7b66355e5e52b2be9e8f7658c47b65561055f7d79d0ef2c57a22bb7cb634"
+    },
+    {
+      "path": "records/round-3-edge/0000-h1-off-reuse.command.json",
+      "bytes": 921,
+      "sha256": "d2d0060289817cbee6e12ec7e95c54ae9ec5a012bf61106fad8deba0c89c6714"
+    },
+    {
+      "path": "records/round-3-edge/origin-reference.command.json",
+      "bytes": 921,
+      "sha256": "e6425e9ab08eac2a917c20206a7f98db527287d357a3beb8341e86eeea909fad"
+    },
+    {
+      "path": "records/round-3-edge/manifest.json",
+      "bytes": 51287,
+      "sha256": "7349a2fe165b68d4ad6f96d989d4a596d8ca94b4b0dad73c1ada8a3ef32f660f"
+    },
+    {
+      "path": "records/round-3-edge/0000-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "2521ac3a4cd2f7b06cd5ff8f01bf305676ccd1d1105a6db61c1dc5d0da4b00ac"
+    },
+    {
+      "path": "records/round-3-edge/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-3-edge/0002-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 92555,
+      "sha256": "9de83da342621a610c88718c6b483ad4734827062590dc2b83b8d6d8561c9495"
+    },
+    {
+      "path": "records/round-3-edge/0000-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "9e5149024be22b0086baff677f426ee9d4d4ac76925c8ba10e65493d1ab2977c"
+    },
+    {
+      "path": "records/round-3-edge/0002-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "235244b405fc32782e2f7b76c053dda182669be3866b3264d62ef1965b7a7b0b"
+    },
+    {
+      "path": "records/round-3-edge/0002-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "ca21b361da8ed9e7d90c5015ce347d8c523ea231f33d15bdedf5672e4d5565ad"
+    },
+    {
+      "path": "records/round-3-edge/0000-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 93170,
+      "sha256": "294b5df0ef4c8edacef1ca15cd7e6ab686ccdb3e2aca93efa220a9042a19bcb3"
+    },
+    {
+      "path": "records/round-3-edge/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "29e141149719850564d975f2c0becf750ea58e0fad181e315d771559f6d03867"
+    },
+    {
+      "path": "records/round-3-edge/origin-reference.0.client.tsv.gz",
+      "bytes": 251160,
+      "sha256": "a9f3e69a9c3af34feab57e9243b99d6b5f623a2ce025bc858ac0911ca65c627c"
+    },
+    {
+      "path": "records/round-3-edge/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-3-edge/proxy.conf",
+      "bytes": 1109,
+      "sha256": "9dbaceeabf738fe6d68918116682bada6bd36f2e930ebcb0f237bd883770ebe2"
+    },
+    {
+      "path": "records/round-3-edge/origin-connections.json",
+      "bytes": 781,
+      "sha256": "d7d9f6180aa69806372f666356dc92a3aa726953da447dcd2793f6837191ea6a"
+    },
+    {
+      "path": "records/round-3-edge/0001-h1-tls-off-reuse.command.json",
+      "bytes": 931,
+      "sha256": "48f6e688460bcae20e5fba5ed6cab52939ffdea1173bf072875c61d30582a577"
+    },
+    {
+      "path": "records/round-3-edge/0002-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 90483,
+      "sha256": "7a070a46cf582e7f65b6fdb13517fb1953293db0cd236b24fc7c33979be9e02a"
+    },
+    {
+      "path": "records/round-3-edge/0001-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 81792,
+      "sha256": "2698d82719316bbaa7593d9ebdc8ace32415f57cb25a8b83dfb92246ecbdc3de"
+    },
+    {
+      "path": "records/round-3-edge/0001-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "b2422a7c09afb2781e131c2b03abaa0b607b7f07d0386993f873c4ddaf00c5ec"
+    },
+    {
+      "path": "records/round-3-edge/0002-h2-off-reuse.command.json",
+      "bytes": 923,
+      "sha256": "1e3a3cf363c0f4c3e6d1e53789c46a98ab5e42c0402ee349e573e711389eb9d6"
+    },
+    {
+      "path": "records/round-3-edge/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "68a20e1f120bfd6a8bc4f24d5f72277e5392840e1e778f71fac679bb8de22a31"
+    },
+    {
+      "path": "records/round-3-edge/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "4b41fcdde02b3397b8e784348035eabf8928aeb415f9612e07dee41927b5bbeb"
+    },
+    {
+      "path": "records/round-3-openresty/0001-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "d8a03a68b25e61bdcc2967ccf88244cfd49b9dc9bbfdbefbd40fcc2b4b271cf2"
+    },
+    {
+      "path": "records/round-3-openresty/0000-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 236197,
+      "sha256": "b358672f5e3f5f0b8e32896a8bbddb0449720969b0cf67c7ce21602291c75993"
+    },
+    {
+      "path": "records/round-3-openresty/0001-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 191487,
+      "sha256": "e30294a0febdd8dd8ac5f3c8f1b76a5a0e2ae30ada696cebf63805779c7bacdb"
+    },
+    {
+      "path": "records/round-3-openresty/origin-reference.1.client.tsv.gz",
+      "bytes": 245522,
+      "sha256": "f4528f7f2f98487a9fc41556482210b31d92e729e73244c6add163bedb591366"
+    },
+    {
+      "path": "records/round-3-openresty/0000-h1-off-reuse.command.json",
+      "bytes": 931,
+      "sha256": "538d655a5a3b7e0a06ad560329fac634afa5dac4f164ca86828dc570281d67eb"
+    },
+    {
+      "path": "records/round-3-openresty/origin-reference.command.json",
+      "bytes": 931,
+      "sha256": "aac7c388ee7f9afff07f56df0fb880cc7baab14417aa4436069d168f289c6ec9"
+    },
+    {
+      "path": "records/round-3-openresty/manifest.json",
+      "bytes": 41781,
+      "sha256": "710cfcf9eb34325ddd9b150f9a2b3e2ec13ca31c61e1293a54406ba6aefe7859"
+    },
+    {
+      "path": "records/round-3-openresty/0000-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "32f76ae81c2158f6e39c6d8d8d014c9823b0db9dec36fe63b467c1c97ab1859e"
+    },
+    {
+      "path": "records/round-3-openresty/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-3-openresty/0002-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 172591,
+      "sha256": "f3f48deaf5b3ddc42b0d7200b6ab5c5cb38a4b54bd01f9e34405758a89facef7"
+    },
+    {
+      "path": "records/round-3-openresty/0000-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "39c7882c8f5433305e3a05984faaef66d7c8ce7b7058a4f34b2c3416a86b10d1"
+    },
+    {
+      "path": "records/round-3-openresty/0002-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "6e218ee85d75677445246aa68e85c9d4ecad44663434c5cd69a1fb8a1d3061fe"
+    },
+    {
+      "path": "records/round-3-openresty/0002-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "539e6bb7305ca56dfcc0b89db833c0aa2b107c03af1dab31a6e50069bb8a8df5"
+    },
+    {
+      "path": "records/round-3-openresty/0000-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 235495,
+      "sha256": "33d770f4ffb2b272334dbc349429354db7f96f5b2fe7a1b2a65e7403b395e5bf"
+    },
+    {
+      "path": "records/round-3-openresty/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "926b8e4aa66fd254ef862eb0fb468349b3fb90b10669471193edfef881ebf631"
+    },
+    {
+      "path": "records/round-3-openresty/origin-reference.0.client.tsv.gz",
+      "bytes": 249791,
+      "sha256": "357d19072d4e89bdb43ed133073a7c9e0422470ae2ce6dd337d82003b9433bd7"
+    },
+    {
+      "path": "records/round-3-openresty/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-3-openresty/proxy.conf",
+      "bytes": 1109,
+      "sha256": "9dbaceeabf738fe6d68918116682bada6bd36f2e930ebcb0f237bd883770ebe2"
+    },
+    {
+      "path": "records/round-3-openresty/origin-connections.json",
+      "bytes": 786,
+      "sha256": "eb59f1a9d6924dc0ac36f0109cb4fa79cc8e43d710376d7f2a8d7c3bd9154856"
+    },
+    {
+      "path": "records/round-3-openresty/0001-h1-tls-off-reuse.command.json",
+      "bytes": 941,
+      "sha256": "65d3b98b0cb37490837dbf1cc3581d30b9761b1e628e3a22911a68db7ca76e5b"
+    },
+    {
+      "path": "records/round-3-openresty/0002-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 169280,
+      "sha256": "79d8667ff10bebedf0f967e7e9c06f2c445601f9eb7891845a1c3765eebb2970"
+    },
+    {
+      "path": "records/round-3-openresty/0001-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 190067,
+      "sha256": "e5cef0bffd0e89a37125deaf68716604684d86fe35eb0667cc019ed116a0f9f9"
+    },
+    {
+      "path": "records/round-3-openresty/0001-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "b8abb88dc87e52e8f52a60df81575b990bd043b1917f4b935bf6c3b6dddb24bf"
+    },
+    {
+      "path": "records/round-3-openresty/0002-h2-off-reuse.command.json",
+      "bytes": 933,
+      "sha256": "2285a122a7e58c069ccf9fb8d989a91744b8d01241992250263c1013fcd2650f"
+    },
+    {
+      "path": "records/round-3-openresty/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "6747be6a46d1c05b5788635493aa1bf902facd03698258fb1a1326b2ac8df7c2"
+    },
+    {
+      "path": "records/round-3-openresty/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "275c4a7eadc75df7c025837cf02e91a09340d77b18f6cc8259cf697b923f8fb5"
+    },
+    {
+      "path": "records/round-1-openresty/0001-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "36ea5ed39e30d60622fafca6ae718e5c0d693df099fa7e647095d6aeb5cee571"
+    },
+    {
+      "path": "records/round-1-openresty/origin-reference.1.client.tsv.gz",
+      "bytes": 248449,
+      "sha256": "430aa35568b0728734047f05d9108a621f4c5a307a0fd043ad0c4f7f657e68c4"
+    },
+    {
+      "path": "records/round-1-openresty/origin-reference.command.json",
+      "bytes": 931,
+      "sha256": "a2869a745ad3ad730dbf85d92f1a8c1c9f11f9b63d4c150a17181d09c4894f3a"
+    },
+    {
+      "path": "records/round-1-openresty/0001-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 168205,
+      "sha256": "5667121af0adc61fc6c24634e1cdd8e2d1f8445610f6a8aea09e02b1e77892e7"
+    },
+    {
+      "path": "records/round-1-openresty/manifest.json",
+      "bytes": 41737,
+      "sha256": "737644b54d00aca3e283adc01cbdac6d77d99f566898635abda6e277530744ee"
+    },
+    {
+      "path": "records/round-1-openresty/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-1-openresty/0000-h1-tls-off-reuse.command.json",
+      "bytes": 941,
+      "sha256": "142119b0e59fbd486521125cafe35a270017e3de61a30674e7661c14b33fe0ee"
+    },
+    {
+      "path": "records/round-1-openresty/0002-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "d2f4d0a665397eb5254cb8f9be41f752a8a01d7412d468154f687883f99684d7"
+    },
+    {
+      "path": "records/round-1-openresty/0001-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "77527c2438f094e9fd4540ca5ca747cd04c71b022d9afddabcf09e6a668513cf"
+    },
+    {
+      "path": "records/round-1-openresty/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "3bfdf76142fce46fb78f5d0ccaf11c711a83192a8662a9ee844fb9cfce59a7d8"
+    },
+    {
+      "path": "records/round-1-openresty/0002-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 233748,
+      "sha256": "bd54c351194417bc3d8d598e0b03eda53342d5c5a3c3e4c6d10d65650bc09dd8"
+    },
+    {
+      "path": "records/round-1-openresty/origin-reference.0.client.tsv.gz",
+      "bytes": 250377,
+      "sha256": "c182861a5616b04d778e93b0dc77fe960bc6e37f7ee6fd2e0169f5479c2d2349"
+    },
+    {
+      "path": "records/round-1-openresty/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-1-openresty/proxy.conf",
+      "bytes": 1109,
+      "sha256": "9dbaceeabf738fe6d68918116682bada6bd36f2e930ebcb0f237bd883770ebe2"
+    },
+    {
+      "path": "records/round-1-openresty/origin-connections.json",
+      "bytes": 784,
+      "sha256": "7cffce09d06f8b5249c86d2ebf5caf7f20e956278bed2210571f503353043e9b"
+    },
+    {
+      "path": "records/round-1-openresty/0002-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 236222,
+      "sha256": "aa896198a8638eb07bd5feb16df15e4c0071001cd88f06fd0d55bfccf1142614"
+    },
+    {
+      "path": "records/round-1-openresty/0001-h2-off-reuse.command.json",
+      "bytes": 933,
+      "sha256": "66e25db455f6c425136e7cc6905c7445773acd9c8f5b584ef4479e988a329d72"
+    },
+    {
+      "path": "records/round-1-openresty/0002-h1-off-reuse.command.json",
+      "bytes": 931,
+      "sha256": "7b8b19da356678982aaed35f6f0ab6181c570d753cfd783161305a9fb6a83366"
+    },
+    {
+      "path": "records/round-1-openresty/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "97c96c580e0414559f04ef316d6eecc8ca8f8272bcc8f5e0e11bd221548bbccd"
+    },
+    {
+      "path": "records/round-1-openresty/0002-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "d75dcb1ae82d39b9197cfe917c1f250857e387bf2309c6513d2660538de2217f"
+    },
+    {
+      "path": "records/round-1-openresty/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "005842f6c7b87ada2e25559ba1cea6308bf952a8985e7e444ef2a0df91b9ff93"
+    },
+    {
+      "path": "records/round-1-openresty/0000-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 191618,
+      "sha256": "6f5c98ebdb5d9b61fa4fe583ce032c14cd9c03d7533dbdd990bac32d0eaf72a5"
+    },
+    {
+      "path": "records/round-1-openresty/0000-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 189025,
+      "sha256": "d8b105103b6912676bc2c1ef4e33fc73f93146e2caaee31be019fae9bbc298a6"
+    },
+    {
+      "path": "records/round-1-openresty/0000-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "12b1799badc8baaa1b0de7bb1c1ebc3c8a2e06f1811767e6fb31d82cf88d114a"
+    },
+    {
+      "path": "records/round-1-openresty/0000-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "252f3d1757cd462919ccf78add326d25986feaf4d5dbb4676442b3ed6658a5a8"
+    },
+    {
+      "path": "records/round-1-openresty/0001-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 171406,
+      "sha256": "564e4e46b2f4cf7acaede15b07736f2da731ca8eac3f0231a9c49df0bd4b171e"
+    },
+    {
+      "path": "records/round-1-pingora/0001-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "f663b0e23fe9d40b6f6d2083830754c88598bab77b7757dd29d8c9856ee6c486"
+    },
+    {
+      "path": "records/round-1-pingora/origin-reference.1.client.tsv.gz",
+      "bytes": 247400,
+      "sha256": "fe2c7face8679328b4e5ce555597a7a6f35e29c97409763b180481c919f32e45"
+    },
+    {
+      "path": "records/round-1-pingora/origin-reference.command.json",
+      "bytes": 927,
+      "sha256": "6bfd09ab0f5354332dd4393b7cbe01a88993a086eb8a2ada9959a8a6961553e0"
+    },
+    {
+      "path": "records/round-1-pingora/0001-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 144112,
+      "sha256": "a210e7d1d78bf9af2eb392c347bc1fa08ceffdacb6095402d36e0786b971dd65"
+    },
+    {
+      "path": "records/round-1-pingora/manifest.json",
+      "bytes": 33682,
+      "sha256": "80f3cdf3c9c9822be8d87d070f46ff3067bd2d280ba48cbd8087e71a41bbfb67"
+    },
+    {
+      "path": "records/round-1-pingora/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-1-pingora/0000-h1-tls-off-reuse.command.json",
+      "bytes": 937,
+      "sha256": "b36d8f3e0b95fb9d400c8dc7290b83d101260413dd13028b747ce0ed26ff0740"
+    },
+    {
+      "path": "records/round-1-pingora/0002-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "1888e9e4f54394d9fb587115d88597ebc3207e81b0c8301c70c8dcb089da3c3d"
+    },
+    {
+      "path": "records/round-1-pingora/0001-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "7cc4d032535434e89fd5ec05cd0dcd44720fe37f82f6127c91ae260d9e70cf90"
+    },
+    {
+      "path": "records/round-1-pingora/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "d14257e1e60aae5b56a3c60dda1293be711873cdec5611af9032ee3acdf9ce6b"
+    },
+    {
+      "path": "records/round-1-pingora/0002-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 182996,
+      "sha256": "0ac9769984bebf023ba421414b1684377c2faf9639bca41fcacd15ba7d11bcd4"
+    },
+    {
+      "path": "records/round-1-pingora/origin-reference.0.client.tsv.gz",
+      "bytes": 249852,
+      "sha256": "905f0be9600563b32d167ed5523c5e7b26a69c54610f263ffa397128be46cff8"
+    },
+    {
+      "path": "records/round-1-pingora/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-1-pingora/proxy.conf",
+      "bytes": 1081,
+      "sha256": "a7b343fb5ef6438f7cf7920a70ca10779475734799aafd73b587ab3900850fec"
+    },
+    {
+      "path": "records/round-1-pingora/origin-connections.json",
+      "bytes": 778,
+      "sha256": "4fd17e7e78b601088f3a34530b3a98a6b1e4b41168d1b2c91935e1cf44e40fad"
+    },
+    {
+      "path": "records/round-1-pingora/0002-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 179588,
+      "sha256": "a138cd89882b9b769d0de080bb0a0f70a70ac7e7d7e5e1014e54a1922032cb77"
+    },
+    {
+      "path": "records/round-1-pingora/0001-h2-off-reuse.command.json",
+      "bytes": 929,
+      "sha256": "7450a1f009b35b3ac6675b6c0aa6132e1a64a742b50d684cfa5a89294c108b76"
+    },
+    {
+      "path": "records/round-1-pingora/0002-h1-off-reuse.command.json",
+      "bytes": 927,
+      "sha256": "a3d229c4a7e353ffe791fa8e4512c4a05e40a39ec953d79bdce76d53f80f9e4d"
+    },
+    {
+      "path": "records/round-1-pingora/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "88fe6ff67a4fd4aedc4d77a8c82719d430f514c074e400638456ec142c210d4e"
+    },
+    {
+      "path": "records/round-1-pingora/0002-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "94491aa8dd95b8913206e1f47fd2da86c16ba578d2cac36d8bab7e56f735f46f"
+    },
+    {
+      "path": "records/round-1-pingora/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "c31761c88c6c330644f488b1a6f03a5d015bee29ff71a14679079ff960646ae3"
+    },
+    {
+      "path": "records/round-1-pingora/0000-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 158895,
+      "sha256": "479010c34f3c424d725f08a83379b924bc572e0e4145720093c0feae3aa413ed"
+    },
+    {
+      "path": "records/round-1-pingora/0000-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 154443,
+      "sha256": "315a62436b5cca2c195375052a608940631985fc85784c4b585548d040129a8f"
+    },
+    {
+      "path": "records/round-1-pingora/0000-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "cd884cf8235ca382a25538288d5c3529b0b57651ca38d357b4cb4e8a49240dee"
+    },
+    {
+      "path": "records/round-1-pingora/0000-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "332cf18da22e583c196e1886be4ce6d207c5334ee739dc13077d4d271c4e54e0"
+    },
+    {
+      "path": "records/round-1-pingora/0001-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 148064,
+      "sha256": "3d4d1892e5bb48ff4b855afe3b923b16dc33c105c50918153a85b30470f77d69"
+    },
+    {
+      "path": "records/round-0-nginx/origin-reference.1.client.tsv.gz",
+      "bytes": 248176,
+      "sha256": "f2cee1f2e4eda6f1cb539c75afc8a4469cd9be36b3517f57385d04af6fa0cfab"
+    },
+    {
+      "path": "records/round-0-nginx/0001-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 237477,
+      "sha256": "d2c6b15023e4ae792593115746925b039a500ea222dd199331734e75cdf0016f"
+    },
+    {
+      "path": "records/round-0-nginx/origin-reference.command.json",
+      "bytes": 923,
+      "sha256": "df18b572dcdb6f92b233ffa495b8c6b64d0e58eedcbcf9ae348af53439738cb3"
+    },
+    {
+      "path": "records/round-0-nginx/0001-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 234382,
+      "sha256": "0ecd6e7b583650b027aaa7ab4a5facc2b41da6798fc5c55d988e97fbcf752678"
+    },
+    {
+      "path": "records/round-0-nginx/manifest.json",
+      "bytes": 41097,
+      "sha256": "359c51605cd1b9a0f00b43017e11dd9445ea6316416f0e9d33a7030a8f11f1d9"
+    },
+    {
+      "path": "records/round-0-nginx/0001-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "1a7b9a5da72a7d9511ed87809c899d5dfdfa3f948f22f59920c5a6a57699bb5b"
+    },
+    {
+      "path": "records/round-0-nginx/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-0-nginx/0002-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 167366,
+      "sha256": "f9469f0e910d30d95e9799d85911459f043a2532f57775ed14a5573af036fce0"
+    },
+    {
+      "path": "records/round-0-nginx/0000-h1-tls-off-reuse.command.json",
+      "bytes": 933,
+      "sha256": "8a1c73ffd345e3248e8f204cae880852cad2a1d010d89c9535b4ce2ccf30b1ed"
+    },
+    {
+      "path": "records/round-0-nginx/0002-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "e7e037e4908d28daa4f2accca360067d4bf5df9d4792d372170d74a22bff928b"
+    },
+    {
+      "path": "records/round-0-nginx/0001-h1-off-reuse.command.json",
+      "bytes": 923,
+      "sha256": "1c582751cb99508437ecbe00260e74239b8103e1216437c3a3fb3071bc2d1304"
+    },
+    {
+      "path": "records/round-0-nginx/0002-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "3c21b715872f094ed2ef99a5a95dcfddb408642c6ef77cd81cc3362b3894a63e"
+    },
+    {
+      "path": "records/round-0-nginx/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "6fd60cce8078e95b0b46afca78def6e52280675f1c447d20f7e15cd1eaefbb74"
+    },
+    {
+      "path": "records/round-0-nginx/origin-reference.0.client.tsv.gz",
+      "bytes": 252331,
+      "sha256": "6b789240bdee149aa6544d1747733ec8c8ffe823ccf8ded9d5caad39a5948254"
+    },
+    {
+      "path": "records/round-0-nginx/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-0-nginx/proxy.conf",
+      "bytes": 1109,
+      "sha256": "9dbaceeabf738fe6d68918116682bada6bd36f2e930ebcb0f237bd883770ebe2"
+    },
+    {
+      "path": "records/round-0-nginx/origin-connections.json",
+      "bytes": 786,
+      "sha256": "581c3dfc72fb57540bff573a9dbe515ca725148472755093d2491b7e249d77c0"
+    },
+    {
+      "path": "records/round-0-nginx/0002-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 164314,
+      "sha256": "961213f8b0cacf923a2077d93235fbf2aad15945211eabab8b35732cddb165d2"
+    },
+    {
+      "path": "records/round-0-nginx/0002-h2-off-reuse.command.json",
+      "bytes": 925,
+      "sha256": "e91a758184b06cf21da8fe51058563fcc60058410e317c5c29703c6a42747f84"
+    },
+    {
+      "path": "records/round-0-nginx/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "2f66de9d5cce0af4a7e5a200e9c6658a9f98f52c861fe145e760076a2c085927"
+    },
+    {
+      "path": "records/round-0-nginx/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "793b29fa97dbb43492445b890b191cfc0ae8315267f8bddb12afd5066bc132a1"
+    },
+    {
+      "path": "records/round-0-nginx/0000-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 183952,
+      "sha256": "6574c5bc0077d134e27b7766e7c74fb1f5c1e06506cbce5ab9a9947b90def7b3"
+    },
+    {
+      "path": "records/round-0-nginx/0000-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 180323,
+      "sha256": "fd4e6ab58ebfcdd77761ae6cf4aacaa5fa2e60b54bb00a9d1ad41cc9eda8d0ba"
+    },
+    {
+      "path": "records/round-0-nginx/0000-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "13ceb9bc8eb7f9b69c30266eaafa08b837f386ea449971dfe0f56b9775d4d4b4"
+    },
+    {
+      "path": "records/round-0-nginx/0000-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "fc0fa2b6643fdf1cdf8b4ff1256d0226942c46347b626741fce5b6f60d504f09"
+    },
+    {
+      "path": "records/round-0-nginx/0001-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "4e649efd575b7a312ec1f35bad71eb207812ec4370442c8f17908c15928e7036"
+    },
+    {
+      "path": "records/round-0-pingora/origin-reference.1.client.tsv.gz",
+      "bytes": 245504,
+      "sha256": "4d92a80ea3bdd883d5a837ea45568d8e3c38ab8d75895132a9472d93f795ba8f"
+    },
+    {
+      "path": "records/round-0-pingora/0001-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 180207,
+      "sha256": "f6c74a5c4f66943bdaf4c72e03f05f854550ded8ca0413a716a1bca1596e331f"
+    },
+    {
+      "path": "records/round-0-pingora/origin-reference.command.json",
+      "bytes": 927,
+      "sha256": "27e52cb4d92e1eb7af89f6745a4a8a7a33bdaaeab252ef4833b60b741a5f1a69"
+    },
+    {
+      "path": "records/round-0-pingora/0001-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 182898,
+      "sha256": "f9706ebe4220b221e244e7abfc8deca8261c56cd5a32798d91d7ea877dc65c07"
+    },
+    {
+      "path": "records/round-0-pingora/manifest.json",
+      "bytes": 33679,
+      "sha256": "5966b765475f92c2498a41d6389af6a8faa65b6ed19be32eebc341c68b8c6e56"
+    },
+    {
+      "path": "records/round-0-pingora/0001-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "5495c5bbd2c8d09b156a0c58a2b99b81e444b125ac2d77654fd4d67fb49c1c76"
+    },
+    {
+      "path": "records/round-0-pingora/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-0-pingora/0002-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 148665,
+      "sha256": "6b84f6d24cc8460ee512299f8659bafc3fa9f340c8ed2946c094f0776bd9bd60"
+    },
+    {
+      "path": "records/round-0-pingora/0000-h1-tls-off-reuse.command.json",
+      "bytes": 937,
+      "sha256": "ef16b7f76d1859361e3604c9e00c06c9aee54678f6bfd4336ab452a6b3c83b5b"
+    },
+    {
+      "path": "records/round-0-pingora/0002-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "4aa43032d1b4ce6070b7235e16cb800d377b8a8002c210515994fb7483b19854"
+    },
+    {
+      "path": "records/round-0-pingora/0001-h1-off-reuse.command.json",
+      "bytes": 927,
+      "sha256": "b80bad590270782e916e501c1ef1cf376764d742b512ed60117248c7bdb18069"
+    },
+    {
+      "path": "records/round-0-pingora/0002-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "1dafa06f3896cfb8f6a332b6879d8d01c3cc6f5621cff8e7618d68af86bc6c72"
+    },
+    {
+      "path": "records/round-0-pingora/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "0f85f7de7413453e887f607f6a414d007eecfb1e8aab2276586744bc81ae30dc"
+    },
+    {
+      "path": "records/round-0-pingora/origin-reference.0.client.tsv.gz",
+      "bytes": 248699,
+      "sha256": "2b95c86a2d10c11dd1dc696935481a4615d6899e7b8d09e1089f6d066307dbd5"
+    },
+    {
+      "path": "records/round-0-pingora/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-0-pingora/proxy.conf",
+      "bytes": 1081,
+      "sha256": "a7b343fb5ef6438f7cf7920a70ca10779475734799aafd73b587ab3900850fec"
+    },
+    {
+      "path": "records/round-0-pingora/origin-connections.json",
+      "bytes": 781,
+      "sha256": "a6cdfbcc40e2d3485eabefebba718c902c97b2386ad59e6d0a05d12d0afd22fc"
+    },
+    {
+      "path": "records/round-0-pingora/0002-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 143487,
+      "sha256": "80d609d60d955bfb9fb6309bfbbc8008298f9da243b82f3b9e7ffcd9e804b696"
+    },
+    {
+      "path": "records/round-0-pingora/0002-h2-off-reuse.command.json",
+      "bytes": 929,
+      "sha256": "e244d547f24f28c68bfefb4af1cf55ee62a988143456f1d1d4c84fb58f524002"
+    },
+    {
+      "path": "records/round-0-pingora/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "81aa0767f15bbfb08c14172f686fa163b092db1a3027340a8e5a10748b497dd4"
+    },
+    {
+      "path": "records/round-0-pingora/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "d029fc622209f4977ae1cd8ae69a851bfe1255607e6345a40d6316facc71bf8d"
+    },
+    {
+      "path": "records/round-0-pingora/0000-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 156654,
+      "sha256": "8f2b0c2c38ad25c497767c8d974b288fa0d2a74368711223f8e4332d4152da9f"
+    },
+    {
+      "path": "records/round-0-pingora/0000-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 152095,
+      "sha256": "96ec9f2b00b5d145bab177a33534169e1b2bcf30babc09fd2c49c711d4f41a38"
+    },
+    {
+      "path": "records/round-0-pingora/0000-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "02d0d5054a4f6205ba498f67b5dfdef86cc17cca963a888347f3ae8922926f37"
+    },
+    {
+      "path": "records/round-0-pingora/0000-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "4f6aa811e5181960814dbdaadd5d5099b097f0c10705c3afa8e328342cbffd4d"
+    },
+    {
+      "path": "records/round-0-pingora/0001-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "c5934867d87387ace2a12d01f4fc8ea1b7d88a2b5e1d8779969a01f4ed17f7ec"
+    },
+    {
+      "path": "records/round-2-nginx/origin-reference.1.client.tsv.gz",
+      "bytes": 247165,
+      "sha256": "77b963d1803436da5a3eaf5fd34d255261c84f046d000a3cfd39f2ea4ccdbed3"
+    },
+    {
+      "path": "records/round-2-nginx/0001-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 234250,
+      "sha256": "64a768560f96b10357668188736de599ccba270a13bc881c04dfcce691749754"
+    },
+    {
+      "path": "records/round-2-nginx/origin-reference.command.json",
+      "bytes": 923,
+      "sha256": "5882279dd744bfdc5e23d3466354c90c759674e0a5e77f5f0d6a7cc5b6110097"
+    },
+    {
+      "path": "records/round-2-nginx/0001-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 234718,
+      "sha256": "5d674bf25d5deb67d8aa641dd3ed031d052c9db39da1f432308d61c69eb97c68"
+    },
+    {
+      "path": "records/round-2-nginx/manifest.json",
+      "bytes": 41147,
+      "sha256": "e69b3680532bc5b12811542165e8b9c391bde2ad7851c0c9eb126d5f23bb9800"
+    },
+    {
+      "path": "records/round-2-nginx/0001-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "bf030064f9e2414a36f7399263a846a8879e8143a56444a9801f9e5ec54d7e25"
+    },
+    {
+      "path": "records/round-2-nginx/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-2-nginx/0002-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 167289,
+      "sha256": "fa4e03fc46fdf7fc6c9f459b8c7751b34430fadc62848976c72403fac962db50"
+    },
+    {
+      "path": "records/round-2-nginx/0000-h1-tls-off-reuse.command.json",
+      "bytes": 933,
+      "sha256": "fb80e233e0c3f8287502554316e0502956749887f20f5bdb333ea492dbab30c4"
+    },
+    {
+      "path": "records/round-2-nginx/0002-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "3eb6adea8925ace08bcb6426d04f4856e21654db5aabf3b753b6ddc1fa760505"
+    },
+    {
+      "path": "records/round-2-nginx/0001-h1-off-reuse.command.json",
+      "bytes": 923,
+      "sha256": "71c85470bf0312642d483816bed19523cbb1caaedca943f431f7cfbd229a6143"
+    },
+    {
+      "path": "records/round-2-nginx/0002-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "b5fe1b7db7fca3a0fe26e21537b1846bdf1ca82417982b41d19627602ec179d6"
+    },
+    {
+      "path": "records/round-2-nginx/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "77ca04ed5e43626db9e02d46fa94c6455804c7c73222a063a556b2c2d8a05b79"
+    },
+    {
+      "path": "records/round-2-nginx/origin-reference.0.client.tsv.gz",
+      "bytes": 251457,
+      "sha256": "2b347828977f8b357614266fa6dd7a429fc9b41b8e7185cb0decba84f3ec4afa"
+    },
+    {
+      "path": "records/round-2-nginx/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-2-nginx/proxy.conf",
+      "bytes": 1109,
+      "sha256": "9dbaceeabf738fe6d68918116682bada6bd36f2e930ebcb0f237bd883770ebe2"
+    },
+    {
+      "path": "records/round-2-nginx/origin-connections.json",
+      "bytes": 786,
+      "sha256": "abd3e057593a388d2bb1ddd00ab27c4138aa6a57572dfc4ebe53ad64e9547801"
+    },
+    {
+      "path": "records/round-2-nginx/0002-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 163497,
+      "sha256": "aa9f531a551fd52725c20e7d5cb35addbda290d91d26929f66a5249c05d4db46"
+    },
+    {
+      "path": "records/round-2-nginx/0002-h2-off-reuse.command.json",
+      "bytes": 925,
+      "sha256": "e9403ad1ab1af8e4fdddba474676f0b417f1f9c1c21ff95bb89d15751085ca55"
+    },
+    {
+      "path": "records/round-2-nginx/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "cdb449f515d0ab1f6d875bd0ffe8fea1ed27e412dc5901260518213722094ca5"
+    },
+    {
+      "path": "records/round-2-nginx/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "f1a19848bd2c240af2e957decea84716221d87c9b4f41472a8c6ef624b2e1c44"
+    },
+    {
+      "path": "records/round-2-nginx/0000-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 187841,
+      "sha256": "639f21e81c4705829d96befe9df86e94d58b5bf0f2286ba8b121bb8a130ee035"
+    },
+    {
+      "path": "records/round-2-nginx/0000-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 184002,
+      "sha256": "0da2935eefd0c8d787035542dd822748d84e3d83ee900c88b32c03d1371bf98e"
+    },
+    {
+      "path": "records/round-2-nginx/0000-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "387f91c8e7a9187b00a22f8044e3c54914dbb41985319aacf7e82c0be8aa918b"
+    },
+    {
+      "path": "records/round-2-nginx/0000-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "307948507099ad4a9597137855b716e5394981e6a3638fb48016af5bf29460c3"
+    },
+    {
+      "path": "records/round-2-nginx/0001-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "73bc367a55646d0b1e1f7c85aec2fb8c04d2b41eda0f07a42b63295900940053"
+    },
+    {
+      "path": "records/round-3-pingora/0001-h1-tls-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "629fdbc1b310d0109f00f2eb434897ffa46abcd7c2a647c6ba3c09053a51a018"
+    },
+    {
+      "path": "records/round-3-pingora/0000-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 178735,
+      "sha256": "f4216ec365c729d98c895bd922a8b7eedb4921a3d3f7ae0015cbb48adfa88f81"
+    },
+    {
+      "path": "records/round-3-pingora/0001-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 158011,
+      "sha256": "0661db72aea63a29d8a575eae39f15bb0e4a01eaf6e6b96cf23733b780ca04b0"
+    },
+    {
+      "path": "records/round-3-pingora/origin-reference.1.client.tsv.gz",
+      "bytes": 248769,
+      "sha256": "10da23ab8bbbe64e29c1d610afa75450e6479868b40ad66316de28c4a3a2359d"
+    },
+    {
+      "path": "records/round-3-pingora/0000-h1-off-reuse.command.json",
+      "bytes": 927,
+      "sha256": "a045e9b2f419f4e931128b0e08983c615b20a5d901c369fa5d25a46c2eee2d79"
+    },
+    {
+      "path": "records/round-3-pingora/origin-reference.command.json",
+      "bytes": 927,
+      "sha256": "100aea37be2f94453833b6efe3c57e4f88cc9662f6d1b5b7c89652b7b57c23e3"
+    },
+    {
+      "path": "records/round-3-pingora/manifest.json",
+      "bytes": 33716,
+      "sha256": "5bcded2a27fcc49975d5c1e95684bc875a024669e064201dd6383f568b6fe3b8"
+    },
+    {
+      "path": "records/round-3-pingora/0000-h1-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "684034fd2ede6eef6c4d61d46ab13f9e00a9dc7049f9d9ea96d1a6547c24a0a7"
+    },
+    {
+      "path": "records/round-3-pingora/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "records/round-3-pingora/0002-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 148488,
+      "sha256": "bd881256767be829531eb4a18cc55c9003c27a0411075b80e4498d9b1f2cfee0"
+    },
+    {
+      "path": "records/round-3-pingora/0000-h1-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "7cdbdcd66efca377ddd4e5fc3c2271dc6dd46cc26026795cc0bdf82c5bd83c7d"
+    },
+    {
+      "path": "records/round-3-pingora/0002-h2-off-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "5c0157ca8582ec24ae96e6e6e0d25ae2edd40ce4cda4d7e429a18e412f846fc2"
+    },
+    {
+      "path": "records/round-3-pingora/0002-h2-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "71596620c4f611eeca010585017846113ec607390fe3fb30a24e27a920da9817"
+    },
+    {
+      "path": "records/round-3-pingora/0000-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 182107,
+      "sha256": "a8f3892b343dd4ec3a3f09feea3409baeb32344995498f4db07e4d38b0c44f87"
+    },
+    {
+      "path": "records/round-3-pingora/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "df0b698131428f048fd9ea827122787c1ad3c975db6868cf4a320ed89ebdd1ee"
+    },
+    {
+      "path": "records/round-3-pingora/origin-reference.0.client.tsv.gz",
+      "bytes": 251644,
+      "sha256": "11ddb4ad74813a86e7475b4b9ae804554f548977c3d2dc0cf5ee867a4dc683d7"
+    },
+    {
+      "path": "records/round-3-pingora/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "records/round-3-pingora/proxy.conf",
+      "bytes": 1081,
+      "sha256": "a7b343fb5ef6438f7cf7920a70ca10779475734799aafd73b587ab3900850fec"
+    },
+    {
+      "path": "records/round-3-pingora/origin-connections.json",
+      "bytes": 781,
+      "sha256": "f9b75b77f5c222f1df7f92670abd487b3b070253ac8b0b4a53e649815b7aed0f"
+    },
+    {
+      "path": "records/round-3-pingora/0001-h1-tls-off-reuse.command.json",
+      "bytes": 937,
+      "sha256": "69bc4a891c2468a34cc8260debf960041c00e4d000eb8bc2cf217ee62d90baef"
+    },
+    {
+      "path": "records/round-3-pingora/0002-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 143577,
+      "sha256": "67bc9fb81bca796a18e1207649f15acdc0a245bcd408a64aaff5be031689c484"
+    },
+    {
+      "path": "records/round-3-pingora/0001-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 153995,
+      "sha256": "d944773c380f348b423d9e67c363a40fb2b1773983a1792d4b29e5a271b722fa"
+    },
+    {
+      "path": "records/round-3-pingora/0001-h1-tls-off-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "fc3af2e5d00f9370f3e703b72c8ccfe6e072854d563fa926ada60e5b015195dd"
+    },
+    {
+      "path": "records/round-3-pingora/0002-h2-off-reuse.command.json",
+      "bytes": 929,
+      "sha256": "209fde239b8e35094609618c9b6ef531aaf490bd396754791e5d101da0c9f45f"
+    },
+    {
+      "path": "records/round-3-pingora/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "5cd1ff2f30cf96a74c8c9029765889d70a88c2216d87d027d9c476243b21e39c"
+    },
+    {
+      "path": "records/round-3-pingora/tls-controls.json",
+      "bytes": 1489,
+      "sha256": "ecbe92f4356fd4036723f1b84a04581cd503b3a7fb946d9b7306e68a4e61d2c7"
+    }
+  ],
+  "excluded": [
+    "TLS private keys",
+    "runtime snapshots and node stores",
+    "duplicate immutable Edge inputs"
+  ]
+}

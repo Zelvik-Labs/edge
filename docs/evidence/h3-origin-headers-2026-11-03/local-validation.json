@@ -1,0 +1,8 @@
+{
+  "rustfmt": "passed",
+  "diff_check": "passed",
+  "local_rust_compilation": "not run: free disk below 6GiB start floor",
+  "initial_formatter_attempt": "PATH was missing after runtime recovery; absolute pinned-toolchain formatter passed; persistent environment restored",
+  "source_change": "repeated response values preserved; canonical HeaderName avoids lowercase String construction; test imports scoped inside test functions",
+  "throughput_claim": false
+}

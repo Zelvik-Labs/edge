@@ -323,6 +323,29 @@ pub struct AfXdpPollStats {
     pub parsed: usize,
     pub parse_errors: usize,
     pub refilled: usize,
+    /// Every included queue actually polled RX and observed it empty.
+    /// A skipped read or an empty runtime does not acknowledge readiness.
+    pub rx_observed_empty: bool,
+}
+
+/// RX ownership/readiness observations without an optional classification pass.
+/// The proxy bridge validates frames itself; unlike the public full-statistics
+/// API, this type makes no claim about parsed or rejected packet counts.
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct AfXdpRxObservation {
+    pub(super) packets: usize,
+    pub(super) refilled: usize,
+    pub(super) rx_observed_empty: bool,
+}
+
+impl From<AfXdpPollStats> for AfXdpRxObservation {
+    fn from(stats: AfXdpPollStats) -> Self {
+        Self {
+            packets: stats.packets,
+            refilled: stats.refilled,
+            rx_observed_empty: stats.rx_observed_empty,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -349,13 +372,17 @@ impl AfXdpRuntimeHandle {
     where
         F: FnMut(&str, u32, Vec<u8>),
     {
-        let mut stats = AfXdpPollStats::default();
+        let mut stats = AfXdpPollStats {
+            rx_observed_empty: !self.queues.is_empty(),
+            ..AfXdpPollStats::default()
+        };
         for queue in &mut self.queues {
             let queue_stats = queue.poll_raw_once(&mut on_packet)?;
             stats.packets += queue_stats.packets;
             stats.parsed += queue_stats.parsed;
             stats.parse_errors += queue_stats.parse_errors;
             stats.refilled += queue_stats.refilled;
+            stats.rx_observed_empty &= queue_stats.rx_observed_empty;
         }
         self.refresh_statuses(false);
         Ok(stats)
@@ -591,6 +618,43 @@ impl AfXdpQueueHandle {
     where
         F: FnMut(&str, u32, Vec<u8>),
     {
+        let mut parsed = 0;
+        let mut parse_errors = 0;
+        let rx = self.poll_rx_frames(&mut |interface, queue, frame| {
+            if super::af_xdp::parse_l4_packet(frame).is_some() {
+                parsed += 1;
+            } else {
+                parse_errors += 1;
+            }
+            on_packet(interface, queue, frame.to_vec());
+        })?;
+        Ok(AfXdpPollStats {
+            packets: rx.packets,
+            parsed,
+            parse_errors,
+            refilled: rx.refilled,
+            rx_observed_empty: rx.rx_observed_empty,
+        })
+    }
+
+    pub(super) fn poll_bridge_once<F>(
+        &mut self,
+        on_packet: &mut F,
+    ) -> anyhow::Result<AfXdpRxObservation>
+    where
+        F: FnMut(&str, u32, Vec<u8>),
+    {
+        // Frames must outlive UMEM ownership before steering or async work.
+        // Full checksum/protocol validation remains in the bridge parser.
+        self.poll_rx_frames(&mut |interface, queue, frame| {
+            on_packet(interface, queue, frame.to_vec());
+        })
+    }
+
+    fn poll_rx_frames<F>(&mut self, on_packet: &mut F) -> anyhow::Result<AfXdpRxObservation>
+    where
+        F: FnMut(&str, u32, &[u8]),
+    {
         // Drain TX completions unconditionally — reclaiming only inside the
         // send path leaves the last sent frames' completions parked in the
         // CQ once traffic stops, which keeps the xsk fd permanently readable
@@ -598,9 +662,9 @@ impl AfXdpQueueHandle {
         // afxdp worker pinned at ~20% CPU on an idle queue, POLLIN re-arming
         // every round).
         self.reclaim_tx_completions();
-        let mut stats = AfXdpPollStats {
+        let mut stats = AfXdpRxObservation {
             refilled: self.replenish_fill()?,
-            ..AfXdpPollStats::default()
+            ..AfXdpRxObservation::default()
         };
         let limit = self.rx_batch.len();
         if limit == 0 {
@@ -610,21 +674,17 @@ impl AfXdpQueueHandle {
         // kernel owns any descriptors returned by RX until this method returns them
         // to the fill ring or `free_frames`.
         let received = unsafe { self.rx.poll_and_consume(&mut self.rx_batch[..limit], 0)? };
+        stats.rx_observed_empty = received == 0;
         stats.packets += received;
         for desc in &self.rx_batch[..received] {
             // SAFETY: RX populated `desc` from this queue's UMEM, and we copy the
             // frame before returning ownership to the fill ring.
             let (_, data) = unsafe { self.umem.frame(desc) };
             let frame = data.contents();
-            if super::af_xdp::parse_l4_packet(frame).is_some() {
-                stats.parsed += 1;
-            } else {
-                stats.parse_errors += 1;
-            }
             if let Some(w) = self.pcap.as_mut() {
                 Self::pcap_write(w, frame);
             }
-            on_packet(&self.interface, self.queue, frame.to_vec());
+            on_packet(&self.interface, self.queue, frame);
         }
         stats.refilled += self.return_rx_frames(received)?;
         Ok(stats)

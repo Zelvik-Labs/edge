@@ -1,0 +1,8 @@
+{
+  "source": "c5ebb91a76afe4855993f4822b4ac0657e85f18b",
+  "rustflags": "-C target-cpu=x86-64-v2",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "example_sha256": "0930a1687378516afc9db1aca95898abb3743161ff1d51287a217549fdf1ec12",
+  "binary_sha256": "8902546aa03c533476cef87a982958cb9d7244f37903f31130b914a594a79db8",
+  "scope": "unpolled real callback frame layouts; not request CPU, allocation counts or throughput"
+}

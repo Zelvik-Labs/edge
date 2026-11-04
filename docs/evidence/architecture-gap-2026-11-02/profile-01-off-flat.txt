@@ -1,0 +1,143 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 3K of event 'cpu-clock:u'
+# Event count (approx.): 16592962750
+#
+# Overhead  Command          Shared Object     Symbol                                                                                                                                                                                                                                                                                                                                                                                               
+# ........  ...............  ................  .....................................................................................................................................................................................................................................................................................................................................................................................................
+#
+     5.00%  tokio-rt-worker  Zelvik-Edge       [.] _mi_page_malloc_zero
+     3.21%  tokio-rt-worker  Zelvik-Edge       [.] mi_free
+     1.70%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::request_filter::{closure#0}
+     1.51%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::proxy_1to1::{closure#0}::{closure#1}
+     1.45%  tokio-rt-worker  Zelvik-Edge       [.] mi_theap_malloc_aligned
+     1.42%  tokio-rt-worker  Zelvik-Edge       [.] http::header::name::parse_hdr
+     1.33%  tokio-rt-worker  Zelvik-Edge       [.] <core::hash::sip::Hasher<core::hash::sip::Sip13Rounds> as core::hash::Hasher>::write
+     1.30%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::response_filter::{closure#0}
+     1.30%  tokio-rt-worker  Zelvik-Edge       [.] bytes::bytes::shared_clone
+     1.30%  tokio-rt-worker  [vdso]            [.] __vdso_clock_gettime
+     1.06%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::proxy_to_upstream::{closure#0}
+     1.03%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_core::protocols::http::v1::client::HttpSession>::read_resp_header_parts::{closure#0}
+     1.03%  tokio-rt-worker  Zelvik-Edge       [.] _mi_page_free_collect
+     0.97%  tokio-rt-worker  Zelvik-Edge       [.] zelvik_edge::worker_reclaim::with_worker_reclaim::<<zelvik_edge::http_proxy_manager::HttpProxyManager>::run_http_listener_worker::{closure#0}::{closure#0}>::{closure#0}
+     0.97%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::upstream_peer::{closure#0}
+     0.94%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy> as pingora_core::apps::HttpServerApp>::process_new_http::{closure#0}
+     0.94%  tokio-rt-worker  Zelvik-Edge       [.] <http::header::name::StandardHeader>::from_bytes
+     0.91%  tokio-rt-worker  Zelvik-Edge       [.] http::header::map::hash_elem_using::<http::header::name::HdrName>
+     0.88%  tokio-rt-worker  Zelvik-Edge       [.] <tokio::runtime::io::registration::Registration>::poll_ready
+     0.85%  tokio-rt-worker  Zelvik-Edge       [.] <http::header::name::HdrName>::from_bytes::<<&str as http::header::map::as_header_name::Sealed>::find<http::header::value::HeaderValue>::{closure#0}, core::option::Option<(usize, usize)>>
+     0.82%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::proxy::EdgeProxy>::sync_response_headers
+     0.79%  tokio-rt-worker  Zelvik-Edge       [.] bytes::bytes::shared_drop
+     0.73%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_core::protocols::http::v1::server::HttpSession>::read_request::{closure#0}
+     0.73%  tokio-rt-worker  Zelvik-Edge       [.] httparse::parse_headers_iter_uninit
+     0.73%  tokio-rt-worker  Zelvik-Edge       [.] zelvik_edge::metrics::record::record_http_dimension_event
+     0.70%  tokio-rt-worker  Zelvik-Edge       [.] http::header::map::hash_elem_using::<http::header::name::HeaderName>
+     0.67%  tokio-rt-worker  Zelvik-Edge       [.] core::ptr::drop_glue::<zelvik_edge::proxy::ProxyCTX>
+     0.64%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_core::connectors::TransportConnector>::release_stream::{closure#0}
+     0.64%  tokio-rt-worker  Zelvik-Edge       [.] regex_automata::hybrid::search::find_fwd
+     0.64%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_core::protocols::l4::stream::Stream as tokio::io::async_read::AsyncRead>::poll_read
+     0.61%  tokio-rt-worker  Zelvik-Edge       [.] <tokio::sync::notify::NotifiedProject>::poll_notified
+     0.61%  tokio-rt-worker  Zelvik-Edge       [.] mi_malloc_aligned
+     0.58%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_core::protocols::http::v1::client::HttpSession>::write_request_header::{closure#0}
+     0.55%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::proxy::EdgeProxy>::run_request_context_phase::{closure#0}
+     0.55%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::request_cache_filter
+     0.55%  tokio-rt-worker  Zelvik-Edge       [.] _mi_theap_realloc_zero
+     0.51%  tokio-rt-worker  Zelvik-Edge       [.] <chrono::naive::date::NaiveDate>::from_num_days_from_ce_opt
+     0.48%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::upstream_request_filter::{closure#0}
+     0.48%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::logging::{closure#0}
+     0.48%  tokio-rt-worker  Zelvik-Edge       [.] mi_find_page
+     0.45%  tokio-rt-worker  Zelvik-Edge       [.] pingora_http::append_header_value::<http::header::value::HeaderValue, pingora_http::case_header_name::CaseHeaderName>
+     0.45%  tokio-rt-worker  Zelvik-Edge       [.] <tokio::sync::mpsc::bounded::Sender<pingora_core::protocols::http::HttpTask>>::send::{closure#0}
+     0.42%  tokio-rt-worker  Zelvik-Edge       [.] <http::header::name::HeaderName>::from_bytes
+     0.42%  tokio-rt-worker  Zelvik-Edge       [.] core::fmt::write
+     0.42%  tokio-rt-worker  Zelvik-Edge       [.] <tokio::io::util::read_buf::ReadBuf<alloc::boxed::Box<dyn pingora_core::protocols::IO>, bytes::bytes_mut::BytesMut> as core::future::future::Future>::poll
+     0.42%  tokio-rt-worker  Zelvik-Edge       [.] <tokio::sync::batch_semaphore::Acquire as core::future::future::Future>::poll
+     0.42%  tokio-rt-worker  libc.so.6         [.] clock_gettime
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::process_request::{closure#0}
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] <tokio::runtime::scheduler::multi_thread::worker::Context>::run_task
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] zelvik_edge::metrics::record::record_dimensions
+     0.39%  tokio-rt-worker  Zelvik-Edge       [.] mi_theap_umalloc
+     0.36%  tokio-rt-worker  Zelvik-Edge       [.] <dashmap::DashMap<alloc::string::String, alloc::string::String>>::hash_u64::<&str>
+     0.36%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_core::protocols::http::v1::body::BodyWriter>::write_body::<alloc::boxed::Box<dyn pingora_core::protocols::IO>>::{closure#0}
+     0.36%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::l4_connection_registry::L4ConnectionRegistry>::ticket_for
+     0.36%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_pool::lru::Lru<i32, pingora_pool::connection::ConnectionMeta>>::pop
+     0.36%  tokio-rt-worker  Zelvik-Edge       [.] <dashmap::DashMap<zelvik_edge::metrics::aggregator::AggregationKey, zelvik_edge::metrics::aggregator::AggregatedValue> as dashmap::t::Map<zelvik_edge::metrics::aggregator::AggregationKey, zelvik_edge::metrics::aggregator::AggregatedValue, std::hash::random::RandomState>>::_entry
+     0.36%  tokio-rt-worker  Zelvik-Edge       [.] <alloc::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle> as tokio::runtime::task::Schedule>::release
+     0.36%  tokio-rt-worker  libc.so.6         [.] 0x000000000017b80f
+     0.33%  collector        Zelvik-Edge       [.] std::sys::backtrace::__rust_begin_short_backtrace::<mace::cc::context::collect_thread::{closure#0}, ()>
+     0.33%  tokio-rt-worker  Zelvik-Edge       [.] tokio::runtime::task::raw::poll::<zelvik_edge::worker_reclaim::with_worker_reclaim<<zelvik_edge::http_proxy_manager::HttpProxyManager>::run_http_listener_worker::{closure#0}::{closure#0}>::{closure#0}, alloc::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle>>
+     0.33%  tokio-rt-worker  Zelvik-Edge       [.] <tokio::sync::watch::Receiver<zelvik_edge::l4_connection_registry::ConnectionCancelReason>>::changed::{closure#0}
+     0.33%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::upstream_response_filter::{closure#0}
+     0.33%  tokio-rt-worker  Zelvik-Edge       [.] <hashbrown::map::HashMap<alloc::string::String, alloc::string::String, std::hash::random::RandomState>>::insert
+     0.33%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::proxy::EdgeProxy>::current_request_url
+     0.33%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::proxy::ProxyCTX as core::default::Default>::default
+     0.30%  tokio-rt-worker  Zelvik-Edge       [.] zelvik_edge::proxy::insert_http_request_parse_mark_with_capacity::<&pingora_core::protocols::l4::socket::SocketAddr>
+     0.30%  tokio-rt-worker  Zelvik-Edge       [.] <dashmap::DashMap<(u8, i64, core::net::ip_addr::IpAddr), i64> as dashmap::t::Map<(u8, i64, core::net::ip_addr::IpAddr), i64, std::hash::random::RandomState>>::_get::<(u8, i64, core::net::ip_addr::IpAddr)>
+     0.30%  tokio-rt-worker  Zelvik-Edge       [.] <dashmap::DashMap<i64, alloc::sync::Arc<zelvik_edge::origin_state::OriginState>> as dashmap::t::Map<i64, alloc::sync::Arc<zelvik_edge::origin_state::OriginState>, std::hash::random::RandomState>>::_get::<i64>
+     0.30%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::handle_new_request::{closure#0}
+     0.30%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_proxy::Session>::write_response_tasks::{closure#0}
+     0.30%  tokio-rt-worker  Zelvik-Edge       [.] <tokio::sync::batch_semaphore::Semaphore>::add_permits_locked
+     0.30%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_core::connectors::TransportConnector>::release_stream
+     0.30%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::metrics::daily::DailyDomainTracker>::record
+     0.30%  tokio-rt-worker  Zelvik-Edge       [.] tokio::runtime::task::waker::clone_waker
+     0.30%  tokio-rt-worker  Zelvik-Edge       [.] tokio::runtime::task::waker::wake_by_val
+     0.30%  tokio-rt-worker  Zelvik-Edge       [.] <&str as core::str::pattern::Pattern>::is_contained_in
+     0.30%  tokio-rt-worker  Zelvik-Edge       [.] _mi_malloc_generic
+     0.30%  tokio-rt-worker  libc.so.6         [.] 0x000000000017221a
+     0.27%  checkpointer     Zelvik-Edge       [.] <std::sync::mpmc::list::Channel<mace::map::SharedState>>::recv::{closure#1}
+     0.27%  tokio-rt-worker  Zelvik-Edge       [.] <http::header::map::HeaderMap>::get2::<http::header::name::HeaderName>
+     0.27%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_core::connectors::TransportConnector>::reused_stream::<pingora_core::upstreams::peer::HttpPeer>::{closure#0}
+     0.27%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::send_body_to_pipe::{closure#0}
+     0.27%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::process_upstream_tasks::{closure#0}
+     0.27%  tokio-rt-worker  Zelvik-Edge       [.] <regex_automata::meta::regex::Regex>::search_half
+     0.27%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::proxy::EdgeProxy>::ensure_request_metrics_started
+     0.27%  tokio-rt-worker  Zelvik-Edge       [.] <tokio::sync::notify::NotifiedProject>::drop_notified
+     0.27%  tokio-rt-worker  Zelvik-Edge       [.] tokio::runtime::scheduler::multi_thread::worker::run
+     0.27%  tokio-rt-worker  Zelvik-Edge       [.] <alloc::string::String as core::fmt::Write>::write_str
+     0.27%  tokio-rt-worker  Zelvik-Edge       [.] _mi_theap_malloc_zero
+     0.27%  tokio-rt-worker  Zelvik-Edge       [.] mi_bin
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] <http::header::map::HeaderMap>::try_append2::<http::header::name::HeaderName>
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] <hashbrown::raw::RawTable<(alloc::string::String, alloc::string::String)>>::reserve_rehash::<hashbrown::map::make_hasher<alloc::string::String, alloc::string::String, std::hash::random::RandomState>::{closure#0}>
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] http::header::map::hash_elem_using::<http::header::name::HeaderName>
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] <dashmap::DashMap<u64, alloc::sync::Arc<pingora_pool::connection::PoolNode<pingora_pool::connection::PoolConnection<alloc::sync::Arc<tokio::sync::mutex::Mutex<alloc::boxed::Box<dyn pingora_core::protocols::IO>>>>>>> as dashmap::t::Map<u64, alloc::sync::Arc<pingora_pool::connection::PoolNode<pingora_pool::connection::PoolConnection<alloc::sync::Arc<tokio::sync::mutex::Mutex<alloc::boxed::Box<dyn pingora_core::protocols::IO>>>>>>, std::hash::random::RandomState>>::_get::<u64>
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::h1_response_filter::{closure#0}
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] <tokio::sync::mpsc::bounded::Receiver<pingora_core::protocols::http::HttpTask>>::recv::{closure#0}
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] zelvik_edge::http_proxy_manager::process_http1_stream::{closure#0}
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] <chrono::offset::utc::Utc>::now
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] <std::sys::pal::unix::time::Timespec>::sub_timespec
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] <http::header::map::HeaderMap>::try_grow
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::proxy::EdgeProxy>::request_full_url
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::config_models::URLPattern>::path_without_query_fragment
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::memory_governor::MemoryGovernor>::memory_snapshot
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::memory_governor::MemoryGovernor>::budgeted_from_cached
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] zelvik_edge::metrics::analyzer::analyze_request
+     0.24%  tokio-rt-worker  Zelvik-Edge       [.] pingora_core::protocols::http::v1::common::content_length_for_framing
+     0.24%  tokio-rt-worker  libc.so.6         [.] 0x000000000009a72e
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] pingora_http::header_to_h1_wire::<bytes::bytes_mut::BytesMut>
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] pingora_http::insert_header_value::<http::header::value::HeaderValue, &str>
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_http::RequestHeader>::remove_header::<str>
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] core::ptr::drop_glue::<tokio::sync::mpsc::bounded::Receiver<pingora_core::protocols::http::HttpTask>>
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::finish::{closure#0}
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_core::protocols::http::server::Session>::read_body_or_idle::{closure#0}
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_core::protocols::http::server::Session>::finish::{closure#0}
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] zelvik_edge::metrics::init_http_dimension_worker::{closure#0}
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] pingora_http::normalize_field_value
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] <core::net::parser::Parser>::read_ipv4_addr
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] <http::header::map::HeaderMap<pingora_http::case_header_name::CaseHeaderName>>::try_grow
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] <tokio::sync::mpsc::list::Rx<pingora_core::protocols::http::HttpTask>>::pop
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::proxy::EdgeProxy>::should_redirect_to_https
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] <pingora_core::protocols::http::v1::server::HttpSession>::init_body_reader
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] <core::fmt::Formatter>::pad
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] <tokio::net::tcp::stream::TcpStream as tokio::io::async_read::AsyncRead>::poll_read
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] <http::header::map::HeaderMap as core::clone::Clone>::clone
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] <zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::response_body_filter
+     0.21%  tokio-rt-worker  Zelvik-Edge       [.] _mi_bin_size
+     0.21%  tokio-rt-worker  libc.so.6         [.] 0x000000000017b9be
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

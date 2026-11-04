@@ -1,0 +1,43 @@
+{
+  "artifact_id": 13301319318,
+  "archive": "raw.zip",
+  "archive_bytes": 59911,
+  "archive_sha256": "4efe93249c3c9ec22ae7e87183b02aabdc636703b9f57c33414506166e4d4ec1",
+  "files": [
+    {
+      "path": "retained-manifest.json",
+      "bytes": 142,
+      "sha256": "0d401b25ef4986a2a559f96d6dd0f8fc9cccc4fe98318d4b0078af904db24de2"
+    },
+    {
+      "path": "source/Cargo.lock",
+      "bytes": 60126,
+      "sha256": "ef0a86df96946918cbf07ddf11a9c6465d1bab94a83730b908484f88e1552ce5"
+    },
+    {
+      "path": "build-metadata.json",
+      "bytes": 1328,
+      "sha256": "ed3a7e09f05ec90e39f1747b726d64ac4fd2738e04ff3afdb4f154c6e8da63a2"
+    },
+    {
+      "path": "clippy.log",
+      "bytes": 22778,
+      "sha256": "9dda481e2eda0d2fab1ca80c4f122b6d835982a680415554dc6cf20e6287c010"
+    },
+    {
+      "path": "source/Cargo.toml",
+      "bytes": 629,
+      "sha256": "749f76bfe177ac977fc51aaaa50e6de17d5ce35038fd13616fada1e86d19c300"
+    },
+    {
+      "path": "source/bare_pingora_proxy.rs",
+      "bytes": 3289,
+      "sha256": "48cebea4cefec8088cc39c77a76b6d2bc4e6320d33d70a2b9c89adb45b71ce97"
+    },
+    {
+      "path": "source/root-Cargo.lock",
+      "bytes": 157757,
+      "sha256": "e7e9e1ae18947ab0f94c146545d24be7d014a45d0749584675e8a4931a9962c6"
+    }
+  ]
+}

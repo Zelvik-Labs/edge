@@ -1,0 +1,11 @@
+{
+  "id": 13292272103,
+  "name": "afxdp-node-e640a76caee4d7dcc12e77d8b2fc0cefbd753a7e",
+  "size_in_bytes": 137121,
+  "digest": "sha256:4039a38fa244b7393a67671689a948df93482e87ab1c9f63b96478780ff5820e",
+  "workflow_run": {
+    "id": 41761049818,
+    "head_sha": "e640a76caee4d7dcc12e77d8b2fc0cefbd753a7e",
+    "head_branch": "perf/program-wide-20261104"
+  }
+}

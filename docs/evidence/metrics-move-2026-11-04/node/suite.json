@@ -1,0 +1,199 @@
+{
+  "source": "0fc9cbd612c0d1cdefd5389ad903c946f99fbe0c",
+  "build": {
+    "harness_source": "0fc9cbd612c0d1cdefd5389ad903c946f99fbe0c",
+    "baseline": "e36710ca5f231333ce3b388ea7dd4ad181c2fa69",
+    "runtime_changes": [
+      "src/metrics.rs"
+    ],
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1",
+    "rustflags": "-C target-cpu=x86-64-v2",
+    "variants": {
+      "before": {
+        "source": "e36710ca5f231333ce3b388ea7dd4ad181c2fa69",
+        "binaries": {
+          "Zelvik-Edge": {
+            "bytes": 45055248,
+            "sha256": "74419a1b75fb85c73e718f33707fb66fdb9b7dbfff08c163217c8cf72a5326c4"
+          },
+          "issue34-controller": {
+            "bytes": 4326224,
+            "sha256": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2"
+          }
+        },
+        "source_hashes": {
+          "src/metrics.rs": "a010c87318c1d697c3b542519c38c4f44592947f75bb0fac494667d4307a2bc5",
+          "Cargo.lock": "e7e9e1ae18947ab0f94c146545d24be7d014a45d0749584675e8a4931a9962c6",
+          "Cargo.toml": "b70e1fa34407a22fd85b697edd158954ff286c1e3b35affbca26b32d38b0e626"
+        }
+      },
+      "after": {
+        "source": "e8d8b3abd57389e692e1777aa5910938efa0e160",
+        "binaries": {
+          "Zelvik-Edge": {
+            "bytes": 45054928,
+            "sha256": "2af0a763fa08dc0b2599f8e57ca2cd12bd6f59fd25c3c1e923e17808a55af00e"
+          },
+          "issue34-controller": {
+            "bytes": 4326224,
+            "sha256": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2"
+          }
+        },
+        "source_hashes": {
+          "src/metrics.rs": "17d990435034e2a8c365ccc4c536dbd63753d47743e9c3cccd32e382f6d6117a",
+          "Cargo.lock": "e7e9e1ae18947ab0f94c146545d24be7d014a45d0749584675e8a4931a9962c6",
+          "Cargo.toml": "b70e1fa34407a22fd85b697edd158954ff286c1e3b35affbca26b32d38b0e626"
+        }
+      }
+    },
+    "builds_complete_before_measurement": true
+  },
+  "orders": [
+    [
+      "before",
+      "after",
+      "openresty",
+      "nginx"
+    ],
+    [
+      "after",
+      "nginx",
+      "before",
+      "openresty"
+    ],
+    [
+      "nginx",
+      "openresty",
+      "after",
+      "before"
+    ],
+    [
+      "openresty",
+      "before",
+      "nginx",
+      "after"
+    ]
+  ],
+  "runs": [
+    {
+      "round": 0,
+      "variant": "before",
+      "manifest": "round-0-before/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    },
+    {
+      "round": 0,
+      "variant": "after",
+      "manifest": "round-0-after/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    },
+    {
+      "round": 0,
+      "variant": "openresty",
+      "manifest": "round-0-openresty/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    },
+    {
+      "round": 0,
+      "variant": "nginx",
+      "manifest": "round-0-nginx/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    },
+    {
+      "round": 1,
+      "variant": "after",
+      "manifest": "round-1-after/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    },
+    {
+      "round": 1,
+      "variant": "nginx",
+      "manifest": "round-1-nginx/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    },
+    {
+      "round": 1,
+      "variant": "before",
+      "manifest": "round-1-before/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    },
+    {
+      "round": 1,
+      "variant": "openresty",
+      "manifest": "round-1-openresty/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    },
+    {
+      "round": 2,
+      "variant": "nginx",
+      "manifest": "round-2-nginx/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    },
+    {
+      "round": 2,
+      "variant": "openresty",
+      "manifest": "round-2-openresty/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    },
+    {
+      "round": 2,
+      "variant": "after",
+      "manifest": "round-2-after/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    },
+    {
+      "round": 2,
+      "variant": "before",
+      "manifest": "round-2-before/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    },
+    {
+      "round": 3,
+      "variant": "openresty",
+      "manifest": "round-3-openresty/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    },
+    {
+      "round": 3,
+      "variant": "before",
+      "manifest": "round-3-before/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    },
+    {
+      "round": 3,
+      "variant": "nginx",
+      "manifest": "round-3-nginx/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    },
+    {
+      "round": 3,
+      "variant": "after",
+      "manifest": "round-3-after/manifest.json",
+      "exit": 0,
+      "infrastructure_failure": null
+    }
+  ],
+  "scope": "1KiB, 32 reuse connections, four protocols and cache states; sequential targets; no fresh/mux ranking",
+  "client_sha256": "f3030d25671016111072d971c5aa57a6f8931500458374f18f5fbe29196715bc",
+  "sources": {
+    "scripts/perf/cache-range/run.py": "312581cba7c82d80236a6a5d88e89e137384801014144689ec492bf3d046fa9a",
+    "scripts/perf/protocol_state_matrix.py": "bbd709da5a6752ed09077841e382e6e9ae1dee3632be4f7f7e28d9b724ef3247",
+    "scripts/perf/http-state/verify.py": "dd9c1f179735015e927cf710a2a21678ba004d38837cd19c24b18780b89bf5f9",
+    "benches/support/protocol_state_client.c": "a701692547e3385da31d1a97e92dc6b6334f86505337ffa3abf2736d87efc983"
+  }
+}

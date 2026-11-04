@@ -1,0 +1,58 @@
+      ┌─────────┐  mr boxington
+     ╱ ═══════ ╱│
+    ╱─────────╱ │
+    │ •    (◉)│≡│
+    │  ◟▄▄▄◞  │ ╱
+    │   ◀◆▶   │╱
+    └─────────┘
+   Compiling zelvik-edge v26.11.1 (/workspace/edge/.worktrees/perf-next)
+   Compiling zelvik-edge-io v0.1.0 (/workspace/edge/.worktrees/perf-next/crates/zelvik-edge-io)
+mbx[warning]: cc cache bypassed: compiler invocation names no output file
+mbx[progress]: 15s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 60s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 75s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 90s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 105s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 120s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 135s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 150s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 165s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 180s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 195s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 210s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 225s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 240s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 255s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 270s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 285s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+mbx[progress]: 300s elapsed; 0 hits, 0 misses, 3 bypassed, 1 not looked up; ~0.0s compiler work saved
+    Finished `test` profile [optimized] target(s) in 5m 00s
+     Running unittests src/lib.rs (/workspace/edge/target/debug/deps/zelvik_edge-ca49dcf30a597835)
+
+running 19 tests
+test tcp_proxy::tests::af_xdp_tcp_lookup_matches_plain_and_tls_port_ranges ... ok
+test tcp_proxy::tests::benign_relay_close_records_direction_phase_and_note ... ok
+test tcp_proxy::tests::raw_tcp_relay_treats_client_abort_as_non_hard_close ... ok
+test tcp_proxy::tests::relay_cancel_channel_close_is_not_misread_as_l4_drain ... ok
+test tcp_proxy::tests::relay_cancel_returns_l4_drain_without_losing_counters ... ok
+test tcp_proxy::tests::sni_passthrough_disables_only_pressure_idle_timeout ... ok
+test tcp_proxy::tests::sni_passthrough_propagates_backend_eof_to_client ... ok
+test tcp_proxy::tests::sni_service_keeps_independent_tcp_tls_port ... ok
+test tcp_proxy::tests::tcp_forward_context_tracks_least_conn_inflight ... ok
+test tcp_proxy::tests::tcp_pressure_idle_keeps_small_buffer_intact ... ok
+test tcp_proxy::tests::tcp_pressure_idle_normal_path_does_not_timeout ... ok
+test tcp_proxy::tests::tcp_pressure_idle_pressure_path_times_out ... ok
+test tcp_proxy::tests::tcp_pressure_idle_shrinks_buffer_before_timeout ... ok
+test tcp_proxy::tests::tcp_proxy_early_close_classifier_requires_tiny_client_payload ... ok
+test tcp_proxy::tests::tcp_tls_handshake_failure_uses_global_tls_exhaustion_defense ... ok
+test tcp_proxy::tests::tcp_tls_rejects_globally_blocked_ip_before_handshake ... ok
+test tcp_proxy::tests::zero_copy_cancel_keeps_written_counts_and_releases_sockets ... ok
+test tcp_proxy::tests::zero_copy_client_half_close_keeps_the_origin_response ... ok
+test tcp_proxy::tests::active_relay_survives_cache_reclaim_with_exact_bytes ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 1274 filtered out; finished in 2.97s
+
+mbx[cache]: 0 hits, 0 misses, 1 not looked up, 3 bypassed; 0 B downloaded, 0 B uploaded, 229.4 KiB stored locally
+mbx[savings]: swept up 10.9 GiB logical so far. the broom is content-addressed.

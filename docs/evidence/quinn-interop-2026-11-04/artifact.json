@@ -1,0 +1,19 @@
+{
+  "id": 13289573635,
+  "name": "quinn-interop-9390bfbaea6e7224a1a8b13bdd29bc181821cd3a",
+  "size_in_bytes": 2454854,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13289573635",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13289573635/zip",
+  "expired": false,
+  "created_at": "2026-11-04T02:26:59Z",
+  "expires_at": "2027-02-02T02:18:03Z",
+  "updated_at": "2026-11-04T02:26:59Z",
+  "digest": "sha256:b3a20ee48ab2bac7ea494329afd4864f5f231e6d96e6f5bc6bf096b064b592ea",
+  "workflow_run": {
+    "id": 41759827134,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/program-wide-20261104",
+    "head_sha": "9390bfbaea6e7224a1a8b13bdd29bc181821cd3a"
+  }
+}

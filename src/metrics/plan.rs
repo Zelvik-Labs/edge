@@ -59,6 +59,7 @@ pub struct CompiledMetricItem {
     pub category: Arc<str>,
     pub value: MetricValueKind,
     pub keys: Arc<[Arc<str>]>,
+    compiled_keys: Arc<[super::template::CompiledTemplate]>,
 }
 
 impl CompiledMetricItem {
@@ -87,10 +88,12 @@ pub struct MetricCollectionPlan {
 #[derive(Default)]
 struct CategoryPlan {
     items: usize,
+    needs_analysis: bool,
+    needs_provider_id: bool,
     /// Request-context variables referenced by the category's key templates.
     /// Geo/browser values are derived from the analysis result by the worker,
     /// so they never need a request attribute copy.
-    request_vars: BTreeSet<Arc<str>>,
+    request_fields: super::request_fields::RequestFields,
 }
 
 /// One request completion as the projection layer consumes it. Grouped in a
@@ -141,12 +144,28 @@ impl MetricCollectionPlan {
         self.category_plan(category).items > 0
     }
 
+    pub(crate) fn needs_analysis_for(&self, category: &str) -> bool {
+        self.category_plan(category).needs_analysis
+    }
+
+    pub(crate) fn needs_provider_id_for(&self, category: &str) -> bool {
+        self.category_plan(category).needs_provider_id
+    }
+
     /// Request variables the category's templates need. `None` means no event
     /// of that category can produce a custom metric, so no request context
     /// should be built at all.
     pub fn request_vars_for(&self, category: &str) -> Option<&BTreeSet<Arc<str>>> {
         let plan = self.category_plan(category);
-        (!plan.request_vars.is_empty()).then_some(&plan.request_vars)
+        (!plan.request_fields.variables().is_empty()).then_some(plan.request_fields.variables())
+    }
+
+    pub fn request_fields_for(
+        &self,
+        category: &str,
+    ) -> Option<&super::request_fields::RequestFields> {
+        let plan = self.category_plan(category);
+        (!plan.request_fields.variables().is_empty()).then_some(&plan.request_fields)
     }
 
     fn category_plan(&self, category: &str) -> &CategoryPlan {
@@ -218,23 +237,26 @@ impl MetricCollectionPlan {
             return 0;
         };
         let mut dropped = 0;
+        // Reporting periods do not change the event-time collection minute.
+        let mut window = None;
         for item in self
             .items
             .iter()
             .filter(|item| item.category.as_ref() == category)
         {
-            let (time_key, window_start, window_end) = item.time_key(event_time_millis);
+            let (time_key, window_start, window_end) =
+                window.get_or_insert_with(|| item.time_key(event_time_millis));
             let keys = item
-                .keys
+                .compiled_keys
                 .iter()
                 .map(|template| resolve_projection_key(template, attrs, dimensions))
                 .collect::<Vec<_>>();
             let key = ProjectionKey {
                 item_id: item.id,
                 version: item.version,
-                time_key,
-                window_start,
-                window_end,
+                time_key: Arc::clone(time_key),
+                window_start: *window_start,
+                window_end: *window_end,
                 server_id,
                 keys: Arc::from(keys),
             };
@@ -269,6 +291,11 @@ impl MetricPlanLease {
     fn new(plan: Arc<MetricCollectionPlan>) -> Self {
         plan.acquire_event();
         Self { plan }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn for_test(plan: MetricCollectionPlan) -> Self {
+        Self::new(Arc::new(plan))
     }
 
     pub fn plan(&self) -> &Arc<MetricCollectionPlan> {
@@ -311,25 +338,18 @@ fn is_analysis_variable(name: &str) -> bool {
     )
 }
 
-fn template_variables(template: &str) -> impl Iterator<Item = &str> {
-    let mut rest = template;
-    std::iter::from_fn(move || {
-        let start = rest.find("${")?;
-        let after = &rest[start + 2..];
-        let end = after.find('}')?;
-        rest = &after[end + 1..];
-        Some(&after[..end])
-    })
-}
-
 fn resolve_projection_key(
-    template: &str,
+    template: &super::template::CompiledTemplate,
     attrs: &BTreeMap<String, String>,
     dimensions: &ResolvedDimensions,
 ) -> String {
-    crate::metrics::resolve_template_with(template, |var_name| {
+    template.render(|var_name| {
         let resolved = crate::metrics::resolve_metric_variable_from_map(attrs, var_name);
-        if !resolved.is_empty() && resolved != format!("${{{var_name}}}") {
+        let unresolved = resolved
+            .strip_prefix("${")
+            .and_then(|value| value.strip_suffix('}'))
+            == Some(var_name);
+        if !resolved.is_empty() && !unresolved {
             return resolved;
         }
         dimensions.resolve_variable(var_name, resolved)
@@ -366,16 +386,24 @@ fn compile_plan(
             .iter()
             .map(|key| Arc::<str>::from(key.as_str()))
             .collect::<Vec<_>>();
+        let compiled_keys = keys
+            .iter()
+            .cloned()
+            .map(super::template::CompiledTemplate::compile)
+            .collect::<Vec<_>>();
         let category_plan = match category.as_ref() {
             crate::metrics::METRIC_CATEGORY_TCP => &mut tcp,
             crate::metrics::METRIC_CATEGORY_UDP => &mut udp,
             _ => &mut http,
         };
         category_plan.items += 1;
-        for template in &keys {
-            for variable in template_variables(template) {
+        for template in &compiled_keys {
+            for variable in template.variables() {
+                category_plan.needs_analysis |= is_analysis_variable(variable)
+                    && !matches!(variable, "wafGroup" | "wafAction" | "isp.id");
+                category_plan.needs_provider_id |= variable == "isp.id";
                 if !is_analysis_variable(variable) {
-                    category_plan.request_vars.insert(Arc::from(variable));
+                    category_plan.request_fields.register(Arc::from(variable));
                 }
             }
         }
@@ -385,7 +413,11 @@ fn compile_plan(
             category,
             value: MetricValueKind::compile(&item.value),
             keys: Arc::from(keys),
+            compiled_keys: Arc::from(compiled_keys),
         });
+    }
+    for category in [&mut http, &mut tcp, &mut udp] {
+        category.request_fields.finish();
     }
     let aggregator =
         (!compiled.is_empty()).then(|| Arc::new(MetricProjectionAggregator::new(generation)));
@@ -489,7 +521,7 @@ pub fn dropped_projections() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{collection_window, compile_plan, publish_metric_items};
+    use super::{MetricCollectionPlan, collection_window, compile_plan, publish_metric_items};
     use crate::config_models::MetricItemConfig;
     use chrono::{TimeZone, Timelike};
     use std::collections::BTreeMap;
@@ -550,6 +582,31 @@ mod tests {
             assert_eq!(key.as_ref(), "202610311207", "{period} {unit}");
             assert_eq!(end - start, 60, "{period} {unit}");
         }
+    }
+
+    #[test]
+    fn analysis_dependencies_are_scoped_to_enabled_category_and_generation() {
+        let plan = MetricCollectionPlan::for_test(&[
+            item(1, "tcp", 1, "minute", &["${wafAction}", "${serverId}"]),
+            item(2, "udp", 1, "minute", &["${isp.id}"]),
+            item(
+                3,
+                "http",
+                1,
+                "minute",
+                &["${browser.name}", "${geo.country.name}"],
+            ),
+        ]);
+        assert!(!plan.needs_analysis_for("tcp"));
+        assert!(!plan.needs_provider_id_for("tcp"));
+        assert!(!plan.needs_analysis_for("udp"));
+        assert!(plan.needs_provider_id_for("udp"));
+        assert!(plan.needs_analysis_for("http"));
+        let mut disabled = item(4, "tcp", 1, "minute", &["${geo.city.name}"]);
+        disabled.is_on = false;
+        let next = MetricCollectionPlan::for_test(&[disabled]);
+        assert!(!next.needs_analysis_for("tcp"));
+        assert!(plan.needs_analysis_for("http"));
     }
 
     #[test]
@@ -635,6 +692,166 @@ mod tests {
             plan.request_vars_for(crate::metrics::METRIC_CATEGORY_TCP)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn compiled_request_fields_keep_generation_and_category_identity() {
+        let first = compile_plan(
+            &[item(
+                1,
+                "http",
+                5,
+                "minute",
+                &["${http.X-Test}", "${country}"],
+            )],
+            1,
+            0,
+        );
+        let second = compile_plan(
+            &[
+                item(1, "http", 5, "minute", &["${status}"]),
+                item(2, "tcp", 5, "minute", &["${remoteAddr}"]),
+            ],
+            2,
+            1,
+        );
+        let old = first.request_fields_for("http").unwrap();
+        assert!(old.wants("http.X-Test"));
+        assert!(!old.wants("country"));
+        assert!(!old.wants("status"));
+        assert!(second.request_fields_for("http").unwrap().wants("status"));
+        assert!(
+            !second
+                .request_fields_for("http")
+                .unwrap()
+                .wants("remoteAddr")
+        );
+        assert!(
+            second
+                .request_fields_for("tcp")
+                .unwrap()
+                .wants("remoteAddr")
+        );
+        assert!(first.request_fields_for("tcp").is_none());
+        assert!(second.request_fields_for("udp").is_none());
+        assert_eq!(first.generation(), 1);
+        assert_eq!(second.generation(), 2);
+    }
+
+    #[test]
+    fn compiled_projection_keys_preserve_analysis_fallback_and_placeholder_values() {
+        let dimensions = crate::metrics::projection::ResolvedDimensions {
+            country: std::sync::Arc::from("CN"),
+            ..Default::default()
+        };
+        for country in ["", "override", "${country}", "${country}}"] {
+            let attrs = BTreeMap::from([
+                ("country".to_string(), country.to_string()),
+                ("host".to_string(), "example.test".to_string()),
+                ("requestMethod".to_string(), " get ".to_string()),
+                ("header.x-test".to_string(), "header-value".to_string()),
+            ]);
+            for source in [
+                "",
+                "literal",
+                "${country}",
+                "${host}",
+                "${request.method}",
+                "${header.X-Test}",
+                "${http.X-Test}",
+                "${unknown}",
+                "${unknown.field}",
+                "${}",
+                "${unclosed",
+                "prefix=${country}/${host}:${unknown}",
+            ] {
+                let compiled = crate::metrics::template::CompiledTemplate::compile(
+                    std::sync::Arc::from(source),
+                );
+                let expected = crate::metrics::resolve_template_with(source, |name| {
+                    let resolved = crate::metrics::resolve_metric_variable_from_map(&attrs, name);
+                    if !resolved.is_empty() && resolved != format!("${{{name}}}") {
+                        return resolved;
+                    }
+                    dimensions.resolve_variable(name, resolved)
+                });
+                assert_eq!(
+                    super::resolve_projection_key(&compiled, &attrs, &dimensions),
+                    expected,
+                    "{source}, country={country}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn compiled_event_preserves_keys_counters_and_one_minute_for_each_item() {
+        use crate::metrics::projection::{
+            MetricChargePool, MetricProjectionAggregator, ResolvedDimensions,
+        };
+        use std::sync::Arc;
+        let mut plan = compile_plan(
+            &[
+                item(1, "http", 5, "minute", &["site=${host}", "${status}"]),
+                item(2, "http", 1, "day", &["${country}"]),
+                item(3, "tcp", 1, "hour", &["${host}"]),
+            ],
+            17,
+            0,
+        );
+        let pool = Arc::new(MetricChargePool::for_test());
+        plan.aggregator = Some(Arc::new(MetricProjectionAggregator::with_pool(
+            17,
+            Arc::clone(&pool),
+        )));
+        let attrs = BTreeMap::from([
+            ("host".to_string(), "example.test".to_string()),
+            ("status".to_string(), "200".to_string()),
+        ]);
+        let dimensions = ResolvedDimensions {
+            country: Arc::from("CN"),
+            ..Default::default()
+        };
+        let event_time_millis = 1_790_000_059_999;
+        assert_eq!(
+            plan.record_event(super::ProjectionEvent {
+                category: "http",
+                server_id: 7,
+                event_time_millis,
+                attrs: &attrs,
+                dimensions: &dimensions,
+                bytes_sent: 123,
+                bytes_received: 7,
+                is_attack: true,
+            }),
+            0
+        );
+        let aggregator = plan.aggregator().unwrap();
+        let drain = aggregator.drain();
+        assert_eq!(drain.rows.len(), 2);
+        for (key, value) in &drain.rows {
+            let definition = plan.item(key.item_id, key.version).unwrap();
+            let (time_key, start, end) = definition.time_key(event_time_millis);
+            assert_eq!(
+                (&key.time_key, key.window_start, key.window_end),
+                (&time_key, start, end)
+            );
+            assert_eq!(end - start, 60);
+            assert_eq!(key.server_id, 7);
+            let expected = if key.item_id == 1 {
+                vec!["site=example.test".to_string(), "200".to_string()]
+            } else {
+                vec!["CN".to_string()]
+            };
+            assert_eq!(key.keys.as_ref(), expected.as_slice());
+            assert_eq!(value.counters.count, 1);
+            assert_eq!(value.counters.count_attack, 1);
+            assert_eq!(value.counters.bytes_sent, 123);
+            assert_eq!(value.counters.bytes_received, 7);
+            assert_eq!(value.counters.attack_bytes, 123);
+        }
+        aggregator.release_charge(drain.charged_bytes);
+        assert_eq!(pool.used(), 0);
     }
 
     #[test]

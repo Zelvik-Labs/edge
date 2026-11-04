@@ -1,0 +1,38 @@
+{
+  "run": 41793784516,
+  "source": "59b9c849c2678b1c0f7aaae4ad0ffc23faeb5d9f",
+  "job": 126452997322,
+  "conclusion": "failure",
+  "library": {
+    "passed": 1373,
+    "failed": 1,
+    "ignored": 5
+  },
+  "failed_test": "origin_h3::wire_tests::failed_stream_drains_new_reuse_without_cancelling_an_active_peer",
+  "failure_location": "src/origin_h3_tests.rs:447",
+  "failure": "fixture Origin.stop joins handler: Remote error: ApplicationClose: H3_NO_ERROR",
+  "new_config_tests": "both passed",
+  "snapshot_tests": "all three passed",
+  "native32": "not run after failed library gate",
+  "log": {
+    "bytes": 2923622,
+    "sha256": "13db59d609482e0d889388d9c50981b21b19105ef8d49e298c1c661e7c6a6b01"
+  },
+  "jobs": [
+    {
+      "id": 126452997322,
+      "name": "Test - linux-x64",
+      "conclusion": "failure"
+    },
+    {
+      "id": 126452997685,
+      "name": "Check / Clippy - linux-x64",
+      "conclusion": "success"
+    },
+    {
+      "id": 126452998937,
+      "name": "Isolated BPF / AF_XDP capability",
+      "conclusion": "skipped"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "id": 13306289576,
+  "node_id": "MDg6QXJ0aWZhY3QxMzMwNjI4OTU3Ng==",
+  "name": "framework-syscalls-a45ac544bb8b32efa56429f3976fc3db38764fde",
+  "size_in_bytes": 3544895,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13306289576",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13306289576/zip",
+  "expired": false,
+  "digest": "sha256:9fd00765f518a0b5c710f2683de42d0972b84882b37cb5020e867c297f3499fb",
+  "created_at": "2026-11-04T08:29:40Z",
+  "updated_at": "2026-11-04T08:29:40Z",
+  "expires_at": "2027-02-02T08:26:48Z",
+  "workflow_run": {
+    "id": 41799556407,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/program-wide-20261104",
+    "head_sha": "a45ac544bb8b32efa56429f3976fc3db38764fde"
+  }
+}

@@ -1,0 +1,186 @@
+{
+  "source": "3b25c01f2b0d40ad90beb20a41e7cff917e54510",
+  "edge_runtime": "ba474745fae3c08332d9e0862d9d5650550664ff",
+  "scope": "OFF-only minimal Pingora control; not production Edge or feature-equivalent replacement",
+  "cells": 48,
+  "successful": 2541819,
+  "failed": 0,
+  "wrong_ca_controls": 32,
+  "max_host_steal_fraction": 0.0,
+  "medians": [
+    {
+      "protocol": "h1",
+      "target": "edge",
+      "rps": 5827.699399335901,
+      "cpu_usec_per_request": 163.393031767247,
+      "p99_ms": 7.6034999999999995,
+      "client_cpu_fraction": 0.4806807024848263,
+      "proxy_cpu_fraction": 0.9537527802260891,
+      "origin_cpu_fraction": 0.3924832749593936,
+      "origin_new_connections": 30.5,
+      "process_cpu_usec_per_request": {
+        "edge_process": 162.2303998219888,
+        "controller": 0.0,
+        "other": 0.0
+      }
+    },
+    {
+      "protocol": "h1",
+      "target": "nginx",
+      "rps": 15793.971700074584,
+      "cpu_usec_per_request": 54.76278609666738,
+      "p99_ms": 2.924,
+      "client_cpu_fraction": 0.5963756563484051,
+      "proxy_cpu_fraction": 0.8647734750784641,
+      "origin_cpu_fraction": 0.914563083493988,
+      "origin_new_connections": 91.0,
+      "process_cpu_usec_per_request": {
+        "proxy": 54.363123757191815
+      }
+    },
+    {
+      "protocol": "h1",
+      "target": "openresty",
+      "rps": 15794.371805701081,
+      "cpu_usec_per_request": 54.61677777910354,
+      "p99_ms": 2.974,
+      "client_cpu_fraction": 0.5968718475520496,
+      "proxy_cpu_fraction": 0.8614221803387493,
+      "origin_cpu_fraction": 0.9130558012373269,
+      "origin_new_connections": 92.0,
+      "process_cpu_usec_per_request": {
+        "proxy": 54.23903388533736
+      }
+    },
+    {
+      "protocol": "h1",
+      "target": "pingora",
+      "rps": 11684.75246034396,
+      "cpu_usec_per_request": 78.11433181189402,
+      "p99_ms": 3.9195,
+      "client_cpu_fraction": 0.5554698902008172,
+      "proxy_cpu_fraction": 0.9127460859892413,
+      "origin_cpu_fraction": 0.6772057493527325,
+      "origin_new_connections": 31.0,
+      "process_cpu_usec_per_request": {
+        "proxy": 77.55559167017438
+      }
+    },
+    {
+      "protocol": "h1-tls",
+      "target": "edge",
+      "rps": 5117.0872448112605,
+      "cpu_usec_per_request": 183.01559255904954,
+      "p99_ms": 8.3925,
+      "client_cpu_fraction": 0.5566046939258669,
+      "proxy_cpu_fraction": 0.9372614716208394,
+      "origin_cpu_fraction": 0.3577899354885916,
+      "origin_new_connections": 31.0,
+      "process_cpu_usec_per_request": {
+        "edge_process": 181.6720407565117,
+        "controller": 0.0,
+        "other": 0.0
+      }
+    },
+    {
+      "protocol": "h1-tls",
+      "target": "nginx",
+      "rps": 11977.692150877287,
+      "cpu_usec_per_request": 75.61167818243044,
+      "p99_ms": 3.6144999999999996,
+      "client_cpu_fraction": 0.6526217276391555,
+      "proxy_cpu_fraction": 0.905584411377338,
+      "origin_cpu_fraction": 0.7260278659180216,
+      "origin_new_connections": 72.0,
+      "process_cpu_usec_per_request": {
+        "proxy": 75.13002898162861
+      }
+    },
+    {
+      "protocol": "h1-tls",
+      "target": "openresty",
+      "rps": 12484.259244553106,
+      "cpu_usec_per_request": 72.1918325996214,
+      "p99_ms": 3.5235000000000003,
+      "client_cpu_fraction": 0.6520946536386036,
+      "proxy_cpu_fraction": 0.9024192075450672,
+      "origin_cpu_fraction": 0.7597952913687522,
+      "origin_new_connections": 74.0,
+      "process_cpu_usec_per_request": {
+        "proxy": 71.69692670705737
+      }
+    },
+    {
+      "protocol": "h1-tls",
+      "target": "pingora",
+      "rps": 9958.715834408575,
+      "cpu_usec_per_request": 91.71174173271734,
+      "p99_ms": 4.33,
+      "client_cpu_fraction": 0.6532822661707124,
+      "proxy_cpu_fraction": 0.913329218183963,
+      "origin_cpu_fraction": 0.6149319461852416,
+      "origin_new_connections": 30.5,
+      "process_cpu_usec_per_request": {
+        "proxy": 91.23977846585223
+      }
+    },
+    {
+      "protocol": "h2",
+      "target": "edge",
+      "rps": 5857.118330950019,
+      "cpu_usec_per_request": 166.39764359807472,
+      "p99_ms": 7.123,
+      "client_cpu_fraction": 0.47031727436084103,
+      "proxy_cpu_fraction": 0.9758471675304637,
+      "origin_cpu_fraction": 0.38599424539552013,
+      "origin_new_connections": 31.0,
+      "process_cpu_usec_per_request": {
+        "edge_process": 165.39733415458414,
+        "controller": 0.0,
+        "other": 0.0
+      }
+    },
+    {
+      "protocol": "h2",
+      "target": "nginx",
+      "rps": 10896.57042412311,
+      "cpu_usec_per_request": 82.93587493928715,
+      "p99_ms": 3.8425000000000002,
+      "client_cpu_fraction": 0.7186069457600559,
+      "proxy_cpu_fraction": 0.9024102280120334,
+      "origin_cpu_fraction": 0.7021959880016162,
+      "origin_new_connections": 65.5,
+      "process_cpu_usec_per_request": {
+        "proxy": 82.41732675781665
+      }
+    },
+    {
+      "protocol": "h2",
+      "target": "openresty",
+      "rps": 11266.646804304284,
+      "cpu_usec_per_request": 79.62322285235379,
+      "p99_ms": 3.794,
+      "client_cpu_fraction": 0.7242686732228005,
+      "proxy_cpu_fraction": 0.8973235640821732,
+      "origin_cpu_fraction": 0.7264881918682636,
+      "origin_new_connections": 65.5,
+      "process_cpu_usec_per_request": {
+        "proxy": 79.11740148793075
+      }
+    },
+    {
+      "protocol": "h2",
+      "target": "pingora",
+      "rps": 9440.621749447324,
+      "cpu_usec_per_request": 99.46937961219078,
+      "p99_ms": 4.4885,
+      "client_cpu_fraction": 0.6596775489471054,
+      "proxy_cpu_fraction": 0.9386009541571714,
+      "origin_cpu_fraction": 0.6018576513307167,
+      "origin_new_connections": 30.5,
+      "process_cpu_usec_per_request": {
+        "proxy": 98.79364303539666
+      }
+    }
+  ]
+}

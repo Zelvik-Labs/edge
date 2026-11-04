@@ -1,0 +1,6 @@
+{
+  "scripts/perf/protocol_state_matrix.py": "278d9dc25ffba5afd3d2e8166d9a2e823a843a41d47ff5222acf22d05010f0a6",
+  "scripts/perf/compare_architecture_candidates.py": "31c75b7e46f757d73532e71f5af17c9fd0b377475be2d8e1e4b652c3fa23da41",
+  "scripts/perf/summarize_architecture_candidates.py": "28172f10d06a72061d6b3907ce11930986b8cc6773b40c670bf8c3d63535a1f0",
+  "benches/support/protocol_state_client.c": "528394d1d89ee1830e483a20afae2d244742cf48828845ffffcac429c9185e3b"
+}

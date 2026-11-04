@@ -1,0 +1,43 @@
+{
+  "artifact_id": 13246927960,
+  "archive": "raw.zip",
+  "archive_bytes": 13526,
+  "archive_sha256": "0aa059894c9ff225b6e9c4c2168333960399ba915cf7190a0f39ab5a07f66ed8",
+  "files": [
+    {
+      "path": "fixed-wire/edge-quiche-test-9659-0/cert.pem",
+      "bytes": 1139,
+      "sha256": "8d5edbe1ecc3758beddb172c21ae6c80bdb5f90dc18a68e5bf4be51c0cf3a65a"
+    },
+    {
+      "path": "fixed-wire/edge-quiche-test-9659-0/qlog/4f754234d08ea832f2eb45793a60a379849350a2.sqlog",
+      "bytes": 17552,
+      "sha256": "daed1142d276bdf4e35105e17fc83d46245e72926b65b449fe664e5d3436fd49"
+    },
+    {
+      "path": "fixed.log",
+      "bytes": 1247,
+      "sha256": "0d8cf6586698ed117545590b4aec0c7f64cfc0a542a9cb1b8741aa6cb1f7542d"
+    },
+    {
+      "path": "old-wire/edge-quiche-test-9513-0/cert.pem",
+      "bytes": 1139,
+      "sha256": "f85cd8c4495c8c48213546a1b72408ba734514c95b1c293ada2fb9dd71a12e10"
+    },
+    {
+      "path": "old-wire/edge-quiche-test-9513-0/qlog/faa11c74ca88eb7adc24c42f5d7354023e15e995.sqlog",
+      "bytes": 17534,
+      "sha256": "2b59a678739709bf589cd1f0592486d4e6c17ba45c38d35f6705d21d165c8a56"
+    },
+    {
+      "path": "old.log",
+      "bytes": 26936,
+      "sha256": "e5569d9388329f4844a2dcb2cd04c6f9c4522b6ef257e8350f429efc507675f7"
+    },
+    {
+      "path": "status.txt",
+      "bytes": 28,
+      "sha256": "534d194a1bc498b510b9bf958875c65643ffcc661ad7378d183b11be9e9cd0b6"
+    }
+  ]
+}

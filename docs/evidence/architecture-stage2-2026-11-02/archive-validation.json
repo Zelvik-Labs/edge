@@ -1,0 +1,14 @@
+{
+  "frozen_source_files_verified": 173,
+  "binary_digests_verified": 4,
+  "harness_files_verified": 24,
+  "portable_manifest_references_verified": 68,
+  "controlled_tls_window_probes_verified": 48,
+  "controlled_tls_warm_probes_verified": 8,
+  "report_links_exist": true,
+  "archived_helpers_parse": true,
+  "h1_summary_recomputed_identically": true,
+  "raw_file_hashes_verified": 2128,
+  "storage_budget_ok": true,
+  "rust_source_changed_after_measurement": false
+}

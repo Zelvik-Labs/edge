@@ -1,0 +1,53 @@
+{
+  "artifact_id": 13297371837,
+  "archive": "raw.zip",
+  "archive_bytes": 47463,
+  "archive_sha256": "0c1aae3f096520e8cca231b9fad101055c49f4c2ccd7fc8058f8edb2a248584b",
+  "files": [
+    {
+      "path": "setup.json",
+      "bytes": 177,
+      "sha256": "6d3e46655ffc71275dfebea4a48920672ffac9011fa1c7a2c2d3549a2a1bc1c8"
+    },
+    {
+      "path": "source/Cargo.toml",
+      "bytes": 226,
+      "sha256": "af6222fb98ceac1499a07a5523c29aa39a6cc189f4c51186ae57b49490cac5e9"
+    },
+    {
+      "path": "source/Cargo.lock",
+      "bytes": 2985,
+      "sha256": "6123dd143ba985841d2e4ef9082cc2ac8bc7b1ecca1e3b768df46de8b01d96fb"
+    },
+    {
+      "path": "source/allocator.rs",
+      "bytes": 2375,
+      "sha256": "e58d551ed0afbbc1767da29b8726ffda84032eec0132b1faa872c93cd8cc4a37"
+    },
+    {
+      "path": "source/baseline.rs",
+      "bytes": 3635,
+      "sha256": "1d812a8779af5dafab244b7662223d13f18b35f45cfcc12cb55f6fe86c8d04bd"
+    },
+    {
+      "path": "source/candidate.rs",
+      "bytes": 4906,
+      "sha256": "84b663fd0cd779916d42073c85a92a8c88e8d6ebfb0ce8abee8faa32beb35038"
+    },
+    {
+      "path": "source/main.rs",
+      "bytes": 9259,
+      "sha256": "ddc647d7430a4a44081e01c2676e7c84a6b697ccd35b4037ee1663f9cb5a241b"
+    },
+    {
+      "path": "source/original-full.rs",
+      "bytes": 5436,
+      "sha256": "afb042ceec0b228ef88ebdcb44dae2f83498a58f5c79f94359db7836a63d8b2b"
+    },
+    {
+      "path": "source/root-Cargo.lock",
+      "bytes": 157757,
+      "sha256": "e7e9e1ae18947ab0f94c146545d24be7d014a45d0749584675e8a4931a9962c6"
+    }
+  ]
+}

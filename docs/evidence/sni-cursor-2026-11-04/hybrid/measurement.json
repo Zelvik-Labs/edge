@@ -1,0 +1,1008 @@
+{
+  "source": "471f95a5d108bad4e0238444e7cdc1443449f90a",
+  "baseline": "ac46a48becb18e1c36309eee541bda3d0c6b7b93",
+  "bounded": "b4d635519973b2ec9aa24a533129fdbb86d3fc4f",
+  "cursor": "52687f97a1134d063384c7ecd7bf49c9a8f0083a",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "baseline_original_sha256": "c54056369d7515d6eea96abf7decbb9a94e864b2ef614556edc3d3addaa751f7",
+  "variants": {
+    "baseline": {
+      "parser_sha256": "4ca0b8114ba84514f6a761637166710ce9cafb51f6efae87e84e09862552dd67",
+      "probe_sha256": "91e134d987982ec22df60e6cff86f303c90fa05974244b60018d228b4a0b677a",
+      "binaries": {
+        "timing": "6d38ec0500f4944f2a8242a838777c207c5d91305a37df0f90ec6aaa49e49860",
+        "allocations": "3a772150f026b6a7953a62b081f445adc0b0ad7ce72920d58b1c888e96aaddda"
+      }
+    },
+    "bounded": {
+      "parser_sha256": "393e705cf22796e79eb08ef5113849d1f6175df06d0aaf260aa80f3826f51ad4",
+      "probe_sha256": "91e134d987982ec22df60e6cff86f303c90fa05974244b60018d228b4a0b677a",
+      "binaries": {
+        "timing": "b403d483fa0951053f0fbe39441cb9a8bf3a348efc8b04e6db5d3a841c9bb045",
+        "allocations": "618b2dc59db33fc09ab4a49c8f87bf58ee0a4758f223c05ca10e07027d44575a"
+      }
+    },
+    "cursor": {
+      "parser_sha256": "9eba216dd8a107d1c3d85254c58e0733453739d01bc63f245ec450a73b2f7262",
+      "probe_sha256": "91e134d987982ec22df60e6cff86f303c90fa05974244b60018d228b4a0b677a",
+      "binaries": {
+        "timing": "faf64e7584e931efe76b1bbe64912b28d4d89f3435ec0cfd4f772a25f118600f",
+        "allocations": "e4a3d7718a35416aedf340b59271cefb7e696040b028ead70c392eff3d6cdaf5"
+      }
+    },
+    "candidate": {
+      "parser_sha256": "e20d309f372761b7efc448989d1ff8f631e691a19575d452268d803d9959816d",
+      "probe_sha256": "91e134d987982ec22df60e6cff86f303c90fa05974244b60018d228b4a0b677a",
+      "binaries": {
+        "timing": "fae76b0240fe374d7e3bf7d6a4d6ac51665ce8628aadc18cb704780e1c9ac0a5",
+        "allocations": "219d0ec32505857077553d23dc8ef2b9f91a6b0512df2464a9596c58d4f756c9"
+      }
+    }
+  },
+  "scope": "pure production SNI parser, System allocator; no full-node throughput claim",
+  "cpu": 0,
+  "runs": [
+    {
+      "round": 0,
+      "variant": "baseline",
+      "file": "round-0-baseline.tsv",
+      "cpu_before": [
+        712,
+        0,
+        303,
+        28768,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        803,
+        0,
+        303,
+        28768,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 0,
+      "variant": "bounded",
+      "file": "round-0-bounded.tsv",
+      "cpu_before": [
+        803,
+        0,
+        303,
+        28769,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        881,
+        0,
+        303,
+        28769,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 0,
+      "variant": "candidate",
+      "file": "round-0-candidate.tsv",
+      "cpu_before": [
+        881,
+        0,
+        303,
+        28769,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        951,
+        0,
+        303,
+        28769,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 0,
+      "variant": "cursor",
+      "file": "round-0-cursor.tsv",
+      "cpu_before": [
+        951,
+        0,
+        303,
+        28770,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1024,
+        0,
+        303,
+        28771,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 1,
+      "variant": "bounded",
+      "file": "round-1-bounded.tsv",
+      "cpu_before": [
+        1024,
+        0,
+        303,
+        28773,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1100,
+        0,
+        303,
+        28773,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 1,
+      "variant": "cursor",
+      "file": "round-1-cursor.tsv",
+      "cpu_before": [
+        1100,
+        0,
+        303,
+        28775,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1172,
+        0,
+        303,
+        28775,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 1,
+      "variant": "baseline",
+      "file": "round-1-baseline.tsv",
+      "cpu_before": [
+        1172,
+        0,
+        303,
+        28775,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1266,
+        0,
+        303,
+        28775,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 1,
+      "variant": "candidate",
+      "file": "round-1-candidate.tsv",
+      "cpu_before": [
+        1266,
+        0,
+        303,
+        28775,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1337,
+        0,
+        304,
+        28775,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 2,
+      "variant": "cursor",
+      "file": "round-2-cursor.tsv",
+      "cpu_before": [
+        1337,
+        0,
+        304,
+        28775,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1411,
+        0,
+        304,
+        28775,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 2,
+      "variant": "candidate",
+      "file": "round-2-candidate.tsv",
+      "cpu_before": [
+        1411,
+        0,
+        304,
+        28776,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1481,
+        0,
+        304,
+        28776,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 2,
+      "variant": "bounded",
+      "file": "round-2-bounded.tsv",
+      "cpu_before": [
+        1481,
+        0,
+        304,
+        28776,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1560,
+        0,
+        304,
+        28776,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 2,
+      "variant": "baseline",
+      "file": "round-2-baseline.tsv",
+      "cpu_before": [
+        1560,
+        0,
+        304,
+        28776,
+        139,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1657,
+        0,
+        304,
+        28776,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 3,
+      "variant": "candidate",
+      "file": "round-3-candidate.tsv",
+      "cpu_before": [
+        1657,
+        0,
+        304,
+        28776,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1730,
+        0,
+        304,
+        28776,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 3,
+      "variant": "baseline",
+      "file": "round-3-baseline.tsv",
+      "cpu_before": [
+        1730,
+        0,
+        304,
+        28776,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1822,
+        0,
+        304,
+        28776,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 3,
+      "variant": "cursor",
+      "file": "round-3-cursor.tsv",
+      "cpu_before": [
+        1822,
+        0,
+        304,
+        28777,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1897,
+        0,
+        304,
+        28777,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 3,
+      "variant": "bounded",
+      "file": "round-3-bounded.tsv",
+      "cpu_before": [
+        1897,
+        0,
+        304,
+        28777,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1977,
+        0,
+        304,
+        28777,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 4,
+      "variant": "baseline",
+      "file": "round-4-baseline.tsv",
+      "cpu_before": [
+        1977,
+        0,
+        304,
+        28777,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        2072,
+        0,
+        304,
+        28777,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 4,
+      "variant": "bounded",
+      "file": "round-4-bounded.tsv",
+      "cpu_before": [
+        2072,
+        0,
+        304,
+        28777,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        2149,
+        0,
+        304,
+        28777,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 4,
+      "variant": "candidate",
+      "file": "round-4-candidate.tsv",
+      "cpu_before": [
+        2149,
+        0,
+        304,
+        28777,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        2219,
+        0,
+        305,
+        28777,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 4,
+      "variant": "cursor",
+      "file": "round-4-cursor.tsv",
+      "cpu_before": [
+        2219,
+        0,
+        305,
+        28777,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        2291,
+        0,
+        305,
+        28778,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 5,
+      "variant": "bounded",
+      "file": "round-5-bounded.tsv",
+      "cpu_before": [
+        2291,
+        0,
+        305,
+        28778,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        2370,
+        0,
+        305,
+        28778,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 5,
+      "variant": "cursor",
+      "file": "round-5-cursor.tsv",
+      "cpu_before": [
+        2370,
+        0,
+        305,
+        28778,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        2441,
+        0,
+        305,
+        28778,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 5,
+      "variant": "baseline",
+      "file": "round-5-baseline.tsv",
+      "cpu_before": [
+        2441,
+        0,
+        305,
+        28778,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        2538,
+        0,
+        305,
+        28778,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 5,
+      "variant": "candidate",
+      "file": "round-5-candidate.tsv",
+      "cpu_before": [
+        2538,
+        0,
+        305,
+        28778,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        2609,
+        0,
+        305,
+        28778,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 6,
+      "variant": "cursor",
+      "file": "round-6-cursor.tsv",
+      "cpu_before": [
+        2609,
+        0,
+        305,
+        28778,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        2682,
+        0,
+        305,
+        28778,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 6,
+      "variant": "candidate",
+      "file": "round-6-candidate.tsv",
+      "cpu_before": [
+        2682,
+        0,
+        305,
+        28781,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        2750,
+        0,
+        305,
+        28781,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 6,
+      "variant": "bounded",
+      "file": "round-6-bounded.tsv",
+      "cpu_before": [
+        2750,
+        0,
+        305,
+        28784,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        2829,
+        0,
+        305,
+        28784,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 6,
+      "variant": "baseline",
+      "file": "round-6-baseline.tsv",
+      "cpu_before": [
+        2829,
+        0,
+        305,
+        28790,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        2923,
+        0,
+        305,
+        28791,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 7,
+      "variant": "candidate",
+      "file": "round-7-candidate.tsv",
+      "cpu_before": [
+        2923,
+        0,
+        305,
+        28793,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        2993,
+        0,
+        306,
+        28793,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 7,
+      "variant": "baseline",
+      "file": "round-7-baseline.tsv",
+      "cpu_before": [
+        2993,
+        0,
+        306,
+        28794,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        3091,
+        0,
+        306,
+        28794,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 7,
+      "variant": "cursor",
+      "file": "round-7-cursor.tsv",
+      "cpu_before": [
+        3091,
+        0,
+        306,
+        28794,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        3163,
+        0,
+        306,
+        28794,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 7,
+      "variant": "bounded",
+      "file": "round-7-bounded.tsv",
+      "cpu_before": [
+        3163,
+        0,
+        306,
+        28794,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        3241,
+        0,
+        306,
+        28794,
+        140,
+        0,
+        41,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    }
+  ],
+  "corpus_cases": 64203,
+  "corpus_sha256": "9750ebd9e527375a151e147d4d38dee7a6485b02ffd139b1a5c0df13a48915e3"
+}

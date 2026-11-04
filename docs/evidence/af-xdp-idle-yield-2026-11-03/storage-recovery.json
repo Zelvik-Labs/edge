@@ -1,0 +1,8 @@
+{
+  "scope": "remove only the verified duplicate extraction, retaining original ZIP and all file SHA; no build cache removal",
+  "removed": ".local/perf-round14-idle-yield/udp/extracted",
+  "unpacked_file_bytes": 98326393,
+  "archive": "docs/evidence/af-xdp-idle-yield-2026-11-03/udp-raw.zip",
+  "archive_sha256": "1f5efd42f6026a9c53675f0092a011475d8286db4f82e5bb7fcf683d9af75c92",
+  "restore_command": "python3 -m zipfile -e docs/evidence/af-xdp-idle-yield-2026-11-03/udp-raw.zip .local/perf-round14-idle-yield/udp/extracted"
+}

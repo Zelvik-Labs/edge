@@ -1,0 +1,50 @@
+{
+  "phases": {
+    "body_waf": {
+      "alignment": 8,
+      "frame_bytes": 5672
+    },
+    "context": {
+      "alignment": 8,
+      "frame_bytes": 2560
+    },
+    "early_response": {
+      "alignment": 8,
+      "frame_bytes": 1464
+    },
+    "feature_policy": {
+      "alignment": 8,
+      "frame_bytes": 1168
+    },
+    "lightweight_waf": {
+      "alignment": 8,
+      "frame_bytes": 1992
+    },
+    "limits": {
+      "alignment": 8,
+      "frame_bytes": 1912
+    },
+    "local_service": {
+      "alignment": 8,
+      "frame_bytes": 2280
+    },
+    "protocol_policy": {
+      "alignment": 8,
+      "frame_bytes": 2344
+    },
+    "rewrite": {
+      "alignment": 8,
+      "frame_bytes": 688
+    },
+    "security_state": {
+      "alignment": 8,
+      "frame_bytes": 32
+    },
+    "status_response": {
+      "alignment": 8,
+      "frame_bytes": 1768
+    }
+  },
+  "request_filter_frame_bytes": 5808,
+  "scope": "unpolled real phase frame layouts; not CPU or throughput"
+}

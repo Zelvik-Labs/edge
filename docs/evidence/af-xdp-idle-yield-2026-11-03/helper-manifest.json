@@ -1,0 +1,37 @@
+{
+  "artifact_id": 13209284565,
+  "zip_bytes": 3550,
+  "zip_sha256": "d08f271f0c43d4e5ef73cefe19eccc4a29daf62db79bf8758f17b50c9cd759ef",
+  "files": [
+    {
+      "path": "results/busy-budget-mutant.log",
+      "bytes": 1151,
+      "sha256": "d98ee79a3042048533cfc9b1f2eac4113617478ff29348c129ab58c69d2285da"
+    },
+    {
+      "path": "results/no-idle-budget-mutant.log",
+      "bytes": 1112,
+      "sha256": "914d55f780f35fcea301cd1a2f7b7b18d1006872127baa4893b585d4e8eb267a"
+    },
+    {
+      "path": "results/clippy.log",
+      "bytes": 290,
+      "sha256": "702bf88f578d0f65b8405f5e19f9e1e4afa030e304364fd7aff0fa02f6d5ad53"
+    },
+    {
+      "path": "results/production.log",
+      "bytes": 1286,
+      "sha256": "7323c90c116c0376f710a70b3325c93565c6f392a5e43cbaf659525e16e4a2b7"
+    },
+    {
+      "path": "results/restored-production.log",
+      "bytes": 761,
+      "sha256": "887a7cc3d0560c789cda774b1208bf138e39471c241872649b26e754ada9d76b"
+    },
+    {
+      "path": "results/summary.json",
+      "bytes": 1217,
+      "sha256": "9710e0187a1f5f2bcf62fec2cb64e16f5c63e920a431785cc6898c88736873a2"
+    }
+  ]
+}

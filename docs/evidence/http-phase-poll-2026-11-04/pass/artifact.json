@@ -1,0 +1,20 @@
+{
+  "id": 13309082781,
+  "node_id": "MDg6QXJ0aWZhY3QxMzMwOTA4Mjc4MQ==",
+  "name": "http-phase-poll-61e525b85d021acb518af09f1f170132b796f317",
+  "size_in_bytes": 7374425,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13309082781",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13309082781/zip",
+  "expired": false,
+  "digest": "sha256:97117eb6849f9a9c276850360dd13eb8bb09df5c029ade980103a69d7e0ec1e3",
+  "created_at": "2026-11-04T09:03:29Z",
+  "updated_at": "2026-11-04T09:03:29Z",
+  "expires_at": "2027-02-02T08:52:56Z",
+  "workflow_run": {
+    "id": 41802908107,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/program-wide-20261104",
+    "head_sha": "61e525b85d021acb518af09f1f170132b796f317"
+  }
+}

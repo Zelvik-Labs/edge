@@ -1,0 +1,40 @@
+name: Host normalization allocation component
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - benches/support/host_normalize_*.rs
+      - scripts/perf/host-normalize/**
+      - .github/workflows/host-normalize.yml
+permissions:
+  contents: read
+concurrency:
+  group: host-normalize-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  compare:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      CARGO_BUILD_JOBS: "2"
+      RUSTFLAGS: "-C target-cpu=x86-64-v2 -D warnings"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: clippy
+      - name: Build exact host helpers with separate timing and allocation binaries
+        run: python3 scripts/perf/host-normalize/run.py build
+      - name: Verify host outputs and allocation counts then measure balanced blocks
+        run: python3 scripts/perf/host-normalize/run.py measure
+      - name: Retain source, actual binaries, controls and every block including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-normalize-${{ github.sha }}
+          path: .local/host-normalize-ci/
+          include-hidden-files: true
+          if-no-files-found: error

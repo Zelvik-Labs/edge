@@ -1,0 +1,131 @@
+{
+  "passed": false,
+  "binaries_unchanged": true,
+  "cases": [
+    {
+      "label": "1-worker",
+      "wake": "worker",
+      "exit_code": 1,
+      "passed": false,
+      "network_cleanup_ok": true,
+      "remaining_links": [
+        {
+          "ifindex": 1,
+          "ifname": "lo",
+          "flags": [
+            "LOOPBACK",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 65536,
+          "qdisc": "noqueue",
+          "operstate": "UNKNOWN",
+          "linkmode": "DEFAULT",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "loopback",
+          "address": "00:00:00:00:00:00",
+          "broadcast": "00:00:00:00:00:00"
+        }
+      ],
+      "remaining_namespaces": "",
+      "elapsed_seconds": 0.6640064716339111,
+      "timing_kind": "functional suite wall time, not throughput or latency"
+    },
+    {
+      "label": "1-readable",
+      "wake": "readable",
+      "exit_code": 1,
+      "passed": false,
+      "network_cleanup_ok": true,
+      "remaining_links": [
+        {
+          "ifindex": 1,
+          "ifname": "lo",
+          "flags": [
+            "LOOPBACK",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 65536,
+          "qdisc": "noqueue",
+          "operstate": "UNKNOWN",
+          "linkmode": "DEFAULT",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "loopback",
+          "address": "00:00:00:00:00:00",
+          "broadcast": "00:00:00:00:00:00"
+        }
+      ],
+      "remaining_namespaces": "",
+      "elapsed_seconds": 0.7173888683319092,
+      "timing_kind": "functional suite wall time, not throughput or latency"
+    },
+    {
+      "label": "2-readable",
+      "wake": "readable",
+      "exit_code": 1,
+      "passed": false,
+      "network_cleanup_ok": true,
+      "remaining_links": [
+        {
+          "ifindex": 1,
+          "ifname": "lo",
+          "flags": [
+            "LOOPBACK",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 65536,
+          "qdisc": "noqueue",
+          "operstate": "UNKNOWN",
+          "linkmode": "DEFAULT",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "loopback",
+          "address": "00:00:00:00:00:00",
+          "broadcast": "00:00:00:00:00:00"
+        }
+      ],
+      "remaining_namespaces": "",
+      "elapsed_seconds": 0.7717664241790771,
+      "timing_kind": "functional suite wall time, not throughput or latency"
+    },
+    {
+      "label": "2-worker",
+      "wake": "worker",
+      "exit_code": 1,
+      "passed": false,
+      "network_cleanup_ok": true,
+      "remaining_links": [
+        {
+          "ifindex": 1,
+          "ifname": "lo",
+          "flags": [
+            "LOOPBACK",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 65536,
+          "qdisc": "noqueue",
+          "operstate": "UNKNOWN",
+          "linkmode": "DEFAULT",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "loopback",
+          "address": "00:00:00:00:00:00",
+          "broadcast": "00:00:00:00:00:00"
+        }
+      ],
+      "remaining_namespaces": "",
+      "elapsed_seconds": 0.8263874053955078,
+      "timing_kind": "functional suite wall time, not throughput or latency"
+    }
+  ],
+  "binaries": {
+    "Zelvik-Edge": "1fee1fc209df90a12e76d8a94a4630cc321f1ae6aa0cf4d705fff05bed93e2c5",
+    "h3-probe": "ea52d93abcdd32b1165786bb67f3bcc0c160dba55e7240a58570232f13cd0beb"
+  },
+  "scope": "correctness only; physical NIC and long soak untested"
+}

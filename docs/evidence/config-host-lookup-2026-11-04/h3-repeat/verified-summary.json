@@ -1,0 +1,10 @@
+{
+  "source": "436e8fdd81919f2d35f292c2519c0383805f5fb3",
+  "scope": "64 actual kernel-loopback H3 drain/replacement regressions; correctness only, not throughput or TLS certificate verification",
+  "completed": 64,
+  "failures": 0,
+  "accepted_and_closed_connections": 128,
+  "resolved_h3_requests": 192,
+  "binary_unchanged": true,
+  "actual_test_elf_in_artifact": false
+}

@@ -1,0 +1,1321 @@
+{
+  "files": [
+    {
+      "path": "protocol_state_matrix.py",
+      "bytes": 30685,
+      "sha256": "1f5465629bb6ab157ed6e25c8dd817cd49a0e6e3e37db3bdd89ed194258914e6"
+    },
+    {
+      "path": "protocol-state-client",
+      "bytes": 22456,
+      "sha256": "368312b058eb6a98373260a6b4977beb1655744418406c7c1c1bcedce92b3c1b"
+    },
+    {
+      "path": "capacity-control-old-2g/0000-h3-hit-reuse-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0000-h3-hit-reuse-after.headers",
+      "bytes": 271,
+      "sha256": "59577eef65411588ecaa0b16728a732bf3ad97572741cda446e55fcf9286a283"
+    },
+    {
+      "path": "capacity-control-old-2g/0000-h3-hit-reuse-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0000-h3-hit-reuse-before.headers",
+      "bytes": 296,
+      "sha256": "c73b5f928dea849500a03f5aea9438088059a2e3f41fefb14d510cca39b85dc3"
+    },
+    {
+      "path": "capacity-control-old-2g/0000-h3-hit-reuse-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0000-h3-hit-reuse-warm.headers",
+      "bytes": 271,
+      "sha256": "7c3b7672d5befeb03ec90c76cf4f81872d15ee05718a073e6ee98fac2376c49b"
+    },
+    {
+      "path": "capacity-control-old-2g/0000-h3-hit-reuse.0.client.tsv.gz",
+      "bytes": 49705,
+      "sha256": "7a569b01f1d166e8fdccca2b5d8d04d645ea6f8f5fba6ddff39042c6cf9edbc9"
+    },
+    {
+      "path": "capacity-control-old-2g/0000-h3-hit-reuse.0.stderr",
+      "bytes": 5528,
+      "sha256": "a89167029e52de15a7a67526fc38a538f9f1282ae667211651933e6ccc61704e"
+    },
+    {
+      "path": "capacity-control-old-2g/0000-h3-hit-reuse.1.client.tsv.gz",
+      "bytes": 74987,
+      "sha256": "9f1e249a47bbc752bd4ff617daf3ee44810370c1778e3b2bdd266d7260db543b"
+    },
+    {
+      "path": "capacity-control-old-2g/0000-h3-hit-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "8e96905f5e11383677cea4d7719451ea3a90f1400c4211128a61f6bcd2ab97d6"
+    },
+    {
+      "path": "capacity-control-old-2g/0000-h3-hit-reuse.command.json",
+      "bytes": 1003,
+      "sha256": "2e3c92986f3bbb9e1301be484b5f70eff436db2f5ce5745753d21059886c9c13"
+    },
+    {
+      "path": "capacity-control-old-2g/0001-h3-hit-fresh-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0001-h3-hit-fresh-after.headers",
+      "bytes": 271,
+      "sha256": "ed42a7c3b62f9678945151bf48060891e160c2655d8db6f9aacc9e4abab9c4de"
+    },
+    {
+      "path": "capacity-control-old-2g/0001-h3-hit-fresh-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0001-h3-hit-fresh-before.headers",
+      "bytes": 296,
+      "sha256": "4fe91f8fca72267aadbd0f732a6a51baa52aedb37b6857dbf3b17950661110db"
+    },
+    {
+      "path": "capacity-control-old-2g/0001-h3-hit-fresh-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0001-h3-hit-fresh-warm.headers",
+      "bytes": 271,
+      "sha256": "33716d72d0288692c62c5815ef3015f6c5186a2d1d7ac0cf0a8341436a054e60"
+    },
+    {
+      "path": "capacity-control-old-2g/0001-h3-hit-fresh.0.client.tsv.gz",
+      "bytes": 1869,
+      "sha256": "a51b17b3d5bc408942e9ba5fb31a4a8f27923022abab8e1344563696df0aa63b"
+    },
+    {
+      "path": "capacity-control-old-2g/0001-h3-hit-fresh.0.stderr",
+      "bytes": 5525,
+      "sha256": "6d769fd79a0e1c5813c7326f6ad4b287b5abd83a9d5bf9b552841238706b58e7"
+    },
+    {
+      "path": "capacity-control-old-2g/0001-h3-hit-fresh.1.client.tsv.gz",
+      "bytes": 1962,
+      "sha256": "bb2b67a27db0e6eb7160c54b033bf441a9208b9855506a1b8d70dcb288ed39f0"
+    },
+    {
+      "path": "capacity-control-old-2g/0001-h3-hit-fresh.1.stderr",
+      "bytes": 5525,
+      "sha256": "5ed93f3fe51699bf911907413e5f0106107a2cf062251e4eea4e44a71c136a52"
+    },
+    {
+      "path": "capacity-control-old-2g/0001-h3-hit-fresh.command.json",
+      "bytes": 1091,
+      "sha256": "fee2458910b3444b5f1acf3de7b512b890482664b903b4958494e02af4161a7c"
+    },
+    {
+      "path": "capacity-control-old-2g/0002-h3-hit-fresh-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0002-h3-hit-fresh-after.headers",
+      "bytes": 271,
+      "sha256": "09056e258c7b378664fd7b929f5c0632cd783703de3c519e829ef83b93eda9b4"
+    },
+    {
+      "path": "capacity-control-old-2g/0002-h3-hit-fresh-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0002-h3-hit-fresh-before.headers",
+      "bytes": 296,
+      "sha256": "70a5a494f14de1201d23a54038956ce79606a6b8b6f9712a7de937839b2e0988"
+    },
+    {
+      "path": "capacity-control-old-2g/0002-h3-hit-fresh-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0002-h3-hit-fresh-warm.headers",
+      "bytes": 271,
+      "sha256": "44d4e9b80482d45186b8b2c47d6b36113c63366bfff199f792095fbabdb72ab1"
+    },
+    {
+      "path": "capacity-control-old-2g/0002-h3-hit-fresh.0.client.tsv.gz",
+      "bytes": 2051,
+      "sha256": "51ab2bb5f373bfecbff92f3a70d1e1fd7ba9fb8be2b086a3b95fc177dbfb76b1"
+    },
+    {
+      "path": "capacity-control-old-2g/0002-h3-hit-fresh.0.stderr",
+      "bytes": 5525,
+      "sha256": "7943ef15280ac2ebbbcd9ca564e2b60dcf28a5587ff7b744a6b7a8dd09c48fd5"
+    },
+    {
+      "path": "capacity-control-old-2g/0002-h3-hit-fresh.1.client.tsv.gz",
+      "bytes": 1949,
+      "sha256": "a3a4601b67468a58cca21a0178cc3f1a9851b37dba7ce73c476d6ff1ad61945a"
+    },
+    {
+      "path": "capacity-control-old-2g/0002-h3-hit-fresh.1.stderr",
+      "bytes": 5524,
+      "sha256": "7dc0b3e2fec5a3e803637eab96ebf853b8b0329577e2c0bd7e57ffe12953c0c3"
+    },
+    {
+      "path": "capacity-control-old-2g/0002-h3-hit-fresh.command.json",
+      "bytes": 1091,
+      "sha256": "993bd0216bcd122e700c9f0b4fbd8999c31db9b1c8482f5f7a4e94c4a5e512b0"
+    },
+    {
+      "path": "capacity-control-old-2g/0003-h3-hit-reuse-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0003-h3-hit-reuse-after.headers",
+      "bytes": 271,
+      "sha256": "e4afda842ee0ce5f36659e860c8c47b0b08a6263b842758cd8d378ad2a6eb12a"
+    },
+    {
+      "path": "capacity-control-old-2g/0003-h3-hit-reuse-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0003-h3-hit-reuse-before.headers",
+      "bytes": 296,
+      "sha256": "ef60b279dbf1aff7b8674d002f77714f80cd2baa57ad48381361230f4646d00f"
+    },
+    {
+      "path": "capacity-control-old-2g/0003-h3-hit-reuse-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0003-h3-hit-reuse-warm.headers",
+      "bytes": 271,
+      "sha256": "a22f00022cae4bdf490553bff144ac53627bddfc16ceb60f958d09a196623bcc"
+    },
+    {
+      "path": "capacity-control-old-2g/0003-h3-hit-reuse.0.client.tsv.gz",
+      "bytes": 62146,
+      "sha256": "632f36d35d2670d2bf7a93ed5aba8255a81397381bf595a6ef6cddc58b416c2b"
+    },
+    {
+      "path": "capacity-control-old-2g/0003-h3-hit-reuse.0.stderr",
+      "bytes": 88,
+      "sha256": "35debc517d33bfdf9df89349aca8c992cb166e5861b91438a9661b3a69fe3b0c"
+    },
+    {
+      "path": "capacity-control-old-2g/0003-h3-hit-reuse.1.client.tsv.gz",
+      "bytes": 39458,
+      "sha256": "1a6f27da4ef918a3856a82ef0de94d129f58a71aff6e01e4b0f8cff22d930911"
+    },
+    {
+      "path": "capacity-control-old-2g/0003-h3-hit-reuse.1.stderr",
+      "bytes": 5528,
+      "sha256": "d15eab91cc7867a8ffb48a39971b4de6e1df0bfbda03bd49ec5b63344c572f34"
+    },
+    {
+      "path": "capacity-control-old-2g/0003-h3-hit-reuse.command.json",
+      "bytes": 1003,
+      "sha256": "36d999488c7ebb4d58c20ab32b8139a74456ea94855cca585551f2cf3fce8f09"
+    },
+    {
+      "path": "capacity-control-old-2g/0004-h3-hit-reuse-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0004-h3-hit-reuse-after.headers",
+      "bytes": 271,
+      "sha256": "cb9468249450ff85815d497602304a5e5e1d7119b13fe9c6e9e85e297b1eb5c4"
+    },
+    {
+      "path": "capacity-control-old-2g/0004-h3-hit-reuse-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0004-h3-hit-reuse-before.headers",
+      "bytes": 296,
+      "sha256": "173ce67237991c83f4d8d005db21cb679859092dfced268d7fb49218729099b6"
+    },
+    {
+      "path": "capacity-control-old-2g/0004-h3-hit-reuse-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0004-h3-hit-reuse-warm.headers",
+      "bytes": 271,
+      "sha256": "f7ce45a6594884ad26386c987402460f22d09a030d1bf393bfb907cfb857108f"
+    },
+    {
+      "path": "capacity-control-old-2g/0004-h3-hit-reuse.0.client.tsv.gz",
+      "bytes": 74740,
+      "sha256": "bc3771e66c61ad5d1cc1ab41861a435940911af9b7f171c3b4f84facaf994d05"
+    },
+    {
+      "path": "capacity-control-old-2g/0004-h3-hit-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "bc068b1bdcb72636b81e01de341573d3441170c633caf30541d1da3086a418b6"
+    },
+    {
+      "path": "capacity-control-old-2g/0004-h3-hit-reuse.1.client.tsv.gz",
+      "bytes": 48490,
+      "sha256": "23fa8528fa5a479dd04b092e769578623ee34f521c051ed32797f8333592bb6a"
+    },
+    {
+      "path": "capacity-control-old-2g/0004-h3-hit-reuse.1.stderr",
+      "bytes": 5528,
+      "sha256": "e43c2a8aee0501096ac15cb0ad89906c41f842b92d573d1f884f392cc7e25c82"
+    },
+    {
+      "path": "capacity-control-old-2g/0004-h3-hit-reuse.command.json",
+      "bytes": 1003,
+      "sha256": "4f6fd8e606452948020a9963491a71354f6a8af8ecd37937196806ddbfbb6a41"
+    },
+    {
+      "path": "capacity-control-old-2g/0005-h3-hit-fresh-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0005-h3-hit-fresh-after.headers",
+      "bytes": 271,
+      "sha256": "2843d7251a8a008de2c323dfcd4d576618be4cf27716cc3845930c470bd66974"
+    },
+    {
+      "path": "capacity-control-old-2g/0005-h3-hit-fresh-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0005-h3-hit-fresh-before.headers",
+      "bytes": 296,
+      "sha256": "d2766b201aa8aee86cb2e34443bb0fa214d8d4ab6191495ea0ce3ca49c32660b"
+    },
+    {
+      "path": "capacity-control-old-2g/0005-h3-hit-fresh-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/0005-h3-hit-fresh-warm.headers",
+      "bytes": 271,
+      "sha256": "4b5793e4c757f5c90872b8beb18373952ca4aa7fe1e6237eea17b95dce7f5e3a"
+    },
+    {
+      "path": "capacity-control-old-2g/0005-h3-hit-fresh.0.client.tsv.gz",
+      "bytes": 1859,
+      "sha256": "12533fc6eb6c612abe21f74921a6c0fcb6be7788b8f873dcf9ddefe7ba2310d6"
+    },
+    {
+      "path": "capacity-control-old-2g/0005-h3-hit-fresh.0.stderr",
+      "bytes": 5525,
+      "sha256": "44e9910942c3c2b9965ba9bce435f5a283d933e60bb2c2d40161f3fa679ed24a"
+    },
+    {
+      "path": "capacity-control-old-2g/0005-h3-hit-fresh.1.client.tsv.gz",
+      "bytes": 1935,
+      "sha256": "c9405fdc5537105b0119e9622ad4dc8cd7215e6865dac32398c5ff603eaf9fa4"
+    },
+    {
+      "path": "capacity-control-old-2g/0005-h3-hit-fresh.1.stderr",
+      "bytes": 5525,
+      "sha256": "94d4e7466018e5bb0e558d42c8f272943e4e01df625776e856f4e1747e58a916"
+    },
+    {
+      "path": "capacity-control-old-2g/0005-h3-hit-fresh.command.json",
+      "bytes": 1091,
+      "sha256": "f8f2b4541c637c0d817e5aee5b964ccc9f64ce10468a1c689ed4bfce78363107"
+    },
+    {
+      "path": "capacity-control-old-2g/controller-status.json",
+      "bytes": 14389,
+      "sha256": "7ab32faf200a043bb89c82e188fd31e0e4b6d6931a365c07c6ff4e6e1f5315b7"
+    },
+    {
+      "path": "capacity-control-old-2g/edge-boot-0000.log",
+      "bytes": 6244,
+      "sha256": "d5c9d2bb3ffcfb6bf5d19f3fefca536869aee918de0237a6f15f2eb5f3655cd4"
+    },
+    {
+      "path": "capacity-control-old-2g/edge-boot-0001.log",
+      "bytes": 5858,
+      "sha256": "39c722ce511bcd203c652cc58424d29d79dc936027440be6f040f009094327b9"
+    },
+    {
+      "path": "capacity-control-old-2g/edge-boot-0002.log",
+      "bytes": 6056,
+      "sha256": "3d7db013186cbe2d36ffde3076d976e2e6c26f55b173b5fbe55bdddfa32ffaa8"
+    },
+    {
+      "path": "capacity-control-old-2g/edge-boot-0003.log",
+      "bytes": 6247,
+      "sha256": "069109f88f0879d14bd43f6a9045e198f3b7314d99107e917635785e53e4f6c5"
+    },
+    {
+      "path": "capacity-control-old-2g/edge-boot-0004.log",
+      "bytes": 6246,
+      "sha256": "5836db57fd28691e3933812646379957357682b795ccf1562806ade5d94b9094"
+    },
+    {
+      "path": "capacity-control-old-2g/edge-ready.json",
+      "bytes": 6922,
+      "sha256": "f7f542bda79a9332648d7075234e44680dc0784213e9ada3e0bd43275e3149a6"
+    },
+    {
+      "path": "capacity-control-old-2g/edge-state-fcdb58b9f0-edge.log",
+      "bytes": 43572,
+      "sha256": "67b1d31e073de6962a09411ce2902539e81bfe5f14994a7e1008c6df23fbaa28"
+    },
+    {
+      "path": "capacity-control-old-2g/edge-state-fcdb58b9f0-origin.log",
+      "bytes": 754,
+      "sha256": "df1ae8b058f5da19d13f295a62ddb42340fe7ecd11b3e82a936e07f41149a072"
+    },
+    {
+      "path": "capacity-control-old-2g/edge.log",
+      "bytes": 5858,
+      "sha256": "69de152a223183be25bf4b32c828225284e1de224f9f99ed87a7596b44be1adb"
+    },
+    {
+      "path": "capacity-control-old-2g/manifest.json",
+      "bytes": 82233,
+      "sha256": "3d0fcf2b0c8d032f1f44ce0175441dd47a7dcdd38dbaec80816d6abb56da30b9"
+    },
+    {
+      "path": "capacity-control-old-2g/origin-reference.0.client.tsv.gz",
+      "bytes": 300510,
+      "sha256": "f6794bec43eda42e49ec3afabd4801f86dc6c3f55b8f3891f2301a714b5c775e"
+    },
+    {
+      "path": "capacity-control-old-2g/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "c0b34342c91601f1db5e462211ebf0b0816892cd1273cec74157555276944a2e"
+    },
+    {
+      "path": "capacity-control-old-2g/origin-reference.1.client.tsv.gz",
+      "bytes": 306706,
+      "sha256": "40f0173e4156ef5308fd65afe410d85997687b996c12738c5dc6c8bdb5466fc5"
+    },
+    {
+      "path": "capacity-control-old-2g/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "a27906414fa6c8281a3bc4b8deb823467beea979ab7aa4bde15aaf2caf97ad1c"
+    },
+    {
+      "path": "capacity-control-old-2g/origin-reference.command.json",
+      "bytes": 1001,
+      "sha256": "8d1f84fc26bb940512ee62cd0ed6b9fa082411b3a857d5f9107c0ede75e19701"
+    },
+    {
+      "path": "capacity-control-old-2g/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "capacity-control-old-2g/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/proxy.conf",
+      "bytes": 1109,
+      "sha256": "c2ff9ee0542c763728b6dfc96173234bbf04eda1dcc313b8edb241d6036f4d91"
+    },
+    {
+      "path": "capacity-control-old-2g/readiness.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-old-2g/readiness.headers",
+      "bytes": 294,
+      "sha256": "f38979964e746c1ae014365e357a6f6dcd7da210e92a22daa7b896c4c9e48820"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0000-h3-hit-reuse-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0000-h3-hit-reuse-after.headers",
+      "bytes": 271,
+      "sha256": "5cc92cad2fa0a9438e11b0f5069b768d09930a0685ddc987bd170a27412b5d49"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0000-h3-hit-reuse-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0000-h3-hit-reuse-before.headers",
+      "bytes": 296,
+      "sha256": "73ce815643124dd8fac4b5dab0f6545c35a2e32d202a24900376ba8eb95b2cf1"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0000-h3-hit-reuse-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0000-h3-hit-reuse-warm.headers",
+      "bytes": 271,
+      "sha256": "74100b978c2b77f919e6a1b1a568d07e86353621463a6adee26b9f3a86d82ac0"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0000-h3-hit-reuse.0.client.tsv.gz",
+      "bytes": 69429,
+      "sha256": "9ef39f253abd9cbd0cdbb4a40b656aa43d0f57a55447b860986f336f1becb715"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0000-h3-hit-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "7400127c89861db22fcba0428a9b4a569ffcac764c793ce08f140686385e8903"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0000-h3-hit-reuse.1.client.tsv.gz",
+      "bytes": 71194,
+      "sha256": "5d3b63952d9cb171eb41fb141ae48bf1244eac1df540da578e0e707c6391e06c"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0000-h3-hit-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "340c0f895fde9205319d88a4230e623ec3542463de7ee39ce897889e481c474f"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0000-h3-hit-reuse.command.json",
+      "bytes": 1021,
+      "sha256": "d087b596ebe012feaad6582e4be1b4850c2ddbe1e8e02a4125416ebf82c4014f"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0001-h3-hit-fresh-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0001-h3-hit-fresh-after.headers",
+      "bytes": 271,
+      "sha256": "d6ebd0d4589241b1c6a16a079a9550ced4b839da324c2ea8f4878f4362203258"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0001-h3-hit-fresh-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0001-h3-hit-fresh-before.headers",
+      "bytes": 296,
+      "sha256": "c8c3d86e954d20957cb57a2968ae31efc6d564c97d8ec828c53a1c2ae94c31b0"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0001-h3-hit-fresh-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0001-h3-hit-fresh-warm.headers",
+      "bytes": 271,
+      "sha256": "8530c34a1ee0b37c8ba16fe34d930be60e93feef2224f90220c79ef53e6a5a1a"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0001-h3-hit-fresh.0.client.tsv.gz",
+      "bytes": 2417,
+      "sha256": "fec9a41c2a216c83252b1f38f80a1e9aa90d8e2e8e8ae7863b9c748098f5828b"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0001-h3-hit-fresh.0.stderr",
+      "bytes": 4127,
+      "sha256": "137ba0eebc0afc72c107d113bb8fd2aefd1531dde5e31fbdaef227a05182d31e"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0001-h3-hit-fresh.1.client.tsv.gz",
+      "bytes": 2420,
+      "sha256": "af085c4542e0df19b6d4fa637faec71231b4c51cf631fb93bde2ae27c8aa6f3b"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0001-h3-hit-fresh.1.stderr",
+      "bytes": 2829,
+      "sha256": "5d8e2ef7b593096052fc0c34d5fe7220d04680ae8ac7ae6289c20459c5dfae78"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0001-h3-hit-fresh.command.json",
+      "bytes": 1109,
+      "sha256": "ad0cac4b6afa7ae077d3a6619600895d154fce70bec4856347c64250c1b4369a"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0002-h3-hit-fresh-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0002-h3-hit-fresh-after.headers",
+      "bytes": 271,
+      "sha256": "8af0b1bfdb1c23d670ca86c05d1cb97a12dd18c42a903c46b519af65dc694980"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0002-h3-hit-fresh-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0002-h3-hit-fresh-before.headers",
+      "bytes": 296,
+      "sha256": "586f51f6be856c80f4d8b4689d71b9cca15929f739c452e0391cf4c84ff46cb1"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0002-h3-hit-fresh-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0002-h3-hit-fresh-warm.headers",
+      "bytes": 271,
+      "sha256": "06d51808cac13280fc725ddf0d231a36c3aa9c2b5f740d00d55beadec70360ee"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0002-h3-hit-fresh.0.client.tsv.gz",
+      "bytes": 2574,
+      "sha256": "ecd8f99e8ac04cf33667296be4f34718ad40c93756397807b07d8d8de2617b83"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0002-h3-hit-fresh.0.stderr",
+      "bytes": 1033,
+      "sha256": "f259424d6b884dce0e2f282f7e5d83d5f9b60b89f78fc3e53db9c365cbbfdae7"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0002-h3-hit-fresh.1.client.tsv.gz",
+      "bytes": 2533,
+      "sha256": "24d3177bf0c7535ff5a3bcd97f3b241699e23e93e1c3573f395babd962243eaf"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0002-h3-hit-fresh.1.stderr",
+      "bytes": 2151,
+      "sha256": "959eefc93b741bfdcff2f9bd15061d7dfc6dd0a9b636bb55985f0a84a02c59ec"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0002-h3-hit-fresh.command.json",
+      "bytes": 1109,
+      "sha256": "b53a0788d7206a1b5589726a416d2b22f25306df75ab06f8ac1008a66ad7d83e"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0003-h3-hit-reuse-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0003-h3-hit-reuse-after.headers",
+      "bytes": 271,
+      "sha256": "1de66ecf7b4ebf5a8bcdbb1252242b6742a418e00324aa02c7f01177eb423d6e"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0003-h3-hit-reuse-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0003-h3-hit-reuse-before.headers",
+      "bytes": 296,
+      "sha256": "53ccc36758f0f7bda2821e96e43a5f1535c61ba87982e626edf677fc224cb8ce"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0003-h3-hit-reuse-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0003-h3-hit-reuse-warm.headers",
+      "bytes": 271,
+      "sha256": "d1c3f97abd53c22f5696bf72c60823e1ed9c14df108957b75cf209b8fa7ed4bf"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0003-h3-hit-reuse.0.client.tsv.gz",
+      "bytes": 64197,
+      "sha256": "19fae0f6376e210cfd5889d97a32858afb0521c4ee183a96e4b4aa76b5e691fd"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0003-h3-hit-reuse.0.stderr",
+      "bytes": 88,
+      "sha256": "1110815966737141933ffd3dbc67c3392ecdf540aa9e69276db22dc2053ba9c8"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0003-h3-hit-reuse.1.client.tsv.gz",
+      "bytes": 67245,
+      "sha256": "134605b08fff9852e870eef36e5cbd07b13e1a2eb72998820aacf1a42a6cc9c6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0003-h3-hit-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "ca797deb451d1aa72a483bd6b5746c915fc6afbca72221653e919ed4ecd0cd37"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0003-h3-hit-reuse.command.json",
+      "bytes": 1021,
+      "sha256": "eb478a8a9c2ee4e5e13f1131764511a38c75197b367e4adf1971d1266d3a693a"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0004-h3-hit-reuse-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0004-h3-hit-reuse-after.headers",
+      "bytes": 271,
+      "sha256": "64a20518689bddf667649d329f6a801c1b619b11b3e3d96cee0fab6734484eac"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0004-h3-hit-reuse-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0004-h3-hit-reuse-before.headers",
+      "bytes": 296,
+      "sha256": "a0e7454c97f3310dbc3338fe5ee6596af757b5de6c5ebc11bbac5474ffa25b3c"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0004-h3-hit-reuse-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0004-h3-hit-reuse-warm.headers",
+      "bytes": 271,
+      "sha256": "5cb53d573373366c35b6298f8e9bcf725ba0ed57f3ba08a7f3f825a84ca93cc6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0004-h3-hit-reuse.0.client.tsv.gz",
+      "bytes": 67922,
+      "sha256": "54bc32b3f5ba49cf0b6559a46f2b9a0e908268a1e6b1e490e4ed4b3591d469bf"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0004-h3-hit-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "5b239d3d9010ecdafba3da09916eeb7ea23148287fcaa63f53a2c8c5a29de653"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0004-h3-hit-reuse.1.client.tsv.gz",
+      "bytes": 71723,
+      "sha256": "c5fcd6ae6ee0bfa5a06edb11717a6562b1119ee06594f13bf8694c3071f33b27"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0004-h3-hit-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "c6569c54795a1a5c08faa19c50ffa8b392fb64d3312cfa085f19808bfd2d1792"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0004-h3-hit-reuse.command.json",
+      "bytes": 1021,
+      "sha256": "445619f9a2ee2059b88a33e82a93bbf763b729af79eebb70801ca5890dca5100"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0005-h3-hit-fresh-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0005-h3-hit-fresh-after.headers",
+      "bytes": 271,
+      "sha256": "10de6ea087c2c161318830079ea8d55c640873119b0984d44af1717e95d724f4"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0005-h3-hit-fresh-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0005-h3-hit-fresh-before.headers",
+      "bytes": 296,
+      "sha256": "4aacd0d484914efded7c9c3a643e50819d71d44cb4384fc8206a567f7899e7fe"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0005-h3-hit-fresh-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0005-h3-hit-fresh-warm.headers",
+      "bytes": 271,
+      "sha256": "6381fda9861253ee6ddc02ad0c9caa230247656db9d445280669782e9293b288"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0005-h3-hit-fresh.0.client.tsv.gz",
+      "bytes": 2597,
+      "sha256": "026a744d12245ff1b45917f053d776b3e5eb032bfffc5be1eed840f129d49f5b"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0005-h3-hit-fresh.0.stderr",
+      "bytes": 87,
+      "sha256": "ab0e7dd3f57927ab6601d79382b52cda37f1821c5892f6f6205746263c56ecfc"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0005-h3-hit-fresh.1.client.tsv.gz",
+      "bytes": 2700,
+      "sha256": "8daabdd773ffbc725330004f9932102c2cd1536216c534e8d841f1d56f84ac57"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0005-h3-hit-fresh.1.stderr",
+      "bytes": 87,
+      "sha256": "dd26bb9410798f65c504dfb79111d2f47ab19c147b0454a51cfbdca34a777a0f"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/0005-h3-hit-fresh.command.json",
+      "bytes": 1109,
+      "sha256": "2c2184f1effbf0f6a016f71aacc81e5f9cd22acc335a7d91e8a7dd5efeda582c"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/controller-status.json",
+      "bytes": 14401,
+      "sha256": "f037efe9e7543d89c50e04ab4bd253cc79597996d2cc92f915323f7550b29206"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/edge-boot-0000.log",
+      "bytes": 5623,
+      "sha256": "41f0f713657f4b60ef67be1be25a00e5054e06443f2104116a5768e604c46c6f"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/edge-boot-0001.log",
+      "bytes": 5856,
+      "sha256": "19da92e0c5ec504a38a8bb5b7dcd59d6cd427f66f34bb1576572ec20895ec715"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/edge-boot-0002.log",
+      "bytes": 6055,
+      "sha256": "8eb5c0113e67398e21f7945318ee69034aefedf210ca0d50512f4c294ce120c4"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/edge-boot-0003.log",
+      "bytes": 5626,
+      "sha256": "8d8471ff2f4d58d09445a8c8b9640abcdd8fab653d79b85410f9bd446e004a05"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/edge-boot-0004.log",
+      "bytes": 5626,
+      "sha256": "0a547d3e8aa246b805d575a99022c55971beb886e6816bc4511436377bfaf9a3"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/edge-ready.json",
+      "bytes": 6928,
+      "sha256": "56924e273f26a85ef11a1b8bac6d32e37d0a3135af63ec66fde4358859392a40"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/edge-state-1ad45f0c55-edge.log",
+      "bytes": 43620,
+      "sha256": "1d8ce819957a26f8ab46d05e49228e570b72d6f916fa99f1e54430a04b9e2217"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/edge-state-1ad45f0c55-origin.log",
+      "bytes": 754,
+      "sha256": "df1ae8b058f5da19d13f295a62ddb42340fe7ecd11b3e82a936e07f41149a072"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/edge.log",
+      "bytes": 5625,
+      "sha256": "3a661c9a020a0491c6db2e6d03745bf269d0a144f67af2a16daaa0cee51fefd5"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/manifest.json",
+      "bytes": 74472,
+      "sha256": "5bebff042f3175e7838e3159f850306afefe35472c6ab9553ae8c0ff73133e43"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/origin-reference.0.client.tsv.gz",
+      "bytes": 112186,
+      "sha256": "44fd5b8328bd2fc9ee02797b0c738c1cad08ff977bff80d568bbf757708bb9ce"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "525a5d8e096c08337b610e6456736749e9618e358aab65e27bf0a5092618f43c"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/origin-reference.1.client.tsv.gz",
+      "bytes": 234519,
+      "sha256": "339a9229b93f677c118d4b69fdf7e77e2f8dda1684b84dae60c1552f3ac2af1c"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "4bc7ee6ed2455f334b0118a0e39034a39101c7c7400929069ad640f6ecadf1c5"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/origin-reference.command.json",
+      "bytes": 1019,
+      "sha256": "2a8249a548ed06f81dfe4924a2b45dc039722de34ff9f21a90915c10704993d2"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/proxy.conf",
+      "bytes": 1109,
+      "sha256": "c2ff9ee0542c763728b6dfc96173234bbf04eda1dcc313b8edb241d6036f4d91"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/readiness.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-intermediate-2g/readiness.headers",
+      "bytes": 294,
+      "sha256": "c6f6bf095fc22c8c9a4d32685dfd3576850f9578c779fe87b43c9e8fd66b2c50"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0000-h3-hit-reuse-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0000-h3-hit-reuse-after.headers",
+      "bytes": 271,
+      "sha256": "00283c4d0bcea0ba0f88991494cbc442f4e75b75b882edf23481cddc732ddef8"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0000-h3-hit-reuse-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0000-h3-hit-reuse-before.headers",
+      "bytes": 296,
+      "sha256": "e4d2c5a3f54ad03a1e6cbdad5a557baf2a38d336f1c3884d933e585cc7629377"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0000-h3-hit-reuse-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0000-h3-hit-reuse-warm.headers",
+      "bytes": 271,
+      "sha256": "a0b15274f71e9e04fb57c9ac109963844b9be8a59795c5938201e8c8ed55030c"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0000-h3-hit-reuse.0.client.tsv.gz",
+      "bytes": 24366,
+      "sha256": "f04a2dd7a177e984670f38cbb8a1625761215ae086f0d55b6ab6276271d98f95"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0000-h3-hit-reuse.0.stderr",
+      "bytes": 88,
+      "sha256": "ebc2ea6d51612d94ba79488561a190afa9d7cedb46c90b22dc94ee029cd52ecd"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0000-h3-hit-reuse.1.client.tsv.gz",
+      "bytes": 23911,
+      "sha256": "8fc05fb29944aaa40a39cf741cb782922ef917f948c61b44a3225e63dee78af9"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0000-h3-hit-reuse.1.stderr",
+      "bytes": 88,
+      "sha256": "7a3ec097b2d8e0ac1a17935b1d889b57862eb1faeb294cb79454cc78e7c864eb"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0000-h3-hit-reuse.command.json",
+      "bytes": 1015,
+      "sha256": "0203cfe455282269efc22f25bf7871cbf44abc6ea3393654daf3427764606bc1"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0001-h3-hit-fresh-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0001-h3-hit-fresh-after.headers",
+      "bytes": 271,
+      "sha256": "a6b7b292bf9f39e8c606e8c92d4f03b95a891ef3b140602e4b79556e82209d37"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0001-h3-hit-fresh-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0001-h3-hit-fresh-before.headers",
+      "bytes": 296,
+      "sha256": "1fa57f9cbc8af4d738967db13a514e4babad3e06d007946d7e62ebecd72df4f8"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0001-h3-hit-fresh-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0001-h3-hit-fresh-warm.headers",
+      "bytes": 271,
+      "sha256": "9a4b14522fd2c7e8f4a0d9db5053c35a075b54dbc9e65ad8f8906a86281d2975"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0001-h3-hit-fresh.0.client.tsv.gz",
+      "bytes": 2538,
+      "sha256": "577f27012bd4091f5d31456cd7adb7c784c8b77057864007d78e4b9c9f950340"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0001-h3-hit-fresh.0.stderr",
+      "bytes": 87,
+      "sha256": "78c0ab400ecd3e9d1bcc3981a77a0515ee54e1e9e1b883872f126d8cff471e43"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0001-h3-hit-fresh.1.client.tsv.gz",
+      "bytes": 2503,
+      "sha256": "409318469a7a61a5bc3ad5cf9072a71d139798c941a487c3b05ac6f76ad563fd"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0001-h3-hit-fresh.1.stderr",
+      "bytes": 87,
+      "sha256": "3ae446f4608b5415c10ee1abe0f1a9b19f6848e0f4f7788cf35f1dcb601236dd"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0001-h3-hit-fresh.command.json",
+      "bytes": 1103,
+      "sha256": "b6468b8a4e28c9d5324b7285dcabf39424030e4d372e69b07f7f9f3a2fd8910d"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0002-h3-hit-fresh-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0002-h3-hit-fresh-after.headers",
+      "bytes": 271,
+      "sha256": "d9581b9eb8e7183c6b6072672632d9b17f859c7dc884d215a89b69ee40051105"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0002-h3-hit-fresh-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0002-h3-hit-fresh-before.headers",
+      "bytes": 296,
+      "sha256": "e899de6b14aa3c1db3b1d410cb51d943033ec11401ef5b98d93f08d4b186a854"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0002-h3-hit-fresh-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0002-h3-hit-fresh-warm.headers",
+      "bytes": 271,
+      "sha256": "b95fb67c6c583ecf063f68758f06c5253162c5b07aa0727ab53d0318f2176ebe"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0002-h3-hit-fresh.0.client.tsv.gz",
+      "bytes": 2532,
+      "sha256": "03c5edf349bb243c06c694272f11e80699988b8407d60dc5d826cdbcc085eb0b"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0002-h3-hit-fresh.0.stderr",
+      "bytes": 87,
+      "sha256": "43206a61148b5e53736086e92438e4160522e4a785a68837198893e7cc397eb6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0002-h3-hit-fresh.1.client.tsv.gz",
+      "bytes": 2564,
+      "sha256": "e37861d168933c736e583f72269dee55ee23058c0fd14a84c5aded4916cfbfd0"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0002-h3-hit-fresh.1.stderr",
+      "bytes": 87,
+      "sha256": "532430ff2964db4143a5546ce8b0fd030523fb046415ad6b7849e2b09d3f0c65"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0002-h3-hit-fresh.command.json",
+      "bytes": 1103,
+      "sha256": "82d63d6c7e4d509af122c72f999a7c8b9d38f05820bfd352ef527d28f7540c70"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0003-h3-hit-reuse-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0003-h3-hit-reuse-after.headers",
+      "bytes": 271,
+      "sha256": "a47e6d9782035ee919711efb0118514a332b96c6d211a8b49a695ca2e0b12b03"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0003-h3-hit-reuse-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0003-h3-hit-reuse-before.headers",
+      "bytes": 296,
+      "sha256": "17c8b835fc4021b4d35841352d4fcd098df66887036f6e6b3fb5068089bc6ccd"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0003-h3-hit-reuse-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0003-h3-hit-reuse-warm.headers",
+      "bytes": 271,
+      "sha256": "c37971f87d23dbae9e30662d4cf4b1941750a076005586c986ec981960431757"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0003-h3-hit-reuse.0.client.tsv.gz",
+      "bytes": 60959,
+      "sha256": "881e05317d95355bd9c22ca5f63a83ff63711b210b468f10808e5cde9e5e077a"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0003-h3-hit-reuse.0.stderr",
+      "bytes": 88,
+      "sha256": "c7499891682da46f9f8eeee20c51c8be40f38f86ac93185ab2ee010bc0f18865"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0003-h3-hit-reuse.1.client.tsv.gz",
+      "bytes": 63420,
+      "sha256": "784e091ae8203041f7b4bb57516245fa1664822833b7cbcfa364b74c590e6a74"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0003-h3-hit-reuse.1.stderr",
+      "bytes": 88,
+      "sha256": "f07d9e8ec09bb1b8f5c08a3bb1d626098ff5d9a93bb78efdf451cbf0ea6f01e0"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0003-h3-hit-reuse.command.json",
+      "bytes": 1015,
+      "sha256": "5ff1c7890353de10d383bcf90017e16a426aa0dfb4bcd615b3806845bf4b8399"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0004-h3-hit-reuse-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0004-h3-hit-reuse-after.headers",
+      "bytes": 271,
+      "sha256": "e1c673fa22a95dca247ac4aa526080dd052c5a1ed9d1b075b70a295b922d89a5"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0004-h3-hit-reuse-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0004-h3-hit-reuse-before.headers",
+      "bytes": 296,
+      "sha256": "cf3632250bfafb66b6d774ee3ecd5184707effa5bd4770ace50a94db2b13d96d"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0004-h3-hit-reuse-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0004-h3-hit-reuse-warm.headers",
+      "bytes": 271,
+      "sha256": "5e0ffbe2bcb91cbd84e5dc7666503524fb49563b09bd78254e25a1e6a144b576"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0004-h3-hit-reuse.0.client.tsv.gz",
+      "bytes": 64922,
+      "sha256": "47497bd38b8c195debf5ee6bc708b915ea5bfa59b54833b6552bf7347d2222ab"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0004-h3-hit-reuse.0.stderr",
+      "bytes": 90,
+      "sha256": "5ed7abc96a1e658d6114306c8aae39daf9c497f5cb69e55f918b551c9075cdcf"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0004-h3-hit-reuse.1.client.tsv.gz",
+      "bytes": 67992,
+      "sha256": "ed60ac181c43e01c110a26516ddcca15cc7a37aa00df2b372a8743106961ee08"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0004-h3-hit-reuse.1.stderr",
+      "bytes": 90,
+      "sha256": "f9bdaa9d4df6d22b5ac874d4cf936e6c733d621c7700e1bae11dc2bca0b2d17a"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0004-h3-hit-reuse.command.json",
+      "bytes": 1015,
+      "sha256": "959eacc3b0c7483103acbe10d60e0b27c3b912b61a5b263e13c098fefebaeab8"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0005-h3-hit-fresh-after.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0005-h3-hit-fresh-after.headers",
+      "bytes": 271,
+      "sha256": "1a1cb0046613b41a1632c9c7746f368bcda9f7a2d50e47361453b14d39a6cf95"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0005-h3-hit-fresh-before.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0005-h3-hit-fresh-before.headers",
+      "bytes": 296,
+      "sha256": "6c95b2ba94f0502f4c722c1388b09873ee22c36ccaaf7c09c7f0b78ffbec35b3"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0005-h3-hit-fresh-warm.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0005-h3-hit-fresh-warm.headers",
+      "bytes": 271,
+      "sha256": "91bc314dcb2aa215275344caccd00a275eb822dc7474d990d603a7f431f7d207"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0005-h3-hit-fresh.0.client.tsv.gz",
+      "bytes": 2483,
+      "sha256": "67a19c03fc38d7a4278979f5587a154b47d8c942e5f4a8e2c440513d8fcaabd0"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0005-h3-hit-fresh.0.stderr",
+      "bytes": 87,
+      "sha256": "58765597f744a85f4f8f8bc13439b37e83b84fcdc6014ad29d4a258b32c9908b"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0005-h3-hit-fresh.1.client.tsv.gz",
+      "bytes": 2479,
+      "sha256": "c44b6104b6dc2b0417a43c7dd8002569445c24181a1580f079f7da1e23a0a2a5"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0005-h3-hit-fresh.1.stderr",
+      "bytes": 87,
+      "sha256": "656a3e8968ac48f26d28606221b7e25381d3d3dd4659fc59a32c25b02a6ce899"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/0005-h3-hit-fresh.command.json",
+      "bytes": 1103,
+      "sha256": "d5ba05c124df0662c4c527112ff0e7b478485f944dfe8162020559b3af360f6d"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/controller-status.json",
+      "bytes": 14405,
+      "sha256": "b59d20a1076b229e29e40c5e7bd28a89063b8880fc12dd8fdaab5b555c417c71"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/edge-boot-0000.log",
+      "bytes": 5626,
+      "sha256": "bfc302344465c8a6b14b5cc2a9b33aa804d1f817cada7be20bdf462f8c2d6e4e"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/edge-boot-0001.log",
+      "bytes": 5435,
+      "sha256": "214033f5066779e2ea65884f1621a3bbde64bbb9a91f2049a90fdd7cb875c612"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/edge-boot-0002.log",
+      "bytes": 5237,
+      "sha256": "971cc6302b5bc949cc53e0d4ea51f1fe48272f3fc68b579b751edd4a66325f2b"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/edge-boot-0003.log",
+      "bytes": 5625,
+      "sha256": "842e37d353f14f8bc0bba1018542e54a4b9e59a7155238d4b47602fa5107ca8e"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/edge-boot-0004.log",
+      "bytes": 5626,
+      "sha256": "646399efcea5a4cf96a4fda0c5dc6f48b034a914223a30b4b6902f41f447390f"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/edge-ready.json",
+      "bytes": 6930,
+      "sha256": "69a4913a307f327a5d54b8434c072a936f4583e42238f46d28bbfb4b94814af4"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/edge-state-c330fc6209-edge.log",
+      "bytes": 43622,
+      "sha256": "e07fbf90f8c0e3c4b8f8aa8a83555324f7e63b23061b6eff85d663c01e3645aa"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/edge-state-c330fc6209-origin.log",
+      "bytes": 754,
+      "sha256": "df1ae8b058f5da19d13f295a62ddb42340fe7ecd11b3e82a936e07f41149a072"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/edge.log",
+      "bytes": 5237,
+      "sha256": "ef10779b067abcc2dc0e5abd9e641526455eec3701d2b15a913e84c32213b8c3"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/manifest.json",
+      "bytes": 70458,
+      "sha256": "8418eea51c109c8bba27fd2bff6886b6993bdbee7fe9d5dad658f9e2e233351a"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/origin-reference.0.client.tsv.gz",
+      "bytes": 204469,
+      "sha256": "6f2415f129452f22919be5baf6f800281155b33e896353344aa87b395f0465a5"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/origin-reference.0.stderr",
+      "bytes": 90,
+      "sha256": "8cbfc5554b98f611bf6adfa2ee505daeffe6957de954f47588bc507091faeac3"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/origin-reference.1.client.tsv.gz",
+      "bytes": 207207,
+      "sha256": "6a5293597850e19eb5da14fa1288f3161afed1836d93b475404498b1d9cd8d2d"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/origin-reference.1.stderr",
+      "bytes": 90,
+      "sha256": "9c93f7f0b56d11166886eef010d9d8794137626c52d9c75cec6da33e11ff4f33"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/origin-reference.command.json",
+      "bytes": 1013,
+      "sha256": "4d4559ead2bc2db7519ec15b986145d35014fdf4619f7ebba9dfbcff40abe4cb"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/origin.conf",
+      "bytes": 290,
+      "sha256": "73a7cc013b9c875e9656e161ba3c7ab687a159a6d392d8b34b21ddd435a49ed5"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/proxy.conf",
+      "bytes": 1109,
+      "sha256": "c2ff9ee0542c763728b6dfc96173234bbf04eda1dcc313b8edb241d6036f4d91"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/readiness.body",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "capacity-control-confirmed-2g/readiness.headers",
+      "bytes": 294,
+      "sha256": "39643a1104d7643b718297579beb7341561504ca4ee468e6618ee9953b6cd746"
+    }
+  ],
+  "archive_bytes": 2644417,
+  "archive_sha256": "b9279a4bce5f69ac856360fc68941391cdadbc1f1e10203a6517d5b34c947d32"
+}

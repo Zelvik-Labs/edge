@@ -1,0 +1,32 @@
+{
+  "artifact_id": 13209939579,
+  "zip_bytes": 2604,
+  "zip_sha256": "66cb3913d7e1977c0b3b383bed255d88266e2e7078ae8977fe9ac890952bc027",
+  "files": [
+    {
+      "path": "results/clippy.log",
+      "bytes": 195,
+      "sha256": "5fcfbfe799605956f6d567434d3a74033b6bce2406e33cec81f00aa6d0796ba0"
+    },
+    {
+      "path": "results/production.log",
+      "bytes": 766,
+      "sha256": "33acf22f09e69704a63753df5bd09be309f650a4af9092939b1f960a8016caf5"
+    },
+    {
+      "path": "results/missing-middle-words-mutant.log",
+      "bytes": 1154,
+      "sha256": "8c986d2b9e4547a0527f7014401beccf11d86abac359a02641fc6e56e44ed6c7"
+    },
+    {
+      "path": "results/restored-production.log",
+      "bytes": 766,
+      "sha256": "5f9458294143c5ad4c36f7e736e9d4bafedc943b58591f55ecb3c1d15333cc95"
+    },
+    {
+      "path": "results/summary.json",
+      "bytes": 793,
+      "sha256": "175fecf54523b76e3887d575307236ff6ffa28664e8c76c21428a9cea594b6c3"
+    }
+  ]
+}

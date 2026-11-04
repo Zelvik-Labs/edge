@@ -1,0 +1,179 @@
+name: Actual ready HTTP phase poll diagnostics
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - .github/workflows/http-phase-poll.yml
+      - examples/http-phase-poll.rs
+      - scripts/perf/http-phase-poll/**
+permissions:
+  contents: read
+concurrency:
+  group: http-phase-poll-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  matrix:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    env:
+      RUSTFLAGS: "-C target-cpu=x86-64-v2"
+      CARGO_BUILD_JOBS: "2"
+      RUST_TEST_THREADS: "2"
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Checkout geo runtime dependency
+        uses: actions/checkout@v5
+        with:
+          repository: Zelvik-Labs/dns
+          ref: aca0f3bb61bc498682b10900b4886709a2c248b8
+          ssh-key: ${{ secrets.ZELVIK_DNS_DEPLOY_KEY }}
+          persist-credentials: false
+          path: .ci/dns
+
+      - name: Link sibling geo runtime path
+        run: ln -s "$GITHUB_WORKSPACE/.ci/dns" "$GITHUB_WORKSPACE/../dns"
+
+      # Cargo.toml 经 https git 依赖私有仓 protocol（zelvik-suite）。凭据是**只读 deploy key**
+      # （仓库 secret PROTOCOL_DEPLOY_KEY），只对 protocol 有效；不用个人长期 token，
+      # 也不在 runner 主机上落任何凭据。把 https URL 改写成 ssh URL 让 git 用这把 key。
+      # 托管 runner 上曾靠 rust-cache 里已有的 ~/.cargo/git/db 侥幸跳过 clone，
+      # 自托管冷缓存必须真 clone，缺这一步就会在依赖解析阶段失败。
+      - name: 私有 protocol 依赖凭据（只读 deploy key）
+        run: |
+          set -euo pipefail
+          if [ -z "${PROTOCOL_DEPLOY_KEY:-}" ]; then
+            echo "::error::缺少仓库 secret PROTOCOL_DEPLOY_KEY：protocol 为私有仓库，没有凭据无法拉取依赖。"
+            exit 1
+          fi
+
+          key="$RUNNER_TEMP/protocol_deploy_key"
+          install -m 600 /dev/null "$key"
+          printf '%s\n' "$PROTOCOL_DEPLOY_KEY" > "$key"
+
+          # 主机密钥来自 HTTPS 接口而不是首次连接的 TOFU，避免第一次连接就被固定成伪造密钥。
+          if ! curl --fail-with-body --silent --show-error --location --retry 3 --retry-delay 2 \
+            -D "$RUNNER_TEMP/github-meta.headers" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $CI_METADATA_TOKEN" \
+            https://api.github.com/meta > "$RUNNER_TEMP/github-meta.json"; then
+            python3 - <<'PYMETAERROR'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          headers = root / 'github-meta.headers'
+          if headers.exists():
+              for line in headers.read_text().splitlines():
+                  if line.lower().startswith(('http/', 'x-ratelimit-')):
+                      print(line)
+          try:
+              message = json.loads((root / 'github-meta.json').read_text()).get('message', 'no API message')
+          except json.JSONDecodeError:
+              message = 'metadata endpoint returned a non-JSON error'
+          print(f'::error::GitHub metadata API failed: {message}')
+          PYMETAERROR
+            exit 1
+          fi
+          python3 - <<'PYMETA'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          keys = json.loads((root / 'github-meta.json').read_text())['ssh_keys']
+          assert isinstance(keys, list) and keys and all(isinstance(key, str) and key for key in keys)
+          (root / 'known_hosts').write_text(''.join(f'github.com {key}\n' for key in keys))
+          PYMETA
+
+          {
+            echo "GIT_SSH_COMMAND=ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+            echo "GIT_CONFIG_COUNT=1"
+            echo "GIT_CONFIG_KEY_0=url.git@github.com:Zelvik-Labs/protocol.insteadOf"
+            echo "GIT_CONFIG_VALUE_0=https://github.com/Zelvik-Labs/protocol"
+          } >> "$GITHUB_ENV"
+        env:
+          PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
+          CI_METADATA_TOKEN: ${{ github.token }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: clippy
+
+      - name: Install dependencies
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          packages=(cmake build-essential clang pkg-config perl protobuf-compiler libclang-dev libelf-dev zlib1g-dev libzstd-dev libpcap0.8-dev m4 llvm)
+
+          sudo tee /etc/apt/apt.conf.d/99ci-timeouts >/dev/null <<'EOF'
+          Acquire::Retries "3";
+          Acquire::http::Timeout "20";
+          Acquire::https::Timeout "20";
+          Acquire::ftp::Timeout "20";
+          EOF
+          sudo rm -rf /var/lib/apt/lists/*
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y --no-install-recommends "${packages[@]}"; then
+              break
+            fi
+            if [ "$attempt" = "3" ]; then
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: |
+            . -> target
+            pingora-main -> pingora-main/target
+            scripts/perf/idle-yield -> ../../../.local/idle-yield-target
+            scripts/perf/h3-index -> ../../../.local/h3-index-target
+
+      - name: Install eBPF Toolchain
+        shell: bash
+        env:
+          # Same pin as release.yml — bumping it requires re-running the
+          # XDP/AF_XDP smoke matrix.
+          BPF_LINKER_VERSION: "0.11.1"
+        run: |
+          set -euo pipefail
+          EBPF_NIGHTLY="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' crates/zelvik-edge-xdp-ebpf/rust-toolchain.toml | head -1)"
+          test -n "$EBPF_NIGHTLY"
+          rustup toolchain install "$EBPF_NIGHTLY" --profile minimal -c rust-src -c rustc-dev
+          # bpf-linker links against libLLVM (>= the LLVM providing
+          # LLVMGetDINodeTag). Distro LLVM is too old; the toolchain's own
+          # rustc-dev component ships the version-exact shared lib, so
+          # point LLVM_PREFIX at the sysroot and provide the unversioned
+          # soname the linker looks for.
+          SYSROOT="$(rustup run "$EBPF_NIGHTLY" rustc --print sysroot)"
+          ln -sf "$(find "$SYSROOT/lib" -name 'libLLVM.so.*' -print -quit)" "$SYSROOT/lib/libLLVM.so"
+          export LLVM_PREFIX="$SYSROOT"
+          cargo +"$EBPF_NIGHTLY" install bpf-linker --version "$BPF_LINKER_VERSION" --locked
+
+      - name: Build XDP eBPF Object
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f data/zelvik-edge-xdp-ebpf.o
+          cargo xtask build-ebpf
+          test -s data/zelvik-edge-xdp-ebpf.o
+          echo "ZELVIK_EDGE_XDP_EBPF_SOURCE=data/zelvik-edge-xdp-ebpf.o" >> "$GITHUB_ENV"
+          echo "ZELVIK_EDGE_XDP_EBPF_SHA256=$(sha256sum data/zelvik-edge-xdp-ebpf.o | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Lint, build and poll real phases after compilation
+        run: python3 scripts/perf/http-phase-poll/run.py build
+      - name: Retain actual executable, source and every block including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: http-phase-poll-${{ github.sha }}
+          path: .local/http-phase-poll-ci/
+          include-hidden-files: true
+          if-no-files-found: error

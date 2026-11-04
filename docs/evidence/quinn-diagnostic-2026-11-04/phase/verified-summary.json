@@ -1,0 +1,19 @@
+{
+  "source": "1ff0c14215c322b7c46852aedbce4e38088f18ad",
+  "runtime_source": "82e3cf0db722497fb594acdcfabc645a6deb2b56",
+  "scope": "instrumented protocol diagnosis only; no capacity or latency comparison",
+  "cases": 4,
+  "statuses": {
+    "traffic-errors": 2,
+    "passed": 2
+  },
+  "successful": 32867,
+  "failed": 29,
+  "infrastructure_failures": [],
+  "error_traces": 29,
+  "incomplete_processes": [],
+  "traces_with_close_frame": 29,
+  "close_reasons": {
+    "{\"code\": 14, \"direction\": \"write\", \"frame\": 0, \"reason\": \"RX key update again too soon\", \"reason_bytes\": 28, \"reason_hex\": \"5258206b65792075706461746520616761696e20746f6f20736f6f6e\", \"transport\": true, \"truncated\": false}": 29
+  }
+}

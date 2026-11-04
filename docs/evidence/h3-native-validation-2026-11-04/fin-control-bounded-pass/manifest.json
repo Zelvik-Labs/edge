@@ -1,0 +1,58 @@
+{
+  "artifact_id": 13250111187,
+  "archive": "raw.zip",
+  "archive_bytes": 51629,
+  "archive_sha256": "1c7e31f8daf1fffa46e5473da21b9c451e2d13372ff8e20df1a62a6416bf14ac",
+  "files": [
+    {
+      "path": "baseline-after.lock",
+      "bytes": 90544,
+      "sha256": "636fd5d6d79a937704122c92245786580f090ea803f79b34ee864c3bc236e7e9"
+    },
+    {
+      "path": "baseline-lock.log",
+      "bytes": 202,
+      "sha256": "b8a21e14d96568ab13ceb4bbfc7aaddbe4d1947561841242c0e657343b8585c0"
+    },
+    {
+      "path": "baseline-before.lock",
+      "bytes": 90535,
+      "sha256": "61d51f15d5c1901919b0349978c82398c79ac291384bc02e165b34defa9bad5f"
+    },
+    {
+      "path": "fixed-wire/edge-quiche-test-3019-0/cert.pem",
+      "bytes": 1139,
+      "sha256": "c0b6bb9a88ff405bff094652573efe25a3ff4149c174e66554ce4cc621761c5a"
+    },
+    {
+      "path": "fixed-wire/edge-quiche-test-3019-0/qlog/2fe7b0b1ac1a2fbe1ae5ae4f185b243fa53a3352.sqlog",
+      "bytes": 7893,
+      "sha256": "5994031eec5ac2842ee3f6673812af4c0891c0a1ec1de89e2d763c9f434bdbaa"
+    },
+    {
+      "path": "old-wire/edge-quiche-test-2966-0/cert.pem",
+      "bytes": 1139,
+      "sha256": "e9d2ef2cccc195fe419301a1f70d84051e6d47f915729d10c3755cc485d3c9d6"
+    },
+    {
+      "path": "fixed.log",
+      "bytes": 687,
+      "sha256": "909f5e036918549c7dae6e0b8f3e326d050c78f15285e779b3f5d4453db4128a"
+    },
+    {
+      "path": "old-wire/edge-quiche-test-2966-0/qlog/91de6909708c43290db4310db3b69e500ba46b8c.sqlog",
+      "bytes": 7912,
+      "sha256": "91b5a0cad6d2b0d04e899640b4e41a1066d091c77519405cef771b0ce79f6c20"
+    },
+    {
+      "path": "old.log",
+      "bytes": 1123,
+      "sha256": "87c81048929b717e76dc5b884d9cdbb9d1e11474f552e4bb7037f875bd687735"
+    },
+    {
+      "path": "status.txt",
+      "bytes": 30,
+      "sha256": "5f032eb53c2a6b9d2ac556826641907c0a10b2468b9d65536bd837582ce729a5"
+    }
+  ]
+}

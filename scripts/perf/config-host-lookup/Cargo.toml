@@ -1,0 +1,14 @@
+[package]
+name = "config-host-lookup-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[features]
+count-allocations = []
+
+[[bin]]
+name = "config-host-lookup-probe"
+path = "../../../benches/support/config_host_lookup_probe.rs"

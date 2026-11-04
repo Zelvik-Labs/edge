@@ -1,0 +1,4 @@
+{"case":"timestamp-ABA","expected_counterexample":true}
+{"case":"version-without-fences","expected_counterexample":true}
+{"case":"versioned","writers":1,"schedules":226,"preemption_bound":null}
+{"case":"versioned","writers":2,"schedules":1164,"preemption_bound":2}

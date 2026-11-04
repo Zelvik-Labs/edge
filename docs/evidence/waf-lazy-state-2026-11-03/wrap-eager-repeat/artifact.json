@@ -1,0 +1,19 @@
+{
+  "id": 13242415407,
+  "name": "waf-state-paired-8c67cf3b951df48eb775e51b811caa75e5e0053d",
+  "size_in_bytes": 562245,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13242415407",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13242415407/zip",
+  "expired": false,
+  "created_at": "2026-11-03T15:07:10Z",
+  "expires_at": "2027-02-01T15:06:04Z",
+  "updated_at": "2026-11-03T15:07:10Z",
+  "digest": "sha256:18663250bbe05a757cf4e6399e01cd6804075e89b68cf6ce8d6d47e02d4823bf",
+  "workflow_run": {
+    "id": 41660330186,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/five-priorities-20261103",
+    "head_sha": "8c67cf3b951df48eb775e51b811caa75e5e0053d"
+  }
+}

@@ -77,6 +77,8 @@ enum CertIdentity {
 #[derive(Clone, Debug)]
 pub struct CertPair {
     pub id: i64,
+    #[cfg(feature = "h3-quiche")]
+    quiche_certificate: Arc<zelvik_edge_h3_quiche::tls::Certificate>,
     certified_key: Arc<CertifiedKey>,
     cert_bytes: Vec<u8>,
     key_bytes: Vec<u8>,
@@ -192,6 +194,67 @@ impl DynamicCertSelector {
 
         let default_pair = serialize_pair_pem(snapshot.default.as_ref()?);
         Some((exact_out, wildcard_out, default_pair))
+    }
+
+    /// Dynamic SNI and OCSP use the same atomically published certificate pairs
+    /// as rustls. Parse BoringSSL material during sync, never per handshake.
+    #[cfg(feature = "h3-quiche")]
+    pub(crate) fn build_quiche_ssl_builder(
+        &self,
+    ) -> anyhow::Result<(
+        zelvik_edge_h3_quiche::boring::ssl::SslContextBuilder,
+        zelvik_edge_h3_quiche::tls::HandshakeGate,
+    )> {
+        use zelvik_edge_h3_quiche::boring::ssl::{
+            NameType, SelectCertError, Ssl, SslContextBuilder, SslMethod, SslVersion,
+        };
+        anyhow::ensure!(
+            self.has_default_cert(),
+            "no certificate snapshot available for QUIC listener"
+        );
+        let selected = Ssl::new_ex_index::<Arc<CertPair>>()?;
+        let admission = zelvik_edge_h3_quiche::tls::HandshakeGate::new()?;
+        let mut builder = SslContextBuilder::new(SslMethod::tls())?;
+        builder.set_min_proto_version(Some(SslVersion::TLS1_3))?;
+        let selector = self.clone();
+        builder.set_select_certificate_callback(move |mut hello| {
+            admission.check(hello.ssl())?;
+            if hello.ssl().ex_data(selected).is_some() {
+                return Ok(());
+            }
+            let host = hello
+                .servername(NameType::HOST_NAME)
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            let Some(pair) = selector.find_pair_blocking(&host) else {
+                tracing::error!(
+                    "HTTP/3 quiche certificate snapshot has no matching/default certificate"
+                );
+                return Err(SelectCertError::ERROR);
+            };
+            pair.quiche_certificate
+                .apply_once(hello.ssl_mut())
+                .map_err(|error| {
+                    tracing::error!("HTTP/3 quiche certificate installation failed: {error}");
+                    SelectCertError::ERROR
+                })?;
+            hello.ssl_mut().set_ex_data(selected, pair);
+            Ok(())
+        });
+        builder.set_status_callback(move |ssl| {
+            let Some(pair) = ssl.ex_data(selected).cloned() else {
+                return Ok(false);
+            };
+            let state = pair.ocsp.load();
+            if pair.ocsp_enabled
+                && let Some(record) = state.record.as_ref().filter(|record| record.valid())
+            {
+                ssl.set_ocsp_status(&record.data)?;
+                return Ok(true);
+            }
+            Ok(false)
+        })?;
+        Ok((builder, admission))
     }
 
     pub fn resolve_certified_key_for_host(&self, host: &str) -> Option<Arc<CertifiedKey>> {
@@ -904,12 +967,19 @@ fn parse_cert_pair(
 ) -> anyhow::Result<CertPair> {
     let cert_chain = parse_cert_chain(&cert_bytes)?;
     let key = parse_private_key(&key_bytes)?;
+    #[cfg(feature = "h3-quiche")]
+    let quiche_certificate = Arc::new(zelvik_edge_h3_quiche::tls::Certificate::from_der(
+        cert_chain.iter().map(|cert| cert.as_ref()),
+        key.secret_der(),
+    )?);
     let provider = default_crypto_provider();
     let certified_key = CertifiedKey::from_der(cert_chain, key, &provider)?;
     let certified_key = Arc::new(certified_key);
 
     Ok(CertPair {
         id: cert_id,
+        #[cfg(feature = "h3-quiche")]
+        quiche_certificate,
         certified_key,
         cert_bytes,
         key_bytes,
@@ -1073,6 +1143,9 @@ fn fnv_hash64_bytes(chunks: &[&[u8]]) -> u64 {
 mod tests {
     use super::*;
     use crate::config_models::{HTTPSConfig, ServerConfig, ServerNameConfig};
+
+    #[cfg(feature = "h3-quiche")]
+    include!("ssl_quiche_tests.rs");
 
     const CERT_A_PEM: &str =
         include_str!("../pingora-main/pingora-core/examples/keys/server/cert.pem");

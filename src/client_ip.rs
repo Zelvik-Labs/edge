@@ -7,6 +7,23 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::LazyLock as Lazy;
 
 static RE_VAR: Lazy<Regex> = Lazy::new(|| Regex::new(r"\$\{[^}]+\}").expect("valid regex"));
+static FALLBACK_IP_HEADERS: Lazy<[http::HeaderName; 12]> = Lazy::new(|| {
+    [
+        "x-cloud-real-ip",
+        "x-real-ip",
+        "cf-connecting-ip",
+        "true-client-ip",
+        "x-forwarded-for",
+        "x-client-ip",
+        "x-original-forwarded-for",
+        "x-cluster-client-ip",
+        "fastly-client-ip",
+        "ali-cdn-real-ip",
+        "cdn-src-ip",
+        "forwarded",
+    ]
+    .map(http::HeaderName::from_static)
+});
 static HOSTNAME: Lazy<String> = Lazy::new(|| {
     hostname::get()
         .unwrap_or_default()
@@ -155,21 +172,58 @@ pub fn fallback_client_ip(session: &Session, raw_ip: IpAddr) -> IpAddr {
     if !is_local_ip(&raw_ip) {
         return raw_ip;
     }
-    for header in [
-        "x-cloud-real-ip",
-        "x-real-ip",
-        "cf-connecting-ip",
-        "true-client-ip",
-        "x-forwarded-for",
-        "x-client-ip",
-        "x-original-forwarded-for",
-        "x-cluster-client-ip",
-        "fastly-client-ip",
-        "ali-cdn-real-ip",
-        "cdn-src-ip",
-        "forwarded",
-    ] {
-        if let Some(value) = header_value_ci(session, header)
+    let headers = &session.req_header().headers;
+    if headers.len() <= 4 {
+        // Preserve cheap lookups for the two highest-priority headers.
+        for header in &FALLBACK_IP_HEADERS[..2] {
+            if let Some(value) = headers
+                .get(header)
+                .and_then(|value| value.to_str().ok())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                && let Some(ip) = parse_candidate_ip(value)
+            {
+                return canonicalize_ip(ip);
+            }
+        }
+        let mut seen = 3u16;
+        let mut best = FALLBACK_IP_HEADERS.len();
+        let mut result = raw_ip;
+        for (name, value) in headers {
+            // These standard fields are never sources in the fixed IP list.
+            if matches!(name.as_str(), "host" | "user-agent" | "accept") {
+                continue;
+            }
+            let Some(priority) = FALLBACK_IP_HEADERS.iter().position(|header| header == name)
+            else {
+                continue;
+            };
+            let bit = 1u16 << priority;
+            if seen & bit != 0 || priority >= best {
+                continue;
+            }
+            seen |= bit;
+            if let Some(value) = value
+                .to_str()
+                .ok()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                && let Some(ip) = parse_candidate_ip(value)
+            {
+                best = priority;
+                result = canonicalize_ip(ip);
+            }
+        }
+        return result;
+    }
+    for header in FALLBACK_IP_HEADERS.iter() {
+        if let Some(value) = session
+            .req_header()
+            .headers
+            .get(header)
+            .and_then(|value| value.to_str().ok())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
             && let Some(ip) = parse_candidate_ip(value)
         {
             return canonicalize_ip(ip);
@@ -424,6 +478,26 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn fallback_headers_keep_precedence_and_public_peer_trust_boundary() {
+        use tokio::io::AsyncWriteExt;
+        let (mut client, downstream) = tokio::net::UnixStream::pair().unwrap();
+        client.write_all(b"GET / HTTP/1.1\r\nHost: example.test\r\nX-Cloud-Real-IP: invalid\r\nX-Real-IP: 203.0.113.7\r\nX-Forwarded-For: 203.0.113.8\r\n\r\n").await.unwrap();
+        let mut session = Session::new_h1(Box::new(
+            pingora_core::protocols::l4::stream::Stream::from(downstream),
+        ));
+        session.downstream_session.read_request().await.unwrap();
+        assert_eq!(
+            fallback_client_ip(&session, "10.0.0.1".parse().unwrap()),
+            "203.0.113.7".parse::<IpAddr>().unwrap()
+        );
+        assert_eq!(
+            fallback_client_ip(&session, "198.51.100.1".parse().unwrap()),
+            "198.51.100.1".parse::<IpAddr>().unwrap()
+        );
+    }
+
     #[test]
     fn remote_addr_request_header_type_uses_configured_header() {
         let server: ServerConfig = serde_json::from_value(serde_json::json!({
@@ -439,6 +513,42 @@ mod tests {
         .unwrap();
         let cfg = server.web.as_ref().unwrap().remote_addr.as_ref().unwrap();
         assert!(cfg.is_request_header_type());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn fallback_small_and_large_headers_preserve_duplicate_and_mapping_rules() {
+        use tokio::io::AsyncWriteExt;
+        let cases: [(&[u8], &str); 2] = [
+            (b"X-Real-IP: invalid\r\nX-Real-IP: 203.0.113.9\r\nX-Forwarded-For: ::ffff:198.51.100.3\r\n", "198.51.100.3"),
+            (b"CF-Connecting-IP: 2001:db8::7\r\nX-Real-IP: invalid\r\nUser-Agent: edge-test\r\n", "2001:db8::7"),
+        ];
+        for (fields, expected) in cases {
+            for large in [false, true] {
+                let mut request = b"GET / HTTP/1.1\r\nHost: 192.0.2.123\r\n".to_vec();
+                request.extend_from_slice(fields);
+                if large {
+                    request.extend_from_slice(b"X-Unrelated: 203.0.113.77\r\n");
+                }
+                request.extend_from_slice(b"\r\n");
+                let (mut client, downstream) = tokio::net::UnixStream::pair().unwrap();
+                client.write_all(&request).await.unwrap();
+                let mut session = Session::new_h1(Box::new(
+                    pingora_core::protocols::l4::stream::Stream::from(downstream),
+                ));
+                session.downstream_session.read_request().await.unwrap();
+                assert_eq!(
+                    session.req_header().headers.len(),
+                    if large { 5 } else { 4 }
+                );
+                assert_eq!(
+                    fallback_client_ip(&session, "::ffff:10.0.0.1".parse().unwrap()),
+                    expected.parse::<IpAddr>().unwrap()
+                );
+                let public: IpAddr = "::ffff:198.51.100.1".parse().unwrap();
+                assert_eq!(fallback_client_ip(&session, public), public);
+            }
+        }
     }
 
     #[test]

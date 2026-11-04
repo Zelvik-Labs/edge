@@ -1,0 +1,487 @@
+{
+  "passed": true,
+  "source_commit": "4b29028edb47e6a038392d066eee747e2f34d3f7",
+  "case_count": 68,
+  "checked_cases": 68,
+  "rtt_samples": 5780000,
+  "failures": [],
+  "checks": [
+    {
+      "label": "direct-c1-b64",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 41800.631595,
+      "p99_rtt_ns": 35282
+    },
+    {
+      "label": "r1-c1-b64-worker",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 8426.438449,
+      "p99_rtt_ns": 158584
+    },
+    {
+      "label": "r1-c1-b64-readable",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 10136.671423,
+      "p99_rtt_ns": 124764
+    },
+    {
+      "label": "r1-c1-b64-openresty",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 21640.065414,
+      "p99_rtt_ns": 62983
+    },
+    {
+      "label": "r1-c1-b64-nginx",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 21572.03351,
+      "p99_rtt_ns": 63384
+    },
+    {
+      "label": "r2-c1-b64-readable",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 10090.727426,
+      "p99_rtt_ns": 123652
+    },
+    {
+      "label": "r2-c1-b64-nginx",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 22052.683543,
+      "p99_rtt_ns": 61471
+    },
+    {
+      "label": "r2-c1-b64-worker",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 8819.096861,
+      "p99_rtt_ns": 133658
+    },
+    {
+      "label": "r2-c1-b64-openresty",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 22108.902551,
+      "p99_rtt_ns": 62142
+    },
+    {
+      "label": "r3-c1-b64-nginx",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 21655.742409,
+      "p99_rtt_ns": 62432
+    },
+    {
+      "label": "r3-c1-b64-openresty",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 22127.933769,
+      "p99_rtt_ns": 61521
+    },
+    {
+      "label": "r3-c1-b64-readable",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 9932.441016,
+      "p99_rtt_ns": 126407
+    },
+    {
+      "label": "r3-c1-b64-worker",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 8697.599725,
+      "p99_rtt_ns": 137063
+    },
+    {
+      "label": "r4-c1-b64-openresty",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 21839.053696,
+      "p99_rtt_ns": 63053
+    },
+    {
+      "label": "r4-c1-b64-worker",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 8779.181606,
+      "p99_rtt_ns": 133438
+    },
+    {
+      "label": "r4-c1-b64-nginx",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 22525.035992,
+      "p99_rtt_ns": 59648
+    },
+    {
+      "label": "r4-c1-b64-readable",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 10112.844867,
+      "p99_rtt_ns": 123412
+    },
+    {
+      "label": "direct-c1-b1200",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 41453.396369,
+      "p99_rtt_ns": 34982
+    },
+    {
+      "label": "r1-c1-b1200-worker",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 8739.046128,
+      "p99_rtt_ns": 134209
+    },
+    {
+      "label": "r1-c1-b1200-readable",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 9797.057462,
+      "p99_rtt_ns": 127899
+    },
+    {
+      "label": "r1-c1-b1200-openresty",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 19584.427573,
+      "p99_rtt_ns": 269308
+    },
+    {
+      "label": "r1-c1-b1200-nginx",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 21209.643759,
+      "p99_rtt_ns": 64145
+    },
+    {
+      "label": "r2-c1-b1200-readable",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 9874.864424,
+      "p99_rtt_ns": 125616
+    },
+    {
+      "label": "r2-c1-b1200-nginx",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 21575.515328,
+      "p99_rtt_ns": 62803
+    },
+    {
+      "label": "r2-c1-b1200-worker",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 8593.728883,
+      "p99_rtt_ns": 136932
+    },
+    {
+      "label": "r2-c1-b1200-openresty",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 21724.611358,
+      "p99_rtt_ns": 62402
+    },
+    {
+      "label": "r3-c1-b1200-nginx",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 21011.458012,
+      "p99_rtt_ns": 65337
+    },
+    {
+      "label": "r3-c1-b1200-openresty",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 21571.170641,
+      "p99_rtt_ns": 62512
+    },
+    {
+      "label": "r3-c1-b1200-readable",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 9465.389877,
+      "p99_rtt_ns": 227497
+    },
+    {
+      "label": "r3-c1-b1200-worker",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 8548.301386,
+      "p99_rtt_ns": 142431
+    },
+    {
+      "label": "r4-c1-b1200-openresty",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 21373.352731,
+      "p99_rtt_ns": 64275
+    },
+    {
+      "label": "r4-c1-b1200-worker",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 8374.802171,
+      "p99_rtt_ns": 317300
+    },
+    {
+      "label": "r4-c1-b1200-nginx",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 21700.388542,
+      "p99_rtt_ns": 61961
+    },
+    {
+      "label": "r4-c1-b1200-readable",
+      "rtt_samples": 10000,
+      "validated_datagrams": 11000,
+      "rps": 9736.107167,
+      "p99_rtt_ns": 128190
+    },
+    {
+      "label": "direct-c16-b64",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 167972.484058,
+      "p99_rtt_ns": 213385
+    },
+    {
+      "label": "r1-c16-b64-worker",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 83583.686543,
+      "p99_rtt_ns": 233705
+    },
+    {
+      "label": "r1-c16-b64-readable",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 78912.09801,
+      "p99_rtt_ns": 317409
+    },
+    {
+      "label": "r1-c16-b64-openresty",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 111453.821007,
+      "p99_rtt_ns": 175579
+    },
+    {
+      "label": "r1-c16-b64-nginx",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 110892.08077,
+      "p99_rtt_ns": 174879
+    },
+    {
+      "label": "r2-c16-b64-readable",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 80471.158674,
+      "p99_rtt_ns": 245082
+    },
+    {
+      "label": "r2-c16-b64-nginx",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 103674.304839,
+      "p99_rtt_ns": 193126
+    },
+    {
+      "label": "r2-c16-b64-worker",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 83835.473412,
+      "p99_rtt_ns": 230841
+    },
+    {
+      "label": "r2-c16-b64-openresty",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 113262.745154,
+      "p99_rtt_ns": 167959
+    },
+    {
+      "label": "r3-c16-b64-nginx",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 121443.528451,
+      "p99_rtt_ns": 165265
+    },
+    {
+      "label": "r3-c16-b64-openresty",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 102766.558943,
+      "p99_rtt_ns": 193837
+    },
+    {
+      "label": "r3-c16-b64-readable",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 81532.2923,
+      "p99_rtt_ns": 237772
+    },
+    {
+      "label": "r3-c16-b64-worker",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 84251.760724,
+      "p99_rtt_ns": 228227
+    },
+    {
+      "label": "r4-c16-b64-openresty",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 109769.84918,
+      "p99_rtt_ns": 168279
+    },
+    {
+      "label": "r4-c16-b64-worker",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 83399.007793,
+      "p99_rtt_ns": 236189
+    },
+    {
+      "label": "r4-c16-b64-nginx",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 95278.809632,
+      "p99_rtt_ns": 209680
+    },
+    {
+      "label": "r4-c16-b64-readable",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 80902.261582,
+      "p99_rtt_ns": 239154
+    },
+    {
+      "label": "direct-c16-b1200",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 163378.372125,
+      "p99_rtt_ns": 199285
+    },
+    {
+      "label": "r1-c16-b1200-worker",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 76042.908228,
+      "p99_rtt_ns": 252634
+    },
+    {
+      "label": "r1-c16-b1200-readable",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 73336.183963,
+      "p99_rtt_ns": 261486
+    },
+    {
+      "label": "r1-c16-b1200-openresty",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 98427.26524,
+      "p99_rtt_ns": 194498
+    },
+    {
+      "label": "r1-c16-b1200-nginx",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 92495.512129,
+      "p99_rtt_ns": 207988
+    },
+    {
+      "label": "r2-c16-b1200-readable",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 73042.320858,
+      "p99_rtt_ns": 263901
+    },
+    {
+      "label": "r2-c16-b1200-nginx",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 91540.255719,
+      "p99_rtt_ns": 210531
+    },
+    {
+      "label": "r2-c16-b1200-worker",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 75744.799597,
+      "p99_rtt_ns": 254376
+    },
+    {
+      "label": "r2-c16-b1200-openresty",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 117854.465611,
+      "p99_rtt_ns": 170502
+    },
+    {
+      "label": "r3-c16-b1200-nginx",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 106934.33264,
+      "p99_rtt_ns": 181188
+    },
+    {
+      "label": "r3-c16-b1200-openresty",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 86035.124181,
+      "p99_rtt_ns": 228548
+    },
+    {
+      "label": "r3-c16-b1200-readable",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 72683.951341,
+      "p99_rtt_ns": 264210
+    },
+    {
+      "label": "r3-c16-b1200-worker",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 76009.293309,
+      "p99_rtt_ns": 252743
+    },
+    {
+      "label": "r4-c16-b1200-openresty",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 91629.747944,
+      "p99_rtt_ns": 222208
+    },
+    {
+      "label": "r4-c16-b1200-worker",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 75879.335109,
+      "p99_rtt_ns": 267936
+    },
+    {
+      "label": "r4-c16-b1200-nginx",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 107411.617361,
+      "p99_rtt_ns": 181328
+    },
+    {
+      "label": "r4-c16-b1200-readable",
+      "rtt_samples": 160000,
+      "validated_datagrams": 176000,
+      "rps": 73241.651643,
+      "p99_rtt_ns": 263139
+    }
+  ],
+  "scope": "independent recomputation from retained client, origin, record and RTT files; byte verification was performed by the pinned client, not reconstructed from RTTs"
+}

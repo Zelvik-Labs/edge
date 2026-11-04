@@ -1,0 +1,222 @@
+{
+  "source": "52687f97a1134d063384c7ecd7bf49c9a8f0083a",
+  "baseline": "ac46a48becb18e1c36309eee541bda3d0c6b7b93",
+  "bounded": "b4d635519973b2ec9aa24a533129fdbb86d3fc4f",
+  "corpus_cases": 64203,
+  "allocations": {
+    "baseline": {
+      "single": {
+        "allocations": 1,
+        "reallocations": 0,
+        "requested_bytes": 11,
+        "max_allocation_bytes": 11
+      },
+      "fragmented": {
+        "allocations": 2,
+        "reallocations": 0,
+        "requested_bytes": 8274,
+        "max_allocation_bytes": 8263
+      },
+      "partial": {
+        "allocations": 1,
+        "reallocations": 0,
+        "requested_bytes": 8263,
+        "max_allocation_bytes": 8263
+      },
+      "oversized": {
+        "allocations": 1,
+        "reallocations": 0,
+        "requested_bytes": 16777219,
+        "max_allocation_bytes": 16777219
+      },
+      "trailing": {
+        "allocations": 2,
+        "reallocations": 1,
+        "requested_bytes": 8337,
+        "max_allocation_bytes": 8259
+      }
+    },
+    "bounded": {
+      "single": {
+        "allocations": 1,
+        "reallocations": 0,
+        "requested_bytes": 11,
+        "max_allocation_bytes": 11
+      },
+      "fragmented": {
+        "allocations": 2,
+        "reallocations": 0,
+        "requested_bytes": 8274,
+        "max_allocation_bytes": 8263
+      },
+      "partial": {
+        "allocations": 0,
+        "reallocations": 0,
+        "requested_bytes": 0,
+        "max_allocation_bytes": 0
+      },
+      "oversized": {
+        "allocations": 0,
+        "reallocations": 0,
+        "requested_bytes": 0,
+        "max_allocation_bytes": 0
+      },
+      "trailing": {
+        "allocations": 2,
+        "reallocations": 0,
+        "requested_bytes": 78,
+        "max_allocation_bytes": 67
+      }
+    },
+    "candidate": {
+      "single": {
+        "allocations": 1,
+        "reallocations": 0,
+        "requested_bytes": 11,
+        "max_allocation_bytes": 11
+      },
+      "fragmented": {
+        "allocations": 1,
+        "reallocations": 0,
+        "requested_bytes": 11,
+        "max_allocation_bytes": 11
+      },
+      "partial": {
+        "allocations": 0,
+        "reallocations": 0,
+        "requested_bytes": 0,
+        "max_allocation_bytes": 0
+      },
+      "oversized": {
+        "allocations": 0,
+        "reallocations": 0,
+        "requested_bytes": 0,
+        "max_allocation_bytes": 0
+      },
+      "trailing": {
+        "allocations": 1,
+        "reallocations": 0,
+        "requested_bytes": 11,
+        "max_allocation_bytes": 11
+      }
+    }
+  },
+  "cases": {
+    "single": {
+      "baseline_ns": 30.32642426492125,
+      "bounded_ns": 30.07904270384961,
+      "candidate_ns": 27.712085492085492,
+      "paired_change_vs_baseline": [
+        -0.08186570634129864,
+        -0.08310235042538827,
+        -0.0878093111513496,
+        -0.07526590260521548,
+        -0.08651032807666392,
+        -0.08374044207349074
+      ],
+      "paired_median_vs_baseline": -0.0834213962494395,
+      "paired_change_vs_bounded": [
+        -0.08201806230775344,
+        -0.08306995609433021,
+        -0.1782698762610181,
+        -0.04624298036218433,
+        -0.07727197990035972,
+        -0.07209980211997058
+      ],
+      "paired_median_vs_bounded": -0.07964502110405658
+    },
+    "fragmented": {
+      "baseline_ns": 184.99318204132288,
+      "bounded_ns": 205.51042574766115,
+      "candidate_ns": 80.74779370969964,
+      "paired_change_vs_baseline": [
+        -0.5688573402616814,
+        -0.5428056812874398,
+        -0.5711715472845968,
+        -0.5519108633907206,
+        -0.5779550604500898,
+        -0.5579941274287767
+      ],
+      "paired_median_vs_baseline": -0.5634257338452291,
+      "paired_change_vs_bounded": [
+        -0.6434630061015281,
+        -0.587818049659392,
+        -0.5834139041344137,
+        -0.5919005171032254,
+        -0.621281706165072,
+        -0.6219342151039429
+      ],
+      "paired_median_vs_bounded": -0.6065911116341487
+    },
+    "partial": {
+      "baseline_ns": 60.034916446991744,
+      "bounded_ns": 10.113598175,
+      "candidate_ns": 9.045190875,
+      "paired_change_vs_baseline": [
+        -0.8623231006591026,
+        -0.876643921063467,
+        -0.845497002945008,
+        -0.8475806016901455,
+        -0.8477013092236729,
+        -0.8501341079858123
+      ],
+      "paired_median_vs_baseline": -0.8489177086047426,
+      "paired_change_vs_bounded": [
+        -0.11680068195006577,
+        -0.10154605044117415,
+        -0.10614487605358469,
+        -0.09591442648642057,
+        -0.10826041339168613,
+        -0.10817226774248989
+      ],
+      "paired_median_vs_bounded": -0.10715857189803729
+    },
+    "oversized": {
+      "baseline_ns": 26.23681536351169,
+      "bounded_ns": 10.097441225,
+      "candidate_ns": 9.041248925000001,
+      "paired_change_vs_baseline": [
+        -0.6570012847292731,
+        -0.6492967986082703,
+        -0.655075995925186,
+        -0.652451085575944,
+        -0.6641223694872059,
+        -0.6550911066978773
+      ],
+      "paired_median_vs_baseline": -0.6550835513115316,
+      "paired_change_vs_bounded": [
+        -0.10821797727514904,
+        -0.09770933812168336,
+        -0.10375942169786578,
+        -0.10461094902473222,
+        -0.10771469870126293,
+        -0.10435164076123082
+      ],
+      "paired_median_vs_bounded": -0.10448129489298152
+    },
+    "trailing": {
+      "baseline_ns": 173.24358127203627,
+      "bounded_ns": 52.59907634667485,
+      "candidate_ns": 67.9024944001048,
+      "paired_change_vs_baseline": [
+        -0.6086189945706302,
+        -0.6054598180605752,
+        -0.6072379794408411,
+        -0.6150655106623393,
+        -0.6038533328721036,
+        -0.6103497113102252
+      ],
+      "paired_median_vs_baseline": -0.6079284870057357,
+      "paired_change_vs_bounded": [
+        0.2933403276549593,
+        0.29549558237470297,
+        0.29283171518190776,
+        0.29194838526818123,
+        0.29590664117817234,
+        0.28906692233995024
+      ],
+      "paired_median_vs_bounded": 0.29308602141843354
+    }
+  },
+  "max_host_steal_fraction": 0.0
+}

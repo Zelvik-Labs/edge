@@ -1,0 +1,73 @@
+{
+  "artifact_id": 13309082781,
+  "archive": "raw.zip",
+  "archive_bytes": 7374425,
+  "archive_sha256": "97117eb6849f9a9c276850360dd13eb8bb09df5c029ade980103a69d7e0ec1e3",
+  "files": [
+    {
+      "path": "blocks.jsonl",
+      "bytes": 164265,
+      "sha256": "443abefcb59dd2e390aeb188a42ebcf8453602e708c69bee2f97b08061aac091"
+    },
+    {
+      "path": "clippy.log",
+      "bytes": 4389,
+      "sha256": "884c8d732386df3985c7ab0867549edd1774e7631bd15ad96ea1eb47cb945b88"
+    },
+    {
+      "path": "build.log",
+      "bytes": 3004,
+      "sha256": "a95f62804d448f84ee80f53974a2f04a06b98fc5091592de2b7d8718a50a24ac"
+    },
+    {
+      "path": "metadata.json",
+      "bytes": 1744,
+      "sha256": "4d0e91f5fb9bc13d09c81216bdfe419e528753d5b18bf2b5205388fa55f5edf0"
+    },
+    {
+      "path": "probe",
+      "bytes": 17867400,
+      "sha256": "44eca91d30bcd7f1b1051f5ac6f8d9a8212c5bb6cdb33d133fae8d98db894f9b"
+    },
+    {
+      "path": "probe.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "source/Cargo.lock",
+      "bytes": 157757,
+      "sha256": "e7e9e1ae18947ab0f94c146545d24be7d014a45d0749584675e8a4931a9962c6"
+    },
+    {
+      "path": "source/Cargo.toml",
+      "bytes": 9466,
+      "sha256": "34668bee6413f9acffb98ee1acde46273ecd670c8cbe8c27cf8a205f488e1d3c"
+    },
+    {
+      "path": "source/examples/http-phase-poll.rs",
+      "bytes": 7956,
+      "sha256": "f545755c19471adf5922efa144206a04d685ef51664bb3b8e8f9f01f3945798a"
+    },
+    {
+      "path": "source/scripts/perf/http-phase-poll/run.py",
+      "bytes": 6915,
+      "sha256": "10e94898903bd81dd3e26c47b904721aa1602527869b38427b4848bc65192345"
+    },
+    {
+      "path": "source/src/config.rs",
+      "bytes": 147584,
+      "sha256": "fe99062dac91f9d8095797b5d930fe99d64517497b3889ad3968d00060699420"
+    },
+    {
+      "path": "source/src/proxy.rs",
+      "bytes": 514438,
+      "sha256": "99cbaba20b3d4585e240d1b517eca0baffe026d345c783ef266775cfda1f698b"
+    },
+    {
+      "path": "verified-summary.json",
+      "bytes": 3164,
+      "sha256": "1c1cf8a0f95d86962fb54803519c8e3948a14fd73cd40369ca094f7b3a009637"
+    }
+  ]
+}

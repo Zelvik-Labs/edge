@@ -7,6 +7,7 @@ pub mod matching;
 pub mod partial;
 pub(crate) mod process_lock;
 pub(crate) mod purge_barrier;
+pub(crate) mod storage_encoding;
 
 pub(crate) fn should_store_response_header(name: &str) -> bool {
     const SKIP: &[&str] = &[
@@ -69,7 +70,7 @@ fn parse_content_length_values<'a>(
 /// prevents the decision path from accepting a response that the writer later
 /// interprets differently.
 pub(crate) fn response_content_length(headers: &HeaderMap) -> Result<Option<u64>, ()> {
-    parse_content_length_values(headers.get_all("content-length").iter())
+    parse_content_length_values(headers.get_all(http::header::CONTENT_LENGTH).iter())
 }
 
 /// Validate the response transfer framing and report whether it is chunked.
@@ -80,7 +81,7 @@ pub(crate) fn response_content_length(headers: &HeaderMap) -> Result<Option<u64>
 /// cannot disagree with the body parser about the response boundary.
 pub(crate) fn response_transfer_encoding_is_chunked(headers: &HeaderMap) -> Result<bool, ()> {
     let mut coding_count = 0usize;
-    for value in headers.get_all("transfer-encoding").iter() {
+    for value in headers.get_all(http::header::TRANSFER_ENCODING).iter() {
         let value = value.to_str().map_err(|_| ())?;
         for coding in value.split(',') {
             let coding = coding.trim();
@@ -90,7 +91,7 @@ pub(crate) fn response_transfer_encoding_is_chunked(headers: &HeaderMap) -> Resu
             coding_count = coding_count.checked_add(1).ok_or(())?;
         }
     }
-    if coding_count > 0 && headers.contains_key("content-length") {
+    if coding_count > 0 && headers.contains_key(http::header::CONTENT_LENGTH) {
         return Err(());
     }
     if coding_count > 1 {
@@ -114,7 +115,7 @@ pub(crate) fn cache_control_headers_have_skipped_value(
     skipped: &[String],
 ) -> bool {
     headers
-        .get_all("cache-control")
+        .get_all(http::header::CACHE_CONTROL)
         .iter()
         .filter_map(|value| value.to_str().ok())
         .any(|value| cache_control_has_skipped_value(value, skipped))
@@ -127,10 +128,12 @@ pub(crate) fn request_headers_allow_shared_cache(method: &str, headers: &HeaderM
     if !method.eq_ignore_ascii_case("GET") && !method.eq_ignore_ascii_case("HEAD") {
         return false;
     }
-    if headers.contains_key("cookie") || headers.contains_key("authorization") {
+    if headers.contains_key(http::header::COOKIE)
+        || headers.contains_key(http::header::AUTHORIZATION)
+    {
         return false;
     }
-    if headers.contains_key("transfer-encoding") {
+    if headers.contains_key(http::header::TRANSFER_ENCODING) {
         return false;
     }
     // If-Range is evaluated against the origin representation's validator.
@@ -138,7 +141,7 @@ pub(crate) fn request_headers_allow_shared_cache(method: &str, headers: &HeaderM
     // whether the client's Range should produce 206 or fall back to 200.
     // Treat the combination as a pass-through request so a stale/mismatched
     // validator can never receive a false partial response from cache.
-    if headers.contains_key("range") && headers.contains_key("if-range") {
+    if headers.contains_key(http::header::RANGE) && headers.contains_key("if-range") {
         return false;
     }
     let Ok(request_content_length) = response_content_length(headers) else {
@@ -163,7 +166,7 @@ pub(crate) fn response_headers_allow_shared_cache(headers: &HeaderMap) -> bool {
         return false;
     }
 
-    if headers.contains_key("set-cookie") || headers.contains_key("vary") {
+    if headers.contains_key(http::header::SET_COOKIE) || headers.contains_key(http::header::VARY) {
         return false;
     }
 
@@ -178,7 +181,7 @@ pub(crate) fn response_headers_allow_shared_cache(headers: &HeaderMap) -> bool {
         return false;
     }
 
-    for value in headers.get_all("cache-control").iter() {
+    for value in headers.get_all(http::header::CACHE_CONTROL).iter() {
         let Ok(value) = value.to_str() else {
             return false;
         };
@@ -189,7 +192,7 @@ pub(crate) fn response_headers_allow_shared_cache(headers: &HeaderMap) -> bool {
             return false;
         }
     }
-    for value in headers.get_all("pragma").iter() {
+    for value in headers.get_all(http::header::PRAGMA).iter() {
         let Ok(value) = value.to_str() else {
             return false;
         };
@@ -205,6 +208,55 @@ pub(crate) fn response_headers_allow_shared_cache(headers: &HeaderMap) -> bool {
 /// original response are not sufficient for legacy or externally replicated
 /// entries.
 pub(crate) fn stored_response_headers_allow_shared_cache(headers: &[(String, String)]) -> bool {
+    // Preserve the original large-map capacity behavior, including its limits.
+    // This bound selects an optimization; it does not reject larger metadata.
+    if headers.len() > 32 {
+        return stored_response_headers_allow_shared_cache_restored(headers);
+    }
+    let mut content_length = None;
+    for (name, value) in headers {
+        let Ok(name) = HeaderName::from_bytes(name.as_bytes()) else {
+            return false;
+        };
+        let Ok(value) = HeaderValue::from_str(value) else {
+            return false;
+        };
+        let Ok(text) = value.to_str() else {
+            return false;
+        };
+        let is_content_length = name == http::header::CONTENT_LENGTH;
+        if !should_store_response_header(name.as_str()) && !is_content_length {
+            return false;
+        }
+        if is_content_length {
+            let Ok(length) = text.trim().parse::<u64>() else {
+                return false;
+            };
+            if content_length.is_some_and(|previous| previous != length) {
+                return false;
+            }
+            content_length = Some(length);
+        }
+        if name == http::header::VARY {
+            return false;
+        }
+        if name == http::header::CACHE_CONTROL
+            && (cache_control_has_directive(text, "no-store")
+                || cache_control_has_directive(text, "private")
+                || cache_control_has_directive(text, "no-cache"))
+        {
+            return false;
+        }
+        if name == http::header::PRAGMA && cache_control_has_directive(text, "no-cache") {
+            return false;
+        }
+        // Set-Cookie and every Transfer-Encoding are rejected by the storage
+        // header gate above. A temporary map adds no further framing checks.
+    }
+    true
+}
+
+fn stored_response_headers_allow_shared_cache_restored(headers: &[(String, String)]) -> bool {
     let mut restored = HeaderMap::with_capacity(headers.len());
     for (name, value) in headers {
         let Ok(name) = HeaderName::from_bytes(name.as_bytes()) else {
@@ -385,7 +437,7 @@ fn parse_content_encoding_values<'a>(
 /// response exists, so this check is required on both fill and hit paths.
 pub(crate) fn response_encoding_matches_cache_key(cache_key: &str, headers: &HeaderMap) -> bool {
     let values = headers
-        .get_all("content-encoding")
+        .get_all(http::header::CONTENT_ENCODING)
         .iter()
         .map(|value| value.to_str().map_err(|_| ()))
         .collect::<Result<Vec<_>, _>>();
@@ -831,6 +883,42 @@ mod tests {
         headers.insert("content-length", HeaderValue::from_static("10"));
         assert!(super::response_transfer_encoding_is_chunked(&headers).is_err());
         assert!(!super::response_headers_allow_shared_cache(&headers));
+    }
+
+    #[test]
+    fn stored_header_streaming_and_restored_paths_preserve_privacy_and_framing() {
+        for count in [2, 32, 33] {
+            for (name, value, expected) in [
+                ("Content-Length", "+00042", true),
+                ("content-length", "43", false),
+                ("content-length", "42,42", false),
+                ("Cache-Control", "public, max-age=60", true),
+                ("cache-control", "PrIvAtE = \"authorization\"", false),
+                ("pragma", "foo, no-cache", false),
+                ("Vary", "", false),
+                ("set-cookie", "session=secret", false),
+                ("transfer-encoding", "chunked", false),
+                ("x-custom", "visible\ttext", true),
+                ("x-custom", "non-ascii: 中文", false),
+                ("bad name", "value", false),
+                ("x-custom", "value\r\nforged: yes", false),
+            ] {
+                let mut headers: Vec<_> = (0..count)
+                    .map(|index| (format!("x-{index}"), "value".to_string()))
+                    .collect();
+                headers[0] = ("content-length".into(), "42".into());
+                headers[count - 1] = (name.into(), value.into());
+                assert_eq!(
+                    super::stored_response_headers_allow_shared_cache(&headers),
+                    expected,
+                    "count={count}, name={name}, value={value:?}"
+                );
+                assert_eq!(
+                    super::stored_response_headers_allow_shared_cache_restored(&headers),
+                    expected
+                );
+            }
+        }
     }
 
     #[test]

@@ -1,0 +1,155 @@
+{
+  "source": "9992eab3502a55c521c5cea630b2ce377137e3d6",
+  "baseline": "b4d635519973b2ec9aa24a533129fdbb86d3fc4f",
+  "allocations": {
+    "baseline": {
+      "1KiB_full": {
+        "allocations": 2,
+        "reallocations": 0,
+        "requested_bytes": 65560,
+        "max_allocation_bytes": 65536
+      },
+      "64KiB_full": {
+        "allocations": 2,
+        "reallocations": 0,
+        "requested_bytes": 65560,
+        "max_allocation_bytes": 65536
+      },
+      "1MiB_full": {
+        "allocations": 2,
+        "reallocations": 0,
+        "requested_bytes": 65560,
+        "max_allocation_bytes": 65536
+      },
+      "64KiB_short64": {
+        "allocations": 2,
+        "reallocations": 0,
+        "requested_bytes": 65560,
+        "max_allocation_bytes": 65536
+      }
+    },
+    "candidate": {
+      "1KiB_full": {
+        "allocations": 1,
+        "reallocations": 0,
+        "requested_bytes": 65536,
+        "max_allocation_bytes": 65536
+      },
+      "64KiB_full": {
+        "allocations": 1,
+        "reallocations": 0,
+        "requested_bytes": 65536,
+        "max_allocation_bytes": 65536
+      },
+      "1MiB_full": {
+        "allocations": 1,
+        "reallocations": 0,
+        "requested_bytes": 65536,
+        "max_allocation_bytes": 65536
+      },
+      "64KiB_short64": {
+        "allocations": 1,
+        "reallocations": 0,
+        "requested_bytes": 65536,
+        "max_allocation_bytes": 65536
+      }
+    }
+  },
+  "controls": {
+    "baseline": {
+      "partial_error": {
+        "accepted": 3,
+        "counter": 0,
+        "flushed": 0
+      },
+      "partial_zero": {
+        "accepted": 3,
+        "counter": 0,
+        "flushed": 0
+      },
+      "partial_cancel": {
+        "accepted": 3,
+        "counter": 0,
+        "flushed": 0
+      },
+      "read_cancel": {
+        "accepted": 6,
+        "counter": 6,
+        "flushed": 0
+      }
+    },
+    "candidate": {
+      "partial_error": {
+        "accepted": 3,
+        "counter": 3,
+        "flushed": 3
+      },
+      "partial_zero": {
+        "accepted": 3,
+        "counter": 3,
+        "flushed": 3
+      },
+      "partial_cancel": {
+        "accepted": 3,
+        "counter": 3,
+        "flushed": 3
+      },
+      "read_cancel": {
+        "accepted": 6,
+        "counter": 6,
+        "flushed": 6
+      }
+    }
+  },
+  "cases": {
+    "1KiB_full": {
+      "baseline_ns": 841.1020551991897,
+      "candidate_ns": 835.6099207673061,
+      "paired_change": [
+        -0.011618194267335125,
+        -0.006529688517504573,
+        -0.005500318726168407,
+        -0.009515508967234076,
+        0.009956007122973842
+      ],
+      "paired_median": -0.006529688517504573
+    },
+    "64KiB_full": {
+      "baseline_ns": 3953.6024853228964,
+      "candidate_ns": 3940.265823785065,
+      "paired_change": [
+        -0.0022598965683658934,
+        -0.006293194621783349,
+        -0.002548521529390335,
+        -0.001913569564098605,
+        -0.0036091255108792186
+      ],
+      "paired_median": -0.002548521529390335
+    },
+    "1MiB_full": {
+      "baseline_ns": 60161.87319277108,
+      "candidate_ns": 59441.35479041916,
+      "paired_change": [
+        -0.016920782727093853,
+        -0.006663129767835341,
+        -0.014239598384870766,
+        -0.012706986609465676,
+        -0.010284614030707684
+      ],
+      "paired_median": -0.012706986609465676
+    },
+    "64KiB_short64": {
+      "baseline_ns": 6656.0833552631575,
+      "candidate_ns": 6885.627933151432,
+      "paired_change": [
+        0.03435946892563546,
+        0.02607595046518374,
+        0.09660315101329586,
+        0.049365224173635536,
+        0.03806307762159866
+      ],
+      "paired_median": 0.03806307762159866
+    }
+  },
+  "max_host_steal_fraction": 0.0
+}

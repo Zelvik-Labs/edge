@@ -1,0 +1,53 @@
+{
+  "artifact_id": 13304255000,
+  "archive": "raw.zip",
+  "archive_bytes": 39619,
+  "archive_sha256": "8862c227c77576d81fca5178b279341e6e618b68d84789765b995751ec5bc4d9",
+  "files": [
+    {
+      "path": "source/Cargo.lock",
+      "bytes": 168,
+      "sha256": "b06c247b78fc9befba5c15f98e7ffed7a98eb4cb9fe57812ec9d0613c049435a"
+    },
+    {
+      "path": "source/allocator.rs",
+      "bytes": 2375,
+      "sha256": "e58d551ed0afbbc1767da29b8726ffda84032eec0132b1faa872c93cd8cc4a37"
+    },
+    {
+      "path": "source/Cargo.toml",
+      "bytes": 203,
+      "sha256": "c420d8cc15f19c33991904b8d40376bfa2002b1c044b0a32710b1f3c46226319"
+    },
+    {
+      "path": "source/candidate.rs",
+      "bytes": 636,
+      "sha256": "ed1a595624665102c522f4a9db684c0ea5e4b8e882182343dba72a13f5edbf8d"
+    },
+    {
+      "path": "source/main.rs",
+      "bytes": 4619,
+      "sha256": "6064fecd982e05dbf92b6fecede6fb3e89616494664deb169c28c67cd278eb5b"
+    },
+    {
+      "path": "source/original-config.rs",
+      "bytes": 145162,
+      "sha256": "dd45682e32168c6967aaf0306b32bafff45d397b5f920212978646a966831147"
+    },
+    {
+      "path": "source/original-lb-factory.rs",
+      "bytes": 58574,
+      "sha256": "a722cebb2dc1a08f0317a2f0249df3f395e203d7ac99dd7e38ba8b5b711f5a17"
+    },
+    {
+      "path": "source/original.rs",
+      "bytes": 673,
+      "sha256": "0cc03938defbb9ecafdd12329178613842d68688ab87d9e700543448e119dbb4"
+    },
+    {
+      "path": "timing-clippy.log",
+      "bytes": 1549,
+      "sha256": "c100ed487b69e77b73e4d6346eacb2668c8ce80302de8b70faa99beb0d780d44"
+    }
+  ]
+}

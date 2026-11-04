@@ -1,0 +1,248 @@
+{
+  "source": "ba474745fae3c08332d9e0862d9d5650550664ff",
+  "baseline": "a79b20d22c32e2b77c926e2335792b874b1d8bc8",
+  "differential_inputs": 31981,
+  "accepted_inputs": 3424,
+  "raw_blocks": 2560,
+  "max_host_steal_fraction": 0.0,
+  "allocations": {
+    "baseline": [
+      {
+        "case": "empty",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "typical6",
+        "allocations": "8",
+        "reallocations": "0",
+        "bytes": "771",
+        "largest": "624"
+      },
+      {
+        "case": "custom16",
+        "allocations": "28",
+        "reallocations": "0",
+        "bytes": "4169",
+        "largest": "2496"
+      },
+      {
+        "case": "private_tail",
+        "allocations": "10",
+        "reallocations": "0",
+        "bytes": "1738",
+        "largest": "1248"
+      },
+      {
+        "case": "duplicate_length",
+        "allocations": "11",
+        "reallocations": "0",
+        "bytes": "1725",
+        "largest": "1248"
+      },
+      {
+        "case": "framing_reject",
+        "allocations": "3",
+        "reallocations": "0",
+        "bytes": "115",
+        "largest": "104"
+      },
+      {
+        "case": "boundary32",
+        "allocations": "66",
+        "reallocations": "0",
+        "bytes": "5526",
+        "largest": "4992"
+      },
+      {
+        "case": "fallback33",
+        "allocations": "68",
+        "reallocations": "0",
+        "bytes": "5535",
+        "largest": "4992"
+      }
+    ],
+    "candidate": [
+      {
+        "case": "empty",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "typical6",
+        "allocations": "6",
+        "reallocations": "0",
+        "bytes": "115",
+        "largest": "29"
+      },
+      {
+        "case": "custom16",
+        "allocations": "26",
+        "reallocations": "0",
+        "bytes": "1545",
+        "largest": "128"
+      },
+      {
+        "case": "private_tail",
+        "allocations": "7",
+        "reallocations": "0",
+        "bytes": "138",
+        "largest": "29"
+      },
+      {
+        "case": "duplicate_length",
+        "allocations": "8",
+        "reallocations": "0",
+        "bytes": "125",
+        "largest": "29"
+      },
+      {
+        "case": "framing_reject",
+        "allocations": "1",
+        "reallocations": "0",
+        "bytes": "7",
+        "largest": "7"
+      },
+      {
+        "case": "boundary32",
+        "allocations": "64",
+        "reallocations": "0",
+        "bytes": "278",
+        "largest": "5"
+      },
+      {
+        "case": "fallback33",
+        "allocations": "68",
+        "reallocations": "0",
+        "bytes": "5535",
+        "largest": "4992"
+      }
+    ]
+  },
+  "cases": {
+    "empty": {
+      "baseline_ns": 41.35638395079903,
+      "candidate_ns": 3.2066518754032654,
+      "paired_changes": [
+        -0.9263474175632486,
+        -0.9229655430815477,
+        -0.9265422565949966,
+        -0.9217026702408342,
+        -0.9218969682269028,
+        -0.9218588381828905,
+        -0.9233166768363584,
+        -0.9220589953621161
+      ],
+      "paired_median": -0.9225122692218319
+    },
+    "typical6": {
+      "baseline_ns": 609.7961333975975,
+      "candidate_ns": 397.8008233178472,
+      "paired_changes": [
+        -0.35889247686034653,
+        -0.4986227995120367,
+        -0.3238731198119007,
+        -0.351526343690471,
+        -0.35375520959177986,
+        -0.33038071528339286,
+        -0.3549488850603817,
+        -0.33900201479671854
+      ],
+      "paired_median": -0.3526407766411254
+    },
+    "custom16": {
+      "baseline_ns": 1812.2064808238638,
+      "candidate_ns": 1268.6481791834676,
+      "paired_changes": [
+        -0.30216247210223734,
+        -0.3138402271050742,
+        -0.3000383157118166,
+        -0.2983536637868469,
+        -0.3036714940961074,
+        -0.2961815918257228,
+        -0.31938684183845545,
+        -0.2987243465809444
+      ],
+      "paired_median": -0.301100393907027
+    },
+    "private_tail": {
+      "baseline_ns": 818.9652369823065,
+      "candidate_ns": 513.3213193452495,
+      "paired_changes": [
+        -0.38244454913559256,
+        -0.38034953027465535,
+        -0.37194598760037734,
+        -0.37339542469618237,
+        -0.37301464528601713,
+        -0.365492199912291,
+        -0.3739661584550912,
+        -0.3640545092832016
+      ],
+      "paired_median": -0.37320503499109975
+    },
+    "duplicate_length": {
+      "baseline_ns": 906.17565132714,
+      "candidate_ns": 542.7587414068515,
+      "paired_changes": [
+        -0.49498947279870564,
+        -0.40253962321460246,
+        -0.40402446068002495,
+        -0.38659933133832947,
+        -0.40714632721740684,
+        -0.39547834677713456,
+        -0.4017874354973855,
+        -0.38649774490766386
+      ],
+      "paired_median": -0.402163529355994
+    },
+    "framing_reject": {
+      "baseline_ns": 82.60573155478573,
+      "candidate_ns": 53.34419609292117,
+      "paired_changes": [
+        -0.35453794622185764,
+        -0.35513255886606987,
+        -0.3792697057992941,
+        -0.35114109791457127,
+        -0.359367311701147,
+        -0.34212412683160387,
+        -0.3641315943190788,
+        -0.35227610501483486
+      ],
+      "paired_median": -0.35483525254396375
+    },
+    "boundary32": {
+      "baseline_ns": 3757.444656999144,
+      "candidate_ns": 1962.0934555802878,
+      "paired_changes": [
+        -0.5065278775905838,
+        -0.4785122069221024,
+        -0.5065745002400688,
+        -0.47588604140412016,
+        -0.46770003711241714,
+        -0.47739663716842407,
+        -0.47005987419498685,
+        -0.5019335475473422
+      ],
+      "paired_median": -0.4779544220452632
+    },
+    "fallback33": {
+      "baseline_ns": 3870.0935916649287,
+      "candidate_ns": 3871.045851759195,
+      "paired_changes": [
+        0.011821721193330248,
+        -0.09811110366912956,
+        -0.05424907696793224,
+        0.005252847659064086,
+        0.010225873282055709,
+        -0.0008030745879777923,
+        -0.0030044598038760917,
+        -0.0027930380478455863
+      ],
+      "paired_median": -0.0017980563179116893
+    }
+  }
+}

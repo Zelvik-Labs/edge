@@ -1,0 +1,1 @@
+{"passed": true, "source_commit": "07021fe84f976795f28771c255243b6f6f7c21ee", "checked_cases": 136, "rtt_samples": 13600000, "failures": [], "same_binaries_and_sources_across_budgets": true, "scope": "independent recomputation of retained outputs; full byte/sequence verification happened in the pinned C client, not reconstructed from RTTs"}

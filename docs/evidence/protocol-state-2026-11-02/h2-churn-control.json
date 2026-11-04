@@ -1,0 +1,251 @@
+{
+  "purpose": "diagnostic only, not in formal capacity medians",
+  "setting": "Nginx keepalive_requests=200, same native client, 32 request concurrency, 8 sec, one repeat",
+  "manifest_sha256": "acfcff8a48de541e1609ff81246abd5744d1da371a462cd3987a07638d948072",
+  "proxy_conf_sha256": "bf663ec1b850f832180ae3b36a3b3539f044dae8c2faee3b3ce0406e1a109046",
+  "helper_sha256": "d93150debe941ddb1b2ff5c65a9b34611d347704ce27277f5e29742b8b76cc87",
+  "cases": [
+    {
+      "protocol": "h2",
+      "cache": "off",
+      "connection": "multiplex",
+      "repeat": 0,
+      "status": "traffic-errors",
+      "error": null,
+      "native": {
+        "client": "native-libcurl-multi",
+        "request_limit": null,
+        "successful": 90032,
+        "failed": 403,
+        "error_distribution": {
+          "curl_56/http_0/v_0": 403
+        },
+        "first_failures": [
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.0006,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 11
+          },
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.000584,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 13
+          },
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.000549,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 12
+          },
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.001269,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 0
+          },
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.000427,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 16
+          },
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.000382,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 11
+          },
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.000613,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 19
+          },
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.000571,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 18
+          }
+        ],
+        "new_connections": 452,
+        "good_rps": 11157.556390777876,
+        "p99_ms": 11.06
+      }
+    },
+    {
+      "protocol": "h2",
+      "cache": "hit",
+      "connection": "multiplex",
+      "repeat": 0,
+      "status": "traffic-errors",
+      "error": null,
+      "native": {
+        "client": "native-libcurl-multi",
+        "request_limit": null,
+        "successful": 112632,
+        "failed": 606,
+        "error_distribution": {
+          "curl_56/http_0/v_0": 606
+        },
+        "first_failures": [
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.005443,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 5
+          },
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.005433,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 4
+          },
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.001406,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 4
+          },
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.000938,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 6
+          },
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.00049,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 4
+          },
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.000405,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 11
+          },
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.001074,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 10
+          },
+          {
+            "code": 0,
+            "version": "0",
+            "connects": 0,
+            "bytes": 0,
+            "seconds": 0.001052,
+            "ttfb": 0.0,
+            "exitcode": 56,
+            "connection_id": 7
+          }
+        ],
+        "new_connections": 565,
+        "good_rps": 13975.409669123183,
+        "p99_ms": 10.399000000000001
+      }
+    },
+    {
+      "protocol": "h2",
+      "cache": "hit",
+      "connection": "reuse",
+      "repeat": 0,
+      "status": "passed",
+      "error": null,
+      "native": {
+        "client": "native-libcurl-multi",
+        "request_limit": null,
+        "successful": 135073,
+        "failed": 0,
+        "error_distribution": {},
+        "first_failures": [],
+        "new_connections": 693,
+        "good_rps": 16761.260474976898,
+        "p99_ms": 7.798
+      }
+    },
+    {
+      "protocol": "h2",
+      "cache": "off",
+      "connection": "reuse",
+      "repeat": 0,
+      "status": "passed",
+      "error": null,
+      "native": {
+        "client": "native-libcurl-multi",
+        "request_limit": null,
+        "successful": 98379,
+        "failed": 0,
+        "error_distribution": {},
+        "first_failures": [],
+        "new_connections": 509,
+        "good_rps": 12239.368797287909,
+        "p99_ms": 8.272
+      }
+    }
+  ]
+}

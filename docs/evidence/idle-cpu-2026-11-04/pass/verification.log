@@ -1,0 +1,48 @@
+{
+  "source": "d07a4c7b29fc93e164282c3669fb9d8b3afe38a6",
+  "cells": 8,
+  "successful": 587900,
+  "failed": 0,
+  "cpu_assignment": {
+    "proxy": [
+      0
+    ],
+    "client": [
+      1,
+      2
+    ],
+    "origin": [
+      3
+    ]
+  },
+  "medians": [
+    {
+      "target": "edge",
+      "idle_before_cpu_cores": 0.026118430332002632,
+      "loaded_cpu_usec_per_response": 133.72471941058166,
+      "idle_after_cpu_cores": 0.025701219583447926
+    },
+    {
+      "target": "nginx",
+      "idle_before_cpu_cores": 6.599253437240059e-06,
+      "loaded_cpu_usec_per_response": 46.31317577942819,
+      "idle_after_cpu_cores": 4.749487815219909e-06
+    },
+    {
+      "target": "openresty",
+      "idle_before_cpu_cores": 5.164425607842182e-05,
+      "loaded_cpu_usec_per_response": 46.114029863875295,
+      "idle_after_cpu_cores": 5.184427137005964e-05
+    },
+    {
+      "target": "pingora",
+      "idle_before_cpu_cores": 0.001975990935573663,
+      "loaded_cpu_usec_per_response": 60.969835712797796,
+      "idle_after_cpu_cores": 0.002046330112979735
+    }
+  ],
+  "no_idle_cpu_subtraction": true,
+  "no_capacity_ranking": true,
+  "scope": "host-counter diagnosis of immutable executables, H1 OFF reuse, two independent reverse orders"
+}
+{"raw_archive_replayed": true, "source": "d07a4c7b29fc93e164282c3669fb9d8b3afe38a6", "cells": 8, "successful": 587900, "failed": 0, "cpu_assignment": {"proxy": [0], "client": [1, 2], "origin": [3]}, "medians": [{"target": "edge", "idle_before_cpu_cores": 0.026118430332002632, "loaded_cpu_usec_per_response": 133.72471941058166, "idle_after_cpu_cores": 0.025701219583447926}, {"target": "nginx", "idle_before_cpu_cores": 6.599253437240059e-06, "loaded_cpu_usec_per_response": 46.31317577942819, "idle_after_cpu_cores": 4.749487815219909e-06}, {"target": "openresty", "idle_before_cpu_cores": 5.164425607842182e-05, "loaded_cpu_usec_per_response": 46.114029863875295, "idle_after_cpu_cores": 5.184427137005964e-05}, {"target": "pingora", "idle_before_cpu_cores": 0.001975990935573663, "loaded_cpu_usec_per_response": 60.969835712797796, "idle_after_cpu_cores": 0.002046330112979735}], "no_idle_cpu_subtraction": true, "no_capacity_ranking": true, "scope": "host-counter diagnosis of immutable executables, H1 OFF reuse, two independent reverse orders"}

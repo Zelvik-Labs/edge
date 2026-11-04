@@ -1,0 +1,926 @@
+--- baseline/src/proxy.rs
++++ candidate/src/proxy.rs
+@@ -48,6 +48,10 @@
+ pub struct LazyBytes(Option<Vec<u8>>);
+ 
+ static EMPTY_BYTES_VEC: LazyLock<Vec<u8>> = LazyLock::new(Vec::new);
++static EMPTY_CACHE_POLICIES: LazyLock<Arc<Vec<Arc<HTTPCachePolicy>>>> =
++    LazyLock::new(|| Arc::new(Vec::new()));
++static EMPTY_COMPILED_PLANS: LazyLock<Arc<crate::compiled::CompiledPlanSet>> =
++    LazyLock::new(|| Arc::new(crate::compiled::CompiledPlanSet::default()));
+ 
+ fn merged_session_cookie_header(session: &Session) -> Option<String> {
+     let values = session
+@@ -498,8 +502,8 @@
+             plan_max_upload_bytes: None,
+             plan_downlink_mbps: None,
+             traffic_limit_notice_body: None,
+-            global_cache_policies: Arc::new(Vec::new()),
+-            compiled_plans: Arc::new(crate::compiled::CompiledPlanSet::default()),
++            global_cache_policies: Arc::clone(&EMPTY_CACHE_POLICIES),
++            compiled_plans: Arc::clone(&EMPTY_COMPILED_PLANS),
+             global_http_config: None,
+             firewall_policies_snapshot: None,
+             node_level: 0,
+@@ -629,6 +633,15 @@
+ 
+ static HTTP_REQUEST_PARSE_MARKS: Lazy<DashMap<String, i64>> =
+     Lazy::new(|| DashMap::with_shard_amount(64));
++tokio::task_local! {
++    static HTTP1_REQUEST_PARSED: std::cell::Cell<bool>;
++}
++
++pub(crate) async fn with_http1_parse_tracking<F: std::future::Future>(future: F) -> F::Output {
++    HTTP1_REQUEST_PARSED
++        .scope(std::cell::Cell::new(false), future)
++        .await
++}
+ static HTTP_REQUEST_PARSE_MARK_SWEEP_AT_MS: LazyLock<std::sync::atomic::AtomicI64> =
+     LazyLock::new(|| std::sync::atomic::AtomicI64::new(0));
+ static HTTP_REQUEST_PARSE_MARK_WARN_AT_MS: LazyLock<std::sync::atomic::AtomicI64> =
+@@ -703,12 +716,24 @@
+ }
+ 
+ pub(crate) fn mark_http_request_parsed(session: &Session) {
++    if session.as_downstream().is_http2() || session.as_downstream().is_custom() {
++        return;
++    }
++    if HTTP1_REQUEST_PARSED
++        .try_with(|parsed| parsed.set(true))
++        .is_ok()
++    {
++        return;
++    }
+     if let Some(client_addr) = session.downstream_session.client_addr() {
+         insert_http_request_parse_mark(client_addr);
+     }
+ }
+ 
+ pub(crate) fn take_http_request_parse_mark(client_addr: impl ToString) -> bool {
++    if let Ok(parsed) = HTTP1_REQUEST_PARSED.try_with(|parsed| parsed.replace(false)) {
++        return parsed;
++    }
+     sweep_http_request_parse_marks();
+     HTTP_REQUEST_PARSE_MARKS
+         .remove(&http_request_parse_mark_key(client_addr))
+@@ -3769,59 +3794,68 @@
+             return true;
+         }
+ 
+-        let request_url = Self::current_request_url(session, ctx);
+-        let path = session.req_header().uri.path().to_ascii_lowercase();
+-        let is_hls_asset = path.ends_with(".m3u8") || path.ends_with(".ts");
+         let feature_plan = server
+             .id
+             .and_then(|server_id| ctx.compiled_plans.server_features.get(&server_id));
+-
+-        let optimization_matches = feature_plan
+-            .is_some_and(|plan| plan.optimization_matches_url(&request_url))
++        let optimization = server
++            .web
++            .as_ref()
++            .and_then(|web| web.optimization.as_ref())
++            .filter(|optimization| optimization.is_on());
++        let hls = server
++            .web
++            .as_ref()
++            .and_then(|web| web.hls.as_ref())
++            .and_then(|hls| hls.encrypting.as_ref())
++            .filter(|encrypting| encrypting.is_on);
++        let optimization_enabled =
++            feature_plan.is_some_and(|plan| plan.has_optimization()) || optimization.is_some();
++        let hls_enabled =
++            feature_plan.is_some_and(|plan| plan.has_hls_encrypting()) || hls.is_some();
++
++        // Do not build a full URL (or lowercase a path) for disabled filters.
++        // Both compiled and raw fallback policies remain authoritative.
++        if optimization_enabled || hls_enabled {
++            let request_url = Self::current_request_url(session, ctx);
++            if feature_plan.is_some_and(|plan| plan.optimization_matches_url(&request_url))
++                || optimization.is_some_and(|optimization| {
++                    optimization
++                        .html
++                        .as_ref()
++                        .is_some_and(|config| config.is_on && config.base.matches_url(&request_url))
++                        || optimization.css.as_ref().is_some_and(|config| {
++                            config.is_on && config.base.matches_url(&request_url)
++                        })
++                        || optimization.javascript.as_ref().is_some_and(|config| {
++                            config.is_on && config.base.matches_url(&request_url)
++                        })
++                })
++            {
++                return true;
++            }
++            let is_hls_asset = session
++                .req_header()
++                .uri
++                .path()
++                .rsplit_once('.')
++                .is_some_and(|(_, extension)| {
++                    extension.eq_ignore_ascii_case("m3u8") || extension.eq_ignore_ascii_case("ts")
++                });
++            if is_hls_asset
++                && (feature_plan.is_some_and(|plan| plan.hls_encrypting_matches(&request_url))
++                    || hls.is_some_and(|encrypting| encrypting.matches_url(&request_url)))
++            {
++                return true;
++            }
++        }
++
++        (Self::compiled_site_webp_matches_request(ctx, session).unwrap_or(false)
+             || server
+                 .web
+                 .as_ref()
+-                .and_then(|web| web.optimization.as_ref())
+-                .is_some_and(|optimization| {
+-                    optimization.is_on()
+-                        && optimization.html.as_ref().is_some_and(|config| {
+-                            config.is_on && config.base.matches_url(&request_url)
+-                        })
+-                        || optimization.is_on()
+-                            && optimization.css.as_ref().is_some_and(|config| {
+-                                config.is_on && config.base.matches_url(&request_url)
+-                            })
+-                        || optimization.is_on()
+-                            && optimization.javascript.as_ref().is_some_and(|config| {
+-                                config.is_on && config.base.matches_url(&request_url)
+-                            })
+-                });
+-        if optimization_matches {
+-            return true;
+-        }
+-
+-        let hls_matches = is_hls_asset
+-            && (feature_plan.is_some_and(|plan| {
+-                plan.has_hls_encrypting() && plan.hls_encrypting_matches(&request_url)
+-            }) || server
+-                .web
+-                .as_ref()
+-                .and_then(|web| web.hls.as_ref())
+-                .and_then(|hls| hls.encrypting.as_ref())
+-                .is_some_and(|encrypting| {
+-                    encrypting.is_on && encrypting.matches_url(&request_url)
+-                }));
+-        if hls_matches {
+-            return true;
+-        }
+-
+-        self.global_webp_policy().is_some()
+-            && (Self::compiled_site_webp_matches_request(ctx, session).unwrap_or(false)
+-                || server
+-                    .web
+-                    .as_ref()
+-                    .and_then(|web| web.webp.as_ref())
+-                    .is_some_and(|webp| Self::site_webp_matches_request(webp, session)))
++                .and_then(|web| web.webp.as_ref())
++                .is_some_and(|webp| Self::site_webp_matches_request(webp, session)))
++            && self.global_webp_policy().is_some()
+     }
+ 
+     fn request_path_has_webp_image_extension(session: &Session) -> bool {
+@@ -3941,7 +3975,8 @@
+         // applied media-range precedence and q=0. This keeps the compiled and
+         // fallback paths from disagreeing on `image/webp;q=0` or `image/*`.
+         Some(
+-            Self::request_accepts_webp(session)
++            feature_plan.has_webp()
++                && Self::request_accepts_webp(session)
+                 && feature_plan.webp_matches_request(session.req_header().uri.path(), "image/webp"),
+         )
+     }
+@@ -8184,8 +8219,8 @@
+         &self,
+         session: &mut Session,
+         ctx: &mut ProxyCTX,
+-        state: RequestFilterState,
+-    ) -> Result<PhaseOutcome<RequestFilterState>> {
++        state: &RequestFilterState,
++    ) -> Result<PhaseOutcome<()>> {
+         ctx.request_phase = RequestPhase::LocalService;
+         ctx.is_on = state.hot_path.is_on;
+         if !ctx.is_on {
+@@ -8209,15 +8244,15 @@
+             return Ok(PhaseOutcome::Done(true));
+         }
+ 
+-        Ok(PhaseOutcome::Continue(state))
++        Ok(PhaseOutcome::Continue(()))
+     }
+ 
+     async fn run_protocol_policy_phase(
+         &self,
+         session: &mut Session,
+         ctx: &mut ProxyCTX,
+-        state: RequestFilterState,
+-    ) -> Result<PhaseOutcome<RequestFilterState>> {
++        state: &RequestFilterState,
++    ) -> Result<PhaseOutcome<()>> {
+         ctx.request_phase = RequestPhase::ProtocolPolicy;
+         if let Some(server) = &ctx.server {
+             if let Some(web) = &server.web
+@@ -8300,15 +8335,15 @@
+                 .map(PhaseOutcome::Done);
+         }
+ 
+-        Ok(PhaseOutcome::Continue(state))
++        Ok(PhaseOutcome::Continue(()))
+     }
+ 
+     async fn run_early_response_phase(
+         &self,
+         session: &mut Session,
+         ctx: &mut ProxyCTX,
+-        state: RequestFilterState,
+-    ) -> Result<PhaseOutcome<RequestFilterState>> {
++        state: &RequestFilterState,
++    ) -> Result<PhaseOutcome<()>> {
+         ctx.request_phase = RequestPhase::EarlyResponse;
+         if let Some(server) = ctx.server.clone()
+             && let Some(ref web) = server.web
+@@ -8428,15 +8463,14 @@
+             return Ok(PhaseOutcome::Done(true));
+         }
+ 
+-        Ok(PhaseOutcome::Continue(state))
++        Ok(PhaseOutcome::Continue(()))
+     }
+ 
+     async fn run_security_state_phase(
+         &self,
+         session: &mut Session,
+         ctx: &mut ProxyCTX,
+-        state: RequestFilterState,
+-    ) -> Result<PhaseOutcome<RequestFilterState>> {
++    ) -> Result<PhaseOutcome<()>> {
+         ctx.request_phase = RequestPhase::SecurityState;
+         let waf_enabled = ctx
+             .server
+@@ -8470,15 +8504,15 @@
+         }
+ 
+         self.ensure_request_metrics_started(ctx);
+-        Ok(PhaseOutcome::Continue(state))
++        Ok(PhaseOutcome::Continue(()))
+     }
+ 
+     async fn run_limits_phase(
+         &self,
+         session: &mut Session,
+         ctx: &mut ProxyCTX,
+-        state: RequestFilterState,
+-    ) -> Result<PhaseOutcome<RequestFilterState>> {
++        state: &RequestFilterState,
++    ) -> Result<PhaseOutcome<()>> {
+         ctx.request_phase = RequestPhase::Limits;
+         let full_url = Self::request_full_url(session, ctx);
+         if self.config.is_deleted_content_exact_sync(&full_url) {
+@@ -8544,28 +8578,27 @@
+                 .map(PhaseOutcome::Done);
+         }
+ 
+-        Ok(PhaseOutcome::Continue(state))
++        Ok(PhaseOutcome::Continue(()))
+     }
+ 
+     async fn run_lightweight_waf_phase(
+         &self,
+         session: &mut Session,
+         ctx: &mut ProxyCTX,
+-        state: RequestFilterState,
+-    ) -> Result<PhaseOutcome<RequestFilterState>> {
++    ) -> Result<PhaseOutcome<()>> {
+         ctx.request_phase = RequestPhase::LightweightWaf;
+         if self.run_lightweight_request_security(session, ctx).await? {
+             return Ok(PhaseOutcome::Done(true));
+         }
+-        Ok(PhaseOutcome::Continue(state))
++        Ok(PhaseOutcome::Continue(()))
+     }
+ 
+     async fn run_body_waf_phase(
+         &self,
+         session: &mut Session,
+         ctx: &mut ProxyCTX,
+-        state: RequestFilterState,
+-    ) -> Result<PhaseOutcome<RequestFilterState>> {
++        state: &RequestFilterState,
++    ) -> Result<PhaseOutcome<()>> {
+         ctx.request_phase = RequestPhase::BodyWaf;
+         let (blocked, _action) = self
+             .run_miss_only_body_waf(session, ctx, &state.hot_path.firewall_policies)
+@@ -8573,15 +8606,14 @@
+         if blocked {
+             return Ok(PhaseOutcome::Done(true));
+         }
+-        Ok(PhaseOutcome::Continue(state))
++        Ok(PhaseOutcome::Continue(()))
+     }
+ 
+     async fn run_feature_policy_phase(
+         &self,
+         session: &mut Session,
+         ctx: &mut ProxyCTX,
+-        state: RequestFilterState,
+-    ) -> Result<PhaseOutcome<RequestFilterState>> {
++    ) -> Result<PhaseOutcome<()>> {
+         ctx.request_phase = RequestPhase::FeaturePolicy;
+         if self.enforce_referers(session, ctx).await? {
+             return Ok(PhaseOutcome::Done(true));
+@@ -8592,15 +8624,15 @@
+         if self.enforce_auth(session, ctx).await? {
+             return Ok(PhaseOutcome::Done(true));
+         }
+-        Ok(PhaseOutcome::Continue(state))
++        Ok(PhaseOutcome::Continue(()))
+     }
+ 
+     async fn run_rewrite_phase(
+         &self,
+         session: &mut Session,
+         ctx: &mut ProxyCTX,
+-        state: RequestFilterState,
+-    ) -> Result<PhaseOutcome<RequestFilterState>> {
++        state: &RequestFilterState,
++    ) -> Result<PhaseOutcome<()>> {
+         ctx.request_phase = RequestPhase::Rewrite;
+         if let Some(server) = &ctx.server
+             && let Some(web) = &server.web
+@@ -8726,7 +8758,7 @@
+             }
+         }
+ 
+-        Ok(PhaseOutcome::Continue(state))
++        Ok(PhaseOutcome::Continue(()))
+     }
+ }
+ 
+@@ -8899,47 +8931,44 @@
+ 
+     async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
+         mark_http_request_parsed(session);
+-        let mut state = match self.run_request_context_phase(session, ctx).await? {
++        let state = match self.run_request_context_phase(session, ctx).await? {
+             PhaseOutcome::Continue(state) => state,
+             PhaseOutcome::Done(done) => return Ok(done),
+         };
+-        state = match self.run_local_service_phase(session, ctx, state).await? {
+-            PhaseOutcome::Continue(state) => state,
+-            PhaseOutcome::Done(done) => return Ok(done),
+-        };
+-        state = match self.run_protocol_policy_phase(session, ctx, state).await? {
+-            PhaseOutcome::Continue(state) => state,
+-            PhaseOutcome::Done(done) => return Ok(done),
+-        };
+-        state = match self.run_early_response_phase(session, ctx, state).await? {
+-            PhaseOutcome::Continue(state) => state,
+-            PhaseOutcome::Done(done) => return Ok(done),
+-        };
+-        state = match self.run_security_state_phase(session, ctx, state).await? {
+-            PhaseOutcome::Continue(state) => state,
+-            PhaseOutcome::Done(done) => return Ok(done),
+-        };
+-        state = match self.run_limits_phase(session, ctx, state).await? {
+-            PhaseOutcome::Continue(state) => state,
+-            PhaseOutcome::Done(done) => return Ok(done),
+-        };
+-        state = match self.run_lightweight_waf_phase(session, ctx, state).await? {
+-            PhaseOutcome::Continue(state) => state,
+-            PhaseOutcome::Done(done) => return Ok(done),
+-        };
+-        state = match self.run_body_waf_phase(session, ctx, state).await? {
+-            PhaseOutcome::Continue(state) => state,
+-            PhaseOutcome::Done(done) => return Ok(done),
+-        };
+-        state = match self.run_feature_policy_phase(session, ctx, state).await? {
+-            PhaseOutcome::Continue(state) => state,
+-            PhaseOutcome::Done(done) => return Ok(done),
+-        };
+-        let _state = match self.run_rewrite_phase(session, ctx, state).await? {
+-            PhaseOutcome::Continue(state) => state,
+-            PhaseOutcome::Done(done) => return Ok(done),
+-        };
+-
++        // The immutable snapshot has one owner for the whole filter. Phases
++        // borrow it instead of moving it through their futures and results.
++        if let PhaseOutcome::Done(done) = self.run_local_service_phase(session, ctx, &state).await?
++        {
++            return Ok(done);
++        }
++        if let PhaseOutcome::Done(done) =
++            self.run_protocol_policy_phase(session, ctx, &state).await?
++        {
++            return Ok(done);
++        }
++        if let PhaseOutcome::Done(done) =
++            self.run_early_response_phase(session, ctx, &state).await?
++        {
++            return Ok(done);
++        }
++        if let PhaseOutcome::Done(done) = self.run_security_state_phase(session, ctx).await? {
++            return Ok(done);
++        }
++        if let PhaseOutcome::Done(done) = self.run_limits_phase(session, ctx, &state).await? {
++            return Ok(done);
++        }
++        if let PhaseOutcome::Done(done) = self.run_lightweight_waf_phase(session, ctx).await? {
++            return Ok(done);
++        }
++        if let PhaseOutcome::Done(done) = self.run_body_waf_phase(session, ctx, &state).await? {
++            return Ok(done);
++        }
++        if let PhaseOutcome::Done(done) = self.run_feature_policy_phase(session, ctx).await? {
++            return Ok(done);
++        }
++        if let PhaseOutcome::Done(done) = self.run_rewrite_phase(session, ctx, &state).await? {
++            return Ok(done);
++        }
+         ctx.request_phase = RequestPhase::Proxy;
+         Ok(false)
+     }
+@@ -12170,6 +12199,95 @@
+         assert!(!EdgeProxy::request_has_enabled_outbound_waf(&ctx));
+     }
+ 
++    #[cfg(unix)]
++    #[tokio::test]
++    async fn connection_owned_parse_tracking_keeps_first_request_detection_isolated() {
++        use tokio::io::AsyncWriteExt;
++        let (mut client, downstream) = tokio::net::UnixStream::pair().unwrap();
++        client
++            .write_all(b"GET / HTTP/1.1\r\nHost: example.test\r\n\r\n")
++            .await
++            .unwrap();
++        let mut session = pingora::proxy::Session::new_h1(Box::new(
++            pingora::protocols::l4::stream::Stream::from(downstream),
++        ));
++        session.downstream_session.read_request().await.unwrap();
++        super::with_http1_parse_tracking(async {
++            assert!(!super::take_http_request_parse_mark("owned-connection"));
++            super::mark_http_request_parsed(&session);
++            super::with_http1_parse_tracking(async {
++                assert!(!super::take_http_request_parse_mark("other-connection"));
++            })
++            .await;
++            assert!(super::take_http_request_parse_mark("owned-connection"));
++            assert!(!super::take_http_request_parse_mark("owned-connection"));
++            super::mark_http_request_parsed(&session);
++            assert!(super::take_http_request_parse_mark("owned-connection"));
++        })
++        .await;
++        assert!(!super::HTTP_REQUEST_PARSE_MARKS.contains_key("owned-connection"));
++    }
++
++    #[cfg(unix)]
++    #[tokio::test]
++    async fn cache_transform_admission_preserves_compiled_and_raw_feature_rules() {
++        use tokio::io::AsyncWriteExt;
++        for compiled in [false, true] {
++            for (web, path, expected) in [
++                (serde_json::json!({}), "/plain", false),
++                (
++                    serde_json::json!({"optimization":{"html":{"isOn":true}}}),
++                    "/index.html",
++                    true,
++                ),
++                (
++                    serde_json::json!({"optimization":{"html":{"isOn":false}}}),
++                    "/index.html",
++                    false,
++                ),
++                (
++                    serde_json::json!({"hls":{"encrypting":{"isOn":true}}}),
++                    "/video.TS",
++                    true,
++                ),
++                (
++                    serde_json::json!({"hls":{"encrypting":{"isOn":true}}}),
++                    "/style.css",
++                    false,
++                ),
++            ] {
++                let server: crate::config_models::ServerConfig =
++                    serde_json::from_value(serde_json::json!({"id":1,"web":web})).unwrap();
++                let (mut client, downstream) = tokio::net::UnixStream::pair().unwrap();
++                client
++                    .write_all(
++                        format!("GET {path} HTTP/1.1\r\nHost: example.test\r\n\r\n").as_bytes(),
++                    )
++                    .await
++                    .unwrap();
++                let mut session = pingora::proxy::Session::new_h1(Box::new(
++                    pingora::protocols::l4::stream::Stream::from(downstream),
++                ));
++                session.downstream_session.read_request().await.unwrap();
++                let mut ctx = super::ProxyCTX::default();
++                if compiled {
++                    let mut plans = crate::compiled::CompiledPlanSet::default();
++                    if let Some(plan) = crate::compiled::CompiledServerFeaturePlan::compile(&server)
++                    {
++                        plans.server_features.insert(1, std::sync::Arc::new(plan));
++                    }
++                    ctx.compiled_plans = std::sync::Arc::new(plans);
++                }
++                assert_eq!(
++                    test_proxy()
++                        .request_may_change_response_representation(&session, &ctx, &server),
++                    expected,
++                    "compiled={compiled} path={path}"
++                );
++            }
++        }
++    }
++
+     #[test]
+     fn cached_response_header_for_store_strips_set_cookie() {
+         let mut resp = pingora_http::ResponseHeader::build(200, Some(5)).unwrap();
+--- baseline/src/client_ip.rs
++++ candidate/src/client_ip.rs
+@@ -7,6 +7,23 @@
+ use std::sync::LazyLock as Lazy;
+ 
+ static RE_VAR: Lazy<Regex> = Lazy::new(|| Regex::new(r"\$\{[^}]+\}").expect("valid regex"));
++static FALLBACK_IP_HEADERS: Lazy<[http::HeaderName; 12]> = Lazy::new(|| {
++    [
++        "x-cloud-real-ip",
++        "x-real-ip",
++        "cf-connecting-ip",
++        "true-client-ip",
++        "x-forwarded-for",
++        "x-client-ip",
++        "x-original-forwarded-for",
++        "x-cluster-client-ip",
++        "fastly-client-ip",
++        "ali-cdn-real-ip",
++        "cdn-src-ip",
++        "forwarded",
++    ]
++    .map(http::HeaderName::from_static)
++});
+ static HOSTNAME: Lazy<String> = Lazy::new(|| {
+     hostname::get()
+         .unwrap_or_default()
+@@ -155,21 +172,14 @@
+     if !is_local_ip(&raw_ip) {
+         return raw_ip;
+     }
+-    for header in [
+-        "x-cloud-real-ip",
+-        "x-real-ip",
+-        "cf-connecting-ip",
+-        "true-client-ip",
+-        "x-forwarded-for",
+-        "x-client-ip",
+-        "x-original-forwarded-for",
+-        "x-cluster-client-ip",
+-        "fastly-client-ip",
+-        "ali-cdn-real-ip",
+-        "cdn-src-ip",
+-        "forwarded",
+-    ] {
+-        if let Some(value) = header_value_ci(session, header)
++    for header in FALLBACK_IP_HEADERS.iter() {
++        if let Some(value) = session
++            .req_header()
++            .headers
++            .get(header)
++            .and_then(|value| value.to_str().ok())
++            .map(str::trim)
++            .filter(|value| !value.is_empty())
+             && let Some(ip) = parse_candidate_ip(value)
+         {
+             return canonicalize_ip(ip);
+@@ -424,6 +434,26 @@
+         );
+     }
+ 
++    #[cfg(unix)]
++    #[tokio::test]
++    async fn fallback_headers_keep_precedence_and_public_peer_trust_boundary() {
++        use tokio::io::AsyncWriteExt;
++        let (mut client, downstream) = tokio::net::UnixStream::pair().unwrap();
++        client.write_all(b"GET / HTTP/1.1\r\nHost: example.test\r\nX-Cloud-Real-IP: invalid\r\nX-Real-IP: 203.0.113.7\r\nX-Forwarded-For: 203.0.113.8\r\n\r\n").await.unwrap();
++        let mut session = Session::new_h1(Box::new(
++            pingora_core::protocols::l4::stream::Stream::from(downstream),
++        ));
++        session.downstream_session.read_request().await.unwrap();
++        assert_eq!(
++            fallback_client_ip(&session, "10.0.0.1".parse().unwrap()),
++            "203.0.113.7".parse::<IpAddr>().unwrap()
++        );
++        assert_eq!(
++            fallback_client_ip(&session, "198.51.100.1".parse().unwrap()),
++            "198.51.100.1".parse::<IpAddr>().unwrap()
++        );
++    }
++
+     #[test]
+     fn remote_addr_request_header_type_uses_configured_header() {
+         let server: ServerConfig = serde_json::from_value(serde_json::json!({
+--- baseline/src/compiled.rs
++++ candidate/src/compiled.rs
+@@ -157,6 +157,10 @@
+ 
+     pub fn has_hls_encrypting(&self) -> bool {
+         self.hls_encrypting.is_some()
++    }
++
++    pub fn has_webp(&self) -> bool {
++        self.webp.is_some()
+     }
+ 
+     pub fn hls_encrypting_matches(&self, request_url: &str) -> bool {
+--- baseline/src/cache_hybrid.rs
++++ candidate/src/cache_hybrid.rs
+@@ -314,7 +314,30 @@
+     pub weight: u32,
+ }
+ 
++async fn create_cache_temp_file(path: &Path) -> std::io::Result<tokio::fs::File> {
++    let path = path.to_path_buf();
++    // Directory preparation and open belong to one operation. Tokio's two
++    // filesystem calls otherwise schedule two separate blocking-pool tasks.
++    let file = tokio::task::spawn_blocking(move || {
++        if let Some(parent) = path.parent() {
++            std::fs::create_dir_all(parent)?;
++        }
++        std::fs::File::create(path)
++    })
++    .await
++    .map_err(std::io::Error::other)??;
++    Ok(tokio::fs::File::from_std(file))
++}
++
+ impl FileStorage {
++    fn process_lock_roots(&self) -> Vec<PathBuf> {
++        if crate::cache::process_lock::process_locks_enabled() {
++            self.inner.load().all_roots()
++        } else {
++            Vec::new()
++        }
++    }
++
+     pub fn new(root: impl Into<PathBuf>) -> Self {
+         let main_root = root.into();
+         let _ = std::fs::create_dir_all(&main_root);
+@@ -756,7 +779,7 @@
+         let write_lock = cache_write_lock_for_key(key_str);
+         let _write_guard = write_lock.lock().await;
+         let hash = self.get_hash(key);
+-        let process_roots = self.inner.load().all_roots();
++        let process_roots = self.process_lock_roots();
+         let process_lock = match acquire_cache_process_read_lock_hashed(&hash, &process_roots).await
+         {
+             Ok(lock) => lock,
+@@ -1289,7 +1312,7 @@
+         let purge_guard = acquire_cache_purge_read_guard().await;
+         let write_lock = cache_write_lock_for_key(&k_str);
+         let write_guard = write_lock.lock_owned().await;
+-        let process_roots = self.inner.load().all_roots();
++        let process_roots = self.process_lock_roots();
+         let process_lock = match acquire_cache_process_fill_lock(&k_str, &process_roots).await {
+             Ok(lock) => lock,
+             Err(err) => {
+@@ -1337,20 +1360,9 @@
+             .with_file_name(&versioned_name)
+             .to_string_lossy()
+             .into_owned();
+-        if let Some(parent) = path.parent()
+-            && let Err(err) = tokio::fs::create_dir_all(parent).await
+-        {
+-            warn!(
+-                path = %parent.display(),
+-                error = %err,
+-                "CACHE_MISS: unable to create cache directory; bypassing fill"
+-            );
+-            return Ok(Box::new(NoopMissHandler));
+-        }
+-
+         let temp_path = path.with_extension(format!("tmp.{}.{}", std::process::id(), unique_id));
+ 
+-        let std_file = match tokio::fs::File::create(&temp_path).await {
++        let std_file = match create_cache_temp_file(&temp_path).await {
+             Ok(file) => file,
+             Err(err) => {
+                 warn!(
+@@ -1395,11 +1407,11 @@
+             .and_then(|v| v.to_str().ok())
+             .unwrap_or("");
+ 
+-        let should_compress = (content_type.contains("text/")
+-            || content_type.contains("json")
+-            || content_type.contains("javascript")
+-            || content_type.contains("xml"))
+-            && content_encoding.is_empty();
++        let should_compress = crate::cache::storage_encoding::should_compress(
++            content_type,
++            content_encoding,
++            expected_body_len,
++        );
+ 
+         // Parse stale-while-revalidate from Cache-Control header
+         let swr_secs =
+@@ -1459,7 +1471,7 @@
+ 
+         let key_str = key.user_tag.as_ref();
+         let _purge_guard = acquire_cache_purge_write_guard().await;
+-        let process_roots = self.inner.load().all_roots();
++        let process_roots = self.process_lock_roots();
+         let _process_lock = match acquire_cache_process_barrier_write_lock(&process_roots).await {
+             Ok(lock) => lock,
+             Err(err) => {
+@@ -1506,7 +1518,7 @@
+         let _purge_guard = acquire_cache_purge_read_guard().await;
+         let write_lock = cache_write_lock_for_key(&k_str);
+         let _write_guard = write_lock.lock().await;
+-        let process_roots = self.inner.load().all_roots();
++        let process_roots = self.process_lock_roots();
+         let _process_lock = match acquire_cache_process_fill_lock(&k_str, &process_roots).await {
+             Ok(lock) => lock,
+             Err(err) => {
+@@ -4810,7 +4822,7 @@
+         // key lock after this function has deleted the known variants and
+         // publish the pre-purge response again.
+         let _purge_guard = acquire_cache_purge_write_guard().await;
+-        let process_roots = self.l2.inner.load().all_roots();
++        let process_roots = self.l2.process_lock_roots();
+         let _process_lock = match acquire_cache_process_barrier_write_lock(&process_roots).await {
+             Ok(lock) => lock,
+             Err(err) => {
+@@ -4857,7 +4869,7 @@
+         requested_version: Option<u64>,
+     ) -> bool {
+         let _purge_guard = acquire_cache_purge_write_guard().await;
+-        let process_roots = self.l2.inner.load().all_roots();
++        let process_roots = self.l2.process_lock_roots();
+         let _process_lock = match acquire_cache_process_barrier_write_lock(&process_roots).await {
+             Ok(lock) => lock,
+             Err(err) => {
+@@ -4958,7 +4970,7 @@
+             return false;
+         }
+         let _purge_guard = acquire_cache_purge_write_guard().await;
+-        let process_roots = self.l2.inner.load().all_roots();
++        let process_roots = self.l2.process_lock_roots();
+         let _process_lock = match acquire_cache_process_barrier_write_lock(&process_roots).await {
+             Ok(lock) => lock,
+             Err(err) => {
+@@ -5195,7 +5207,7 @@
+             // no metadata callback yet. The lock is shared and refcounted, so
+             // concurrent readers of one key no longer serialize on it.
+             let l1_process_lock = if let Some(key_hash) = key_hash {
+-                let process_roots = self.l2.inner.load().all_roots();
++                let process_roots = self.l2.process_lock_roots();
+                 match acquire_cache_process_read_lock_hashed(key_hash, &process_roots).await {
+                     Ok(lock) => Some(lock),
+                     Err(err) => {
+@@ -5425,7 +5437,7 @@
+ 
+         let key_str = key.user_tag.as_ref();
+         let _purge_guard = acquire_cache_purge_write_guard().await;
+-        let process_roots = self.l2.inner.load().all_roots();
++        let process_roots = self.l2.process_lock_roots();
+         let _process_lock = match acquire_cache_process_barrier_write_lock(&process_roots).await {
+             Ok(lock) => lock,
+             Err(err) => {
+@@ -5588,7 +5600,7 @@
+     let _purge_guard = acquire_cache_purge_read_guard().await;
+     let write_lock = cache_write_lock_for_key(cache_key);
+     let _write_guard = write_lock.lock().await;
+-    let process_roots = storage.l2.inner.load().all_roots();
++    let process_roots = storage.l2.process_lock_roots();
+     let _process_lock = match acquire_cache_process_fill_lock(cache_key, &process_roots).await {
+         Ok(lock) => lock,
+         Err(err) => {
+--- baseline/src/cache/process_lock.rs
++++ candidate/src/cache/process_lock.rs
+@@ -71,7 +71,7 @@
+ /// configuration; with it gone, every deployment owns its roots exclusively
+ /// and taking flock()s would only pay syscalls to exclude participants that
+ /// cannot exist.
+-fn process_locks_enabled() -> bool {
++pub(crate) fn process_locks_enabled() -> bool {
+     #[cfg(test)]
+     if FORCE_PROCESS_LOCKS.load(Ordering::Relaxed) {
+         return true;
+@@ -164,8 +164,7 @@
+ }
+ 
+ fn cache_process_barrier_path(root: &Path) -> PathBuf {
+-    root.join(".zelvik-edge-cache-locks")
+-        .join("barrier.lock")
++    root.join(".zelvik-edge-cache-locks").join("barrier.lock")
+ }
+ 
+ fn cache_process_key_path(root: &Path, key_hash: &str) -> PathBuf {
+--- baseline/src/http_proxy_manager.rs
++++ candidate/src/http_proxy_manager.rs
+@@ -58,7 +58,7 @@
+ }
+ 
+ const H2_CHURN_WINDOW: Duration = Duration::from_secs(30);
+-const H2_CHURN_STREAM_LIMIT: u64 = 200;
++const H2_ABUSE_EVENT_LIMIT: u64 = 200;
+ const H2_CHURN_HINT_STREAM_LIMIT: u64 = 100;
+ const H2_L4_EVENT_FLUSH_STREAMS: u64 = 10;
+ 
+@@ -151,7 +151,11 @@
+ 
+     fn should_close_for_churn(&mut self) -> bool {
+         self.refresh_window();
+-        self.accepted_streams >= H2_CHURN_STREAM_LIMIT
++        // Accepted requests are normal work, not connection churn. A healthy
++        // multiplexed connection can complete this many streams in milliseconds.
++        // Keep the bounded abuse window for rejected/error events instead;
++        // stream admission, malformed-frame limits and lifetime remain active.
++        self.rejected_streams.saturating_add(self.errors) >= H2_ABUSE_EVENT_LIMIT
+             && self.window_started_at.elapsed() <= H2_CHURN_WINDOW
+     }
+ 
+@@ -2869,6 +2873,10 @@
+ }
+ 
+ async fn process_http1_stream(args: ProcessHttp1StreamArgs) {
++    crate::proxy::with_http1_parse_tracking(process_http1_stream_tracked(args)).await;
++}
++
++async fn process_http1_stream_tracked(args: ProcessHttp1StreamArgs) {
+     let ProcessHttp1StreamArgs {
+         stream,
+         proxy_inner,
+@@ -3390,6 +3398,26 @@
+         drop(guard);
+         assert!(!state.has_active_streams());
+         assert!(state.next_idle_deadline() <= TokioInstant::now());
++    }
++
++    #[test]
++    fn h2_successful_reuse_does_not_trigger_abuse_rotation() {
++        let mut state = H2ConnectionDefenseState::new(
++            "127.0.0.1".parse().unwrap(),
++            443,
++            crate::l4_defense::L4PressureLevel::Normal,
++        );
++        for _ in 0..10_000 {
++            state.record_stream();
++        }
++        assert!(!state.should_close_for_churn());
++        for _ in 0..H2_ABUSE_EVENT_LIMIT / 2 {
++            state.record_reject();
++            state.record_error();
++        }
++        assert!(state.should_close_for_churn());
++        state.window_started_at = TokioInstant::now() - H2_CHURN_WINDOW - Duration::from_secs(1);
++        assert!(!state.should_close_for_churn());
+     }
+ 
+     #[test]
+--- /dev/null
++++ candidate/src/cache/storage_encoding.rs
+@@ -0,0 +1,36 @@
++//! Storage encoding is independent of HTTP Content-Encoding. Small known-size
++//! bodies avoid a compression context per fill; old compressed objects remain
++//! readable through their existing metadata flag. Unknown-size bodies retain
++//! the streaming compression policy rather than buffering to discover size.
++const MIN_COMPRESSED_BODY_BYTES: u64 = 64 * 1024;
++
++pub(crate) fn should_compress(
++    content_type: &str,
++    content_encoding: &str,
++    length: Option<u64>,
++) -> bool {
++    !length.is_some_and(|length| length < MIN_COMPRESSED_BODY_BYTES)
++        && content_encoding.is_empty()
++        && (content_type.contains("text/")
++            || content_type.contains("json")
++            || content_type.contains("javascript")
++            || content_type.contains("xml"))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn small_text_avoids_context_but_streaming_and_large_text_keep_compression() {
++        for size in [0, 1024, 32 * 1024, MIN_COMPRESSED_BODY_BYTES - 1] {
++            assert!(!should_compress("text/plain", "", Some(size)));
++        }
++        for length in [None, Some(MIN_COMPRESSED_BODY_BYTES), Some(1024 * 1024)] {
++            assert!(should_compress("text/plain", "", length));
++            assert!(should_compress("application/json", "", length));
++            assert!(!should_compress("text/plain", "gzip", length));
++            assert!(!should_compress("image/png", "", length));
++        }
++    }
++}
+--- baseline/src/cache/mod.rs
++++ candidate/src/cache/mod.rs
+@@ -7,6 +7,7 @@
+ pub mod partial;
+ pub(crate) mod process_lock;
+ pub(crate) mod purge_barrier;
++pub(crate) mod storage_encoding;
+ 
+ pub(crate) fn should_store_response_header(name: &str) -> bool {
+     const SKIP: &[&str] = &[

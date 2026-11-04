@@ -1,0 +1,23 @@
+{
+  "source_commit": "4651bd39f576687240bbefe99bfee38927b96c3d",
+  "root_lib": {
+    "passed": 1300,
+    "failed": 0,
+    "existing_ignored": 2
+  },
+  "root_all_target_clippy": "passed",
+  "standalone_tests": {
+    "passed": 13,
+    "failed": 0,
+    "ignored": 0
+  },
+  "standalone_clippy": "passed",
+  "scope": "tests overlap; do not add independent and full-library counts",
+  "new_test_inputs": "ShedState per test; explicit complete QUIC observation, with all production limits and pressure composition retained",
+  "native_protocol_result": {
+    "workflow": 41553649436,
+    "source_commit": "4651bd39f576687240bbefe99bfee38927b96c3d",
+    "all_four_cases": "passed"
+  },
+  "cache": "cloud profile, auto GC disabled; preserve warm caches within physical disk and 5GiB runtime floor"
+}

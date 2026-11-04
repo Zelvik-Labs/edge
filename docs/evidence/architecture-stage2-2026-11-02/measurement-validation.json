@@ -1,0 +1,418 @@
+{
+  "all_candidate_source_and_binary_hashes_match": true,
+  "comparison_case_count": 188,
+  "comparison_statuses": {
+    "passed": 188
+  },
+  "candidate_statuses": {
+    "passed": 55
+  },
+  "known_native_failed_transfers": 0,
+  "groups": {
+    "h1": {
+      "cases": 36,
+      "statuses": {
+        "passed": 36
+      },
+      "quality_flags": {
+        "high_cpu_steal": 12,
+        "rps_spread_over_15pct": 10,
+        "short_batch_under_1s": 1
+      }
+    },
+    "tls-h2": {
+      "cases": 36,
+      "statuses": {
+        "passed": 36
+      },
+      "quality_flags": {
+        "high_cpu_steal": 36,
+        "client_cpu_above_80pct": 4,
+        "short_batch_under_1s": 3
+      }
+    },
+    "fresh": {
+      "cases": 36,
+      "statuses": {
+        "passed": 36
+      },
+      "quality_flags": {
+        "high_cpu_steal": 36,
+        "short_batch_under_1s": 10,
+        "client_cpu_above_80pct": 23
+      }
+    },
+    "cold-long": {
+      "cases": 12,
+      "statuses": {
+        "passed": 12
+      },
+      "quality_flags": {
+        "high_cpu_steal": 4,
+        "rps_spread_over_15pct": 3
+      }
+    },
+    "32k": {
+      "cases": 12,
+      "statuses": {
+        "passed": 12
+      },
+      "quality_flags": {
+        "high_cpu_steal": 12,
+        "client_cpu_above_80pct": 1,
+        "short_batch_under_1s": 4
+      }
+    },
+    "regression-recheck": {
+      "cases": 32,
+      "statuses": {
+        "passed": 32
+      },
+      "quality_flags": {
+        "high_cpu_steal": 16,
+        "short_batch_under_1s": 2,
+        "rps_spread_over_15pct": 8
+      }
+    },
+    "uniform-tls": {
+      "cases": 24,
+      "statuses": {
+        "passed": 24
+      },
+      "quality_flags": {
+        "high_cpu_steal": 24,
+        "client_cpu_above_80pct": 19
+      }
+    }
+  },
+  "functional_only": {
+    "functional-128k": {
+      "cases": 2,
+      "statuses": {
+        "passed": 2
+      },
+      "successful": 22416,
+      "failed": 0
+    },
+    "functional-h3": {
+      "cases": 1,
+      "statuses": {
+        "passed": 1
+      },
+      "successful": 12582,
+      "failed": 0
+    }
+  },
+  "profiles": {
+    "before": {
+      "diagnostic_only": true,
+      "sample_counts": [
+        3047,
+        3169,
+        1281
+      ],
+      "lost_samples": 0
+    },
+    "after": {
+      "diagnostic_only": true,
+      "sample_counts": [
+        2958,
+        3314,
+        1694
+      ],
+      "lost_samples": 0
+    }
+  },
+  "tls_negotiation": {
+    "edge": {
+      "diagnostic_only": true,
+      "observations": [
+        {
+          "command": [
+            "curl",
+            "--silent",
+            "--show-error",
+            "--verbose",
+            "--http1.1",
+            "--no-sessionid",
+            "--noproxy",
+            "*",
+            "--cacert",
+            "/workspace/edge/.worktrees/perf-next/.local/perf-next/tls/ca.pem",
+            "--max-time",
+            "15",
+            "--output",
+            "/dev/null",
+            "--write-out",
+            "%{http_code} %{http_version} %{ssl_verify_result}",
+            "https://localhost:34502/off/payload"
+          ],
+          "returncode": 0,
+          "result": "200 1.1 0",
+          "tls_lines": [
+            "* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384 / X25519MLKEM768 / RSASSA-PSS",
+            "* ALPN: server accepted http/1.1",
+            "* Server certificate:",
+            "*  subject: CN=localhost",
+            "*  SSL certificate verify ok.",
+            "*   Certificate level 0: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption",
+            "*   Certificate level 1: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption"
+          ]
+        },
+        {
+          "command": [
+            "curl",
+            "--silent",
+            "--show-error",
+            "--verbose",
+            "--http1.1",
+            "--no-sessionid",
+            "--noproxy",
+            "*",
+            "--cacert",
+            "/workspace/edge/.worktrees/perf-next/.local/perf-next/tls/ca.pem",
+            "--max-time",
+            "15",
+            "--output",
+            "/dev/null",
+            "--write-out",
+            "%{http_code} %{http_version} %{ssl_verify_result}",
+            "https://localhost:34502/off/payload"
+          ],
+          "returncode": 0,
+          "result": "200 1.1 0",
+          "tls_lines": [
+            "* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384 / X25519MLKEM768 / RSASSA-PSS",
+            "* ALPN: server accepted http/1.1",
+            "* Server certificate:",
+            "*  subject: CN=localhost",
+            "*  SSL certificate verify ok.",
+            "*   Certificate level 0: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption",
+            "*   Certificate level 1: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption"
+          ]
+        },
+        {
+          "command": [
+            "curl",
+            "--silent",
+            "--show-error",
+            "--verbose",
+            "--http1.1",
+            "--no-sessionid",
+            "--noproxy",
+            "*",
+            "--cacert",
+            "/workspace/edge/.worktrees/perf-next/.local/perf-next/tls/ca.pem",
+            "--max-time",
+            "15",
+            "--output",
+            "/dev/null",
+            "--write-out",
+            "%{http_code} %{http_version} %{ssl_verify_result}",
+            "http://localhost:34501/off/payload"
+          ],
+          "returncode": 0,
+          "result": "200 1.1 0",
+          "tls_lines": []
+        }
+      ]
+    },
+    "nginx": {
+      "diagnostic_only": true,
+      "observations": [
+        {
+          "command": [
+            "curl",
+            "--silent",
+            "--show-error",
+            "--verbose",
+            "--http1.1",
+            "--no-sessionid",
+            "--noproxy",
+            "*",
+            "--cacert",
+            "/workspace/edge/.worktrees/perf-next/.local/perf-next/tls/ca.pem",
+            "--max-time",
+            "15",
+            "--output",
+            "/dev/null",
+            "--write-out",
+            "%{http_code} %{http_version} %{ssl_verify_result}",
+            "https://localhost:34505/off/payload"
+          ],
+          "returncode": 0,
+          "result": "200 1.1 0",
+          "tls_lines": [
+            "* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384 / x25519 / RSASSA-PSS",
+            "* ALPN: server accepted http/1.1",
+            "* Server certificate:",
+            "*  subject: CN=localhost",
+            "*  SSL certificate verify ok.",
+            "*   Certificate level 0: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption",
+            "*   Certificate level 1: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption"
+          ]
+        },
+        {
+          "command": [
+            "curl",
+            "--silent",
+            "--show-error",
+            "--verbose",
+            "--http1.1",
+            "--no-sessionid",
+            "--noproxy",
+            "*",
+            "--cacert",
+            "/workspace/edge/.worktrees/perf-next/.local/perf-next/tls/ca.pem",
+            "--max-time",
+            "15",
+            "--output",
+            "/dev/null",
+            "--write-out",
+            "%{http_code} %{http_version} %{ssl_verify_result}",
+            "https://localhost:34505/off/payload"
+          ],
+          "returncode": 0,
+          "result": "200 1.1 0",
+          "tls_lines": [
+            "* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384 / x25519 / RSASSA-PSS",
+            "* ALPN: server accepted http/1.1",
+            "* Server certificate:",
+            "*  subject: CN=localhost",
+            "*  SSL certificate verify ok.",
+            "*   Certificate level 0: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption",
+            "*   Certificate level 1: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption"
+          ]
+        },
+        {
+          "command": [
+            "curl",
+            "--silent",
+            "--show-error",
+            "--verbose",
+            "--http1.1",
+            "--no-sessionid",
+            "--noproxy",
+            "*",
+            "--cacert",
+            "/workspace/edge/.worktrees/perf-next/.local/perf-next/tls/ca.pem",
+            "--max-time",
+            "15",
+            "--output",
+            "/dev/null",
+            "--write-out",
+            "%{http_code} %{http_version} %{ssl_verify_result}",
+            "http://localhost:34504/off/payload"
+          ],
+          "returncode": 0,
+          "result": "200 1.1 0",
+          "tls_lines": []
+        }
+      ]
+    },
+    "openresty": {
+      "diagnostic_only": true,
+      "observations": [
+        {
+          "command": [
+            "curl",
+            "--silent",
+            "--show-error",
+            "--verbose",
+            "--http1.1",
+            "--no-sessionid",
+            "--noproxy",
+            "*",
+            "--cacert",
+            "/workspace/edge/.worktrees/perf-next/.local/perf-next/tls/ca.pem",
+            "--max-time",
+            "15",
+            "--output",
+            "/dev/null",
+            "--write-out",
+            "%{http_code} %{http_version} %{ssl_verify_result}",
+            "https://localhost:34508/off/payload"
+          ],
+          "returncode": 0,
+          "result": "200 1.1 0",
+          "tls_lines": [
+            "* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384 / x25519 / RSASSA-PSS",
+            "* ALPN: server accepted http/1.1",
+            "* Server certificate:",
+            "*  subject: CN=localhost",
+            "*  SSL certificate verify ok.",
+            "*   Certificate level 0: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption",
+            "*   Certificate level 1: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption"
+          ]
+        },
+        {
+          "command": [
+            "curl",
+            "--silent",
+            "--show-error",
+            "--verbose",
+            "--http1.1",
+            "--no-sessionid",
+            "--noproxy",
+            "*",
+            "--cacert",
+            "/workspace/edge/.worktrees/perf-next/.local/perf-next/tls/ca.pem",
+            "--max-time",
+            "15",
+            "--output",
+            "/dev/null",
+            "--write-out",
+            "%{http_code} %{http_version} %{ssl_verify_result}",
+            "https://localhost:34508/off/payload"
+          ],
+          "returncode": 0,
+          "result": "200 1.1 0",
+          "tls_lines": [
+            "* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384 / x25519 / RSASSA-PSS",
+            "* ALPN: server accepted http/1.1",
+            "* Server certificate:",
+            "*  subject: CN=localhost",
+            "*  SSL certificate verify ok.",
+            "*   Certificate level 0: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption",
+            "*   Certificate level 1: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption"
+          ]
+        },
+        {
+          "command": [
+            "curl",
+            "--silent",
+            "--show-error",
+            "--verbose",
+            "--http1.1",
+            "--no-sessionid",
+            "--noproxy",
+            "*",
+            "--cacert",
+            "/workspace/edge/.worktrees/perf-next/.local/perf-next/tls/ca.pem",
+            "--max-time",
+            "15",
+            "--output",
+            "/dev/null",
+            "--write-out",
+            "%{http_code} %{http_version} %{ssl_verify_result}",
+            "http://localhost:34507/off/payload"
+          ],
+          "returncode": 0,
+          "result": "200 1.1 0",
+          "tls_lines": []
+        }
+      ]
+    }
+  },
+  "raw_file_hash_count": 2128,
+  "all_failed_cases_retained": true,
+  "fresh_connection_protocols_compared": [
+    "h1",
+    "h1-tls",
+    "h2"
+  ],
+  "long_stability_completed": false,
+  "h3_cache_fixed": false,
+  "production_deployed": false,
+  "parent_cpu_quota_cores": 4
+}

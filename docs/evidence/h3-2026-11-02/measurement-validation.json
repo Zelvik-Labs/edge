@@ -1,0 +1,86 @@
+{
+  "capacity_cases": 105,
+  "capacity_statuses": {
+    "failed": 17,
+    "passed": 86,
+    "traffic-errors": 2
+  },
+  "candidate_cases": 33,
+  "candidate_statuses": {
+    "passed": 33
+  },
+  "known_native_failures": 137,
+  "candidate_native_failures": 0,
+  "cases_without_native_result": 17,
+  "functional": {
+    "smoke": {
+      "statuses": {
+        "passed": 3
+      },
+      "successful": 24224,
+      "failed": 0
+    },
+    "functional-128k": {
+      "statuses": {
+        "passed": 2
+      },
+      "successful": 2599,
+      "failed": 0
+    }
+  },
+  "diagnostics": {
+    "baseline": {
+      "diagnostic_only": true,
+      "statuses": {
+        "failed": 5,
+        "passed": 1
+      }
+    },
+    "fresh-diagnostic": {
+      "diagnostic_only": true,
+      "statuses": {
+        "traffic-errors": 1
+      }
+    },
+    "fresh-strace": {
+      "diagnostic_only": true,
+      "statuses": {
+        "traffic-errors": 1
+      }
+    },
+    "fresh-direct": {
+      "diagnostic_only": true,
+      "statuses": {
+        "traffic-errors": 1
+      }
+    },
+    "fresh-endpoint": {
+      "diagnostic_only": true,
+      "statuses": {
+        "traffic-errors": 1
+      }
+    },
+    "fresh-server-strace": {
+      "diagnostic_only": true,
+      "statuses": {
+        "traffic-errors": 1
+      }
+    },
+    "fresh-demux-baseline": {
+      "diagnostic_only": true,
+      "statuses": {
+        "traffic-errors": 1
+      }
+    }
+  },
+  "raw_hashes": 1151,
+  "profiles": {
+    "diagnostic_only": true,
+    "cases": 2,
+    "failed_transfers": 0
+  },
+  "all_frozen_hashes_verified": true,
+  "all_failures_retained": true,
+  "production_deployed": false,
+  "long_stability_completed": false
+}

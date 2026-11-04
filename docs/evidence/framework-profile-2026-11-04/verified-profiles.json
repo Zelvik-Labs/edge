@@ -1,0 +1,4346 @@
+{
+  "source": "95906b87b190f1756bb758be4904a58172e7f467",
+  "scope": "OFF-only user CPU paths of fixed ba474 Edge vs fixed bare Pingora; instrumented timing excluded from capacity ranking",
+  "edge_source": "ba474745fae3c08332d9e0862d9d5650550664ff",
+  "bare_sha256": "1a5439941c53dc32044b665013add230ac8a2062ab34e72f92dfde7799d093c2",
+  "cells": 12,
+  "successful": 1602985,
+  "failed": 0,
+  "samples": 21002,
+  "lost_samples": 0,
+  "max_host_steal_fraction": 0.0,
+  "profiles": [
+    {
+      "path": "round-0-edge/0000-h1-tls-off-reuse.stacks.txt",
+      "sha256": "7589ffe53b33de496debeb89c6cb5493ad7823e305c27155d94bb71cf341d18d",
+      "event": "cpu-clock:u",
+      "sample_count": 2024,
+      "lost_samples": 0,
+      "periods": {
+        "5025125": 2024
+      },
+      "inclusive_groups_overlap": true,
+      "groups": {
+        "request_filter": {
+          "samples": 192,
+          "percent": 9.486166007905139
+        },
+        "cache_admission": {
+          "samples": 82,
+          "percent": 4.051383399209486
+        },
+        "response_filter": {
+          "samples": 170,
+          "percent": 8.399209486166008
+        },
+        "request_completion": {
+          "samples": 63,
+          "percent": 3.1126482213438735
+        },
+        "dimension_worker": {
+          "samples": 62,
+          "percent": 3.0632411067193677
+        },
+        "cache_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "memory_governor": {
+          "samples": 24,
+          "percent": 1.1857707509881423
+        },
+        "headers": {
+          "samples": 295,
+          "percent": 14.575098814229248
+        },
+        "allocator": {
+          "samples": 223,
+          "percent": 11.017786561264822
+        },
+        "upstream_peer": {
+          "samples": 98,
+          "percent": 4.841897233201581
+        },
+        "firewall_symbols": {
+          "samples": 24,
+          "percent": 1.1857707509881423
+        },
+        "upstream_pipeline_including_callbacks": {
+          "samples": 1177,
+          "percent": 58.15217391304348
+        },
+        "zstd": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "zstd_context_creation": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "tokio_filesystem": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "file_fill_handler": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "metadata_writer": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "heap_relinquish": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "bloom_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "parse_mark_insert": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "client_ip_header_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "request_id": {
+          "samples": 11,
+          "percent": 0.5434782608695652
+        },
+        "response_transform_probe": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "leaf_symbols": [
+        {
+          "symbol": "[unknown] (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          "samples": 128,
+          "percent": 6.324110671936759
+        },
+        {
+          "symbol": "_mi_page_malloc_zero",
+          "samples": 54,
+          "percent": 2.6679841897233203
+        },
+        {
+          "symbol": "mi_free",
+          "samples": 45,
+          "percent": 2.2233201581027666
+        },
+        {
+          "symbol": "<core::hash::sip::Hasher<core::hash::sip::Sip13Rounds> as core::hash::Hasher>::write",
+          "samples": 38,
+          "percent": 1.8774703557312253
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HeaderName>",
+          "samples": 33,
+          "percent": 1.6304347826086956
+        },
+        {
+          "symbol": "http::header::name::parse_hdr",
+          "samples": 30,
+          "percent": 1.482213438735178
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::proxy_1to1::{closure#0}::{closure#1}",
+          "samples": 29,
+          "percent": 1.4328063241106719
+        },
+        {
+          "symbol": "mi_malloc_aligned",
+          "samples": 28,
+          "percent": 1.383399209486166
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::request_filter::{closure#0}",
+          "samples": 23,
+          "percent": 1.1363636363636365
+        },
+        {
+          "symbol": "[unknown] ([vdso])",
+          "samples": 22,
+          "percent": 1.0869565217391304
+        },
+        {
+          "symbol": "mi_theap_malloc_aligned",
+          "samples": 20,
+          "percent": 0.9881422924901185
+        },
+        {
+          "symbol": "<http::header::name::StandardHeader>::from_bytes",
+          "samples": 20,
+          "percent": 0.9881422924901185
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::proxy_to_upstream::{closure#0}",
+          "samples": 20,
+          "percent": 0.9881422924901185
+        },
+        {
+          "symbol": "_mi_malloc_generic",
+          "samples": 20,
+          "percent": 0.9881422924901185
+        },
+        {
+          "symbol": "getpeername",
+          "samples": 19,
+          "percent": 0.9387351778656127
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::response_filter::{closure#0}",
+          "samples": 18,
+          "percent": 0.8893280632411067
+        },
+        {
+          "symbol": "<&str as core::str::pattern::Pattern>::is_contained_in",
+          "samples": 18,
+          "percent": 0.8893280632411067
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::server::HttpSession>::read_request::{closure#0}",
+          "samples": 16,
+          "percent": 0.7905138339920948
+        },
+        {
+          "symbol": "_mi_theap_realloc_zero",
+          "samples": 16,
+          "percent": 0.7905138339920948
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get2::<http::header::name::HeaderName>",
+          "samples": 15,
+          "percent": 0.741106719367589
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::upstream_peer::{closure#0}",
+          "samples": 15,
+          "percent": 0.741106719367589
+        },
+        {
+          "symbol": "<tokio::runtime::io::registration::Registration>::poll_ready",
+          "samples": 14,
+          "percent": 0.691699604743083
+        },
+        {
+          "symbol": "httparse::parse_headers_iter_uninit",
+          "samples": 12,
+          "percent": 0.5928853754940712
+        },
+        {
+          "symbol": "zelvik_edge::http_proxy_manager::process_http1_stream::{closure#0}",
+          "samples": 12,
+          "percent": 0.5928853754940712
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy>::run_request_context_phase::{closure#0}",
+          "samples": 12,
+          "percent": 0.5928853754940712
+        },
+        {
+          "symbol": "<pingora_core::protocols::tls::rustls::stream::TlsStream<pingora_core::protocols::l4::stream::Stream> as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 12,
+          "percent": 0.5928853754940712
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy> as pingora_core::apps::HttpServerApp>::process_new_http::{closure#0}",
+          "samples": 12,
+          "percent": 0.5928853754940712
+        },
+        {
+          "symbol": "core::ptr::drop_glue::<zelvik_edge::proxy::ProxyCTX>",
+          "samples": 12,
+          "percent": 0.5928853754940712
+        },
+        {
+          "symbol": "<http::header::name::HeaderName>::from_bytes",
+          "samples": 12,
+          "percent": 0.5928853754940712
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::read_resp_header_parts::{closure#0}",
+          "samples": 11,
+          "percent": 0.5434782608695652
+        },
+        {
+          "symbol": "zelvik_edge::metrics::record::record_http_dimension_event",
+          "samples": 11,
+          "percent": 0.5434782608695652
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::process_request::{closure#0}",
+          "samples": 11,
+          "percent": 0.5434782608695652
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy>::sync_response_headers",
+          "samples": 11,
+          "percent": 0.5434782608695652
+        },
+        {
+          "symbol": "syscall",
+          "samples": 11,
+          "percent": 0.5434782608695652
+        },
+        {
+          "symbol": "regex_automata::hybrid::search::find_fwd",
+          "samples": 10,
+          "percent": 0.49407114624505927
+        },
+        {
+          "symbol": "_aesni_ctr32_ghash_6x",
+          "samples": 10,
+          "percent": 0.49407114624505927
+        },
+        {
+          "symbol": "core::fmt::write",
+          "samples": 10,
+          "percent": 0.49407114624505927
+        },
+        {
+          "symbol": "<pingora_core::connectors::TransportConnector>::release_stream",
+          "samples": 10,
+          "percent": 0.49407114624505927
+        },
+        {
+          "symbol": "<alloc::raw_vec::RawVecInner>::finish_grow",
+          "samples": 10,
+          "percent": 0.49407114624505927
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::Stream as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 10,
+          "percent": 0.49407114624505927
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::try_insert2::<http::header::name::HeaderName>",
+          "samples": 10,
+          "percent": 0.49407114624505927
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::process_upstream_tasks::{closure#0}",
+          "samples": 9,
+          "percent": 0.44466403162055335
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::request_cache_filter",
+          "samples": 9,
+          "percent": 0.44466403162055335
+        },
+        {
+          "symbol": "bytes::bytes::shared_drop",
+          "samples": 9,
+          "percent": 0.44466403162055335
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::try_append2::<http::header::name::HeaderName>",
+          "samples": 9,
+          "percent": 0.44466403162055335
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::handle_new_request::{closure#0}",
+          "samples": 9,
+          "percent": 0.44466403162055335
+        },
+        {
+          "symbol": "<rustls::conn::ConnectionCore<rustls::server::server_conn::ServerConnectionData>>::process_new_packets",
+          "samples": 9,
+          "percent": 0.44466403162055335
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get_all::<http::header::name::HeaderName>",
+          "samples": 9,
+          "percent": 0.44466403162055335
+        },
+        {
+          "symbol": "tokio::runtime::scheduler::multi_thread::worker::run",
+          "samples": 9,
+          "percent": 0.44466403162055335
+        },
+        {
+          "symbol": "<tokio::runtime::scheduler::multi_thread::worker::Context>::run_task",
+          "samples": 9,
+          "percent": 0.44466403162055335
+        }
+      ],
+      "round": 0,
+      "target": "edge",
+      "protocol": "h1-tls",
+      "cache": "off"
+    },
+    {
+      "path": "round-0-edge/0001-h1-off-reuse.stacks.txt",
+      "sha256": "9282829228291053d4a0150d11cdc1cfc36badcacb83d65fe61c43a479e6de9b",
+      "event": "cpu-clock:u",
+      "sample_count": 1986,
+      "lost_samples": 0,
+      "periods": {
+        "5025125": 1986
+      },
+      "inclusive_groups_overlap": true,
+      "groups": {
+        "request_filter": {
+          "samples": 221,
+          "percent": 11.127895266868077
+        },
+        "cache_admission": {
+          "samples": 112,
+          "percent": 5.639476334340383
+        },
+        "response_filter": {
+          "samples": 151,
+          "percent": 7.603222557905338
+        },
+        "request_completion": {
+          "samples": 79,
+          "percent": 3.9778449144008055
+        },
+        "dimension_worker": {
+          "samples": 76,
+          "percent": 3.826787512588117
+        },
+        "cache_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "memory_governor": {
+          "samples": 40,
+          "percent": 2.014098690835851
+        },
+        "headers": {
+          "samples": 273,
+          "percent": 13.746223564954683
+        },
+        "allocator": {
+          "samples": 211,
+          "percent": 10.624370594159114
+        },
+        "upstream_peer": {
+          "samples": 95,
+          "percent": 4.783484390735146
+        },
+        "firewall_symbols": {
+          "samples": 17,
+          "percent": 0.8559919436052367
+        },
+        "upstream_pipeline_including_callbacks": {
+          "samples": 1086,
+          "percent": 54.68277945619335
+        },
+        "zstd": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "zstd_context_creation": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "tokio_filesystem": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "file_fill_handler": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "metadata_writer": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "heap_relinquish": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "bloom_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "parse_mark_insert": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "client_ip_header_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "request_id": {
+          "samples": 15,
+          "percent": 0.7552870090634441
+        },
+        "response_transform_probe": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "leaf_symbols": [
+        {
+          "symbol": "[unknown] (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          "samples": 146,
+          "percent": 7.351460221550856
+        },
+        {
+          "symbol": "mi_free",
+          "samples": 56,
+          "percent": 2.8197381671701915
+        },
+        {
+          "symbol": "<core::hash::sip::Hasher<core::hash::sip::Sip13Rounds> as core::hash::Hasher>::write",
+          "samples": 41,
+          "percent": 2.0644511581067473
+        },
+        {
+          "symbol": "mi_theap_malloc_aligned",
+          "samples": 35,
+          "percent": 1.7623363544813695
+        },
+        {
+          "symbol": "_mi_page_malloc_zero",
+          "samples": 33,
+          "percent": 1.661631419939577
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::proxy_1to1::{closure#0}::{closure#1}",
+          "samples": 32,
+          "percent": 1.6112789526686808
+        },
+        {
+          "symbol": "[unknown] ([vdso])",
+          "samples": 31,
+          "percent": 1.5609264853977844
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HeaderName>",
+          "samples": 29,
+          "percent": 1.460221550855992
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::request_filter::{closure#0}",
+          "samples": 28,
+          "percent": 1.4098690835850958
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::proxy_to_upstream::{closure#0}",
+          "samples": 24,
+          "percent": 1.2084592145015105
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::server::HttpSession>::read_request::{closure#0}",
+          "samples": 24,
+          "percent": 1.2084592145015105
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get2::<http::header::name::HeaderName>",
+          "samples": 23,
+          "percent": 1.1581067472306144
+        },
+        {
+          "symbol": "http::header::name::parse_hdr",
+          "samples": 23,
+          "percent": 1.1581067472306144
+        },
+        {
+          "symbol": "mi_malloc_aligned",
+          "samples": 20,
+          "percent": 1.0070493454179255
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::logging::{closure#0}",
+          "samples": 19,
+          "percent": 0.9566968781470292
+        },
+        {
+          "symbol": "<http::header::name::StandardHeader>::from_bytes",
+          "samples": 19,
+          "percent": 0.9566968781470292
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::request_cache_filter",
+          "samples": 18,
+          "percent": 0.9063444108761329
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy>::sync_response_headers",
+          "samples": 17,
+          "percent": 0.8559919436052367
+        },
+        {
+          "symbol": "regex_automata::hybrid::search::find_fwd",
+          "samples": 17,
+          "percent": 0.8559919436052367
+        },
+        {
+          "symbol": "core::ptr::drop_glue::<zelvik_edge::proxy::ProxyCTX>",
+          "samples": 17,
+          "percent": 0.8559919436052367
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::write_request_header::{closure#0}",
+          "samples": 17,
+          "percent": 0.8559919436052367
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::read_resp_header_parts::{closure#0}",
+          "samples": 17,
+          "percent": 0.8559919436052367
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::upstream_peer::{closure#0}",
+          "samples": 17,
+          "percent": 0.8559919436052367
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy> as pingora_core::apps::HttpServerApp>::process_new_http::{closure#0}",
+          "samples": 16,
+          "percent": 0.8056394763343404
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::response_filter::{closure#0}",
+          "samples": 15,
+          "percent": 0.7552870090634441
+        },
+        {
+          "symbol": "<dashmap::DashMap<alloc::string::String, alloc::string::String>>::hash_u64::<&str>",
+          "samples": 15,
+          "percent": 0.7552870090634441
+        },
+        {
+          "symbol": "_mi_malloc_generic",
+          "samples": 15,
+          "percent": 0.7552870090634441
+        },
+        {
+          "symbol": "_mi_theap_realloc_zero",
+          "samples": 14,
+          "percent": 0.7049345417925479
+        },
+        {
+          "symbol": "getpeername",
+          "samples": 13,
+          "percent": 0.6545820745216515
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::read_response_task::{closure#0}",
+          "samples": 13,
+          "percent": 0.6545820745216515
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::Stream as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 12,
+          "percent": 0.6042296072507553
+        },
+        {
+          "symbol": "pingora_http::append_header_value::<http::header::value::HeaderValue, pingora_http::case_header_name::CaseHeaderName>",
+          "samples": 12,
+          "percent": 0.6042296072507553
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy>::run_request_context_phase::{closure#0}",
+          "samples": 12,
+          "percent": 0.6042296072507553
+        },
+        {
+          "symbol": "bytes::bytes::shared_clone",
+          "samples": 11,
+          "percent": 0.553877139979859
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::upstream_request_filter::{closure#0}",
+          "samples": 11,
+          "percent": 0.553877139979859
+        },
+        {
+          "symbol": "pingora_core::protocols::http::v1::common::content_length_for_framing",
+          "samples": 11,
+          "percent": 0.553877139979859
+        },
+        {
+          "symbol": "tokio::runtime::task::raw::poll::<zelvik_edge::worker_reclaim::with_worker_reclaim<<zelvik_edge::http_proxy_manager::HttpProxyManager>::run_http_listener_worker::{closure#0}::{closure#0}>::{closure#0}, alloc::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle>>",
+          "samples": 11,
+          "percent": 0.553877139979859
+        },
+        {
+          "symbol": "<alloc::raw_vec::RawVecInner>::finish_grow",
+          "samples": 11,
+          "percent": 0.553877139979859
+        },
+        {
+          "symbol": "<pingora_core::connectors::TransportConnector>::release_stream",
+          "samples": 11,
+          "percent": 0.553877139979859
+        },
+        {
+          "symbol": "zelvik_edge::worker_reclaim::with_worker_reclaim::<<zelvik_edge::http_proxy_manager::HttpProxyManager>::run_http_listener_worker::{closure#0}::{closure#0}>::{closure#0}",
+          "samples": 10,
+          "percent": 0.5035246727089627
+        },
+        {
+          "symbol": "httparse::parse_headers_iter_uninit",
+          "samples": 10,
+          "percent": 0.5035246727089627
+        },
+        {
+          "symbol": "<tokio::sync::notify::NotifiedProject>::poll_notified",
+          "samples": 10,
+          "percent": 0.5035246727089627
+        },
+        {
+          "symbol": "<http::header::name::HdrName>::from_bytes::<<&str as http::header::map::as_header_name::Sealed>::find<http::header::value::HeaderValue>::{closure#0}, core::option::Option<(usize, usize)>>",
+          "samples": 10,
+          "percent": 0.5035246727089627
+        },
+        {
+          "symbol": "<pingora_proxy::Session>::write_response_tasks::{closure#0}",
+          "samples": 10,
+          "percent": 0.5035246727089627
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::try_append2::<http::header::name::HeaderName>",
+          "samples": 10,
+          "percent": 0.5035246727089627
+        },
+        {
+          "symbol": "zelvik_edge::metrics::record::request_start_without_active",
+          "samples": 10,
+          "percent": 0.5035246727089627
+        },
+        {
+          "symbol": "bytes::bytes::shared_drop",
+          "samples": 10,
+          "percent": 0.5035246727089627
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::body::BodyWriter>::write_body::<alloc::boxed::Box<dyn pingora_core::protocols::IO>>::{closure#0}",
+          "samples": 10,
+          "percent": 0.5035246727089627
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::process_request::{closure#0}",
+          "samples": 9,
+          "percent": 0.45317220543806647
+        },
+        {
+          "symbol": "<tokio::sync::batch_semaphore::Semaphore>::add_permits_locked",
+          "samples": 9,
+          "percent": 0.45317220543806647
+        }
+      ],
+      "round": 0,
+      "target": "edge",
+      "protocol": "h1",
+      "cache": "off"
+    },
+    {
+      "path": "round-0-edge/0002-h2-off-reuse.stacks.txt",
+      "sha256": "047a222a326877f79e5810a1bf4beabe4df237af62a673ec8bd21bf620b4b8d7",
+      "event": "cpu-clock:u",
+      "sample_count": 2359,
+      "lost_samples": 0,
+      "periods": {
+        "5025125": 2359
+      },
+      "inclusive_groups_overlap": true,
+      "groups": {
+        "request_filter": {
+          "samples": 214,
+          "percent": 9.07164052564646
+        },
+        "cache_admission": {
+          "samples": 76,
+          "percent": 3.2217041119118273
+        },
+        "response_filter": {
+          "samples": 159,
+          "percent": 6.740144128868164
+        },
+        "request_completion": {
+          "samples": 62,
+          "percent": 2.6282323018228064
+        },
+        "dimension_worker": {
+          "samples": 55,
+          "percent": 2.331496396778296
+        },
+        "cache_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "memory_governor": {
+          "samples": 49,
+          "percent": 2.077151335311573
+        },
+        "headers": {
+          "samples": 300,
+          "percent": 12.71725307333616
+        },
+        "allocator": {
+          "samples": 243,
+          "percent": 10.30097498940229
+        },
+        "upstream_peer": {
+          "samples": 93,
+          "percent": 3.942348452734209
+        },
+        "firewall_symbols": {
+          "samples": 32,
+          "percent": 1.3565069944891903
+        },
+        "upstream_pipeline_including_callbacks": {
+          "samples": 1098,
+          "percent": 46.54514624841034
+        },
+        "zstd": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "zstd_context_creation": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "tokio_filesystem": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "file_fill_handler": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "metadata_writer": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "heap_relinquish": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "bloom_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "parse_mark_insert": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "client_ip_header_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "request_id": {
+          "samples": 10,
+          "percent": 0.42390843577787196
+        },
+        "response_transform_probe": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "leaf_symbols": [
+        {
+          "symbol": "[unknown] (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          "samples": 130,
+          "percent": 5.510809665112336
+        },
+        {
+          "symbol": "mi_free",
+          "samples": 66,
+          "percent": 2.797795676133955
+        },
+        {
+          "symbol": "_mi_page_malloc_zero",
+          "samples": 63,
+          "percent": 2.6706231454005933
+        },
+        {
+          "symbol": "[unknown] ([vdso])",
+          "samples": 36,
+          "percent": 1.5260703688003392
+        },
+        {
+          "symbol": "mi_theap_malloc_aligned",
+          "samples": 35,
+          "percent": 1.4836795252225519
+        },
+        {
+          "symbol": "<h2::frame::headers::HeaderBlock>::into_encoding",
+          "samples": 33,
+          "percent": 1.3988978380669774
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::request_filter::{closure#0}",
+          "samples": 31,
+          "percent": 1.3141161509114032
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HeaderName>",
+          "samples": 30,
+          "percent": 1.2717253073336159
+        },
+        {
+          "symbol": "<h2::server::Connection<alloc::boxed::Box<dyn pingora_core::protocols::IO>, bytes::bytes::Bytes>>::poll_accept",
+          "samples": 27,
+          "percent": 1.1445527766002543
+        },
+        {
+          "symbol": "<h2::proto::streams::streams::Inner>::buffer_pending::<alloc::boxed::Box<dyn pingora_core::protocols::IO>, bytes::bytes::Bytes>",
+          "samples": 27,
+          "percent": 1.1445527766002543
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::proxy_to_upstream::{closure#0}",
+          "samples": 26,
+          "percent": 1.1021619330224672
+        },
+        {
+          "symbol": "<core::hash::sip::Hasher<core::hash::sip::Sip13Rounds> as core::hash::Hasher>::write",
+          "samples": 24,
+          "percent": 1.0173802458668928
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::proxy_1to1::{closure#0}::{closure#1}",
+          "samples": 24,
+          "percent": 1.0173802458668928
+        },
+        {
+          "symbol": "http::header::name::parse_hdr",
+          "samples": 23,
+          "percent": 0.9749894022891056
+        },
+        {
+          "symbol": "zelvik_edge::http_proxy_manager::process_h2_stream::{closure#0}",
+          "samples": 22,
+          "percent": 0.9325985587113184
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get2::<http::header::name::HeaderName>",
+          "samples": 22,
+          "percent": 0.9325985587113184
+        },
+        {
+          "symbol": "<http::header::name::HeaderName>::from_bytes",
+          "samples": 20,
+          "percent": 0.8478168715557439
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::response_filter::{closure#0}",
+          "samples": 19,
+          "percent": 0.8054260279779568
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy>::run_request_context_phase::{closure#0}",
+          "samples": 18,
+          "percent": 0.7630351844001696
+        },
+        {
+          "symbol": "<http::header::name::StandardHeader>::as_str",
+          "samples": 17,
+          "percent": 0.7206443408223824
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get_all::<http::header::name::HeaderName>",
+          "samples": 17,
+          "percent": 0.7206443408223824
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::process_request::{closure#0}",
+          "samples": 16,
+          "percent": 0.6782534972445952
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::upstream_peer::{closure#0}",
+          "samples": 16,
+          "percent": 0.6782534972445952
+        },
+        {
+          "symbol": "_mi_malloc_generic",
+          "samples": 16,
+          "percent": 0.6782534972445952
+        },
+        {
+          "symbol": "getpeername",
+          "samples": 15,
+          "percent": 0.6358626536668079
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HdrName>",
+          "samples": 15,
+          "percent": 0.6358626536668079
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::Stream as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 14,
+          "percent": 0.5934718100890207
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::read_response_task::{closure#0}",
+          "samples": 13,
+          "percent": 0.5510809665112336
+        },
+        {
+          "symbol": "<chrono::offset::utc::Utc>::now",
+          "samples": 13,
+          "percent": 0.5510809665112336
+        },
+        {
+          "symbol": "regex_automata::hybrid::search::find_fwd",
+          "samples": 13,
+          "percent": 0.5510809665112336
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::read_resp_header_parts::{closure#0}",
+          "samples": 12,
+          "percent": 0.5086901229334464
+        },
+        {
+          "symbol": "<&str as core::str::pattern::Pattern>::is_contained_in",
+          "samples": 12,
+          "percent": 0.5086901229334464
+        },
+        {
+          "symbol": "mi_malloc_aligned",
+          "samples": 12,
+          "percent": 0.5086901229334464
+        },
+        {
+          "symbol": "<h2::frame::headers::HeaderBlock>::load::{closure#0}",
+          "samples": 12,
+          "percent": 0.5086901229334464
+        },
+        {
+          "symbol": "<http::header::name::StandardHeader>::from_bytes",
+          "samples": 11,
+          "percent": 0.4662992793556592
+        },
+        {
+          "symbol": "core::ptr::drop_glue::<zelvik_edge::proxy::ProxyCTX>",
+          "samples": 11,
+          "percent": 0.4662992793556592
+        },
+        {
+          "symbol": "<h2::codec::Codec<alloc::boxed::Box<dyn pingora_core::protocols::IO>, h2::proto::streams::prioritize::Prioritized<bytes::bytes::Bytes>> as futures_core::stream::Stream>::poll_next",
+          "samples": 11,
+          "percent": 0.4662992793556592
+        },
+        {
+          "symbol": "<dashmap::DashMap<alloc::string::String, alloc::string::String>>::hash_u64::<&str>",
+          "samples": 11,
+          "percent": 0.4662992793556592
+        },
+        {
+          "symbol": "_mi_theap_realloc_zero",
+          "samples": 11,
+          "percent": 0.4662992793556592
+        },
+        {
+          "symbol": "<tokio::runtime::scheduler::multi_thread::worker::Context>::run_task",
+          "samples": 10,
+          "percent": 0.42390843577787196
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy>::sync_response_headers",
+          "samples": 10,
+          "percent": 0.42390843577787196
+        },
+        {
+          "symbol": "<h2::proto::streams::prioritize::Prioritize>::reclaim_frame::<alloc::boxed::Box<dyn pingora_core::protocols::IO>, bytes::bytes::Bytes>",
+          "samples": 10,
+          "percent": 0.42390843577787196
+        },
+        {
+          "symbol": "pingora_core::protocols::http::v1::common::content_length_for_framing",
+          "samples": 10,
+          "percent": 0.42390843577787196
+        },
+        {
+          "symbol": "tokio::runtime::task::waker::clone_waker",
+          "samples": 10,
+          "percent": 0.42390843577787196
+        },
+        {
+          "symbol": "<pingora_core::connectors::TransportConnector>::release_stream::{closure#0}",
+          "samples": 10,
+          "percent": 0.42390843577787196
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::request_cache_filter",
+          "samples": 10,
+          "percent": 0.42390843577787196
+        },
+        {
+          "symbol": "<tokio::net::tcp::stream::TcpStream as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 9,
+          "percent": 0.3815175922000848
+        },
+        {
+          "symbol": "httparse::parse_headers_iter_uninit",
+          "samples": 9,
+          "percent": 0.3815175922000848
+        },
+        {
+          "symbol": "<alloc::string::String as core::fmt::Write>::write_str",
+          "samples": 9,
+          "percent": 0.3815175922000848
+        },
+        {
+          "symbol": "<h2::proto::streams::recv::Recv>::recv_headers",
+          "samples": 9,
+          "percent": 0.3815175922000848
+        }
+      ],
+      "round": 0,
+      "target": "edge",
+      "protocol": "h2",
+      "cache": "off"
+    },
+    {
+      "path": "round-0-pingora/0000-h1-tls-off-reuse.stacks.txt",
+      "sha256": "59423d0597f987a3cb46073bede1b04ae288fad6d747a7c4bb87ea16e2667df9",
+      "event": "cpu-clock:u",
+      "sample_count": 1153,
+      "lost_samples": 0,
+      "periods": {
+        "5025125": 1153
+      },
+      "inclusive_groups_overlap": true,
+      "groups": {
+        "request_filter": {
+          "samples": 1,
+          "percent": 0.08673026886383348
+        },
+        "cache_admission": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "response_filter": {
+          "samples": 6,
+          "percent": 0.5203816131830009
+        },
+        "request_completion": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "dimension_worker": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "cache_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "memory_governor": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "headers": {
+          "samples": 170,
+          "percent": 14.744145706851691
+        },
+        "allocator": {
+          "samples": 126,
+          "percent": 10.928013876843018
+        },
+        "upstream_peer": {
+          "samples": 8,
+          "percent": 0.6938421509106678
+        },
+        "firewall_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "upstream_pipeline_including_callbacks": {
+          "samples": 819,
+          "percent": 71.03209019947961
+        },
+        "zstd": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "zstd_context_creation": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "tokio_filesystem": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "file_fill_handler": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "metadata_writer": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "heap_relinquish": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "bloom_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "parse_mark_insert": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "client_ip_header_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "request_id": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "response_transform_probe": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "leaf_symbols": [
+        {
+          "symbol": "[unknown] (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          "samples": 79,
+          "percent": 6.851691240242845
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::proxy_1to1::{closure#0}::{closure#1}",
+          "samples": 40,
+          "percent": 3.4692107545533393
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::read_resp_header_parts::{closure#0}",
+          "samples": 33,
+          "percent": 2.862098872506505
+        },
+        {
+          "symbol": "mi_free",
+          "samples": 33,
+          "percent": 2.862098872506505
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::proxy_to_upstream::{closure#0}",
+          "samples": 31,
+          "percent": 2.6886383347788376
+        },
+        {
+          "symbol": "_mi_page_malloc_zero",
+          "samples": 28,
+          "percent": 2.4284475281873372
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy> as pingora_core::apps::HttpServerApp>::process_new_http::{closure#0}",
+          "samples": 23,
+          "percent": 1.99479618386817
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::server::HttpSession>::read_request::{closure#0}",
+          "samples": 22,
+          "percent": 1.9080659150043364
+        },
+        {
+          "symbol": "mi_theap_malloc_aligned",
+          "samples": 20,
+          "percent": 1.7346053772766696
+        },
+        {
+          "symbol": "<http::header::name::StandardHeader>::from_bytes",
+          "samples": 18,
+          "percent": 1.5611448395490026
+        },
+        {
+          "symbol": "httparse::parse_headers_iter_uninit",
+          "samples": 16,
+          "percent": 1.3876843018213356
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HeaderName>",
+          "samples": 15,
+          "percent": 1.3009540329575022
+        },
+        {
+          "symbol": "_aesni_ctr32_ghash_6x",
+          "samples": 15,
+          "percent": 1.3009540329575022
+        },
+        {
+          "symbol": "<pingora_core::protocols::tls::rustls::stream::TlsStream<pingora_core::protocols::l4::stream::Stream> as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 15,
+          "percent": 1.3009540329575022
+        },
+        {
+          "symbol": "pingora_http::append_header_value::<http::header::value::HeaderValue, pingora_http::case_header_name::CaseHeaderName>",
+          "samples": 15,
+          "percent": 1.3009540329575022
+        },
+        {
+          "symbol": "<pingora_core::connectors::http::Connector>::release_http_session::<pingora_core::upstreams::peer::HttpPeer>::{closure#0}",
+          "samples": 14,
+          "percent": 1.2142237640936686
+        },
+        {
+          "symbol": "mi_malloc_aligned",
+          "samples": 14,
+          "percent": 1.2142237640936686
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy> as pingora_core::apps::ServerApp>::process_new::{closure#0}",
+          "samples": 14,
+          "percent": 1.2142237640936686
+        },
+        {
+          "symbol": "[unknown] ([vdso])",
+          "samples": 14,
+          "percent": 1.2142237640936686
+        },
+        {
+          "symbol": "_mi_malloc_generic",
+          "samples": 13,
+          "percent": 1.1274934952298352
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::try_append2::<http::header::name::HeaderName>",
+          "samples": 13,
+          "percent": 1.1274934952298352
+        },
+        {
+          "symbol": "<tokio_rustls::common::Stream<pingora_core::protocols::l4::stream::Stream, rustls::server::server_conn::connection::ServerConnection>>::read_io",
+          "samples": 13,
+          "percent": 1.1274934952298352
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::process_request::{closure#0}",
+          "samples": 12,
+          "percent": 1.0407632263660018
+        },
+        {
+          "symbol": "<pingora_proxy::Session>::write_response_tasks::{closure#0}",
+          "samples": 11,
+          "percent": 0.9540329575021682
+        },
+        {
+          "symbol": "<http::header::name::HeaderName>::from_bytes",
+          "samples": 11,
+          "percent": 0.9540329575021682
+        },
+        {
+          "symbol": "<tokio::runtime::io::registration::Registration>::poll_ready",
+          "samples": 11,
+          "percent": 0.9540329575021682
+        },
+        {
+          "symbol": "http::header::name::parse_hdr",
+          "samples": 10,
+          "percent": 0.8673026886383348
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::body::BodyWriter>::write_body::<alloc::boxed::Box<dyn pingora_core::protocols::IO>>::{closure#0}",
+          "samples": 10,
+          "percent": 0.8673026886383348
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::server::HttpSession>::prepare_response_header",
+          "samples": 10,
+          "percent": 0.8673026886383348
+        },
+        {
+          "symbol": "<pingora_core::connectors::TransportConnector>::reused_stream::<pingora_core::upstreams::peer::HttpPeer>::{closure#0}",
+          "samples": 9,
+          "percent": 0.7805724197745013
+        },
+        {
+          "symbol": "<tokio::sync::batch_semaphore::Semaphore>::add_permits_locked",
+          "samples": 9,
+          "percent": 0.7805724197745013
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get2::<http::header::name::HeaderName>",
+          "samples": 9,
+          "percent": 0.7805724197745013
+        },
+        {
+          "symbol": "<rustls::crypto::aws_lc_rs::tls13::GcmMessageEncrypter as rustls::crypto::cipher::MessageEncrypter>::encrypt",
+          "samples": 9,
+          "percent": 0.7805724197745013
+        },
+        {
+          "symbol": "aws_lc_0_44_0_aes_hw_encrypt",
+          "samples": 9,
+          "percent": 0.7805724197745013
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::h1_response_filter::{closure#0}",
+          "samples": 8,
+          "percent": 0.6938421509106678
+        },
+        {
+          "symbol": "<pingora_core::services::listening::Service<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>>::run_endpoint::{closure#0}::{closure#0}",
+          "samples": 8,
+          "percent": 0.6938421509106678
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::Stream as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 8,
+          "percent": 0.6938421509106678
+        },
+        {
+          "symbol": "pingora_core::protocols::http::v1::common::content_length_for_framing",
+          "samples": 8,
+          "percent": 0.6938421509106678
+        },
+        {
+          "symbol": "aws_lc_0_44_0_aes_hw_ctr32_encrypt_blocks",
+          "samples": 8,
+          "percent": 0.6938421509106678
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap<pingora_http::case_header_name::CaseHeaderName>>::try_reserve_one",
+          "samples": 7,
+          "percent": 0.6071118820468343
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::RawStreamWrapper as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 7,
+          "percent": 0.6071118820468343
+        },
+        {
+          "symbol": "<pingora_core::connectors::TransportConnector>::release_stream::{closure#0}",
+          "samples": 7,
+          "percent": 0.6071118820468343
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HdrName>",
+          "samples": 7,
+          "percent": 0.6071118820468343
+        },
+        {
+          "symbol": "aws_lc_0_44_0_gcm_gmult_clmul",
+          "samples": 7,
+          "percent": 0.6071118820468343
+        },
+        {
+          "symbol": "<pingora_core::upstreams::peer::HttpPeer as core::clone::Clone>::clone",
+          "samples": 7,
+          "percent": 0.6071118820468343
+        },
+        {
+          "symbol": "<pingora_proxy::Session>::downstream_response_task_filter::{closure#0}",
+          "samples": 7,
+          "percent": 0.6071118820468343
+        },
+        {
+          "symbol": "tokio::runtime::task::raw::poll::<<pingora_core::connectors::TransportConnector>::release_stream::{closure#0}, alloc::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle>>",
+          "samples": 7,
+          "percent": 0.6071118820468343
+        },
+        {
+          "symbol": "<rustls::vecbuf::ChunkVecBuffer>::write_to",
+          "samples": 7,
+          "percent": 0.6071118820468343
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap<pingora_http::case_header_name::CaseHeaderName> as core::clone::Clone>::clone",
+          "samples": 7,
+          "percent": 0.6071118820468343
+        },
+        {
+          "symbol": "getpeername",
+          "samples": 6,
+          "percent": 0.5203816131830009
+        }
+      ],
+      "round": 0,
+      "target": "pingora",
+      "protocol": "h1-tls",
+      "cache": "off"
+    },
+    {
+      "path": "round-0-pingora/0001-h1-off-reuse.stacks.txt",
+      "sha256": "15c269e911a5a7ab9204f1206745aa1307e999964932d386d8bdf31c6fdcf618",
+      "event": "cpu-clock:u",
+      "sample_count": 1561,
+      "lost_samples": 0,
+      "periods": {
+        "5025125": 1561
+      },
+      "inclusive_groups_overlap": true,
+      "groups": {
+        "request_filter": {
+          "samples": 2,
+          "percent": 0.12812299807815503
+        },
+        "cache_admission": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "response_filter": {
+          "samples": 3,
+          "percent": 0.19218449711723254
+        },
+        "request_completion": {
+          "samples": 3,
+          "percent": 0.19218449711723254
+        },
+        "dimension_worker": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "cache_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "memory_governor": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "headers": {
+          "samples": 258,
+          "percent": 16.527866752081998
+        },
+        "allocator": {
+          "samples": 186,
+          "percent": 11.915438821268417
+        },
+        "upstream_peer": {
+          "samples": 17,
+          "percent": 1.0890454836643177
+        },
+        "firewall_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "upstream_pipeline_including_callbacks": {
+          "samples": 1128,
+          "percent": 72.26137091607944
+        },
+        "zstd": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "zstd_context_creation": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "tokio_filesystem": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "file_fill_handler": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "metadata_writer": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "heap_relinquish": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "bloom_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "parse_mark_insert": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "client_ip_header_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "request_id": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "response_transform_probe": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "leaf_symbols": [
+        {
+          "symbol": "[unknown] (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          "samples": 148,
+          "percent": 9.481101857783472
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::proxy_1to1::{closure#0}::{closure#1}",
+          "samples": 70,
+          "percent": 4.484304932735426
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::proxy_to_upstream::{closure#0}",
+          "samples": 50,
+          "percent": 3.2030749519538757
+        },
+        {
+          "symbol": "_mi_page_malloc_zero",
+          "samples": 49,
+          "percent": 3.1390134529147984
+        },
+        {
+          "symbol": "mi_free",
+          "samples": 42,
+          "percent": 2.690582959641256
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::read_resp_header_parts::{closure#0}",
+          "samples": 41,
+          "percent": 2.626521460602178
+        },
+        {
+          "symbol": "pingora_http::append_header_value::<http::header::value::HeaderValue, pingora_http::case_header_name::CaseHeaderName>",
+          "samples": 33,
+          "percent": 2.114029468289558
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy> as pingora_core::apps::HttpServerApp>::process_new_http::{closure#0}",
+          "samples": 31,
+          "percent": 1.9859064702114029
+        },
+        {
+          "symbol": "mi_theap_malloc_aligned",
+          "samples": 29,
+          "percent": 1.857783472133248
+        },
+        {
+          "symbol": "getpeername",
+          "samples": 24,
+          "percent": 1.5374759769378603
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::server::HttpSession>::read_request::{closure#0}",
+          "samples": 22,
+          "percent": 1.4093529788597052
+        },
+        {
+          "symbol": "httparse::parse_headers_iter_uninit",
+          "samples": 22,
+          "percent": 1.4093529788597052
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::try_append2::<http::header::name::HeaderName>",
+          "samples": 21,
+          "percent": 1.345291479820628
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::process_request::{closure#0}",
+          "samples": 20,
+          "percent": 1.2812299807815504
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HeaderName>",
+          "samples": 20,
+          "percent": 1.2812299807815504
+        },
+        {
+          "symbol": "<http::header::name::StandardHeader>::from_bytes",
+          "samples": 18,
+          "percent": 1.1531069827033953
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get_all::<http::header::name::HeaderName>",
+          "samples": 17,
+          "percent": 1.0890454836643177
+        },
+        {
+          "symbol": "<pingora_proxy::Session>::write_response_tasks::{closure#0}",
+          "samples": 17,
+          "percent": 1.0890454836643177
+        },
+        {
+          "symbol": "http::header::name::parse_hdr",
+          "samples": 15,
+          "percent": 0.9609224855861627
+        },
+        {
+          "symbol": "<tokio::runtime::io::registration::Registration>::poll_ready",
+          "samples": 15,
+          "percent": 0.9609224855861627
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::Stream as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 15,
+          "percent": 0.9609224855861627
+        },
+        {
+          "symbol": "pingora_core::protocols::http::v1::common::content_length_for_framing",
+          "samples": 15,
+          "percent": 0.9609224855861627
+        },
+        {
+          "symbol": "<pingora_core::services::listening::Service<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>>::run_endpoint::{closure#0}::{closure#0}",
+          "samples": 15,
+          "percent": 0.9609224855861627
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy> as pingora_core::apps::ServerApp>::process_new::{closure#0}",
+          "samples": 15,
+          "percent": 0.9609224855861627
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get2::<http::header::name::HeaderName>",
+          "samples": 14,
+          "percent": 0.8968609865470852
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::server::HttpSession>::prepare_response_header",
+          "samples": 13,
+          "percent": 0.8327994875080077
+        },
+        {
+          "symbol": "<pingora_core::connectors::TransportConnector>::release_stream::{closure#0}",
+          "samples": 13,
+          "percent": 0.8327994875080077
+        },
+        {
+          "symbol": "_mi_bin_size",
+          "samples": 12,
+          "percent": 0.7687379884689302
+        },
+        {
+          "symbol": "<http::header::name::HeaderName>::from_bytes",
+          "samples": 12,
+          "percent": 0.7687379884689302
+        },
+        {
+          "symbol": "<tokio::sync::batch_semaphore::Acquire as core::future::future::Future>::poll",
+          "samples": 12,
+          "percent": 0.7687379884689302
+        },
+        {
+          "symbol": "<tokio::sync::mpsc::list::Rx<pingora_core::protocols::http::HttpTask>>::pop",
+          "samples": 12,
+          "percent": 0.7687379884689302
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::RawStreamWrapper as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 12,
+          "percent": 0.7687379884689302
+        },
+        {
+          "symbol": "<tokio::sync::batch_semaphore::Semaphore>::add_permits_locked",
+          "samples": 12,
+          "percent": 0.7687379884689302
+        },
+        {
+          "symbol": "_mi_malloc_generic",
+          "samples": 11,
+          "percent": 0.7046764894298526
+        },
+        {
+          "symbol": "<tokio::sync::mpsc::bounded::Receiver<pingora_core::protocols::http::HttpTask>>::recv::{closure#0}",
+          "samples": 11,
+          "percent": 0.7046764894298526
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::finish::{closure#0}",
+          "samples": 11,
+          "percent": 0.7046764894298526
+        },
+        {
+          "symbol": "[unknown] ([vdso])",
+          "samples": 11,
+          "percent": 0.7046764894298526
+        },
+        {
+          "symbol": "bytes::bytes::shared_drop",
+          "samples": 11,
+          "percent": 0.7046764894298526
+        },
+        {
+          "symbol": "<pingora_core::upstreams::peer::HttpPeer as core::clone::Clone>::clone",
+          "samples": 11,
+          "percent": 0.7046764894298526
+        },
+        {
+          "symbol": "<pingora_proxy::Session>::downstream_response_task_filter::{closure#0}",
+          "samples": 11,
+          "percent": 0.7046764894298526
+        },
+        {
+          "symbol": "tokio::runtime::task::raw::poll::<tokio::runtime::blocking::task::BlockingTask<<tokio::runtime::scheduler::multi_thread::worker::Launch>::launch::{closure#0}>, tokio::runtime::blocking::schedule::BlockingSchedule>",
+          "samples": 10,
+          "percent": 0.6406149903907752
+        },
+        {
+          "symbol": "tokio::runtime::task::raw::poll::<<pingora_core::services::listening::Service<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>>::run_endpoint::{closure#0}::{closure#0}, alloc::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle>>",
+          "samples": 9,
+          "percent": 0.5765534913516976
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::server::Session>::read_body_or_idle::{closure#0}",
+          "samples": 9,
+          "percent": 0.5765534913516976
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::Stream as tokio::io::async_write::AsyncWrite>::poll_flush",
+          "samples": 9,
+          "percent": 0.5765534913516976
+        },
+        {
+          "symbol": "tokio::runtime::task::raw::poll::<<pingora_core::connectors::TransportConnector>::release_stream::{closure#0}, alloc::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle>>",
+          "samples": 8,
+          "percent": 0.5124919923126201
+        },
+        {
+          "symbol": "<pingora_core::connectors::http::Connector>::release_http_session::<pingora_core::upstreams::peer::HttpPeer>::{closure#0}",
+          "samples": 8,
+          "percent": 0.5124919923126201
+        },
+        {
+          "symbol": "<tokio::io::util::read_buf::ReadBuf<alloc::boxed::Box<dyn pingora_core::protocols::IO>, bytes::bytes_mut::BytesMut> as core::future::future::Future>::poll",
+          "samples": 8,
+          "percent": 0.5124919923126201
+        },
+        {
+          "symbol": "<pingora_pool::connection::PoolNode<pingora_pool::connection::PoolConnection<alloc::sync::Arc<tokio::sync::mutex::Mutex<alloc::boxed::Box<dyn pingora_core::protocols::IO>>>>>>::insert",
+          "samples": 8,
+          "percent": 0.5124919923126201
+        },
+        {
+          "symbol": "<tokio::runtime::scheduler::multi_thread::handle::Handle>::schedule_task::{closure#0}",
+          "samples": 8,
+          "percent": 0.5124919923126201
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap as core::clone::Clone>::clone",
+          "samples": 8,
+          "percent": 0.5124919923126201
+        }
+      ],
+      "round": 0,
+      "target": "pingora",
+      "protocol": "h1",
+      "cache": "off"
+    },
+    {
+      "path": "round-0-pingora/0002-h2-off-reuse.stacks.txt",
+      "sha256": "2144b42ef1d615fcb5a7a0b6220b0755ffa4b2ad81fe3fbaba945d7362929c37",
+      "event": "cpu-clock:u",
+      "sample_count": 1351,
+      "lost_samples": 0,
+      "periods": {
+        "5025125": 1351
+      },
+      "inclusive_groups_overlap": true,
+      "groups": {
+        "request_filter": {
+          "samples": 3,
+          "percent": 0.22205773501110287
+        },
+        "cache_admission": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "response_filter": {
+          "samples": 1,
+          "percent": 0.07401924500370097
+        },
+        "request_completion": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "dimension_worker": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "cache_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "memory_governor": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "headers": {
+          "samples": 171,
+          "percent": 12.657290895632865
+        },
+        "allocator": {
+          "samples": 101,
+          "percent": 7.475943745373797
+        },
+        "upstream_peer": {
+          "samples": 3,
+          "percent": 0.22205773501110287
+        },
+        "firewall_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "upstream_pipeline_including_callbacks": {
+          "samples": 675,
+          "percent": 49.96299037749815
+        },
+        "zstd": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "zstd_context_creation": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "tokio_filesystem": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "file_fill_handler": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "metadata_writer": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "heap_relinquish": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "bloom_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "parse_mark_insert": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "client_ip_header_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "request_id": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "response_transform_probe": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "leaf_symbols": [
+        {
+          "symbol": "[unknown] (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          "samples": 115,
+          "percent": 8.512213175425611
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::proxy_1to1::{closure#0}::{closure#1}",
+          "samples": 36,
+          "percent": 2.6646928201332347
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v2::server::HttpSession>::from_h2_conn_with_malformed_budget::{closure#0}",
+          "samples": 34,
+          "percent": 2.516654330125833
+        },
+        {
+          "symbol": "<h2::frame::headers::HeaderBlock>::into_encoding",
+          "samples": 31,
+          "percent": 2.29459659511473
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::read_resp_header_parts::{closure#0}",
+          "samples": 28,
+          "percent": 2.0725388601036268
+        },
+        {
+          "symbol": "mi_theap_malloc_aligned",
+          "samples": 27,
+          "percent": 1.998519615099926
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::proxy_to_upstream::{closure#0}",
+          "samples": 27,
+          "percent": 1.998519615099926
+        },
+        {
+          "symbol": "<h2::codec::Codec<alloc::boxed::Box<dyn pingora_core::protocols::IO>, h2::proto::streams::prioritize::Prioritized<bytes::bytes::Bytes>> as futures_core::stream::Stream>::poll_next",
+          "samples": 16,
+          "percent": 1.1843079200592155
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy> as pingora_core::apps::ServerApp>::process_new::{closure#0}",
+          "samples": 16,
+          "percent": 1.1843079200592155
+        },
+        {
+          "symbol": "_mi_page_malloc_zero",
+          "samples": 16,
+          "percent": 1.1843079200592155
+        },
+        {
+          "symbol": "<tokio_rustls::common::Stream<pingora_core::protocols::l4::stream::Stream, rustls::server::server_conn::connection::ServerConnection>>::read_io",
+          "samples": 16,
+          "percent": 1.1843079200592155
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HeaderName>",
+          "samples": 16,
+          "percent": 1.1843079200592155
+        },
+        {
+          "symbol": "_aesni_ctr32_ghash_6x",
+          "samples": 15,
+          "percent": 1.1102886750555145
+        },
+        {
+          "symbol": "mi_free",
+          "samples": 15,
+          "percent": 1.1102886750555145
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::process_request::{closure#0}",
+          "samples": 14,
+          "percent": 1.0362694300518134
+        },
+        {
+          "symbol": "pingora_core::protocols::http::v1::common::content_length_for_framing",
+          "samples": 14,
+          "percent": 1.0362694300518134
+        },
+        {
+          "symbol": "[unknown] ([vdso])",
+          "samples": 13,
+          "percent": 0.9622501850481125
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy> as pingora_core::apps::HttpServerApp>::process_new_http::{closure#0}",
+          "samples": 13,
+          "percent": 0.9622501850481125
+        },
+        {
+          "symbol": "bytes::bytes::shared_drop",
+          "samples": 12,
+          "percent": 0.8882309400444115
+        },
+        {
+          "symbol": "_mi_malloc_generic",
+          "samples": 12,
+          "percent": 0.8882309400444115
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::RawStreamWrapper as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 11,
+          "percent": 0.8142116950407106
+        },
+        {
+          "symbol": "pingora_http::append_header_value::<http::header::value::HeaderValue, pingora_http::case_header_name::CaseHeaderName>",
+          "samples": 11,
+          "percent": 0.8142116950407106
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get2::<http::header::name::HeaderName>",
+          "samples": 11,
+          "percent": 0.8142116950407106
+        },
+        {
+          "symbol": "bytes::bytes::shared_clone",
+          "samples": 11,
+          "percent": 0.8142116950407106
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get_all::<http::header::name::HeaderName>",
+          "samples": 10,
+          "percent": 0.7401924500370096
+        },
+        {
+          "symbol": "<http::header::name::StandardHeader>::from_bytes",
+          "samples": 10,
+          "percent": 0.7401924500370096
+        },
+        {
+          "symbol": "tokio::runtime::task::waker::clone_waker",
+          "samples": 10,
+          "percent": 0.7401924500370096
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::finish::{closure#0}",
+          "samples": 9,
+          "percent": 0.6661732050333087
+        },
+        {
+          "symbol": "<http::header::name::HeaderName>::from_bytes",
+          "samples": 9,
+          "percent": 0.6661732050333087
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::h1_response_filter::{closure#0}",
+          "samples": 9,
+          "percent": 0.6661732050333087
+        },
+        {
+          "symbol": "<h2::frame::headers::HeaderBlock>::load::{closure#0}",
+          "samples": 9,
+          "percent": 0.6661732050333087
+        },
+        {
+          "symbol": "<h2::proto::streams::streams::Inner>::buffer_pending::<alloc::boxed::Box<dyn pingora_core::protocols::IO>, bytes::bytes::Bytes>",
+          "samples": 9,
+          "percent": 0.6661732050333087
+        },
+        {
+          "symbol": "<h2::hpack::table::Table>::index_occupied",
+          "samples": 9,
+          "percent": 0.6661732050333087
+        },
+        {
+          "symbol": "<pingora_core::connectors::http::Connector>::release_http_session::<pingora_core::upstreams::peer::HttpPeer>::{closure#0}",
+          "samples": 9,
+          "percent": 0.6661732050333087
+        },
+        {
+          "symbol": "httparse::parse_headers_iter_uninit",
+          "samples": 9,
+          "percent": 0.6661732050333087
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap as core::clone::Clone>::clone",
+          "samples": 9,
+          "percent": 0.6661732050333087
+        },
+        {
+          "symbol": "<h2::proto::connection::DynConnection>::recv_frame",
+          "samples": 9,
+          "percent": 0.6661732050333087
+        },
+        {
+          "symbol": "<h2::codec::framed_write::FramedWrite<alloc::boxed::Box<dyn pingora_core::protocols::IO>, h2::proto::streams::prioritize::Prioritized<bytes::bytes::Bytes>>>::flush",
+          "samples": 9,
+          "percent": 0.6661732050333087
+        },
+        {
+          "symbol": "<h2::hpack::decoder::Decoder>::try_decode_string",
+          "samples": 9,
+          "percent": 0.6661732050333087
+        },
+        {
+          "symbol": "<pingora_core::connectors::TransportConnector>::reused_stream::<pingora_core::upstreams::peer::HttpPeer>::{closure#0}",
+          "samples": 8,
+          "percent": 0.5921539600296077
+        },
+        {
+          "symbol": "core::ptr::drop_glue::<http::header::map::HeaderMap>",
+          "samples": 8,
+          "percent": 0.5921539600296077
+        },
+        {
+          "symbol": "<pingora_core::protocols::tls::rustls::stream::TlsStream<pingora_core::protocols::l4::stream::Stream> as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 8,
+          "percent": 0.5921539600296077
+        },
+        {
+          "symbol": "<pingora_core::upstreams::peer::HttpPeer as pingora_core::upstreams::peer::Peer>::reuse_hash",
+          "samples": 8,
+          "percent": 0.5921539600296077
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::Stream as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 7,
+          "percent": 0.5181347150259067
+        },
+        {
+          "symbol": "<h2::proto::streams::recv::Recv>::recv_headers",
+          "samples": 7,
+          "percent": 0.5181347150259067
+        },
+        {
+          "symbol": "aws_lc_0_44_0_EVP_AEAD_CTX_seal",
+          "samples": 7,
+          "percent": 0.5181347150259067
+        },
+        {
+          "symbol": "_mi_bin_size",
+          "samples": 7,
+          "percent": 0.5181347150259067
+        },
+        {
+          "symbol": "<rustls::crypto::aws_lc_rs::tls13::GcmMessageDecrypter as rustls::crypto::cipher::MessageDecrypter>::decrypt",
+          "samples": 7,
+          "percent": 0.5181347150259067
+        },
+        {
+          "symbol": "<tokio::sync::mpsc::list::Rx<pingora_core::protocols::http::HttpTask>>::pop",
+          "samples": 7,
+          "percent": 0.5181347150259067
+        },
+        {
+          "symbol": "<pingora_timeout::timer::TimerManager>::register_timer",
+          "samples": 7,
+          "percent": 0.5181347150259067
+        }
+      ],
+      "round": 0,
+      "target": "pingora",
+      "protocol": "h2",
+      "cache": "off"
+    },
+    {
+      "path": "round-1-pingora/0000-h1-tls-off-reuse.stacks.txt",
+      "sha256": "bc2bfdaffeab1f3155e169800116a7cb6644af07bcb676f16dc7b1f5a165e215",
+      "event": "cpu-clock:u",
+      "sample_count": 1180,
+      "lost_samples": 0,
+      "periods": {
+        "5025125": 1180
+      },
+      "inclusive_groups_overlap": true,
+      "groups": {
+        "request_filter": {
+          "samples": 2,
+          "percent": 0.1694915254237288
+        },
+        "cache_admission": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "response_filter": {
+          "samples": 2,
+          "percent": 0.1694915254237288
+        },
+        "request_completion": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "dimension_worker": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "cache_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "memory_governor": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "headers": {
+          "samples": 181,
+          "percent": 15.338983050847459
+        },
+        "allocator": {
+          "samples": 132,
+          "percent": 11.186440677966102
+        },
+        "upstream_peer": {
+          "samples": 11,
+          "percent": 0.9322033898305084
+        },
+        "firewall_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "upstream_pipeline_including_callbacks": {
+          "samples": 821,
+          "percent": 69.57627118644068
+        },
+        "zstd": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "zstd_context_creation": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "tokio_filesystem": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "file_fill_handler": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "metadata_writer": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "heap_relinquish": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "bloom_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "parse_mark_insert": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "client_ip_header_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "request_id": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "response_transform_probe": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "leaf_symbols": [
+        {
+          "symbol": "[unknown] (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          "samples": 87,
+          "percent": 7.372881355932203
+        },
+        {
+          "symbol": "mi_free",
+          "samples": 37,
+          "percent": 3.135593220338983
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::proxy_1to1::{closure#0}::{closure#1}",
+          "samples": 35,
+          "percent": 2.9661016949152543
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::proxy_to_upstream::{closure#0}",
+          "samples": 32,
+          "percent": 2.711864406779661
+        },
+        {
+          "symbol": "_mi_page_malloc_zero",
+          "samples": 29,
+          "percent": 2.457627118644068
+        },
+        {
+          "symbol": "mi_theap_malloc_aligned",
+          "samples": 28,
+          "percent": 2.3728813559322033
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::read_resp_header_parts::{closure#0}",
+          "samples": 27,
+          "percent": 2.288135593220339
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::server::HttpSession>::read_request::{closure#0}",
+          "samples": 23,
+          "percent": 1.9491525423728813
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy> as pingora_core::apps::HttpServerApp>::process_new_http::{closure#0}",
+          "samples": 19,
+          "percent": 1.6101694915254237
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HeaderName>",
+          "samples": 19,
+          "percent": 1.6101694915254237
+        },
+        {
+          "symbol": "httparse::parse_headers_iter_uninit",
+          "samples": 17,
+          "percent": 1.4406779661016949
+        },
+        {
+          "symbol": "<pingora_core::connectors::http::Connector>::release_http_session::<pingora_core::upstreams::peer::HttpPeer>::{closure#0}",
+          "samples": 16,
+          "percent": 1.3559322033898304
+        },
+        {
+          "symbol": "<http::header::name::HeaderName>::from_bytes",
+          "samples": 15,
+          "percent": 1.271186440677966
+        },
+        {
+          "symbol": "<http::header::name::StandardHeader>::from_bytes",
+          "samples": 14,
+          "percent": 1.1864406779661016
+        },
+        {
+          "symbol": "_aesni_ctr32_ghash_6x",
+          "samples": 14,
+          "percent": 1.1864406779661016
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get2::<http::header::name::HeaderName>",
+          "samples": 13,
+          "percent": 1.1016949152542372
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get_all::<http::header::name::HeaderName>",
+          "samples": 12,
+          "percent": 1.0169491525423728
+        },
+        {
+          "symbol": "pingora_http::append_header_value::<http::header::value::HeaderValue, pingora_http::case_header_name::CaseHeaderName>",
+          "samples": 12,
+          "percent": 1.0169491525423728
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::h1_response_filter::{closure#0}",
+          "samples": 11,
+          "percent": 0.9322033898305084
+        },
+        {
+          "symbol": "pingora_core::protocols::http::v1::common::content_length_for_framing",
+          "samples": 11,
+          "percent": 0.9322033898305084
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::process_request::{closure#0}",
+          "samples": 11,
+          "percent": 0.9322033898305084
+        },
+        {
+          "symbol": "tokio::runtime::task::raw::poll::<<pingora_core::connectors::TransportConnector>::release_stream::{closure#0}, alloc::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle>>",
+          "samples": 10,
+          "percent": 0.847457627118644
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap<pingora_http::case_header_name::CaseHeaderName> as core::clone::Clone>::clone",
+          "samples": 10,
+          "percent": 0.847457627118644
+        },
+        {
+          "symbol": "<pingora_proxy::Session>::write_response_tasks::{closure#0}",
+          "samples": 10,
+          "percent": 0.847457627118644
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy> as pingora_core::apps::ServerApp>::process_new::{closure#0}",
+          "samples": 10,
+          "percent": 0.847457627118644
+        },
+        {
+          "symbol": "<tokio::runtime::io::registration::Registration>::poll_ready",
+          "samples": 10,
+          "percent": 0.847457627118644
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::server::HttpSession>::prepare_response_header",
+          "samples": 9,
+          "percent": 0.7627118644067796
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::contains_key::<http::header::name::HeaderName>",
+          "samples": 9,
+          "percent": 0.7627118644067796
+        },
+        {
+          "symbol": "<pingora_core::protocols::tls::rustls::stream::TlsStream<pingora_core::protocols::l4::stream::Stream> as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 9,
+          "percent": 0.7627118644067796
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::RawStreamWrapper as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 9,
+          "percent": 0.7627118644067796
+        },
+        {
+          "symbol": "<tokio_rustls::common::Stream<pingora_core::protocols::l4::stream::Stream, rustls::server::server_conn::connection::ServerConnection>>::read_io",
+          "samples": 9,
+          "percent": 0.7627118644067796
+        },
+        {
+          "symbol": "[unknown] ([vdso])",
+          "samples": 8,
+          "percent": 0.6779661016949152
+        },
+        {
+          "symbol": "<pingora_core::connectors::TransportConnector>::release_stream::{closure#0}",
+          "samples": 8,
+          "percent": 0.6779661016949152
+        },
+        {
+          "symbol": "_mi_malloc_generic",
+          "samples": 8,
+          "percent": 0.6779661016949152
+        },
+        {
+          "symbol": "aws_lc_0_44_0_gcm_gmult_clmul",
+          "samples": 8,
+          "percent": 0.6779661016949152
+        },
+        {
+          "symbol": "aws_lc_0_44_0_aes_hw_ctr32_encrypt_blocks",
+          "samples": 7,
+          "percent": 0.5932203389830508
+        },
+        {
+          "symbol": "<tokio::sync::mpsc::list::Rx<pingora_core::protocols::http::HttpTask>>::pop",
+          "samples": 7,
+          "percent": 0.5932203389830508
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::try_append2::<http::header::name::HeaderName>",
+          "samples": 7,
+          "percent": 0.5932203389830508
+        },
+        {
+          "symbol": "<tokio::sync::batch_semaphore::Acquire as core::future::future::Future>::poll",
+          "samples": 7,
+          "percent": 0.5932203389830508
+        },
+        {
+          "symbol": "<tokio::sync::batch_semaphore::Semaphore>::add_permits_locked",
+          "samples": 7,
+          "percent": 0.5932203389830508
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::body::BodyReader>::read_body::<alloc::boxed::Box<dyn pingora_core::protocols::IO>>::{closure#0}",
+          "samples": 7,
+          "percent": 0.5932203389830508
+        },
+        {
+          "symbol": "<bytes::bytes_mut::BytesMut as bytes::buf::buf_mut::BufMut>::put_slice",
+          "samples": 6,
+          "percent": 0.5084745762711864
+        },
+        {
+          "symbol": "tokio::runtime::task::raw::poll::<<pingora_core::services::listening::Service<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>>::run_endpoint::{closure#0}::{closure#0}, alloc::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle>>",
+          "samples": 6,
+          "percent": 0.5084745762711864
+        },
+        {
+          "symbol": "getpeername",
+          "samples": 6,
+          "percent": 0.5084745762711864
+        },
+        {
+          "symbol": "<tokio::runtime::scheduler::multi_thread::worker::Context>::run_task",
+          "samples": 6,
+          "percent": 0.5084745762711864
+        },
+        {
+          "symbol": "<rustls::vecbuf::ChunkVecBuffer>::write_to",
+          "samples": 6,
+          "percent": 0.5084745762711864
+        },
+        {
+          "symbol": "clock_gettime",
+          "samples": 6,
+          "percent": 0.5084745762711864
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap as core::clone::Clone>::clone",
+          "samples": 6,
+          "percent": 0.5084745762711864
+        },
+        {
+          "symbol": "<pingora_core::upstreams::peer::HttpPeer as core::clone::Clone>::clone",
+          "samples": 6,
+          "percent": 0.5084745762711864
+        },
+        {
+          "symbol": "core::ptr::drop_glue::<core::option::Option<http::header::map::HeaderMap<pingora_http::case_header_name::CaseHeaderName>>>",
+          "samples": 6,
+          "percent": 0.5084745762711864
+        }
+      ],
+      "round": 1,
+      "target": "pingora",
+      "protocol": "h1-tls",
+      "cache": "off"
+    },
+    {
+      "path": "round-1-pingora/0001-h1-off-reuse.stacks.txt",
+      "sha256": "d22d742b6081a3ceb84c059dedd976c5711696a35aeafee4611e3f52e9c6c91c",
+      "event": "cpu-clock:u",
+      "sample_count": 1578,
+      "lost_samples": 0,
+      "periods": {
+        "5025125": 1578
+      },
+      "inclusive_groups_overlap": true,
+      "groups": {
+        "request_filter": {
+          "samples": 3,
+          "percent": 0.19011406844106463
+        },
+        "cache_admission": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "response_filter": {
+          "samples": 4,
+          "percent": 0.2534854245880862
+        },
+        "request_completion": {
+          "samples": 2,
+          "percent": 0.1267427122940431
+        },
+        "dimension_worker": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "cache_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "memory_governor": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "headers": {
+          "samples": 272,
+          "percent": 17.23700887198986
+        },
+        "allocator": {
+          "samples": 190,
+          "percent": 12.040557667934094
+        },
+        "upstream_peer": {
+          "samples": 15,
+          "percent": 0.9505703422053232
+        },
+        "firewall_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "upstream_pipeline_including_callbacks": {
+          "samples": 1089,
+          "percent": 69.01140684410646
+        },
+        "zstd": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "zstd_context_creation": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "tokio_filesystem": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "file_fill_handler": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "metadata_writer": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "heap_relinquish": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "bloom_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "parse_mark_insert": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "client_ip_header_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "request_id": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "response_transform_probe": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "leaf_symbols": [
+        {
+          "symbol": "[unknown] (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          "samples": 150,
+          "percent": 9.505703422053232
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::proxy_to_upstream::{closure#0}",
+          "samples": 51,
+          "percent": 3.2319391634980987
+        },
+        {
+          "symbol": "_mi_page_malloc_zero",
+          "samples": 49,
+          "percent": 3.1051964512040557
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::proxy_1to1::{closure#0}::{closure#1}",
+          "samples": 49,
+          "percent": 3.1051964512040557
+        },
+        {
+          "symbol": "mi_free",
+          "samples": 41,
+          "percent": 2.5982256020278833
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::read_resp_header_parts::{closure#0}",
+          "samples": 39,
+          "percent": 2.4714828897338403
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::server::HttpSession>::read_request::{closure#0}",
+          "samples": 37,
+          "percent": 2.3447401774397973
+        },
+        {
+          "symbol": "mi_theap_malloc_aligned",
+          "samples": 31,
+          "percent": 1.964512040557668
+        },
+        {
+          "symbol": "pingora_http::append_header_value::<http::header::value::HeaderValue, pingora_http::case_header_name::CaseHeaderName>",
+          "samples": 28,
+          "percent": 1.7743979721166032
+        },
+        {
+          "symbol": "httparse::parse_headers_iter_uninit",
+          "samples": 25,
+          "percent": 1.5842839036755387
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy> as pingora_core::apps::ServerApp>::process_new::{closure#0}",
+          "samples": 25,
+          "percent": 1.5842839036755387
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HeaderName>",
+          "samples": 22,
+          "percent": 1.394169835234474
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy> as pingora_core::apps::HttpServerApp>::process_new_http::{closure#0}",
+          "samples": 21,
+          "percent": 1.3307984790874525
+        },
+        {
+          "symbol": "bytes::bytes::shared_drop",
+          "samples": 20,
+          "percent": 1.267427122940431
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::process_request::{closure#0}",
+          "samples": 19,
+          "percent": 1.2040557667934093
+        },
+        {
+          "symbol": "<tokio::runtime::io::registration::Registration>::poll_ready",
+          "samples": 19,
+          "percent": 1.2040557667934093
+        },
+        {
+          "symbol": "<pingora_core::services::listening::Service<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>>::run_endpoint::{closure#0}::{closure#0}",
+          "samples": 18,
+          "percent": 1.1406844106463878
+        },
+        {
+          "symbol": "<pingora_core::connectors::http::Connector>::release_http_session::<pingora_core::upstreams::peer::HttpPeer>::{closure#0}",
+          "samples": 17,
+          "percent": 1.0773130544993663
+        },
+        {
+          "symbol": "<http::header::name::StandardHeader>::from_bytes",
+          "samples": 17,
+          "percent": 1.0773130544993663
+        },
+        {
+          "symbol": "_mi_malloc_generic",
+          "samples": 16,
+          "percent": 1.0139416983523448
+        },
+        {
+          "symbol": "getpeername",
+          "samples": 16,
+          "percent": 1.0139416983523448
+        },
+        {
+          "symbol": "[unknown] ([vdso])",
+          "samples": 16,
+          "percent": 1.0139416983523448
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get2::<http::header::name::HeaderName>",
+          "samples": 16,
+          "percent": 1.0139416983523448
+        },
+        {
+          "symbol": "<http::header::name::HeaderName>::from_bytes",
+          "samples": 16,
+          "percent": 1.0139416983523448
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::try_append2::<http::header::name::HeaderName>",
+          "samples": 15,
+          "percent": 0.9505703422053232
+        },
+        {
+          "symbol": "tokio::runtime::task::raw::poll::<<pingora_core::services::listening::Service<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>>::run_endpoint::{closure#0}::{closure#0}, alloc::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle>>",
+          "samples": 14,
+          "percent": 0.8871989860583016
+        },
+        {
+          "symbol": "bytes::bytes::shared_clone",
+          "samples": 14,
+          "percent": 0.8871989860583016
+        },
+        {
+          "symbol": "<tokio::sync::mpsc::bounded::Receiver<pingora_core::protocols::http::HttpTask>>::recv::{closure#0}",
+          "samples": 14,
+          "percent": 0.8871989860583016
+        },
+        {
+          "symbol": "<pingora_core::connectors::TransportConnector>::release_stream::{closure#0}",
+          "samples": 13,
+          "percent": 0.8238276299112801
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get_all::<http::header::name::HeaderName>",
+          "samples": 13,
+          "percent": 0.8238276299112801
+        },
+        {
+          "symbol": "tokio::runtime::task::raw::poll::<tokio::runtime::blocking::task::BlockingTask<<tokio::runtime::scheduler::multi_thread::worker::Launch>::launch::{closure#0}>, tokio::runtime::blocking::schedule::BlockingSchedule>",
+          "samples": 13,
+          "percent": 0.8238276299112801
+        },
+        {
+          "symbol": "<pingora_proxy::Session>::write_response_tasks::{closure#0}",
+          "samples": 13,
+          "percent": 0.8238276299112801
+        },
+        {
+          "symbol": "mi_malloc_aligned",
+          "samples": 12,
+          "percent": 0.7604562737642585
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::finish::{closure#0}",
+          "samples": 12,
+          "percent": 0.7604562737642585
+        },
+        {
+          "symbol": "_mi_theap_malloc_zero",
+          "samples": 11,
+          "percent": 0.697084917617237
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::Stream as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 11,
+          "percent": 0.697084917617237
+        },
+        {
+          "symbol": "<pingora_http::RequestHeader>::remove_header::<str>",
+          "samples": 10,
+          "percent": 0.6337135614702155
+        },
+        {
+          "symbol": "mi_bin",
+          "samples": 10,
+          "percent": 0.6337135614702155
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::RawStreamWrapper as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 10,
+          "percent": 0.6337135614702155
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::process_upstream_tasks::{closure#0}",
+          "samples": 10,
+          "percent": 0.6337135614702155
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::server::HttpSession>::prepare_response_header",
+          "samples": 10,
+          "percent": 0.6337135614702155
+        },
+        {
+          "symbol": "<tokio::sync::mpsc::bounded::Sender<pingora_core::protocols::http::HttpTask>>::reserve::{closure#0}",
+          "samples": 9,
+          "percent": 0.5703422053231939
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::contains_key::<http::header::name::HeaderName>",
+          "samples": 9,
+          "percent": 0.5703422053231939
+        },
+        {
+          "symbol": "pingora_core::protocols::http::v1::common::content_length_for_framing",
+          "samples": 9,
+          "percent": 0.5703422053231939
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap as core::clone::Clone>::clone",
+          "samples": 9,
+          "percent": 0.5703422053231939
+        },
+        {
+          "symbol": "_mi_bin_size",
+          "samples": 8,
+          "percent": 0.5069708491761724
+        },
+        {
+          "symbol": "core::ptr::drop_glue::<core::option::Option<http::header::map::HeaderMap<pingora_http::case_header_name::CaseHeaderName>>>",
+          "samples": 8,
+          "percent": 0.5069708491761724
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HdrName>",
+          "samples": 8,
+          "percent": 0.5069708491761724
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap<pingora_http::case_header_name::CaseHeaderName> as core::clone::Clone>::clone",
+          "samples": 8,
+          "percent": 0.5069708491761724
+        },
+        {
+          "symbol": "<tokio::sync::batch_semaphore::Acquire as core::future::future::Future>::poll",
+          "samples": 8,
+          "percent": 0.5069708491761724
+        }
+      ],
+      "round": 1,
+      "target": "pingora",
+      "protocol": "h1",
+      "cache": "off"
+    },
+    {
+      "path": "round-1-pingora/0002-h2-off-reuse.stacks.txt",
+      "sha256": "78bdde0007985c90bb8b6b0292b59e4ef8e352e4b21c323f22639ea2dac8737b",
+      "event": "cpu-clock:u",
+      "sample_count": 1314,
+      "lost_samples": 0,
+      "periods": {
+        "5025125": 1314
+      },
+      "inclusive_groups_overlap": true,
+      "groups": {
+        "request_filter": {
+          "samples": 1,
+          "percent": 0.076103500761035
+        },
+        "cache_admission": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "response_filter": {
+          "samples": 3,
+          "percent": 0.228310502283105
+        },
+        "request_completion": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "dimension_worker": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "cache_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "memory_governor": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "headers": {
+          "samples": 163,
+          "percent": 12.404870624048707
+        },
+        "allocator": {
+          "samples": 112,
+          "percent": 8.52359208523592
+        },
+        "upstream_peer": {
+          "samples": 5,
+          "percent": 0.380517503805175
+        },
+        "firewall_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "upstream_pipeline_including_callbacks": {
+          "samples": 713,
+          "percent": 54.26179604261796
+        },
+        "zstd": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "zstd_context_creation": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "tokio_filesystem": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "file_fill_handler": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "metadata_writer": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "heap_relinquish": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "bloom_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "parse_mark_insert": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "client_ip_header_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "request_id": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "response_transform_probe": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "leaf_symbols": [
+        {
+          "symbol": "[unknown] (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          "samples": 103,
+          "percent": 7.838660578386606
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::proxy_1to1::{closure#0}::{closure#1}",
+          "samples": 38,
+          "percent": 2.8919330289193304
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::read_resp_header_parts::{closure#0}",
+          "samples": 30,
+          "percent": 2.2831050228310503
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::proxy_to_upstream::{closure#0}",
+          "samples": 30,
+          "percent": 2.2831050228310503
+        },
+        {
+          "symbol": "_mi_page_malloc_zero",
+          "samples": 28,
+          "percent": 2.13089802130898
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v2::server::HttpSession>::from_h2_conn_with_malformed_budget::{closure#0}",
+          "samples": 27,
+          "percent": 2.0547945205479454
+        },
+        {
+          "symbol": "<h2::frame::headers::HeaderBlock>::into_encoding",
+          "samples": 26,
+          "percent": 1.97869101978691
+        },
+        {
+          "symbol": "mi_free",
+          "samples": 25,
+          "percent": 1.9025875190258752
+        },
+        {
+          "symbol": "mi_theap_malloc_aligned",
+          "samples": 20,
+          "percent": 1.5220700152207
+        },
+        {
+          "symbol": "<h2::proto::streams::streams::Inner>::buffer_pending::<alloc::boxed::Box<dyn pingora_core::protocols::IO>, bytes::bytes::Bytes>",
+          "samples": 18,
+          "percent": 1.36986301369863
+        },
+        {
+          "symbol": "_aesni_ctr32_ghash_6x",
+          "samples": 17,
+          "percent": 1.2937595129375952
+        },
+        {
+          "symbol": "<pingora_core::connectors::http::Connector>::release_http_session::<pingora_core::upstreams::peer::HttpPeer>::{closure#0}",
+          "samples": 15,
+          "percent": 1.1415525114155252
+        },
+        {
+          "symbol": "<h2::codec::Codec<alloc::boxed::Box<dyn pingora_core::protocols::IO>, h2::proto::streams::prioritize::Prioritized<bytes::bytes::Bytes>> as futures_core::stream::Stream>::poll_next",
+          "samples": 15,
+          "percent": 1.1415525114155252
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy> as pingora_core::apps::HttpServerApp>::process_new_http::{closure#0}",
+          "samples": 13,
+          "percent": 0.989345509893455
+        },
+        {
+          "symbol": "<tokio::sync::batch_semaphore::Semaphore>::add_permits_locked",
+          "samples": 12,
+          "percent": 0.91324200913242
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::process_request::{closure#0}",
+          "samples": 11,
+          "percent": 0.837138508371385
+        },
+        {
+          "symbol": "<http::header::name::StandardHeader>::from_bytes",
+          "samples": 11,
+          "percent": 0.837138508371385
+        },
+        {
+          "symbol": "httparse::parse_headers_iter_uninit",
+          "samples": 11,
+          "percent": 0.837138508371385
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HeaderName>",
+          "samples": 11,
+          "percent": 0.837138508371385
+        },
+        {
+          "symbol": "bytes::bytes::shared_drop",
+          "samples": 10,
+          "percent": 0.76103500761035
+        },
+        {
+          "symbol": "getpeername",
+          "samples": 10,
+          "percent": 0.76103500761035
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy> as pingora_core::apps::ServerApp>::process_new::{closure#0}",
+          "samples": 10,
+          "percent": 0.76103500761035
+        },
+        {
+          "symbol": "<pingora_proxy::Session>::write_response_tasks::{closure#0}",
+          "samples": 10,
+          "percent": 0.76103500761035
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::Stream as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 10,
+          "percent": 0.76103500761035
+        },
+        {
+          "symbol": "<pingora_core::protocols::tls::rustls::stream::TlsStream<pingora_core::protocols::l4::stream::Stream> as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 10,
+          "percent": 0.76103500761035
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::remove::<&http::header::name::HeaderName>",
+          "samples": 9,
+          "percent": 0.684931506849315
+        },
+        {
+          "symbol": "pingora_core::protocols::http::v1::common::content_length_for_framing",
+          "samples": 9,
+          "percent": 0.684931506849315
+        },
+        {
+          "symbol": "tokio::runtime::task::raw::poll::<<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy> as pingora_core::apps::ServerApp>::process_new::{closure#0}::{closure#4}::{closure#0}, alloc::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle>>",
+          "samples": 9,
+          "percent": 0.684931506849315
+        },
+        {
+          "symbol": "<h2::server::Peer as h2::proto::peer::Peer>::convert_poll_message",
+          "samples": 9,
+          "percent": 0.684931506849315
+        },
+        {
+          "symbol": "_mi_malloc_generic",
+          "samples": 9,
+          "percent": 0.684931506849315
+        },
+        {
+          "symbol": "aws_lc_0_44_0_aes_hw_encrypt",
+          "samples": 9,
+          "percent": 0.684931506849315
+        },
+        {
+          "symbol": "<pingora_core::connectors::TransportConnector>::release_stream::{closure#0}",
+          "samples": 9,
+          "percent": 0.684931506849315
+        },
+        {
+          "symbol": "http::header::name::parse_hdr",
+          "samples": 9,
+          "percent": 0.684931506849315
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::try_append2::<http::header::name::HeaderName>",
+          "samples": 9,
+          "percent": 0.684931506849315
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v2::server::HttpSession>::write_response_header",
+          "samples": 8,
+          "percent": 0.60882800608828
+        },
+        {
+          "symbol": "<http::header::name::HeaderName>::from_bytes",
+          "samples": 8,
+          "percent": 0.60882800608828
+        },
+        {
+          "symbol": "tokio::runtime::task::raw::poll::<tokio::runtime::blocking::task::BlockingTask<<tokio::runtime::scheduler::multi_thread::worker::Launch>::launch::{closure#0}>, tokio::runtime::blocking::schedule::BlockingSchedule>",
+          "samples": 8,
+          "percent": 0.60882800608828
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<bare_pingora_proxy::BareProxy>>::process_upstream_tasks::{closure#0}",
+          "samples": 8,
+          "percent": 0.60882800608828
+        },
+        {
+          "symbol": "<pingora_timeout::timer::TimerManager>::register_timer",
+          "samples": 8,
+          "percent": 0.60882800608828
+        },
+        {
+          "symbol": "<tokio::runtime::scheduler::multi_thread::worker::Context>::run_task",
+          "samples": 8,
+          "percent": 0.60882800608828
+        },
+        {
+          "symbol": "<pingora_core::connectors::TransportConnector>::reused_stream::<pingora_core::upstreams::peer::HttpPeer>::{closure#0}",
+          "samples": 8,
+          "percent": 0.60882800608828
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get_all::<http::header::name::HeaderName>",
+          "samples": 8,
+          "percent": 0.60882800608828
+        },
+        {
+          "symbol": "tokio::runtime::task::waker::clone_waker",
+          "samples": 8,
+          "percent": 0.60882800608828
+        },
+        {
+          "symbol": "tokio::runtime::task::raw::poll::<<pingora_core::connectors::TransportConnector>::release_stream::{closure#0}, alloc::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle>>",
+          "samples": 8,
+          "percent": 0.60882800608828
+        },
+        {
+          "symbol": "<tokio::sync::batch_semaphore::Acquire as core::future::future::Future>::poll",
+          "samples": 8,
+          "percent": 0.60882800608828
+        },
+        {
+          "symbol": "<tokio_rustls::common::Stream<pingora_core::protocols::l4::stream::Stream, rustls::server::server_conn::connection::ServerConnection>>::read_io",
+          "samples": 8,
+          "percent": 0.60882800608828
+        },
+        {
+          "symbol": "<tokio::runtime::io::registration::Registration>::poll_ready",
+          "samples": 8,
+          "percent": 0.60882800608828
+        },
+        {
+          "symbol": "mi_malloc_aligned",
+          "samples": 7,
+          "percent": 0.532724505327245
+        },
+        {
+          "symbol": "<h2::proto::streams::recv::Recv>::recv_headers",
+          "samples": 7,
+          "percent": 0.532724505327245
+        },
+        {
+          "symbol": "<pingora_proxy::Session>::downstream_response_task_filter::{closure#0}",
+          "samples": 7,
+          "percent": 0.532724505327245
+        }
+      ],
+      "round": 1,
+      "target": "pingora",
+      "protocol": "h2",
+      "cache": "off"
+    },
+    {
+      "path": "round-1-edge/0000-h1-tls-off-reuse.stacks.txt",
+      "sha256": "910b194ee1ea18ee2ce5c2d5ced6a8d2654b84563e80db0d11485446d198b94f",
+      "event": "cpu-clock:u",
+      "sample_count": 2094,
+      "lost_samples": 0,
+      "periods": {
+        "5025125": 2094
+      },
+      "inclusive_groups_overlap": true,
+      "groups": {
+        "request_filter": {
+          "samples": 192,
+          "percent": 9.169054441260744
+        },
+        "cache_admission": {
+          "samples": 100,
+          "percent": 4.775549188156638
+        },
+        "response_filter": {
+          "samples": 164,
+          "percent": 7.831900668576886
+        },
+        "request_completion": {
+          "samples": 60,
+          "percent": 2.865329512893983
+        },
+        "dimension_worker": {
+          "samples": 73,
+          "percent": 3.4861509073543457
+        },
+        "cache_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "memory_governor": {
+          "samples": 27,
+          "percent": 1.2893982808022924
+        },
+        "headers": {
+          "samples": 309,
+          "percent": 14.756446991404012
+        },
+        "allocator": {
+          "samples": 218,
+          "percent": 10.410697230181471
+        },
+        "upstream_peer": {
+          "samples": 89,
+          "percent": 4.2502387774594075
+        },
+        "firewall_symbols": {
+          "samples": 25,
+          "percent": 1.1938872970391594
+        },
+        "upstream_pipeline_including_callbacks": {
+          "samples": 1172,
+          "percent": 55.9694364851958
+        },
+        "zstd": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "zstd_context_creation": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "tokio_filesystem": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "file_fill_handler": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "metadata_writer": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "heap_relinquish": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "bloom_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "parse_mark_insert": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "client_ip_header_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "request_id": {
+          "samples": 6,
+          "percent": 0.28653295128939826
+        },
+        "response_transform_probe": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "leaf_symbols": [
+        {
+          "symbol": "[unknown] (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          "samples": 154,
+          "percent": 7.354345749761222
+        },
+        {
+          "symbol": "_mi_page_malloc_zero",
+          "samples": 55,
+          "percent": 2.626552053486151
+        },
+        {
+          "symbol": "mi_free",
+          "samples": 49,
+          "percent": 2.3400191021967527
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::request_filter::{closure#0}",
+          "samples": 43,
+          "percent": 2.0534861509073545
+        },
+        {
+          "symbol": "<core::hash::sip::Hasher<core::hash::sip::Sip13Rounds> as core::hash::Hasher>::write",
+          "samples": 38,
+          "percent": 1.8147086914995225
+        },
+        {
+          "symbol": "mi_theap_malloc_aligned",
+          "samples": 36,
+          "percent": 1.7191977077363896
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::proxy_1to1::{closure#0}::{closure#1}",
+          "samples": 31,
+          "percent": 1.4804202483285578
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HeaderName>",
+          "samples": 26,
+          "percent": 1.241642788920726
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::proxy_to_upstream::{closure#0}",
+          "samples": 21,
+          "percent": 1.002865329512894
+        },
+        {
+          "symbol": "mi_malloc_aligned",
+          "samples": 20,
+          "percent": 0.9551098376313276
+        },
+        {
+          "symbol": "_mi_malloc_generic",
+          "samples": 19,
+          "percent": 0.9073543457497613
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::upstream_peer::{closure#0}",
+          "samples": 19,
+          "percent": 0.9073543457497613
+        },
+        {
+          "symbol": "http::header::name::parse_hdr",
+          "samples": 18,
+          "percent": 0.8595988538681948
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::read_resp_header_parts::{closure#0}",
+          "samples": 18,
+          "percent": 0.8595988538681948
+        },
+        {
+          "symbol": "<&str as core::str::pattern::Pattern>::is_contained_in",
+          "samples": 17,
+          "percent": 0.8118433619866284
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::server::HttpSession>::read_request::{closure#0}",
+          "samples": 17,
+          "percent": 0.8118433619866284
+        },
+        {
+          "symbol": "[unknown] ([vdso])",
+          "samples": 16,
+          "percent": 0.7640878701050621
+        },
+        {
+          "symbol": "<http::header::name::StandardHeader>::from_bytes",
+          "samples": 16,
+          "percent": 0.7640878701050621
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get2::<http::header::name::HeaderName>",
+          "samples": 16,
+          "percent": 0.7640878701050621
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::process_request::{closure#0}",
+          "samples": 15,
+          "percent": 0.7163323782234957
+        },
+        {
+          "symbol": "<http::header::name::HeaderName>::from_bytes",
+          "samples": 15,
+          "percent": 0.7163323782234957
+        },
+        {
+          "symbol": "zelvik_edge::http_proxy_manager::process_http1_stream::{closure#0}",
+          "samples": 14,
+          "percent": 0.6685768863419294
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get_all::<http::header::name::HeaderName>",
+          "samples": 14,
+          "percent": 0.6685768863419294
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::response_filter::{closure#0}",
+          "samples": 14,
+          "percent": 0.6685768863419294
+        },
+        {
+          "symbol": "syscall",
+          "samples": 13,
+          "percent": 0.620821394460363
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy>::run_request_context_phase::{closure#0}",
+          "samples": 13,
+          "percent": 0.620821394460363
+        },
+        {
+          "symbol": "regex_automata::hybrid::search::find_fwd",
+          "samples": 13,
+          "percent": 0.620821394460363
+        },
+        {
+          "symbol": "pingora_http::append_header_value::<http::header::value::HeaderValue, pingora_http::case_header_name::CaseHeaderName>",
+          "samples": 12,
+          "percent": 0.5730659025787965
+        },
+        {
+          "symbol": "alloc::fmt::format::format_inner",
+          "samples": 12,
+          "percent": 0.5730659025787965
+        },
+        {
+          "symbol": "httparse::parse_headers_iter_uninit",
+          "samples": 12,
+          "percent": 0.5730659025787965
+        },
+        {
+          "symbol": "_aesni_ctr32_ghash_6x",
+          "samples": 12,
+          "percent": 0.5730659025787965
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HdrName>",
+          "samples": 12,
+          "percent": 0.5730659025787965
+        },
+        {
+          "symbol": "<tokio::runtime::scheduler::multi_thread::worker::Context>::run_task",
+          "samples": 12,
+          "percent": 0.5730659025787965
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::Stream as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 12,
+          "percent": 0.5730659025787965
+        },
+        {
+          "symbol": "<http::header::name::HdrName>::from_bytes::<<&str as http::header::map::as_header_name::Sealed>::find<http::header::value::HeaderValue>::{closure#0}, core::option::Option<(usize, usize)>>",
+          "samples": 11,
+          "percent": 0.5253104106972302
+        },
+        {
+          "symbol": "<pingora_proxy::Session>::write_response_tasks::{closure#0}",
+          "samples": 11,
+          "percent": 0.5253104106972302
+        },
+        {
+          "symbol": "getpeername",
+          "samples": 11,
+          "percent": 0.5253104106972302
+        },
+        {
+          "symbol": "<pingora_core::protocols::tls::rustls::stream::TlsStream<pingora_core::protocols::l4::stream::Stream> as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 11,
+          "percent": 0.5253104106972302
+        },
+        {
+          "symbol": "<rustls::conn::ConnectionCore<rustls::server::server_conn::ServerConnectionData>>::process_new_packets",
+          "samples": 11,
+          "percent": 0.5253104106972302
+        },
+        {
+          "symbol": "<chrono::naive::date::NaiveDate>::from_num_days_from_ce_opt",
+          "samples": 10,
+          "percent": 0.4775549188156638
+        },
+        {
+          "symbol": "zelvik_edge::metrics::record::record_http_dimension_event",
+          "samples": 10,
+          "percent": 0.4775549188156638
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy>::sync_response_headers",
+          "samples": 10,
+          "percent": 0.4775549188156638
+        },
+        {
+          "symbol": "zelvik_edge::worker_reclaim::with_worker_reclaim::<<zelvik_edge::http_proxy_manager::HttpProxyManager>::run_http_listener_worker::{closure#0}::{closure#1}>::{closure#0}",
+          "samples": 10,
+          "percent": 0.4775549188156638
+        },
+        {
+          "symbol": "<rustls::vecbuf::ChunkVecBuffer>::write_to",
+          "samples": 9,
+          "percent": 0.4297994269340974
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::request_cache_filter",
+          "samples": 9,
+          "percent": 0.4297994269340974
+        },
+        {
+          "symbol": "pingora_core::protocols::http::v1::common::content_length_for_framing",
+          "samples": 9,
+          "percent": 0.4297994269340974
+        },
+        {
+          "symbol": "<tokio::runtime::io::registration::Registration>::poll_ready",
+          "samples": 9,
+          "percent": 0.4297994269340974
+        },
+        {
+          "symbol": "bytes::bytes::shared_drop",
+          "samples": 9,
+          "percent": 0.4297994269340974
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::logging::{closure#0}",
+          "samples": 9,
+          "percent": 0.4297994269340974
+        },
+        {
+          "symbol": "tokio::runtime::task::raw::poll::<zelvik_edge::worker_reclaim::with_worker_reclaim<<zelvik_edge::http_proxy_manager::HttpProxyManager>::run_http_listener_worker::{closure#0}::{closure#1}>::{closure#0}, alloc::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle>>",
+          "samples": 9,
+          "percent": 0.4297994269340974
+        }
+      ],
+      "round": 1,
+      "target": "edge",
+      "protocol": "h1-tls",
+      "cache": "off"
+    },
+    {
+      "path": "round-1-edge/0001-h1-off-reuse.stacks.txt",
+      "sha256": "52a7dc3f53fb44b7603c7f7a16241f43506f685e3d1ff10902b8fef9eeb8da63",
+      "event": "cpu-clock:u",
+      "sample_count": 2059,
+      "lost_samples": 0,
+      "periods": {
+        "5025125": 2059
+      },
+      "inclusive_groups_overlap": true,
+      "groups": {
+        "request_filter": {
+          "samples": 206,
+          "percent": 10.004856726566294
+        },
+        "cache_admission": {
+          "samples": 105,
+          "percent": 5.099562894609034
+        },
+        "response_filter": {
+          "samples": 156,
+          "percent": 7.576493443419135
+        },
+        "request_completion": {
+          "samples": 80,
+          "percent": 3.885381253035454
+        },
+        "dimension_worker": {
+          "samples": 81,
+          "percent": 3.933948518698397
+        },
+        "cache_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "memory_governor": {
+          "samples": 37,
+          "percent": 1.7969888295288976
+        },
+        "headers": {
+          "samples": 315,
+          "percent": 15.2986886838271
+        },
+        "allocator": {
+          "samples": 243,
+          "percent": 11.801845556095191
+        },
+        "upstream_peer": {
+          "samples": 109,
+          "percent": 5.293831957260807
+        },
+        "firewall_symbols": {
+          "samples": 21,
+          "percent": 1.0199125789218066
+        },
+        "upstream_pipeline_including_callbacks": {
+          "samples": 1150,
+          "percent": 55.852355512384655
+        },
+        "zstd": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "zstd_context_creation": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "tokio_filesystem": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "file_fill_handler": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "metadata_writer": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "heap_relinquish": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "bloom_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "parse_mark_insert": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "client_ip_header_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "request_id": {
+          "samples": 17,
+          "percent": 0.825643516270034
+        },
+        "response_transform_probe": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "leaf_symbols": [
+        {
+          "symbol": "[unknown] (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          "samples": 119,
+          "percent": 5.779504613890238
+        },
+        {
+          "symbol": "_mi_page_malloc_zero",
+          "samples": 67,
+          "percent": 3.254006799417193
+        },
+        {
+          "symbol": "mi_free",
+          "samples": 54,
+          "percent": 2.6226323457989316
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::request_filter::{closure#0}",
+          "samples": 46,
+          "percent": 2.234094220495386
+        },
+        {
+          "symbol": "<core::hash::sip::Hasher<core::hash::sip::Sip13Rounds> as core::hash::Hasher>::write",
+          "samples": 44,
+          "percent": 2.1369596891694997
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::proxy_1to1::{closure#0}::{closure#1}",
+          "samples": 39,
+          "percent": 1.8941233608547838
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HeaderName>",
+          "samples": 36,
+          "percent": 1.7484215638659544
+        },
+        {
+          "symbol": "mi_theap_malloc_aligned",
+          "samples": 33,
+          "percent": 1.602719766877125
+        },
+        {
+          "symbol": "[unknown] ([vdso])",
+          "samples": 32,
+          "percent": 1.5541525012141817
+        },
+        {
+          "symbol": "http::header::name::parse_hdr",
+          "samples": 24,
+          "percent": 1.1656143759106363
+        },
+        {
+          "symbol": "core::ptr::drop_glue::<zelvik_edge::proxy::ProxyCTX>",
+          "samples": 22,
+          "percent": 1.0684798445847499
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::proxy_to_upstream::{closure#0}",
+          "samples": 21,
+          "percent": 1.0199125789218066
+        },
+        {
+          "symbol": "httparse::parse_headers_iter_uninit",
+          "samples": 20,
+          "percent": 0.9713453132588635
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::response_filter::{closure#0}",
+          "samples": 19,
+          "percent": 0.9227780475959203
+        },
+        {
+          "symbol": "mi_malloc_aligned",
+          "samples": 19,
+          "percent": 0.9227780475959203
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::read_resp_header_parts::{closure#0}",
+          "samples": 17,
+          "percent": 0.825643516270034
+        },
+        {
+          "symbol": "regex_automata::hybrid::search::find_fwd",
+          "samples": 16,
+          "percent": 0.7770762506070908
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get2::<http::header::name::HeaderName>",
+          "samples": 16,
+          "percent": 0.7770762506070908
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::server::HttpSession>::read_request::{closure#0}",
+          "samples": 16,
+          "percent": 0.7770762506070908
+        },
+        {
+          "symbol": "_mi_malloc_generic",
+          "samples": 15,
+          "percent": 0.7285089849441476
+        },
+        {
+          "symbol": "zelvik_edge::worker_reclaim::with_worker_reclaim::<<zelvik_edge::http_proxy_manager::HttpProxyManager>::run_http_listener_worker::{closure#0}::{closure#0}>::{closure#0}",
+          "samples": 15,
+          "percent": 0.7285089849441476
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::Stream as tokio::io::async_write::AsyncWrite>::poll_write",
+          "samples": 14,
+          "percent": 0.6799417192812045
+        },
+        {
+          "symbol": "<http::header::name::StandardHeader>::from_bytes",
+          "samples": 14,
+          "percent": 0.6799417192812045
+        },
+        {
+          "symbol": "<dashmap::DashMap<alloc::string::String, alloc::string::String>>::hash_u64::<&str>",
+          "samples": 14,
+          "percent": 0.6799417192812045
+        },
+        {
+          "symbol": "tokio::runtime::task::raw::poll::<zelvik_edge::worker_reclaim::with_worker_reclaim<<zelvik_edge::http_proxy_manager::HttpProxyManager>::run_http_listener_worker::{closure#0}::{closure#0}>::{closure#0}, alloc::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle>>",
+          "samples": 13,
+          "percent": 0.6313744536182613
+        },
+        {
+          "symbol": "zelvik_edge::metrics::record::record_http_dimension_event",
+          "samples": 13,
+          "percent": 0.6313744536182613
+        },
+        {
+          "symbol": "tokio::runtime::task::raw::poll::<<pingora_core::connectors::TransportConnector>::release_stream::{closure#0}, alloc::sync::Arc<tokio::runtime::scheduler::multi_thread::handle::Handle>>",
+          "samples": 13,
+          "percent": 0.6313744536182613
+        },
+        {
+          "symbol": "pingora_http::append_header_value::<http::header::value::HeaderValue, pingora_http::case_header_name::CaseHeaderName>",
+          "samples": 13,
+          "percent": 0.6313744536182613
+        },
+        {
+          "symbol": "<tokio::runtime::io::registration::Registration>::poll_ready",
+          "samples": 13,
+          "percent": 0.6313744536182613
+        },
+        {
+          "symbol": "<http::header::name::HeaderName>::from_bytes",
+          "samples": 13,
+          "percent": 0.6313744536182613
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::upstream_peer::{closure#0}",
+          "samples": 13,
+          "percent": 0.6313744536182613
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy> as pingora_core::apps::HttpServerApp>::process_new_http::{closure#0}",
+          "samples": 13,
+          "percent": 0.6313744536182613
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::upstream_request_filter::{closure#0}",
+          "samples": 12,
+          "percent": 0.5828071879553182
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::read_response_task::{closure#0}",
+          "samples": 12,
+          "percent": 0.5828071879553182
+        },
+        {
+          "symbol": "bytes::bytes::shared_drop",
+          "samples": 12,
+          "percent": 0.5828071879553182
+        },
+        {
+          "symbol": "<pingora_proxy::Session>::write_response_tasks::{closure#0}",
+          "samples": 12,
+          "percent": 0.5828071879553182
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::request_cache_filter",
+          "samples": 12,
+          "percent": 0.5828071879553182
+        },
+        {
+          "symbol": "<alloc::raw_vec::RawVecInner>::finish_grow",
+          "samples": 12,
+          "percent": 0.5828071879553182
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::process_request::{closure#0}",
+          "samples": 12,
+          "percent": 0.5828071879553182
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HdrName>",
+          "samples": 11,
+          "percent": 0.5342399222923749
+        },
+        {
+          "symbol": "<str>::trim_matches::<<char>::is_whitespace>",
+          "samples": 10,
+          "percent": 0.48567265662943176
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::write_request_header::{closure#0}",
+          "samples": 10,
+          "percent": 0.48567265662943176
+        },
+        {
+          "symbol": "<dashmap::DashMap<u64, alloc::sync::Arc<pingora_pool::connection::PoolNode<pingora_pool::connection::PoolConnection<alloc::sync::Arc<tokio::sync::mutex::Mutex<alloc::boxed::Box<dyn pingora_core::protocols::IO>>>>>>>>::hash_usize::<&u64>",
+          "samples": 10,
+          "percent": 0.48567265662943176
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy>::sync_response_headers",
+          "samples": 10,
+          "percent": 0.48567265662943176
+        },
+        {
+          "symbol": "<zelvik_edge::config_models::URLPattern>::path_without_query_fragment",
+          "samples": 10,
+          "percent": 0.48567265662943176
+        },
+        {
+          "symbol": "zelvik_edge::http_proxy_manager::process_http1_stream::{closure#0}",
+          "samples": 10,
+          "percent": 0.48567265662943176
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::Stream as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 10,
+          "percent": 0.48567265662943176
+        },
+        {
+          "symbol": "<pingora_core::connectors::TransportConnector>::release_stream",
+          "samples": 10,
+          "percent": 0.48567265662943176
+        },
+        {
+          "symbol": "<&str as core::str::pattern::Pattern>::is_contained_in",
+          "samples": 10,
+          "percent": 0.48567265662943176
+        },
+        {
+          "symbol": "mi_theap_malloc_zero_aligned_at_generic",
+          "samples": 9,
+          "percent": 0.4371053909664886
+        }
+      ],
+      "round": 1,
+      "target": "edge",
+      "protocol": "h1",
+      "cache": "off"
+    },
+    {
+      "path": "round-1-edge/0002-h2-off-reuse.stacks.txt",
+      "sha256": "d5abe75fcfae8249bbac25e613e49722264cb6cbf134544925a36ece4539fa99",
+      "event": "cpu-clock:u",
+      "sample_count": 2343,
+      "lost_samples": 0,
+      "periods": {
+        "5025125": 2343
+      },
+      "inclusive_groups_overlap": true,
+      "groups": {
+        "request_filter": {
+          "samples": 223,
+          "percent": 9.517712334613742
+        },
+        "cache_admission": {
+          "samples": 107,
+          "percent": 4.566794707639778
+        },
+        "response_filter": {
+          "samples": 173,
+          "percent": 7.383696116090483
+        },
+        "request_completion": {
+          "samples": 76,
+          "percent": 3.2437046521553565
+        },
+        "dimension_worker": {
+          "samples": 68,
+          "percent": 2.9022620571916344
+        },
+        "cache_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "memory_governor": {
+          "samples": 67,
+          "percent": 2.8595817328211695
+        },
+        "headers": {
+          "samples": 275,
+          "percent": 11.737089201877934
+        },
+        "allocator": {
+          "samples": 238,
+          "percent": 10.157917200170722
+        },
+        "upstream_peer": {
+          "samples": 94,
+          "percent": 4.011950490823731
+        },
+        "firewall_symbols": {
+          "samples": 20,
+          "percent": 0.8536064874093043
+        },
+        "upstream_pipeline_including_callbacks": {
+          "samples": 1039,
+          "percent": 44.34485702091336
+        },
+        "zstd": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "zstd_context_creation": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "tokio_filesystem": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "file_fill_handler": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "metadata_writer": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "heap_relinquish": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "bloom_symbols": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "parse_mark_insert": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "client_ip_header_lookup": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "request_id": {
+          "samples": 17,
+          "percent": 0.7255655142979086
+        },
+        "response_transform_probe": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "leaf_symbols": [
+        {
+          "symbol": "[unknown] (/usr/lib/x86_64-linux-gnu/libc.so.6)",
+          "samples": 134,
+          "percent": 5.719163465642339
+        },
+        {
+          "symbol": "mi_free",
+          "samples": 63,
+          "percent": 2.6888604353393086
+        },
+        {
+          "symbol": "_mi_page_malloc_zero",
+          "samples": 58,
+          "percent": 2.4754588134869824
+        },
+        {
+          "symbol": "[unknown] ([vdso])",
+          "samples": 45,
+          "percent": 1.9206145966709347
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::request_filter::{closure#0}",
+          "samples": 42,
+          "percent": 1.792573623559539
+        },
+        {
+          "symbol": "<h2::frame::headers::HeaderBlock>::into_encoding",
+          "samples": 39,
+          "percent": 1.6645326504481435
+        },
+        {
+          "symbol": "mi_theap_malloc_aligned",
+          "samples": 34,
+          "percent": 1.4511310285958172
+        },
+        {
+          "symbol": "<core::hash::sip::Hasher<core::hash::sip::Sip13Rounds> as core::hash::Hasher>::write",
+          "samples": 33,
+          "percent": 1.408450704225352
+        },
+        {
+          "symbol": "<h2::server::Connection<alloc::boxed::Box<dyn pingora_core::protocols::IO>, bytes::bytes::Bytes>>::poll_accept",
+          "samples": 33,
+          "percent": 1.408450704225352
+        },
+        {
+          "symbol": "http::header::map::hash_elem_using::<http::header::name::HeaderName>",
+          "samples": 32,
+          "percent": 1.3657703798548868
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::proxy_1to1::{closure#0}::{closure#1}",
+          "samples": 30,
+          "percent": 1.2804097311139564
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::response_filter::{closure#0}",
+          "samples": 26,
+          "percent": 1.1096884336320956
+        },
+        {
+          "symbol": "mi_malloc_aligned",
+          "samples": 26,
+          "percent": 1.1096884336320956
+        },
+        {
+          "symbol": "http::header::name::parse_hdr",
+          "samples": 24,
+          "percent": 1.0243277848911652
+        },
+        {
+          "symbol": "<h2::proto::streams::streams::Inner>::buffer_pending::<alloc::boxed::Box<dyn pingora_core::protocols::IO>, bytes::bytes::Bytes>",
+          "samples": 22,
+          "percent": 0.9389671361502347
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy>::run_request_context_phase::{closure#0}",
+          "samples": 19,
+          "percent": 0.8109261630388391
+        },
+        {
+          "symbol": "zelvik_edge::http_proxy_manager::process_h2_stream::{closure#0}",
+          "samples": 19,
+          "percent": 0.8109261630388391
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::proxy_to_upstream::{closure#0}",
+          "samples": 17,
+          "percent": 0.7255655142979086
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::upstream_peer::{closure#0}",
+          "samples": 17,
+          "percent": 0.7255655142979086
+        },
+        {
+          "symbol": "<dashmap::DashMap<alloc::string::String, alloc::string::String>>::hash_u64::<&str>",
+          "samples": 17,
+          "percent": 0.7255655142979086
+        },
+        {
+          "symbol": "<pingora_core::protocols::http::v1::client::HttpSession>::read_resp_header_parts::{closure#0}",
+          "samples": 16,
+          "percent": 0.6828851899274434
+        },
+        {
+          "symbol": "<http::header::name::StandardHeader>::from_bytes",
+          "samples": 16,
+          "percent": 0.6828851899274434
+        },
+        {
+          "symbol": "<http::header::name::HeaderName>::from_bytes",
+          "samples": 14,
+          "percent": 0.597524541186513
+        },
+        {
+          "symbol": "<chrono::offset::utc::Utc>::now",
+          "samples": 14,
+          "percent": 0.597524541186513
+        },
+        {
+          "symbol": "bytes::bytes::shared_drop",
+          "samples": 14,
+          "percent": 0.597524541186513
+        },
+        {
+          "symbol": "regex_automata::hybrid::search::find_fwd",
+          "samples": 13,
+          "percent": 0.5548442168160478
+        },
+        {
+          "symbol": "_mi_malloc_generic",
+          "samples": 13,
+          "percent": 0.5548442168160478
+        },
+        {
+          "symbol": "<http::header::name::HdrName>::from_bytes::<<&str as http::header::map::as_header_name::Sealed>::find<http::header::value::HeaderValue>::{closure#0}, core::option::Option<(usize, usize)>>",
+          "samples": 13,
+          "percent": 0.5548442168160478
+        },
+        {
+          "symbol": "<h2::codec::framed_write::FramedWrite<alloc::boxed::Box<dyn pingora_core::protocols::IO>, h2::proto::streams::prioritize::Prioritized<bytes::bytes::Bytes>>>::flush",
+          "samples": 12,
+          "percent": 0.5121638924455826
+        },
+        {
+          "symbol": "<alloc::string::String as core::fmt::Write>::write_str",
+          "samples": 12,
+          "percent": 0.5121638924455826
+        },
+        {
+          "symbol": "<h2::frame::headers::HeaderBlock>::load::{closure#0}",
+          "samples": 12,
+          "percent": 0.5121638924455826
+        },
+        {
+          "symbol": "<h2::codec::Codec<alloc::boxed::Box<dyn pingora_core::protocols::IO>, h2::proto::streams::prioritize::Prioritized<bytes::bytes::Bytes>> as futures_core::stream::Stream>::poll_next",
+          "samples": 12,
+          "percent": 0.5121638924455826
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy>>::process_request::{closure#0}",
+          "samples": 12,
+          "percent": 0.5121638924455826
+        },
+        {
+          "symbol": "<h2::proto::connection::DynConnection>::recv_frame",
+          "samples": 12,
+          "percent": 0.5121638924455826
+        },
+        {
+          "symbol": "getpeername",
+          "samples": 12,
+          "percent": 0.5121638924455826
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get2::<http::header::name::HeaderName>",
+          "samples": 12,
+          "percent": 0.5121638924455826
+        },
+        {
+          "symbol": "<zelvik_edge::proxy::EdgeProxy as pingora_proxy::proxy_trait::ProxyHttp>::upstream_request_filter::{closure#0}",
+          "samples": 12,
+          "percent": 0.5121638924455826
+        },
+        {
+          "symbol": "_mi_theap_realloc_zero",
+          "samples": 11,
+          "percent": 0.4694835680751174
+        },
+        {
+          "symbol": "<alloc::raw_vec::RawVecInner>::finish_grow",
+          "samples": 11,
+          "percent": 0.4694835680751174
+        },
+        {
+          "symbol": "<rustls::conn::ConnectionCore<rustls::server::server_conn::ServerConnectionData>>::process_new_packets",
+          "samples": 11,
+          "percent": 0.4694835680751174
+        },
+        {
+          "symbol": "<tokio::sync::batch_semaphore::Acquire as core::future::future::Future>::poll",
+          "samples": 11,
+          "percent": 0.4694835680751174
+        },
+        {
+          "symbol": "core::ptr::drop_glue::<zelvik_edge::proxy::ProxyCTX>",
+          "samples": 11,
+          "percent": 0.4694835680751174
+        },
+        {
+          "symbol": "<pingora_core::protocols::l4::stream::Stream as tokio::io::async_read::AsyncRead>::poll_read",
+          "samples": 11,
+          "percent": 0.4694835680751174
+        },
+        {
+          "symbol": "<tokio::runtime::scheduler::multi_thread::worker::Context>::run_task",
+          "samples": 10,
+          "percent": 0.42680324370465217
+        },
+        {
+          "symbol": "<http::header::map::HeaderMap>::get_all::<http::header::name::HeaderName>",
+          "samples": 10,
+          "percent": 0.42680324370465217
+        },
+        {
+          "symbol": "<pingora_proxy::HttpProxy<zelvik_edge::proxy::EdgeProxy> as pingora_core::apps::HttpServerApp>::process_new_http::{closure#0}",
+          "samples": 10,
+          "percent": 0.42680324370465217
+        },
+        {
+          "symbol": "<zelvik_edge::config_models::URLPattern>::matches",
+          "samples": 9,
+          "percent": 0.38412291933418696
+        },
+        {
+          "symbol": "_aesni_ctr32_ghash_6x",
+          "samples": 9,
+          "percent": 0.38412291933418696
+        },
+        {
+          "symbol": "<chrono::naive::date::NaiveDate>::from_num_days_from_ce_opt",
+          "samples": 9,
+          "percent": 0.38412291933418696
+        },
+        {
+          "symbol": "httparse::parse_headers_iter_uninit",
+          "samples": 9,
+          "percent": 0.38412291933418696
+        }
+      ],
+      "round": 1,
+      "target": "edge",
+      "protocol": "h2",
+      "cache": "off"
+    }
+  ]
+}

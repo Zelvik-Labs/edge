@@ -1,0 +1,17 @@
+[package]
+name = "daily-domain-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[features]
+count-allocations = []
+
+[dependencies]
+dashmap = "=6.2.1"
+
+[[bin]]
+name = "daily-domain-probe"
+path = "../../../benches/support/daily_domain_probe.rs"

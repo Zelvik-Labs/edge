@@ -1,0 +1,13 @@
+{
+  "traces": 29,
+  "all_before_parsed_handshake_done": true,
+  "all_phase0_then_phase1": true,
+  "first_phase1_truncated_pn": {
+    "11": 9,
+    "12": 11,
+    "10": 9
+  },
+  "dropped_trace_bytes": 0,
+  "header_events_authenticated": false,
+  "scope": "observed header sequence plus actual KEY_UPDATE_ERROR closes; not yet a full peer-correctness determination"
+}

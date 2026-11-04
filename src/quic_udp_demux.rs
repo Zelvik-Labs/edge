@@ -5,6 +5,7 @@ use dashmap::DashMap;
 use quinn::{AsyncUdpSocket, Endpoint, UdpPoller};
 use std::collections::{HashSet, VecDeque};
 use std::fmt;
+use std::future::Future;
 use std::io::{self, IoSliceMut};
 use std::net::{IpAddr as StdIpAddr, SocketAddr};
 use std::pin::Pin;
@@ -25,11 +26,19 @@ use crate::net_bind::{bind_udp_socket, dual_stack_bind_addrs};
 use crate::quic_probe::{QuicCryptoFragment, QuicProbeFragmentResult};
 use crate::udp_proxy::{
     DownstreamUdpDatagram, UdpDownstreamSender, UdpIngressDatagramStatus, UdpProxyManager,
-    UdpSession, UdpSessionQuicCid, UdpSessionSendStatus, udp_activity_is_alive,
+    UdpSession, UdpSessionQuicCid, UdpSessionSendStatus,
     udp_activity_now_ms,
 };
 
 const MAX_DATAGRAM_SIZE: usize = 65_535;
+
+fn quic_rx_batch_size(value: Option<&str>) -> Result<usize> {
+    match value {
+        None | Some("1") => Ok(1),
+        Some("32") => Ok(32),
+        Some(value) => anyhow::bail!("ZELVIK_EDGE_QUIC_RX_BATCH must be 1 or 32, got {value:?}"),
+    }
+}
 const UDP_SESSION_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 const H3_ROUTE_IDLE_TIMEOUT: Duration = Duration::from_secs(180);
 const NEW_ROUTE_RATE_WINDOW: Duration = Duration::from_secs(10);
@@ -125,14 +134,18 @@ fn new_demux_shared_state(
 }
 
 struct SharedQuinnState {
-    rx: Mutex<mpsc::Receiver<H3Datagram>>,
+    rx: mpsc::Receiver<H3Datagram>,
+    // A later slot can fail after earlier slots were copied successfully.
+    // Deliver the completed prefix first, then return this error on the next
+    // poll instead of losing either the prefix or the error.
+    pending_error: Option<io::Error>,
 }
 
 #[derive(Clone)]
 struct SharedQuinnUdpSocket {
     downstream_sender: UdpDownstreamSender,
     local_addr: SocketAddr,
-    state: Arc<SharedQuinnState>,
+    state: Arc<Mutex<SharedQuinnState>>,
 }
 
 impl fmt::Debug for SharedQuinnUdpSocket {
@@ -152,16 +165,17 @@ impl SharedQuinnUdpSocket {
         Self {
             downstream_sender,
             local_addr,
-            state: Arc::new(SharedQuinnState { rx: Mutex::new(rx) }),
+            state: Arc::new(Mutex::new(SharedQuinnState {
+                rx,
+                pending_error: None,
+            })),
         }
     }
 }
 
 impl AsyncUdpSocket for SharedQuinnUdpSocket {
     fn create_io_poller(self: Arc<Self>) -> Pin<Box<dyn UdpPoller>> {
-        Box::pin(SharedUdpPoller {
-            downstream_sender: self.downstream_sender.clone(),
-        })
+        Box::pin(SharedUdpPoller::new(self.downstream_sender.clone()))
     }
 
     fn try_send(&self, transmit: &quinn::udp::Transmit<'_>) -> io::Result<()> {
@@ -193,27 +207,38 @@ impl AsyncUdpSocket for SharedQuinnUdpSocket {
             return Poll::Ready(Ok(0));
         }
 
-        let mut rx = self
+        let mut state = self
             .state
-            .rx
             .lock()
             .map_err(|_| io::Error::other("HTTP/3 UDP receive queue lock poisoned"))?;
-
-        match Pin::new(&mut *rx).poll_recv(cx) {
-            Poll::Ready(Some(datagram)) => {
-                debug!(
-                    "HTTP/3 shared UDP socket received {} bytes from {}",
-                    datagram.data.len(),
-                    datagram.from
-                );
-                Poll::Ready(
-                    copy_datagram(datagram, self.local_addr.ip(), &mut bufs[0], &mut meta[0])
-                        .map(|_| 1),
-                )
-            }
-            Poll::Ready(None) => Poll::Ready(Ok(0)),
-            Poll::Pending => Poll::Pending,
+        if let Some(error) = state.pending_error.take() {
+            return Poll::Ready(Err(error));
         }
+        let mut received = 0;
+        // Quinn supplies multiple buffers. Drain only immediately available
+        // datagrams into that bounded slice, with one receive-queue lock.
+        for (buf, metadata) in bufs.iter_mut().zip(meta.iter_mut()) {
+            let datagram = match Pin::new(&mut state.rx).poll_recv(cx) {
+                Poll::Ready(Some(datagram)) => datagram,
+                Poll::Ready(None) => break,
+                Poll::Pending if received == 0 => return Poll::Pending,
+                Poll::Pending => break,
+            };
+            debug!(
+                "HTTP/3 shared UDP socket received {} bytes from {}",
+                datagram.data.len(),
+                datagram.from
+            );
+            if let Err(error) = copy_datagram(datagram, self.local_addr.ip(), buf, metadata) {
+                if received == 0 {
+                    return Poll::Ready(Err(error));
+                }
+                state.pending_error = Some(error);
+                break;
+            }
+            received += 1;
+        }
+        Poll::Ready(Ok(received))
     }
 
     fn local_addr(&self) -> io::Result<SocketAddr> {
@@ -225,14 +250,52 @@ impl AsyncUdpSocket for SharedQuinnUdpSocket {
     }
 }
 
-#[derive(Debug)]
+type PendingUdpWritable = Pin<Box<dyn Future<Output = io::Result<()>> + Send>>;
+
 struct SharedUdpPoller {
     downstream_sender: UdpDownstreamSender,
+    // Each Quinn connection needs its own waiter. Mutex provides the Sync
+    // contract for the stored future; exclusive poll access needs no lock.
+    pending: Mutex<Option<PendingUdpWritable>>,
+}
+
+impl SharedUdpPoller {
+    fn new(downstream_sender: UdpDownstreamSender) -> Self {
+        Self {
+            downstream_sender,
+            pending: Mutex::new(None),
+        }
+    }
+}
+
+impl fmt::Debug for SharedUdpPoller {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SharedUdpPoller")
+            .field("downstream_sender", &self.downstream_sender)
+            .finish_non_exhaustive()
+    }
 }
 
 impl UdpPoller for SharedUdpPoller {
     fn poll_writable(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<io::Result<()>> {
-        self.downstream_sender.poll_send_ready(cx)
+        let this = self.get_mut();
+        let pending = this
+            .pending
+            .get_mut()
+            .unwrap_or_else(|err| err.into_inner());
+        let ready = pending
+            .get_or_insert_with(|| {
+                let sender = this.downstream_sender.clone();
+                Box::pin(async move { sender.writable().await })
+            })
+            .as_mut()
+            .poll(cx);
+        if ready.is_ready() {
+            // Futures are single-use, while UdpPoller may be reused after
+            // either success or a closed channel error.
+            *pending = None;
+        }
+        ready
     }
 }
 
@@ -573,15 +636,19 @@ fn route_kind_same(left: &RouteKind, right: &RouteKind) -> bool {
 fn route_kind_is_active_with_pressure(
     route: &RouteKind,
     pressure_level: crate::l4_defense::L4PressureLevel,
+    now_ms: u64,
 ) -> bool {
-    match route {
-        RouteKind::Http3(last_activity_ms) => {
-            udp_activity_is_alive(last_activity_ms, h3_route_idle_timeout(pressure_level))
-        }
+    let (last_activity_ms, timeout) = match route {
+        RouteKind::Http3(last_activity_ms) => (
+            last_activity_ms.as_ref(),
+            h3_route_idle_timeout(pressure_level),
+        ),
         RouteKind::Passthrough(session) => {
-            udp_activity_is_alive(&session.last_activity_ms, UDP_SESSION_IDLE_TIMEOUT)
+            (session.last_activity_ms.as_ref(), UDP_SESSION_IDLE_TIMEOUT)
         }
-    }
+    };
+    now_ms.saturating_sub(last_activity_ms.load(Ordering::Relaxed))
+        < timeout.as_millis().min(u64::MAX as u128) as u64
 }
 
 fn h3_route_idle_timeout(pressure_level: crate::l4_defense::L4PressureLevel) -> Duration {
@@ -593,22 +660,18 @@ fn h3_route_idle_timeout(pressure_level: crate::l4_defense::L4PressureLevel) -> 
     }
 }
 
-fn cleanup_routes(
-    udp_manager: &UdpProxyManager,
-    routes: &DashMap<SocketAddr, RouteKind>,
-    cid_routes: &CidRoutes,
-    pending_routes: &DashMap<SocketAddr, PendingQuicRoute>,
-    pending_reassembly_bytes: &AtomicUsize,
-    session_routes: &SessionRoutes,
-) {
+fn cleanup_routes(udp_manager: &UdpProxyManager, shared: &UdpDemuxSharedState) {
+    // Admission already includes route/pending/reassembly occupancy. Use the
+    // same observation here, even when global memory and FD pressure are low.
+    let observation = QuicIngressSource::Governor.observe(shared);
     cleanup_routes_with_pressure(
         udp_manager,
-        routes,
-        cid_routes,
-        pending_routes,
-        pending_reassembly_bytes,
-        session_routes,
-        crate::l4_defense::current_pressure_level(),
+        &shared.routes,
+        &shared.cid_routes,
+        &shared.pending_routes,
+        &shared.pending_reassembly_bytes,
+        &shared.session_routes,
+        observation.pressure_level,
     );
 }
 
@@ -629,10 +692,27 @@ fn cleanup_routes_with_pressure(
         crate::l4_defense::quic_pending_route_timeout(pressure_level),
     );
     udp_manager.cleanup_idle_sessions(UDP_SESSION_IDLE_TIMEOUT);
-    routes.retain(|_, route| route_kind_is_active_with_pressure(route, pressure_level));
-    session_routes.retain(|_, route| route_kind_is_active_with_pressure(route, pressure_level));
+    prune_route_indexes_at(
+        routes,
+        cid_routes,
+        session_routes,
+        pressure_level,
+        udp_activity_now_ms(),
+    );
+}
+
+fn prune_route_indexes_at(
+    routes: &DashMap<SocketAddr, RouteKind>,
+    cid_routes: &CidRoutes,
+    session_routes: &SessionRoutes,
+    pressure_level: crate::l4_defense::L4PressureLevel,
+    now_ms: u64,
+) {
+    routes.retain(|_, route| route_kind_is_active_with_pressure(route, pressure_level, now_ms));
+    session_routes
+        .retain(|_, route| route_kind_is_active_with_pressure(route, pressure_level, now_ms));
     cid_routes.retain(|_, bucket| {
-        bucket.retain(|_, route| route_kind_is_active_with_pressure(route, pressure_level));
+        bucket.retain(|_, route| route_kind_is_active_with_pressure(route, pressure_level, now_ms));
         !bucket.is_empty()
     });
 }
@@ -798,6 +878,48 @@ struct ProcessDatagramArgs<'a> {
     shutdown_rx: watch::Receiver<bool>,
 }
 
+#[derive(Clone, Copy)]
+struct QuicIngressObservation {
+    ingress: crate::memory_governor::QuicIngressSnapshot,
+    pressure_level: crate::l4_defense::L4PressureLevel,
+}
+
+fn observe_quic_ingress(
+    ingress: crate::memory_governor::QuicIngressSnapshot,
+    shared: &UdpDemuxSharedState,
+) -> QuicIngressObservation {
+    let pressure_level = crate::l4_defense::pressure_level_with_quic_snapshot(
+        ingress.pressure,
+        shared.routes.len(),
+        ingress.route_limit,
+        shared.pending_routes.len(),
+        ingress.pending_route_limit,
+        shared.pending_reassembly_bytes.load(Ordering::Relaxed),
+        ingress.pending_reassembly_budget_bytes,
+    );
+    QuicIngressObservation {
+        ingress,
+        pressure_level,
+    }
+}
+
+enum QuicIngressSource {
+    Governor,
+    #[cfg(test)]
+    Fixed(QuicIngressObservation),
+}
+
+impl QuicIngressSource {
+    #[inline]
+    fn observe(self, shared: &UdpDemuxSharedState) -> QuicIngressObservation {
+        match self {
+            Self::Governor => observe_quic_ingress(MEMORY_GOVERNOR.quic_ingress_snapshot(), shared),
+            #[cfg(test)]
+            Self::Fixed(observation) => observation,
+        }
+    }
+}
+
 struct ClassifyRouteArgs<'a> {
     port: u16,
     client_addr: SocketAddr,
@@ -836,6 +958,7 @@ struct DispatchRouteArgs<'a> {
     ecn: Option<u8>,
     h3_tx: &'a mpsc::Sender<H3Datagram>,
     h3_queued_bytes: &'a Arc<AtomicUsize>,
+    h3_queue_budget_bytes: usize,
     http3_enabled: bool,
     pressure_level: crate::l4_defense::L4PressureLevel,
 }
@@ -1070,14 +1193,7 @@ impl QuicUdpDemuxManager {
     }
 
     fn af_xdp_demux_http3_enabled_sync(&self, port: u16) -> Option<bool> {
-        let http3_ports = self.http3_manager.desired_ports_sync();
-        if http3_ports.contains(&port) {
-            return Some(true);
-        }
-        self.config_store
-            .quic_passthrough_ports_sync()
-            .contains(&port)
-            .then_some(false)
+        self.config_store.af_xdp_demux_http3_enabled_sync(port)
     }
 
     async fn ensure_af_xdp_demux_handle(
@@ -1131,6 +1247,23 @@ impl QuicUdpDemuxManager {
         mut shutdown_rx: watch::Receiver<bool>,
     ) -> Result<()> {
         let port = bind_addr.port();
+        let backend = crate::h3_backend::selected()?;
+        if http3_enabled && backend != crate::h3_backend::H3Backend::QuinnShared {
+            anyhow::ensure!(
+                !self.udp_manager.desired_ports().await.contains(&port)
+                    && !self.config_store.has_quic_passthrough_on_port_sync(port),
+                "native H3 experiment cannot share UDP port {port} with UDP/QUIC forwarding"
+            );
+            if let Some(runtime) = crate::runtime_mode::RuntimeConfig::current() {
+                crate::h3_backend::validate_runtime(&runtime)?;
+            }
+            let socket = bind_udp_with_retry(bind_addr, &mut shutdown_rx).await?;
+            return self
+                .http3_manager
+                .clone()
+                .run_native_socket(socket, shutdown_rx, backend)
+                .await;
+        }
         let socket = Arc::new(bind_udp_with_retry(bind_addr, &mut shutdown_rx).await?);
         let local_addr = socket.local_addr()?;
         let h3_queue_size = MEMORY_GOVERNOR.h3_datagram_queue_size();
@@ -1252,14 +1385,7 @@ impl QuicUdpDemuxManager {
                         return;
                     }
                     _ = cleanup_tick.tick() => {
-                        cleanup_routes(
-                            &udp_manager,
-                            &shared.routes,
-                            &shared.cid_routes,
-                            &shared.pending_routes,
-                            &shared.pending_reassembly_bytes,
-                            &shared.session_routes,
-                        );
+                        cleanup_routes(&udp_manager, &shared);
                         cleanup_new_route_windows(&shared.new_route_windows);
                     }
                     update = quic_cid_rx.recv() => {
@@ -1288,6 +1414,16 @@ impl QuicUdpDemuxManager {
         let port = bind_addr.port();
         let downstream_sender = UdpDownstreamSender::socket(socket.clone());
         let mut buf = vec![0u8; MAX_DATAGRAM_SIZE];
+        // An explicit experiment keeps the same per-datagram routing,
+        // admission, accounting and bounded H3 queue. Only readiness/select
+        // overhead is amortized; default behavior remains one receive.
+        let batch_value = std::env::var("ZELVIK_EDGE_QUIC_RX_BATCH")
+            .map(Some)
+            .or_else(|error| match error {
+                std::env::VarError::NotPresent => Ok(None),
+                other => Err(other),
+            })?;
+        let batch_size = quic_rx_batch_size(batch_value.as_deref())?;
         loop {
             let recv_result = tokio::select! {
                 _ = shutdown_rx.changed() => {
@@ -1299,32 +1435,60 @@ impl QuicUdpDemuxManager {
                 }
                 result = socket.recv_from(&mut buf) => result,
             };
-            let (len, client_addr) = recv_result?;
-            debug!(
-                "QUIC UDP demux: datagram received from {} on port {} bytes={} http3_enabled={}",
-                client_addr, port, len, http3_enabled
-            );
-            let data = Bytes::copy_from_slice(&buf[..len]);
-            let _ = self
-                .process_datagram_with_downstream(ProcessDatagramArgs {
-                    port,
-                    client_addr,
-                    data,
-                    // C11: kernel-socket path — no ECN metadata; contract
-                    // unchanged.
-                    ecn: None,
-                    downstream_sender: downstream_sender.clone(),
-                    shared: &shared,
-                    http3_enabled,
-                    shutdown_rx: shutdown_rx.clone(),
-                })
-                .await?;
+            let first = recv_result?;
+            let mut processed = 0;
+            for index in 0..batch_size {
+                let (len, client_addr) = if index == 0 {
+                    first
+                } else {
+                    match socket.try_recv_from(&mut buf) {
+                        Ok(datagram) => datagram,
+                        Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
+                        Err(error) => return Err(error.into()),
+                    }
+                };
+                debug!(
+                    "QUIC UDP demux: datagram received from {} on port {} bytes={} http3_enabled={}",
+                    client_addr, port, len, http3_enabled
+                );
+                let data = Bytes::copy_from_slice(&buf[..len]);
+                let _ = self
+                    .process_datagram_with_downstream(ProcessDatagramArgs {
+                        port,
+                        client_addr,
+                        data,
+                        // C11: kernel-socket path — no ECN metadata; contract
+                        // unchanged.
+                        ecn: None,
+                        downstream_sender: downstream_sender.clone(),
+                        shared: &shared,
+                        http3_enabled,
+                        shutdown_rx: shutdown_rx.clone(),
+                    })
+                    .await?;
+                processed += 1;
+            }
+            if batch_size > 1 && processed == batch_size {
+                // try_recv_from does not consume Tokio's cooperative budget.
+                // Explicitly bound this loop so queued traffic cannot starve
+                // connection drivers, maintenance or shutdown processing.
+                tokio::task::yield_now().await;
+            }
         }
     }
 
     async fn process_datagram_with_downstream(
         &self,
         args: ProcessDatagramArgs<'_>,
+    ) -> Result<UdpIngressDatagramStatus> {
+        self.process_datagram_with_ingress_source(args, QuicIngressSource::Governor)
+            .await
+    }
+
+    async fn process_datagram_with_ingress_source(
+        &self,
+        args: ProcessDatagramArgs<'_>,
+        ingress_source: QuicIngressSource,
     ) -> Result<UdpIngressDatagramStatus> {
         let ProcessDatagramArgs {
             port,
@@ -1347,18 +1511,13 @@ impl QuicUdpDemuxManager {
             return Ok(UdpIngressDatagramStatus::Blocked);
         }
 
-        let max_routes_per_port = MEMORY_GOVERNOR.udp_route_limit_per_port();
-        let pending_route_limit = MEMORY_GOVERNOR.quic_pending_route_limit_per_port();
-        let pending_reassembly_budget_bytes =
-            MEMORY_GOVERNOR.quic_pending_reassembly_budget_bytes();
-        let pressure_level = crate::l4_defense::current_pressure_level_with_quic_usage(
-            shared.routes.len(),
-            max_routes_per_port,
-            shared.pending_routes.len(),
-            pending_route_limit,
-            shared.pending_reassembly_bytes.load(Ordering::Relaxed),
-            pending_reassembly_budget_bytes,
-        );
+        // Materialize after the blocked-client fast path. Production reads
+        // the live governor; behavior tests supply explicit bounded inputs.
+        let QuicIngressObservation {
+            ingress,
+            pressure_level,
+        } = ingress_source.observe(shared);
+        let max_routes_per_port = ingress.route_limit;
         let max_new_routes_per_ip = crate::l4_defense::quic_new_route_limit(pressure_level);
         self.cleanup_routes_under_pressure(shared, max_routes_per_port, pressure_level);
 
@@ -1375,6 +1534,7 @@ impl QuicUdpDemuxManager {
                     ecn,
                     h3_tx: &shared.h3_tx,
                     h3_queued_bytes: &shared.h3_queued_bytes,
+                    h3_queue_budget_bytes: ingress.h3_datagram_queue_budget_bytes,
                     http3_enabled,
                     pressure_level,
                 })
@@ -1391,6 +1551,7 @@ impl QuicUdpDemuxManager {
                     ecn,
                     h3_tx: &shared.h3_tx,
                     h3_queued_bytes: &shared.h3_queued_bytes,
+                    h3_queue_budget_bytes: ingress.h3_datagram_queue_budget_bytes,
                     http3_enabled,
                     pressure_level,
                 })
@@ -1431,7 +1592,16 @@ impl QuicUdpDemuxManager {
         }
 
         let has_pending_route = shared.pending_routes.contains_key(&client_addr);
-        if !has_pending_route
+        // On a native-only port Quinn owns QUIC/ALPN validation and Retry.
+        // There is no forwarding decision to infer by decrypting ClientHello
+        // a second time, nor any incomplete-hello state to allocate. Keep the
+        // global route/queue bounds above, and the adaptive per-IP gate when
+        // pressure rises. Mixed forwarding ports retain their original gate.
+        let native_h3_route = http3_enabled
+            && pressure_level == crate::l4_defense::L4PressureLevel::Normal
+            && self.config_store.udp_port_has_no_forwarding_sync(port);
+        if !native_h3_route
+            && !has_pending_route
             && is_new_route_rate_limited(
                 &shared.new_route_windows,
                 client_addr.ip(),
@@ -1458,8 +1628,13 @@ impl QuicUdpDemuxManager {
             return Ok(UdpIngressDatagramStatus::Full);
         }
 
-        let route = self
-            .classify_new_route(ClassifyRouteArgs {
+        let route = if native_h3_route {
+            Some((
+                RouteKind::Http3(Arc::new(AtomicU64::new(udp_activity_now_ms()))),
+                vec![data],
+            ))
+        } else {
+            self.classify_new_route(ClassifyRouteArgs {
                 port,
                 client_addr,
                 data,
@@ -1475,11 +1650,12 @@ impl QuicUdpDemuxManager {
                 quic_cid_tx: shared.quic_cid_tx.clone(),
                 pressure_level,
             })
-            .await?;
+            .await?
+        };
         let Some((route, datagrams)) = route else {
             return Ok(UdpIngressDatagramStatus::NoRoute);
         };
-        if !has_pending_route {
+        if !native_h3_route && !has_pending_route {
             record_new_route_for_ip(&shared.new_route_windows, client_addr.ip());
         }
         shared.routes.insert(client_addr, route.clone());
@@ -1500,6 +1676,7 @@ impl QuicUdpDemuxManager {
                     ecn,
                     h3_tx: &shared.h3_tx,
                     h3_queued_bytes: &shared.h3_queued_bytes,
+                    h3_queue_budget_bytes: ingress.h3_datagram_queue_budget_bytes,
                     http3_enabled,
                     pressure_level,
                 })
@@ -2160,6 +2337,7 @@ impl QuicUdpDemuxManager {
             ecn,
             h3_tx,
             h3_queued_bytes,
+            h3_queue_budget_bytes,
             http3_enabled,
             pressure_level,
         } = args;
@@ -2174,7 +2352,7 @@ impl QuicUdpDemuxManager {
                     client_addr,
                     data,
                     ecn,
-                    MEMORY_GOVERNOR.h3_datagram_queue_budget_bytes(),
+                    h3_queue_budget_bytes,
                 ) {
                     H3QueueStatus::Sent => {
                         last_activity_ms.store(udp_activity_now_ms(), Ordering::Relaxed);
@@ -2269,10 +2447,182 @@ impl QuicUdpDemuxManager {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn receive_batch_experiment_rejects_unsupported_values() {
+        assert_eq!(super::quic_rx_batch_size(None).unwrap(), 1);
+        assert_eq!(super::quic_rx_batch_size(Some("32")).unwrap(), 32);
+        for value in ["0", "2", "65536", "", "invalid"] {
+            assert!(super::quic_rx_batch_size(Some(value)).is_err());
+        }
+    }
     use super::*;
     use crate::config_models::{NetworkAddressConfig, ServerNameConfig, UDPConfig};
     use std::collections::{HashMap, HashSet};
 
+    #[derive(Default)]
+    struct WritableWake {
+        calls: AtomicUsize,
+        notify: tokio::sync::Notify,
+    }
+
+    impl std::task::Wake for WritableWake {
+        fn wake(self: Arc<Self>) {
+            self.wake_by_ref();
+        }
+
+        fn wake_by_ref(self: &Arc<Self>) {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            self.notify.notify_one();
+        }
+    }
+
+    #[tokio::test]
+    async fn shared_channel_writable_waits_recovers_and_reports_close() {
+        let address = "127.0.0.1:443".parse().unwrap();
+        let (tx, mut rx) = mpsc::channel(1);
+        let sender = UdpDownstreamSender::channel(address, tx);
+        let mut poller = Box::pin(SharedUdpPoller::new(sender.clone()));
+        let wake = Arc::new(WritableWake::default());
+        let waker = std::task::Waker::from(wake.clone());
+        let mut cx = TaskContext::from_waker(&waker);
+        for payload in [b"one", b"two"] {
+            assert_eq!(sender.try_send_to(payload, address).unwrap(), 3);
+            assert_eq!(
+                sender.try_send_to(b"full", address).unwrap_err().kind(),
+                io::ErrorKind::WouldBlock
+            );
+            let before = wake.calls.load(Ordering::Relaxed);
+            for _ in 0..16 {
+                assert!(poller.as_mut().poll_writable(&mut cx).is_pending());
+            }
+            assert_eq!(wake.calls.load(Ordering::Relaxed), before);
+            assert_eq!(rx.recv().await.unwrap().payload.as_ref(), payload);
+            assert!(wake.calls.load(Ordering::Relaxed) > before);
+            assert!(matches!(
+                poller.as_mut().poll_writable(&mut cx),
+                Poll::Ready(Ok(()))
+            ));
+        }
+        sender.try_send_to(b"last", address).unwrap();
+        assert!(poller.as_mut().poll_writable(&mut cx).is_pending());
+        let before = wake.calls.load(Ordering::Relaxed);
+        drop(rx);
+        assert!(wake.calls.load(Ordering::Relaxed) > before);
+        for _ in 0..3 {
+            match poller.as_mut().poll_writable(&mut cx) {
+                Poll::Ready(Err(error)) => assert_eq!(error.kind(), io::ErrorKind::BrokenPipe),
+                other => panic!("closed channel must remain an observable error: {other:?}"),
+            }
+        }
+        assert_eq!(
+            sender.try_send_to(b"closed", address).unwrap_err().kind(),
+            io::ErrorKind::BrokenPipe
+        );
+    }
+
+    #[tokio::test]
+    async fn shared_channel_writable_has_independent_cancellable_waiters() {
+        let address = "127.0.0.1:443".parse().unwrap();
+        let (tx, mut rx) = mpsc::channel(1);
+        let sender = UdpDownstreamSender::channel(address, tx);
+        let mut first = Box::pin(SharedUdpPoller::new(sender.clone()));
+        let mut second = Box::pin(SharedUdpPoller::new(sender.clone()));
+        let first_wake = Arc::new(WritableWake::default());
+        let second_wake = Arc::new(WritableWake::default());
+        let first_waker = std::task::Waker::from(first_wake.clone());
+        let second_waker = std::task::Waker::from(second_wake.clone());
+        let mut first_cx = TaskContext::from_waker(&first_waker);
+        let mut second_cx = TaskContext::from_waker(&second_waker);
+        sender.try_send_to(b"full", address).unwrap();
+        assert!(first.as_mut().poll_writable(&mut first_cx).is_pending());
+        assert!(second.as_mut().poll_writable(&mut second_cx).is_pending());
+        rx.recv().await.unwrap();
+        assert!(first_wake.calls.load(Ordering::Relaxed) > 0);
+        assert!(matches!(
+            first.as_mut().poll_writable(&mut first_cx),
+            Poll::Ready(Ok(()))
+        ));
+        // Dropping the advisory permit must wake the next connection.
+        assert!(second_wake.calls.load(Ordering::Relaxed) > 0);
+        assert!(matches!(
+            second.as_mut().poll_writable(&mut second_cx),
+            Poll::Ready(Ok(()))
+        ));
+        sender.try_send_to(b"full again", address).unwrap();
+        assert!(first.as_mut().poll_writable(&mut first_cx).is_pending());
+        assert!(second.as_mut().poll_writable(&mut second_cx).is_pending());
+        drop(first);
+        let before = second_wake.calls.load(Ordering::Relaxed);
+        rx.recv().await.unwrap();
+        assert!(second_wake.calls.load(Ordering::Relaxed) > before);
+        assert!(matches!(
+            second.as_mut().poll_writable(&mut second_cx),
+            Poll::Ready(Ok(()))
+        ));
+        sender.try_send_to(b"after cancellation", address).unwrap();
+        assert_eq!(
+            rx.recv().await.unwrap().payload.as_ref(),
+            b"after cancellation"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn shared_socket_writable_wakes_each_connection_on_initial_registration() {
+        for bind in ["127.0.0.1:0", "[::1]:0"] {
+            let receiver = UdpSocket::bind(bind).await.unwrap();
+            let address = receiver.local_addr().unwrap();
+            let socket = std::net::UdpSocket::bind(bind).unwrap();
+            socket.set_nonblocking(true).unwrap();
+            let sender =
+                UdpDownstreamSender::socket(Arc::new(UdpSocket::from_std(socket).unwrap()));
+            // No yield after registration: the single reactor thread has not
+            // yet observed the real initial writable event.
+            assert_eq!(
+                sender.try_send_to(b"wait", address).unwrap_err().kind(),
+                io::ErrorKind::WouldBlock
+            );
+            let mut first = Box::pin(SharedUdpPoller::new(sender.clone()));
+            let mut second = Box::pin(SharedUdpPoller::new(sender.clone()));
+            let first_wake = Arc::new(WritableWake::default());
+            let second_wake = Arc::new(WritableWake::default());
+            let first_waker = std::task::Waker::from(first_wake.clone());
+            let second_waker = std::task::Waker::from(second_wake.clone());
+            let mut first_cx = TaskContext::from_waker(&first_waker);
+            let mut second_cx = TaskContext::from_waker(&second_waker);
+            assert!(first.as_mut().poll_writable(&mut first_cx).is_pending());
+            assert!(second.as_mut().poll_writable(&mut second_cx).is_pending());
+            tokio::time::timeout(Duration::from_secs(2), async {
+                first_wake.notify.notified().await;
+                second_wake.notify.notified().await;
+            })
+            .await
+            .expect("both connection waiters must receive the socket event");
+            assert!(first_wake.calls.load(Ordering::Relaxed) > 0);
+            assert!(second_wake.calls.load(Ordering::Relaxed) > 0);
+            for poller in [&mut first, &mut second] {
+                assert!(matches!(
+                    poller.as_mut().poll_writable(&mut first_cx),
+                    Poll::Ready(Ok(()))
+                ));
+            }
+            assert_eq!(sender.try_send_to(b"ready", address).unwrap(), 5);
+            let mut data = [0; 16];
+            let (length, peer) =
+                tokio::time::timeout(Duration::from_secs(2), receiver.recv_from(&mut data))
+                    .await
+                    .unwrap()
+                    .unwrap();
+            assert_eq!(&data[..length], b"ready");
+            let UdpDownstreamSender::Socket(socket) = &sender else {
+                unreachable!()
+            };
+            assert_eq!(peer, socket.local_addr().unwrap());
+            assert!(matches!(
+                second.as_mut().poll_writable(&mut second_cx),
+                Poll::Ready(Ok(()))
+            ));
+        }
+    }
     fn test_demux_manager(store: ConfigStore) -> Arc<QuicUdpDemuxManager> {
         let waf_state = Arc::new(crate::firewall::state::WafStateManager::new());
         let cert_selector = Arc::new(crate::ssl::DynamicCertSelector::new());
@@ -2298,9 +2648,7 @@ mod tests {
             api_config: api_config.clone(),
             challenge_key,
             cert_selector: cert_selector.clone(),
-            waf_verifier: Arc::new(crate::firewall::verifier::WafVerifier::new(
-                &challenge_key,
-            )),
+            waf_verifier: Arc::new(crate::firewall::verifier::WafVerifier::new(&challenge_key)),
             tls_downstream: false,
         };
         let http3_manager = crate::http3_proxy_manager::Http3ProxyManager::new(
@@ -2315,6 +2663,103 @@ mod tests {
 
     fn ports(values: &[u16]) -> HashSet<u16> {
         values.iter().copied().collect()
+    }
+
+    #[tokio::test]
+    async fn af_xdp_demux_point_query_matches_listener_sets_and_replacement() {
+        let store = ConfigStore::new();
+        let manager = test_demux_manager(store.clone());
+        let definitions = [
+            serde_json::json!({
+                "id": 76101, "isOn": false,
+                "serverNames": [{"name": "site.example"}],
+                "https": {"isOn": true, "http3Enabled": true, "listen": [
+                    {"portRange": "0"}, {"portRange": "443"}, {"portRange": "8444-8446"},
+                    {"portRange": " 9444:legacy "}, {"portRange": "65535-65534"},
+                    {"portRange": "20-10"}, {"portRange": "bad"}
+                ]}
+            }),
+            serde_json::json!({
+                "id": 76102, "isOn": true,
+                "serverNames": [{"name": "sni.example@SNI_PASSTHROUGH"}],
+                "https": {"isOn": true, "http3Enabled": true, "listen": [{"portRange": "7443"}]}
+            }),
+            serde_json::json!({
+                "id": 76103, "isOn": true,
+                "serverNames": [{"name": "quic.example", "subNames": ["域名@QuIc"]}],
+                "https": {"isOn": true, "http3Enabled": true, "listen": [{"portRange": "7444"}]},
+                "udp": {"isOn": true, "listen": [{"portRange": "443"}, {"portRange": "8445"}, {"portRange": "7444"}]}
+            }),
+            serde_json::json!({
+                "id": 76104, "isOn": true,
+                "serverNames": [{"name": "off.example"}],
+                "https": {"isOn": false, "http3Enabled": true, "listen": [{"portRange": "7445"}]}
+            }),
+            serde_json::json!({
+                "id": 76105, "isOn": true,
+                "serverNames": [{"name": "no-h3.example"}],
+                "https": {"isOn": true, "listen": [{"portRange": "7446"}]}
+            }),
+        ];
+        let servers = definitions
+            .into_iter()
+            .map(|value| Arc::new(serde_json::from_value(value).expect("valid server fixture")))
+            .collect();
+        store
+            .replace_all_servers(servers, HashMap::new(), HashMap::new(), HashMap::new())
+            .await
+            .expect("server configuration installs");
+        let check = || {
+            let http3 = manager.http3_manager.desired_ports_sync();
+            let quic = store.quic_passthrough_ports_sync();
+            for port in 0..=u16::MAX {
+                let expected = if http3.contains(&port) {
+                    Some(true)
+                } else {
+                    quic.contains(&port).then_some(false)
+                };
+                assert_eq!(
+                    manager.af_xdp_demux_http3_enabled_sync(port),
+                    expected,
+                    "port {port}"
+                );
+                assert_eq!(
+                    store.af_xdp_demux_http3_scan_for_validation_sync(port),
+                    expected,
+                    "scan port {port}"
+                );
+            }
+        };
+        check();
+        for is_on in [true, false] {
+            for port in [-1, 0, 443, 8443, 65535, 65536] {
+                store.test_set_http3_policy(crate::config_models::HTTP3Policy {
+                    is_on,
+                    port,
+                    address_validation: "always".into(),
+                    ..Default::default()
+                });
+                check();
+                if is_on && port == 0 {
+                    assert_eq!(manager.af_xdp_demux_http3_enabled_sync(443), Some(true));
+                    assert_eq!(manager.af_xdp_demux_http3_enabled_sync(7443), None);
+                    assert_eq!(manager.af_xdp_demux_http3_enabled_sync(7444), Some(false));
+                    assert_eq!(manager.af_xdp_demux_http3_enabled_sync(7445), None);
+                    assert_eq!(manager.af_xdp_demux_http3_enabled_sync(7446), None);
+                }
+            }
+        }
+        store
+            .replace_all_servers(Vec::new(), HashMap::new(), HashMap::new(), HashMap::new())
+            .await
+            .expect("removed server configuration installs");
+        store.test_set_http3_policy(crate::config_models::HTTP3Policy {
+            is_on: true,
+            port: 0,
+            ..Default::default()
+        });
+        check();
+        assert_eq!(manager.af_xdp_demux_http3_enabled_sync(443), None);
     }
 
     fn insert_test_af_xdp_handle(
@@ -2575,6 +3020,114 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn shared_quinn_udp_socket_batches_with_metadata_and_queue_refunds() {
+        let listen_addr = "127.0.0.1:443".parse().unwrap();
+        let (downstream_tx, _downstream_rx) = mpsc::channel(1);
+        let (h3_tx, h3_rx) = mpsc::channel(3);
+        let queued_bytes = Arc::new(AtomicUsize::new(6));
+        for (index, data) in [b"a".as_slice(), b"bb", b"ccc"].into_iter().enumerate() {
+            h3_tx
+                .send(H3Datagram {
+                    from: SocketAddr::from(([127, 0, 0, 1], 53000 + index as u16)),
+                    data: Bytes::copy_from_slice(data),
+                    queued_bytes: Some(queued_bytes.clone()),
+                    ecn: Some(3),
+                })
+                .await
+                .unwrap();
+        }
+        drop(h3_tx);
+        let socket = SharedQuinnUdpSocket::new(
+            UdpDownstreamSender::channel(listen_addr, downstream_tx),
+            listen_addr,
+            h3_rx,
+        );
+        let mut buffers = [[0u8; 8]; 2];
+        let mut meta = [quinn::udp::RecvMeta::default(); 2];
+        // One metadata slot must not dequeue the next packet even though
+        // two payload buffers are available.
+        let count = {
+            let mut bufs = buffers.each_mut().map(|b| IoSliceMut::new(&mut b[..]));
+            std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta[..1]))
+                .await
+                .unwrap()
+        };
+        assert_eq!(count, 1);
+        assert_eq!(&buffers[0][..meta[0].len], b"a");
+        assert_eq!(queued_bytes.load(Ordering::Acquire), 5);
+        let count = {
+            let mut bufs = buffers.each_mut().map(|b| IoSliceMut::new(&mut b[..]));
+            std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta))
+                .await
+                .unwrap()
+        };
+        assert_eq!(count, 2);
+        for (index, expected) in [b"bb".as_slice(), b"ccc"].into_iter().enumerate() {
+            assert_eq!(&buffers[index][..meta[index].len], expected);
+            assert_eq!(meta[index].addr.port(), 53001 + index as u16);
+            assert_eq!(meta[index].ecn, Some(quinn::udp::EcnCodepoint::Ce));
+            assert_eq!(meta[index].dst_ip, Some(listen_addr.ip()));
+            assert_eq!(meta[index].stride, expected.len());
+        }
+        assert_eq!(queued_bytes.load(Ordering::Acquire), 0);
+        let mut bufs = buffers.each_mut().map(|b| IoSliceMut::new(&mut b[..]));
+        assert_eq!(
+            std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta))
+                .await
+                .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn shared_quinn_udp_socket_preserves_error_after_a_partial_batch() {
+        let listen_addr = "127.0.0.1:443".parse().unwrap();
+        let (downstream_tx, _downstream_rx) = mpsc::channel(1);
+        let (h3_tx, h3_rx) = mpsc::channel(3);
+        let queued_bytes = Arc::new(AtomicUsize::new(14));
+        for data in [b"ok".as_slice(), b"oversize", b"tail"] {
+            h3_tx
+                .send(H3Datagram {
+                    from: "127.0.0.1:53000".parse().unwrap(),
+                    data: Bytes::copy_from_slice(data),
+                    queued_bytes: Some(queued_bytes.clone()),
+                    ecn: None,
+                })
+                .await
+                .unwrap();
+        }
+        drop(h3_tx);
+        let socket = SharedQuinnUdpSocket::new(
+            UdpDownstreamSender::channel(listen_addr, downstream_tx),
+            listen_addr,
+            h3_rx,
+        );
+        let mut buffers = [[0u8; 4]; 3];
+        let mut meta = [quinn::udp::RecvMeta::default(); 3];
+        let count = {
+            let mut bufs = buffers.each_mut().map(|b| IoSliceMut::new(&mut b[..]));
+            std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta))
+                .await
+                .unwrap()
+        };
+        assert_eq!(count, 1);
+        assert_eq!(&buffers[0][..meta[0].len], b"ok");
+        assert_eq!(queued_bytes.load(Ordering::Acquire), 4);
+        let mut bufs = buffers.each_mut().map(|b| IoSliceMut::new(&mut b[..]));
+        let error = std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta))
+            .await
+            .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(queued_bytes.load(Ordering::Acquire), 4);
+        let count = std::future::poll_fn(|cx| socket.poll_recv(cx, &mut bufs, &mut meta))
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
+        assert_eq!(queued_bytes.load(Ordering::Acquire), 0);
+        assert_eq!(&bufs[0][..meta[0].len], b"tail");
+    }
+
+    #[tokio::test]
     async fn shared_quinn_udp_socket_receives_h3_datagram_and_releases_budget() {
         let listen_addr: SocketAddr = "127.0.0.1:443".parse().unwrap();
         let peer_addr: SocketAddr = "127.0.0.1:53000".parse().unwrap();
@@ -2818,6 +3371,248 @@ mod tests {
         assert!(is_new_route_rate_limited(&windows, ip, high_limit));
     }
 
+    // The NAT fan-in contract is specifically the Normal-pressure path.
+    // A live host/parallel governor test can legitimately elevate pressure.
+    fn normal_test_ingress() -> QuicIngressSource {
+        QuicIngressSource::Fixed(QuicIngressObservation {
+            ingress: crate::memory_governor::QuicIngressSnapshot {
+                pressure: crate::memory_governor::L4PressureSnapshot {
+                    memory_pressure_level: crate::memory_governor::MemoryPressureLevel::Normal,
+                    connection_admission_used_bytes: 0,
+                    connection_budget_bytes: 16 * 1024 * 1024,
+                    fd_used_pct: 0,
+                },
+                route_limit: 4096,
+                pending_route_limit: 128,
+                pending_reassembly_budget_bytes: 1024 * 1024,
+                h3_datagram_queue_budget_bytes: 64 * 1024,
+            },
+            pressure_level: crate::l4_defense::L4PressureLevel::Normal,
+        })
+    }
+
+    #[test]
+    fn local_route_pressure_prunes_expired_h3_aliases_with_healthy_global_memory() {
+        use crate::l4_defense::L4PressureLevel;
+
+        let (shared, _h3_rx, _cid_rx) = new_demux_shared_state(1);
+        let now_ms = 100_000;
+        let expired = RouteKind::Http3(Arc::new(AtomicU64::new(25_000)));
+        let active = RouteKind::Http3(Arc::new(AtomicU64::new(99_000)));
+        for port in 10000..10014 {
+            shared.routes.insert(
+                SocketAddr::from(([203, 0, 113, 202], port)),
+                if port < 10012 {
+                    expired.clone()
+                } else {
+                    active.clone()
+                },
+            );
+        }
+        insert_cid_route(
+            &shared.cid_routes,
+            QuicConnectionId(vec![1, 2, 3, 4]),
+            expired,
+        );
+        insert_cid_route(
+            &shared.cid_routes,
+            QuicConnectionId(vec![5, 6, 7, 8]),
+            active,
+        );
+
+        let QuicIngressSource::Fixed(mut healthy) = normal_test_ingress() else {
+            unreachable!("test uses an explicit healthy snapshot");
+        };
+        healthy.ingress.route_limit = 20;
+        let observation = observe_quic_ingress(healthy.ingress, &shared);
+        assert_eq!(observation.pressure_level, L4PressureLevel::Elevated);
+
+        // The previous global-only maintenance policy retains 75-second-old
+        // metadata, although the same route occupancy already limits admission.
+        prune_route_indexes_at(
+            &shared.routes,
+            &shared.cid_routes,
+            &shared.session_routes,
+            L4PressureLevel::Normal,
+            now_ms,
+        );
+        assert_eq!(shared.routes.len(), 14);
+        assert!(lookup_cid_route(&shared.cid_routes, &[0x40, 1, 2, 3, 4, 0]).is_some());
+
+        prune_route_indexes_at(
+            &shared.routes,
+            &shared.cid_routes,
+            &shared.session_routes,
+            observation.pressure_level,
+            now_ms,
+        );
+        assert_eq!(shared.routes.len(), 2);
+        assert!(lookup_cid_route(&shared.cid_routes, &[0x40, 1, 2, 3, 4, 0]).is_none());
+        assert!(lookup_cid_route(&shared.cid_routes, &[0x40, 5, 6, 7, 8, 0]).is_some());
+    }
+
+    #[tokio::test]
+    async fn native_h3_routes_do_not_exhaust_a_nat_address_window() {
+        let manager = test_demux_manager(ConfigStore::new());
+        let (shared, mut h3_rx, _cid_rx) = new_demux_shared_state(1);
+        let (downstream_tx, _downstream_rx) = mpsc::channel(1);
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
+        let sender = UdpDownstreamSender::channel("127.0.0.1:443".parse().unwrap(), downstream_tx);
+        // More than the old 128 routes/10s, with one source IP. Validation
+        // belongs to Quinn: the demux must not decrypt/buffer a second hello.
+        for port in 10000..10256 {
+            let peer = SocketAddr::from(([203, 0, 113, 201], port));
+            let status = manager
+                .process_datagram_with_ingress_source(
+                    ProcessDatagramArgs {
+                        port: 443,
+                        client_addr: peer,
+                        data: Bytes::from_static(b"native QUIC"),
+                        ecn: Some(3),
+                        downstream_sender: sender.clone(),
+                        shared: &shared,
+                        http3_enabled: true,
+                        shutdown_rx: shutdown_rx.clone(),
+                    },
+                    normal_test_ingress(),
+                )
+                .await
+                .unwrap();
+            assert!(
+                matches!(status, UdpIngressDatagramStatus::Sent),
+                "peer={peer} status={status:?}"
+            );
+            let packet = h3_rx.try_recv().unwrap();
+            assert_eq!(packet.from, peer);
+            assert_eq!(packet.ecn, Some(3));
+            drop(packet);
+        }
+        assert_eq!(shared.routes.len(), 256);
+        assert!(shared.pending_routes.is_empty());
+        assert_eq!(shared.pending_reassembly_bytes.load(Ordering::Acquire), 0);
+        assert!(shared.new_route_windows.is_empty());
+        assert_eq!(shared.h3_queued_bytes.load(Ordering::Acquire), 0);
+
+        // The native path still uses the bounded queue and reports overflow.
+        let peer = "203.0.113.201:11000".parse().unwrap();
+        for expected_full in [false, true] {
+            let status = manager
+                .process_datagram_with_ingress_source(
+                    ProcessDatagramArgs {
+                        port: 443,
+                        client_addr: peer,
+                        data: Bytes::from_static(b"native QUIC"),
+                        ecn: None,
+                        downstream_sender: sender.clone(),
+                        shared: &shared,
+                        http3_enabled: true,
+                        shutdown_rx: shutdown_rx.clone(),
+                    },
+                    normal_test_ingress(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                matches!(status, UdpIngressDatagramStatus::Full),
+                expected_full
+            );
+        }
+        drop(h3_rx.try_recv().unwrap());
+        assert_eq!(shared.h3_queued_bytes.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn native_h3_high_pressure_keeps_the_per_ip_admission_limit() {
+        let manager = test_demux_manager(ConfigStore::new());
+        let (shared, mut h3_rx, _cid_rx) = new_demux_shared_state(1);
+        let (downstream_tx, _downstream_rx) = mpsc::channel(1);
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
+        let peer: SocketAddr = "203.0.113.202:10000".parse().unwrap();
+        let QuicIngressSource::Fixed(mut observation) = normal_test_ingress() else {
+            panic!("test source must be fixed")
+        };
+        observation.ingress.pressure.memory_pressure_level =
+            crate::memory_governor::MemoryPressureLevel::High;
+        observation.pressure_level = crate::l4_defense::L4PressureLevel::High;
+        let limit =
+            crate::l4_defense::quic_new_route_limit(crate::l4_defense::L4PressureLevel::High);
+        for _ in 0..limit {
+            assert!(!is_new_route_rate_limited(
+                &shared.new_route_windows,
+                peer.ip(),
+                limit
+            ));
+            record_new_route_for_ip(&shared.new_route_windows, peer.ip());
+        }
+        let status = manager
+            .process_datagram_with_ingress_source(
+                ProcessDatagramArgs {
+                    port: 443,
+                    client_addr: peer,
+                    data: Bytes::from_static(b"native QUIC"),
+                    ecn: None,
+                    downstream_sender: UdpDownstreamSender::channel(
+                        "127.0.0.1:443".parse().unwrap(),
+                        downstream_tx,
+                    ),
+                    shared: &shared,
+                    http3_enabled: true,
+                    shutdown_rx,
+                },
+                QuicIngressSource::Fixed(observation),
+            )
+            .await
+            .unwrap();
+        assert_eq!(status, UdpIngressDatagramStatus::Full);
+        assert!(shared.routes.is_empty());
+        assert!(shared.pending_routes.is_empty());
+        assert!(matches!(
+            h3_rx.try_recv(),
+            Err(mpsc::error::TryRecvError::Empty)
+        ));
+    }
+
+    #[tokio::test]
+    async fn native_h3_keeps_the_total_route_bound() {
+        let manager = test_demux_manager(ConfigStore::new());
+        let (shared, mut h3_rx, _cid_rx) = new_demux_shared_state(1);
+        let (downstream_tx, _downstream_rx) = mpsc::channel(1);
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
+        let QuicIngressSource::Fixed(mut observation) = normal_test_ingress() else {
+            panic!("test source must be fixed")
+        };
+        observation.ingress.route_limit = 1;
+        let sender = UdpDownstreamSender::channel("127.0.0.1:443".parse().unwrap(), downstream_tx);
+        for (port, expected) in [
+            (10000, UdpIngressDatagramStatus::Sent),
+            (10001, UdpIngressDatagramStatus::Full),
+        ] {
+            let status = manager
+                .process_datagram_with_ingress_source(
+                    ProcessDatagramArgs {
+                        port: 443,
+                        client_addr: SocketAddr::from(([203, 0, 113, 203], port)),
+                        data: Bytes::from_static(b"native QUIC"),
+                        ecn: None,
+                        downstream_sender: sender.clone(),
+                        shared: &shared,
+                        http3_enabled: true,
+                        shutdown_rx: shutdown_rx.clone(),
+                    },
+                    QuicIngressSource::Fixed(observation),
+                )
+                .await
+                .unwrap();
+            assert_eq!(status, expected);
+            if expected == UdpIngressDatagramStatus::Sent {
+                drop(h3_rx.try_recv().unwrap());
+            }
+        }
+        assert_eq!(shared.routes.len(), 1);
+        assert!(shared.pending_routes.is_empty());
+        assert_eq!(shared.h3_queued_bytes.load(Ordering::Acquire), 0);
+    }
+
     #[test]
     fn pending_route_cleanup_releases_retained_bytes() {
         let pending_routes = DashMap::new();
@@ -2977,7 +3772,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         let client_hello = crate::quic_probe::QuicClientHello {
             server_name: Some("other.example.com".to_string()),

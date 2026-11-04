@@ -1,0 +1,116 @@
+{
+  "target": "edge",
+  "started_at": 1793762554.9799883,
+  "cases": [],
+  "status": "failed",
+  "args": {
+    "target": "edge",
+    "output": "/home/runner/work/edge/edge/.local/architecture-profile-private/profile",
+    "tls": "/home/runner/work/edge/edge/.local/architecture-profile-private/tls",
+    "client": "/home/runner/work/edge/edge/.local/architecture-profile-binaries/.local/http-state-ci/protocol-state-client",
+    "edge_binary": "/home/runner/work/edge/edge/.local/architecture-profile-binaries/target/release/Zelvik-Edge",
+    "controller": "/home/runner/work/edge/edge/.local/architecture-profile-binaries/target/release/examples/issue34-controller",
+    "seconds": 20,
+    "repeats": 2,
+    "payload_size": 1024,
+    "concurrency": 32,
+    "cold_requests": null,
+    "fresh_requests": 2048,
+    "protocols": [
+      "h1",
+      "h1-tls",
+      "h2"
+    ],
+    "states": [
+      "hit",
+      "off",
+      "miss"
+    ],
+    "connections": [
+      "reuse"
+    ],
+    "multiplex": false,
+    "seed": 20261102,
+    "experiment": "instrumented production CPU profile; exclude from capacity comparison",
+    "edge_image": "edge-architecture-profiler:20261104",
+    "profiler_image": "edge-architecture-profiler:20261104",
+    "profile_driver_sha256": "8cdf56290435788f51d10309d1ba6a89fb63347b167b87b1a5f72b3c1994744e",
+    "cpu_assignment": {
+      "proxy": [
+        0
+      ],
+      "client": [
+        1,
+        2
+      ],
+      "origin": [
+        3
+      ]
+    },
+    "supports_h3": true
+  },
+  "source_revision": "7546a2da100e78352e8b150692ee81a667e809c5",
+  "driver_sha256": "bbd709da5a6752ed09077841e382e6e9ae1dee3632be4f7f7e28d9b724ef3247",
+  "client_sha256": "368312b058eb6a98373260a6b4977beb1655744418406c7c1c1bcedce92b3c1b",
+  "client_source_sha256": "a701692547e3385da31d1a97e92dc6b6334f86505337ffa3abf2736d87efc983",
+  "payload_sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+  "cpu_assignment": {
+    "proxy": [
+      0
+    ],
+    "client": [
+      1,
+      2
+    ],
+    "origin": [
+      3
+    ]
+  },
+  "protocol_capability": "Edge Quinn H3 enabled in this build",
+  "inter_case_quiet_seconds": 0.5,
+  "case_isolation": "fresh process and tmpfs for EVERY protocol/cache/connection/repeat case",
+  "parent_limits": {
+    "cpu.max": "max 100000",
+    "memory.max": "max"
+  },
+  "images": {
+    "nginx": "sha256:34e04bb6b4bb37d45845842374be0cd181723daffb230849b1984aaeaa96faba",
+    "openresty": "sha256:a122f8f9c6f368bc1d3a89437051db5936a8869734dfcadc566e8d34dc0e72e2",
+    "edge": "sha256:8ff941e9a13d2fa296e737c7e38fb87716c6e763a159dc7f49b5a87864b98244"
+  },
+  "scope": "production Edge startup + authenticated test controller in same proxy cgroup",
+  "client_versions": {
+    "curl": "curl 8.14.1 (x86_64-pc-linux-gnu) libcurl/8.14.1 OpenSSL/3.5.7 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10\nRelease-Date: 2025-06-04, security patched: 8.14.1-2+deb13u7\nProtocols: dict file ftp ftps gopher gophers http https imap imaps ipfs ipns ldap ldaps mqtt pop3 pop3s rtmp rtsp scp sftp smb smbs smtp smtps telnet tftp ws wss\nFeatures: alt-svc AsynchDNS brotli GSS-API HSTS HTTP2 HTTP3 HTTPS-proxy IDN IPv6 Kerberos Largefile libz NTLM PSL SPNEGO SSL threadsafe TLS-SRP UnixSockets zstd\n",
+    "native_libcurl": "libcurl/8.14.1 OpenSSL/3.5.7 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10\n"
+  },
+  "binaries": {
+    "/home/runner/work/edge/edge/.local/architecture-profile-binaries/target/release/Zelvik-Edge": "28e988dbe83f90b9cd5e7f50f6346d0bd0293b4f320bca0a80bf0193fff4b12e",
+    "/home/runner/work/edge/edge/.local/architecture-profile-binaries/target/release/examples/issue34-controller": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2"
+  },
+  "origin_readiness": {
+    "attempts": 1,
+    "observation": {
+      "protocol": "1.1",
+      "tls_verified": true,
+      "cache_status": null,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6",
+      "headers_file": "origin-readiness.headers"
+    }
+  },
+  "origin_reference": {
+    "client": "native-libcurl-multi",
+    "request_limit": null,
+    "successful": 348746,
+    "failed": 0,
+    "error_distribution": {},
+    "first_failures": [],
+    "new_connections": 32,
+    "good_rps": 17391.792608503318,
+    "p99_ms": 3.1220000000000003,
+    "elapsed": 20.05233203099999,
+    "origin_cpu_fraction": 0.9502179582176902,
+    "client_cpu_fraction": 0.8245893532202507
+  },
+  "error": "Command '['docker', '--host=unix:///var/run/docker.sock', 'run', '--cap-add', 'PERFMON', '--cap-add', 'SYS_PTRACE', '--security-opt', 'seccomp=unconfined', '-d', '--name', 'edge-state-7a43694a91-edge', '--network', 'edge-state-7a43694a91-net', '--cpuset-cpus', '0', '--cpus', '1', '--memory', '2g', '--memory-swap', '2g', '--ulimit', 'nofile=65536:65536', '--tmpfs', '/run/cache:rw,size=512m,mode=1777', '--tmpfs', '/node:rw,size=512m,mode=1777', '--mount', 'type=bind,src=/home/runner/work/edge/edge/.local/architecture-profile-private/profile,dst=/test', '--mount', 'type=bind,src=/home/runner/work/edge/edge/.local/architecture-profile-private/tls,dst=/tls,readonly', '-p', '127.0.0.1::19080', '-p', '127.0.0.1::19443/tcp', '-p', '127.0.0.1::19443/udp', '--mount', 'type=bind,src=/home/runner/work/edge/edge/.local/architecture-profile-binaries/target/release/Zelvik-Edge,dst=/tools/Zelvik-Edge,readonly', '--mount', 'type=bind,src=/home/runner/work/edge/edge/.local/architecture-profile-binaries/target/release/examples/issue34-controller,dst=/tools/controller,readonly', '-e', 'RUST_LOG=warn', '-e', 'ZELVIK_EDGE_H3_BACKEND=quinn-shared', '-e', 'ZELVIK_EDGE_H3_TRANSPORT_PROFILE=production', '-e', 'ZELVIK_EDGE_QUINN_NATIVE_GSO=auto', '-e', 'ZELVIK_EDGE_QUIC_RX_BATCH=1', '--entrypoint', '/tools/controller', 'edge-architecture-profiler:20261104', '--home', '/node', '--spawn-edge', '--edge-binary', '/tools/Zelvik-Edge', '--origin', 'http://origin:8081', '--tls-port', '19443', '--tls-host', 'localhost', '--ca-file', '/tls/ca.pem', '--cert-file', '/tls/server.pem', '--key-file', '/tls/server.key', '--snapshot-overrides', '/test/overrides.json', '--edge-log', '/test/edge.log', '--status-file', '/test/controller-status.json', '--ready-file', '/test/edge-ready.json', '--telemetry-mode', 'success', '--telemetry-store', '/node/accepted.bin']' returned non-zero exit status 126.",
+  "ended_at": 1793762579.0622017
+}

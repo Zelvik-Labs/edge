@@ -1,0 +1,837 @@
+[
+  {
+    "budget": 1,
+    "concurrency": 1,
+    "payload": 64,
+    "target": "full-stats",
+    "calls_per_request_median": 18.3335,
+    "calls_per_request_all": [
+      18.3255,
+      18.3415,
+      18.263,
+      18.391
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.0525,
+      "statx": 0.045,
+      "lseek": 0.015,
+      "write": 2.8865,
+      "clock_nanosleep": 0.002,
+      "close": 0.0425,
+      "sendto": 2.0,
+      "getsockopt": 0.0005,
+      "epoll_wait": 6.082,
+      "poll": 5.0175,
+      "sched_getaffinity": 0.0025,
+      "read": 0.15,
+      "restart_syscall": 0.001,
+      "prlimit64": 0.0025,
+      "futex": 2.0065
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 1,
+    "concurrency": 1,
+    "payload": 64,
+    "target": "bridge-stats",
+    "calls_per_request_median": 18.299,
+    "calls_per_request_all": [
+      18.3085,
+      18.2965,
+      18.283,
+      18.3015
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.056749999999999995,
+      "statx": 0.0485,
+      "lseek": 0.01575,
+      "write": 2.87025,
+      "clock_nanosleep": 0.0022500000000000003,
+      "close": 0.04575,
+      "sendto": 2.0,
+      "getsockopt": 0.0005,
+      "epoll_wait": 6.07225,
+      "poll": 5.00425,
+      "sched_getaffinity": 0.0025,
+      "read": 0.16325,
+      "restart_syscall": 0.001,
+      "prlimit64": 0.0025,
+      "futex": 2.0015
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 1,
+    "concurrency": 1,
+    "payload": 64,
+    "target": "nginx",
+    "calls_per_request_median": 7.000500000000001,
+    "calls_per_request_all": [
+      7.0205,
+      7.0,
+      7.0,
+      7.001
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 2.0004999999999997
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 1,
+    "concurrency": 1,
+    "payload": 64,
+    "target": "openresty",
+    "calls_per_request_median": 7.003,
+    "calls_per_request_all": [
+      7.018,
+      7.001,
+      7.0005,
+      7.005
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 2.003
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 1,
+    "concurrency": 1,
+    "payload": 1200,
+    "target": "full-stats",
+    "calls_per_request_median": 18.268,
+    "calls_per_request_all": [
+      18.2965,
+      18.2575,
+      18.253,
+      18.2785
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.0525,
+      "statx": 0.045,
+      "lseek": 0.015,
+      "write": 2.86325,
+      "clock_nanosleep": 0.002,
+      "close": 0.0425,
+      "sendto": 2.0,
+      "getsockopt": 0.0005,
+      "epoll_wait": 6.0755,
+      "poll": 5.00925,
+      "madvise": 0.00175,
+      "sched_getaffinity": 0.0025,
+      "read": 0.15,
+      "restart_syscall": 0.001,
+      "prlimit64": 0.0025,
+      "futex": 2.003
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 1,
+    "concurrency": 1,
+    "payload": 1200,
+    "target": "bridge-stats",
+    "calls_per_request_median": 18.287750000000003,
+    "calls_per_request_all": [
+      18.2655,
+      18.306,
+      18.316,
+      18.2695
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.053,
+      "statx": 0.0455,
+      "lseek": 0.01575,
+      "write": 2.888,
+      "clock_nanosleep": 0.0022500000000000003,
+      "close": 0.043,
+      "sendto": 2.0,
+      "getsockopt": 0.0005,
+      "epoll_wait": 6.074,
+      "poll": 5.006,
+      "madvise": 0.0,
+      "sched_getaffinity": 0.0025,
+      "read": 0.1525,
+      "restart_syscall": 0.001,
+      "prlimit64": 0.0025,
+      "futex": 2.001
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 1,
+    "concurrency": 1,
+    "payload": 1200,
+    "target": "nginx",
+    "calls_per_request_median": 7.001,
+    "calls_per_request_all": [
+      7.0,
+      7.029,
+      7.001,
+      7.001
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 2.001
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 1,
+    "concurrency": 1,
+    "payload": 1200,
+    "target": "openresty",
+    "calls_per_request_median": 7.0005,
+    "calls_per_request_all": [
+      7.0,
+      7.003,
+      7.0005,
+      7.0005
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 2.0005
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 1,
+    "concurrency": 16,
+    "payload": 64,
+    "target": "full-stats",
+    "calls_per_request_median": 1.32428125,
+    "calls_per_request_all": [
+      1.32275,
+      1.3258125,
+      1.3276875,
+      1.32125
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.00525,
+      "statx": 0.0045,
+      "lseek": 0.0015,
+      "write": 0.2511875,
+      "clock_nanosleep": 0.0001875,
+      "close": 0.00425,
+      "sendto": 0.24915625000000002,
+      "getsockopt": 6.25e-05,
+      "epoll_wait": 0.53778125,
+      "poll": 0.2510625,
+      "madvise": 0.0001875,
+      "sched_getaffinity": 0.00025,
+      "read": 0.015,
+      "restart_syscall": 0.000125,
+      "prlimit64": 0.00025,
+      "futex": 0.0011875
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 1,
+    "concurrency": 16,
+    "payload": 64,
+    "target": "bridge-stats",
+    "calls_per_request_median": 1.3214375,
+    "calls_per_request_all": [
+      1.322375,
+      1.3209375,
+      1.3219375,
+      1.320625
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.00525,
+      "statx": 0.0045,
+      "lseek": 0.0015,
+      "write": 0.25121875000000005,
+      "clock_nanosleep": 0.0001875,
+      "close": 0.00425,
+      "sendto": 0.24909375,
+      "getsockopt": 6.25e-05,
+      "epoll_wait": 0.53790625,
+      "poll": 0.25071875,
+      "madvise": 0.0001875,
+      "sched_getaffinity": 0.00025,
+      "read": 0.015,
+      "restart_syscall": 0.000125,
+      "prlimit64": 0.00025,
+      "futex": 0.0009375
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 1,
+    "concurrency": 16,
+    "payload": 64,
+    "target": "nginx",
+    "calls_per_request_median": 6.0000625,
+    "calls_per_request_all": [
+      6.0000625,
+      6.0000625,
+      6.0000625,
+      6.0000625
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 1.0000625
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 1,
+    "concurrency": 16,
+    "payload": 64,
+    "target": "openresty",
+    "calls_per_request_median": 6.000125000000001,
+    "calls_per_request_all": [
+      6.0001875,
+      6.0000625,
+      6.0003125,
+      6.0000625
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 1.0001250000000002
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 1,
+    "concurrency": 16,
+    "payload": 1200,
+    "target": "full-stats",
+    "calls_per_request_median": 1.3225625,
+    "calls_per_request_all": [
+      1.32375,
+      1.323,
+      1.3180625,
+      1.322125
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.00525,
+      "statx": 0.0045,
+      "lseek": 0.0015,
+      "write": 0.25134375,
+      "clock_nanosleep": 0.0001875,
+      "close": 0.00425,
+      "sendto": 0.24896875000000002,
+      "getsockopt": 6.25e-05,
+      "epoll_wait": 0.53815625,
+      "poll": 0.251125,
+      "madvise": 0.0004375,
+      "sched_getaffinity": 0.00025,
+      "read": 0.015,
+      "restart_syscall": 0.000125,
+      "prlimit64": 0.00025,
+      "futex": 0.000875
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 1,
+    "concurrency": 16,
+    "payload": 1200,
+    "target": "bridge-stats",
+    "calls_per_request_median": 1.3161562500000001,
+    "calls_per_request_all": [
+      1.31675,
+      1.2940625,
+      1.3223125,
+      1.3155625
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.00525,
+      "statx": 0.0045,
+      "lseek": 0.0015,
+      "write": 0.2491875,
+      "clock_nanosleep": 0.0001875,
+      "close": 0.00425,
+      "sendto": 0.24709375,
+      "getsockopt": 6.25e-05,
+      "epoll_wait": 0.5360625,
+      "poll": 0.25112500000000004,
+      "madvise": 0.000375,
+      "sched_getaffinity": 0.00025,
+      "read": 0.015,
+      "restart_syscall": 0.000125,
+      "prlimit64": 0.00025,
+      "futex": 0.0009375
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 1,
+    "concurrency": 16,
+    "payload": 1200,
+    "target": "nginx",
+    "calls_per_request_median": 6.0000625,
+    "calls_per_request_all": [
+      6.0000625,
+      6.0000625,
+      6.0000625,
+      6.0000625
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 1.0000625
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 1,
+    "concurrency": 16,
+    "payload": 1200,
+    "target": "openresty",
+    "calls_per_request_median": 6.0000625,
+    "calls_per_request_all": [
+      6.0000625,
+      6.0000625,
+      6.0000625,
+      6.0001875
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 1.0000625
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 1,
+    "payload": 64,
+    "target": "full-stats",
+    "calls_per_request_median": 22.40125,
+    "calls_per_request_all": [
+      22.469,
+      22.3735,
+      22.399,
+      22.4035
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.0525,
+      "statx": 0.045,
+      "lseek": 0.015,
+      "write": 2.9185,
+      "clock_nanosleep": 0.002,
+      "close": 0.0425,
+      "sendto": 2.0,
+      "getsockopt": 0.0005,
+      "epoll_wait": 6.09075,
+      "poll": 5.0497499999999995,
+      "sched_getaffinity": 0.0025,
+      "read": 0.15,
+      "restart_syscall": 0.001,
+      "prlimit64": 0.0025,
+      "sched_yield": 0.00825,
+      "futex": 6.02
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 1,
+    "payload": 64,
+    "target": "bridge-stats",
+    "calls_per_request_median": 22.422,
+    "calls_per_request_all": [
+      22.404,
+      22.6795,
+      22.4295,
+      22.4145
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.0525,
+      "statx": 0.045,
+      "lseek": 0.015,
+      "write": 2.9282500000000002,
+      "clock_nanosleep": 0.002,
+      "close": 0.0425,
+      "sendto": 2.0,
+      "getsockopt": 0.0005,
+      "epoll_wait": 6.09675,
+      "poll": 5.0545,
+      "sched_getaffinity": 0.0025,
+      "read": 0.15,
+      "restart_syscall": 0.001,
+      "prlimit64": 0.0025,
+      "sched_yield": 0.01075,
+      "futex": 6.024
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 1,
+    "payload": 64,
+    "target": "nginx",
+    "calls_per_request_median": 7.001,
+    "calls_per_request_all": [
+      7.0005,
+      7.001,
+      7.001,
+      7.0015
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 2.001
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 1,
+    "payload": 64,
+    "target": "openresty",
+    "calls_per_request_median": 7.000249999999999,
+    "calls_per_request_all": [
+      7.001,
+      7.0,
+      7.0,
+      7.0005
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 2.0002500000000003
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 1,
+    "payload": 1200,
+    "target": "full-stats",
+    "calls_per_request_median": 22.320749999999997,
+    "calls_per_request_all": [
+      22.3425,
+      22.313,
+      22.3285,
+      22.293
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.0525,
+      "statx": 0.045,
+      "lseek": 0.015,
+      "write": 2.8845,
+      "clock_nanosleep": 0.002,
+      "close": 0.0425,
+      "sendto": 2.0,
+      "getsockopt": 0.0005,
+      "epoll_wait": 6.06825,
+      "poll": 5.0375,
+      "madvise": 0.0022500000000000003,
+      "sched_getaffinity": 0.0025,
+      "read": 0.15,
+      "restart_syscall": 0.001,
+      "prlimit64": 0.0025,
+      "sched_yield": 0.0022500000000000003,
+      "futex": 6.012499999999999
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 1,
+    "payload": 1200,
+    "target": "bridge-stats",
+    "calls_per_request_median": 22.34975,
+    "calls_per_request_all": [
+      22.373,
+      22.3345,
+      22.306,
+      22.365
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.0525,
+      "statx": 0.045,
+      "lseek": 0.015,
+      "write": 2.891,
+      "clock_nanosleep": 0.002,
+      "close": 0.0425,
+      "sendto": 2.0,
+      "getsockopt": 0.0005,
+      "epoll_wait": 6.077999999999999,
+      "poll": 5.0475,
+      "madvise": 0.001,
+      "sched_getaffinity": 0.0025,
+      "read": 0.15,
+      "restart_syscall": 0.001,
+      "prlimit64": 0.0025,
+      "sched_yield": 0.0025,
+      "futex": 6.0165
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 1,
+    "payload": 1200,
+    "target": "nginx",
+    "calls_per_request_median": 7.00125,
+    "calls_per_request_all": [
+      7.0005,
+      7.0175,
+      7.002,
+      7.0005
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 2.0012499999999998
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 1,
+    "payload": 1200,
+    "target": "openresty",
+    "calls_per_request_median": 7.0005,
+    "calls_per_request_all": [
+      7.0005,
+      7.0005,
+      7.0,
+      7.0005
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 2.0005
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 16,
+    "payload": 64,
+    "target": "full-stats",
+    "calls_per_request_median": 1.732375,
+    "calls_per_request_all": [
+      1.72675,
+      1.804,
+      1.631875,
+      1.738
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.00525,
+      "statx": 0.0045,
+      "lseek": 0.0015,
+      "write": 0.2336875,
+      "clock_nanosleep": 0.0001875,
+      "close": 0.00425,
+      "sendto": 0.23109375,
+      "getsockopt": 6.25e-05,
+      "epoll_wait": 0.51221875,
+      "poll": 0.25684375,
+      "sched_getaffinity": 0.00025,
+      "read": 0.015,
+      "restart_syscall": 0.000125,
+      "prlimit64": 0.00025,
+      "sched_yield": 0.00028125000000000003,
+      "futex": 0.46687500000000004
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 16,
+    "payload": 64,
+    "target": "bridge-stats",
+    "calls_per_request_median": 1.706,
+    "calls_per_request_all": [
+      1.7125,
+      1.692125,
+      1.8183125,
+      1.6995
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.00525,
+      "statx": 0.0045,
+      "lseek": 0.0015,
+      "write": 0.22909374999999998,
+      "clock_nanosleep": 0.0001875,
+      "close": 0.00425,
+      "sendto": 0.22740625,
+      "getsockopt": 6.25e-05,
+      "epoll_wait": 0.50609375,
+      "poll": 0.25240625,
+      "madvise": 0.0003125,
+      "sched_getaffinity": 0.00025,
+      "read": 0.015,
+      "restart_syscall": 0.000125,
+      "prlimit64": 0.00025,
+      "sched_yield": 0.0003125,
+      "futex": 0.4593125
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 16,
+    "payload": 64,
+    "target": "nginx",
+    "calls_per_request_median": 6.000125,
+    "calls_per_request_all": [
+      6.000125,
+      6.000125,
+      6.000125,
+      6.000125
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 1.000125
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 16,
+    "payload": 64,
+    "target": "openresty",
+    "calls_per_request_median": 6.000125,
+    "calls_per_request_all": [
+      6.000125,
+      6.000125,
+      6.000125,
+      6.0005
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 1.000125
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 16,
+    "payload": 1200,
+    "target": "full-stats",
+    "calls_per_request_median": 1.7062499999999998,
+    "calls_per_request_all": [
+      1.6670625,
+      1.7454375,
+      1.5685,
+      1.7934375
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.00590625,
+      "statx": 0.005062499999999999,
+      "lseek": 0.0016875,
+      "write": 0.22884375,
+      "clock_nanosleep": 0.00021875,
+      "close": 0.004781250000000001,
+      "sendto": 0.227125,
+      "getsockopt": 6.25e-05,
+      "epoll_wait": 0.5056875000000001,
+      "poll": 0.2515625,
+      "madvise": 0.0009062499999999999,
+      "sched_getaffinity": 0.00028125000000000003,
+      "read": 0.016875,
+      "restart_syscall": 0.000125,
+      "prlimit64": 0.00028125000000000003,
+      "sched_yield": 0.0003125,
+      "futex": 0.456375
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 16,
+    "payload": 1200,
+    "target": "bridge-stats",
+    "calls_per_request_median": 1.74990625,
+    "calls_per_request_all": [
+      1.7801875,
+      1.7771875,
+      1.722625,
+      1.6964375
+    ],
+    "syscalls_per_request_median": {
+      "openat": 0.00590625,
+      "statx": 0.005062499999999999,
+      "lseek": 0.0016875,
+      "write": 0.23778125,
+      "clock_nanosleep": 0.00021875,
+      "close": 0.004781250000000001,
+      "sendto": 0.23484375000000002,
+      "getsockopt": 6.25e-05,
+      "epoll_wait": 0.51409375,
+      "poll": 0.25225,
+      "madvise": 0.00084375,
+      "sched_getaffinity": 0.00028125000000000003,
+      "read": 0.016875,
+      "restart_syscall": 0.000125,
+      "prlimit64": 0.00028125000000000003,
+      "sched_yield": 0.00040625000000000004,
+      "futex": 0.47475
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 16,
+    "payload": 1200,
+    "target": "nginx",
+    "calls_per_request_median": 6.000249999999999,
+    "calls_per_request_all": [
+      6.000125,
+      6.000375,
+      6.000125,
+      6.000375
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 1.0002499999999999
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  },
+  {
+    "budget": 2,
+    "concurrency": 16,
+    "payload": 1200,
+    "target": "openresty",
+    "calls_per_request_median": 6.000125,
+    "calls_per_request_all": [
+      6.000125,
+      6.000125,
+      6.000125,
+      6.000125
+    ],
+    "syscalls_per_request_median": {
+      "recvmsg": 1.0,
+      "recvfrom": 2.0,
+      "sendmsg": 2.0,
+      "epoll_wait": 1.000125
+    },
+    "observed_absent_syscalls": "zero in a completed all-syscall trace; all four attempts retained"
+  }
+]

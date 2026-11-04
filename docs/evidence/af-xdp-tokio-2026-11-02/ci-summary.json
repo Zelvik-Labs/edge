@@ -1,0 +1,53 @@
+{
+  "all_passed": true,
+  "comparisons": [
+    {
+      "engine": "readable",
+      "pairs": [
+        {
+          "round": 1,
+          "worker": 26299.15844,
+          "readable": 8447.43231,
+          "change_percent": -67.87945770480708
+        },
+        {
+          "round": 2,
+          "worker": 25570.46075,
+          "readable": 8315.69494,
+          "change_percent": -67.47929174487011
+        },
+        {
+          "round": 3,
+          "worker": 25522.93555,
+          "readable": 8280.81045,
+          "change_percent": -67.55541527040371
+        }
+      ],
+      "median_percent": -67.55541527040371
+    },
+    {
+      "engine": "read-write",
+      "pairs": [
+        {
+          "round": 1,
+          "worker": 26299.15844,
+          "read-write": 8448.67538,
+          "change_percent": -67.87473105166022
+        },
+        {
+          "round": 2,
+          "worker": 25570.46075,
+          "read-write": 8507.34652,
+          "change_percent": -66.72978792531143
+        },
+        {
+          "round": 3,
+          "worker": 25522.93555,
+          "read-write": 8508.57596,
+          "change_percent": -66.66301984216702
+        }
+      ],
+      "median_percent": -66.72978792531143
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+Gnuplot not found, using plotters backend
+Benchmarking h3_governor_reads/diagnostic_snapshot
+Benchmarking h3_governor_reads/diagnostic_snapshot: Warming up for 1.0000 s
+Benchmarking h3_governor_reads/diagnostic_snapshot: Collecting 30 samples in estimated 3.0006 s (214k iterations)
+Benchmarking h3_governor_reads/diagnostic_snapshot: Analyzing
+h3_governor_reads/diagnostic_snapshot
+                        time:   [10.548 µs 14.204 µs 18.524 µs]
+Found 4 outliers among 30 measurements (13.33%)
+  2 (6.67%) high mild
+  2 (6.67%) high severe
+Benchmarking h3_governor_reads/quic_ingress_snapshot
+Benchmarking h3_governor_reads/quic_ingress_snapshot: Warming up for 1.0000 s
+Benchmarking h3_governor_reads/quic_ingress_snapshot: Collecting 30 samples in estimated 3.0001 s (9.2M iterations)
+Benchmarking h3_governor_reads/quic_ingress_snapshot: Analyzing
+h3_governor_reads/quic_ingress_snapshot
+                        time:   [269.63 ns 276.91 ns 284.50 ns]
+

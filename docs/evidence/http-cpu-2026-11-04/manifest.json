@@ -1,0 +1,978 @@
+{
+  "artifact_id": 13266591907,
+  "archive": "raw.zip",
+  "archive_bytes": 28493369,
+  "archive_sha256": "ac3831e3c56ba21eaa6ee0448e21bf514653abcd3509969ba4a09170d511a0b8",
+  "files": [
+    {
+      "path": "curl-version.txt",
+      "bytes": 582,
+      "sha256": "84e18a4933237f9f02d1a77d2ea64c83ee91681ca46646c3191237aca4ee5c33"
+    },
+    {
+      "path": "kernel.txt",
+      "bytes": 106,
+      "sha256": "6a420b9da39dad05976367378c1e78ad9caa22fe20bc20ccbe577fca65f21646"
+    },
+    {
+      "path": "packages.txt",
+      "bytes": 4464,
+      "sha256": "efc85dad9d9b777f502dc961ebbf35c80cbc6bf9db28b676885e52c2d0354c24"
+    },
+    {
+      "path": "perf-version.txt",
+      "bytes": 22,
+      "sha256": "f0fa60ef0aeb6572285b3ccba91b78b1ac3545d8d4bb38bbce58aec25d7d47dc"
+    },
+    {
+      "path": "profile/0000-h1-miss-reuse.0.client.tsv.gz",
+      "bytes": 273958,
+      "sha256": "6d90008f66eb5bc97b15e8fa3f6dd8218e0e1a932182c23a3ab188a97417ae09"
+    },
+    {
+      "path": "profile/0000-h1-miss-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "a1b07bbc99651dddf2bedd27c010491e0ca93e5f901de4a26bdc968f1299cec9"
+    },
+    {
+      "path": "profile/0000-h1-miss-reuse.1.client.tsv.gz",
+      "bytes": 273580,
+      "sha256": "3745fe025b32c8d14dd624b0483003399a7ccfaf48c5c0f40dc8a61744df1afb"
+    },
+    {
+      "path": "profile/0000-h1-miss-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "75ff6d8a8cfac0a9db6f7c18dec06adf900a59b63327a387f2f940e51e880731"
+    },
+    {
+      "path": "profile/0000-h1-miss-reuse.command.json",
+      "bytes": 1087,
+      "sha256": "17e135359f1c4f25d98222ba175bcf3d26b99ba5b9c5e15124ee29746e1485ae"
+    },
+    {
+      "path": "profile/0000-h1-miss-reuse.perf-callers.txt",
+      "bytes": 749377,
+      "sha256": "db6272074c71fc355c1b47a86517fb36da6eab00911ab24acf374c82c9afed77"
+    },
+    {
+      "path": "profile/0000-h1-miss-reuse.perf-command.json",
+      "bytes": 286,
+      "sha256": "e5bcbb1a4289f4cc5042769a7235d90685f6c2707586174fd95fe544df596e25"
+    },
+    {
+      "path": "profile/0000-h1-miss-reuse.perf-flat.txt",
+      "bytes": 19001,
+      "sha256": "486385d2936b28178e394771ae7550911e6c16510016cd1bd66551860e5a289b"
+    },
+    {
+      "path": "profile/0000-h1-miss-reuse.perf-record.log",
+      "bytes": 146,
+      "sha256": "33ab1b2566abf86e43c9d77f8bbcb1e831bd27d3fa187682ef795c3dcdcc17ed"
+    },
+    {
+      "path": "profile/0000-h1-miss-reuse.stacks.txt",
+      "bytes": 6282048,
+      "sha256": "b6a2dd8a942409292c90d6f835c7f8f9102fec6f08628f4cf5ed230aeaa07930"
+    },
+    {
+      "path": "profile/0001-h1-tls-hit-reuse.0.client.tsv.gz",
+      "bytes": 787341,
+      "sha256": "8ed15b1ed50af7deb9810615a7b012d08ff0cc7ce74fa26f5d68f492d966fac7"
+    },
+    {
+      "path": "profile/0001-h1-tls-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "d61ccb4453bc8a07d9ccea345013745013c1cba7b0297ca2ea6e34f555a1921e"
+    },
+    {
+      "path": "profile/0001-h1-tls-hit-reuse.1.client.tsv.gz",
+      "bytes": 805506,
+      "sha256": "66801d6620e71c3380c67052f4e5401b4832aa24be521614c9cc5aacac7012a0"
+    },
+    {
+      "path": "profile/0001-h1-tls-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "6d75ed4ffb6e02142d5851b3c09148d440c6e27d09936d1463f457a2cb26de35"
+    },
+    {
+      "path": "profile/0001-h1-tls-hit-reuse.command.json",
+      "bytes": 1013,
+      "sha256": "095f4e50896ae742b0bd0734d0d12da91422b1267cb92391b933b519b1726ed9"
+    },
+    {
+      "path": "profile/0001-h1-tls-hit-reuse.perf-callers.txt",
+      "bytes": 488899,
+      "sha256": "2441096652c40d53f5cbe73c699a1f6b0844650c01cb24d281eb7a298543cb36"
+    },
+    {
+      "path": "profile/0001-h1-tls-hit-reuse.perf-command.json",
+      "bytes": 289,
+      "sha256": "54b7e2a4201d4094049d0d8cd56eb3a4020be063424efa35456abfe54a682f35"
+    },
+    {
+      "path": "profile/0001-h1-tls-hit-reuse.perf-record.log",
+      "bytes": 149,
+      "sha256": "b96881cf83c0205e6d3755f47ce310cde7c845c8af3b124fd625afeed8ce01e0"
+    },
+    {
+      "path": "profile/0001-h1-tls-hit-reuse.perf-flat.txt",
+      "bytes": 19126,
+      "sha256": "6f1b925b64a96dd91cb2f5f88607a3170e289049aa8c21794fc448198927ead6"
+    },
+    {
+      "path": "profile/0001-h1-tls-hit-reuse.stacks.txt",
+      "bytes": 4204390,
+      "sha256": "5ce4da5a4a9e93a2c562d6b02c73eb0df0b0cf5368dbd4271b19fd6776642c34"
+    },
+    {
+      "path": "profile/0002-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 499506,
+      "sha256": "070f9b1497987b06e74104fb0abe231bcad730c45dc33d46280e5262ce020bf4"
+    },
+    {
+      "path": "profile/0002-h1-tls-off-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "a0e32522d1dcb40e17a0ea6cc645ab71a62173e6fbacd1d216cf238d184a5433"
+    },
+    {
+      "path": "profile/0002-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 505713,
+      "sha256": "b392d1457b23d4a51356d27189a506b77afe46209c27c8316c807482d74d473b"
+    },
+    {
+      "path": "profile/0002-h1-tls-off-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "f858ea0638341fbdc38b76e49e49c6dc7e3f0d61c9ac75d141abac1c2863f66c"
+    },
+    {
+      "path": "profile/0002-h1-tls-off-reuse.command.json",
+      "bytes": 1013,
+      "sha256": "a9546dfed58ab9eab3fb499978ad383fbf867db7266e58f46d9eabde2b0fc76c"
+    },
+    {
+      "path": "profile/0002-h1-tls-off-reuse.perf-callers.txt",
+      "bytes": 530039,
+      "sha256": "b72738422f9eaab590977a0f15faa5e76682a1bdacd3d5e9ca143a1404efb2e9"
+    },
+    {
+      "path": "profile/0002-h1-tls-off-reuse.perf-command.json",
+      "bytes": 289,
+      "sha256": "41898f919e1a16796cf0ed86e82ebae3ec10341ae63f83345c16a5c33f569781"
+    },
+    {
+      "path": "profile/0002-h1-tls-off-reuse.perf-flat.txt",
+      "bytes": 19625,
+      "sha256": "cd14715e5510a09d4d012dd4b8f23b0f7f5d2e23e28e104df1a38e373bb2fdba"
+    },
+    {
+      "path": "profile/0002-h1-tls-off-reuse.perf-record.log",
+      "bytes": 149,
+      "sha256": "522ff93f2533d056fcca4e56dc2907a606950a9cce0361ce84fe613adbf6c12b"
+    },
+    {
+      "path": "profile/0002-h1-tls-off-reuse.stacks.txt",
+      "bytes": 4217041,
+      "sha256": "4809e3bc30083033a3f6d436882072487f48222ca5ec16f1f43c5232eb60ca9d"
+    },
+    {
+      "path": "profile/0003-h1-hit-reuse.0.client.tsv.gz",
+      "bytes": 987524,
+      "sha256": "489d2bff604b9a25e0af320d192c1b0b3bcfb650a45d9090cc191cc1790e488f"
+    },
+    {
+      "path": "profile/0003-h1-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "614bd6328b7a52e9faf6094c4b82b53a43a1b3f7fecd2b96626bae8cba130543"
+    },
+    {
+      "path": "profile/0003-h1-hit-reuse.1.client.tsv.gz",
+      "bytes": 1001353,
+      "sha256": "d1283d20eca25c0240d9d76fff3e103547415f76ca80d13525b3e3ef38c96bfd"
+    },
+    {
+      "path": "profile/0003-h1-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "97476a578625473f19313d875cfb3d1593f039bed2b99bd3a8170cdad0f436b4"
+    },
+    {
+      "path": "profile/0003-h1-hit-reuse.command.json",
+      "bytes": 1003,
+      "sha256": "031880f149fa64106061a0d3d4900e1cf6b90d892f450fd9bb931508fc58cefe"
+    },
+    {
+      "path": "profile/0003-h1-hit-reuse.perf-callers.txt",
+      "bytes": 726350,
+      "sha256": "9389bfb49f62145b709544a298ad5a11cdc0db9d7f28725c05328deec8c436a8"
+    },
+    {
+      "path": "profile/0003-h1-hit-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "86baa4d867d9c1cd7de1c4fa0c0c19c1f0e169529bba91b55131dc5414abf14c"
+    },
+    {
+      "path": "profile/0003-h1-hit-reuse.perf-flat.txt",
+      "bytes": 20215,
+      "sha256": "7fb25ba4bf946bd2f731b9701ecd965a7274acf1e92d87bd9ec34d42a644f65e"
+    },
+    {
+      "path": "profile/0003-h1-hit-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "f3c631d2a9a52f649759b2a4b329fcb8ca6c7a2341ec9fd8a6d00229922ab21d"
+    },
+    {
+      "path": "profile/0003-h1-hit-reuse.stacks.txt",
+      "bytes": 6113905,
+      "sha256": "096524128b1d1856e739510237a8fc3e59f2adb6c1270d71c0a5f96b7e1b1aa3"
+    },
+    {
+      "path": "profile/0004-h2-miss-reuse.0.client.tsv.gz",
+      "bytes": 306855,
+      "sha256": "50a4a3971d45d58fc321dd7ee9bd23d7918863e0c02a31cbd6c905e07a669a76"
+    },
+    {
+      "path": "profile/0004-h2-miss-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "9d44661afed100f7a9f080a74b0f88c8c7b02744f82168f2908f63a6be387f1c"
+    },
+    {
+      "path": "profile/0004-h2-miss-reuse.1.client.tsv.gz",
+      "bytes": 311922,
+      "sha256": "c6439be044b20e43d7cf289831053bc5fec64fd7b65e27275b4c2c62f4e79c56"
+    },
+    {
+      "path": "profile/0004-h2-miss-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "c4c2e64c893e8cb693f02b597feb6dcec9520c62fe4947d7add4fef0240229c1"
+    },
+    {
+      "path": "profile/0004-h2-miss-reuse.command.json",
+      "bytes": 1089,
+      "sha256": "081c9c71de82da2b7733c64b253ec0ef296dc3aa7fc462449f001b7b0917c912"
+    },
+    {
+      "path": "profile/0004-h2-miss-reuse.perf-callers.txt",
+      "bytes": 678887,
+      "sha256": "f4606d3232abcafb87e6b72a1d6fd81bf54e2ebba3dd55d04e9e3ff0a16e4310"
+    },
+    {
+      "path": "profile/0004-h2-miss-reuse.perf-command.json",
+      "bytes": 286,
+      "sha256": "56ca17f46a5ef813cac50d8e7d9bdd5417cad1c50ac40eb52833828ed1690bd9"
+    },
+    {
+      "path": "profile/0004-h2-miss-reuse.perf-flat.txt",
+      "bytes": 18901,
+      "sha256": "b03f92a9f9755e7b0f1f6e2a1ec6cc97ee18c79c9bf602b195a442250a7b89da"
+    },
+    {
+      "path": "profile/0004-h2-miss-reuse.perf-record.log",
+      "bytes": 146,
+      "sha256": "65c159ea3d105ad85cb307064d387d70739c841950eb31d7509ea3d15f7dfd20"
+    },
+    {
+      "path": "profile/0004-h2-miss-reuse.stacks.txt",
+      "bytes": 5960596,
+      "sha256": "8eae6fa7fedf91b31baeede0d235f85ed7735e22fae129aff6e34c32f08d9b7a"
+    },
+    {
+      "path": "profile/0005-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 524264,
+      "sha256": "953822c7bfb716ffbbf9d4dfdcfa00cc2bb63db0bce2d709df6b9d2287e29e30"
+    },
+    {
+      "path": "profile/0005-h2-off-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "68b651761634d28dd9fc46d0b1ac0336d53fa030beeaf84f6cbb6bf4cdf93895"
+    },
+    {
+      "path": "profile/0005-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 535514,
+      "sha256": "e5d929dcf62086794fb16207b3e8fd86c8220f1b09aecffcf55bdafeb7770016"
+    },
+    {
+      "path": "profile/0005-h2-off-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "94d6f5fb957b864c2dc1d41d4c95a33bca81ccc5a718818ab2c4193b7de337e7"
+    },
+    {
+      "path": "profile/0005-h2-off-reuse.command.json",
+      "bytes": 1005,
+      "sha256": "f3a28158cdfa7bfe016d9607f08c60e664734cf31469f5ada5a22697b2a6de3f"
+    },
+    {
+      "path": "profile/0005-h2-off-reuse.perf-callers.txt",
+      "bytes": 646650,
+      "sha256": "8336ffa1c3ac265b0d4c8414f0d5d8745bd6a89a22fa791f2a88ae70fa48bad4"
+    },
+    {
+      "path": "profile/0005-h2-off-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "de30a86497da2a2339fdfb8ab08d6e2f968802a0924a5c9c1dee7f6803abf9d5"
+    },
+    {
+      "path": "profile/0005-h2-off-reuse.perf-flat.txt",
+      "bytes": 24175,
+      "sha256": "74e2917ecf3b92056c6ec2453d887140cbc2b98b0cd8ba1ddfd5caf8485d80a2"
+    },
+    {
+      "path": "profile/0005-h2-off-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "6a87e29dc6ae46f3cb82d2f58a4140ee57c71ee1554efc3dcea7276e83bc0464"
+    },
+    {
+      "path": "profile/0005-h2-off-reuse.stacks.txt",
+      "bytes": 6327840,
+      "sha256": "6e4c470d934384e6a6e72dbd3eec20e7d881258acddb7308f903826b15a99986"
+    },
+    {
+      "path": "profile/0006-h1-tls-miss-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "961575483d343179af67dc3a4931549b8cee17f94f090b807cf324324d2b9077"
+    },
+    {
+      "path": "profile/0006-h1-tls-miss-reuse.0.client.tsv.gz",
+      "bytes": 256271,
+      "sha256": "04f819b5653d25bd90391a30936061a95d23e1af12effee4ddd0e3f406cc902e"
+    },
+    {
+      "path": "profile/0006-h1-tls-miss-reuse.1.client.tsv.gz",
+      "bytes": 258304,
+      "sha256": "0bfaeb669c77f58a42a3a5b6134ab5f4a8e060f913813dbfce1772bf579c467d"
+    },
+    {
+      "path": "profile/0006-h1-tls-miss-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "7bfbb603cf65800bae3b25afa99940df1ab79053628b7d78f0d5d5bf3a4d5c40"
+    },
+    {
+      "path": "profile/0006-h1-tls-miss-reuse.command.json",
+      "bytes": 1097,
+      "sha256": "9d75db8a7fd9047ea6cb8895e72e8a6d03b5e7e4343a8821e2c9cecccf70435f"
+    },
+    {
+      "path": "profile/0006-h1-tls-miss-reuse.perf-callers.txt",
+      "bytes": 497185,
+      "sha256": "ae4d7a8e100649c5287a78fce4eff3c469149ff78752ad260c2263a824fc041b"
+    },
+    {
+      "path": "profile/0006-h1-tls-miss-reuse.perf-command.json",
+      "bytes": 290,
+      "sha256": "c1a3132f1efc2b1745ce7ea613641753498a9f6b232d3e6ee78139dd89ea9d54"
+    },
+    {
+      "path": "profile/0006-h1-tls-miss-reuse.perf-flat.txt",
+      "bytes": 19065,
+      "sha256": "9d89a21812a712c093eb38632b77afc1715acfb29f9fdb94d97a2b4bc892f331"
+    },
+    {
+      "path": "profile/0006-h1-tls-miss-reuse.perf-record.log",
+      "bytes": 150,
+      "sha256": "3189dbb0726bff01f446bb0b073e66328291c2049e222a9531af06cde34aaa11"
+    },
+    {
+      "path": "profile/0006-h1-tls-miss-reuse.stacks.txt",
+      "bytes": 4332780,
+      "sha256": "f2f8f269d83ce6d0394acda12ffd019e4c78e3006e845c353d31ea66c3f7c4fa"
+    },
+    {
+      "path": "profile/0007-h2-hit-reuse.0.client.tsv.gz",
+      "bytes": 773520,
+      "sha256": "a3376385b39957a6fed60f971e796218d9f374ae2bc4f67c4e533329b4c7dd95"
+    },
+    {
+      "path": "profile/0007-h2-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "9366696f4c2f9dac5f6200d137c849a58bfbae901abeeb534399cce91f728448"
+    },
+    {
+      "path": "profile/0007-h2-hit-reuse.1.client.tsv.gz",
+      "bytes": 786599,
+      "sha256": "8e4de537adb8936508cc5f2f7ffc881cf29ddb7028555f5417e44b978db96707"
+    },
+    {
+      "path": "profile/0007-h2-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "ffc4ffed6827b564b8153ff2a191d363c303128e5f9a97d039fcb4daf6bb21b0"
+    },
+    {
+      "path": "profile/0007-h2-hit-reuse.command.json",
+      "bytes": 1005,
+      "sha256": "aba8d6f5d07833cc4e59dcae4f2dc9d08c121e5a2e9c6a2bf7f49870dfbb50e0"
+    },
+    {
+      "path": "profile/0007-h2-hit-reuse.perf-callers.txt",
+      "bytes": 551055,
+      "sha256": "fb02116b33c6e641892aeba64c9b8bf8c0903dd9edff5ca546d2ebfaa19d90b9"
+    },
+    {
+      "path": "profile/0007-h2-hit-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "f64e51af5a96d49d6015ac633a26f9715b5377d762f9c0320f2dee62b9d90ef3"
+    },
+    {
+      "path": "profile/0007-h2-hit-reuse.perf-flat.txt",
+      "bytes": 19953,
+      "sha256": "5eeb7a4db4a9937e19365900ce55032139cb613aa27b73d0f75495920b32b2f7"
+    },
+    {
+      "path": "profile/0007-h2-hit-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "8964b19fcf5d1def597a7afa4b8aa94d9d0a498707045ecc6d2a3a72b493d4f2"
+    },
+    {
+      "path": "profile/0007-h2-hit-reuse.stacks.txt",
+      "bytes": 6005202,
+      "sha256": "f02f2b7ae0f455fb4f78babb5c7fcf67736484cb9caf4c0bfe9e9510c1b10a4c"
+    },
+    {
+      "path": "profile/0008-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 574303,
+      "sha256": "ff91fa89ff7b899ee05e658dcf2a62a0d7c3dce8ee779c4d04bd4ff12b3ab407"
+    },
+    {
+      "path": "profile/0008-h1-off-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "f3afb623b95a55e825f5732ce486334113fdd6e6ecc17b744eed74ca0d6d00c4"
+    },
+    {
+      "path": "profile/0008-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 578228,
+      "sha256": "1f5ac7b41b23b41dac53b3abcba66bc8cb15cc8e3c3c9f078e3dea11aa2cfcc3"
+    },
+    {
+      "path": "profile/0008-h1-off-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "2d441ac31424a9ed9518016bb590fec8613eeb2a6cd49ab53e479897810928b3"
+    },
+    {
+      "path": "profile/0008-h1-off-reuse.command.json",
+      "bytes": 1003,
+      "sha256": "f6f0b0c05cd4dd5acb9d4998e87c500fe949cbf22d6e277f08048680b2f3fc87"
+    },
+    {
+      "path": "profile/0008-h1-off-reuse.perf-callers.txt",
+      "bytes": 849512,
+      "sha256": "c869c277920a2e247201567e07516bd399a07231681bba4f95a81bb4120d9c2a"
+    },
+    {
+      "path": "profile/0008-h1-off-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "f53ca3f7beb7153a67969b2682c1600a1e4d61d1fee7e84977a048074e06a75c"
+    },
+    {
+      "path": "profile/0008-h1-off-reuse.perf-flat.txt",
+      "bytes": 26810,
+      "sha256": "387f7bf941bb9044addb4d6344440472ec69cc4eff04908be1c064d03d7c2e4e"
+    },
+    {
+      "path": "profile/0008-h1-off-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "9ec17a64a37bf782b2b2cda2ce72e097900c95d7fb45d73536cb50198bdeb86b"
+    },
+    {
+      "path": "profile/0008-h1-off-reuse.stacks.txt",
+      "bytes": 6253309,
+      "sha256": "03bd0110cfa062f7bb4049d729d3e91cfc1d68811db7c5c82c9a6fd16b3fdb5f"
+    },
+    {
+      "path": "profile/0009-h1-tls-miss-reuse.0.client.tsv.gz",
+      "bytes": 250195,
+      "sha256": "5ffe190160b878cae3aca6be15d1fd71e9f627f9ee4decaedd6c6bfb8e5df4fb"
+    },
+    {
+      "path": "profile/0009-h1-tls-miss-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "3efc4371c3b34e72f13e5e05056876794eecb02f86dc83dc7f174dbaeeb1de57"
+    },
+    {
+      "path": "profile/0009-h1-tls-miss-reuse.1.client.tsv.gz",
+      "bytes": 251203,
+      "sha256": "72a5e46a748e16791241bd34789c381565a5877f152c76e87282c8c230b31a7c"
+    },
+    {
+      "path": "profile/0009-h1-tls-miss-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "3e19ea4d7e489dd5eeae05a8120eb3f77fd22fe63a7958a4d68b8bb54fd8d673"
+    },
+    {
+      "path": "profile/0009-h1-tls-miss-reuse.command.json",
+      "bytes": 1097,
+      "sha256": "5073b65add47a16bb4b572b272865807740907217aa75e3fddbaa158ceb3f10d"
+    },
+    {
+      "path": "profile/0009-h1-tls-miss-reuse.perf-callers.txt",
+      "bytes": 525529,
+      "sha256": "934da285be9ba5f82144bbd539089a0b9d7f1beaf69ae92e21d6f86e586598d1"
+    },
+    {
+      "path": "profile/0009-h1-tls-miss-reuse.perf-command.json",
+      "bytes": 290,
+      "sha256": "91caca387ddbfcd37655da23231b2d30c497ed29d10129682bf27af82dafebc9"
+    },
+    {
+      "path": "profile/0009-h1-tls-miss-reuse.perf-flat.txt",
+      "bytes": 19641,
+      "sha256": "a7fc911d14432b40d86a311a0cb534c2d5cfe8f1f1b7f0b1060803d7722bf4ef"
+    },
+    {
+      "path": "profile/0009-h1-tls-miss-reuse.perf-record.log",
+      "bytes": 150,
+      "sha256": "51252184ff8d20a93601b82ad36f4d37b895174ed0f5d809d46760c546cfe625"
+    },
+    {
+      "path": "profile/0009-h1-tls-miss-reuse.stacks.txt",
+      "bytes": 4323771,
+      "sha256": "d9a2516d79152c3ed19ff08e7390e67685a2ac65d0545b1e04a3802dea57b3ff"
+    },
+    {
+      "path": "profile/0010-h1-hit-reuse.0.client.tsv.gz",
+      "bytes": 984072,
+      "sha256": "482f4d91a54d0510661112b4b172069a8f1c5aaadd8d8e7bc4a5341d42ae0846"
+    },
+    {
+      "path": "profile/0010-h1-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "1a2543fa1ae687952d923e369530ca8a933dd9739f0d0a25734cb88863596a07"
+    },
+    {
+      "path": "profile/0010-h1-hit-reuse.1.client.tsv.gz",
+      "bytes": 989493,
+      "sha256": "1db16649e72d376c34adc1ba6a7fce1817067954dbcd666a097e48d77dfe729a"
+    },
+    {
+      "path": "profile/0010-h1-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "ff8ca9fd6848c437780affcd65f0ae8aab381868fde2db420a89c4837474244c"
+    },
+    {
+      "path": "profile/0010-h1-hit-reuse.command.json",
+      "bytes": 1003,
+      "sha256": "15ad109145e914606485c4276e35ce2cda42ce1c8d456258fb47a33d45c767cb"
+    },
+    {
+      "path": "profile/0010-h1-hit-reuse.perf-callers.txt",
+      "bytes": 759601,
+      "sha256": "addc51252d12aa18c27a9864fce091e24f7b59b1ccd722767f2b93518c1ebfa7"
+    },
+    {
+      "path": "profile/0010-h1-hit-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "0e16a49db02c4ccf72ea8e9589e0ab6e7bf729e99050eda2f00f8022c589c099"
+    },
+    {
+      "path": "profile/0010-h1-hit-reuse.perf-flat.txt",
+      "bytes": 19685,
+      "sha256": "b222aef74373db34fd40b533e71075dc0ad92c37a215b7231ee46ca55098b0ba"
+    },
+    {
+      "path": "profile/0010-h1-hit-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "18750221099af2ecd22f4e1efdb09352873d0c2a5dce51b717f244d08090f82e"
+    },
+    {
+      "path": "profile/0010-h1-hit-reuse.stacks.txt",
+      "bytes": 6430353,
+      "sha256": "32c8870da2f3fa145fa9d158ad1abf045c6cdc1f8d31a68b00ab30447087f951"
+    },
+    {
+      "path": "profile/0011-h1-miss-reuse.0.client.tsv.gz",
+      "bytes": 283923,
+      "sha256": "681079b8e7aff428052b361146e898f93607a07f12c493b134826e59df83906b"
+    },
+    {
+      "path": "profile/0011-h1-miss-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "dec0f6a4d722bde955a02c3dcb3867b4a38e674216ea120e7aca64981d23867a"
+    },
+    {
+      "path": "profile/0011-h1-miss-reuse.1.client.tsv.gz",
+      "bytes": 284521,
+      "sha256": "e874d48e0d2c582b609179a8b3d859240f1986017858981abc991b16b1c17751"
+    },
+    {
+      "path": "profile/0011-h1-miss-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "5d8cb7da83c66025450d0dd5a5cf2492563e7cac667e1c0b92290cdabf27fc7c"
+    },
+    {
+      "path": "profile/0011-h1-miss-reuse.command.json",
+      "bytes": 1087,
+      "sha256": "7ba243599ec19d049642999e7bd2d164d70e2f766193ee68e51bae3fb6299f14"
+    },
+    {
+      "path": "profile/0011-h1-miss-reuse.perf-callers.txt",
+      "bytes": 705482,
+      "sha256": "52ba2e63db4c339b7b30d77c86b38200c3ba64c2bb21d97727cc8aec8d6b700d"
+    },
+    {
+      "path": "profile/0011-h1-miss-reuse.perf-command.json",
+      "bytes": 286,
+      "sha256": "ba374ffa53d82df92cd19c4b3a4165b9af81ed968cb2d58e544e080f6b137d49"
+    },
+    {
+      "path": "profile/0011-h1-miss-reuse.perf-flat.txt",
+      "bytes": 18034,
+      "sha256": "0f44e8995fcc4d4b2c439d17560e43abc9fdbe0e83af11a575996b371d40aa16"
+    },
+    {
+      "path": "profile/0011-h1-miss-reuse.perf-record.log",
+      "bytes": 146,
+      "sha256": "90315670060239b99484153adaa2392ebd364a237324fd9177413a0ef6c9767f"
+    },
+    {
+      "path": "profile/0012-h1-off-reuse.0.client.tsv.gz",
+      "bytes": 568985,
+      "sha256": "37dbb6ffc536b6d20dc4543b15acd51c65868fc251659d89d5a2ff19b51b3ea1"
+    },
+    {
+      "path": "profile/0012-h1-off-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "588e4ac474e0af6c57ff9bb97cda222ec89412905bfaaeea948d0d1ce5a7059b"
+    },
+    {
+      "path": "profile/0011-h1-miss-reuse.stacks.txt",
+      "bytes": 6190628,
+      "sha256": "8cc0f609f2b504a14bac00746d2640b1eea43842429b187b5bb80cb556c9ec34"
+    },
+    {
+      "path": "profile/0012-h1-off-reuse.1.client.tsv.gz",
+      "bytes": 574133,
+      "sha256": "d084e7c6162fde1c9301df4c748af489e2b345cb804588faf908fd8ecab8875e"
+    },
+    {
+      "path": "profile/0012-h1-off-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "cbca700ef8e6f1e43d5d35e67ed524d42a5b70d52b0fd17820292d2e98d8051b"
+    },
+    {
+      "path": "profile/0012-h1-off-reuse.perf-callers.txt",
+      "bytes": 901095,
+      "sha256": "f8e92e97cc4efc899dd42213481675a522577155a6773692d55aa63357983bb8"
+    },
+    {
+      "path": "profile/0012-h1-off-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "e1cb70e582f43ed45798ef20af555f21e5ead8443b1f3e44450568bfcfb473f9"
+    },
+    {
+      "path": "profile/0012-h1-off-reuse.command.json",
+      "bytes": 1003,
+      "sha256": "7eb0ff63b277c481eabf60bb9221484e4a608961e6d26c071731be4aeb68752c"
+    },
+    {
+      "path": "profile/0012-h1-off-reuse.perf-flat.txt",
+      "bytes": 26645,
+      "sha256": "9c88c9a1cae6229399d9733988b7c3f2d5b44a7f703c236da2e2280d609f0278"
+    },
+    {
+      "path": "profile/0012-h1-off-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "52ba28990f50b90fd6f56ee2ee4f5e6eabf0a67dd16c20866f6c89e6e1b318f2"
+    },
+    {
+      "path": "profile/0012-h1-off-reuse.stacks.txt",
+      "bytes": 6214671,
+      "sha256": "c7ce440c58c6b79c392d71e6c6698e55b97c99b43b066470517d95833591d2be"
+    },
+    {
+      "path": "profile/0013-h2-miss-reuse.0.client.tsv.gz",
+      "bytes": 314279,
+      "sha256": "9bbee203ae4f8770de88a47d83091bf54b94caf4828ecbb7804381cac956248c"
+    },
+    {
+      "path": "profile/0013-h2-miss-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "2c4aac9e05cbb223da140282ec6c5ae72e760dd4c73cb568736e3a26ee616316"
+    },
+    {
+      "path": "profile/0013-h2-miss-reuse.1.client.tsv.gz",
+      "bytes": 319316,
+      "sha256": "0a3a7fa096c8512a959d22560938250afdf5ae434c70f5e99317518c6c19095f"
+    },
+    {
+      "path": "profile/0013-h2-miss-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "63e9f1a5723f6a82bf94b777990aa91c46eac0ee792d6752c0a759141370c92e"
+    },
+    {
+      "path": "profile/0013-h2-miss-reuse.command.json",
+      "bytes": 1089,
+      "sha256": "3974a5358af0a425741ffbb2851337ce3b42b7f9ea668d2f2bf8ad64a65ea399"
+    },
+    {
+      "path": "profile/0013-h2-miss-reuse.perf-callers.txt",
+      "bytes": 634421,
+      "sha256": "18ad3cf8957e7d8c82bb59429ab6c319449c733b9e4955149dfc1b3bafffce56"
+    },
+    {
+      "path": "profile/0013-h2-miss-reuse.perf-command.json",
+      "bytes": 286,
+      "sha256": "1486075bb724394bc9a78a5af94fd10bbf888671696571db25e7a9c9a6d53fb6"
+    },
+    {
+      "path": "profile/0013-h2-miss-reuse.perf-flat.txt",
+      "bytes": 19997,
+      "sha256": "8a46bd167e4771c71b6bb372ec70c929c158f8bf9822e6bced3c98ae602552d2"
+    },
+    {
+      "path": "profile/0013-h2-miss-reuse.perf-record.log",
+      "bytes": 146,
+      "sha256": "c539fe89b079c9357662c78dc3a43b314471092af3213946253817621d22f830"
+    },
+    {
+      "path": "profile/0013-h2-miss-reuse.stacks.txt",
+      "bytes": 6127294,
+      "sha256": "b15b25849bb32ea92a091b877fabe79b4aa9c7d5dae0f3d274545d3e5b3196d5"
+    },
+    {
+      "path": "profile/0014-h2-off-reuse.0.client.tsv.gz",
+      "bytes": 527573,
+      "sha256": "409484ec2be1474b19eb7be33b6d232d7d178a45401539d80f3c4345b91f9ef9"
+    },
+    {
+      "path": "profile/0014-h2-off-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "60db24112b8cbda9711d01a2e4db4d0237d0da5953646a88c5545856bee4167f"
+    },
+    {
+      "path": "profile/0014-h2-off-reuse.1.client.tsv.gz",
+      "bytes": 537071,
+      "sha256": "0f6552fc94c14ec156334b4a5f40d63b3006480f74360ccec34ee56669e9914b"
+    },
+    {
+      "path": "profile/0014-h2-off-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "77a0e4a80b1cf19bedd1bbf5f3771705cb212cb4d5bef63e51f911f088198f91"
+    },
+    {
+      "path": "profile/0014-h2-off-reuse.command.json",
+      "bytes": 1005,
+      "sha256": "09e00846de032161d4a73f0a90369ace562e44d417748173d5080204e8c831c8"
+    },
+    {
+      "path": "profile/0014-h2-off-reuse.perf-callers.txt",
+      "bytes": 649360,
+      "sha256": "590046703afe626d60007b5283474fdf126c7aee63a60ff0fa5402e0da4727c0"
+    },
+    {
+      "path": "profile/0014-h2-off-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "5ab617429e2af3e898cc85abb9f2da6f1e47909ec1509354db1e18364c9ffddf"
+    },
+    {
+      "path": "profile/0014-h2-off-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "bbc3a3555a3bdc6e526e12a89bae4c18c9d9bd3c1721b54d0cbd29992c9dbc73"
+    },
+    {
+      "path": "profile/0014-h2-off-reuse.perf-flat.txt",
+      "bytes": 27000,
+      "sha256": "9a77f14a30a5c8a3b500d5f6a4cf7c95a64ce21306df31901487f411ca6106a7"
+    },
+    {
+      "path": "profile/0014-h2-off-reuse.stacks.txt",
+      "bytes": 6330111,
+      "sha256": "86b3a8d15b5a53f613619dc66399df6866e1c503139add383a14b54a8dc9928a"
+    },
+    {
+      "path": "profile/0015-h1-tls-off-reuse.0.client.tsv.gz",
+      "bytes": 484635,
+      "sha256": "13ae34d27a81e64e105549db37e3dd88c0010082e1a4527e333e828439e7acfd"
+    },
+    {
+      "path": "profile/0015-h1-tls-off-reuse.0.stderr",
+      "bytes": 91,
+      "sha256": "4d0c747d0ae32a973345fed9da9d361da2ebdf784ca34da676f7c10a1d5a3a05"
+    },
+    {
+      "path": "profile/0015-h1-tls-off-reuse.1.client.tsv.gz",
+      "bytes": 490890,
+      "sha256": "1a39f41fe7240ab51d3c9fedb7f9610b38308320ea48a1e7983a344d2c534d81"
+    },
+    {
+      "path": "profile/0015-h1-tls-off-reuse.1.stderr",
+      "bytes": 91,
+      "sha256": "b00fd4a3e3de1559c733103c12e5abfa359c8aef597271a870fe402a002ab147"
+    },
+    {
+      "path": "profile/0015-h1-tls-off-reuse.command.json",
+      "bytes": 1013,
+      "sha256": "29857ec9636471c748e8a368f892cd43f5b768aba2bccdd944098fa9a03376e4"
+    },
+    {
+      "path": "profile/0015-h1-tls-off-reuse.perf-callers.txt",
+      "bytes": 497594,
+      "sha256": "6a08c65b844f1cc5268274fd63931cc1868139b1c3792aca1cb13e4974c238e0"
+    },
+    {
+      "path": "profile/0015-h1-tls-off-reuse.perf-flat.txt",
+      "bytes": 22279,
+      "sha256": "2317522163ed6c8a376caefc9b0427150034c47782a096d1c46edfef0099493b"
+    },
+    {
+      "path": "profile/0015-h1-tls-off-reuse.perf-command.json",
+      "bytes": 289,
+      "sha256": "03b20d0e4c9037429b8bdba0feafa476c221f1eddacc224ab5538d0a84fb1902"
+    },
+    {
+      "path": "profile/0015-h1-tls-off-reuse.perf-record.log",
+      "bytes": 149,
+      "sha256": "c79e6ab2cf9896c4cf49fb7340810cf8e67aa36c5d8e0907058289f54d78593a"
+    },
+    {
+      "path": "profile/0015-h1-tls-off-reuse.stacks.txt",
+      "bytes": 4132756,
+      "sha256": "3edef6d584ce1323dc7a939edbb45adee42a3edf944e2e63601d98e9ca9e4567"
+    },
+    {
+      "path": "profile/0016-h2-hit-reuse.0.client.tsv.gz",
+      "bytes": 774493,
+      "sha256": "2e71786b58f31bd54434aed87a97b00042be90216f6c1ea729de7411ee483864"
+    },
+    {
+      "path": "profile/0016-h2-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "98e1dd103524a99adaa4d1cf2a261f7284f593c8b88504d6180893bca96f113c"
+    },
+    {
+      "path": "profile/0016-h2-hit-reuse.1.client.tsv.gz",
+      "bytes": 790459,
+      "sha256": "e4eb4ac29124c121e0c8dad589e7b569fc9310addf8a45904525154aa43aab4a"
+    },
+    {
+      "path": "profile/0016-h2-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "1f383924c8fda9858a076a0a1a3d934c32299fbdff060142c399184e6b3ffd1a"
+    },
+    {
+      "path": "profile/0016-h2-hit-reuse.command.json",
+      "bytes": 1005,
+      "sha256": "b31c774f039b9a708a040631983f1bba76fb49ef16f3fd075cacacc467c83369"
+    },
+    {
+      "path": "profile/0016-h2-hit-reuse.perf-callers.txt",
+      "bytes": 507790,
+      "sha256": "40a26fef433c9fba7503e55d42c2a9badf1b87606b64d87b0b4fc24782ff283d"
+    },
+    {
+      "path": "profile/0016-h2-hit-reuse.perf-command.json",
+      "bytes": 285,
+      "sha256": "37ea6d127f90a86df77d655d8f285b0285a9b7484c6f6ba42800e06b545608e9"
+    },
+    {
+      "path": "profile/0016-h2-hit-reuse.perf-flat.txt",
+      "bytes": 21862,
+      "sha256": "8addaae2ad883289362be66f46310d0985e0443a94045236d5fe50455d1da146"
+    },
+    {
+      "path": "profile/0016-h2-hit-reuse.perf-record.log",
+      "bytes": 145,
+      "sha256": "170843819fbbcaac805c3bcbe275b592353b2add1bf3510bf75c0be301435600"
+    },
+    {
+      "path": "profile/0016-h2-hit-reuse.stacks.txt",
+      "bytes": 5775599,
+      "sha256": "0cae09f00402a1f521a4f00fa9bd540ee282a8249a98507f9580fa9bfd192309"
+    },
+    {
+      "path": "profile/0017-h1-tls-hit-reuse.0.client.tsv.gz",
+      "bytes": 769132,
+      "sha256": "f1fcf533f38365c06cb37ea2069d334dbd3c7b2cc8245673d0083c4d68b3c57b"
+    },
+    {
+      "path": "profile/0017-h1-tls-hit-reuse.0.stderr",
+      "bytes": 93,
+      "sha256": "86a8131409b79240fceca0458b1642e2ec6c1daa9cd01f0ff29f0a3f189eb21f"
+    },
+    {
+      "path": "profile/0017-h1-tls-hit-reuse.1.client.tsv.gz",
+      "bytes": 788573,
+      "sha256": "aa5174f03df872fd3cad69d43633af35d2c25c00505d05ae5c716a1f1e57c372"
+    },
+    {
+      "path": "profile/0017-h1-tls-hit-reuse.1.stderr",
+      "bytes": 93,
+      "sha256": "fbf7e2de97320737248d7dbfef9396b73b0cce82d1a73d69afdb34719c8c6623"
+    },
+    {
+      "path": "profile/0017-h1-tls-hit-reuse.command.json",
+      "bytes": 1013,
+      "sha256": "b1158c5c116b5714b458453f4aafe671775b5e6b2488f4a8fcfdebc5a399306d"
+    },
+    {
+      "path": "profile/0017-h1-tls-hit-reuse.perf-callers.txt",
+      "bytes": 497434,
+      "sha256": "f4fa858644e442804204e1fbc702c99633c4fc9d77bd2c81c0df1160ec43486a"
+    },
+    {
+      "path": "profile/0017-h1-tls-hit-reuse.perf-command.json",
+      "bytes": 289,
+      "sha256": "e1e85a1ed0013388a9618286e1218a3f7d7d1f060a914f251760fb82b766afe0"
+    },
+    {
+      "path": "profile/0017-h1-tls-hit-reuse.perf-flat.txt",
+      "bytes": 19446,
+      "sha256": "b7820b2f3d7a04dc1dc97ab088317cf9666f73568f40db7fda4a898dfa5e5fa7"
+    },
+    {
+      "path": "profile/0017-h1-tls-hit-reuse.perf-record.log",
+      "bytes": 149,
+      "sha256": "a2162a1d248ed85dd6d8a88f397a8b4852336f64ea57cb139a104c79cc50c364"
+    },
+    {
+      "path": "profile/0017-h1-tls-hit-reuse.stacks.txt",
+      "bytes": 4208929,
+      "sha256": "a6cf75795371b805702aeec919f6d483392a507c0a446189f627b07832384c2a"
+    },
+    {
+      "path": "profile/manifest.json",
+      "bytes": 152587,
+      "sha256": "5831c00c5eae3ceffe1641a0ab87f86db7ea536153cb0d635dc66630bc39ddf6"
+    },
+    {
+      "path": "profile/origin-reference.0.client.tsv.gz",
+      "bytes": 1398540,
+      "sha256": "4e8d6074830f638e1a394c3b71eb4d2a07cbade52e2cfa8ef1f103b9df10b6b6"
+    },
+    {
+      "path": "profile/origin-reference.0.stderr",
+      "bytes": 93,
+      "sha256": "1eecf29f3f262204b831b02bb741438bddca048a843001dbd4b0fca19f2471d6"
+    },
+    {
+      "path": "profile/origin-reference.1.client.tsv.gz",
+      "bytes": 1386514,
+      "sha256": "7a9984f92b8e1f244d6aa13ae6a616383096ae3e074bad4e42341c62a462718b"
+    },
+    {
+      "path": "profile/origin-reference.1.stderr",
+      "bytes": 93,
+      "sha256": "add4bfdfd24cd6975ab81b9f0f82c81e34b8683eb0dfbe6109c8e07f6812e1e3"
+    },
+    {
+      "path": "profile/origin-reference.command.json",
+      "bytes": 1003,
+      "sha256": "288874d3cc21d4cf48729468d1f630879ecfc2a42b879c285c33f2649aa86331"
+    },
+    {
+      "path": "profile/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "provenance.json",
+      "bytes": 1406,
+      "sha256": "c686d96ad228e0d99bf47fb6f7554e6bbf3214fa5c233562a9107c3d42b8ec05"
+    },
+    {
+      "path": "retained-manifest.json",
+      "bytes": 33884,
+      "sha256": "ca5115940a3a81449f03fc554db0855fe16b73378465806b7bdb216d958595cb"
+    },
+    {
+      "path": "verified-profiles.json",
+      "bytes": 210136,
+      "sha256": "f859966b2a91a1106777f27cc250917a1a0ab45995604bc5dcfcf142ba2a307f"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "artifact_id": 13295325462,
+  "archive": "raw.zip",
+  "archive_bytes": 5219,
+  "archive_sha256": "51e9432de8ad0370b0f2ac7239fac5428ae8cb620a7325833d5912789a14c8ff",
+  "files": [
+    {
+      "path": "verification.log",
+      "bytes": 16811,
+      "sha256": "b67bf9861226a5088773ad45a3cee4e4ecbade20fb816ad1b028cead1b9b8e90"
+    },
+    {
+      "path": "evidence/verified-records.json",
+      "bytes": 4580,
+      "sha256": "65c747c6bd5f1578b18dfee5a54703284bfe4a37cb770969c7b54de256017e65"
+    },
+    {
+      "path": "evidence/verified-summary.json",
+      "bytes": 26039,
+      "sha256": "421e4d5467bc4b3c85696b764bb376ba5e2ba850c80a6c1c10f0599b7e03beef"
+    }
+  ]
+}

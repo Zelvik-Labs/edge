@@ -1,0 +1,17 @@
+[package]
+name = "client-ip-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[features]
+count-allocations = []
+
+[dependencies]
+http = "=1.5.0"
+
+[[bin]]
+name = "client-ip-probe"
+path = "../../../benches/support/client_ip_probe.rs"

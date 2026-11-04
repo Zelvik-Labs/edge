@@ -1,0 +1,46 @@
+{
+  "source_commit": "2f65ad03d1ed309b62746b5d55363b75b848ac71",
+  "baseline_commit": "4b29028edb47e6a038392d066eee747e2f34d3f7",
+  "scope": "internal ready predicate regression and per-round Vec removal; no whole-node throughput claim; native full-node CI pending",
+  "local_results": {
+    "initial_harness_failure": "red-test.log incorrectly observed the public all-healthy status; not zero-survivor proof",
+    "correct_red": "red-internal-gate.log:exit101,internalgate true expectedfalse after last healthy queue withdrawal",
+    "green": "green-proxy-tests.log:9pass0fail0ignored,exit0",
+    "clippy": "alltargets correctness/suspicious exit0",
+    "format": "preexisting unrelated formatting differences retained; own new formatting corrected"
+  },
+  "files": {
+    "clippy.log": {
+      "bytes": 961,
+      "sha256": "93f195779820ed5b6bdf7798b526d548409a194f88e5aff6b507c3b36108a14b"
+    },
+    "format-check.log": {
+      "bytes": 4099,
+      "sha256": "5c94d87276b2ddb40ff1fc21ed82adb2c3849693b12515b90cc6e25e73042734"
+    },
+    "green-proxy-tests.log": {
+      "bytes": 2473,
+      "sha256": "e7e60cc8aa824a2e72e48208af6065b40878ae5b71e40bd4e54752534312ac8a"
+    },
+    "red-internal-gate.log": {
+      "bytes": 2512,
+      "sha256": "514f6ce401b259e2fd7c5ad760fbe0506ef8e414fdc9ab7cb528b57caf673e35"
+    },
+    "red-test.log": {
+      "bytes": 2602,
+      "sha256": "a04cf6a8882c19fe6e4b9c0f728e1e8473ed70bdd76b112612bdbe3d6fd25925"
+    },
+    "storage-compression.json": {
+      "bytes": 707,
+      "sha256": "270577dfdf09bfc39b551a71aa174edc8dc0a36a96ec80551760588cd13a3f71"
+    },
+    "tested-change.patch": {
+      "bytes": 4177,
+      "sha256": "2d6742cb282d33e0ee776127264cb5b06e0fc5a471acf1e41dd0536c0754f23d"
+    }
+  },
+  "archive": {
+    "bytes": 6705,
+    "sha256": "ea45f4870cf8c54e324abb2b3d547ac6a77e508d40d54e823ea1a2557db9b143"
+  }
+}

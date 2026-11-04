@@ -1,0 +1,898 @@
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -806,6 +806,14 @@
+         lock.unique_quic_passthrough_by_port.contains_key(&port)
+     }
+ 
++    /// A single configuration snapshot must exclude both kinds of forwarding
++    /// before a native H3 listener can delegate protocol validation to Quinn.
++    pub(crate) fn udp_port_has_no_forwarding_sync(&self, port: u16) -> bool {
++        let lock = self.inner.read();
++        !lock.unique_quic_passthrough_by_port.contains_key(&port)
++            && !lock.udp_server_by_port.contains_key(&port)
++    }
++
+     pub fn quic_passthrough_ports_sync(&self) -> HashSet<u16> {
+         let lock = self.inner.read();
+         lock.unique_quic_passthrough_by_port
+@@ -1130,7 +1138,10 @@
+         )
+     }
+ 
+-    #[expect(clippy::too_many_arguments, reason = "configuration snapshot carries explicit global settings")]
++    #[expect(
++        clippy::too_many_arguments,
++        reason = "configuration snapshot carries explicit global settings"
++    )]
+     pub fn set_enabled_features(
+         &self,
+         has_dns: bool,
+@@ -1467,7 +1478,10 @@
+         lock.deleted_contents.clone()
+     }
+ 
+-    #[expect(clippy::too_many_arguments, reason = "configuration snapshot carries explicit global settings")]
++    #[expect(
++        clippy::too_many_arguments,
++        reason = "configuration snapshot carries explicit global settings"
++    )]
+     pub async fn update_config(
+         &self,
+         id: i64,
+@@ -1835,7 +1849,10 @@
+             .await
+     }
+ 
+-    pub async fn remove_user_servers(&self, user_id: i64) -> Result<(), crate::metrics::MetricCapacityError> {
++    pub async fn remove_user_servers(
++        &self,
++        user_id: i64,
++    ) -> Result<(), crate::metrics::MetricCapacityError> {
+         let stale_ids = {
+             let lock = self.inner.read();
+             lock.all_servers
+@@ -1855,7 +1872,10 @@
+         Ok(())
+     }
+ 
+-    pub async fn remove_server(&self, server_id: i64) -> Result<(), crate::metrics::MetricCapacityError> {
++    pub async fn remove_server(
++        &self,
++        server_id: i64,
++    ) -> Result<(), crate::metrics::MetricCapacityError> {
+         self.replace_servers_snapshot(
+             std::iter::once(server_id).collect(),
+             Vec::new(),
+@@ -2417,9 +2437,13 @@
+ 
+         assert!(!crate::metrics::METRICS.servers.contains_key(&removed_id));
+         assert!(crate::metrics::METRICS.servers.contains_key(&readded_id));
+-        let removed = crate::metrics::METRICS.find_server(removed_id).expect("installed instance");
++        let removed = crate::metrics::METRICS
++            .find_server(removed_id)
++            .expect("installed instance");
+         let removed_instance = removed.instance_id;
+-        let readded = crate::metrics::METRICS.find_server(readded_id).expect("installed instance");
++        let readded = crate::metrics::METRICS
++            .find_server(readded_id)
++            .expect("installed instance");
+         drop(removed);
+ 
+         let sample = crate::metrics::METRICS
+@@ -2588,7 +2612,8 @@
+                 None,
+                 None,
+             )
+-            .await.expect("configuration installs");
++            .await
++            .expect("configuration installs");
+     }
+ 
+     #[tokio::test]
+@@ -2806,7 +2831,8 @@
+                     sample_rate: 1.0,
+                 }),
+             )
+-            .await.expect("configuration installs");
++            .await
++            .expect("configuration installs");
+ 
+         let snapshot = store.get_hot_path_snapshot_sync();
+         assert!(snapshot.is_on);
+@@ -2882,7 +2908,8 @@
+ 
+         store
+             .cache_server_route("*.example.com".to_string(), server, lb)
+-            .await.expect("configuration installs");
++            .await
++            .expect("configuration installs");
+ 
+         for host in ["example.com", "www.example.com", "a.b.example.com"] {
+             assert_eq!(
+@@ -2915,7 +2942,8 @@
+ 
+         store
+             .cache_server_route("*.example.com".to_string(), server, lb)
+-            .await.expect("configuration installs");
++            .await
++            .expect("configuration installs");
+ 
+         for host in ["example.com", "www.example.com", "a.b.example.com"] {
+             assert_eq!(
+@@ -3022,7 +3050,8 @@
+                 None,
+                 None,
+             )
+-            .await.expect("configuration installs");
++            .await
++            .expect("configuration installs");
+ 
+         assert_eq!(
+             store
+@@ -3136,7 +3165,8 @@
+                 None,
+                 None,
+             )
+-            .await.expect("configuration installs");
++            .await
++            .expect("configuration installs");
+ 
+         let route = store
+             .inspect_tls_route_sync("rancher.mymya.cn", 443)
+@@ -3231,7 +3261,8 @@
+                 None,
+                 None,
+             )
+-            .await.expect("configuration installs");
++            .await
++            .expect("configuration installs");
+ 
+         assert!(store.has_any_sni_passthrough_sync());
+         let route = store
+@@ -3316,7 +3347,8 @@
+                 None,
+                 None,
+             )
+-            .await.expect("configuration installs");
++            .await
++            .expect("configuration installs");
+ 
+         assert!(store.has_any_quic_passthrough_sync());
+         assert_eq!(
+@@ -3411,7 +3443,8 @@
+                 None,
+                 None,
+             )
+-            .await.expect("configuration installs");
++            .await
++            .expect("configuration installs");
+ 
+         assert!(store.has_any_quic_passthrough_sync());
+         assert_eq!(
+@@ -3502,7 +3535,8 @@
+                 None,
+                 None,
+             )
+-            .await.expect("configuration installs");
++            .await
++            .expect("configuration installs");
+ 
+         assert_eq!(
+             store
+@@ -3613,7 +3647,8 @@
+                 None,
+                 None,
+             )
+-            .await.expect("configuration installs");
++            .await
++            .expect("configuration installs");
+ 
+         assert_eq!(
+             store
+@@ -3698,7 +3733,8 @@
+                 None,
+                 None,
+             )
+-            .await.expect("configuration installs");
++            .await
++            .expect("configuration installs");
+ 
+         assert_eq!(
+             store
+--- a/src/h3_downstream.rs
++++ b/src/h3_downstream.rs
+@@ -1,4 +1,5 @@
+ use std::net::SocketAddr as StdSocketAddr;
++use std::task::{Context, Poll, Waker};
+ use std::time::Duration;
+ 
+ use async_trait::async_trait;
+@@ -14,7 +15,6 @@
+ use pingora_core::{Error, ErrorType, Result as PingoraResult};
+ use pingora_http::{RequestHeader, ResponseHeader};
+ use tokio::sync::Mutex;
+-use tracing::debug;
+ 
+ pub struct H3DownstreamSession<S>
+ where
+@@ -30,6 +30,10 @@
+     write_timeout: Option<Duration>,
+     total_drain_timeout: Option<Duration>,
+     body_done: bool,
++    data_done: bool,
++    trailers_seen: bool,
++    prefetched_body: Option<Bytes>,
++    body_error: Option<Box<Error>>,
+     response_done: bool,
+     body_bytes_read: usize,
+     body_bytes_sent: usize,
+@@ -59,6 +63,10 @@
+             write_timeout: None,
+             total_drain_timeout: None,
+             body_done: false,
++            data_done: false,
++            trailers_seen: false,
++            prefetched_body: None,
++            body_error: None,
+             response_done: false,
+             body_bytes_read: 0,
+             body_bytes_sent: 0,
+@@ -67,51 +75,62 @@
+         })
+     }
+ 
++    // poll_recv_data(None) can mean trailers rather than FIN. Complete the
++    // trailer parser too, so delayed or malformed trailing frames never prove
++    // that an HTTP/3 request is safely bodyless for a shared cache key.
++    fn poll_body_chunk(&mut self, cx: &mut Context<'_>) -> Poll<PingoraResult<Option<Bytes>>> {
++        let stream = self.stream.get_mut();
++        if !self.data_done {
++            match std::task::ready!(stream.poll_recv_data(cx)) {
++                Ok(Some(mut chunk)) => {
++                    let len = chunk.remaining();
++                    return Poll::Ready(Ok(Some(chunk.copy_to_bytes(len))));
++                }
++                Ok(None) => self.data_done = true,
++                Err(err) => return Poll::Ready(Err(Self::body_read_error(err))),
++            }
++        }
++        match std::task::ready!(stream.poll_recv_trailers(cx)) {
++            Ok(trailers) => {
++                self.trailers_seen = trailers.is_some();
++                self.body_done = true;
++                Poll::Ready(Ok(None))
++            }
++            Err(err) => Poll::Ready(Err(Self::body_read_error(err))),
++        }
++    }
++
++    fn body_read_error(err: h3::error::StreamError) -> Box<Error> {
++        Error::explain(
++            ErrorType::ReadError,
++            format!("reading HTTP/3 request body: {err}"),
++        )
++    }
++
+     async fn recv_body_chunk(&mut self) -> PingoraResult<Option<Bytes>> {
+-        if self.body_done {
+-            return Ok(None);
+-        }
+-
+-        debug!("recv_body_chunk ENTER");
+-        let mut stream = self.stream.lock().await;
+-        debug!("recv_body_chunk LOCKED");
+-        let result = if let Some(timeout) = self.read_timeout {
+-            match tokio::time::timeout(timeout, stream.recv_data()).await {
+-                Ok(result) => result,
+-                Err(_) => {
+-                    return Error::e_explain(
+-                        ErrorType::ReadTimedout,
+-                        "reading HTTP/3 request body",
+-                    );
+-                }
+-            }
++        if let Some(err) = self.body_error.take() {
++            return Err(err);
++        }
++        let bytes = if let Some(bytes) = self.prefetched_body.take() {
++            bytes
+         } else {
+-            stream.recv_data().await
++            if self.body_done {
++                return Ok(None);
++            }
++            let timeout = self.read_timeout;
++            let receive = futures_util::future::poll_fn(|cx| self.poll_body_chunk(cx));
++            let chunk = if let Some(timeout) = timeout {
++                tokio::time::timeout(timeout, receive).await.map_err(|_| {
++                    Error::explain(ErrorType::ReadTimedout, "reading HTTP/3 request body")
++                })??
++            } else {
++                receive.await?
++            };
++            let Some(bytes) = chunk else {
++                return Ok(None);
++            };
++            bytes
+         };
+-        debug!(
+-            is_eof = matches!(&result, Ok(None)),
+-            "recv_body_chunk COMPLETE"
+-        );
+-        drop(stream);
+-
+-        let Some(mut chunk) = result.map_err(|err| {
+-            Error::explain(
+-                ErrorType::ReadError,
+-                format!("reading HTTP/3 request body: {err}"),
+-            )
+-        })?
+-        else {
+-            self.body_done = true;
+-            return Ok(None);
+-        };
+-
+-        let mut out = BytesMut::with_capacity(chunk.remaining());
+-        while chunk.has_remaining() {
+-            out.extend_from_slice(chunk.chunk());
+-            let remaining = chunk.remaining();
+-            chunk.advance(remaining);
+-        }
+-        let bytes = out.freeze();
+         self.body_bytes_read = self.body_bytes_read.saturating_add(bytes.len());
+         if let Some(buffer) = self.retry_buffer.as_mut() {
+             if buffer.len().saturating_add(bytes.len()) <= 64 * 1024 {
+@@ -125,9 +144,7 @@
+ 
+     async fn send_response(&mut self, resp: &ResponseHeader, end: bool) -> PingoraResult<()> {
+         let response = build_h3_response(resp)?;
+-        debug!(status = resp.status.as_u16(), end, "send_response ENTER");
+-        let mut stream = self.stream.lock().await;
+-        debug!("send_response LOCKED");
++        let stream = self.stream.get_mut();
+         let send_result = if let Some(timeout) = self.write_timeout {
+             tokio::time::timeout(timeout, stream.send_response(response))
+                 .await
+@@ -137,14 +154,12 @@
+         } else {
+             stream.send_response(response).await
+         };
+-        debug!("send_response COMPLETE");
+         send_result.map_err(|err| {
+             Error::explain(
+                 ErrorType::WriteError,
+                 format!("writing HTTP/3 response header: {err}"),
+             )
+         })?;
+-        drop(stream);
+ 
+         self.response_written = Some(resp.clone());
+         if end {
+@@ -155,9 +170,7 @@
+ 
+     async fn send_body(&mut self, data: Bytes) -> PingoraResult<()> {
+         self.body_bytes_sent = self.body_bytes_sent.saturating_add(data.len());
+-        debug!(bytes = data.len(), "send_body ENTER");
+-        let mut stream = self.stream.lock().await;
+-        debug!("send_body LOCKED");
++        let stream = self.stream.get_mut();
+         let send_result = if let Some(timeout) = self.write_timeout {
+             tokio::time::timeout(timeout, stream.send_data(data))
+                 .await
+@@ -167,7 +180,6 @@
+         } else {
+             stream.send_data(data).await
+         };
+-        debug!("send_body COMPLETE");
+         send_result.map_err(|err| {
+             Error::explain(
+                 ErrorType::WriteError,
+@@ -237,8 +249,7 @@
+ 
+     async fn write_trailers(&mut self, trailers: HeaderMap) -> PingoraResult<()> {
+         self.stream
+-            .lock()
+-            .await
++            .get_mut()
+             .send_trailers(trailers)
+             .await
+             .map_err(|err| {
+@@ -251,7 +262,6 @@
+     }
+ 
+     async fn response_duplex_vec(&mut self, tasks: Vec<HttpTask>) -> PingoraResult<bool> {
+-        debug!(tasks = tasks.len(), "response_duplex_vec ENTER");
+         let mut done = false;
+         for task in tasks {
+             match task {
+@@ -280,7 +290,6 @@
+                 HttpTask::Failed(err) => return Err(err),
+             }
+         }
+-        debug!(done, "response_duplex_vec EXIT");
+         Ok(done)
+     }
+ 
+@@ -324,8 +333,7 @@
+ 
+     async fn shutdown(&mut self, _code: u32, _ctx: &str) {
+         self.stream
+-            .lock()
+-            .await
++            .get_mut()
+             .stop_stream(Code::H3_REQUEST_CANCELLED);
+     }
+ 
+@@ -337,24 +345,44 @@
+         if self.response_done {
+             return Ok(());
+         }
+-        debug!("finish ENTER");
+-        self.stream.lock().await.finish().await.map_err(|err| {
++        self.stream.get_mut().finish().await.map_err(|err| {
+             Error::explain(
+                 ErrorType::WriteError,
+                 format!("finishing HTTP/3 response: {err}"),
+             )
+         })?;
+-        debug!("finish COMPLETE");
+         self.response_done = true;
+         Ok(())
+     }
+ 
+     fn is_body_empty(&mut self) -> bool {
+-        // HTTP/3 request headers do not carry an end-of-stream bit into this
+-        // custom session.  Content-Length: 0 and a GET without Content-Length
+-        // therefore do not prove that no DATA frame will follow.  Only the
+-        // request stream's observed end marker is authoritative.
+-        self.body_bytes_read == 0 && self.body_done
++        if self.body_bytes_read != 0
++            || self.prefetched_body.is_some()
++            || self.body_error.is_some()
++            || self.trailers_seen
++        {
++            return false;
++        }
++        if self.body_done {
++            return true;
++        }
++        // Cache admission is synchronous. Probe only already available frames;
++        // never wait for an upload or infer FIN from GET/Content-Length: 0.
++        // A later read polls again with its own waker. Any prefetched bytes or
++        // error remain owned by this session and are delivered exactly once.
++        let mut cx = Context::from_waker(Waker::noop());
++        match self.poll_body_chunk(&mut cx) {
++            Poll::Ready(Ok(None)) => !self.trailers_seen,
++            Poll::Ready(Ok(Some(bytes))) => {
++                self.prefetched_body = Some(bytes);
++                false
++            }
++            Poll::Ready(Err(err)) => {
++                self.body_error = Some(err);
++                false
++            }
++            Poll::Pending => false,
++        }
+     }
+ 
+     async fn read_body_or_idle(&mut self, no_body_expected: bool) -> PingoraResult<Option<Bytes>> {
+@@ -466,11 +494,9 @@
+         req.insert_header(http::header::HOST, authority.as_str())?;
+     }
+ 
+-    for (name, value) in parts.headers {
+-        if let Some(name) = name
+-            && !is_h3_forbidden_response_header(name.as_str())
+-        {
+-            req.append_header(name, value)?;
++    for (name, value) in &parts.headers {
++        if !is_h3_forbidden_response_header(name.as_str()) {
++            req.append_header(name.clone(), value.clone())?;
+         }
+     }
+ 
+@@ -495,7 +521,7 @@
+ 
+ fn is_h3_forbidden_response_header(name: &str) -> bool {
+     matches!(
+-        name.to_ascii_lowercase().as_str(),
++        name,
+         "connection"
+             | "keep-alive"
+             | "proxy-connection"
+@@ -505,3 +531,232 @@
+             | "upgrade"
+     )
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use std::sync::Arc;
++
++    type Downstream = H3DownstreamSession<h3_quinn::BidiStream<Bytes>>;
++    type ClientStream = h3::client::RequestStream<h3_quinn::BidiStream<Bytes>, Bytes>;
++
++    struct Pair {
++        _server: quinn::Endpoint,
++        _client: quinn::Endpoint,
++        _sender: h3::client::SendRequest<h3_quinn::OpenStreams, Bytes>,
++        drivers: Vec<tokio::task::JoinHandle<()>>,
++    }
++
++    impl Drop for Pair {
++        fn drop(&mut self) {
++            for driver in &self.drivers {
++                driver.abort();
++            }
++            self._client.close(0u32.into(), b"test complete");
++            self._server.close(0u32.into(), b"test complete");
++        }
++    }
++
++    async fn pair(request: Request<()>) -> (Downstream, ClientStream, Pair) {
++        let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
++        let certs =
++            rustls_pemfile::certs(&mut include_bytes!("../tests/testdata/h3/cert.pem").as_slice())
++                .collect::<std::result::Result<Vec<_>, _>>()
++                .unwrap();
++        let key = rustls_pemfile::private_key(
++            &mut include_bytes!("../tests/testdata/h3/key.pem").as_slice(),
++        )
++        .unwrap()
++        .unwrap();
++        let mut server_tls = rustls::ServerConfig::builder_with_provider(provider.clone())
++            .with_protocol_versions(&[&rustls::version::TLS13])
++            .unwrap()
++            .with_no_client_auth()
++            .with_single_cert(certs, key)
++            .unwrap();
++        server_tls.alpn_protocols = vec![b"h3".to_vec()];
++        let server = quinn::Endpoint::server(
++            quinn::ServerConfig::with_crypto(Arc::new(
++                quinn::crypto::rustls::QuicServerConfig::try_from(server_tls).unwrap(),
++            )),
++            "127.0.0.1:0".parse().unwrap(),
++        )
++        .unwrap();
++        let addr = server.local_addr().unwrap();
++        let mut roots = rustls::RootCertStore::empty();
++        for cert in rustls_pemfile::certs(
++            &mut include_bytes!("../pingora-main/pingora-core/examples/keys/server/cert.pem")
++                .as_slice(),
++        ) {
++            roots.add(cert.unwrap()).unwrap();
++        }
++        let mut client_tls = rustls::ClientConfig::builder_with_provider(provider)
++            .with_protocol_versions(&[&rustls::version::TLS13])
++            .unwrap()
++            .with_root_certificates(roots)
++            .with_no_client_auth();
++        client_tls.alpn_protocols = vec![b"h3".to_vec()];
++        let mut client = quinn::Endpoint::client("127.0.0.1:0".parse().unwrap()).unwrap();
++        client.set_default_client_config(quinn::ClientConfig::new(Arc::new(
++            quinn::crypto::rustls::QuicClientConfig::try_from(client_tls).unwrap(),
++        )));
++        let (server_conn, client_conn) = tokio::join!(
++            async { server.accept().await.unwrap().await.unwrap() },
++            async {
++                client
++                    .connect(addr, "openrusty.org")
++                    .unwrap()
++                    .await
++                    .unwrap()
++            }
++        );
++        let remote = server_conn.remote_address();
++        let server_builder = h3::server::builder();
++        let (server_h3, client_h3) = tokio::join!(
++            server_builder.build(h3_quinn::Connection::new(server_conn)),
++            h3::client::new(h3_quinn::Connection::new(client_conn))
++        );
++        let mut server_h3 = server_h3.unwrap();
++        let (mut client_driver, mut sender) = client_h3.unwrap();
++        let client_driver = tokio::spawn(async move {
++            let _ = client_driver.wait_idle().await;
++        });
++        let stream = sender.send_request(request).await.unwrap();
++        let (request, downstream) = server_h3
++            .accept()
++            .await
++            .unwrap()
++            .unwrap()
++            .resolve_request()
++            .await
++            .unwrap();
++        let server_driver = tokio::spawn(async move {
++            while let Ok(Some(resolver)) = server_h3.accept().await {
++                let (_, mut stream) = resolver.resolve_request().await.unwrap();
++                stream.stop_stream(Code::H3_REQUEST_REJECTED);
++            }
++        });
++        (
++            Downstream::new(request, downstream, remote, addr).unwrap(),
++            stream,
++            Pair {
++                _server: server,
++                _client: client,
++                _sender: sender,
++                drivers: vec![client_driver, server_driver],
++            },
++        )
++    }
++
++    fn get(content_length: Option<&str>) -> Request<()> {
++        let mut request = Request::builder().uri("https://openrusty.org/cache");
++        if let Some(length) = content_length {
++            request = request.header("content-length", length);
++        }
++        request.body(()).unwrap()
++    }
++
++    async fn wait_for_probe(session: &mut Downstream) {
++        tokio::time::timeout(Duration::from_secs(2), async {
++            loop {
++                session.is_body_empty();
++                if session.body_done
++                    || session.prefetched_body.is_some()
++                    || session.body_error.is_some()
++                {
++                    break;
++                }
++                tokio::time::sleep(Duration::from_millis(1)).await;
++            }
++        })
++        .await
++        .unwrap();
++    }
++
++    #[tokio::test]
++    async fn h3_bodyless_cache_proof_requires_fin_not_method_or_content_length() {
++        for length in [None, Some("0")] {
++            let (mut session, mut client, _pair) = pair(get(length)).await;
++            assert!(!session.is_body_empty());
++            assert!(!session.is_body_done());
++            client.finish().await.unwrap();
++            wait_for_probe(&mut session).await;
++            assert!(session.is_body_empty());
++            assert!(session.is_body_done());
++            assert!(session.read_body_bytes().await.unwrap().is_none());
++        }
++    }
++
++    #[tokio::test]
++    async fn h3_cache_probe_preserves_body_and_retry_accounting_even_with_false_zero_length() {
++        for length in [None, Some("0")] {
++            let (mut session, mut client, _pair) = pair(get(length)).await;
++            let body = Bytes::from(vec![0x5a; 16 * 1024]);
++            client.send_data(body.clone()).await.unwrap();
++            client.finish().await.unwrap();
++            wait_for_probe(&mut session).await;
++            assert!(!session.is_body_empty());
++            assert_eq!(session.body_bytes_read(), 0);
++            session.enable_retry_buffering();
++            let mut received = Vec::new();
++            while let Some(chunk) = session.read_body_bytes().await.unwrap() {
++                received.extend_from_slice(&chunk);
++            }
++            assert_eq!(received.as_slice(), body.as_ref());
++            assert_eq!(session.body_bytes_read(), body.len());
++            assert_eq!(session.get_retry_buffer().unwrap(), body);
++            assert!(!session.is_body_empty());
++        }
++    }
++
++    #[tokio::test]
++    async fn h3_cache_probe_does_not_admit_trailers_or_lose_resets() {
++        let (mut session, mut client, _pair) = pair(get(None)).await;
++        let mut trailers = HeaderMap::new();
++        trailers.insert("authorization", "trailer-only".parse().unwrap());
++        client.send_trailers(trailers).await.unwrap();
++        client.finish().await.unwrap();
++        wait_for_probe(&mut session).await;
++        assert!(session.is_body_done());
++        assert!(!session.is_body_empty());
++
++        let (mut session, mut client, _pair) = pair(get(None)).await;
++        client.stop_stream(Code::H3_REQUEST_CANCELLED);
++        wait_for_probe(&mut session).await;
++        assert!(!session.is_body_empty());
++        assert!(session.read_body_bytes().await.is_err());
++    }
++
++    #[tokio::test]
++    async fn h3_body_timeout_preserves_stream_for_later_fin() {
++        let (mut session, mut client, _pair) = pair(get(None)).await;
++        session.set_read_timeout(Some(Duration::from_millis(5)));
++        assert!(session.read_body_bytes().await.is_err());
++        assert!(!session.is_body_empty());
++        client.finish().await.unwrap();
++        session.set_read_timeout(Some(Duration::from_secs(2)));
++        assert!(session.read_body_bytes().await.unwrap().is_none());
++        assert!(session.is_body_empty());
++    }
++
++    #[test]
++    fn h3_request_adapter_preserves_duplicate_headers() {
++        let mut request = get(None);
++        request
++            .headers_mut()
++            .append("x-repeat", "one".parse().unwrap());
++        request
++            .headers_mut()
++            .append("x-repeat", "two".parse().unwrap());
++        request
++            .headers_mut()
++            .append("cookie", "a=1".parse().unwrap());
++        request
++            .headers_mut()
++            .append("cookie", "b=2".parse().unwrap());
++        let header = build_request_header(request).unwrap();
++        assert_eq!(header.headers.get_all("x-repeat").iter().count(), 2);
++        assert_eq!(header.headers.get_all("cookie").iter().count(), 2);
++        assert_eq!(header.headers[http::header::HOST], "openrusty.org");
++    }
++}
+--- a/src/proxy.rs
++++ b/src/proxy.rs
+@@ -9706,7 +9706,9 @@
+             // Cache-key selection runs before the request body is forwarded.
+             // H3 is represented by a custom session whose RequestHeader looks
+             // like HTTP/1.1, so its DATA stream cannot be inferred from the
+-            // header map.  For H2, only a header with END_STREAM already set
++            // header map. Its adapter proves emptiness from the real stream
++            // and retains any prefetched bytes/errors for the forwarding path.
++            // For H2, only a header with END_STREAM already set
+             // proves that a body is absent; an explicit Content-Length is
+             // intentionally rejected because Pingora's early H2
+             // `is_body_empty` result treats CL: 0 as empty before a later
+@@ -9720,7 +9722,8 @@
+             } else {
+                 false
+             };
+-            if ctx.is_http3_downstream || h2_body_is_ambiguous {
++            let h3_body_is_ambiguous = ctx.is_http3_downstream && !session.as_mut().is_body_empty();
++            if h3_body_is_ambiguous || h2_body_is_ambiguous {
+                 Self::disable_request_cache(session, ctx, "ProtocolBodyNotProvenEmpty");
+                 return Ok(());
+             }
+--- a/src/quic_udp_demux.rs
++++ b/src/quic_udp_demux.rs
+@@ -1431,7 +1431,16 @@
+         }
+ 
+         let has_pending_route = shared.pending_routes.contains_key(&client_addr);
+-        if !has_pending_route
++        // On a native-only port Quinn owns QUIC/ALPN validation and Retry.
++        // There is no forwarding decision to infer by decrypting ClientHello
++        // a second time, nor any incomplete-hello state to allocate. Keep the
++        // global route/queue bounds above, and the adaptive per-IP gate when
++        // pressure rises. Mixed forwarding ports retain their original gate.
++        let native_h3_route = http3_enabled
++            && pressure_level == crate::l4_defense::L4PressureLevel::Normal
++            && self.config_store.udp_port_has_no_forwarding_sync(port);
++        if !native_h3_route
++            && !has_pending_route
+             && is_new_route_rate_limited(
+                 &shared.new_route_windows,
+                 client_addr.ip(),
+@@ -1458,8 +1467,13 @@
+             return Ok(UdpIngressDatagramStatus::Full);
+         }
+ 
+-        let route = self
+-            .classify_new_route(ClassifyRouteArgs {
++        let route = if native_h3_route {
++            Some((
++                RouteKind::Http3(Arc::new(AtomicU64::new(udp_activity_now_ms()))),
++                vec![data],
++            ))
++        } else {
++            self.classify_new_route(ClassifyRouteArgs {
+                 port,
+                 client_addr,
+                 data,
+@@ -1475,11 +1489,12 @@
+                 quic_cid_tx: shared.quic_cid_tx.clone(),
+                 pressure_level,
+             })
+-            .await?;
++            .await?
++        };
+         let Some((route, datagrams)) = route else {
+             return Ok(UdpIngressDatagramStatus::NoRoute);
+         };
+-        if !has_pending_route {
++        if !native_h3_route && !has_pending_route {
+             record_new_route_for_ip(&shared.new_route_windows, client_addr.ip());
+         }
+         shared.routes.insert(client_addr, route.clone());
+@@ -2298,9 +2313,7 @@
+             api_config: api_config.clone(),
+             challenge_key,
+             cert_selector: cert_selector.clone(),
+-            waf_verifier: Arc::new(crate::firewall::verifier::WafVerifier::new(
+-                &challenge_key,
+-            )),
++            waf_verifier: Arc::new(crate::firewall::verifier::WafVerifier::new(&challenge_key)),
+             tls_downstream: false,
+         };
+         let http3_manager = crate::http3_proxy_manager::Http3ProxyManager::new(
+@@ -2816,6 +2829,67 @@
+         }
+ 
+         assert!(is_new_route_rate_limited(&windows, ip, high_limit));
++    }
++
++    #[tokio::test]
++    async fn native_h3_routes_do_not_exhaust_a_nat_address_window() {
++        let manager = test_demux_manager(ConfigStore::new());
++        let (shared, mut h3_rx, _cid_rx) = new_demux_shared_state(1);
++        let (downstream_tx, _downstream_rx) = mpsc::channel(1);
++        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
++        let sender = UdpDownstreamSender::channel("127.0.0.1:443".parse().unwrap(), downstream_tx);
++        // More than the old 128 routes/10s, with one source IP. Validation
++        // belongs to Quinn: the demux must not decrypt/buffer a second hello.
++        for port in 10000..10256 {
++            let peer = SocketAddr::from(([203, 0, 113, 201], port));
++            let status = manager
++                .process_datagram_with_downstream(ProcessDatagramArgs {
++                    port: 443,
++                    client_addr: peer,
++                    data: Bytes::from_static(b"native QUIC"),
++                    ecn: Some(3),
++                    downstream_sender: sender.clone(),
++                    shared: &shared,
++                    http3_enabled: true,
++                    shutdown_rx: shutdown_rx.clone(),
++                })
++                .await
++                .unwrap();
++            assert!(matches!(status, UdpIngressDatagramStatus::Sent));
++            let packet = h3_rx.try_recv().unwrap();
++            assert_eq!(packet.from, peer);
++            assert_eq!(packet.ecn, Some(3));
++            drop(packet);
++        }
++        assert_eq!(shared.routes.len(), 256);
++        assert!(shared.pending_routes.is_empty());
++        assert_eq!(shared.pending_reassembly_bytes.load(Ordering::Acquire), 0);
++        assert!(shared.new_route_windows.is_empty());
++        assert_eq!(shared.h3_queued_bytes.load(Ordering::Acquire), 0);
++
++        // The native path still uses the bounded queue and reports overflow.
++        let peer = "203.0.113.201:11000".parse().unwrap();
++        for expected_full in [false, true] {
++            let status = manager
++                .process_datagram_with_downstream(ProcessDatagramArgs {
++                    port: 443,
++                    client_addr: peer,
++                    data: Bytes::from_static(b"native QUIC"),
++                    ecn: None,
++                    downstream_sender: sender.clone(),
++                    shared: &shared,
++                    http3_enabled: true,
++                    shutdown_rx: shutdown_rx.clone(),
++                })
++                .await
++                .unwrap();
++            assert_eq!(
++                matches!(status, UdpIngressDatagramStatus::Full),
++                expected_full
++            );
++        }
++        drop(h3_rx.try_recv().unwrap());
++        assert_eq!(shared.h3_queued_bytes.load(Ordering::Acquire), 0);
+     }
+ 
+     #[test]
+@@ -2977,7 +3051,8 @@
+                 None,
+                 None,
+             )
+-            .await.expect("configuration installs");
++            .await
++            .expect("configuration installs");
+ 
+         let client_hello = crate::quic_probe::QuicClientHello {
+             server_name: Some("other.example.com".to_string()),

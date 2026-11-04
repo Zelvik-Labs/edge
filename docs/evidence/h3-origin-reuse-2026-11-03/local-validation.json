@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "origin_base_format_edits": 0,
+  "origin_changed_files_formatted": [
+    "src/origin_h3.rs",
+    "src/origin_h3_pool.rs",
+    "src/origin_h3_tests.rs"
+  ],
+  "runtime_preexisting_format_edits_preserved": 1,
+  "runtime_new_format_edits": 0,
+  "local_rust_compilation": false,
+  "tests_written_not_yet_executed": 7,
+  "scope": "syntax/format only; Rust typechecking, wire assertions and native gates pending CI"
+}

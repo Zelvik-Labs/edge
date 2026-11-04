@@ -1,0 +1,892 @@
+[
+  {
+    "concurrency": 1,
+    "round": 1,
+    "engine": "readiness",
+    "bytes": 1024,
+    "completed_roundtrips": 46623,
+    "fds": 18,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 1,
+    "round": 1,
+    "engine": "readiness",
+    "bytes": 65536,
+    "completed_roundtrips": 24991,
+    "fds": 18,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 1,
+    "round": 1,
+    "engine": "readiness",
+    "bytes": 1048576,
+    "completed_roundtrips": 1771,
+    "fds": 18,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 1,
+    "round": 1,
+    "engine": "uring",
+    "bytes": 1024,
+    "completed_roundtrips": 22681,
+    "fds": 20,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-4514",
+      "iou-wrk-4514",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 8,
+    "io_wq_threads": 2,
+    "worker_report": {
+      "accepted": 1,
+      "rejected": 0,
+      "completed": 1,
+      "abandoned_receivers": 0,
+      "submit_calls": 181451,
+      "completions": 181452
+    },
+    "submit_calls_per_roundtrip": 8.000132269300295,
+    "cqes_per_submit": 1.0000055111297266
+  },
+  {
+    "concurrency": 1,
+    "round": 1,
+    "engine": "uring",
+    "bytes": 65536,
+    "completed_roundtrips": 9975,
+    "fds": 20,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-4532",
+      "iou-wrk-4532",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 8,
+    "io_wq_threads": 2,
+    "worker_report": {
+      "accepted": 1,
+      "rejected": 0,
+      "completed": 1,
+      "abandoned_receivers": 0,
+      "submit_calls": 80438,
+      "completions": 80438
+    },
+    "submit_calls_per_roundtrip": 8.063959899749374,
+    "cqes_per_submit": 1.0
+  },
+  {
+    "concurrency": 1,
+    "round": 1,
+    "engine": "uring",
+    "bytes": 1048576,
+    "completed_roundtrips": 1561,
+    "fds": 20,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-4547",
+      "iou-wrk-4547",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 8,
+    "io_wq_threads": 2,
+    "worker_report": {
+      "accepted": 1,
+      "rejected": 0,
+      "completed": 1,
+      "abandoned_receivers": 0,
+      "submit_calls": 43532,
+      "completions": 43532
+    },
+    "submit_calls_per_roundtrip": 27.887251761691225,
+    "cqes_per_submit": 1.0
+  },
+  {
+    "concurrency": 1,
+    "round": 2,
+    "engine": "uring",
+    "bytes": 1024,
+    "completed_roundtrips": 25411,
+    "fds": 20,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-4577",
+      "iou-wrk-4577",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 8,
+    "io_wq_threads": 2,
+    "worker_report": {
+      "accepted": 1,
+      "rejected": 0,
+      "completed": 1,
+      "abandoned_receivers": 0,
+      "submit_calls": 203294,
+      "completions": 203294
+    },
+    "submit_calls_per_roundtrip": 8.00023611821652,
+    "cqes_per_submit": 1.0
+  },
+  {
+    "concurrency": 1,
+    "round": 2,
+    "engine": "uring",
+    "bytes": 65536,
+    "completed_roundtrips": 14805,
+    "fds": 20,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-4589",
+      "iou-wrk-4589",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 8,
+    "io_wq_threads": 2,
+    "worker_report": {
+      "accepted": 1,
+      "rejected": 0,
+      "completed": 1,
+      "abandoned_receivers": 0,
+      "submit_calls": 119332,
+      "completions": 119332
+    },
+    "submit_calls_per_roundtrip": 8.060249915569065,
+    "cqes_per_submit": 1.0
+  },
+  {
+    "concurrency": 1,
+    "round": 2,
+    "engine": "uring",
+    "bytes": 1048576,
+    "completed_roundtrips": 1095,
+    "fds": 20,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-4608",
+      "iou-wrk-4608",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 8,
+    "io_wq_threads": 2,
+    "worker_report": {
+      "accepted": 1,
+      "rejected": 0,
+      "completed": 1,
+      "abandoned_receivers": 0,
+      "submit_calls": 30912,
+      "completions": 30912
+    },
+    "submit_calls_per_roundtrip": 28.23013698630137,
+    "cqes_per_submit": 1.0
+  },
+  {
+    "concurrency": 1,
+    "round": 2,
+    "engine": "readiness",
+    "bytes": 1024,
+    "completed_roundtrips": 101227,
+    "fds": 18,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 1,
+    "round": 2,
+    "engine": "readiness",
+    "bytes": 65536,
+    "completed_roundtrips": 16275,
+    "fds": 18,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 1,
+    "round": 2,
+    "engine": "readiness",
+    "bytes": 1048576,
+    "completed_roundtrips": 1981,
+    "fds": 18,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 1,
+    "round": 3,
+    "engine": "readiness",
+    "bytes": 1024,
+    "completed_roundtrips": 149325,
+    "fds": 18,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 1,
+    "round": 3,
+    "engine": "readiness",
+    "bytes": 65536,
+    "completed_roundtrips": 16275,
+    "fds": 18,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 1,
+    "round": 3,
+    "engine": "readiness",
+    "bytes": 1048576,
+    "completed_roundtrips": 547,
+    "fds": 18,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 1,
+    "round": 3,
+    "engine": "uring",
+    "bytes": 1024,
+    "completed_roundtrips": 19321,
+    "fds": 20,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-4751",
+      "iou-wrk-4751",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 8,
+    "io_wq_threads": 2,
+    "worker_report": {
+      "accepted": 1,
+      "rejected": 0,
+      "completed": 1,
+      "abandoned_receivers": 0,
+      "submit_calls": 154572,
+      "completions": 154572
+    },
+    "submit_calls_per_roundtrip": 8.000207028621707,
+    "cqes_per_submit": 1.0
+  },
+  {
+    "concurrency": 1,
+    "round": 3,
+    "engine": "uring",
+    "bytes": 65536,
+    "completed_roundtrips": 22261,
+    "fds": 20,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-4772",
+      "iou-wrk-4772",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 8,
+    "io_wq_threads": 2,
+    "worker_report": {
+      "accepted": 1,
+      "rejected": 0,
+      "completed": 1,
+      "abandoned_receivers": 0,
+      "submit_calls": 179482,
+      "completions": 179482
+    },
+    "submit_calls_per_roundtrip": 8.062620726831678,
+    "cqes_per_submit": 1.0
+  },
+  {
+    "concurrency": 1,
+    "round": 3,
+    "engine": "uring",
+    "bytes": 1048576,
+    "completed_roundtrips": 1771,
+    "fds": 20,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-4793",
+      "iou-wrk-4793",
+      "iou-wrk-4793",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 9,
+    "io_wq_threads": 3,
+    "worker_report": {
+      "accepted": 1,
+      "rejected": 0,
+      "completed": 1,
+      "abandoned_receivers": 0,
+      "submit_calls": 58757,
+      "completions": 58758
+    },
+    "submit_calls_per_roundtrip": 33.17730095990966,
+    "cqes_per_submit": 1.0000170192487703
+  },
+  {
+    "concurrency": 16,
+    "round": 1,
+    "engine": "readiness",
+    "bytes": 1024,
+    "completed_roundtrips": 196560,
+    "fds": 138,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 16,
+    "round": 1,
+    "engine": "readiness",
+    "bytes": 65536,
+    "completed_roundtrips": 53328,
+    "fds": 138,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 16,
+    "round": 1,
+    "engine": "readiness",
+    "bytes": 1048576,
+    "completed_roundtrips": 2096,
+    "fds": 138,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 16,
+    "round": 1,
+    "engine": "uring",
+    "bytes": 1024,
+    "completed_roundtrips": 123472,
+    "fds": 140,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-4870",
+      "iou-wrk-4870",
+      "iou-wrk-4870",
+      "iou-wrk-4870",
+      "iou-wrk-4870",
+      "iou-wrk-4870",
+      "iou-wrk-4870",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 13,
+    "io_wq_threads": 7,
+    "worker_report": {
+      "accepted": 16,
+      "rejected": 0,
+      "completed": 16,
+      "abandoned_receivers": 0,
+      "submit_calls": 258963,
+      "completions": 987727
+    },
+    "submit_calls_per_roundtrip": 2.097341907476999,
+    "cqes_per_submit": 3.8141626409950455
+  },
+  {
+    "concurrency": 16,
+    "round": 1,
+    "engine": "uring",
+    "bytes": 65536,
+    "completed_roundtrips": 49968,
+    "fds": 140,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-4893",
+      "iou-wrk-4893",
+      "iou-wrk-4893",
+      "iou-wrk-4893",
+      "iou-wrk-4893",
+      "iou-wrk-4893",
+      "iou-wrk-4893",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 13,
+    "io_wq_threads": 7,
+    "worker_report": {
+      "accepted": 16,
+      "rejected": 0,
+      "completed": 16,
+      "abandoned_receivers": 0,
+      "submit_calls": 156438,
+      "completions": 400885
+    },
+    "submit_calls_per_roundtrip": 3.130763688760807,
+    "cqes_per_submit": 2.562580702898273
+  },
+  {
+    "concurrency": 16,
+    "round": 1,
+    "engine": "uring",
+    "bytes": 1048576,
+    "completed_roundtrips": 4368,
+    "fds": 140,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-4919",
+      "iou-wrk-4919",
+      "iou-wrk-4919",
+      "iou-wrk-4919",
+      "iou-wrk-4919",
+      "iou-wrk-4919",
+      "iou-wrk-4919",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 13,
+    "io_wq_threads": 7,
+    "worker_report": {
+      "accepted": 16,
+      "rejected": 0,
+      "completed": 16,
+      "abandoned_receivers": 0,
+      "submit_calls": 71863,
+      "completions": 102981
+    },
+    "submit_calls_per_roundtrip": 16.452152014652015,
+    "cqes_per_submit": 1.4330183821994629
+  },
+  {
+    "concurrency": 16,
+    "round": 2,
+    "engine": "uring",
+    "bytes": 1024,
+    "completed_roundtrips": 126832,
+    "fds": 140,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-4954",
+      "iou-wrk-4954",
+      "iou-wrk-4954",
+      "iou-wrk-4954",
+      "iou-wrk-4954",
+      "iou-wrk-4954",
+      "iou-wrk-4954",
+      "iou-wrk-4954",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 14,
+    "io_wq_threads": 8,
+    "worker_report": {
+      "accepted": 16,
+      "rejected": 0,
+      "completed": 16,
+      "abandoned_receivers": 0,
+      "submit_calls": 279083,
+      "completions": 1014613
+    },
+    "submit_calls_per_roundtrip": 2.2004147218367605,
+    "cqes_per_submit": 3.635524198894236
+  },
+  {
+    "concurrency": 16,
+    "round": 2,
+    "engine": "uring",
+    "bytes": 65536,
+    "completed_roundtrips": 31696,
+    "fds": 140,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-4978",
+      "iou-wrk-4978",
+      "iou-wrk-4978",
+      "iou-wrk-4978",
+      "iou-wrk-4978",
+      "iou-wrk-4978",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 12,
+    "io_wq_threads": 6,
+    "worker_report": {
+      "accepted": 16,
+      "rejected": 0,
+      "completed": 16,
+      "abandoned_receivers": 0,
+      "submit_calls": 111108,
+      "completions": 254281
+    },
+    "submit_calls_per_roundtrip": 3.50542655224634,
+    "cqes_per_submit": 2.288593080606257
+  },
+  {
+    "concurrency": 16,
+    "round": 2,
+    "engine": "uring",
+    "bytes": 1048576,
+    "completed_roundtrips": 1200,
+    "fds": 140,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-5000",
+      "iou-wrk-5000",
+      "iou-wrk-5000",
+      "iou-wrk-5000",
+      "iou-wrk-5000",
+      "iou-wrk-5000",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 12,
+    "io_wq_threads": 6,
+    "worker_report": {
+      "accepted": 16,
+      "rejected": 0,
+      "completed": 16,
+      "abandoned_receivers": 0,
+      "submit_calls": 18962,
+      "completions": 27855
+    },
+    "submit_calls_per_roundtrip": 15.801666666666666,
+    "cqes_per_submit": 1.4689906128045565
+  },
+  {
+    "concurrency": 16,
+    "round": 2,
+    "engine": "readiness",
+    "bytes": 1024,
+    "completed_roundtrips": 189840,
+    "fds": 138,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 16,
+    "round": 2,
+    "engine": "readiness",
+    "bytes": 65536,
+    "completed_roundtrips": 46608,
+    "fds": 138,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 16,
+    "round": 2,
+    "engine": "readiness",
+    "bytes": 1048576,
+    "completed_roundtrips": 2096,
+    "fds": 138,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 16,
+    "round": 3,
+    "engine": "readiness",
+    "bytes": 1024,
+    "completed_roundtrips": 193200,
+    "fds": 138,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 16,
+    "round": 3,
+    "engine": "readiness",
+    "bytes": 65536,
+    "completed_roundtrips": 53328,
+    "fds": 138,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 16,
+    "round": 3,
+    "engine": "readiness",
+    "bytes": 1048576,
+    "completed_roundtrips": 2096,
+    "fds": 138,
+    "threads": [
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 5,
+    "io_wq_threads": 0
+  },
+  {
+    "concurrency": 16,
+    "round": 3,
+    "engine": "uring",
+    "bytes": 1024,
+    "completed_roundtrips": 79792,
+    "fds": 140,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-5127",
+      "iou-wrk-5127",
+      "iou-wrk-5127",
+      "iou-wrk-5127",
+      "iou-wrk-5127",
+      "iou-wrk-5127",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 12,
+    "io_wq_threads": 6,
+    "worker_report": {
+      "accepted": 16,
+      "rejected": 0,
+      "completed": 16,
+      "abandoned_receivers": 0,
+      "submit_calls": 182621,
+      "completions": 638356
+    },
+    "submit_calls_per_roundtrip": 2.2887131542009223,
+    "cqes_per_submit": 3.495523515915475
+  },
+  {
+    "concurrency": 16,
+    "round": 3,
+    "engine": "uring",
+    "bytes": 65536,
+    "completed_roundtrips": 43248,
+    "fds": 140,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-5151",
+      "iou-wrk-5151",
+      "iou-wrk-5151",
+      "iou-wrk-5151",
+      "iou-wrk-5151",
+      "iou-wrk-5151",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 12,
+    "io_wq_threads": 6,
+    "worker_report": {
+      "accepted": 16,
+      "rejected": 0,
+      "completed": 16,
+      "abandoned_receivers": 0,
+      "submit_calls": 144322,
+      "completions": 346837
+    },
+    "submit_calls_per_roundtrip": 3.337079171291158,
+    "cqes_per_submit": 2.403216418841202
+  },
+  {
+    "concurrency": 16,
+    "round": 3,
+    "engine": "uring",
+    "bytes": 1048576,
+    "completed_roundtrips": 2096,
+    "fds": 140,
+    "threads": [
+      "edge-uring",
+      "iou-wrk-5174",
+      "iou-wrk-5174",
+      "iou-wrk-5174",
+      "iou-wrk-5174",
+      "iou-wrk-5174",
+      "iou-wrk-5174",
+      "iou-wrk-5174",
+      "iou-wrk-5174",
+      "splice-uring",
+      "splice-uring",
+      "splice-uring",
+      "tokio-rt-worker",
+      "tokio-rt-worker"
+    ],
+    "thread_count": 14,
+    "io_wq_threads": 8,
+    "worker_report": {
+      "accepted": 16,
+      "rejected": 0,
+      "completed": 16,
+      "abandoned_receivers": 0,
+      "submit_calls": 33007,
+      "completions": 48173
+    },
+    "submit_calls_per_roundtrip": 15.747614503816793,
+    "cqes_per_submit": 1.4594782924834127
+  }
+]

@@ -1,0 +1,31 @@
+{
+  "included_in_capacity": false,
+  "qualified_for_comparison": false,
+  "reason": "baseline HIT has lost samples; retry all four profiles under matching lower-frequency larger-buffer settings",
+  "profiles": [
+    {
+      "phase": "before",
+      "file": ".local/h3-stage2/profiles-before-initial/0001-h3-hit-reuse.perf-flat.txt",
+      "lost_samples": 16,
+      "sha256": "d7cda0fd86a5ce048da5c1fbd97a963d76de567afe5918ffbd4a576fbff8b0e1"
+    },
+    {
+      "phase": "before",
+      "file": ".local/h3-stage2/profiles-before-initial/0000-h3-off-reuse.perf-flat.txt",
+      "lost_samples": 0,
+      "sha256": "54669c3b774b70f0e15f5a799935286fbf44a7bcdcd9b13e2bc7f31018a8c677"
+    },
+    {
+      "phase": "after",
+      "file": ".local/h3-stage2/profiles-after-initial/0001-h3-hit-reuse.perf-flat.txt",
+      "lost_samples": 0,
+      "sha256": "c1824c17bf641197644ff682f6b65563b86a5d0ca889e0846ec3a75d558b20b7"
+    },
+    {
+      "phase": "after",
+      "file": ".local/h3-stage2/profiles-after-initial/0000-h3-off-reuse.perf-flat.txt",
+      "lost_samples": 0,
+      "sha256": "5b3389c9c77f1083471535ae162d882e194eecfaf9a14c8dd335305e64025808"
+    }
+  ]
+}

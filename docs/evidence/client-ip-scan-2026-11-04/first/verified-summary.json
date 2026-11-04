@@ -1,0 +1,305 @@
+{
+  "source": "dc7450a68739dead753097e80e79e2499bd0cda8",
+  "baseline": "c8df43c099200aff5aefcbb2858d64fb64aa9d69",
+  "differential_inputs": 75914,
+  "raw_blocks": 3200,
+  "max_host_steal_fraction": 0.0,
+  "allocations": {
+    "baseline": [
+      {
+        "case": "public-small",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-no-forward3",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-first4",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-second4",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-forwarded4",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-invalid4",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-priority4",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-large27",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-large-forward28",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "mapped-private4",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      }
+    ],
+    "candidate": [
+      {
+        "case": "public-small",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-no-forward3",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-first4",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-second4",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-forwarded4",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-invalid4",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-priority4",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-large27",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "private-large-forward28",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      },
+      {
+        "case": "mapped-private4",
+        "allocations": "0",
+        "reallocations": "0",
+        "bytes": "0",
+        "largest": "0"
+      }
+    ]
+  },
+  "cases": {
+    "public-small": {
+      "baseline_ns": 5.05969775,
+      "candidate_ns": 5.1379245000000004,
+      "paired_changes": [
+        0.017443507647760148,
+        -0.0006125057620637309,
+        0.5406228227134533,
+        -0.0025766975449856844,
+        0.024832323208292095,
+        0.0103825716123509,
+        -0.13980981695124517,
+        -0.004314733871843779
+      ],
+      "paired_median": 0.004885032925143584
+    },
+    "private-no-forward3": {
+      "baseline_ns": 168.33595825,
+      "candidate_ns": 52.971359,
+      "paired_changes": [
+        -0.6910114320798291,
+        -0.6872864776694612,
+        -0.6556763161634621,
+        -0.6915747009142698,
+        -0.6829544423560342,
+        -0.6934527328224305,
+        -0.7002090634744607,
+        -0.6826029940673342
+      ],
+      "paired_median": -0.6891489548746451
+    },
+    "private-first4": {
+      "baseline_ns": 79.07141225000001,
+      "candidate_ns": 79.88838675,
+      "paired_changes": [
+        -0.0022352751794507686,
+        0.009018397538316902,
+        0.06291092023311728,
+        0.008119716735492055,
+        0.012745292579136924,
+        0.010686650860975089,
+        -0.014690628245045412,
+        0.019824285414322906
+      ],
+      "paired_median": 0.009852524199645996
+    },
+    "private-second4": {
+      "baseline_ns": 89.06574575,
+      "candidate_ns": 109.53337175,
+      "paired_changes": [
+        0.17928526175312642,
+        0.17312580017702928,
+        0.28017863316383407,
+        0.2023930991553775,
+        0.2390924048949319,
+        0.2294221896771922,
+        0.2357456185443334,
+        0.2368840279828215
+      ],
+      "paired_median": 0.2325839041107628
+    },
+    "private-forwarded4": {
+      "baseline_ns": 145.8748545,
+      "candidate_ns": 126.71897899999999,
+      "paired_changes": [
+        -0.1449114608686798,
+        -0.1289782029842198,
+        -0.1003089001059525,
+        -0.15893497516624366,
+        -0.12756179730406103,
+        -0.1294374264426803,
+        -0.16434370768837947,
+        -0.13978896233420812
+      ],
+      "paired_median": -0.1346131943884442
+    },
+    "private-invalid4": {
+      "baseline_ns": 185.3447335,
+      "candidate_ns": 162.26382949999999,
+      "paired_changes": [
+        -0.1204993676559587,
+        -0.12332254515615337,
+        -0.13191002275421693,
+        -0.1553916189583756,
+        -0.11795613546189776,
+        -0.18392233711044548,
+        -0.12439428544250097,
+        -0.12134437842074575
+      ],
+      "paired_median": -0.12385841529932717
+    },
+    "private-priority4": {
+      "baseline_ns": 137.51109300000002,
+      "candidate_ns": 156.94440375,
+      "paired_changes": [
+        0.15231093052601197,
+        0.13399924969315613,
+        0.15766362635356446,
+        0.14293368069947254,
+        0.13978738378201006,
+        0.143908020145745,
+        0.13024452236049555,
+        0.13864527041912056
+      ],
+      "paired_median": 0.1413605322407413
+    },
+    "private-large27": {
+      "baseline_ns": 182.31145475,
+      "candidate_ns": 182.20524699999999,
+      "paired_changes": [
+        -0.00233117045014708,
+        0.0001675340203934894,
+        0.03318579678723088,
+        0.006032665406918936,
+        0.0014551869544576768,
+        -0.009287725042552486,
+        -0.022436152635779583,
+        -0.008089521159773239
+      ],
+      "paired_median": -0.0010818182148767952
+    },
+    "private-large-forward28": {
+      "baseline_ns": 130.83873749999998,
+      "candidate_ns": 130.878847,
+      "paired_changes": [
+        -0.013102895323034991,
+        -0.007986516527243248,
+        0.005844164133365082,
+        -0.011893557892463047,
+        0.010835686958704072,
+        -0.0005814080293320423,
+        0.07107885991849439,
+        0.004799946699445279
+      ],
+      "paired_median": 0.0021092693350566183
+    },
+    "mapped-private4": {
+      "baseline_ns": 149.43468825,
+      "candidate_ns": 128.65065425,
+      "paired_changes": [
+        -0.14845069161134616,
+        -0.13600369645915789,
+        -0.15934057532156054,
+        -0.15494282921451197,
+        -0.13872548009307017,
+        -0.1266203546760417,
+        -0.14640855017531118,
+        -0.15036454783233133
+      ],
+      "paired_median": -0.14742962089332867
+    }
+  }
+}

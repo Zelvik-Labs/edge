@@ -1,0 +1,52 @@
+name: Verify retained QUIC pacing evidence
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - .github/workflows/quinn-pacing-evidence.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Download unchanged failed traffic records
+        uses: actions/download-artifact@v4
+        with:
+          name: quinn-interop-7df4a6e402f9421d2db030a1d79ba95dcbd5fc8d
+          run-id: 41769962134
+          github-token: ${{ github.token }}
+          path: .local/pacing-verify/evidence
+      - name: Download the actual original executables and libraries
+        uses: actions/download-artifact@v4
+        with:
+          name: quinn-interop-binaries-7df4a6e402f9421d2db030a1d79ba95dcbd5fc8d
+          run-id: 41769962134
+          github-token: ${{ github.token }}
+          path: .local/pacing-verify/binaries
+      - name: Verify all transfers and relay observations without new traffic
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          suite = json.loads(Path('.local/pacing-verify/evidence/suite.json').read_text())
+          assert suite['source'] == '7df4a6e402f9421d2db030a1d79ba95dcbd5fc8d'
+          assert suite['build']['runtime_source'] == '82e3cf0db722497fb594acdcfabc645a6deb2b56'
+          assert suite['client_mode'] == 'pacing'
+          PY
+          python3 scripts/perf/quinn-interop/verify.py .local/pacing-verify/evidence .local/pacing-verify/binaries/quinn-diagnostic-binaries > .local/pacing-verify/verification.log
+      - name: Retain derived results and verification failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quinn-pacing-verification-${{ github.sha }}
+          path: |
+            .local/pacing-verify/verification.log
+            .local/pacing-verify/evidence/verified-summary.json
+            .local/pacing-verify/evidence/verified-records.json
+          include-hidden-files: true
+          if-no-files-found: error

@@ -1,0 +1,23 @@
+{
+  "binary": "/workspace/edge/.worktrees/perf-next/.local/architecture-implementation/baseline-Zelvik-Edge",
+  "sha256": "94e8026636a67c69c6abb2f70f5c5259ee54a1eee44353640f547a55a068f645",
+  "symbols": {
+    "drop": {
+      "address": 28680000,
+      "code_bytes": 518
+    },
+    "poll": {
+      "address": 28680528,
+      "code_bytes": 74234
+    }
+  },
+  "layouts": [
+    {
+      "vtable_address": 39238680,
+      "file_offset": 39230488,
+      "size_bytes": 5824,
+      "alignment": 8
+    }
+  ],
+  "layout_is_not_allocation_count_or_throughput": true
+}

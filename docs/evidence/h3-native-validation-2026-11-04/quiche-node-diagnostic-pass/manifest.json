@@ -1,0 +1,23 @@
+{
+  "artifact_id": 13250772857,
+  "archive": "raw.zip",
+  "archive_bytes": 106433,
+  "archive_sha256": "495b50725737fbcec1710ed40455630af0066549b0a28bd9523c441d3b8c902d",
+  "files": [
+    {
+      "path": "check.log",
+      "bytes": 2596,
+      "sha256": "afa743905430bd7792163eee6523ebe791f816daf0efb29b819cc67d3b71b5f0"
+    },
+    {
+      "path": "clippy.log",
+      "bytes": 685,
+      "sha256": "97da33e35bae6ea5ca5a79f3de0821ab7836e763f9067ccab9f67828a1f48bf2"
+    },
+    {
+      "path": "tests.log",
+      "bytes": 2409391,
+      "sha256": "0f8ffeaa978999d99f49785ea6afa814349a9dbc55dc10bf0f3e4e8886b962e3"
+    }
+  ]
+}

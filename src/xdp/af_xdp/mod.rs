@@ -759,6 +759,8 @@ mod bridge;
 mod dial;
 mod parser;
 #[cfg(target_os = "linux")]
+mod readiness;
+#[cfg(target_os = "linux")]
 mod splice;
 mod tcp_reactor;
 #[cfg(target_os = "linux")]

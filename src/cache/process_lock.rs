@@ -71,7 +71,7 @@ static DISABLED_LOGGED: AtomicBool = AtomicBool::new(false);
 /// configuration; with it gone, every deployment owns its roots exclusively
 /// and taking flock()s would only pay syscalls to exclude participants that
 /// cannot exist.
-fn process_locks_enabled() -> bool {
+pub(crate) fn process_locks_enabled() -> bool {
     #[cfg(test)]
     if FORCE_PROCESS_LOCKS.load(Ordering::Relaxed) {
         return true;
@@ -164,8 +164,7 @@ fn cache_process_roots(roots: &[PathBuf]) -> Vec<PathBuf> {
 }
 
 fn cache_process_barrier_path(root: &Path) -> PathBuf {
-    root.join(".zelvik-edge-cache-locks")
-        .join("barrier.lock")
+    root.join(".zelvik-edge-cache-locks").join("barrier.lock")
 }
 
 fn cache_process_key_path(root: &Path, key_hash: &str) -> PathBuf {

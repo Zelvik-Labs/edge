@@ -1,0 +1,19 @@
+{
+  "id": 13250758275,
+  "name": "http-state-binaries-a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a",
+  "size_in_bytes": 19390739,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13250758275",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13250758275/zip",
+  "expired": false,
+  "created_at": "2026-11-03T16:55:01Z",
+  "expires_at": "2027-02-01T15:35:02Z",
+  "updated_at": "2026-11-03T16:55:01Z",
+  "digest": "sha256:ba422c56d099b1978e075d2ec8d3d39b344b55bd75f3b87639daf555a95b0478",
+  "workflow_run": {
+    "id": 41665387055,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/five-priorities-20261103",
+    "head_sha": "a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a"
+  }
+}

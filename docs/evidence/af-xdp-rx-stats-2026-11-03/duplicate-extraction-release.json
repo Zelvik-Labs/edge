@@ -1,0 +1,9 @@
+{
+  "removed_duplicate_extraction": ".local/perf-round10-rx/udp-extracted",
+  "archive": "docs/evidence/af-xdp-rx-stats-2026-11-03/udp-raw.zip",
+  "archive_sha256": "55ec16a3f14eafe8ffd5d04c2fb017d8327e6f9f73855121e40007de4c5cf2d5",
+  "verified_files": 2202,
+  "released_file_bytes": 98301707,
+  "restore": "python3 -m zipfile -e docs/evidence/af-xdp-rx-stats-2026-11-03/udp-raw.zip .local/perf-round10-rx/udp-extracted",
+  "reason": "all raw bytes retained and verified; preserve compiler caches under physical disk headroom"
+}

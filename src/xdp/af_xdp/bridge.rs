@@ -1,6 +1,16 @@
 use super::*;
 
 #[cfg(target_os = "linux")]
+#[path = "affinity.rs"]
+mod affinity;
+
+#[cfg(any(test, target_os = "linux"))]
+#[path = "cooperation.rs"]
+mod cooperation;
+#[cfg(target_os = "linux")]
+use cooperation::cooperate_after_round;
+
+#[cfg(target_os = "linux")]
 use std::os::fd::{AsRawFd, BorrowedFd};
 
 #[derive(Clone, Debug, Default)]
@@ -602,29 +612,17 @@ pub async fn start_udp_bridge(quic_demux: Arc<crate::quic_udp_demux::QuicUdpDemu
     start_proxy_bridge_inner(quic_demux, None, None).await;
 }
 
-#[cfg(target_os = "linux")]
-pub(crate) fn pin_current_thread_to_cpu(cpu: u32) -> bool {
-    // SAFETY: `set` is zeroed before CPU_SET marks exactly one bit; pid 0
-    // targets the calling thread. cpu_set_t is a plain bitmask with no
-    // pointers.
-    unsafe {
-        let mut set: libc::cpu_set_t = std::mem::zeroed();
-        libc::CPU_ZERO(&mut set);
-        libc::CPU_SET(cpu as usize, &mut set);
-        libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &set) == 0
-    }
-}
-
 /// Resolve the CPU a queue reactor should pin to: explicit `cpus[]` entry
 /// aligned with `queues[]`, else round-robin the global queue ordinal over
-/// online CPUs.
+/// the supervisor's inherited CPU identities. Explicit entries retain their
+/// existing precedence; they are not silently remapped into the auto set.
 #[cfg(target_os = "linux")]
-pub(crate) fn af_xdp_queue_cpu(
+fn af_xdp_queue_cpu(
     config: &XdpConfig,
     interface: &str,
     queue: u32,
     ordinal: usize,
-    online_cpus: usize,
+    allowed_cpus: &affinity::CpuAffinity,
 ) -> u32 {
     if let Some(cfg) = config
         .interfaces
@@ -635,7 +633,7 @@ pub(crate) fn af_xdp_queue_cpu(
     {
         return *cpu;
     }
-    (ordinal % online_cpus.max(1)) as u32
+    allowed_cpus.automatic_cpu(ordinal)
 }
 
 /// Whether a generation's AF_XDP setup has reached its terminal state:
@@ -809,7 +807,16 @@ pub(crate) async fn spawn_queue_reactors(
         queue_handles.len()
     );
 
-    let online_cpus = num_cpus::get().max(1);
+    let allowed_cpus = match affinity::CpuAffinity::current() {
+        Ok(affinity) => Arc::new(affinity),
+        Err(error) => {
+            lease.retire();
+            manager.disable_proxy_redirect_for_fallback(format!(
+                "AF_XDP bridge cannot establish inherited CPU affinity: {error}; proxy workers were not started"
+            ));
+            return;
+        }
+    };
     let udp_routes = Arc::new(DashMap::new());
     // T4: one dial registry per bridge generation. Queues register their
     // request senders up-front so no dial window exists between redirect
@@ -930,7 +937,7 @@ pub(crate) async fn spawn_queue_reactors(
             &queue_handle.interface,
             queue_handle.queue,
             ordinal,
-            online_cpus,
+            &allowed_cpus,
         );
         let thread_name = format!("afxdp-{}-{}", queue_handle.interface, queue_handle.queue);
         let join_interface = queue_handle.interface.clone();
@@ -942,13 +949,15 @@ pub(crate) async fn spawn_queue_reactors(
         let ready = ready_tx.clone();
         let name = thread_name.clone();
         let worker_lease = ctx.lease.clone();
+        let worker_affinity = allowed_cpus.clone();
         worker_lease.worker_started();
         let join = match std::thread::Builder::new()
             .name(thread_name)
             .spawn(move || {
-                if !pin_current_thread_to_cpu(cpu) {
-                    tracing::warn!("{name}: failed to pin reactor thread to cpu {cpu}");
+                if let Err(error) = worker_affinity.pin_current_thread(cpu) {
+                    tracing::warn!(%error, "{name}: failed to pin reactor thread to cpu {cpu}");
                 }
+                drop(worker_affinity);
                 match tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
@@ -1238,22 +1247,22 @@ pub(crate) async fn run_queue_bridge_loop(
     // Event-driven idle wait sources. The socket is bound with
     // XDP_USE_NEED_WAKEUP, so a POLLIN poll on the fd is also what wakes
     // the NIC driver after fill-ring starvation — readability signals
-    // real RX. A dedicated thread does that blocking poll and pushes a
-    // coalesced wake: the previous AsyncFd/epoll registration let the
-    // socket's permanently-ready EPOLLOUT keep the tokio IO driver hot,
-    // so `readable()` resolved instantly every round and the queue
-    // thread spun at 100% CPU with zero useful work.
-    // Owned wake worker: an unjoined poller would keep its duplicated
-    // socket fd (and the kernel queue registration it pins) alive after
-    // teardown, so the guard must live for the whole run and be shut
-    // down + joined on every exit path.
-    let mut xsk_wake = {
-        match wake::AfXdpWakeWorker::start(
-            // SAFETY: the fd is borrowed only for the F_DUPFD_CLOEXEC
-            // inside start() — the queue handle keeps owning the socket.
-            unsafe { BorrowedFd::borrow_raw(queue_handle.rx.fd().as_raw_fd()) },
-            format!("xsk-wake-{}", queue_handle.queue),
-        ) {
+    // real RX. Keep those zero-time poll/fill wakeups in poll_raw_once
+    // with either wait mechanism. The default worker owns and joins its
+    // blocking poll thread. Explicit validation can instead register a
+    // duplicated socket with Tokio and retain readiness until RX is empty.
+    // The historical AsyncFd code swallowed errors and cleared readiness
+    // immediately; matched real-XSK tests do not support attributing the
+    // old spin to EPOLLOUT interest alone.
+    let wake_mode = crate::runtime_mode::validation_xsk_wake_mode();
+    let rx_stats_mode = crate::runtime_mode::validation_xsk_rx_stats();
+    let cooperative_idle = crate::runtime_mode::validation_idle_yield()
+        == crate::runtime_mode::XdpValidationIdleYield::Cooperative;
+    // SAFETY: both constructors borrow only while duplicating the fd;
+    // queue_handle owns the original socket throughout this scope.
+    let socket_fd = unsafe { BorrowedFd::borrow_raw(queue_handle.rx.fd().as_raw_fd()) };
+    let mut xsk_wake = if wake_mode == crate::runtime_mode::XdpValidationWakeMode::Worker {
+        match wake::AfXdpWakeWorker::start(socket_fd, format!("xsk-wake-{}", queue_handle.queue)) {
             Ok(worker) => Some(worker),
             Err(err) => {
                 lease.owner().disable_queue_redirect_for_fault(
@@ -1264,7 +1273,29 @@ pub(crate) async fn run_queue_bridge_loop(
                 return;
             }
         }
+    } else {
+        None
     };
+    let xsk_readiness = if wake_mode == crate::runtime_mode::XdpValidationWakeMode::Readable {
+        match readiness::AfXdpReadiness::register(socket_fd) {
+            Ok(registration) => Some(registration),
+            Err(err) => {
+                lease.owner().disable_queue_redirect_for_fault(
+                    &queue_handle.interface,
+                    queue_handle.queue,
+                    format!("xsk readiness registration failed: {err}"),
+                );
+                return;
+            }
+        }
+    } else {
+        None
+    };
+    // Declared after the registration, so cancellation drops the guard
+    // before its owned fd, then releases the queue and its UMEM.
+    let mut xsk_ready: Option<readiness::AfXdpReadinessGuard<'_>> = None;
+    tracing::info!(interface = %queue_handle.interface, queue = queue_handle.queue,
+        wake = wake_mode.as_str(), "AF_XDP queue wake mechanism ready");
     // Items consumed by an idle-wake channel recv are stashed here and
     // processed first at their normal drain sites.
     let mut early_downstream: std::collections::VecDeque<crate::udp_proxy::DownstreamUdpDatagram> =
@@ -1529,16 +1560,27 @@ pub(crate) async fn run_queue_bridge_loop(
             });
         }
         frames.clear();
-        // EN-17: `poll_raw_once` on a queue handle only ever yields frames
+        // EN-17: queue polling only ever yields frames
         // for this queue/interface — keep just the frame bytes instead of
         // allocating a `String` per packet on the RX path.
-        let poll_result = queue_handle.poll_raw_once(&mut |_interface, _queue, frame| {
-            frames.push(frame);
-        });
+        let mut collect = |_interface: &str, _queue: u32, frame: Vec<u8>| frames.push(frame);
+        let poll_result = match rx_stats_mode {
+            crate::runtime_mode::XdpValidationRxStats::Full => queue_handle
+                .poll_raw_once(&mut collect)
+                .map(linux::AfXdpRxObservation::from),
+            crate::runtime_mode::XdpValidationRxStats::Bridge => {
+                queue_handle.poll_bridge_once(&mut collect)
+            }
+        };
 
         let polled_packets = match poll_result {
             Ok(stats) => {
                 consecutive_poll_errors = 0;
+                if stats.rx_observed_empty
+                    && let Some(ready) = xsk_ready.take()
+                {
+                    ready.clear_after_empty();
+                }
                 stats.packets
             }
             Err(err) => {
@@ -2564,6 +2606,7 @@ pub(crate) async fn run_queue_bridge_loop(
         // this check a round that only deferred TX work would sleep up to
         // the 1s cap, blowing past the CoDel 5ms target and amplifying
         // TCP loss under TX backpressure.
+        let mut idle_waited = false;
         if proxy_bridge_should_idle(
             polled_packets,
             parsed_frames,
@@ -2594,7 +2637,7 @@ pub(crate) async fn run_queue_bridge_loop(
             // (e.g. per-queue `fwd_rx` for all but the first queue — its
             // sender is dropped by the iface_fwd map), which would turn
             // the idle wait into a hot loop on exactly those queues.
-            if wait > AF_XDP_IDLE_SPIN_THRESHOLD {
+            if wait > AF_XDP_IDLE_SPIN_THRESHOLD && xsk_ready.is_none() {
                 tokio::select! {
                     _ = tokio::time::sleep(wait) => {}
                     item = downstream_rx.recv(), if !downstream_rx.is_closed() => {
@@ -2618,6 +2661,26 @@ pub(crate) async fn run_queue_bridge_loop(
                         }
                     }
                     _ = wake_notify.notified() => {}
+                    result = async {
+                        match xsk_readiness.as_ref() {
+                            Some(registration) => registration.readable().await,
+                            None => std::future::pending().await,
+                        }
+                    } => {
+                        match result {
+                            Ok(ready) => xsk_ready = Some(ready),
+                            Err(err) => {
+                                lease.owner().disable_queue_redirect_for_fault(
+                                    &queue_handle.interface,
+                                    queue_handle.queue,
+                                    format!("xsk readiness wait failed: {err}"),
+                                );
+                                // Join the existing abort/RST teardown at
+                                // the top of the loop; never silently retry.
+                                wake_failed = true;
+                            }
+                        }
+                    }
                     _ = async {
                         match xsk_wake
                             .as_mut()
@@ -2630,13 +2693,13 @@ pub(crate) async fn run_queue_bridge_loop(
                         }
                     } => {}
                 }
+                idle_waited = true;
             }
         }
-        // The busy path above never awaits; without an explicit yield the
-        // current-thread runtime starves tokio::spawn'ed TCP/HTTP proxy
-        // tasks (sessions get ACKed by the smoltcp stack but no relay task
-        // is ever polled).
-        tokio::task::yield_now().await;
+        // The busy path still yields every round. Only an explicit validation
+        // mode can replace the extra yield after idle select with a bounded
+        // cooperative token; ready Notify events alone need not spend one.
+        cooperate_after_round(idle_waited, cooperative_idle).await;
     }
 }
 

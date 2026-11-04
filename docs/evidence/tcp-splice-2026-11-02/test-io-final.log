@@ -1,0 +1,72 @@
+      ┌─────────┐  mr boxington
+     ╱ ═══════ ╱│
+    ╱─────────╱ │
+    │ •    (◉)│≡│
+    │  ◟▄▄▄◞  │ ╱
+    │   ◀◆▶   │╱
+    └─────────┘
+   Compiling libc v0.2.191
+   Compiling serde_core v1.0.229
+   Compiling smallvec v1.15.2
+   Compiling lock_api v0.4.14
+   Compiling parking_lot_core v0.9.12
+   Compiling errno v0.3.14
+   Compiling crossbeam-epoch v0.9.21
+   Compiling zerocopy v0.8.56
+   Compiling serde v1.0.229
+   Compiling crossbeam-deque v0.8.7
+   Compiling signal-hook-registry v1.4.8
+   Compiling parking_lot v0.12.5
+   Compiling mio v1.2.2
+   Compiling socket2 v0.6.5
+   Compiling half v2.7.1
+   Compiling memchr v2.8.3
+   Compiling regex-syntax v0.8.11
+   Compiling clap_builder v4.6.7
+mbx[progress]: 15s elapsed; 0 hits, 0 misses, 0 bypassed, 18 not looked up; ~0.0s compiler work saved
+   Compiling serde_json v1.0.154
+   Compiling ciborium-ll v0.2.2
+   Compiling tokio v1.53.1
+mbx[progress]: 30s elapsed; 0 hits, 0 misses, 0 bypassed, 21 not looked up; ~0.0s compiler work saved
+   Compiling regex-automata v0.4.18
+mbx[progress]: 45s elapsed; 0 hits, 0 misses, 0 bypassed, 22 not looked up; ~0.0s compiler work saved
+   Compiling num-traits v0.2.19
+   Compiling rayon-core v1.13.0
+   Compiling rayon v1.12.0
+   Compiling alloca v0.4.0
+   Compiling plotters v0.3.7
+   Compiling regex v1.13.1
+mbx[progress]: 60s elapsed; 0 hits, 0 misses, 0 bypassed, 28 not looked up; ~0.0s compiler work saved
+   Compiling ciborium v0.2.2
+   Compiling tinytemplate v1.2.1
+   Compiling clap v4.6.7
+   Compiling page_size v0.6.0
+   Compiling criterion v0.8.2
+   Compiling zelvik-edge-io v0.1.0 (/workspace/edge/.worktrees/perf-next/crates/zelvik-edge-io)
+mbx[progress]: 75s elapsed; 0 hits, 0 misses, 0 bypassed, 34 not looked up; ~0.0s compiler work saved
+    Finished `test` profile [optimized] target(s) in 1m 25s
+     Running unittests src/lib.rs (/workspace/edge/target/debug/deps/zelvik_edge_io-32d32316b5dda832)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/splice.rs (/workspace/edge/target/debug/deps/splice-455f7a76df9fcd3a)
+
+running 5 tests
+test client_half_close_preserves_the_delayed_origin_response ... ok
+test abort_closes_owned_sockets_and_drops_both_observers ... ok
+test duplex_progress_does_not_require_a_blocking_worker ... ok
+test payloads_larger_than_the_pipe_drain_exactly_in_both_directions ... ok
+test read_deadline_remains_an_observable_read_error ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests zelvik_edge_io
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+mbx[cache]: 0 hits, 0 misses, 36 not looked up, 1 bypassed; 0 B downloaded, 0 B uploaded, 138.8 MiB stored locally
+mbx[savings]: has quietly disposed of 10.9 GiB logical of build leftovers. nobody saw anything.

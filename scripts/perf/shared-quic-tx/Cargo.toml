@@ -1,0 +1,17 @@
+[package]
+name = "shared-quic-tx-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+libc = "=0.2.191"
+socket2 = { version = "=0.6.5", features = ["all"] }
+tokio = { version = "=1.53.1", features = ["rt", "macros", "net", "time"] }
+quinn-udp = "=0.5.15"
+
+[[bin]]
+name = "shared-quic-tx-probe"
+path = "../../../benches/support/quic_shared_tx_probe.rs"

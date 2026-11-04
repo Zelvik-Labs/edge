@@ -1,0 +1,19 @@
+{
+  "id": 13270917323,
+  "name": "afxdp-node-fe89411dfaf86dd2547f6714ed8435803277c3a4",
+  "size_in_bytes": 137127,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13270917323",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13270917323/zip",
+  "expired": false,
+  "created_at": "2026-11-03T21:05:57Z",
+  "expires_at": "2027-02-01T20:22:54Z",
+  "updated_at": "2026-11-03T21:05:57Z",
+  "digest": "sha256:032ccbde3776234bd0b61b02f4dd68e17b0efd7503b0975cbb00a6990cb7066d",
+  "workflow_run": {
+    "id": 41712030753,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/program-wide-20261104",
+    "head_sha": "fe89411dfaf86dd2547f6714ed8435803277c3a4"
+  }
+}

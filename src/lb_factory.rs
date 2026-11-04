@@ -621,6 +621,60 @@ pub struct BackendExtension {
     pub oss_backend: Option<crate::oss_origin::OssBackend>,
 }
 
+/// Installed with the backend snapshot. Request-dependent SNI, follow-port,
+/// TLS verification and PROXY identity are applied by the request path.
+#[derive(Clone, Debug)]
+pub(crate) struct PreparedOriginPeer {
+    pub address: Arc<str>,
+    pub peer: pingora_core::upstreams::peer::HttpPeer,
+}
+
+pub(crate) fn configure_origin_peer_options(
+    peer: &mut pingora_core::upstreams::peer::HttpPeer,
+    ext: Option<&BackendExtension>,
+) {
+    peer.options.tcp_keepalive = Some(pingora_core::protocols::l4::ext::TcpKeepalive {
+        idle: Duration::from_secs(60),
+        interval: Duration::from_secs(10),
+        count: 3,
+        #[cfg(target_os = "linux")]
+        user_timeout: Duration::ZERO,
+    });
+    peer.options.connection_timeout = Some(
+        ext.and_then(|e| e.connection_timeout)
+            .unwrap_or(Duration::from_secs(15)),
+    );
+    peer.options.idle_timeout = Some(
+        ext.and_then(|e| e.idle_timeout)
+            .unwrap_or(Duration::from_secs(120)),
+    );
+    peer.options.read_timeout = ext.and_then(|e| e.read_timeout);
+    peer.options.write_timeout = ext.and_then(|e| e.write_timeout);
+}
+
+fn prepare_origin_peer(backend: &mut Backend) {
+    let Some(address) = backend.addr.as_inet() else {
+        return;
+    };
+    let ext = backend.ext.get::<BackendExtension>();
+    let Some(ext) = ext else {
+        return;
+    };
+    let mut peer =
+        pingora_core::upstreams::peer::HttpPeer::new(*address, ext.use_tls, String::new());
+    configure_origin_peer_options(&mut peer, Some(ext));
+    if !ext.proxy_protocol.enabled() {
+        peer.options.custom_l4 = Some(crate::proxy::shared_origin_l4_connector(
+            peer.options.connection_timeout.expect("configured above"),
+        ));
+    }
+    let prepared = PreparedOriginPeer {
+        address: Arc::from(backend.to_string()),
+        peer,
+    };
+    backend.ext.insert(prepared);
+}
+
 pub fn build_lb(
     server_id: i64,
     rp_cfg: &ReverseProxyConfig,
@@ -854,6 +908,7 @@ fn build_origin_lb(
             oss_backend: None,
         });
         backend.ext = ext;
+        prepare_origin_peer(&mut backend);
         backend.weight = origin.weight.max(1) as usize;
         endpoints.push(backend);
 
@@ -1056,6 +1111,7 @@ fn fallback_lb() -> (Arc<AnyLoadBalancer>, bool) {
         oss_backend: None,
     });
     b.ext = ext;
+    prepare_origin_peer(&mut b);
     let mut set = BTreeSet::new();
     set.insert(b);
     let backends = Backends::new(Static::new(set));
@@ -1102,6 +1158,7 @@ fn unsupported_origin_backend(
         oss_backend: None,
     });
     backend.ext = ext;
+    prepare_origin_peer(&mut backend);
     backend.weight = origin.weight.max(1) as usize;
     Some(backend)
 }
@@ -1167,6 +1224,7 @@ fn oss_origin_backend(
         oss_backend: Some(oss_backend),
     });
     backend.ext = ext;
+    prepare_origin_peer(&mut backend);
     backend.weight = origin.weight.max(1) as usize;
     Some(backend)
 }
@@ -1357,6 +1415,7 @@ pub fn build_parent_lb(
                     oss_backend: None,
                 });
                 backend.ext = ext;
+                prepare_origin_peer(&mut backend);
                 backend.weight = node.weight.max(1) as usize;
                 endpoints.push(backend);
             }
@@ -1459,17 +1518,21 @@ fn origin_addr_host(addr: &crate::config_models::FlexibleAddr) -> String {
 }
 
 pub(crate) fn strip_addr_port(value: &str) -> String {
+    strip_addr_port_ref(value).to_string()
+}
+
+pub(crate) fn strip_addr_port_ref(value: &str) -> &str {
     if let Some(rest) = value.strip_prefix('[')
         && let Some(end) = rest.find(']')
     {
-        return rest[..end].to_string();
+        return &rest[..end];
     }
     if value.matches(':').count() == 1
         && let Some((host, _)) = value.rsplit_once(':')
     {
-        return host.to_string();
+        return host;
     }
-    value.to_string()
+    value
 }
 
 fn is_local_addr(addr: &str) -> bool {
@@ -1689,6 +1752,44 @@ mod tests {
             reverse_proxy_request_host(&cfg, &addr),
             "origin.example.com"
         );
+    }
+
+    #[test]
+    fn prepared_origin_keeps_configuration_snapshot_and_proxy_identity_separate() {
+        let mut cfg = rp_cfg(2, "origin.example.test");
+        cfg.primary_origins.push(origin(
+            FlexibleAddr::String("https://127.0.0.1:9443".to_string()),
+            "",
+        ));
+        let (lb, _) = build_origin_pool(1, &cfg, true, None);
+        let backend = lb.select(b"", 16).unwrap();
+        let prepared = backend.ext.get::<PreparedOriginPeer>().unwrap();
+        assert_eq!(prepared.address.as_ref(), "127.0.0.1:9443");
+        assert!(prepared.peer.is_tls());
+        assert!(prepared.peer.sni.is_empty());
+        assert!(prepared.peer.options.custom_l4.is_some());
+        assert_eq!(
+            prepared.peer.options.connection_timeout,
+            Some(Duration::from_secs(15))
+        );
+        let mut request = prepared.peer.clone();
+        request.sni = "request.example.test".to_string();
+        request.options.verify_cert = false;
+        assert!(prepared.peer.options.verify_cert);
+        assert!(prepared.peer.sni.is_empty());
+        cfg.proxy_protocol.is_on = true;
+        let (next_lb, _) = build_origin_pool(1, &cfg, true, None);
+        let next = next_lb.select(b"", 16).unwrap();
+        assert!(
+            next.ext
+                .get::<PreparedOriginPeer>()
+                .unwrap()
+                .peer
+                .options
+                .custom_l4
+                .is_none()
+        );
+        assert!(prepared.peer.options.custom_l4.is_some());
     }
 
     #[test]

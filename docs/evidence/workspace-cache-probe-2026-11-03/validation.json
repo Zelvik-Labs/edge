@@ -1,0 +1,37 @@
+{
+  "passed": true,
+  "source_commit": "d73308e04d8ffeeece0eb2dbc422e32a9d4fd28e",
+  "observations": [
+    {
+      "label": "first",
+      "cache_hit": "false",
+      "restored_fingerprint_files": 0,
+      "initial_source_mtime_ns": 1793683540817767876,
+      "source_later_than_restored_fingerprints": false,
+      "initial_fresh": {
+        "edge_cache_probe": false,
+        "edge-cache-probe": false
+      },
+      "same_job_unchanged_fresh": {
+        "edge_cache_probe": true,
+        "edge-cache-probe": true
+      }
+    },
+    {
+      "label": "second",
+      "cache_hit": "true",
+      "restored_fingerprint_files": 8,
+      "initial_source_mtime_ns": 1793683939677644622,
+      "source_later_than_restored_fingerprints": true,
+      "initial_fresh": {
+        "edge_cache_probe": false,
+        "edge-cache-probe": false
+      },
+      "same_job_unchanged_fresh": {
+        "edge_cache_probe": true,
+        "edge-cache-probe": true
+      }
+    }
+  ],
+  "scope": "independent raw compiler-message/source-hash/control checks. Program stdout was asserted at runtime by the workflow and not retained. Fresh checkout timestamps are a clue; no complete Edge build-speed or stale-source guarantee is inferred."
+}

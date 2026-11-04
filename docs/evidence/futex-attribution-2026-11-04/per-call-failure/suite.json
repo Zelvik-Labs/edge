@@ -1,0 +1,56 @@
+{
+  "source": "2fde11a06f315aa35482aebb294cf206c4c8254f",
+  "client_source_revision": "a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a",
+  "client_source_sha256": "528394d1d89ee1830e483a20afae2d244742cf48828845ffffcac429c9185e3b",
+  "orders": [
+    [
+      "edge",
+      "pingora"
+    ],
+    [
+      "pingora",
+      "edge"
+    ]
+  ],
+  "scope": "Futex operation and userspace caller attribution under ptrace; all timing excluded from capacity comparison, no wait duration or per-component CPU attribution",
+  "source_hashes": {
+    "scripts/perf/futex-stacks/helper.py": "51312600829d3d615393eba560936becfe4d3a2279636bd940c0fc7fe68f9bb6",
+    "scripts/perf/futex-stacks/driver.py": "246da0bafd605ffc6245d9937404324400af9db0f21ccb3636a8e9dd49b61ff6",
+    "scripts/perf/futex-stacks/evidence.py": "fecc09faf068f483a2ae15fdfb155da65e1b9fe176d1bd7b77926b33a3bff270",
+    "scripts/perf/futex-stacks/Dockerfile": "052c5d48959600e18e9996604066b5bf31cbc5b43d06b6628bb6b407b61d45ef",
+    "scripts/perf/futex-stacks/test_parser.py": "94d1a010abb62d0c7101b7b97be1fd089af72f13a1e5d87de9eb12986a840b07",
+    "scripts/perf/framework-syscalls/driver.py": "a6ed287351d272b8dad468a905db95347d125699165f943e02718afe6b3a4de2",
+    "scripts/perf/framework-syscalls/evidence.py": "731167678fdb310cfabc9ec3d4cd33fef2b5f402e2fc6f6a732eb7844d61a093",
+    "scripts/perf/afxdp-node/syscall_profile.py": "a15805165e61b2d6c198dc81249185b8ed2c9ba6679b22066de5300b4b975ece"
+  },
+  "images": {
+    "nginx:1.28.0": {
+      "id": "sha256:34e04bb6b4bb37d45845842374be0cd181723daffb230849b1984aaeaa96faba",
+      "repo_digests": [
+        "nginx@sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609"
+      ]
+    },
+    "openresty/openresty:1.27.1.2-0-bookworm-fat": {
+      "id": "sha256:a122f8f9c6f368bc1d3a89437051db5936a8869734dfcadc566e8d34dc0e72e2",
+      "repo_digests": [
+        "openresty/openresty@sha256:9a7fc041a1ff93cca037875ed664e549e923d97bd5a968c6e9ac4fb28d897464"
+      ]
+    },
+    "edge-http-state-fixture:20261103": {
+      "id": "sha256:8b5b65de39859ff1c9718a63df061b334769a238a843691b7315442f189db507",
+      "repo_digests": []
+    },
+    "edge-futex-sidecar:20261104": {
+      "id": "sha256:d852cb9f4f183e45c0b0c11fb81933f535aff30c355bd06a89060a40d65c7fa7",
+      "repo_digests": []
+    }
+  },
+  "runs": [
+    {
+      "round": 0,
+      "target": "edge",
+      "manifest": "round-0-edge/manifest.json",
+      "exit": 1
+    }
+  ]
+}

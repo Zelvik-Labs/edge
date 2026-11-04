@@ -1,0 +1,92 @@
+--- before/src/h3_downstream.rs
++++ regression-tests/src/h3_downstream.rs
+@@ -739,6 +739,54 @@
+         assert!(session.is_body_empty());
+     }
+ 
++    #[tokio::test]
++    async fn h3_retry_regression_trailers_keep_the_body_end_marker() {
++        let (mut session, mut client, _pair) = pair(get(None)).await;
++        session.enable_retry_buffering();
++        let mut trailers = HeaderMap::new();
++        trailers.insert("authorization", "trailer-only".parse().unwrap());
++        client.send_trailers(trailers).await.unwrap();
++        client.finish().await.unwrap();
++        wait_for_probe(&mut session).await;
++        assert!(session.is_body_done());
++        assert!(!session.is_body_empty());
++        // Pingora needs an initial pipe task when FIN was already consumed
++        // and trailers prohibit the body-empty cache-admission shortcut.
++        assert!(session.get_retry_buffer().unwrap().is_empty());
++    }
++
++    #[tokio::test]
++    async fn h3_retry_regression_truncation_never_exposes_a_partial_replay() {
++        let (mut session, mut client, _pair) = pair(get(None)).await;
++        session.enable_retry_buffering();
++        let prefix = Bytes::from(vec![0x5a; 64 * 1024]);
++        client.send_data(prefix.clone()).await.unwrap();
++        let mut received = Vec::new();
++        while received.len() < prefix.len() {
++            let chunk = session.read_body_bytes().await.unwrap().unwrap();
++            received.extend_from_slice(&chunk);
++        }
++        assert_eq!(session.get_retry_buffer().unwrap(), prefix);
++        assert!(!session.retry_buffer_truncated());
++        client.send_data(Bytes::from_static(b"x")).await.unwrap();
++        assert_eq!(session.read_body_bytes().await.unwrap().unwrap().as_ref(), b"x");
++        assert!(session.retry_buffer_truncated());
++        assert!(session.get_retry_buffer().is_none());
++        assert!(session.retry_buffer.as_ref().unwrap().is_empty());
++        client.send_data(Bytes::from_static(b"tail")).await.unwrap();
++        client.finish().await.unwrap();
++        while session.read_body_bytes().await.unwrap().is_some() {
++            assert!(session.get_retry_buffer().is_none());
++            assert!(session.retry_buffer.as_ref().unwrap().is_empty());
++        }
++        assert_eq!(session.body_bytes_read(), prefix.len() + 5);
++        assert!(session.retry_buffer_truncated());
++        assert!(session.get_retry_buffer().is_none());
++        session.enable_retry_buffering();
++        assert!(!session.retry_buffer_truncated());
++        assert!(session.get_retry_buffer().unwrap().is_empty());
++    }
++
+     #[test]
+     fn h3_request_adapter_preserves_duplicate_headers() {
+         let mut request = get(None);
+--- before/src/proxy.rs
++++ regression-tests/src/proxy.rs
+@@ -12870,6 +12870,32 @@
+         }
+     }
+ 
++    #[cfg(unix)]
++    #[tokio::test]
++    async fn h3_retry_regression_final_empty_chunk_is_a_body_end() {
++        use bytes::Bytes;
++        use pingora_proxy::ProxyHttp;
++        let (_client, downstream) = tokio::net::UnixStream::pair().unwrap();
++        let mut session = pingora::proxy::Session::new_h1(Box::new(
++            pingora::protocols::l4::stream::Stream::from(downstream),
++        ));
++        let proxy = test_proxy();
++        let mut ctx = super::ProxyCTX {
++            is_http3_downstream: true,
++            ..Default::default()
++        };
++        for (input, end, expected) in [
++            (Some(Bytes::new()), false, Some(Bytes::new())),
++            (Some(Bytes::from_static(b"payload")), true, Some(Bytes::from_static(b"payload"))),
++            (None, true, None),
++            (Some(Bytes::new()), true, None),
++        ] {
++            let mut body = input;
++            proxy.request_body_filter(&mut session, &mut body, end, &mut ctx).await.unwrap();
++            assert_eq!(body, expected);
++        }
++    }
++
+     fn uam_ua_hash(ua: &str) -> String {
+         use sha2::{Digest, Sha256};
+         let mut hasher = Sha256::new();

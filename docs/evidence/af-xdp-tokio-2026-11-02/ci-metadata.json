@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "scope": "single-process AF_PACKET client + forced-copy XSK echo; not full Edge capacity",
+  "commit": "7daf4b80b1971aa45e3d12086acbf2bf48f16de5",
+  "tracked_dirty": false,
+  "kernel": {
+    "system": "Linux",
+    "node": "runnervm48cm3",
+    "release": "7.0.0-1017-azure",
+    "version": "#17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026",
+    "machine": "x86_64",
+    "processor": "x86_64"
+  },
+  "cpus": [
+    0,
+    1
+  ],
+  "roundtrips": 100000,
+  "warmup": 2000,
+  "rounds": 3,
+  "binary_sha256": "32840be8f9d649ab59ef12adfff3e5bc96956b20a74fd5f9bee25ddfa08c91ad",
+  "generated_worker_sha256": "da775443d90a7e216b4f0c4e9c577e4da47342014a7702a287dae063f18f1ec3",
+  "legacy_runtime_matches": true,
+  "sources": {
+    "scripts/perf/afxdp-tokio/Cargo.lock": "9467a3bcfbcc8ac1559d5124e265d633dd1074ba751d021ecc882e1d5fa6c15d",
+    "scripts/perf/afxdp-tokio/Cargo.toml": "4629ae1c678947dc282d99cc14779a6a6e08ae093293bfd6a4a52a5630076b1d",
+    "scripts/perf/afxdp-tokio/benches/wake.rs": "e1915854d793c813a940fb0fc5c6719c52e20385da03156daf8adc2595c6377f",
+    "scripts/perf/afxdp-tokio/build.rs": "a3eb091b4e55ba990f65960ee365422f17185c7603dfeedc7ee22b30126b9a7e",
+    "scripts/perf/afxdp-tokio/compare.py": "b2993718c00ed26b3276a36638ce4c546f1f6eec0794d1b55a13b2950e8d53f5",
+    "scripts/perf/afxdp-tokio/native.c": "317e76d18d3a8ad88bf6cda85e859f3fdf3fcebbfc5b690463a6f37c616278ef",
+    "scripts/perf/afxdp-tokio/run.sh": "0cf54e5c95a331b283defd17d6362ce81068d6872777dfdbe799fc8dfa6b12e0",
+    "scripts/perf/afxdp-tokio/src/ffi.rs": "259e6eeb10770284f48062bffd3d4ce760b14109897f71f9bcae22a5672187fd",
+    "scripts/perf/afxdp-tokio/src/lib.rs": "dc01940a0813d9f1542d814996b732a78b58e229f9acb29e4e130969ae527f0d",
+    "src/xdp/af_xdp/wake.rs": "38b077c37687956a286df528a93a8a68c66552bfcd756b23c76217fa5d3a347f",
+    "scripts/perf/afxdp-wake.c": "cebf2924c68897aa7534ec728fcc364466766f3cfbdeed0acb2afdcf9e7f8ed6"
+  },
+  "started_unix": 1793660823.0883746,
+  "cgroup_cpu_max": null,
+  "finished_unix": 1793660838.460442,
+  "binary_unchanged": true,
+  "generated_worker_unchanged": true,
+  "sources_unchanged": true
+}

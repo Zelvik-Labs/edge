@@ -1,0 +1,131 @@
+{
+  "round": 2,
+  "engine": "readiness",
+  "command": [
+    "/workspace/edge/.worktrees/perf-next/.local/perf-round1/bin/splice",
+    "--bench",
+    "--noplot"
+  ],
+  "cpu_before": {
+    "cgroup": "usage_usec 99704494545\nuser_usec 65995985992\nsystem_usec 33708508552\nnice_usec 0\nnr_periods 593325\nnr_throttled 11657\nthrottled_usec 881154356\nnr_bursts 0\nburst_usec 0\n",
+    "proc": {
+      "cpu": [
+        4119434,
+        0,
+        1767672,
+        47497161,
+        11695,
+        0,
+        412933,
+        5365187,
+        0,
+        0
+      ],
+      "cpu0": [
+        698628,
+        0,
+        359300,
+        9633598,
+        2813,
+        0,
+        90527,
+        1098382,
+        0,
+        0
+      ],
+      "cpu1": [
+        947680,
+        0,
+        349818,
+        9220319,
+        2610,
+        0,
+        87072,
+        1265317,
+        0,
+        0
+      ]
+    },
+    "child_user_seconds": 5.580763,
+    "child_system_seconds": 13.097102
+  },
+  "started_unix": 1793646760.3515654,
+  "returncode": 0,
+  "cpu_after": {
+    "cgroup": "usage_usec 99716833743\nuser_usec 66000137516\nsystem_usec 33716696226\nnice_usec 0\nnr_periods 593390\nnr_throttled 11657\nthrottled_usec 881154356\nnr_bursts 0\nburst_usec 0\n",
+    "proc": {
+      "cpu": [
+        4119669,
+        0,
+        1768071,
+        47502321,
+        11695,
+        0,
+        413058,
+        5366235,
+        0,
+        0
+      ],
+      "cpu0": [
+        698783,
+        0,
+        359520,
+        9634339,
+        2813,
+        0,
+        90599,
+        1098574,
+        0,
+        0
+      ],
+      "cpu1": [
+        947720,
+        0,
+        349909,
+        9221194,
+        2610,
+        0,
+        87119,
+        1265923,
+        0,
+        0
+      ]
+    },
+    "child_user_seconds": 8.400345,
+    "child_system_seconds": 19.363676
+  },
+  "finished_unix": 1793646773.3260624,
+  "cases": [
+    {
+      "bytes": 1024,
+      "mean_ns": 170098.36945602478,
+      "median_ns": 198915.93540489642,
+      "mean_confidence_interval": {
+        "confidence_level": 0.95,
+        "lower_bound": 127540.35691349633,
+        "upper_bound": 209476.52313407674
+      }
+    },
+    {
+      "bytes": 1048576,
+      "mean_ns": 3418755.5899477936,
+      "median_ns": 3398306.4368421054,
+      "mean_confidence_interval": {
+        "confidence_level": 0.95,
+        "lower_bound": 3208905.7423376823,
+        "upper_bound": 3630490.207835665
+      }
+    },
+    {
+      "bytes": 65536,
+      "mean_ns": 328579.33705229836,
+      "median_ns": 315723.1615574348,
+      "mean_confidence_interval": {
+        "confidence_level": 0.95,
+        "lower_bound": 287105.78747415525,
+        "upper_bound": 370332.07675105124
+      }
+    }
+  ],
+  "passed": true
+}

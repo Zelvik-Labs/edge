@@ -1,0 +1,111 @@
+name: Workspace cache probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/cache-workspace-20261103]
+    paths: [.github/workflows/workspace-cache-probe.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cache-probe-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  workspace-cache:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    env:
+      CARGO_BUILD_JOBS: "2"
+      RUST_TEST_THREADS: "2"
+      RUSTFLAGS: "-C target-cpu=x86-64-v2"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.1
+      - name: Generate an independent dependency-free cache fixture
+        run: |
+          set -euo pipefail
+          mkdir -p .local/workspace-cache-probe/src .local/workspace-cache-evidence
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.local/workspace-cache-probe')
+          (p/'Cargo.toml').write_text('[package]\nname="edge-cache-probe"\nversion="0.0.0"\nedition="2024"\n\n[workspace]\n')
+          (p/'src/lib.rs').write_text('pub fn value() -> &\'static str { "v1" }\n')
+          (p/'src/main.rs').write_text('fn main() { println!("{}", edge_cache_probe::value()); }\n')
+          PY
+          cargo generate-lockfile --manifest-path .local/workspace-cache-probe/Cargo.toml
+      - name: Restore and retain workspace crates
+        id: cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .local/workspace-cache-probe -> target
+          key: workspace-fixture-v1
+          cache-workspace-crates: true
+          cache-on-failure: true
+      - name: Verify reuse and source invalidation with actual compiler artifacts
+        env:
+          PROBE_CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,os,platform,subprocess,time
+          from pathlib import Path
+          root=Path('.local/workspace-cache-probe')
+          out=Path('.local/workspace-cache-evidence')
+          records=[]
+          initial_lib=(root/'src/lib.rs').read_bytes()
+          source_hash=hashlib.sha256(initial_lib).hexdigest()
+          evidence={'commit':os.environ['GITHUB_SHA'],'cache_hit':os.environ['PROBE_CACHE_HIT'],
+              'rustc':subprocess.check_output(['rustc','--version'],text=True).strip(),
+              'rustflags':os.environ['RUSTFLAGS'],'uname':platform.uname()._asdict(),
+              'source_v1_sha256':source_hash,'initial_source_mtime_ns':(root/'src/lib.rs').stat().st_mtime_ns,
+              'restored_fingerprints':{str(p.relative_to(root)): {'mtime_ns':p.stat().st_mtime_ns,'bytes':p.stat().st_size}
+                  for p in (root/'target').glob('debug/.fingerprint/edge-cache-probe-*/*') if p.is_file()},
+              'scope':'compiler cache correctness/reuse only, not Edge runtime performance'}
+          (out/'conditions.json').write_text(json.dumps(evidence,indent=2)+'\n')
+          def build(label,expected):
+              started=time.monotonic_ns()
+              with (out/(label+'.jsonl')).open('w') as stdout,(out/(label+'.log')).open('w') as stderr:
+                  result=subprocess.run(['cargo','build','--locked','--manifest-path',str(root/'Cargo.toml'),'--message-format=json'],stdout=stdout,stderr=stderr)
+              assert result.returncode==0,(label,result.returncode)
+              messages=[json.loads(line) for line in (out/(label+'.jsonl')).read_text().splitlines()]
+              assert [m['success'] for m in messages if m.get('reason')=='build-finished']==[True]
+              own=[m for m in messages if m.get('reason')=='compiler-artifact' and m['target']['name'] in ['edge_cache_probe','edge-cache-probe']]
+              assert len(own)==2,own
+              executable=[m['executable'] for m in own if m['executable']]
+              assert len(executable)==1
+              assert subprocess.check_output(executable,text=True).strip()==expected
+              record={'phase':label,'elapsed_ns':time.monotonic_ns()-started,
+                  'artifacts':{m['target']['name']:{'fresh':m['fresh'],'profile':m['profile']} for m in own},
+                  'binary_sha256':hashlib.sha256(Path(executable[0]).read_bytes()).hexdigest(),
+                  'source_sha256':hashlib.sha256((root/'src/lib.rs').read_bytes()).hexdigest()}
+              records.append(record)
+              (out/'phases.json').write_text(json.dumps(records,indent=2)+'\n')
+              return record
+          build('initial','v1')
+          (root/'src/lib.rs').write_text('pub fn value() -> &\'static str { "v2" }\n')
+          changed=build('changed','v2')
+          assert all(not a['fresh'] for a in changed['artifacts'].values())
+          (root/'src/lib.rs').write_bytes(initial_lib)
+          restored=build('restored','v1')
+          assert all(not a['fresh'] for a in restored['artifacts'].values())
+          warm=build('unchanged-in-job','v1')
+          assert all(a['fresh'] for a in warm['artifacts'].values())
+          assert warm['source_sha256']==source_hash
+          assert warm['binary_sha256']==restored['binary_sha256']
+          summary={'passed':True,'cache_hit':evidence['cache_hit'],'phases':records,
+              'interpretation':'Initial freshness measures restored workspace reuse on a fresh checkout. In-job freshness and source-change invalidation are separate controls. No timestamp normalization or Cargo validation bypass applied.'}
+          (out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+          print(json.dumps(summary))
+          PY
+      - name: Upload cache observations and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-cache-${{ github.run_id }}
+          path: .local/workspace-cache-evidence/
+          if-no-files-found: error

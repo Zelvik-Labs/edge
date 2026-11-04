@@ -1,0 +1,33 @@
+{
+  "artifact_id": 13300786841,
+  "archive": "raw.zip",
+  "archive_bytes": 6871334,
+  "archive_sha256": "285fd2ffd9b9dec6a5dfcbb9d2c08f1f7a6feb68c5db7a9d4c651ae2d47345ec",
+  "files": [
+    {
+      "path": ".local/http-future-layout-ci/layout.json",
+      "bytes": 14953,
+      "sha256": "42222e88bac3b13df4b23644b3f26f14be0fa2a71f8c408210c72a39df2b5232"
+    },
+    {
+      "path": ".local/http-future-layout-ci/metadata.json",
+      "bytes": 662,
+      "sha256": "27666d71f0935903501c3c489b418b8a61bc33636fed38a31fed9a3088b8c23a"
+    },
+    {
+      "path": ".local/http-future-layout-ci/build.log",
+      "bytes": 22941,
+      "sha256": "897c026d927f9e63a090c9d224429872f82c8895af561ff75fe3154feb8400b7"
+    },
+    {
+      "path": ".local/http-future-layout-ci/phases.json",
+      "bytes": 970,
+      "sha256": "289e1cbfd2c84b40db7b258b9f2535309a93667191cd354e95aa2d7ed04ad371"
+    },
+    {
+      "path": "target/release/examples/http-future-layout",
+      "bytes": 17027056,
+      "sha256": "ff0ee689797f576ecb9fa6df590c33196eb3f986b56486189949d376548d48dc"
+    }
+  ]
+}

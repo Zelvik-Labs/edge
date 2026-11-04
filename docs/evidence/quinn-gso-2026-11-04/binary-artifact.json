@@ -1,0 +1,19 @@
+{
+  "id": 13271188885,
+  "name": "quinn-gso-binaries-82e3cf0db722497fb594acdcfabc645a6deb2b56",
+  "size_in_bytes": 19388352,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13271188885",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13271188885/zip",
+  "expired": false,
+  "created_at": "2026-11-03T21:15:41Z",
+  "expires_at": "2027-02-01T20:36:37Z",
+  "updated_at": "2026-11-03T21:15:41Z",
+  "digest": "sha256:2045fa18ed0085a1092208de2ba359b5ce977289673137e60883d3006a168078",
+  "workflow_run": {
+    "id": 41714149785,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/program-wide-20261104",
+    "head_sha": "82e3cf0db722497fb594acdcfabc645a6deb2b56"
+  }
+}

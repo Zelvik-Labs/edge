@@ -1,0 +1,31 @@
+{
+  "source": "91645784b8ea84bd6756e456f89638d1647b240a",
+  "binary_sha256": "3aa4e60b642006230cac2c1d69ae99c6e517686c5b266aa1817a54f4364642eb",
+  "processes": 10,
+  "measured_requests": 32000,
+  "warmup_requests": 10,
+  "closed_connections": 15510,
+  "paired_ratios": [
+    0.03525083681154171,
+    0.03456902272047732,
+    0.03659854362507188,
+    0.03402126395730402,
+    0.03303759801279147
+  ],
+  "paired_median_delta_pct": -96.54309772795227,
+  "inverse_ratio": 28.92763292980335,
+  "off_median_ns_per_request": 1554811.2878125,
+  "on_median_ns_per_request": 53777.7315625,
+  "host_window_cpu_steal": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ]
+}

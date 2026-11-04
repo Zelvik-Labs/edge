@@ -1,0 +1,26 @@
+{
+  "passed": true,
+  "source_commit": "1fbca822e49c3242edf89c7fd1a134de81ab3b27",
+  "functions": 32,
+  "raw_samples": 960,
+  "build_profiles": [
+    {
+      "opt_level": "2",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": true
+    }
+  ],
+  "overall_cpu_steal_pct": {
+    "cpu0": 27.12783437397305,
+    "cpu1": 2.982202982202982,
+    "cpu2": 3.3317238049251565,
+    "cpu3": 1.0051483206668301,
+    "cpu4": 1.9907369789550662
+  },
+  "quality_flags": [
+    "benchmark_cpu_overall_steal_over_1pct"
+  ],
+  "scope": "sample/estimate/summary recomputation and source checks, not proxy RPS or per-function steal observations; no samples removed"
+}

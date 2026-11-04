@@ -1,0 +1,80 @@
+name: WAF state reservation probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: Exact 40-character baseline commit, including an earlier candidate
+        type: string
+        default: b5bc67ee7484915d7d6f86319cf239ff5d8ade38
+  push:
+    branches: [perf/waf-state-reservation-20261103, perf/five-priorities-20261103]
+    paths:
+      - .github/workflows/waf-state-probe.yml
+      - scripts/perf/waf-state/**
+      - src/firewall/bounded_map.rs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: waf-state-probe-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  production-table:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      CARGO_BUILD_JOBS: "2"
+      RUST_TEST_THREADS: "2"
+      RUSTFLAGS: "-C target-cpu=x86-64-v2"
+      WAF_BASELINE_REF: ${{ inputs.baseline_ref }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.1
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: scripts/perf/waf-state -> target
+          key: waf-state-source-v1
+          cache-on-failure: true
+      - name: Build and compare production table variants
+        run: python3 scripts/perf/waf-state/paired.py
+      - name: Retain raw table allocation, regression and timing evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waf-state-paired-${{ github.sha }}
+          path: .local/waf-state-paired/
+          include-hidden-files: true
+          if-no-files-found: error
+
+  occupancy-miri:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-10-31
+          components: miri
+      - name: Validate initialized-slot and partial-word safety with Miri
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/waf-miri
+          cargo +nightly-2026-10-31 miri setup > .local/waf-miri/setup.log 2>&1
+          cargo +nightly-2026-10-31 miri test --locked --manifest-path scripts/perf/waf-state/Cargo.toml --lib occupancy_bits_guard_uninitialized_slots_including_partial_last_word > .local/waf-miri/test.log 2>&1
+      - name: Retain interpreter evidence and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waf-miri-${{ github.sha }}
+          path: .local/waf-miri/
+          include-hidden-files: true
+          if-no-files-found: error

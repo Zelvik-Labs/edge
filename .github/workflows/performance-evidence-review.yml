@@ -1,0 +1,38 @@
+name: Verify retained performance evidence
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - .github/workflows/performance-evidence-review.yml
+      - scripts/perf/evidence-review/**
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: performance-evidence-review-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  review:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify original archives and source-pinned records without compilation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -m unittest discover -s scripts/perf/evidence-review -p 'test_*.py' -v
+          python3 scripts/perf/evidence-review/review.py
+      - name: Preserve original ZIPs, API provenance and recomputed results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-evidence-review-${{ github.sha }}
+          path: .local/evidence-review/
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 1
