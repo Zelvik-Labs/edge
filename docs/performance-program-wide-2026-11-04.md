@@ -22,7 +22,9 @@
 262,144 次 fresh 尝试中 77 次失败。auto 50 次、off 27 次，关闭 GSO 未消除故障。
 复用控制中关闭 GSO 使吞吐下降约 13%～21%，继续保留 auto 默认值。
 [有界协议诊断](performance-quinn-diagnostic-2026-11-04.md)已抓到 10 次 OpenSSL 本地 `KEY_UPDATE_ERROR`，
-原因均为 `RX key update again too soon`，正在进一步检查握手确认与 key phase 时序。
+原因均为 `RX key update again too soon`，第二轮 29 个错误又记录到相同早期 key phase 时序。
+[同版客户端互操作](performance-quinn-interop-2026-11-04.md)中，OpenSSL 16/32768 错误、GnuTLS/ngtcp2 32768 次通过，
+四项错误 CA 验证均拒绝；这约束故障范围但不代表已修复。
 共享路径两个长批次超时，部分输出和缺失的进程摘要均保留，不当成完整性能结果。
 
 首轮 Range 对比因源站启动时序失败，已保留 161 次 curl 56 与 7 次 curl 52 的全部记录；
