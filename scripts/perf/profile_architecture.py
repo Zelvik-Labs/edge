@@ -21,13 +21,13 @@ def main(options):
     original_docker = matrix.docker
     original_client = matrix.run_client
     target = None
+    matrix.IMAGES[options.target] = options.profiler_image
 
     def docker(*args):
         nonlocal target
         args = list(args)
-        if args[0] == 'run' and '/tools/controller' in args:
+        if args[0] == 'run' and '--name' in args and options.profiler_image in args:
             target = args[args.index('--name') + 1]
-            args[args.index(matrix.IMAGES['edge'])] = options.profiler_image
             args[1:1] = ['--cap-add', 'PERFMON', '--cap-add', 'SYS_PTRACE',
                          '--security-opt', 'seccomp=unconfined']
         return original_docker(*args)
@@ -35,12 +35,29 @@ def main(options):
     def run_client(args, protocol, state, connection, url, ca, stem):
         if stem.name == 'origin-reference':
             return original_client(args, protocol, state, connection, url, ca, stem)
-        ready = json.loads((stem.parent / 'edge-ready.json').read_text())
-        pid = ready['edge_pid']
+        if options.target == 'edge':
+            ready = json.loads((stem.parent / 'edge-ready.json').read_text())
+            pids = [ready['edge_pid']]
+        else:
+            raw = original_docker('exec', target, 'pgrep', '-f', '^nginx: (master|worker|cache)')
+            assert raw.split() and all(value.isdigit() for value in raw.split()), raw
+            pids = sorted(map(int, raw.split()))
+        identity = original_docker('exec', target, 'sha256sum', f'/proc/{pids[0]}/exe').split()[0]
+        if options.target != 'edge':
+            executable = stem.parent / 'profile-executable'
+            if not executable.exists():
+                remote_path = original_docker('exec', target, 'readlink', f'/proc/{pids[0]}/exe')
+                assert remote_path.startswith('/') and not remote_path.endswith(' (deleted)')
+                subprocess.run([*matrix.DOCKER, 'cp', target + ':' + remote_path, str(executable)],
+                               env=matrix.ENV, check=True)
+            assert matrix.sha(executable) == identity
+        matrix.write(Path(str(stem) + '.profile-target.json'),
+                     {'target': options.target, 'container': target, 'container_pids': pids,
+                      'executable_sha256': identity})
         remote = '/test/' + stem.name
         command = [*matrix.DOCKER, 'exec', target, 'perf', 'record', '-F',
                    str(options.frequency), '-e', 'cpu-clock:u', '--call-graph',
-                   'dwarf,32768', '-p', str(pid), '-o', remote + '.perf.data',
+                   'dwarf,32768', '-p', ','.join(map(str, pids)), '-o', remote + '.perf.data',
                    '--', 'sleep', str(options.seconds)]
         matrix.write(Path(str(stem) + '.perf-command.json'), command)
         with Path(str(stem) + '.perf-record.log').open('x') as log:
@@ -66,20 +83,23 @@ def main(options):
     matrix.docker = docker
     matrix.run_client = run_client
     args = argparse.Namespace(
-        target='edge', output=options.output, tls=options.tls, client=options.client,
+        target=options.target, output=options.output, tls=options.tls, client=options.client,
         edge_binary=options.edge_binary, controller=options.controller,
         seconds=options.seconds, repeats=options.repeats, payload_size=options.payload_size, concurrency=32,
         cold_requests=None if options.timed_misses else options.cold_requests,
         fresh_requests=2048, protocols=options.protocols,
         states=options.states, connections=['reuse'], multiplex=False, seed=20261102,
         experiment='instrumented production CPU profile; exclude from capacity comparison',
-        edge_image=options.profiler_image, profiler_image=options.profiler_image,
+        edge_image=options.profiler_image if options.target == 'edge' else options.edge_image,
+        profiler_image=options.profiler_image,
         profile_driver_sha256=matrix.sha(__file__))
     return matrix.run(args)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--target', choices=['edge', 'nginx', 'openresty'], default='edge')
+    parser.add_argument('--edge-image', default='edge-architecture-profiler:20261104')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--tls', type=Path, required=True)
     parser.add_argument('--client', type=Path, required=True)

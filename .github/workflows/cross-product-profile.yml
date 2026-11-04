@@ -1,0 +1,69 @@
+name: Cross-product HTTP CPU paths
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - .github/workflows/cross-product-profile.yml
+      - scripts/perf/cross-product-profile/**
+      - scripts/perf/profile_architecture.py
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cross-product-profile-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  profile:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    env:
+      EDGE_PROFILE_RUNTIME: headers
+    steps:
+      - uses: actions/checkout@v5
+      - name: Download the exact final HTTP matrix executables
+        uses: actions/download-artifact@v4
+        with:
+          name: http-state-binaries-a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a
+          run-id: 41665387055
+          github-token: ${{ github.token }}
+          path: .local/architecture-profile-binaries
+      - name: Download the measured post-cache-optimization executables
+        uses: actions/download-artifact@v4
+        with:
+          name: header-node-binaries-4171ea700386d8ed7c755255c7eeccb7e804d644
+          run-id: 41757321970
+          github-token: ${{ github.token }}
+          path: .local/architecture-header-binaries
+      - name: Verify executable provenance before starting containers
+        run: python3 scripts/perf/cross-product-profile/evidence.py prepare
+      - name: Prepare diagnostic images before sampling
+        run: |
+          docker pull nginx:1.28.0
+          docker pull openresty/openresty:1.27.1.2-0-bookworm-fat
+          docker build -t edge-architecture-profiler:20261104 -f scripts/perf/architecture-ci/Dockerfile .
+          docker build -t edge-nginx-profiler:20261104 --build-arg BASE_IMAGE=nginx:1.28.0 -f scripts/perf/cross-product-profile/Dockerfile .
+          docker build -t edge-openresty-profiler:20261104 --build-arg BASE_IMAGE=openresty/openresty:1.27.1.2-0-bookworm-fat -f scripts/perf/cross-product-profile/Dockerfile .
+      - name: Profile each isolated protocol and cache state
+        run: |
+          docker run --rm --name edge-architecture-harness --network host --pid host \
+            --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
+            -e GITHUB_SHA -e EDGE_PROFILE_RUNTIME -e EDGE_MATRIX_HARNESS_NAME=edge-architecture-harness \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
+            edge-architecture-profiler:20261104 bash scripts/perf/cross-product-profile/run.sh
+      - name: Retain symbolized evidence and failures
+        if: always()
+        run: |
+          if [ -d .local/cross-product-profile-private ]; then
+            sudo chown -R "$(id -u):$(id -g)" .local/cross-product-profile-private
+          fi
+          python3 scripts/perf/cross-product-profile/evidence.py collect
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cross-product-profile-${{ github.sha }}
+          path: .local/cross-product-profile-ci/
+          include-hidden-files: true
+          if-no-files-found: error

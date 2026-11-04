@@ -14,6 +14,7 @@
 - [全程序性能优化进度](performance-program-wide-2026-11-04.md)：缓存、SNI/TCP、统计、XDP 与 io_uring 的本轮交付、收益与未解决项。
 - [缓存优化后的实际 CPU 复核](performance-http-cpu-after-cache-2026-11-04.md)：实际 ba474 二进制的 18 个条件、496 万次响应与 43,074 个样本。
 - [用户态/内核态 CPU 差距与 H3 客户端预算](performance-http-cpu-budget-2026-11-04.md)：从 192 格原始账本复核优化方向，识别客户端容量限制。
+- [同条件三产品 CPU 路径](performance-cross-product-cpu-2026-11-04.md)：补齐 Nginx/OpenResty 用户态采样，诊断执行路径差异，采样吞吐不参加容量排名。
 - [实际 HTTP 回调 future 布局](performance-http-future-layout-2026-11-04.md)：release 实际回调的状态大小，结构测量不等于 CPU 归因。
 - [小头表客户端 IP 查找](performance-client-ip-scan-2026-11-04.md)：75,923 组差分、全部十二种转发头及局部代价。
 - [主机名规范化候选](performance-host-normalize-2026-11-04.md)：去端口借用原输入，验证一次输出分配与原始边界行为。
