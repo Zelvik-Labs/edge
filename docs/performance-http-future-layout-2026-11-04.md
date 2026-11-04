@@ -30,3 +30,11 @@ request_filter 显著更大；它依次 await 十个阶段，状态对象必须�
 [冻结复核器](evidence/http-future-layout-2026-11-04/verify.py)检查全部归档、固定源码 SHA-256 和实际 release probe 的 SHA-256（`8902546aa03c533476cef87a982958cb9d7244f37903f31130b914a594a79db8`）。
 生产回调实现保持，未移除功能或修改 vendor。
 经审批的功能降级：无。
+
+## 大 frame 的实际构造成本
+
+补充与阶段尺寸独立的实测：同一实际 EdgeProxy、production mimalloc，每个回调二十块、每块十万次构造/销毁，合计120块与1200万次。
+使用 black_box 保留 future 的可见地址，所有 future 仍不 poll；Unix 会话、默认上下文与响应 fixture 在计时前构造。
+编译结束后绑单核执行，记录宿主 steal 与全部块，保留实际 probe 二进制和源码。
+这能检验大 frame 是否连构造都很昂贵，不能覆盖首次 poll 初始化、业务执行或挂起/唤醒成本，也不直接计算节点可回收比例。
+在有这组绝对耗时之前，不把 5736 字节当成性能差距的根因。状态：诊断 Actions 待运行。

@@ -3,6 +3,10 @@
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[cfg(unix)]
+#[path = "../benches/support/http_callback_construct.rs"]
+mod construction;
+
+#[cfg(unix)]
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     use pingora_proxy::{ProxyHttp, Session};
@@ -60,14 +64,22 @@ async fn main() -> anyhow::Result<()> {
             // The dynamic future vtable reports its concrete frame, unlike
             // size_of_val(&future), which would only measure the box pointer.
             let value = future.as_ref().get_ref();
+            let frame_bytes = std::mem::size_of_val(value);
+            let alignment = std::mem::align_of_val(value);
+            drop(future);
+            let blocks = construction::blocks(|| {
+                let future = $future;
+                std::hint::black_box(future.as_ref().get_ref());
+                drop(future);
+            });
             rows.insert(
                 $name.to_string(),
                 serde_json::json!({
-                    "frame_bytes": std::mem::size_of_val(value),
-                    "alignment": std::mem::align_of_val(value),
+                    "frame_bytes": frame_bytes,
+                    "alignment": alignment,
+                    "construction_drop_blocks": blocks,
                 }),
             );
-            drop(future);
         }};
     }
     frame!(
@@ -94,7 +106,7 @@ async fn main() -> anyhow::Result<()> {
     println!(
         "{}",
         serde_json::to_string_pretty(&serde_json::json!({
-            "scope": "unpolled real callback frame layouts; not request CPU, allocation counts or throughput",
+            "scope": "unpolled real callback layouts and construction/drop; not request execution, allocation counts or throughput",
             "allocator": "mimalloc, as in the production executable",
             "callbacks": rows,
         }))?
