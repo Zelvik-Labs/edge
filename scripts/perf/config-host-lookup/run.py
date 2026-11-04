@@ -132,7 +132,7 @@ def verify():
     if metadata['integrated']:
         assert lookup_function((OUT / 'source/integrated-config.rs').read_text()) == (OUT / 'source/candidate.rs').read_text().strip()
     controls = read(OUT / 'controls.tsv')
-    assert len(controls) == 65571
+    assert len(controls) == 65831
     assert all(int(row['case']) == i and row['baseline'] == row['candidate'] 
                for i, row in enumerate(controls))
     assert len(metadata['runs']) == 16

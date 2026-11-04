@@ -1,0 +1,91 @@
+{
+  "source": "1c441cea3b416f2d4316abed4ec1863e4666852f",
+  "scope": "isolated atomic publication protocol; not full governor cost, production integration or node throughput",
+  "models": [
+    {
+      "case": "timestamp-ABA",
+      "expected_counterexample": true
+    },
+    {
+      "case": "version-without-fences",
+      "expected_counterexample": true
+    },
+    {
+      "case": "versioned",
+      "writers": 1,
+      "schedules": 226,
+      "preemption_bound": null
+    },
+    {
+      "case": "versioned",
+      "writers": 2,
+      "schedules": 1164,
+      "preemption_bound": 2
+    }
+  ],
+  "controls": 3,
+  "raw_blocks": 1280,
+  "max_host_steal_fraction": 0.0,
+  "cases": {
+    "read-2": {
+      "baseline_ns": 2.185737125,
+      "candidate_ns": 2.102921525,
+      "paired_changes": [
+        -0.09847611863693573,
+        -0.03468017303066384,
+        -0.02684778961467238,
+        0.03912222393803266,
+        -0.018508888031548598,
+        0.0259025803831181,
+        -0.01636420251675963,
+        -0.008339412484703046
+      ],
+      "paired_median": -0.017436545274154114
+    },
+    "read-20": {
+      "baseline_ns": 4.932497850000001,
+      "candidate_ns": 5.25958155,
+      "paired_changes": [
+        0.039288200077669755,
+        0.05497595784882203,
+        0.03519988700645982,
+        0.07288915380124417,
+        0.04131239538554188,
+        0.10637465786976197,
+        0.0721785512456048,
+        0.09221940270242968
+      ],
+      "paired_median": 0.06357725454721341
+    },
+    "publish-every-1024": {
+      "baseline_ns": 7.2058274749999995,
+      "candidate_ns": 7.282490775,
+      "paired_changes": [
+        0.009792254397671618,
+        0.011146262933378726,
+        0.010346580284757767,
+        0.029398330797888228,
+        -0.1486328926678694,
+        0.05724689451260567,
+        0.003870758527593443,
+        0.011081714956445055
+      ],
+      "paired_median": 0.01071414762060141
+    },
+    "publish-every-16": {
+      "baseline_ns": 8.054822,
+      "candidate_ns": 8.117427025,
+      "paired_changes": [
+        0.014977975688280187,
+        -0.014289536035513195,
+        0.09719167565201259,
+        -0.021727676445470467,
+        -0.05091941056668603,
+        0.03004474344293029,
+        -0.0017847156383817842,
+        -0.008145712194061017
+      ],
+      "paired_median": -0.0049652139162214
+    }
+  }
+}

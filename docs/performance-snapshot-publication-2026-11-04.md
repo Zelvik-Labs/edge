@@ -41,3 +41,10 @@ Loom使用同一候选函数体替换原子实现，单writer穷举调度、两w
 真实刷新与测试seeding均遵守发布协议，新增实际同毫秒/中途写入拒绝、fresh时间戳下中断恢复、4读者并发一致性回归。
 集成构建器核对实际helper与候选逐字相同，并归档真实governor；完整CI与native32将验证生产路径，未部署。
 这轮修正的是并发一致性，不声称提高节点RPS；主性能分析仍由独立框架/业务对照推进。
+
+集成[Actions41789423921](https://github.com/Zelvik-Labs/edge/actions/runs/41789423921)通过并复核33文件、同一实际helper、实际两个probe与全部模型/控制/1280块，零steal。
+两项负向控制现核对panic内容必须是混合快照断言，其他模型内部错误不能冒充成功反例。调度范围仍为226/1164。
+复跑20字段读取4.932→5.260ns，配对+6.36%，增加约0.33ns；周期发布1024/16场景配对+1.07%/−0.50%，完整离群轮次保留。
+与首轮绝对ns不同不解释为生产趋势；这轮修正有微小协议成本，不能称为性能加速。
+归档13302209229：591,643字节、33文件，SHA-256 `66bdebd2e06d93b93beb6fb5e138d96b0cfab06af46a471ca28487d1fd3e6d08`；[集成冻结复核器](evidence/snapshot-publication-2026-11-04/integrated/verify.py)保留全部字节与实际源码检查。
+完整[CI41789512638](https://github.com/Zelvik-Labs/edge/actions/runs/41789512638)已通过新增三项实际governor回归及check/Clippy，native矩阵仍在执行；未部署。

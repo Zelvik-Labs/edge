@@ -65,6 +65,13 @@ fn verify() {
         }
         cases.push(value);
     }
+    for position in 0..258 {
+        let mut value = "a".repeat(258);
+        value.replace_range(position..position + 1, "A");
+        cases.push(value);
+    }
+    cases.push("a".repeat(258));
+    cases.push("é".repeat(129));
     for (i, value) in cases.iter().enumerate() {
         let a = baseline(value);
         let b = candidate(value);
