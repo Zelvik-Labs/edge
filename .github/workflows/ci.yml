@@ -13,6 +13,10 @@ on:
         description: Inspect real release HTTP callback future frames without polling request logic
         type: boolean
         default: false
+      h3_origin_drain_repeat:
+        description: Repeat the actual H3 draining and replacement-connection wire regression 64 times
+        type: boolean
+        default: false
       io_uring_benchmark:
         description: Test io_uring splice against readiness and default io-wq limits at 1 and 16 connections
         type: boolean
@@ -533,6 +537,19 @@ jobs:
         env:
           EDGE_H3_TEST_OUTPUT: ${{ github.workspace }}/.local/h3-origin-reuse-ci
         run: cargo test --lib --bins
+
+      - name: Repeat actual H3 draining and replacement lifecycle
+        if: github.event_name == 'workflow_dispatch' && inputs.h3_origin_drain_repeat
+        run: python3 scripts/perf/h3-drain-repeat/run.py
+
+      - name: Retain every H3 drain repeat including failures
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.h3_origin_drain_repeat
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3-drain-repeat-${{ github.sha }}
+          path: .local/h3-drain-repeat-ci/
+          include-hidden-files: true
+          if-no-files-found: warn
 
       - name: Upload H3 origin reuse wire evidence
         if: always() && hashFiles('.local/h3-origin-reuse-ci/**') != ''

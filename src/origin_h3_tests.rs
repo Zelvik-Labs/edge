@@ -928,8 +928,16 @@ fn failed_stream_drains_new_reuse_without_cancelling_an_active_peer() {
             other.context.is_open(),
             "failed request must not close another active stream"
         );
-        let replacement = new_session(&peer).await;
+        let mut replacement = new_session(&peer).await;
         assert_ne!(replacement.context.quic.stable_id(), old_id);
+        // An unused connection can close while the fixture is still opening
+        // H3 control streams. Complete actual work on the replacement before
+        // testing registry survival and shutdown, as in the capacity fixture.
+        replacement
+            .write_request_header(request("/drain-replacement", "GET"), true)
+            .await
+            .unwrap();
+        read_complete(&mut replacement, "/drain-replacement", b"").await;
         other
             .write_request_header(request("/survivor", "GET"), true)
             .await
@@ -960,6 +968,8 @@ fn failed_stream_drains_new_reuse_without_cancelling_an_active_peer() {
         );
         drop(borrowed);
         drop(replacement);
+        assert_eq!(origin.stats.accepted.load(Ordering::Acquire), 2);
+        assert_eq!(origin.stats.requests.load(Ordering::Acquire), 3);
         wait_count(&origin.stats.closed, 2).await;
         origin.stop().await;
     });

@@ -79,3 +79,12 @@ Proxy已经规范化主机名，get_request_context_sync在持读锁时还会调
 新增真实ConfigStore差分/借用与畸形地址重新解析、通配符路由回归；构建器按Rust token核对实际helper与候选，仅忽略排版空白并保留字面量空白。
 归档13303343065：5,564,339字节、35文件，SHA-256 `cfe802bdf258a1a143d78f2c31f885bea051a21b2865173fc0cea1f86d95d648`；[分块冻结复核器](evidence/config-host-lookup-2026-11-04/chunked/verify.py)保留全部原始结果。
 将独立执行累计完整CI、集成组件复测和当前分支节点矩阵，未部署。已修复：普通配置查询的临时字符串分配。仍未解决：整体性能差距。经审批的功能降级：无。
+
+## 首次累计CI的H3 fixture失败
+
+[41793784516](https://github.com/Zelvik-Labs/edge/actions/runs/41793784516)库测试1373通过/1失败/5ignored；两项新增Config回归与三项governor回归均通过，check/Clippy通过，后续native矩阵未运行。
+失败发生在failed_stream_drains_new_reuse_without_cancelling_an_active_peer的测试源站关闭join，收到Remote error: ApplicationClose: H3_NO_ERROR。
+该fixture新建replacement后未发送任何请求就释放，可与服务端H3控制流初始化竞争；既有capacity fixture在9164578已修过相同类型的未用连接竞态，本处仍缺就绪交互。
+现让replacement完整发送/接收正文与trailers，再验证旧context不能删除新登记、旧活动请求不被取消，以及两连接均关闭、三请求均解析。
+不忽略任何正常/异常关闭，不放宽原超时，不修改实际H3复用实现；原失败[日志复核器](evidence/config-host-lookup-2026-11-04/first-full-ci/verify.py)保留。
+新增显式CI输入h3_origin_drain_repeat，在完整库门通过后64次实际loopback复查，失败不重试替换，并继续累计完整CI/native32。
