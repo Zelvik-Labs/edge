@@ -1,0 +1,630 @@
+[
+  {
+    "client": "default",
+    "round": 0,
+    "shard": 0,
+    "connection": 1845,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 4588,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 11,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "default",
+    "round": 0,
+    "shard": 0,
+    "connection": 4416,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 4588,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 11,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "default",
+    "round": 0,
+    "shard": 0,
+    "connection": 7259,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 4588,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 10,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "default",
+    "round": 0,
+    "shard": 0,
+    "connection": 8052,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 4588,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 11,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 13,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "default",
+    "round": 0,
+    "shard": 0,
+    "connection": 8080,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 4588,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 11,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 13,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "default",
+    "round": 0,
+    "shard": 1,
+    "connection": 3595,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 4588,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 10,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "default",
+    "round": 0,
+    "shard": 1,
+    "connection": 4289,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 4588,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 11,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "default",
+    "round": 0,
+    "shard": 1,
+    "connection": 4337,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 4588,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 12,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "default",
+    "round": 0,
+    "shard": 1,
+    "connection": 5974,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 4588,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 10,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 13,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "default",
+    "round": 0,
+    "shard": 1,
+    "connection": 8112,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 4588,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 10,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "x25519",
+    "round": 0,
+    "shard": 0,
+    "connection": 2079,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 29,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 12,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "x25519",
+    "round": 0,
+    "shard": 1,
+    "connection": 4247,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 29,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 10,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "x25519",
+    "round": 0,
+    "shard": 1,
+    "connection": 6211,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 29,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 11,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "x25519",
+    "round": 1,
+    "shard": 0,
+    "connection": 3069,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 29,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 11,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "x25519",
+    "round": 1,
+    "shard": 0,
+    "connection": 5915,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 29,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 11,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 13,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "x25519",
+    "round": 1,
+    "shard": 0,
+    "connection": 6953,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 29,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 12,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 13,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "x25519",
+    "round": 1,
+    "shard": 1,
+    "connection": 3036,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 29,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 11,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "x25519",
+    "round": 1,
+    "shard": 1,
+    "connection": 7285,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 29,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 12,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "default",
+    "round": 1,
+    "shard": 0,
+    "connection": 1654,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 4588,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 10,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "default",
+    "round": 1,
+    "shard": 0,
+    "connection": 3886,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 4588,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 12,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "default",
+    "round": 1,
+    "shard": 0,
+    "connection": 7144,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 4588,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 10,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 10,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 11,
+        "pn_bytes": 1
+      },
+      {
+        "phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  },
+  {
+    "client": "default",
+    "round": 1,
+    "shard": 1,
+    "connection": 977,
+    "dropped_trace_bytes": 0,
+    "close_code": 14,
+    "close_reason": "RX key update again too soon",
+    "observed_group": 4588,
+    "received_handshake_done_before_close": false,
+    "first_phase_one_header": {
+      "phase": 1,
+      "pn_truncated": 12,
+      "pn_bytes": 1
+    },
+    "all_phase_one_headers": [
+      {
+        "phase": 1,
+        "pn_truncated": 12,
+        "pn_bytes": 1
+      }
+    ],
+    "header_scope": "unprotected metadata before authentication; not proof of an authenticated peer violation"
+  }
+]

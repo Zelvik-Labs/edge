@@ -1,0 +1,323 @@
+{
+  "package_version": {
+    "libcurl4t64": "8.14.1-2+deb13u7",
+    "libcurl3t64-gnutls": "8.14.1-2+deb13u7"
+  },
+  "source_sha256": "a701692547e3385da31d1a97e92dc6b6334f86505337ffa3abf2736d87efc983",
+  "instrumentation": "OpenSSL diagnostic callback in groups mode only",
+  "client_mode": "groups",
+  "clients": {
+    "openssl": {
+      "command": [
+        "cc",
+        "-O3",
+        "-march=x86-64-v2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-DEDGE_QUIC_DIAGNOSTICS",
+        "/home/runner/work/edge/edge/benches/support/protocol_state_client.c",
+        "-I/usr/include/x86_64-linux-gnu",
+        "-isystem",
+        "/usr/include/mit-krb5",
+        "-I/usr/include/p11-kit-1",
+        "-lcurl",
+        "-lssl",
+        "-lcrypto",
+        "-o",
+        "/home/runner/work/edge/edge/.local/quinn-interop-private/clients/openssl"
+      ],
+      "sha256": "da79e498b2a8da9ecab0a504e6936bf616d6671e5e18853f3e3c7a6b3fcf96cc",
+      "version": "libcurl/8.14.1 OpenSSL/3.5.7 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10",
+      "libraries": {
+        "/usr/lib/x86_64-linux-gnu/libcurl.so.4.8.0": {
+          "sha256": "5588975d3d85448ca9d40018efb2b8c103c13feea247cfa09734985e831b3ffd",
+          "bytes": 983720
+        },
+        "/usr/lib/x86_64-linux-gnu/libssl.so.3": {
+          "sha256": "9592038e92d1f41affcbb625334d0b6e788714c889104fa6d5b107cf9fd657f2",
+          "bytes": 1109952
+        },
+        "/usr/lib/x86_64-linux-gnu/libc.so.6": {
+          "sha256": "9792e3cbb541c8f44c7acf5f14f4022ea62998ecc787d326bed4d8b6547dfd92",
+          "bytes": 1995216
+        },
+        "/usr/lib/x86_64-linux-gnu/libnghttp3.so.9.2.6": {
+          "sha256": "37ecaa050c23fee92d563eec8701164505ef880c00a513cbd6d1d03beeb8fa29",
+          "bytes": 173392
+        },
+        "/usr/lib/x86_64-linux-gnu/libnghttp2.so.14.28.3": {
+          "sha256": "207268890b5be3043575c97af4e08c8326a12321a8a83e7278681b6b6f7d5ea8",
+          "bytes": 199152
+        },
+        "/usr/lib/x86_64-linux-gnu/libidn2.so.0.4.0": {
+          "sha256": "299cdc741f1dd0834a49d5cb44f3da26b1960bb110c1f521a084400d9b603cbf",
+          "bytes": 202872
+        },
+        "/usr/lib/x86_64-linux-gnu/librtmp.so.1": {
+          "sha256": "7d4c54c51f62085d79a4c96c7ad52f680f1f2e6d38ff7c8b8fa18d57f89df130",
+          "bytes": 122256
+        },
+        "/usr/lib/x86_64-linux-gnu/libssh2.so.1.0.1": {
+          "sha256": "bea384b0ed8797abdba6cb31b2de38ae2a6ad38d5a1cc13fb3704863bcbb15ca",
+          "bytes": 297472
+        },
+        "/usr/lib/x86_64-linux-gnu/libpsl.so.5.3.4": {
+          "sha256": "d9a6975db1b66ed34bdc04195a92a77b7d29b8d6affe4c35c05d7eafe5424fef",
+          "bytes": 75616
+        },
+        "/usr/lib/x86_64-linux-gnu/libcrypto.so.3": {
+          "sha256": "8ae56f0a9481280a68c19f59809cd242a07a91ad7142944d21a878221992244b",
+          "bytes": 6521408
+        },
+        "/usr/lib/x86_64-linux-gnu/libgssapi_krb5.so.2.2": {
+          "sha256": "c290f761873ebeac539911010526e1c5db86218bfcb29672760da46841741de0",
+          "bytes": 346904
+        },
+        "/usr/lib/x86_64-linux-gnu/libldap.so.2.0.200": {
+          "sha256": "e8f34e65087f24f296fa7a65a8c65383f4a7e2b532c46e40463d4e59a206c20a",
+          "bytes": 400912
+        },
+        "/usr/lib/x86_64-linux-gnu/liblber.so.2.0.200": {
+          "sha256": "ca319704dd4f58b5b3fc8510738850f03f18940544ba04bebf2fa8a23a798346",
+          "bytes": 63824
+        },
+        "/usr/lib/x86_64-linux-gnu/libzstd.so.1.5.7": {
+          "sha256": "27f07c9a49c2c956bcfb64cd4712976586a66facbf15fc7f09bc37413b5f2b21",
+          "bytes": 825336
+        },
+        "/usr/lib/x86_64-linux-gnu/libbrotlidec.so.1.1.0": {
+          "sha256": "ff4baf3141862726c25ab08cdd94bced37dcae0c6827943d3e40fc1079969814",
+          "bytes": 51376
+        },
+        "/usr/lib/x86_64-linux-gnu/libz.so.1.3.1": {
+          "sha256": "85590dd58edf5445e18bc7193e5ebc01ac5841f1ae187e97705a662e90c6421e",
+          "bytes": 125376
+        },
+        "/usr/lib/x86_64-linux-gnu/libunistring.so.5.2.0": {
+          "sha256": "9c200ec975ff24c0a259d4f6cf0d0fc1736d0c86da30fff3d499ad3d9a368b65",
+          "bytes": 1996840
+        },
+        "/usr/lib/x86_64-linux-gnu/libgnutls.so.30.40.3": {
+          "sha256": "4b14edde42e7cbeefd8a6d88d035e096f2e6412a535388bb1d073a1c196e2822",
+          "bytes": 2246712
+        },
+        "/usr/lib/x86_64-linux-gnu/libhogweed.so.6.10": {
+          "sha256": "2663d9bdca20ba67d2d72f1d4c24b6fd0a3e97d5ee23e7b739788176cf904380",
+          "bytes": 305144
+        },
+        "/usr/lib/x86_64-linux-gnu/libnettle.so.8.10": {
+          "sha256": "34ac695c167a593d3587bd88592d33d53e5dc4035984f84446100962f57376fd",
+          "bytes": 346216
+        },
+        "/usr/lib/x86_64-linux-gnu/libgmp.so.10.5.0": {
+          "sha256": "d15e1585c6c267296459570c8ac217ca9123044bcd4e896d2f686b32333445d2",
+          "bytes": 566080
+        },
+        "/usr/lib/x86_64-linux-gnu/libkrb5.so.3.3": {
+          "sha256": "c4ab64e6bc2874a83e649e4439be752465da027a0041e2bb5343f81c80f0882d",
+          "bytes": 883984
+        },
+        "/usr/lib/x86_64-linux-gnu/libk5crypto.so.3.1": {
+          "sha256": "c4c3221d0350f882cee0430b58d5fb289a5776c684d3156964864c8a9719dff1",
+          "bytes": 187144
+        },
+        "/usr/lib/x86_64-linux-gnu/libcom_err.so.2.1": {
+          "sha256": "dc4828400674492839b630c001db424cd38e5cecfcf46dbf705a637647e04bea",
+          "bytes": 18344
+        },
+        "/usr/lib/x86_64-linux-gnu/libkrb5support.so.0.1": {
+          "sha256": "f559f051ee5d39f151a57d79f2cde475c484030098b0c73f9f7035b421b187c4",
+          "bytes": 52208
+        },
+        "/usr/lib/x86_64-linux-gnu/libsasl2.so.2.0.25": {
+          "sha256": "3f93968591811eb3972c3467c69c2968dd9cb2b51f7b7bb48de22ba8e17d13fd",
+          "bytes": 109232
+        },
+        "/usr/lib/x86_64-linux-gnu/libbrotlicommon.so.1.1.0": {
+          "sha256": "0697dd09666e2a080974470950075ee959f2391ecb173ceee50423f969032d79",
+          "bytes": 141496
+        },
+        "/usr/lib/x86_64-linux-gnu/libp11-kit.so.0.4.1": {
+          "sha256": "e4ae39be74740511cf8e49e80fdfc16aeee7b822ee313793da1b78ce148ba05f",
+          "bytes": 1705664
+        },
+        "/usr/lib/x86_64-linux-gnu/libtasn1.so.6.6.4": {
+          "sha256": "cea637336b0855f91260714181894bcea9f345a3a97ce68d6447f6031728cabd",
+          "bytes": 88064
+        },
+        "/usr/lib/x86_64-linux-gnu/libkeyutils.so.1.10": {
+          "sha256": "e5d5a7450d08eff7d4bbcaac75ef2b94d3447c81a1b2ddf3ab85d2de4709a9a8",
+          "bytes": 22448
+        },
+        "/usr/lib/x86_64-linux-gnu/libresolv.so.2": {
+          "sha256": "d41dd4adacf5a35df426461dd8a92d7bdd5ba29bb61a1c3531bec0ada386f8dd",
+          "bytes": 63936
+        },
+        "/usr/lib/x86_64-linux-gnu/libffi.so.8.1.4": {
+          "sha256": "922024ec5a23f7de1095b1cff2f6cbfb377b5d58cd51fd0ec2e8fe35427653e2",
+          "bytes": 47576
+        }
+      }
+    },
+    "gnutls": {
+      "command": [
+        "cc",
+        "-O3",
+        "-march=x86-64-v2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/home/runner/work/edge/edge/benches/support/protocol_state_client.c",
+        "-I/usr/include/x86_64-linux-gnu",
+        "-isystem",
+        "/usr/include/mit-krb5",
+        "-I/usr/include/p11-kit-1",
+        "-Wl,-l:libcurl-gnutls.so.4",
+        "-o",
+        "/home/runner/work/edge/edge/.local/quinn-interop-private/clients/gnutls"
+      ],
+      "sha256": "93885b7705f2cbde39ae36e51529a8bb723bca5cceef08c6542e8e6b91fde238",
+      "version": "libcurl/8.14.1 GnuTLS/3.8.9 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 ngtcp2/1.11.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10",
+      "libraries": {
+        "/usr/lib/x86_64-linux-gnu/libcurl-gnutls.so.4.8.0": {
+          "sha256": "66e11cde15c921f44da4b27c7b815e29bc165696fa103c632121c8277841a713",
+          "bytes": 963560
+        },
+        "/usr/lib/x86_64-linux-gnu/libc.so.6": {
+          "sha256": "9792e3cbb541c8f44c7acf5f14f4022ea62998ecc787d326bed4d8b6547dfd92",
+          "bytes": 1995216
+        },
+        "/usr/lib/x86_64-linux-gnu/libnghttp3.so.9.2.6": {
+          "sha256": "37ecaa050c23fee92d563eec8701164505ef880c00a513cbd6d1d03beeb8fa29",
+          "bytes": 173392
+        },
+        "/usr/lib/x86_64-linux-gnu/libngtcp2_crypto_gnutls.so.8.2.0": {
+          "sha256": "32ff8ebba031c45a407f0d4bb7f0f97b372089789de05e43a8d9deb97f569edf",
+          "bytes": 43608
+        },
+        "/usr/lib/x86_64-linux-gnu/libngtcp2.so.16.2.9": {
+          "sha256": "ac58fdb952991fdb624bcb275e9a9ded9e59228eb7a989c4d18b4339103f50d3",
+          "bytes": 301592
+        },
+        "/usr/lib/x86_64-linux-gnu/libnghttp2.so.14.28.3": {
+          "sha256": "207268890b5be3043575c97af4e08c8326a12321a8a83e7278681b6b6f7d5ea8",
+          "bytes": 199152
+        },
+        "/usr/lib/x86_64-linux-gnu/libidn2.so.0.4.0": {
+          "sha256": "299cdc741f1dd0834a49d5cb44f3da26b1960bb110c1f521a084400d9b603cbf",
+          "bytes": 202872
+        },
+        "/usr/lib/x86_64-linux-gnu/librtmp.so.1": {
+          "sha256": "7d4c54c51f62085d79a4c96c7ad52f680f1f2e6d38ff7c8b8fa18d57f89df130",
+          "bytes": 122256
+        },
+        "/usr/lib/x86_64-linux-gnu/libssh2.so.1.0.1": {
+          "sha256": "bea384b0ed8797abdba6cb31b2de38ae2a6ad38d5a1cc13fb3704863bcbb15ca",
+          "bytes": 297472
+        },
+        "/usr/lib/x86_64-linux-gnu/libpsl.so.5.3.4": {
+          "sha256": "d9a6975db1b66ed34bdc04195a92a77b7d29b8d6affe4c35c05d7eafe5424fef",
+          "bytes": 75616
+        },
+        "/usr/lib/x86_64-linux-gnu/libnettle.so.8.10": {
+          "sha256": "34ac695c167a593d3587bd88592d33d53e5dc4035984f84446100962f57376fd",
+          "bytes": 346216
+        },
+        "/usr/lib/x86_64-linux-gnu/libgnutls.so.30.40.3": {
+          "sha256": "4b14edde42e7cbeefd8a6d88d035e096f2e6412a535388bb1d073a1c196e2822",
+          "bytes": 2246712
+        },
+        "/usr/lib/x86_64-linux-gnu/libgssapi_krb5.so.2.2": {
+          "sha256": "c290f761873ebeac539911010526e1c5db86218bfcb29672760da46841741de0",
+          "bytes": 346904
+        },
+        "/usr/lib/x86_64-linux-gnu/libldap.so.2.0.200": {
+          "sha256": "e8f34e65087f24f296fa7a65a8c65383f4a7e2b532c46e40463d4e59a206c20a",
+          "bytes": 400912
+        },
+        "/usr/lib/x86_64-linux-gnu/liblber.so.2.0.200": {
+          "sha256": "ca319704dd4f58b5b3fc8510738850f03f18940544ba04bebf2fa8a23a798346",
+          "bytes": 63824
+        },
+        "/usr/lib/x86_64-linux-gnu/libzstd.so.1.5.7": {
+          "sha256": "27f07c9a49c2c956bcfb64cd4712976586a66facbf15fc7f09bc37413b5f2b21",
+          "bytes": 825336
+        },
+        "/usr/lib/x86_64-linux-gnu/libbrotlidec.so.1.1.0": {
+          "sha256": "ff4baf3141862726c25ab08cdd94bced37dcae0c6827943d3e40fc1079969814",
+          "bytes": 51376
+        },
+        "/usr/lib/x86_64-linux-gnu/libz.so.1.3.1": {
+          "sha256": "85590dd58edf5445e18bc7193e5ebc01ac5841f1ae187e97705a662e90c6421e",
+          "bytes": 125376
+        },
+        "/usr/lib/x86_64-linux-gnu/libunistring.so.5.2.0": {
+          "sha256": "9c200ec975ff24c0a259d4f6cf0d0fc1736d0c86da30fff3d499ad3d9a368b65",
+          "bytes": 1996840
+        },
+        "/usr/lib/x86_64-linux-gnu/libhogweed.so.6.10": {
+          "sha256": "2663d9bdca20ba67d2d72f1d4c24b6fd0a3e97d5ee23e7b739788176cf904380",
+          "bytes": 305144
+        },
+        "/usr/lib/x86_64-linux-gnu/libgmp.so.10.5.0": {
+          "sha256": "d15e1585c6c267296459570c8ac217ca9123044bcd4e896d2f686b32333445d2",
+          "bytes": 566080
+        },
+        "/usr/lib/x86_64-linux-gnu/libcrypto.so.3": {
+          "sha256": "8ae56f0a9481280a68c19f59809cd242a07a91ad7142944d21a878221992244b",
+          "bytes": 6521408
+        },
+        "/usr/lib/x86_64-linux-gnu/libp11-kit.so.0.4.1": {
+          "sha256": "e4ae39be74740511cf8e49e80fdfc16aeee7b822ee313793da1b78ce148ba05f",
+          "bytes": 1705664
+        },
+        "/usr/lib/x86_64-linux-gnu/libtasn1.so.6.6.4": {
+          "sha256": "cea637336b0855f91260714181894bcea9f345a3a97ce68d6447f6031728cabd",
+          "bytes": 88064
+        },
+        "/usr/lib/x86_64-linux-gnu/libkrb5.so.3.3": {
+          "sha256": "c4ab64e6bc2874a83e649e4439be752465da027a0041e2bb5343f81c80f0882d",
+          "bytes": 883984
+        },
+        "/usr/lib/x86_64-linux-gnu/libk5crypto.so.3.1": {
+          "sha256": "c4c3221d0350f882cee0430b58d5fb289a5776c684d3156964864c8a9719dff1",
+          "bytes": 187144
+        },
+        "/usr/lib/x86_64-linux-gnu/libcom_err.so.2.1": {
+          "sha256": "dc4828400674492839b630c001db424cd38e5cecfcf46dbf705a637647e04bea",
+          "bytes": 18344
+        },
+        "/usr/lib/x86_64-linux-gnu/libkrb5support.so.0.1": {
+          "sha256": "f559f051ee5d39f151a57d79f2cde475c484030098b0c73f9f7035b421b187c4",
+          "bytes": 52208
+        },
+        "/usr/lib/x86_64-linux-gnu/libsasl2.so.2.0.25": {
+          "sha256": "3f93968591811eb3972c3467c69c2968dd9cb2b51f7b7bb48de22ba8e17d13fd",
+          "bytes": 109232
+        },
+        "/usr/lib/x86_64-linux-gnu/libssl.so.3": {
+          "sha256": "9592038e92d1f41affcbb625334d0b6e788714c889104fa6d5b107cf9fd657f2",
+          "bytes": 1109952
+        },
+        "/usr/lib/x86_64-linux-gnu/libbrotlicommon.so.1.1.0": {
+          "sha256": "0697dd09666e2a080974470950075ee959f2391ecb173ceee50423f969032d79",
+          "bytes": 141496
+        },
+        "/usr/lib/x86_64-linux-gnu/libffi.so.8.1.4": {
+          "sha256": "922024ec5a23f7de1095b1cff2f6cbfb377b5d58cd51fd0ec2e8fe35427653e2",
+          "bytes": 47576
+        },
+        "/usr/lib/x86_64-linux-gnu/libkeyutils.so.1.10": {
+          "sha256": "e5d5a7450d08eff7d4bbcaac75ef2b94d3447c81a1b2ddf3ab85d2de4709a9a8",
+          "bytes": 22448
+        },
+        "/usr/lib/x86_64-linux-gnu/libresolv.so.2": {
+          "sha256": "d41dd4adacf5a35df426461dd8a92d7bdd5ba29bb61a1c3531bec0ada386f8dd",
+          "bytes": 63936
+        }
+      }
+    }
+  },
+  "diagnostic_header_sha256": "ca7fc326f66c1e46b9f1355bb797b09a270d0468929195d0cd97cdefda771b44"
+}

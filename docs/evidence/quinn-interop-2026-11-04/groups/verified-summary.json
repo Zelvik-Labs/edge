@@ -1,0 +1,864 @@
+{
+  "source": "186fedc728ea868afbeaea37575df2698fb0cfe7",
+  "runtime_source": "82e3cf0db722497fb594acdcfabc645a6deb2b56",
+  "scope": "client interoperability/group diagnosis; no server capacity comparison; group mode is instrumented",
+  "cases": 4,
+  "infrastructure_failures": [],
+  "incomplete_processes": [],
+  "wrong_ca_rejections": 4,
+  "group_observations": [
+    {
+      "client": "default",
+      "round": 0,
+      "shard": 0,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 514,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 517,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 509,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 514,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 515,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 509,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 514,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 509,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 509,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 508,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 510,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 515,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    },
+    {
+      "client": "default",
+      "round": 0,
+      "shard": 1,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 514,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 510,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 508,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 509,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 516,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 510,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 516,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 514,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 510,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 515,
+          "last_group": 4588,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    },
+    {
+      "client": "x25519",
+      "round": 0,
+      "shard": 0,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 509,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 509,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 515,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 519,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 512,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 506,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 516,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 513,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 511,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 517,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 511,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 512,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 508,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 513,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 513,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 508,
+          "last_group": 29,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    },
+    {
+      "client": "x25519",
+      "round": 0,
+      "shard": 1,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 515,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 513,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 510,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 515,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 511,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 515,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 513,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 512,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 512,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 516,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 510,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 508,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 511,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 515,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 505,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 511,
+          "last_group": 29,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    },
+    {
+      "client": "x25519",
+      "round": 1,
+      "shard": 0,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 514,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 507,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 511,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 519,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 510,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 514,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 511,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 515,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 514,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 517,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 508,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 514,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 509,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 512,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 509,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 508,
+          "last_group": 29,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    },
+    {
+      "client": "x25519",
+      "round": 1,
+      "shard": 1,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 511,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 511,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 513,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 511,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 515,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 512,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 511,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 514,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 512,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 515,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 519,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 507,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 512,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 514,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 509,
+          "last_group": 29,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 506,
+          "last_group": 29,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    },
+    {
+      "client": "default",
+      "round": 1,
+      "shard": 0,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 516,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 507,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 514,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 510,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 514,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 519,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 510,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 510,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 514,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 508,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 510,
+          "last_group": 4588,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    },
+    {
+      "client": "default",
+      "round": 1,
+      "shard": 1,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 507,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 514,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 517,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 507,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 515,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 514,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 517,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 517,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 508,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 518,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 504,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 505,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    }
+  ],
+  "client_mode": "groups",
+  "clients": {
+    "default": {
+      "statuses": {
+        "traffic-errors": 2
+      },
+      "successful": 32754,
+      "failed": 14,
+      "complete_cases": 2,
+      "version": "libcurl/8.14.1 OpenSSL/3.5.7 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10"
+    },
+    "x25519": {
+      "statuses": {
+        "traffic-errors": 2
+      },
+      "successful": 32760,
+      "failed": 8,
+      "complete_cases": 2,
+      "version": "libcurl/8.14.1 OpenSSL/3.5.7 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10"
+    }
+  }
+}

@@ -14,10 +14,14 @@
 - [全程序性能优化进度](performance-program-wide-2026-11-04.md)：缓存、SNI/TCP、统计、XDP 与 io_uring 的本轮交付、收益与未解决项。
 - [实际 HTTP CPU 归因](performance-http-cpu-2026-11-04.md)：生产二进制采样、热点与可复核证据。
 - [Range 缓存预检查优化与四目标对比](performance-range-preflight-2026-11-04.md)：192 个独立单元、前后 Edge/Nginx/OpenResty 吞吐、CPU 与延迟。
-- [已存响应头校验优化](performance-stored-headers-2026-11-04.md)：三万多组语义差分、分配与组件计时，以及生产集成验证。
+- [已存响应头校验优化](performance-stored-headers-2026-11-04.md)：三万多组语义差分、组件计时及 192 格真实节点前后/Nginx/OpenResty 对比。
 - [AF_XDP 自动绑核修复](performance-afxdp-affinity-2026-11-04.md)：继承 CPU 集合、真实线程控制与完整节点验证。
 - [Quinn GSO 隔离结果](performance-quinn-gso-2026-11-04.md)：原生新连接故障复现、GSO 开关代价与诊断边界。
 - [Quinn 新连接协议诊断](performance-quinn-diagnostic-2026-11-04.md)：有界客户端帧记录、关闭码和原始可执行文件控制。
+- [Quinn 客户端互操作](performance-quinn-interop-2026-11-04.md)：同版 libcurl 两种实现与同一 OpenSSL 默认/X25519 的完整错误对照。
+- [共享 QUIC 维护压力](performance-quic-maintenance-2026-11-04.md)：定时清理口径修正与 32 组原生节点复核。
+- [共享 QUIC 发送等待](performance-shared-quic-writable-2026-11-04.md)：队列背压、多连接独立唤醒、关闭和取消。
+- [共享 QUIC 内核 TX 候选](performance-shared-quic-tx-2026-11-04.md)：GSO 原子发送、GRO 关闭、真实错误控制与未接入边界。
 - [io_uring splice 架构审计](performance-io-uring-architecture-2026-11-04.md)：强制异步路径的上游源码证据和后续实现方向。
 - [SNI 分片解析的分配边界与代价](performance-sni-parser-2026-11-04.md)：不完整输入零分配、完整分片扫描代价、逐输入对照和实测原始块。
 - [SNI 跨记录读取与小正文栈缓冲](performance-sni-cursor-2026-11-04.md)：四版本同机对照、大分片复制消除、完整边界结果和局部取舍。

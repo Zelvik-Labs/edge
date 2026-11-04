@@ -1,0 +1,31 @@
+{
+  "source": "e640a76caee4d7dcc12e77d8b2fc0cefbd753a7e",
+  "run": 41761049818,
+  "jobs": [
+    {
+      "id": 126348584243,
+      "name": "Check / Clippy - linux-x64",
+      "conclusion": "success"
+    },
+    {
+      "id": 126348584596,
+      "name": "Test - linux-x64",
+      "conclusion": "success"
+    }
+  ],
+  "library_passed": 1363,
+  "library_ignored": 4,
+  "binary_passed": 16,
+  "integration_vendor": "PASS",
+  "native_cases": 32,
+  "logs": {
+    "test.log": {
+      "sha256": "40977b26c165b78de953aa9ecaef25feaf432ed4cba604e150c32e467ceeaeab",
+      "bytes": 2994592
+    },
+    "check.log": {
+      "sha256": "ca526c32ea4422d42820c6127972d20851c9e692b9adb62a84e2d2f489a6289a",
+      "bytes": 127843
+    }
+  }
+}
