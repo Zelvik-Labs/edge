@@ -2030,10 +2030,10 @@ pub mod record {
                 is_attack,
             );
 
-            crate::metrics::daily::DAILY_DOMAIN_TRACKER.record(
+            crate::metrics::daily::DAILY_DOMAIN_TRACKER.record_shared(
                 event.server_id,
                 event.created_at,
-                event.domain.as_ref(),
+                event.domain,
                 event.bytes_sent,
                 event.cached_bytes,
                 1,

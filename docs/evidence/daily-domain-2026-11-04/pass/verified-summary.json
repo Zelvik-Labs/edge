@@ -1,0 +1,264 @@
+{
+  "source": "739aa162d367040393e1d6d91293af231e7233e6",
+  "baseline": "e866d8bc52145f71d5bab641a18f33fe5afaab18",
+  "scope": "exact daily map helpers; fixed-capacity governor and counted drop sink fixtures; System allocator; no actual governor CPU or node throughput claim",
+  "differential_controls": 20566,
+  "raw_blocks": 2560,
+  "allocations": {
+    "baseline": {
+      "hot-1": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 16000,
+        "largest": 16,
+        "capacity_calls": 1000
+      },
+      "hot-16": {
+        "iterations": 1000,
+        "allocations": 1002,
+        "reallocations": 0,
+        "bytes": 17828,
+        "largest": 728,
+        "capacity_calls": 1000
+      },
+      "hot-1024": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 17890,
+        "largest": 18,
+        "capacity_calls": 1000
+      },
+      "at-cap": {
+        "iterations": 1000,
+        "allocations": 1002,
+        "reallocations": 0,
+        "bytes": 17828,
+        "largest": 728,
+        "capacity_calls": 1000
+      },
+      "reject-new": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 16000,
+        "largest": 16,
+        "capacity_calls": 1000
+      },
+      "insert-new": {
+        "iterations": 1000,
+        "allocations": 1092,
+        "reallocations": 0,
+        "bytes": 332642,
+        "largest": 11408,
+        "capacity_calls": 1000
+      },
+      "invalid": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0,
+        "capacity_calls": 1000
+      },
+      "legacy-hot": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 16000,
+        "largest": 16,
+        "capacity_calls": 1000
+      }
+    },
+    "candidate": {
+      "hot-1": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0,
+        "capacity_calls": 0
+      },
+      "hot-16": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0,
+        "capacity_calls": 0
+      },
+      "hot-1024": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0,
+        "capacity_calls": 0
+      },
+      "at-cap": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0,
+        "capacity_calls": 0
+      },
+      "reject-new": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0,
+        "capacity_calls": 1000
+      },
+      "insert-new": {
+        "iterations": 1000,
+        "allocations": 91,
+        "reallocations": 0,
+        "bytes": 276208,
+        "largest": 10384,
+        "capacity_calls": 1000
+      },
+      "invalid": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0,
+        "capacity_calls": 0
+      },
+      "legacy-hot": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 32000,
+        "largest": 32,
+        "capacity_calls": 0
+      }
+    }
+  },
+  "cases": {
+    "hot-1": {
+      "baseline_ns": 130.38411875,
+      "candidate_ns": 60.33263,
+      "paired_percent_changes": [
+        -53.156080800963665,
+        -53.74098856374832,
+        -53.83731942300637,
+        -54.37680129076179,
+        -53.72965771130114,
+        -52.97072216999143,
+        -53.82920926695822,
+        -52.82595835222273
+      ],
+      "paired_median_percent": -53.73532313752473
+    },
+    "hot-16": {
+      "baseline_ns": 131.89656000000002,
+      "candidate_ns": 61.1683075,
+      "paired_percent_changes": [
+        -53.981687450544115,
+        -22.963791607005536,
+        -53.62767036666083,
+        -54.221097425261775,
+        -53.77052565147606,
+        -53.68009898525471,
+        -53.4079759154926,
+        -54.08241306124808
+      ],
+      "paired_median_percent": -53.72531231836538
+    },
+    "hot-1024": {
+      "baseline_ns": 141.38450375,
+      "candidate_ns": 64.11333875,
+      "paired_percent_changes": [
+        -58.549860228898595,
+        -44.946194017591445,
+        -53.61347130612919,
+        -54.685050019063716,
+        -54.926651308485155,
+        -54.3737545930841,
+        -54.94330905187075,
+        -54.621379551006164
+      ],
+      "paired_median_percent": -54.65321478503494
+    },
+    "at-cap": {
+      "baseline_ns": 133.0567825,
+      "candidate_ns": 61.08757625,
+      "paired_percent_changes": [
+        -52.816998673087035,
+        -54.33604772101204,
+        -53.95572883228861,
+        -54.2780396958209,
+        -53.89565261425879,
+        -54.30494119361384,
+        -54.19290775242711,
+        -55.60802425361031
+      ],
+      "paired_median_percent": -54.235473724124006
+    },
+    "reject-new": {
+      "baseline_ns": 107.01301000000001,
+      "candidate_ns": 97.555385,
+      "paired_percent_changes": [
+        -8.878584355514175,
+        -8.477939790994638,
+        -8.816833607444497,
+        -11.807759571388065,
+        -8.394417628686334,
+        -12.092909246677696,
+        -8.555776965105954,
+        -8.471297631024521
+      ],
+      "paired_median_percent": -8.686305286275225
+    },
+    "insert-new": {
+      "baseline_ns": 308.7963012695312,
+      "candidate_ns": 273.7171264648438,
+      "paired_percent_changes": [
+        4.558214246387782,
+        -8.624946126434374,
+        -12.172851827474629,
+        -4.169387457571583,
+        -13.033325081412372,
+        -15.833476112515054,
+        -16.98022673486119,
+        -11.821499362264309
+      ],
+      "paired_median_percent": -11.997175594869468
+    },
+    "invalid": {
+      "baseline_ns": 4.73268375,
+      "candidate_ns": 4.68821875,
+      "paired_percent_changes": [
+        -0.6394556092057746,
+        -1.582901458795749,
+        0.7523114762167715,
+        -1.3451542753016077,
+        -1.756704574787571,
+        -0.22780703541757097,
+        -1.2025163064667388,
+        0.13090902888528433
+      ],
+      "paired_median_percent": -0.9209859578362567
+    },
+    "legacy-hot": {
+      "baseline_ns": 129.75652000000002,
+      "candidate_ns": 78.59083000000001,
+      "paired_percent_changes": [
+        -38.06325306678096,
+        -39.84628527891784,
+        -39.65595393305418,
+        -40.53417352140912,
+        -38.862937462626704,
+        -39.33740431687951,
+        -38.609780213397336,
+        -39.52192786820788
+      ],
+      "paired_median_percent": -39.4296660925437
+    }
+  },
+  "max_host_steal_fraction": 0.0
+}

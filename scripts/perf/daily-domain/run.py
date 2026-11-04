@@ -35,6 +35,10 @@ def build():
     original = original.replace('use std::sync::Arc;\n', '').replace('use std::sync::LazyLock as Lazy;\n', '')
     (source / 'baseline.rs').write_text(original)
     candidate = (ROOT / 'benches/support/daily_domain_candidate.rs').read_text()
+    integrated = (ROOT / 'src/metrics/daily.rs').read_text()
+    assert integrated[:integrated.index('pub static DAILY_DOMAIN_TRACKER:')].replace(
+        'use std::sync::LazyLock as Lazy;\n', '').strip() == candidate.strip()
+    (source / 'integrated-full.rs').write_text(integrated)
     (source / 'candidate.rs').write_text(candidate)
     allocator = (ROOT / 'benches/support/sni_client_hello_probe.rs').read_text()
     (source / 'allocator.rs').write_text(allocator[allocator.index('#[cfg(feature = "count-allocations")]'):allocator.index('\nfn record(payload:')])
@@ -111,6 +115,9 @@ def verify():
         assert sha(OUT / name) == expected
     for name, expected in metadata['sources'].items():
         assert sha(OUT / 'source' / name) == expected
+    integrated = (OUT / 'source/integrated-full.rs').read_text()
+    assert integrated[:integrated.index('pub static DAILY_DOMAIN_TRACKER:')].replace(
+        'use std::sync::LazyLock as Lazy;\n', '').strip() == (OUT / 'source/candidate.rs').read_text().strip()
     controls = read(OUT / 'controls.tsv')
     assert len(controls) == 20566 and [int(r['case']) for r in controls] == list(range(20566))
     assert all(r['status'] == 'PASS' and r['baseline'] == r['candidate'] for r in controls)
