@@ -38,6 +38,9 @@ def main(options):
         if options.target == 'edge':
             ready = json.loads((stem.parent / 'edge-ready.json').read_text())
             pids = [ready['edge_pid']]
+        elif options.target == 'pingora':
+            # Foreground standalone server; verify PID 1's actual ELF below.
+            pids = [1]
         else:
             raw = original_docker('exec', target, 'pgrep', '-f', '^nginx: (master|worker|cache)')
             assert raw.split() and all(value.isdigit() for value in raw.split()), raw
@@ -89,12 +92,13 @@ def main(options):
     args = argparse.Namespace(
         target=options.target, output=options.output, tls=options.tls, client=options.client,
         edge_binary=options.edge_binary, controller=options.controller,
+        bare_pingora_binary=options.bare_pingora_binary,
         seconds=options.seconds, repeats=options.repeats, payload_size=options.payload_size, concurrency=32,
         cold_requests=None if options.timed_misses else options.cold_requests,
         fresh_requests=2048, protocols=options.protocols,
         states=options.states, connections=['reuse'], multiplex=False, seed=20261102,
         experiment='instrumented production CPU profile; exclude from capacity comparison',
-        edge_image=options.profiler_image if options.target == 'edge' else options.edge_image,
+        edge_image=options.profiler_image if options.target in {'edge', 'pingora'} else options.edge_image,
         profiler_image=options.profiler_image,
         profile_driver_sha256=matrix.sha(__file__))
     return matrix.run(args)
@@ -102,13 +106,14 @@ def main(options):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--target', choices=['edge', 'nginx', 'openresty'], default='edge')
+    parser.add_argument('--target', choices=['edge', 'pingora', 'nginx', 'openresty'], default='edge')
     parser.add_argument('--edge-image', default='edge-architecture-profiler:20261104')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--tls', type=Path, required=True)
     parser.add_argument('--client', type=Path, required=True)
     parser.add_argument('--edge-binary', type=Path, default=Path('/workspace/edge/target/release/Zelvik-Edge'))
     parser.add_argument('--controller', type=Path, default=Path('/workspace/edge/target/release/examples/issue34-controller'))
+    parser.add_argument('--bare-pingora-binary', type=Path, default=Path('/workspace/edge/.local/framework-profile-binaries/bare-pingora-proxy'))
     parser.add_argument('--profiler-image', default='edge-gap-profiler:20261101')
     parser.add_argument('--frequency', type=int, default=199)
     parser.add_argument('--seconds', type=int, default=15)

@@ -1,0 +1,67 @@
+name: Edge versus bare Pingora CPU paths
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - .github/workflows/framework-profile.yml
+      - scripts/perf/framework-profile/**
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: framework-profile-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  profile:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      EDGE_PROFILE_RUNTIME: headers
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: http-state-binaries-a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a
+          run-id: 41665387055
+          github-token: ${{ github.token }}
+          path: .local/architecture-profile-binaries
+      - uses: actions/download-artifact@v4
+        with:
+          name: header-node-binaries-4171ea700386d8ed7c755255c7eeccb7e804d644
+          run-id: 41757321970
+          github-token: ${{ github.token }}
+          path: .local/architecture-header-binaries
+      - uses: actions/download-artifact@v4
+        with:
+          name: bare-pingora-3b25c01f2b0d40ad90beb20a41e7cff917e54510
+          run-id: 41787477297
+          github-token: ${{ github.token }}
+          path: .local/framework-profile-input
+      - name: Prepare images before sampling; no compilation
+        run: |
+          docker pull nginx:1.28.0
+          docker pull openresty/openresty:1.27.1.2-0-bookworm-fat
+          docker build -t edge-architecture-profiler:20261104 -f scripts/perf/architecture-ci/Dockerfile .
+      - name: Independently sample two targets in balanced order
+        run: |
+          docker run --rm --name edge-framework-harness --network host --pid host \
+            --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
+            -e GITHUB_SHA -e EDGE_PROFILE_RUNTIME -e EDGE_MATRIX_HARNESS_NAME=edge-framework-harness \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
+            edge-architecture-profiler:20261104 bash scripts/perf/framework-profile/run.sh
+      - name: Retain symbolized profiles and failed transfers without raw stack memory
+        if: always()
+        run: |
+          if [ -d .local/framework-profile-private ]; then
+            sudo chown -R "$(id -u):$(id -g)" .local/framework-profile-private
+          fi
+          python3 scripts/perf/framework-profile/evidence.py collect
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: framework-profile-${{ github.sha }}
+          path: .local/framework-profile-ci/
+          include-hidden-files: true
+          if-no-files-found: error
