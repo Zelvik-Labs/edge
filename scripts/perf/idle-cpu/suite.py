@@ -46,6 +46,10 @@ def run():
                 manifest=str(output.relative_to(PRIVATE) / 'manifest.json'), exit=result.returncode))
             write(PRIVATE / 'suite.json', suite)
             failed |= result.returncode != 0
+            if result.returncode:
+                print('IDLE_DRIVER_FAILURE ' + json.dumps(dict(round=number, target=target,
+                    exit=result.returncode,
+                    retained_log=(PRIVATE / f'{number}-{target}.driver.log').read_text()[-16000:])), flush=True)
     verify()
     if failed:
         raise RuntimeError('one or more diagnostic fixtures failed; original failures retained')

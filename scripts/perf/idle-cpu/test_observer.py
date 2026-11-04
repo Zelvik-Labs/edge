@@ -16,6 +16,14 @@ matrix_spec.loader.exec_module(matrix)
 
 
 class CounterBoundaries(unittest.TestCase):
+    def test_origin_reference_runs_before_proxy_target(self):
+        self.assertFalse(observer.proxy_sample(None, Path('/tmp/origin-reference')))
+        self.assertTrue(observer.proxy_sample('target', Path('/tmp/0000-h1-off-reuse')))
+
+    def test_proxy_workload_without_target_is_an_error(self):
+        with self.assertRaises(RuntimeError):
+            observer.proxy_sample(None, Path('/tmp/0000-h1-off-reuse'))
+
     def test_host_root_without_limits_reads_actual_harness_cgroup(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

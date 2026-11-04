@@ -74,6 +74,8 @@ original_client = matrix.run_client
 
 
 def run_client(args, protocol, state, connection, url, ca, stem):
+    if not observer.proxy_sample(current_target, stem):
+        return original_client(args, protocol, state, connection, url, ca, stem)
     selected = context()
     before = observer.snapshot(selected['folder'], selected['pids'], matrix.host_cpu)
     complete = False

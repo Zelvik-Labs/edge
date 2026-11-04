@@ -30,6 +30,14 @@ def process(pid):
     return dict(process=after, threads=threads, exited_during_snapshot=exited)
 
 
+def proxy_sample(current_target, stem):
+    if Path(stem).name == 'origin-reference':
+        return False
+    if current_target is None:
+        raise RuntimeError('proxy workload has no observed target')
+    return True
+
+
 def cgroup_path(pid):
     rows = Path(f'/proc/{pid}/cgroup').read_text().splitlines()
     assert len(rows) == 1 and rows[0].startswith('0::'), 'unified host cgroup namespace required'
