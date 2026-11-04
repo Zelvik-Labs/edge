@@ -24,6 +24,7 @@
 - [Quinn GSO 隔离结果](performance-quinn-gso-2026-11-04.md)：原生新连接故障复现、GSO 开关代价与诊断边界。
 - [Quinn 新连接协议诊断](performance-quinn-diagnostic-2026-11-04.md)：有界客户端帧记录、关闭码和原始可执行文件控制。
 - [统计事件维度所有权](performance-metrics-move-2026-11-04.md)：192 格、1102 万次响应，未测出稳定提升，保留退步与全部原始比值。
+- [每日域名统计候选](performance-daily-domain-2026-11-04.md)：复用事件域名、减少现有 key 工作，隔离验证基数、全部计数和并发 flush。
 - [Quinn 收包节奏控制](performance-quinn-receive-spacing-2026-11-04.md)：固定两端实际二进制，约束待处理 datagram 的时序并保留关停剩余。
 - [Quinn 客户端互操作](performance-quinn-interop-2026-11-04.md)：同版 libcurl 两种实现与同一 OpenSSL 默认/X25519 的完整错误对照。
 - [共享 QUIC 维护压力](performance-quic-maintenance-2026-11-04.md)：定时清理口径修正与 32 组原生节点复核。
