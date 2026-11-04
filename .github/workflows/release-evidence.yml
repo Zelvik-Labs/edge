@@ -1,0 +1,27 @@
+name: Publish immutable 26.11.1.1 evidence and verify image
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/evidence-26.11.1.1]
+    paths:
+      - .github/workflows/release-evidence.yml
+      - .github/release-evidence.py
+      - .github/release-evidence-v26.11.1.1.json
+permissions:
+  actions: read
+  contents: write
+  packages: read
+concurrency:
+  group: release-evidence-v26.11.1.1
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/release/evidence-26.11.1.1'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verify original archives, publish exact bytes and inspect image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/release-evidence.py

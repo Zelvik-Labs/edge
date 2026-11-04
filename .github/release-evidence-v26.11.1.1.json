@@ -1,0 +1,65 @@
+{
+  "release_tag": "v26.11.1.1",
+  "release_source": "21e01923ea5daf31152dfee18d72bf5697ed6029",
+  "runtime_validated_source": "2c32f2462fcc9dd4bb77ff1372706fd2047f5f42",
+  "measured_buffer_sources": {
+    "before": "4613a6b8d468be8df646f7cb628a42b89bfe0e98",
+    "after": "60cf30ced5f85f68b84f27e170972ca528115434"
+  },
+  "archives": [
+    {
+      "name": "evidence-idle-cpu-41823827416.zip",
+      "sha256": "48a5135a69074e91cbf7084d93c67d83c109f26affb7dcaa6944ebdf3ac87b28",
+      "sizeBytes": 15948916,
+      "original_artifact_id": 13318731608,
+      "workflow_run": {
+        "id": 41823827416,
+        "repository_id": 1343309127,
+        "head_repository_id": 1343309127,
+        "head_branch": "perf/program-wide-20261104",
+        "head_sha": "d07a4c7b29fc93e164282c3669fb9d8b3afe38a6"
+      }
+    },
+    {
+      "name": "evidence-header-binaries-41757321970.zip",
+      "sha256": "7d41425305dd0456ce9116a138e19217eb8a063bdad43b047437464bf4d84728",
+      "sizeBytes": 38769957,
+      "original_artifact_id": 13290468969,
+      "workflow_run": {
+        "id": 41757321970,
+        "repository_id": 1343309127,
+        "head_repository_id": 1343309127,
+        "head_branch": "perf/program-wide-20261104",
+        "head_sha": "4171ea700386d8ed7c755255c7eeccb7e804d644"
+      }
+    },
+    {
+      "name": "evidence-downstream-buffer-41824926995.zip",
+      "sha256": "5f6f7e146eb4828019539b8ffa0d9c27fb433998d43aaa2346f2b20db7d85ac1",
+      "sizeBytes": 54872983,
+      "original_artifact_id": 13324504327,
+      "workflow_run": {
+        "id": 41824926995,
+        "repository_id": 1343309127,
+        "head_repository_id": 1343309127,
+        "head_branch": "perf/program-wide-20261104",
+        "head_sha": "ebd34770a817b68bd833f876918fc660a0089f49"
+      }
+    },
+    {
+      "name": "evidence-downstream-buffer-binaries-41824926995.zip",
+      "sha256": "7e8f3e7acb9b42464ca6a2d51f62d5c6dc30cd4eb22b45effe862f64bab1f736",
+      "sizeBytes": 38784724,
+      "original_artifact_id": 13326700281,
+      "workflow_run": {
+        "id": 41824926995,
+        "repository_id": 1343309127,
+        "head_repository_id": 1343309127,
+        "head_branch": "perf/program-wide-20261104",
+        "head_sha": "ebd34770a817b68bd833f876918fc660a0089f49"
+      }
+    }
+  ],
+  "original_zip_bytes_unmodified": true,
+  "scope": "candidate node performance and historical idle CPU diagnosis; final ISA release packages are built separately"
+}
