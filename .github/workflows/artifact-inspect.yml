@@ -4,11 +4,11 @@ on:
     inputs:
       run:
         description: Original run ID
-        default: '41818510632'
+        default: '41819185620'
         type: string
       source:
         description: Full original source SHA
-        default: '429ccf12b481c548a24bc66f6f3609b3a32513fc'
+        default: '86d37d7d550dfa216f0764799ca2bb11d015f041'
         type: string
       prefix:
         description: Unique artifact prefix
@@ -29,6 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: Verify raw ZIP and read bounded text without executing retained files
         env:
