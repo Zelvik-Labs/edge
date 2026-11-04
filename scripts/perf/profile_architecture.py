@@ -8,6 +8,7 @@ import argparse
 import importlib.util
 import json
 from pathlib import Path
+import re
 import subprocess
 
 
@@ -15,6 +16,18 @@ spec = importlib.util.spec_from_file_location(
     'matrix', Path(__file__).with_name('protocol_state_matrix.py'))
 matrix = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(matrix)
+
+
+def sanitize_futex_script(stacks):
+    public = []
+    for line in stacks.splitlines():
+        if 'syscalls:sys_enter_futex:' in line:
+            prefix, payload = line.split('syscalls:sys_enter_futex:', 1)
+            operation = re.search(r'\bop:\s*(0x[0-9a-fA-F]+|[0-9]+)\b', payload)
+            assert operation, 'cannot parse futex operation; raw payload not published'
+            line = prefix + 'syscalls:sys_enter_futex: operation=' + str(int(operation[1], 0))
+        public.append(line)
+    return '\n'.join(public)
 
 
 def main(options):
@@ -30,6 +43,8 @@ def main(options):
             target = args[args.index('--name') + 1]
             args[1:1] = ['--cap-add', 'PERFMON', '--cap-add', 'SYS_PTRACE',
                          '--security-opt', 'seccomp=unconfined']
+            if options.event == 'syscalls:sys_enter_futex':
+                args[1:1] = ['--mount', 'type=bind,src=/sys/kernel/tracing,dst=/sys/kernel/tracing,readonly']
         return original_docker(*args)
 
     def run_client(args, protocol, state, connection, url, ca, stem):
@@ -58,8 +73,9 @@ def main(options):
                      {'target': options.target, 'container': target, 'container_pids': pids,
                       'executable_sha256': identity})
         remote = '/test/' + stem.name
-        command = [*matrix.DOCKER, 'exec', target, 'perf', 'record', '-F',
-                   str(options.frequency), '-e', 'cpu-clock:u', '--call-graph',
+        sampling = ['-F', str(options.frequency)] if options.event == 'cpu-clock:u' else ['-c', str(options.period)]
+        command = [*matrix.DOCKER, 'exec', target, 'perf', 'record', *sampling,
+                   '-e', options.event, '--call-graph',
                    'dwarf,32768', '-p', ','.join(map(str, pids)), '-o', remote + '.perf.data',
                    '--', 'sleep', str(options.seconds)]
         matrix.write(Path(str(stem) + '.perf-command.json'), command)
@@ -83,6 +99,8 @@ def main(options):
                 raise
             Path(str(stem) + '.perf-' + label + '.txt').write_text(report + '\n')
         stacks = original_docker('exec', target, 'perf', 'script', '-i', remote + '.perf.data')
+        if options.event == 'syscalls:sys_enter_futex':
+            stacks = sanitize_futex_script(stacks)
         demangled = subprocess.check_output(['c++filt', '-s', 'rust'], input=stacks, text=True)
         Path(str(stem) + '.stacks.txt').write_text(demangled + '\n')
         return result
@@ -97,7 +115,9 @@ def main(options):
         cold_requests=None if options.timed_misses else options.cold_requests,
         fresh_requests=2048, protocols=options.protocols,
         states=options.states, connections=['reuse'], multiplex=False, seed=20261102,
-        experiment='instrumented production CPU profile; exclude from capacity comparison',
+        experiment='instrumented ' + options.event + ' call chains; exclude from capacity comparison',
+        profile_event=options.event, profile_period=options.period if options.event != 'cpu-clock:u' else None,
+        client_source_revision='a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a',
         edge_image=options.profiler_image if options.target in {'edge', 'pingora'} else options.edge_image,
         profiler_image=options.profiler_image,
         profile_driver_sha256=matrix.sha(__file__))
@@ -116,6 +136,8 @@ if __name__ == '__main__':
     parser.add_argument('--bare-pingora-binary', type=Path, default=Path('/workspace/edge/.local/framework-profile-binaries/bare-pingora-proxy'))
     parser.add_argument('--profiler-image', default='edge-gap-profiler:20261101')
     parser.add_argument('--frequency', type=int, default=199)
+    parser.add_argument('--event', choices=['cpu-clock:u', 'syscalls:sys_enter_futex'], default='cpu-clock:u')
+    parser.add_argument('--period', type=int, default=64)
     parser.add_argument('--seconds', type=int, default=15)
     parser.add_argument('--cold-requests', type=int, default=8192)
     parser.add_argument('--timed-misses', action='store_true', help='Use the same timed client window for unique MISS requests')

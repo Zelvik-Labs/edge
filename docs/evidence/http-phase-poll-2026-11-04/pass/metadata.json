@@ -1,0 +1,47 @@
+{
+  "source": "61e525b85d021acb518af09f1f170132b796f317",
+  "scope": "One parsed H1 loopback GET, minimal live route, mimalloc, current-thread Tokio; actual new_ctx/request_filter/private phase methods. Active poll wall time includes clock and instrumentation overhead and preemption; not node CPU, capacity, cache, upstream IO, early admission, response or logging lifecycle. Do not add phase percentages or subtract the clock floor as an exact correction.",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "rustflags": "-C target-cpu=x86-64-v2",
+  "features": [
+    "http-layout-probe"
+  ],
+  "sources": {
+    "examples/http-phase-poll.rs": "f545755c19471adf5922efa144206a04d685ef51664bb3b8e8f9f01f3945798a",
+    "src/proxy.rs": "99cbaba20b3d4585e240d1b517eca0baffe026d345c783ef266775cfda1f698b",
+    "src/config.rs": "fe99062dac91f9d8095797b5d930fe99d64517497b3889ad3968d00060699420",
+    "Cargo.toml": "34668bee6413f9acffb98ee1acde46273ecd670c8cbe8c27cf8a205f488e1d3c",
+    "Cargo.lock": "e7e9e1ae18947ab0f94c146545d24be7d014a45d0749584675e8a4931a9962c6",
+    "scripts/perf/http-phase-poll/run.py": "10e94898903bd81dd3e26c47b904721aa1602527869b38427b4848bc65192345"
+  },
+  "clippy_exit": 0,
+  "build_exit": 0,
+  "binary_sha256": "44eca91d30bcd7f1b1051f5ac6f8d9a8212c5bb6cdb33d133fae8d98db894f9b",
+  "binary_bytes": 17867400,
+  "cpu": 0,
+  "cpu_before": [
+    14765,
+    8,
+    1574,
+    80656,
+    1647,
+    0,
+    75,
+    0,
+    0,
+    0
+  ],
+  "run_exit": 0,
+  "cpu_after": [
+    16576,
+    8,
+    1576,
+    80658,
+    1649,
+    0,
+    75,
+    0,
+    0,
+    0
+  ]
+}

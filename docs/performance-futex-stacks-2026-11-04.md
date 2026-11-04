@@ -9,3 +9,12 @@
 状态：实现后交 GitHub Actions 执行，尚无归因结论。插桩和 unwind 显著改变调度；不报告容量排名、等待时长或组件 CPU 份额，也不据此直接删除统计/安全功能。
 
 仍未解决：futex 的调用来源、额外 H1 写的方向、整体性能差距。经审批的功能降级：无。
+
+
+## 首次逐调用 unwind 失败，切换采样
+
+[41804385041](https://github.com/Zelvik-Labs/edge/actions/runs/41804385041) 的 Edge H1/H2 两格均为 0 成功，共 96 个 curl 28 超时，后续未运行；不能作为正常负载的 futex 归因证据。附加/脱离和脱敏解析完成，未知符号的 Edge() 栈也不能指向某个模块。归档 13308782863（1,066,716 字节、53 文件，SHA-256 `a96b022ecc893f7d5b072e1e7f4cc741915138fcfb4d36beacca8357a777fb17`）保留失败与每条脱敏事件。
+该方法逐 syscall 停顿并 unwind，扰动不可接受；没有延长客户端超时、放宽 HTTP 验证或改变服务器资源来制造成功。
+
+改用内核 syscalls:sys_enter_futex tracepoint，每 64 次事件采样用户栈，仅运行固定 Edge 的 H1/H2 OFF 各两次。测量不再逐 syscall ptrace 停顿。先检查 runner tracefs 能力；符号化后只公开操作值和调用栈，丢弃原始参数载荷与 perf.data。专门验证参数过滤；保留所有 HTTP 失败并要求无丢失样本。
+采样窗口不声明覆盖每个请求或每个线程的全部事件，不据采样数倒算每响应调用数；确切计数来自此前独立 counts-only 对照。采样步骤仍待 Actions 结果。
