@@ -655,8 +655,11 @@ fn bench_server(id: i64, names: &[&str], upstream: &str) -> ServerConfig {
         udp: None,
         web: Some(base_web()),
         reverse_proxy: Some(ReverseProxyConfig {
+            origin_route: None,
             is_on: true,
             primary_origins: vec![OriginConfig {
+                origin_authentication: None,
+                tls_server_name: String::new(),
                 id: 2000 + id,
                 name: "bench origin".to_string(),
                 addr: Some(FlexibleAddr::String(format!("http://{upstream}"))),

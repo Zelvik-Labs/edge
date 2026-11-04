@@ -30,7 +30,46 @@ pub enum AnyLoadBalancer {
     OriginPool {
         primary: Arc<AnyLoadBalancer>,
         backup: Option<Arc<AnyLoadBalancer>>,
+        managed: Option<Arc<ManagedOriginRoute>>,
     },
+}
+
+#[derive(Clone)]
+pub struct ManagedOriginRoute {
+    pub plan: crate::origin_route::OriginRoute,
+    paths: Vec<(String, Arc<AnyLoadBalancer>)>,
+    observations: Vec<(String, Arc<crate::origin_route::OriginPathObserver>)>,
+    active_paths: Vec<(String, Arc<crate::origin_quality::ActiveOriginPath>)>,
+}
+
+impl ManagedOriginRoute {
+    fn select<F>(&self, key: &[u8], iterations: usize, is_down: F) -> Option<Backend>
+    where
+        F: Fn(i64) -> bool + Copy,
+    {
+        let now = crate::origin_route::unix_now();
+        let selected = self.plan.selected_path(now)?;
+        let select_path = |id: &str| {
+            self.paths
+                .iter()
+                .find(|(path_id, _)| path_id == id)
+                .and_then(|(_, pool)| pool.select_healthy(key, iterations, is_down))
+        };
+        if let Some(peer) = select_path(&selected.id) {
+            return Some(peer);
+        }
+        // The path vector is compiled in explicit backup-priority order.
+        self.paths
+            .iter()
+            .filter(|(id, _)| id != &selected.id)
+            .filter(|(id, _)| {
+                self.plan
+                    .paths
+                    .iter()
+                    .any(|path| &path.id == id && path.ready && path.valid_until > now)
+            })
+            .find_map(|(id, _)| select_path(id))
+    }
 }
 
 /// Least-connections selection algorithm.
@@ -89,6 +128,13 @@ impl BackendIter for LeastConnIterator {
 
 impl AnyLoadBalancer {
     pub fn select(&self, key: &[u8], max_iterations: usize) -> Option<Backend> {
+        if let Self::OriginPool {
+            managed: Some(route),
+            ..
+        } = self
+        {
+            return route.select(key, max_iterations, |_| false);
+        }
         match self {
             Self::RoundRobin(lb) => lb.select(key, max_iterations),
             Self::Random(lb) => lb.select(key, max_iterations),
@@ -111,6 +157,157 @@ impl AnyLoadBalancer {
         }
     }
 
+    pub fn uses_object_key(&self) -> bool {
+        matches!(
+            self,
+            Self::OriginPool {
+                managed: Some(_),
+                ..
+            }
+        )
+    }
+
+    pub fn managed_route(&self) -> Option<&crate::origin_route::OriginRoute> {
+        match self {
+            Self::OriginPool {
+                managed: Some(route),
+                ..
+            } => Some(&route.plan),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn origin_observer(
+        &self,
+        origin_id: i64,
+    ) -> Option<Arc<crate::origin_route::OriginPathObserver>> {
+        let Self::OriginPool {
+            managed: Some(route),
+            ..
+        } = self
+        else {
+            return None;
+        };
+        let path = route
+            .plan
+            .paths
+            .iter()
+            .find(|path| path.origins.iter().any(|origin| origin.id == origin_id))?;
+        route
+            .observations
+            .iter()
+            .find(|(id, _)| id == &path.id)
+            .map(|(_, observer)| Arc::clone(observer))
+    }
+
+    pub(crate) fn origin_path_observations(
+        &self,
+        server_id: i64,
+        now: u64,
+    ) -> Vec<serde_json::Value> {
+        let Self::OriginPool {
+            managed: Some(route),
+            ..
+        } = self
+        else {
+            return Vec::new();
+        };
+        if route.plan.valid_until <= now {
+            return Vec::new();
+        }
+        route.observations.iter().map(|(id, observer)| (id, observer, "passive_origin"))
+            .chain(route.active_paths.iter().map(|(id, active)| (id, &active.observer, "active_origin")))
+            .filter_map(|(path_id,observer,source_kind)|{
+            let path=route.plan.paths.iter().find(|path|&path.id==path_id && path.valid_until>now)?;
+            let window=observer.window(now)?;
+            let direction=match (route.plan.role,path.kind){
+                (crate::origin_route::RouteRole::Shield,_)=>"shield_to_origin",
+                (_,crate::origin_route::PathKind::Shield)=>"ingress_to_shield",
+                _=>"ingress_to_origin",
+            };
+            Some(serde_json::json!({"siteId":route.plan.site_id,"deploymentId":route.plan.deployment_id,
+                "revision":route.plan.revision,"serverId":server_id,"role":route.plan.role,"pathId":path_id,
+                "direction":direction,"sourceKind":source_kind,"windowSeconds":window.window_seconds,
+                "sampleCount":window.sample_count,"successCount":window.success_count,"errorCount":window.error_count,
+                "observedAt":window.observed_at,"ttfbMicros":window.ttfb_micros,"lastAttemptAt":window.last_attempt_at}))
+        }).collect()
+    }
+
+    /// Reserve at most one probe per compiled path, every five seconds. All
+    /// candidates receive samples, independently of visitor traffic selection.
+    pub(crate) fn take_active_origin_probes(
+        &self,
+        now: u64,
+    ) -> Vec<crate::origin_quality::OriginQualityJob> {
+        let Self::OriginPool {
+            managed: Some(route),
+            ..
+        } = self
+        else {
+            return Vec::new();
+        };
+        if route.plan.mode != crate::origin_route::RouteMode::SmartShield
+            || route.plan.valid_until <= now
+        {
+            return Vec::new();
+        }
+        route
+            .active_paths
+            .iter()
+            .filter_map(|(id, active)| {
+                let path = route
+                    .plan
+                    .paths
+                    .iter()
+                    .find(|path| &path.id == id && path.ready && path.valid_until > now)?;
+                let pool = &route.paths.iter().find(|(path_id, _)| path_id == id)?.1;
+                let backends = pool.backend_health();
+                if backends.is_empty() {
+                    return None;
+                }
+                let permit = active.reserve_at(now)?;
+                let backend = backends[active.next_backend(backends.len())].0.clone();
+                let origin = path
+                    .origins
+                    .iter()
+                    .find(|origin| origin.id == peer_origin_id(&backend))?;
+                let target = origin
+                    .health_check
+                    .as_ref()
+                    .filter(|check| check.is_on && !check.url.is_empty())
+                    .map(|check| check.url.as_str())
+                    .unwrap_or("/");
+                // The configured health URL contributes only path/query; transport,
+                // address, Host and authentication always come from this endpoint.
+                let target = if target.starts_with('/') {
+                    target.to_string()
+                } else {
+                    match target.parse::<http::Uri>() {
+                        Ok(uri) if matches!(uri.scheme_str(), Some("http" | "https")) && uri.authority().is_some() => {
+                            uri.path_and_query().map(|value|value.as_str()).unwrap_or("/").to_string()
+                        }
+                        Ok(_) => {
+                            tracing::warn!(path_id=%id,"active origin quality URL requires HTTP(S) authority");
+                            return None;
+                        }
+                        Err(error) => {
+                            tracing::warn!(path_id=%id,%error,"invalid active origin quality path");
+                            return None;
+                        }
+                    }
+                };
+                Some(crate::origin_quality::OriginQualityJob {
+                    path_id: id.clone(),
+                    backend,
+                    active: Arc::clone(active),
+                    valid_until: route.plan.valid_until.min(path.valid_until),
+                    _permit: permit,
+                    path: target,
+                })
+            })
+            .collect()
+    }
+
     /// Whether least-connections drives selection, so the caller must maintain
     /// the per-origin in-flight count for the selected backend.
     pub fn is_least_conn(&self) -> bool {
@@ -131,7 +328,14 @@ impl AnyLoadBalancer {
         F: Fn(i64) -> bool + Copy,
     {
         match self {
-            Self::OriginPool { primary, backup } => {
+            Self::OriginPool {
+                primary,
+                backup,
+                managed,
+            } => {
+                if let Some(route) = managed {
+                    return route.select(key, max_iterations, is_down);
+                }
                 if let Some(peer) = primary.select_healthy(key, max_iterations, is_down) {
                     return Some(peer);
                 }
@@ -180,7 +384,9 @@ impl AnyLoadBalancer {
                 lb.select_with(consistent_key(key, &mut buf), max_iterations, accept)
             }
             Self::LeastConn(lb) => lb.select_with(key, max_iterations, accept),
-            Self::OriginPool { primary, .. } => primary.select_healthy(key, max_iterations, is_down),
+            Self::OriginPool { primary, .. } => {
+                primary.select_healthy(key, max_iterations, is_down)
+            }
         }
     }
 
@@ -222,7 +428,17 @@ impl AnyLoadBalancer {
                 Self::Random(lb) => lb.backends().run_health_check(parallel).await,
                 Self::Consistent(lb) => lb.backends().run_health_check(parallel).await,
                 Self::LeastConn(lb) => lb.backends().run_health_check(parallel).await,
-                Self::OriginPool { primary, backup } => {
+                Self::OriginPool {
+                    primary,
+                    backup,
+                    managed,
+                } => {
+                    if let Some(route) = managed {
+                        for (_, pool) in &route.paths {
+                            pool.run_health_check(parallel).await;
+                        }
+                        return;
+                    }
                     primary.run_health_check(parallel).await;
                     if let Some(backup) = backup {
                         backup.run_health_check(parallel).await;
@@ -258,7 +474,18 @@ impl AnyLoadBalancer {
                 .iter()
                 .map(|backend| (backend.clone(), lb.backends().ready(backend)))
                 .collect(),
-            Self::OriginPool { primary, backup } => {
+            Self::OriginPool {
+                primary,
+                backup,
+                managed,
+            } => {
+                if let Some(route) = managed {
+                    return route
+                        .paths
+                        .iter()
+                        .flat_map(|(_, pool)| pool.backend_health())
+                        .collect();
+                }
                 let mut health = primary.backend_health();
                 if let Some(backup) = backup {
                     health.extend(backup.backend_health());
@@ -367,6 +594,8 @@ pub enum OriginRole {
 /// Custom metadata stored in Backend Extensions
 #[derive(Clone, Debug)]
 pub struct BackendExtension {
+    pub origin_authentication: Option<crate::origin_route::OriginAuthentication>,
+    pub tls_server_name: String,
     pub origin_role: OriginRole,
     pub use_tls: bool,
     pub host: String,    // Per-origin custom host (origin.requestHost)
@@ -393,18 +622,18 @@ pub struct BackendExtension {
 }
 
 pub fn build_lb(
-    _server_id: i64,
+    server_id: i64,
     rp_cfg: &ReverseProxyConfig,
     _level: i32,
     _parent_nodes: &HashMap<i64, Vec<ParentNodeConfig>>,
     _tiered_origin_bypass: bool,
     allow_lan: bool,
 ) -> (Arc<AnyLoadBalancer>, bool) {
-    build_origin_pool(rp_cfg, allow_lan, None)
+    build_origin_pool(server_id, rp_cfg, allow_lan, None)
 }
 
 pub fn build_lb_with_global_http(
-    _server_id: i64,
+    server_id: i64,
     rp_cfg: &ReverseProxyConfig,
     _level: i32,
     _parent_nodes: &HashMap<i64, Vec<ParentNodeConfig>>,
@@ -412,14 +641,97 @@ pub fn build_lb_with_global_http(
     allow_lan: bool,
     global_http: Option<&GlobalHTTPAllConfig>,
 ) -> (Arc<AnyLoadBalancer>, bool) {
-    build_origin_pool(rp_cfg, allow_lan, global_http)
+    build_origin_pool(server_id, rp_cfg, allow_lan, global_http)
 }
 
 fn build_origin_pool(
+    server_id: i64,
     rp_cfg: &ReverseProxyConfig,
     allow_lan: bool,
     global_http: Option<&GlobalHTTPAllConfig>,
 ) -> (Arc<AnyLoadBalancer>, bool) {
+    if let Some(route) = &rp_cfg.origin_route {
+        let now = crate::origin_route::unix_now();
+        if let Err(reason) = route.validate(now, &[]) {
+            tracing::error!(deployment_id=%route.deployment_id, %reason, "managed origin route cannot be built");
+            return rejected_route_lb(&reason);
+        }
+        let mut ordered_paths: Vec<_> = route.paths.iter().collect();
+        ordered_paths.sort_by_key(|path| {
+            (
+                path.kind == crate::origin_route::PathKind::Direct
+                    && route.mode != crate::origin_route::RouteMode::Direct,
+                path.priority,
+                &path.id,
+            )
+        });
+        let mut pools = Vec::new();
+        let mut observations = Vec::new();
+        let mut active_paths = Vec::new();
+        let mut has_health_check = false;
+        for path in ordered_paths {
+            if !path.ready || path.valid_until <= now {
+                continue;
+            }
+            let mut proxy = rp_cfg.clone();
+            proxy.origin_route = None;
+            proxy.scheduling = Some(crate::config_models::SchedulingConfig {
+                code: "hash".into(),
+                options: serde_json::json!({"hashKey":"ip"}),
+            });
+            let mut origins = path.origins.clone();
+            for origin in &mut origins {
+                origin.tls_security_verify_mode = OriginTlsSecurityVerifyMode::Force;
+                origin.tls_verify = None;
+            }
+            let (pool, has_hc) = build_origin_lb(
+                &proxy,
+                &origins,
+                OriginRole::Primary,
+                allow_lan,
+                global_http,
+            );
+            let Some(pool) = pool else {
+                return rejected_route_lb("managed route contains no permitted endpoints");
+            };
+            has_health_check |= has_hc;
+            pools.push((path.id.clone(), pool));
+            observations.push((
+                path.id.clone(),
+                crate::origin_route::origin_path_observer(server_id, route, path),
+            ));
+            if route.mode == crate::origin_route::RouteMode::SmartShield {
+                active_paths.push((
+                    path.id.clone(),
+                    crate::origin_quality::ActiveOriginPath::shared(
+                        crate::origin_route::origin_path_observer_for_kind(
+                            server_id,
+                            route,
+                            path,
+                            "active_origin",
+                        ),
+                    ),
+                ));
+            }
+        }
+        let primary = pools
+            .first()
+            .map(|(_, pool)| Arc::clone(pool))
+            .unwrap_or_else(|| rejected_route_lb("managed route has no ready paths").0);
+        return (
+            Arc::new(AnyLoadBalancer::OriginPool {
+                primary,
+                backup: None,
+                managed: Some(Arc::new(ManagedOriginRoute {
+                    plan: route.clone(),
+                    paths: pools,
+                    observations,
+                    active_paths,
+                })),
+            }),
+            has_health_check,
+        );
+    }
     let (primary, primary_hc) = build_origin_lb(
         rp_cfg,
         &rp_cfg.primary_origins,
@@ -437,7 +749,11 @@ fn build_origin_pool(
 
     match (primary, backup) {
         (Some(primary), backup) => (
-            Arc::new(AnyLoadBalancer::OriginPool { primary, backup }),
+            Arc::new(AnyLoadBalancer::OriginPool {
+                primary,
+                backup,
+                managed: None,
+            }),
             primary_hc || backup_hc,
         ),
         (None, Some(backup)) => (backup, backup_hc),
@@ -499,6 +815,8 @@ fn build_origin_lb(
         let legacy_tls_verify = parse_legacy_tls_verify(origin.tls_verify.as_ref());
         let mut ext = Extensions::new();
         ext.insert(BackendExtension {
+            origin_authentication: origin.origin_authentication.clone(),
+            tls_server_name: origin.tls_server_name.clone(),
             origin_role: role,
             use_tls: addr.is_https(),
             host: origin.request_host.clone(),
@@ -576,9 +894,10 @@ fn build_origin_lb(
         .map(|scheduling| scheduling.code.as_str())
         .unwrap_or("");
     let lb = match code {
-        "" | "random" => {
-            AnyLoadBalancer::Random(finalize_lb(LoadBalancer::from_backends(backends), detected_hc))
-        }
+        "" | "random" => AnyLoadBalancer::Random(finalize_lb(
+            LoadBalancer::from_backends(backends),
+            detected_hc,
+        )),
         "polling" | "weight" => AnyLoadBalancer::RoundRobin(finalize_lb(
             LoadBalancer::from_backends(backends),
             detected_hc,
@@ -688,11 +1007,30 @@ fn warn_unsupported_hash_key(rp_cfg: &ReverseProxyConfig) {
     }
 }
 
+fn rejected_route_lb(reason: &str) -> (Arc<AnyLoadBalancer>, bool) {
+    let origin: OriginConfig = serde_json::from_value(serde_json::json!({
+        "id":0, "addr":"http://127.0.0.1:9", "weight":1
+    }))
+    .expect("static rejected origin must parse");
+    let backend = unsupported_origin_backend(&origin, OriginRole::Fallback, reason)
+        .expect("static rejected backend must parse");
+    let backends = Backends::new(Static::new(BTreeSet::from([backend])));
+    (
+        Arc::new(AnyLoadBalancer::RoundRobin(finalize_lb(
+            LoadBalancer::from_backends(backends),
+            None,
+        ))),
+        false,
+    )
+}
+
 fn fallback_lb() -> (Arc<AnyLoadBalancer>, bool) {
     warn!("LB Builder: No upstreams found. Falling back to 127.0.0.1:80");
     let mut b = Backend::new("127.0.0.1:80").expect("valid fallback backend");
     let mut ext = Extensions::new();
     ext.insert(BackendExtension {
+        origin_authentication: None,
+        tls_server_name: String::new(),
         origin_role: OriginRole::Fallback,
         use_tls: false,
         host: String::new(),
@@ -737,6 +1075,8 @@ fn unsupported_origin_backend(
     let mut backend = Backend::new("127.0.0.1:9").ok()?;
     let mut ext = Extensions::new();
     ext.insert(BackendExtension {
+        origin_authentication: origin.origin_authentication.clone(),
+        tls_server_name: origin.tls_server_name.clone(),
         origin_role: role,
         use_tls: false,
         host: origin.request_host.clone(),
@@ -788,6 +1128,8 @@ fn oss_origin_backend(
     let legacy_tls_verify = parse_legacy_tls_verify(origin.tls_verify.as_ref());
     let mut ext = Extensions::new();
     ext.insert(BackendExtension {
+        origin_authentication: origin.origin_authentication.clone(),
+        tls_server_name: origin.tls_server_name.clone(),
         origin_role: role,
         use_tls: oss_backend.use_tls,
         host: origin.request_host.clone(),
@@ -843,7 +1185,7 @@ fn explicit_tls_host(origin_host: &str, rp_host: &str) -> Option<String> {
     }
 }
 
-fn parse_legacy_tls_verify(value: Option<&serde_json::Value>) -> Option<bool> {
+pub(crate) fn parse_legacy_tls_verify(value: Option<&serde_json::Value>) -> Option<bool> {
     value.map(|value| match value {
         serde_json::Value::Bool(value) => *value,
         serde_json::Value::Object(obj) => obj
@@ -988,6 +1330,8 @@ pub fn build_parent_lb(
             if let Ok(mut backend) = Backend::new(&target) {
                 let mut ext = Extensions::new();
                 ext.insert(BackendExtension {
+                    origin_authentication: None,
+                    tls_server_name: String::new(),
                     origin_role: OriginRole::Primary,
                     use_tls: true, // L1 -> L2 always TLS by default.
                     host: String::new(),
@@ -1151,6 +1495,7 @@ mod tests {
 
     fn rp_cfg(request_host_type: i8, request_host: &str) -> ReverseProxyConfig {
         ReverseProxyConfig {
+            origin_route: None,
             is_on: true,
             primary_origins: vec![],
             backup_origins: vec![],
@@ -1164,6 +1509,8 @@ mod tests {
 
     fn origin(addr: FlexibleAddr, request_host: &str) -> OriginConfig {
         OriginConfig {
+            origin_authentication: None,
+            tls_server_name: String::new(),
             id: 1,
             name: String::new(),
             addr: Some(addr),
@@ -1228,6 +1575,8 @@ mod tests {
     #[test]
     fn origin_tls_auto_verifies_explicit_origin_host_but_not_downstream_host() {
         let mut ext = BackendExtension {
+            origin_authentication: None,
+            tls_server_name: String::new(),
             origin_role: OriginRole::Primary,
             use_tls: true,
             host: String::new(),
@@ -1380,9 +1729,7 @@ mod tests {
         cfg.primary_origins = ids
             .iter()
             .enumerate()
-            .map(|(index, id)| {
-                origin_with_id(*id, &format!("http://127.0.0.1:{}", 9500 + index))
-            })
+            .map(|(index, id)| origin_with_id(*id, &format!("http://127.0.0.1:{}", 9500 + index)))
             .collect();
         let (lb, _hc) = build_lb(1, &cfg, 2, &HashMap::new(), false, true);
         lb
@@ -1400,7 +1747,10 @@ mod tests {
 
     #[test]
     fn scheduling_code_maps_to_the_expected_algorithm() {
-        assert_eq!(variant_name(&build_any_lb("", serde_json::json!({}), &[1, 2])), "Random");
+        assert_eq!(
+            variant_name(&build_any_lb("", serde_json::json!({}), &[1, 2])),
+            "Random"
+        );
         assert_eq!(
             variant_name(&build_any_lb("random", serde_json::json!({}), &[1, 2])),
             "Random"
@@ -1434,7 +1784,11 @@ mod tests {
 
     #[test]
     fn consistent_hash_is_sticky_and_advances_past_a_down_backend() {
-        let lb = build_any_lb("hash", serde_json::json!({"hashKey": "ip"}), &[101, 102, 103]);
+        let lb = build_any_lb(
+            "hash",
+            serde_json::json!({"hashKey": "ip"}),
+            &[101, 102, 103],
+        );
         assert_eq!(variant_name(&lb), "Consistent");
         assert!(lb.uses_client_ip_key());
         assert!(!lb.is_least_conn());
@@ -1456,7 +1810,10 @@ mod tests {
         for key in 0u8..64 {
             seen.insert(lb.select(&[key], 32).expect("backend").to_string());
         }
-        assert!(seen.len() > 1, "distinct keys should distribute, saw {seen:?}");
+        assert!(
+            seen.len() > 1,
+            "distinct keys should distribute, saw {seen:?}"
+        );
 
         // Health fallback: with the first pick marked down, selection must walk
         // the ring to a different backend instead of spinning on the same one.
@@ -1538,7 +1895,11 @@ mod tests {
     fn consistent_hash_with_empty_key_still_spreads() {
         // The L4 transports pass an empty key; a consistent-hash pool must not
         // pin every such request to a single backend.
-        let lb = build_any_lb("hash", serde_json::json!({"hashKey": "ip"}), &[401, 402, 403]);
+        let lb = build_any_lb(
+            "hash",
+            serde_json::json!({"hashKey": "ip"}),
+            &[401, 402, 403],
+        );
         let mut seen = BTreeSet::new();
         for _ in 0..128 {
             seen.insert(lb.select(b"", 16).expect("backend").to_string());

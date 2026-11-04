@@ -47,24 +47,24 @@ pub mod memory_plan;
 pub mod memory_reclaim;
 pub mod memory_shed;
 pub mod memory_ticket;
-pub mod worker_reclaim;
 pub mod metrics;
 pub mod net_bind;
 #[cfg(feature = "node-control")]
 pub mod node_control;
 pub mod node_upgrade;
-pub mod storage_migration;
 pub mod origin_h3;
 pub mod origin_h3_pool;
 pub mod origin_h3_state;
+mod origin_quality;
+pub mod origin_route;
 pub mod origin_state;
 pub mod oss_origin;
 pub mod pages;
 pub mod paths;
 pub mod perf_monitor;
 pub mod pipeline_metrics;
-pub mod process_log_policy;
 pub mod probe;
+pub mod process_log_policy;
 pub mod proxy;
 pub mod proxy_protocol;
 pub mod quic_cc;
@@ -78,6 +78,7 @@ pub mod rpc;
 pub mod runtime_mode;
 pub mod special_defense;
 pub mod ssl;
+pub mod storage_migration;
 pub mod tcp_proxy;
 pub mod tls_crypto;
 pub mod toa;
@@ -86,6 +87,7 @@ pub mod transport_clock;
 pub mod udp_proxy;
 pub mod unsupported;
 pub mod utils;
+pub mod worker_reclaim;
 pub mod xdp;
 pub mod xdp_auto_config;
 pub mod xdp_config_wizard;
@@ -131,7 +133,10 @@ mod version_tests {
     #[test]
     fn release_version_is_valid_calver() {
         let v = super::RELEASE_VERSION;
-        assert!(parse_calver(v).is_some(), "RELEASE_VERSION {v:?} must be CalVer YY.M.W[.P]");
+        assert!(
+            parse_calver(v).is_some(),
+            "RELEASE_VERSION {v:?} must be CalVer YY.M.W[.P]"
+        );
         assert!(parse_calver("26.10.2.1").is_some());
         assert!(parse_calver("26.10.2-beta.1").is_none());
         assert!(parse_calver("26.10.6").is_none());

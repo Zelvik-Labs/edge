@@ -1,8 +1,6 @@
 use anyhow::Context;
 use chrono::{Local, TimeZone};
 use clap::{Parser, Subcommand, ValueEnum};
-use zelvik_edge::i18n::{Language, t};
-use zelvik_edge::xdp_config_wizard::{XdpConfigWizard, save_xdp_enabled};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::CString;
 use std::fs;
@@ -16,6 +14,8 @@ use std::sync::{Arc, mpsc as std_mpsc};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tracing::{error, info, warn};
 use tracing_subscriber::fmt::MakeWriter;
+use zelvik_edge::i18n::{Language, t};
+use zelvik_edge::xdp_config_wizard::{XdpConfigWizard, save_xdp_enabled};
 
 // Per-request cache hits do many small allocations (headers, metadata,
 // buffers); mimalloc cuts allocator contention across worker threads.
@@ -31,9 +31,7 @@ use zelvik_edge::health_manager::GlobalHealthManager;
 use zelvik_edge::kernel_syn_defense;
 use zelvik_edge::l4_connection_registry;
 use zelvik_edge::proxy::EdgeProxy;
-use zelvik_edge::runtime_mode::{
-    RuntimeConfig, XdpAttachMode, XdpFallbackMode, XdpRuntimeMode,
-};
+use zelvik_edge::runtime_mode::{RuntimeConfig, XdpAttachMode, XdpFallbackMode, XdpRuntimeMode};
 use zelvik_edge::ssl::DynamicCertSelector;
 use zelvik_edge::{firewall, logging, rpc, tcp_proxy, udp_proxy};
 
@@ -948,9 +946,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                     .enable_all()
                     .build()?;
                 match rt.block_on(
-                    zelvik_edge::xdp_auto_config::derive_xdp_config_from_live_node(
-                        &runtime_config,
-                    ),
+                    zelvik_edge::xdp_auto_config::derive_xdp_config_from_live_node(&runtime_config),
                 ) {
                     Ok(xdp) => runtime_config.xdp = xdp,
                     Err(err) => auto_error = Some(err.to_string()),
@@ -1029,9 +1025,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 zelvik_edge::xdp_netdev_tuning::print_report(&report);
             }
             if !dry_run {
-                zelvik_edge::xdp_auto_config::refresh_xdp_interface_queues(
-                    &mut runtime_config.xdp,
-                );
+                zelvik_edge::xdp_auto_config::refresh_xdp_interface_queues(&mut runtime_config.xdp);
                 runtime_config.validate()?;
             }
             if dry_run {
@@ -1185,9 +1179,7 @@ fn run_xdp_command(command: XdpCommands) -> anyhow::Result<()> {
                 .enable_all()
                 .build()?;
             let duration = Duration::from_millis(duration_ms.max(1));
-            let report = rt.block_on(zelvik_edge::xdp::proxy_reload_smoke(
-                duration, ready_file,
-            ))?;
+            let report = rt.block_on(zelvik_edge::xdp::proxy_reload_smoke(duration, ready_file))?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
         XdpCommands::DialSmoke {
@@ -1667,8 +1659,7 @@ fn run_ntp_command(
         .enable_all()
         .build()?;
     let result = rt.block_on(zelvik_edge::utils::ntp::sync_once(&servers, timeout))?;
-    let adjusted_millis =
-        zelvik_edge::utils::ntp::apply_system_clock_offset(result.offset_millis)?;
+    let adjusted_millis = zelvik_edge::utils::ntp::apply_system_clock_offset(result.offset_millis)?;
     println!("{}", result.system_clock_log_message(adjusted_millis));
     Ok(())
 }
@@ -1771,8 +1762,7 @@ fn read_pid(path: &Path) -> Option<u32> {
 
 fn find_zelvik_edge_process_by_cwd(pid_path: PathBuf) -> Option<RunningInstance> {
     let current_pid = std::process::id();
-    let root =
-        fs::canonicalize(zelvik_edge::paths::NodePaths::current().runtime_root()).ok()?;
+    let root = fs::canonicalize(zelvik_edge::paths::NodePaths::current().runtime_root()).ok()?;
 
     for entry in fs::read_dir("/proc").ok()? {
         let Ok(entry) = entry else {
@@ -1891,7 +1881,6 @@ fn is_systemd_invocation() -> bool {
         || std::env::var_os("JOURNAL_STREAM").is_some()
 }
 
-
 #[cfg(target_os = "linux")]
 fn systemd_service_active_state() -> Option<String> {
     let output = Command::new("systemctl")
@@ -2009,9 +1998,10 @@ struct XdpObjectRepair {
 }
 
 fn normalize_release_version(version: &str) -> anyhow::Result<String> {
-    if version == "latest" || regex::Regex::new(
-        r"^[0-9]{2}\.(1[0-2]|[1-9])\.[1-5](\.[1-9][0-9]*)?$"
-    )?.is_match(version) {
+    if version == "latest"
+        || regex::Regex::new(r"^[0-9]{2}\.(1[0-2]|[1-9])\.[1-5](\.[1-9][0-9]*)?$")?
+            .is_match(version)
+    {
         Ok(version.to_string())
     } else {
         anyhow::bail!("release version must be latest or canonical CalVer YY.M.W[.P]");
@@ -2029,8 +2019,12 @@ fn release_download_url(
         anyhow::bail!("license package downloads require HTTPS");
     }
     for part in [component, version, asset] {
-        if part.is_empty() || part == "." || part == ".."
-            || !part.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
+        if part.is_empty()
+            || part == "."
+            || part == ".."
+            || !part
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
         {
             anyhow::bail!("invalid release component, version or asset path");
         }
@@ -2290,16 +2284,13 @@ fn repair_missing_xdp_ebpf_object(
     Ok(None)
 }
 
-fn repair_missing_xdp_ebpf_object_for_current_runtime(
-    node_paths: &zelvik_edge::paths::NodePaths,
-) {
+fn repair_missing_xdp_ebpf_object_for_current_runtime(node_paths: &zelvik_edge::paths::NodePaths) {
     let dest = node_paths.data_dir().join(XDP_EBPF_OBJECT_NAME);
     if dest.is_file() {
         return;
     }
 
-    let install_binary =
-        std::env::current_exe().unwrap_or_else(|_| PathBuf::from("zelvik-edge"));
+    let install_binary = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("zelvik-edge"));
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     match repair_missing_xdp_ebpf_object(node_paths.runtime_root(), &install_binary, &cwd) {
         Ok(Some(repair)) => warn!(
@@ -2350,9 +2341,10 @@ fn upgrade_binary(options: UpgradeOptions) -> anyhow::Result<()> {
     }
 
     let version = normalize_release_version(&options.version)?;
-    let headers = update_key_headers(options.update_key.as_deref().ok_or_else(|| {
-        anyhow::anyhow!("upgrade requires --update-key or ZELVIK_UPDATE_KEY")
-    })?)?;
+    let headers =
+        update_key_headers(options.update_key.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("upgrade requires --update-key or ZELVIK_UPDATE_KEY")
+        })?)?;
     let asset = match options.asset {
         Some(asset) => asset,
         None => detect_release_asset()?.to_string(),
@@ -2424,7 +2416,11 @@ fn upgrade_binary(options: UpgradeOptions) -> anyhow::Result<()> {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
-        rt.block_on(download_release_to_file(&download_url, &archive_path, headers))?;
+        rt.block_on(download_release_to_file(
+            &download_url,
+            &archive_path,
+            headers,
+        ))?;
 
         println!("{}", t("upgrade.extracting"));
         let payload = extract_release_payload(&archive_path, &tmp_dir)?;
@@ -2471,7 +2467,14 @@ mod upgrade_tests {
         assert_eq!(normalize_release_version("latest").unwrap(), "latest");
         assert_eq!(normalize_release_version("26.10.2").unwrap(), "26.10.2");
         assert_eq!(normalize_release_version("26.10.2.1").unwrap(), "26.10.2.1");
-        for invalid in ["LATEST", "v26.10.2", "26.01.2", "26.10.0", "26.10.2.0", "26.10.2?key=secret"] {
+        for invalid in [
+            "LATEST",
+            "v26.10.2",
+            "26.01.2",
+            "26.10.0",
+            "26.10.2.0",
+            "26.10.2?key=secret",
+        ] {
             assert!(normalize_release_version(invalid).is_err());
         }
     }
@@ -2484,7 +2487,9 @@ mod upgrade_tests {
                 "Zelvik-Edge",
                 "latest",
                 "Zelvik-Edge-linux-x64-v3-avx2.tar.gz"
-            ).unwrap().as_str(),
+            )
+            .unwrap()
+            .as_str(),
             "https://license.zelvik.net/Download/latest/Zelvik-Edge/Zelvik-Edge-linux-x64-v3-avx2.tar.gz"
         );
         assert_eq!(
@@ -2493,26 +2498,41 @@ mod upgrade_tests {
                 "Zelvik-Edge",
                 "26.10.2",
                 "Zelvik-Edge-linux-arm64-generic.tar.gz"
-            ).unwrap().as_str(),
+            )
+            .unwrap()
+            .as_str(),
             "https://license.zelvik.net/Download/26.10.2/Zelvik-Edge/Zelvik-Edge-linux-arm64-generic.tar.gz"
         );
         for base in [
-            "http://license.zelvik.net", "https://user:key@license.zelvik.net",
-            "https://license.zelvik.net?key=secret", "https://license.zelvik.net/#secret",
+            "http://license.zelvik.net",
+            "https://user:key@license.zelvik.net",
+            "https://license.zelvik.net?key=secret",
+            "https://license.zelvik.net/#secret",
             "https://license.zelvik.net/path",
         ] {
             assert!(release_download_url(base, "Zelvik-Edge", "latest", "edge.tar.gz").is_err());
         }
-        for asset in ["../edge.tar.gz", "edge.tar.gz?key=secret", "//other.example/edge.tar.gz"] {
-            assert!(release_download_url("https://license.zelvik.net", "Zelvik-Edge", "latest", asset).is_err());
+        for asset in [
+            "../edge.tar.gz",
+            "edge.tar.gz?key=secret",
+            "//other.example/edge.tar.gz",
+        ] {
+            assert!(
+                release_download_url("https://license.zelvik.net", "Zelvik-Edge", "latest", asset)
+                    .is_err()
+            );
         }
     }
 
     #[test]
     fn upgrade_key_is_an_explicit_option() {
         let cli = Cli::try_parse_from([
-            "zelvik-edge", "upgrade", "--update-key", &format!("zvu_{}", "a".repeat(64))
-        ]).unwrap();
+            "zelvik-edge",
+            "upgrade",
+            "--update-key",
+            &format!("zvu_{}", "a".repeat(64)),
+        ])
+        .unwrap();
         let Some(Commands::Upgrade { update_key, .. }) = cli.command else {
             panic!("expected upgrade command");
         };
@@ -2567,11 +2587,7 @@ mod upgrade_tests {
             let mut archive = tar::Builder::new(encoder);
 
             append_test_tar_file(&mut archive, "zelvik-edge", b"binary")?;
-            append_test_tar_file(
-                &mut archive,
-                "data/zelvik-edge-xdp-ebpf.o",
-                b"ebpf-object",
-            )?;
+            append_test_tar_file(&mut archive, "data/zelvik-edge-xdp-ebpf.o", b"ebpf-object")?;
             archive.finish()?;
             let encoder = archive.into_inner()?;
             encoder.finish()?;
@@ -2756,10 +2772,7 @@ WorkingDirectory='/opt/zelvik/edge'
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
             .unwrap_or(0);
-        std::env::temp_dir().join(format!(
-            "zelvik-edge-{name}-{}-{nanos}",
-            std::process::id()
-        ))
+        std::env::temp_dir().join(format!("zelvik-edge-{name}-{}-{nanos}", std::process::id()))
     }
 
     fn append_test_tar_file(
@@ -2838,7 +2851,10 @@ fn main() -> anyhow::Result<()> {
             zelvik_edge::node_upgrade::run_upgrade_guard(&manifest)?
         }
         Some(Commands::StorageMigrate) => {
-            anyhow::ensure!(check_running().is_none(), "storage migration requires the Edge service to be stopped");
+            anyhow::ensure!(
+                check_running().is_none(),
+                "storage migration requires the Edge service to be stopped"
+            );
             let paths = zelvik_edge::paths::NodePaths::try_current()?;
             zelvik_edge::storage_migration::prepare(&paths.data_dir())?;
             zelvik_edge::storage_migration::mark_ready(&paths.data_dir())?;
@@ -2935,7 +2951,11 @@ fn main() -> anyhow::Result<()> {
             // must not hide systemd/pid status: report it and continue.
             match zelvik_edge::paths::NodePaths::try_current() {
                 Ok(node_paths) => {
-                    println!("{}: {}", t("status.home"), node_paths.runtime_root().display())
+                    println!(
+                        "{}: {}",
+                        t("status.home"),
+                        node_paths.runtime_root().display()
+                    )
                 }
                 Err(err) => eprintln!("warning: cannot resolve the Zelvik-Edge home: {err:#}"),
             }
@@ -2955,7 +2975,11 @@ fn main() -> anyhow::Result<()> {
                         println!("{} (state: {state}, MainPID missing)", t("status.stopped"));
                     }
                 } else {
-                    println!("{} ({}: {state})", t("status.stopped"), t("status.systemd_state"));
+                    println!(
+                        "{} ({}: {state})",
+                        t("status.stopped"),
+                        t("status.systemd_state")
+                    );
                 }
                 return Ok(());
             }
@@ -3013,7 +3037,9 @@ fn main() -> anyhow::Result<()> {
                 // Compare canonical paths: with a symlinked home, installed is
                 // not canonical, and copying the running executable onto
                 // itself truncates it mid-copy.
-                let installed_canonical = installed.canonicalize().unwrap_or_else(|_| installed.clone());
+                let installed_canonical = installed
+                    .canonicalize()
+                    .unwrap_or_else(|_| installed.clone());
                 if exe_path != installed_canonical {
                     let temp = bin_dir.join(format!(".zelvik-edge.install.{}", std::process::id()));
                     fs::copy(&exe_path, &temp)?;
@@ -3298,9 +3324,7 @@ impl pingora_core::services::background::BackgroundService for XdpShutdownServic
             info!("graceful upgrade in progress — XDP dataplane left for the successor");
             return;
         }
-        match tokio::time::timeout(Duration::from_secs(3), zelvik_edge::xdp::detach(false))
-            .await
-        {
+        match tokio::time::timeout(Duration::from_secs(3), zelvik_edge::xdp::detach(false)).await {
             Ok(Ok(())) => info!("XDP dataplane detached during shutdown"),
             Ok(Err(err)) => warn!("XDP detach during shutdown failed: {err}"),
             Err(_) => warn!("XDP detach during shutdown exceeded its 3s budget"),
@@ -3341,11 +3365,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
                     .payload()
                     .downcast_ref::<&str>()
                     .copied()
-                    .or_else(|| {
-                        info.payload()
-                            .downcast_ref::<String>()
-                            .map(String::as_str)
-                    })
+                    .or_else(|| info.payload().downcast_ref::<String>().map(String::as_str))
                     .unwrap_or("<non-string payload>");
                 let thread = std::thread::current();
                 let name = thread.name().unwrap_or("<unnamed>");
@@ -3482,9 +3502,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
             Ok(report) => {
                 info!("XDP netdev tuning completed: {}", report.summary());
                 let before_interfaces = runtime_config.xdp.interfaces.clone();
-                zelvik_edge::xdp_auto_config::refresh_xdp_interface_queues(
-                    &mut runtime_config.xdp,
-                );
+                zelvik_edge::xdp_auto_config::refresh_xdp_interface_queues(&mut runtime_config.xdp);
                 runtime_config.validate()?;
                 if !runtime_config.xdp.interfaces.is_empty()
                     && runtime_config
@@ -3550,6 +3568,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     zelvik_edge::firewall::state::start_gc_task(waf_state.clone());
     let ip_list_manager = Arc::new(firewall::lists::GlobalIpListManager::new(waf_state.clone()));
     let health_manager = GlobalHealthManager::new(16);
+    health_manager.attach_runtime_config(&config_store);
     let cert_selector = Arc::new(DynamicCertSelector::new());
 
     let hm_start = health_manager.clone();
@@ -3560,10 +3579,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     let telemetry_core_api = api_config.clone();
     rt.spawn(zelvik_edge::telemetry::replay(telemetry_core_api, true));
     let telemetry_detail_api = api_config.clone();
-    rt.spawn(zelvik_edge::telemetry::replay(
-        telemetry_detail_api,
-        false,
-    ));
+    rt.spawn(zelvik_edge::telemetry::replay(telemetry_detail_api, false));
     // 3. Start Background Syncers
     // Activation comes first: until this instance registers on the control
     // channel it stays `pending` and every role RPC below is refused.
@@ -3714,8 +3730,7 @@ fn run_node(monitor_port: Option<u16>, monitor_clear: bool) -> anyhow::Result<()
     conf.grace_period_seconds = Some(5);
     conf.graceful_shutdown_timeout_seconds = Some(5);
     let mut my_server = pingora_core::server::Server::new_with_opt_and_conf(None, conf);
-    let mem_plan =
-        zelvik_edge::memory_plan::current_memory_plan(my_server.configuration.threads);
+    let mem_plan = zelvik_edge::memory_plan::current_memory_plan(my_server.configuration.threads);
     info!(
         "Pingora server configured with {} threads, upstream keepalive pool per thread={}, memory plan={}",
         my_server.configuration.threads,
@@ -3915,16 +3930,13 @@ mod tests {
         assert!(is_zelvik_edge_binary_name("zelvik-edge"));
         assert!(is_zelvik_edge_binary_name("zelvik-edge"));
         assert!(!is_zelvik_edge_binary_name("bash"));
-        assert!(!is_zelvik_edge_binary_name(
-            "install-zelvik-edge.sh"
-        ));
+        assert!(!is_zelvik_edge_binary_name("install-zelvik-edge.sh"));
     }
 
     #[test]
     fn process_basename_strips_linux_deleted_suffix() {
         assert_eq!(
-            process_basename(Path::new("/opt/zelvik/edge/zelvik-edge (deleted)"))
-                .as_deref(),
+            process_basename(Path::new("/opt/zelvik/edge/zelvik-edge (deleted)")).as_deref(),
             Some("zelvik-edge")
         );
     }

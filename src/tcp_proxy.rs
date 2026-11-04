@@ -1736,7 +1736,12 @@ impl TcpProxyManager {
         res.map(|_| ()).map_err(Into::into)
     }
 
-    fn record_request_start(&self, client_addr: SocketAddr, server: &ServerConfig, context: &mut TcpForwardContext) {
+    fn record_request_start(
+        &self,
+        client_addr: SocketAddr,
+        server: &ServerConfig,
+        context: &mut TcpForwardContext,
+    ) {
         let client_ip = client_addr.ip().to_string();
         let metrics = server.runtime_metrics.get();
         context.metrics_guard = Some(crate::metrics::ActiveRequestMetricsGuard::new(
@@ -3798,7 +3803,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
     }
 
     /// A least-connections pool over the given origin ids, built through the
@@ -4023,7 +4029,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
     }
 
     async fn connected_proxy_streams() -> (TcpStream, TcpStream, TcpStream, TcpStream) {
@@ -4269,6 +4276,7 @@ mod tests {
         );
         let server = Arc::new(ServerConfig {
             runtime_metrics: Default::default(),
+            origin_ingress: None,
             id: Some(91_003),
             description: String::new(),
             user_id: 0,

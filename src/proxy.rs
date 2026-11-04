@@ -305,6 +305,9 @@ pub struct ProxyCTX {
     pub response_body_waf_permit: Option<crate::memory_ticket::WorkspacePermit>,
     pub response_transform_permit: Option<crate::memory_ticket::WorkspacePermit>,
     pub upstream_retries: u8,
+    pub failed_managed_origin_ids: [i64; 3],
+    pub origin_path_observer: Option<Arc<crate::origin_route::OriginPathObserver>>,
+    pub origin_path_started: Option<std::time::Instant>,
     pub origin_status: i32,
     pub is_on: bool,
     pub client_ip: std::net::IpAddr,
@@ -352,6 +355,7 @@ pub struct ProxyCTX {
     pub upstream_is_parent: bool,
     pub host: String,
     pub origin_host: String,
+    pub origin_authentication: Option<crate::origin_route::OriginAuthentication>,
     pub oss_backend: Option<crate::oss_origin::OssBackend>,
     /// IP parsed from an inbound PROXY Protocol v1/v2 header.
     ///
@@ -461,6 +465,9 @@ impl Default for ProxyCTX {
             response_body_waf_permit: None,
             response_transform_permit: None,
             upstream_retries: 0,
+            failed_managed_origin_ids: [0; 3],
+            origin_path_observer: None,
+            origin_path_started: None,
             origin_status: 0,
             is_on: true,
             client_ip: "127.0.0.1".parse().unwrap(),
@@ -506,10 +513,20 @@ impl Default for ProxyCTX {
             upstream_is_parent: false,
             host: String::new(),
             origin_host: String::new(),
+            origin_authentication: None,
             oss_backend: None,
             proxy_protocol_ip: None,
             request_phase: RequestPhase::Init,
         }
+    }
+}
+
+fn record_origin_path_observation(ctx: &mut ProxyCTX, success: bool) {
+    if let (Some(observer), Some(started)) = (
+        ctx.origin_path_observer.take(),
+        ctx.origin_path_started.take(),
+    ) {
+        observer.record(started.elapsed(), success);
     }
 }
 
@@ -8188,6 +8205,105 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
             session.req_header().uri
         );
         ctx.server = server;
+        let origin_authorized = if let Some(ingress) = ctx
+            .server
+            .as_ref()
+            .and_then(|server| server.origin_ingress.as_ref())
+        {
+            let peer = session
+                .client_addr()
+                .and_then(|address| address.as_inet())
+                .map(|address| address.ip());
+            let token = session
+                .get_header(crate::origin_route::AUTH_HEADER)
+                .map(|header| header.as_bytes())
+                .unwrap_or_default();
+            let deployment = session
+                .get_header(crate::origin_route::DEPLOYMENT_HEADER)
+                .and_then(|header| header.to_str().ok())
+                .unwrap_or("");
+            let hop = session
+                .get_header(crate::origin_route::HOP_HEADER)
+                .and_then(|header| header.to_str().ok());
+            let single_headers = [
+                crate::origin_route::AUTH_HEADER,
+                crate::origin_route::DEPLOYMENT_HEADER,
+                crate::origin_route::HOP_HEADER,
+                crate::origin_route::PREHEAT_HEADER,
+            ]
+            .iter()
+            .all(|name| session.req_header().headers.get_all(*name).iter().count() <= 1);
+            // Listener/runtime TLS evidence only. URI schemes and forwarded
+            // headers are visitor input and cannot authorize a protected hop.
+            let encrypted_transport = self.tls_downstream
+                || ctx.is_http3_downstream
+                || session
+                    .downstream_session
+                    .digest()
+                    .and_then(|digest| digest.ssl_digest.as_ref())
+                    .is_some();
+            let authorized = single_headers
+                && peer.is_some_and(|peer| {
+                    let local_preheat = ingress.valid_until > crate::origin_route::unix_now()
+                        && ingress.hostname.eq_ignore_ascii_case(&host)
+                        && session
+                            .get_header(crate::origin_route::PREHEAT_HEADER)
+                            .is_some_and(|header| {
+                                crate::origin_route::consume_local_preheat(
+                                    ctx.server
+                                        .as_ref()
+                                        .map(|server| server.numeric_id())
+                                        .unwrap_or(0),
+                                    &host,
+                                    session
+                                        .req_header()
+                                        .uri
+                                        .path_and_query()
+                                        .map(|value| value.as_str())
+                                        .unwrap_or("/"),
+                                    peer,
+                                    &session.req_header().method,
+                                    header.as_bytes(),
+                                )
+                            });
+                    local_preheat
+                        || encrypted_transport
+                            && ingress.authorizes(
+                                crate::origin_route::unix_now(),
+                                peer,
+                                &host,
+                                token,
+                                deployment,
+                                hop,
+                            )
+                });
+            authorized
+        } else {
+            true
+        };
+        // These headers are hop-local, never accepted as visitor authority or
+        // forwarded to customer origins. Authenticated next hops are rebuilt
+        // from the selected backend below, not from the downstream request.
+        session
+            .req_header_mut()
+            .remove_header(crate::origin_route::AUTH_HEADER);
+        session
+            .req_header_mut()
+            .remove_header(crate::origin_route::DEPLOYMENT_HEADER);
+        session
+            .req_header_mut()
+            .remove_header(crate::origin_route::HOP_HEADER);
+        session
+            .req_header_mut()
+            .remove_header(crate::origin_route::PREHEAT_HEADER);
+        if !origin_authorized {
+            tracing::warn!(
+                server_id = ctx.server.as_ref().map(|server| server.numeric_id()),
+                "origin shield ingress authorization rejected"
+            );
+            ctx.response_status = 403;
+            return Err(Error::new(HTTPStatus(403)));
+        }
         if let Some(s) = ctx.server.as_ref()
             && !s.locations.is_empty()
         {
@@ -9041,16 +9157,70 @@ impl ProxyHttp for EdgeProxy {
         Ok(false)
     }
 
+    fn error_while_proxy(
+        &self,
+        peer: &HttpPeer,
+        session: &mut Session,
+        e: Box<Error>,
+        ctx: &mut Self::CTX,
+        client_reused: bool,
+    ) -> Box<Error> {
+        if matches!(e.esource(), ErrorSource::Upstream) {
+            record_origin_path_observation(ctx, false)
+        }
+        let mut e = e.more_context(format!("Peer: {}", peer));
+        ctx.upstream_retries = ctx.upstream_retries.saturating_add(1);
+        let max_attempts = ctx
+            .lb
+            .as_ref()
+            .and_then(|pool| pool.managed_route())
+            .map(|route| route.max_attempts)
+            .unwrap_or(2);
+        // Keep the transport's original retry decision. A reused-connection
+        // failure never makes an unsafe method or a truncated body replayable.
+        e.retry.decide_reuse(client_reused);
+        if !crate::origin_route::retry_allowed(
+            &session.req_header().method,
+            ctx.upstream_retries,
+            max_attempts,
+        ) || session.as_ref().retry_buffer_truncated()
+        {
+            e.set_retry(false);
+        }
+        e
+    }
+
     fn fail_to_connect(
         &self,
-        _session: &mut Session,
+        session: &mut Session,
         _peer: &HttpPeer,
         ctx: &mut Self::CTX,
         mut e: Box<Error>,
     ) -> Box<Error> {
+        record_origin_path_observation(ctx, false);
         crate::origin_state::ORIGIN_STATE_MANAGER.record_failure(ctx.origin_id);
+        if ctx
+            .lb
+            .as_ref()
+            .is_some_and(|pool| pool.managed_route().is_some())
+        {
+            let failed_index = usize::from(ctx.upstream_retries);
+            if failed_index < ctx.failed_managed_origin_ids.len() {
+                ctx.failed_managed_origin_ids[failed_index] = ctx.origin_id;
+            }
+        }
         ctx.upstream_retries = ctx.upstream_retries.saturating_add(1);
-        e.set_retry(ctx.upstream_retries < 2);
+        let max_attempts = ctx
+            .lb
+            .as_ref()
+            .and_then(|pool| pool.managed_route())
+            .map(|route| route.max_attempts)
+            .unwrap_or(2);
+        e.set_retry(crate::origin_route::retry_allowed(
+            &session.req_header().method,
+            ctx.upstream_retries,
+            max_attempts,
+        ));
         e
     }
 
@@ -9242,7 +9412,21 @@ impl ProxyHttp for EdgeProxy {
         let mut target_peer = None;
 
         // --- TIERED ORIGIN (L1 -> L2) LOGIC ---
-        if node_level == 1
+        if !ctx
+            .server
+            .as_ref()
+            .and_then(|server| server.reverse_proxy.as_ref())
+            .is_some_and(|proxy| proxy.origin_route.is_some())
+            && !ctx
+                .matched_location
+                .as_ref()
+                .and_then(|location| location.reverse_proxy.as_ref())
+                .is_some_and(|proxy| proxy.origin_route.is_some())
+            && !ctx
+                .lb
+                .as_ref()
+                .is_some_and(|pool| pool.managed_route().is_some())
+            && node_level == 1
             && !bypass_l2
             && (force_ln || ctx.cache_ref.is_some())
             && ctx.server.is_some()
@@ -9311,7 +9495,22 @@ impl ProxyHttp for EdgeProxy {
             // Consistent hashing keys on the client IP (scheduling hashKey="ip");
             // round robin / random / least-conn ignore the key.
             let mut key_buf = [0u8; 16];
-            let key: &[u8] = if lb.uses_client_ip_key() {
+            let object_key;
+            let key: &[u8] = if lb.uses_object_key() {
+                if let Some(key) = ctx.cache_key.as_ref() {
+                    key.as_bytes()
+                } else {
+                    object_key = format!(
+                        "{}:{}",
+                        ctx.server
+                            .as_ref()
+                            .map(|server| server.numeric_id())
+                            .unwrap_or(0),
+                        session.req_header().uri
+                    );
+                    object_key.as_bytes()
+                }
+            } else if lb.uses_client_ip_key() {
                 match ctx.client_ip {
                     std::net::IpAddr::V4(v4) => {
                         key_buf[..4].copy_from_slice(&v4.octets());
@@ -9326,7 +9525,8 @@ impl ProxyHttp for EdgeProxy {
                 b""
             };
             target_peer = lb.select_with_backup(key, 16, |origin_id| {
-                crate::origin_state::ORIGIN_STATE_MANAGER.is_down(origin_id)
+                (lb.managed_route().is_some() && ctx.failed_managed_origin_ids.contains(&origin_id))
+                    || crate::origin_state::ORIGIN_STATE_MANAGER.is_down(origin_id)
             });
         }
 
@@ -9379,7 +9579,7 @@ impl ProxyHttp for EdgeProxy {
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or_else(|| session.req_header().uri.host().unwrap_or("localhost"));
 
-            let (sni_host, host_override) = if let Some(ext) = backend_ext {
+            let (mut sni_host, host_override) = if let Some(ext) = backend_ext {
                 if let Some(oss_backend) = &ext.oss_backend {
                     let host = oss_backend.host_header.clone();
                     (host.clone(), Some(host))
@@ -9418,8 +9618,29 @@ impl ProxyHttp for EdgeProxy {
                 // No backend extension: forward client's Host header
                 (client_host.to_string(), None)
             };
+            if let Some(ext) = backend_ext
+                && !ext.tls_server_name.is_empty()
+            {
+                sni_host = ext.tls_server_name.clone();
+            }
+            ctx.origin_authentication =
+                backend_ext.and_then(|ext| ext.origin_authentication.clone());
 
             ctx.origin_id = backend_ext.map(|ext| ext.origin_id).unwrap_or(0);
+            ctx.origin_path_observer = if matches!(
+                session.req_header().method,
+                http::Method::GET | http::Method::HEAD
+            ) {
+                ctx.lb
+                    .as_ref()
+                    .and_then(|pool| pool.origin_observer(ctx.origin_id))
+            } else {
+                None
+            };
+            ctx.origin_path_started = ctx
+                .origin_path_observer
+                .as_ref()
+                .map(|_| std::time::Instant::now());
             // Hold an in-flight slot for least-connections ranking. The guard is
             // released by dropping the context (or early in `logging`), covering
             // success, error, and cancellation paths alike.
@@ -9712,6 +9933,11 @@ impl ProxyHttp for EdgeProxy {
                     Self::default_cache_key_for_session(session, ctx, cache)
                 };
 
+                let key = crate::origin_route::bind_cache_namespace(
+                    ctx.lb.as_ref().and_then(|pool| pool.managed_route()),
+                    key,
+                );
+
                 ctx.cache_policy = if let Some(ref child) = cache_ref.cache_policy {
                     Some(child.clone())
                 } else {
@@ -9968,6 +10194,11 @@ impl ProxyHttp for EdgeProxy {
                     Self::default_cache_key_for_session(session, ctx, cache)
                 };
 
+                key = crate::origin_route::bind_cache_namespace(
+                    ctx.lb.as_ref().and_then(|pool| pool.managed_route()),
+                    key,
+                );
+
                 // 1. Bind HEAD to the base key. A plain @method:HEAD suffix
                 // is user-controlled when a custom key template is used and
                 // can collide with a GET key.
@@ -10154,6 +10385,7 @@ impl ProxyHttp for EdgeProxy {
         upstream_response: &mut pingora::http::ResponseHeader,
         ctx: &mut Self::CTX,
     ) -> Result<()> {
+        record_origin_path_observation(ctx, upstream_response.status.as_u16() < 500);
         ctx.origin_status = upstream_response.status.as_u16() as i32;
         if ctx.origin_status >= 500 {
             crate::origin_state::ORIGIN_STATE_MANAGER.record_failure(ctx.origin_id);
@@ -10878,6 +11110,24 @@ impl ProxyHttp for EdgeProxy {
         upstream_request.remove_header("X-Cloud-Real-Ip");
         upstream_request.remove_header("X-Cloud-Real-Port");
         upstream_request.remove_header("X-Cloud-Http3-Bridge");
+        upstream_request.remove_header(crate::origin_route::AUTH_HEADER);
+        upstream_request.remove_header(crate::origin_route::DEPLOYMENT_HEADER);
+        upstream_request.remove_header(crate::origin_route::HOP_HEADER);
+        upstream_request.remove_header(crate::origin_route::PREHEAT_HEADER);
+        if let Some(auth) = &ctx.origin_authentication {
+            upstream_request
+                .insert_header(crate::origin_route::AUTH_HEADER, auth.token.as_str())
+                .map_err(|_| Error::new(InternalError))?;
+            upstream_request
+                .insert_header(
+                    crate::origin_route::DEPLOYMENT_HEADER,
+                    auth.deployment_id.as_str(),
+                )
+                .map_err(|_| Error::new(InternalError))?;
+            upstream_request
+                .insert_header(crate::origin_route::HOP_HEADER, "1")
+                .map_err(|_| Error::new(InternalError))?;
+        }
         if let Some(cache_ref) = &ctx.cache_ref {
             if cache_ref.enable_if_none_match
                 && let Some(value) = _session.get_header("if-none-match")
@@ -11895,6 +12145,308 @@ pub fn start_request_limit_cleanup_task() {
 mod tests {
     use super::EdgeProxy;
     use pingora_core::{Error, ErrorType};
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn connected_origin_errors_do_not_replay_side_effects_or_exceed_budget() {
+        use pingora_proxy::ProxyHttp;
+        use tokio::io::AsyncWriteExt;
+        let (mut client, downstream) = tokio::net::UnixStream::pair().unwrap();
+        client
+            .write_all(b"GET /asset HTTP/1.1\r\nHost: content.example\r\n\r\n")
+            .await
+            .unwrap();
+        let mut session = pingora::proxy::Session::new_h1(Box::new(
+            pingora::protocols::l4::stream::Stream::from(downstream),
+        ));
+        session.downstream_session.read_request().await.unwrap();
+        let proxy = test_proxy();
+        let peer = pingora_core::upstreams::peer::HttpPeer::new(
+            "192.0.2.10:443",
+            true,
+            "origin.example".into(),
+        );
+        for method in [http::Method::POST, http::Method::PUT, http::Method::DELETE] {
+            session.req_header_mut().set_method(method);
+            let mut ctx = super::ProxyCTX::default();
+            let mut error = Error::new(ErrorType::WriteError);
+            error.set_retry(true);
+            assert!(
+                !proxy
+                    .error_while_proxy(&peer, &mut session, error, &mut ctx, true)
+                    .retry
+                    .retry()
+            );
+        }
+        session.req_header_mut().set_method(http::Method::GET);
+        let mut ctx = super::ProxyCTX::default();
+        for expected in [true, false] {
+            let mut error = Error::new(ErrorType::ReadError);
+            error.set_retry(true);
+            assert_eq!(
+                proxy
+                    .error_while_proxy(&peer, &mut session, error, &mut ctx, true)
+                    .retry
+                    .retry(),
+                expected
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn protected_origin_ingress_rejects_forged_source_and_requires_one_shot_preheat() {
+        use pingora_core::protocols::{GetSocketDigest, SocketDigest};
+        use pingora_proxy::ProxyHttp;
+        use std::os::fd::AsRawFd;
+        fn local_session(socket: tokio::net::TcpStream) -> pingora::proxy::Session {
+            let mut stream = pingora::protocols::l4::stream::Stream::from(socket);
+            stream.set_socket_digest(SocketDigest::from_raw_fd(stream.as_raw_fd()));
+            pingora::proxy::Session::new_h1(Box::new(stream))
+        }
+        use sha2::{Digest, Sha256};
+        use std::collections::HashMap;
+        use std::sync::Arc;
+        use tokio::io::AsyncWriteExt;
+        let token = "0123456789abcdef0123456789abcdef";
+        let mut proxy = test_proxy();
+        proxy.tls_downstream = true;
+        let server: crate::config_models::ServerConfig = serde_json::from_value(serde_json::json!({
+            "id":910020,"isOn":true,"serverNames":[{"name":"content.example","type":"full"}],
+            "originIngress":{"siteId":"site-a","deploymentId":"dep-a","hostname":"content.example",
+                "tokenSha256":hex::encode(Sha256::digest(token.as_bytes())),
+                "allowedCidrs":["198.51.100.0/24"],"validUntil":crate::origin_route::unix_now()+60}
+        })).unwrap();
+        let server = Arc::new(server);
+        proxy
+            .config
+            .replace_all_servers(
+                vec![Arc::clone(&server)],
+                HashMap::from([("content.example".into(), server)]),
+                HashMap::new(),
+                HashMap::new(),
+            )
+            .await
+            .unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut client = tokio::net::TcpStream::connect(listener.local_addr().unwrap())
+            .await
+            .unwrap();
+        let (downstream, _) = listener.accept().await.unwrap();
+        client.write_all(format!("GET /asset HTTP/1.1\r\nHost: content.example\r\nX-Forwarded-For: 198.51.100.10\r\nX-Zelvik-Origin-Token: {token}\r\nX-Zelvik-Origin-Deployment: dep-a\r\nX-Zelvik-Origin-Hop: 1\r\n\r\n").as_bytes()).await.unwrap();
+        let mut session = local_session(downstream);
+        session.downstream_session.read_request().await.unwrap();
+        let mut ctx = super::ProxyCTX::default();
+        let result = proxy.request_filter(&mut session, &mut ctx).await;
+        assert!(result.is_err());
+        assert_eq!(ctx.response_status, 403);
+        assert!(ctx.server.is_some());
+        for header in [
+            crate::origin_route::AUTH_HEADER,
+            crate::origin_route::DEPLOYMENT_HEADER,
+            crate::origin_route::HOP_HEADER,
+        ] {
+            assert!(session.get_header(header).is_none());
+        }
+        let permit =
+            crate::origin_route::register_local_preheat(910020, "content.example", "/asset")
+                .unwrap();
+        let mut client = tokio::net::TcpStream::connect(listener.local_addr().unwrap())
+            .await
+            .unwrap();
+        let (downstream, _) = listener.accept().await.unwrap();
+        client.write_all(format!("GET /asset HTTP/1.1\r\nHost: content.example\r\nX-Zelvik-Origin-Preheat: {}\r\n\r\n",permit.header()).as_bytes()).await.unwrap();
+        let mut session = local_session(downstream);
+        session.downstream_session.read_request().await.unwrap();
+        let mut ctx = super::ProxyCTX::default();
+        let result = proxy.request_filter(&mut session, &mut ctx).await;
+        assert!(
+            result.is_ok(),
+            "authorized local preheat must pass request filtering"
+        );
+        assert_ne!(ctx.response_status, 403);
+        assert!(
+            session
+                .get_header(crate::origin_route::PREHEAT_HEADER)
+                .is_none()
+        );
+        assert!(!crate::origin_route::consume_local_preheat(
+            910020,
+            "content.example",
+            "/asset",
+            "127.0.0.1".parse().unwrap(),
+            &http::Method::GET,
+            permit.header().as_bytes()
+        ));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn protected_origin_ingress_rejects_plaintext_even_with_valid_auth_and_https_uri() {
+        use pingora_core::protocols::{GetSocketDigest, SocketDigest};
+        use pingora_proxy::ProxyHttp;
+        use sha2::{Digest, Sha256};
+        use std::collections::HashMap;
+        use std::os::fd::AsRawFd;
+        use std::sync::Arc;
+        use tokio::io::AsyncWriteExt;
+        let token = "0123456789abcdef0123456789abcdef";
+        let proxy = test_proxy();
+        let server:crate::config_models::ServerConfig=serde_json::from_value(serde_json::json!({
+            "id":910050,"isOn":true,"serverNames":[{"name":"content.example","type":"full"}],
+            "originIngress":{"siteId":"site-a","deploymentId":"dep-a","hostname":"content.example",
+                "tokenSha256":hex::encode(Sha256::digest(token.as_bytes())),"allowedCidrs":["127.0.0.0/8"],"validUntil":crate::origin_route::unix_now()+60}
+        })).unwrap();
+        assert!(server.origin_ingress.as_ref().unwrap().authorizes(
+            crate::origin_route::unix_now(),
+            "127.0.0.1".parse().unwrap(),
+            "content.example",
+            token.as_bytes(),
+            "dep-a",
+            Some("1")
+        ));
+        let server = Arc::new(server);
+        proxy
+            .config
+            .replace_all_servers(
+                vec![Arc::clone(&server)],
+                HashMap::from([("content.example".into(), server)]),
+                HashMap::new(),
+                HashMap::new(),
+            )
+            .await
+            .unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut client = tokio::net::TcpStream::connect(listener.local_addr().unwrap())
+            .await
+            .unwrap();
+        let (downstream, _) = listener.accept().await.unwrap();
+        client.write_all(format!("GET https://content.example/asset HTTP/1.1\r\nHost: content.example\r\nX-Forwarded-Proto: https\r\nX-Zelvik-Origin-Token: {token}\r\nX-Zelvik-Origin-Deployment: dep-a\r\nX-Zelvik-Origin-Hop: 1\r\n\r\n").as_bytes()).await.unwrap();
+        let mut stream = pingora::protocols::l4::stream::Stream::from(downstream);
+        stream.set_socket_digest(SocketDigest::from_raw_fd(stream.as_raw_fd()));
+        let mut session = pingora::proxy::Session::new_h1(Box::new(stream));
+        session.downstream_session.read_request().await.unwrap();
+        let mut ctx = super::ProxyCTX::default();
+        assert!(proxy.request_filter(&mut session, &mut ctx).await.is_err());
+        assert_eq!(ctx.response_status, 403);
+        assert!(
+            session
+                .get_header(crate::origin_route::AUTH_HEADER)
+                .is_none()
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn managed_origin_shield_uses_separate_sni_and_rebuilds_hop_authentication() {
+        use pingora_proxy::ProxyHttp;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+        use tokio::io::AsyncWriteExt;
+        let (mut client, downstream) = tokio::net::UnixStream::pair().unwrap();
+        client.write_all(b"GET /asset HTTP/1.1\r\nHost: content.example\r\nX-Zelvik-Origin-Token: forged\r\n\r\n").await.unwrap();
+        let mut session = pingora::proxy::Session::new_h1(Box::new(
+            pingora::protocols::l4::stream::Stream::from(downstream),
+        ));
+        session.downstream_session.read_request().await.unwrap();
+        let now = crate::origin_route::unix_now();
+        let server:crate::config_models::ServerConfig=serde_json::from_value(serde_json::json!({
+            "id":910010,"isOn":true,"reverseProxy":{
+                "isOn":true,"originRoute":{
+                    "siteId":"site-a","deploymentId":"dep-a","revision":1,"validUntil":now+60,
+                    "mode":"fixed_shield","role":"ingress","cacheNamespace":"version-one",
+                    "paths":[{"id":"hk","kind":"shield","priority":1,"ready":true,"validUntil":now+60,
+                        "origins":[{"id":910011,"weight":1,"addr":"https://192.0.2.10:443",
+                            "requestHost":"content.example","tlsServerName":"origin-auth.example",
+                            "originAuthentication":{"deploymentId":"dep-a","token":"0123456789abcdef0123456789abcdef"}}]}]
+                }
+            }
+        })).unwrap();
+        let (pool, _) = crate::lb_factory::build_lb(
+            910010,
+            server.reverse_proxy.as_ref().unwrap(),
+            1,
+            &HashMap::new(),
+            false,
+            true,
+        );
+        let proxy = test_proxy();
+        let (hot, _, _) = proxy.config.get_request_context_sync("content.example");
+        let mut ctx = super::ProxyCTX {
+            server: Some(Arc::new(server)),
+            lb: Some(pool),
+            global_http_config: Some(hot.global_http),
+            ..super::ProxyCTX::default()
+        };
+        let peer = proxy.upstream_peer(&mut session, &mut ctx).await.unwrap();
+        assert_eq!(peer.sni, "origin-auth.example");
+        assert!(peer.options.verify_cert);
+        assert!(peer.options.verify_hostname);
+        let mut request = pingora_http::RequestHeader::build("GET", b"/asset", None).unwrap();
+        request
+            .insert_header(crate::origin_route::AUTH_HEADER, "forged")
+            .unwrap();
+        proxy
+            .upstream_request_filter(&mut session, &mut request, &mut ctx)
+            .await
+            .unwrap();
+        assert_eq!(request.headers["host"], "content.example");
+        assert_eq!(
+            request.headers[crate::origin_route::AUTH_HEADER],
+            "0123456789abcdef0123456789abcdef"
+        );
+        assert_eq!(
+            request.headers[crate::origin_route::DEPLOYMENT_HEADER],
+            "dep-a"
+        );
+        assert_eq!(request.headers[crate::origin_route::HOP_HEADER], "1");
+        ctx.origin_authentication = None;
+        proxy
+            .upstream_request_filter(&mut session, &mut request, &mut ctx)
+            .await
+            .unwrap();
+        assert!(
+            !request
+                .headers
+                .contains_key(crate::origin_route::AUTH_HEADER)
+        );
+        assert!(
+            !request
+                .headers
+                .contains_key(crate::origin_route::DEPLOYMENT_HEADER)
+        );
+        let mut response = pingora_http::ResponseHeader::build(200, None).unwrap();
+        proxy
+            .upstream_response_filter(&mut session, &mut response, &mut ctx)
+            .await
+            .unwrap();
+        let observations = ctx
+            .lb
+            .as_ref()
+            .unwrap()
+            .origin_path_observations(910010, crate::origin_route::unix_now());
+        assert_eq!(observations.len(), 1);
+        assert_eq!(observations[0]["pathId"], "hk");
+        assert_eq!(observations[0]["direction"], "ingress_to_shield");
+        assert_eq!(observations[0]["sourceKind"], "passive_origin");
+        assert_eq!(observations[0]["sampleCount"], 1);
+        assert_eq!(observations[0]["successCount"], 1);
+        assert!(observations[0]["ttfbMicros"].as_u64().unwrap() > 0);
+        let peer = proxy.upstream_peer(&mut session, &mut ctx).await.unwrap();
+        let _error = proxy.fail_to_connect(
+            &mut session,
+            &peer,
+            &mut ctx,
+            Error::new(ErrorType::ConnectRefused),
+        );
+        let observations = ctx
+            .lb
+            .as_ref()
+            .unwrap()
+            .origin_path_observations(910010, crate::origin_route::unix_now());
+        assert_eq!(observations[0]["sampleCount"], 2);
+        assert_eq!(observations[0]["errorCount"], 1);
+    }
 
     #[cfg(unix)]
     #[tokio::test]

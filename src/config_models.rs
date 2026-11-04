@@ -927,6 +927,8 @@ pub struct ServerConfig {
     pub web: Option<WebConfig>,
     #[serde(rename = "reverseProxy")]
     pub reverse_proxy: Option<ReverseProxyConfig>,
+    #[serde(rename = "originIngress", default)]
+    pub origin_ingress: Option<crate::origin_route::OriginIngress>,
     #[serde(rename = "grpc")]
     pub grpc: Option<GRPCConfig>,
     #[serde(rename = "uam", default)]
@@ -3185,6 +3187,8 @@ pub struct SchedulingConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ReverseProxyConfig {
+    #[serde(rename = "originRoute", default)]
+    pub origin_route: Option<crate::origin_route::OriginRoute>,
     #[serde(rename = "isOn", default)]
     pub is_on: bool,
     #[serde(
@@ -3434,6 +3438,10 @@ pub enum OriginTlsSecurityVerifyMode {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct OriginConfig {
+    #[serde(rename = "originAuthentication", default)]
+    pub origin_authentication: Option<crate::origin_route::OriginAuthentication>,
+    #[serde(rename = "tlsServerName", default)]
+    pub tls_server_name: String,
     pub id: i64,
     #[serde(default, deserialize_with = "deserialize_null_default")]
     pub name: String,

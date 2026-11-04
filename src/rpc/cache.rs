@@ -1,5 +1,3 @@
-#![allow(clippy::result_large_err)]
-
 use crate::api_config::ApiConfig;
 use crate::config::ConfigStore;
 use crate::config_models::{LocationConfig, ServerConfig, WebCacheConfig};
@@ -263,7 +261,7 @@ fn rank_is_better(new_rank: (u8, usize, i32), old_rank: (u8, usize, i32)) -> boo
     new_rank.2 > old_rank.2
 }
 
-fn matching_location_cache<'a>(server: &'a ServerConfig, path: &str) -> Option<&'a WebCacheConfig> {
+fn matching_location<'a>(server: &'a ServerConfig, path: &str) -> Option<&'a LocationConfig> {
     let mut best: Option<((u8, usize, i32), &LocationConfig)> = None;
     for location in &server.locations {
         let Some(rank) = location_rank(location, path) else {
@@ -276,7 +274,21 @@ fn matching_location_cache<'a>(server: &'a ServerConfig, path: &str) -> Option<&
             best = Some((rank, location));
         }
     }
-    best.and_then(|(_, location)| location.cache.as_ref())
+    best.map(|(_, location)| location)
+}
+
+fn matching_location_cache<'a>(server: &'a ServerConfig, path: &str) -> Option<&'a WebCacheConfig> {
+    matching_location(server, path).and_then(|location| location.cache.as_ref())
+}
+
+fn origin_route_for_path<'a>(
+    server: &'a ServerConfig,
+    path: &str,
+) -> Option<&'a crate::origin_route::OriginRoute> {
+    let proxy = matching_location(server, path)
+        .and_then(|location| location.reverse_proxy.as_ref())
+        .or(server.reverse_proxy.as_ref());
+    proxy.and_then(|proxy| proxy.origin_route.as_ref())
 }
 
 fn server_cache_for_path<'a>(server: &'a ServerConfig, path: &str) -> Option<&'a WebCacheConfig> {
@@ -383,6 +395,7 @@ pub(crate) fn purge_targets_for_server(
     raw_key: &str,
 ) -> Result<Vec<PurgeTarget>, String> {
     let url = parse_purge_url(raw_key)?;
+    let origin_route = origin_route_for_path(server, url.path());
     let targets = if is_all_site_purge(key_type) {
         let base = cache_key_base_for_url(server, &url, true, false);
         vec![PurgeTarget::Prefix(normalize_purge_prefix(&base))]
@@ -404,6 +417,7 @@ pub(crate) fn purge_targets_for_server(
                     .and_then(|options| options.get("cacheGeneration"))
                     .and_then(|value| value.as_i64());
                 for mut candidate in with_scheme_counterpart(key) {
+                    candidate = crate::origin_route::bind_cache_namespace(origin_route, candidate);
                     if let Some(generation) = generation {
                         crate::cache::bind_cache_generation(
                             &mut candidate,
@@ -421,6 +435,9 @@ pub(crate) fn purge_targets_for_server(
                 expanded.extend(
                     with_scheme_counterpart(prefix)
                         .into_iter()
+                        .map(|candidate| {
+                            crate::origin_route::bind_cache_namespace(origin_route, candidate)
+                        })
                         .map(PurgeTarget::Prefix),
                 );
             }
@@ -446,6 +463,35 @@ fn is_preheat_task_type(task_type: &str) -> bool {
     matches!(task_type.to_ascii_lowercase().as_str(), "preheat" | "fetch")
 }
 
+fn protected_preheat_tls_name(
+    server_id: i64,
+    request_host: &str,
+    bindings: &serde_json::Value,
+) -> Result<String, String> {
+    let names = bindings
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|binding| {
+            binding.get("serverId").and_then(|value| value.as_i64()) == Some(server_id)
+        })
+        .filter_map(|binding| binding.get("hostname").and_then(|value| value.as_str()))
+        .collect::<Vec<_>>();
+    if names
+        .iter()
+        .any(|name| wildcard_host_matches(name, request_host))
+    {
+        return Ok(request_host.to_string());
+    }
+    names
+        .into_iter()
+        .find(|name| !name.contains('*') && !name.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| {
+            "protected preheat requires a loaded certificate for this server".to_string()
+        })
+}
+
 async fn preheat_cache_url(
     raw_url: &str,
     config_store: &ConfigStore,
@@ -460,26 +506,73 @@ async fn preheat_cache_url(
         .host_str()
         .ok_or_else(|| format!("preheat URL '{}' has no host", raw_url))?;
     let server = find_purge_server(config_store, scope_server_id, raw_host)?;
-    let fetch_url = preheat_fetch_url_for_server(&server, &url)?;
+    let mut fetch_url = preheat_fetch_url_for_server(&server, &url)?;
+    let protected = server.origin_ingress.is_some();
+    if protected {
+        // Cloud and managed ingress origin paths reach a shield over HTTPS.
+        // Warm that same hop/key even when the public visitor URL is HTTP.
+        fetch_url
+            .set_scheme("https")
+            .map_err(|_| "protected preheat requires HTTPS".to_string())?;
+        fetch_url
+            .set_port(None)
+            .map_err(|_| "protected preheat port is invalid".to_string())?;
+    }
     let fetch_host = fetch_url
         .host_str()
-        .ok_or_else(|| format!("preheat URL '{}' has no host", raw_url))?;
+        .ok_or_else(|| format!("preheat URL '{}' has no host", raw_url))?
+        .to_string();
+    let host_header = match fetch_url.port() {
+        Some(port) => format!("{fetch_host}:{port}"),
+        None => fetch_host.clone(),
+    };
+    let mut target = fetch_url.path().to_string();
+    if let Some(query) = fetch_url.query() {
+        target.push('?');
+        target.push_str(query)
+    }
+    let permit = if protected {
+        Some(crate::origin_route::register_local_preheat(
+            server.numeric_id(),
+            &fetch_host,
+            &target,
+        )?)
+    } else {
+        None
+    };
+    if protected && fetch_url.scheme() == "https" {
+        let tls_name = protected_preheat_tls_name(
+            server.numeric_id(),
+            &fetch_host,
+            &crate::ssl::loaded_certificate_bindings(),
+        )?;
+        fetch_url
+            .set_host(Some(&tls_name))
+            .map_err(|_| "invalid loaded preheat TLS hostname".to_string())?;
+    }
+    let connect_host = fetch_url
+        .host_str()
+        .ok_or("preheat connection hostname is missing")?
+        .to_string();
     let port = fetch_url
         .port_or_known_default()
         .ok_or_else(|| format!("preheat URL '{}' has no default port", raw_url))?;
     let loopback = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
     let client = reqwest::Client::builder()
+        .no_proxy()
         .timeout(std::time::Duration::from_secs(30))
+        .redirect(reqwest::redirect::Policy::none())
         // Preheat is pinned to the local proxy via `resolve()`. The local TLS
         // listener may serve a default/self-signed cert in dev or before OCSP
         // sync, but the request still must exercise the same HTTPS route/key.
-        .danger_accept_invalid_certs(true)
-        .resolve(fetch_host, loopback)
+        .danger_accept_invalid_certs(!protected)
+        .resolve(&connect_host, loopback)
         .build()
         .map_err(|err| format!("build preheat HTTP client failed: {}", err))?;
 
-    let resp = client
+    let request = client
         .get(fetch_url)
+        .header("host", host_header)
         .header("x-edge-cache-action", "fetch")
         .header("x-cloud-cache-action", "fetch")
         .header("x-edge-preheat", "1")
@@ -488,7 +581,16 @@ async fn preheat_cache_url(
             "user-agent",
             "Mozilla/5.0 (compatible; Zelvik-EdgePreheat/1.0)",
         )
-        .header("accept-encoding", "gzip, deflate, br")
+        .header("accept-encoding", "gzip, deflate, br");
+    let request = if let Some(permit) = &permit {
+        let mut header = reqwest::header::HeaderValue::from_str(permit.header())
+            .map_err(|_| "invalid local preheat capability".to_string())?;
+        header.set_sensitive(true);
+        request.header(crate::origin_route::PREHEAT_HEADER, header)
+    } else {
+        request
+    };
+    let resp = request
         .send()
         .await
         .map_err(|err| format!("preheat request failed: {}", err))?;
@@ -513,7 +615,9 @@ pub async fn sync_cache_tasks(
     // The shared suite interceptor owns the identity metadata (zelvik-instance /
     // zelvik-credential / zelvik-kind / zelvik-protocol) and re-mints the
     // credential for this RPC.
-    let interceptor = api_config.credential_interceptor().expect("control-plane identity must be valid before an RPC client is built");
+    let interceptor = api_config
+        .credential_interceptor()
+        .expect("control-plane identity must be valid before an RPC client is built");
     let mut client =
         pb::http_cache_task_key_service_client::HttpCacheTaskKeyServiceClient::with_interceptor(
             channel,
@@ -599,6 +703,8 @@ pub async fn sync_cache_tasks(
                             error = err;
                         }
                     }
+                } else {
+                    error = format!("unsupported cache task type '{}'", key_task.r#type);
                 }
 
                 results.push(pb::update_http_cache_task_keys_status_request::KeyResult {
@@ -608,11 +714,15 @@ pub async fn sync_cache_tasks(
                 });
             }
             if !results.is_empty() {
-                let _ = client
+                if let Err(error) = client
                     .update_http_cache_task_keys_status(pb::UpdateHttpCacheTaskKeysStatusRequest {
                         key_results: results,
                     })
-                    .await;
+                    .await
+                {
+                    warn!(task_id,%error,"cache task completion was not acknowledged; retry required");
+                    return false;
+                }
             }
             true
         }
@@ -830,5 +940,58 @@ mod tests {
         assert!(is_preheat_task_type("fetch"));
         assert!(is_preheat_task_type("FETCH"));
         assert!(!is_preheat_task_type("purge"));
+    }
+}
+
+#[cfg(test)]
+mod origin_route_tests {
+    use super::*;
+
+    #[test]
+    fn managed_origin_rpc_purge_keys_and_prefixes_use_the_runtime_namespace() {
+        let server:ServerConfig=serde_json::from_value(serde_json::json!({
+            "id":910030,"serverNames":[{"name":"content.example","type":"full"}],
+            "reverseProxy":{"isOn":true,"originRoute":{"siteId":"site-a","deploymentId":"dep-a","revision":1,
+                "validUntil":crate::origin_route::unix_now()+60,"mode":"direct","role":"shield","cacheNamespace":"content-v1",
+                "paths":[{"id":"origin","kind":"direct","priority":1,"ready":true,"validUntil":crate::origin_route::unix_now()+60,
+                    "origins":[{"id":910031,"weight":1,"addr":"https://192.0.2.1:443"}]}]}}
+        })).unwrap();
+        let targets =
+            purge_targets_for_server(&server, "key", "https://content.example/asset?v=1").unwrap();
+        assert_eq!(
+            targets,
+            vec![
+                PurgeTarget::Key("6:site-a10:content-v1http://content.example/asset?v=1".into()),
+                PurgeTarget::Key("6:site-a10:content-v1https://content.example/asset?v=1".into())
+            ]
+        );
+        let targets =
+            purge_targets_for_server(&server, "directory", "https://content.example/assets/")
+                .unwrap();
+        assert_eq!(
+            targets,
+            vec![
+                PurgeTarget::Prefix("6:site-a10:content-v1http://content.example/assets/*".into()),
+                PurgeTarget::Prefix("6:site-a10:content-v1https://content.example/assets/*".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn protected_preheat_tls_uses_only_this_servers_loaded_certificate() {
+        let bindings = serde_json::json!([
+            {"serverId":1,"hostname":"other.example"},
+            {"serverId":2,"hostname":"shield-tls.example"}
+        ]);
+        assert_eq!(
+            protected_preheat_tls_name(2, "content.example", &bindings).unwrap(),
+            "shield-tls.example"
+        );
+        assert!(protected_preheat_tls_name(3, "content.example", &bindings).is_err());
+        let bindings = serde_json::json!([{"serverId":2,"hostname":"*.example"}]);
+        assert_eq!(
+            protected_preheat_tls_name(2, "content.example", &bindings).unwrap(),
+            "content.example"
+        );
     }
 }

@@ -480,7 +480,10 @@ pub async fn dial_smoke(
 }
 
 #[cfg(target_os = "linux")]
-#[expect(clippy::too_many_arguments, reason = "dial probe exposes each timing/control knob as an explicit parameter")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "dial probe exposes each timing/control knob as an explicit parameter"
+)]
 async fn dial_smoke_inner(
     manager: std::sync::Arc<XdpManager>,
     target: std::net::SocketAddr,
@@ -1672,8 +1675,11 @@ fn xdp_proxy_smoke_reverse_proxy(
     backend_addr: std::net::SocketAddr,
 ) -> crate::config_models::ReverseProxyConfig {
     crate::config_models::ReverseProxyConfig {
+        origin_route: None,
         is_on: true,
         primary_origins: vec![crate::config_models::OriginConfig {
+            origin_authentication: None,
+            tls_server_name: String::new(),
             id: origin_id,
             name: format!("xdp-smoke-origin-{origin_id}"),
             addr: Some(crate::config_models::FlexibleAddr::Object(

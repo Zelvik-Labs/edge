@@ -1078,6 +1078,8 @@ mod tests {
 
     fn origin(provider: &str, oss: Value) -> OriginConfig {
         OriginConfig {
+            origin_authentication: None,
+            tls_server_name: String::new(),
             id: 1,
             name: String::new(),
             addr: Some(FlexibleAddr::String(format!("oss:{}", provider))),

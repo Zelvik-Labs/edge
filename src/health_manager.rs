@@ -21,6 +21,10 @@ pub struct GlobalHealthManager {
     parent_registry: DashMap<i64, HealthCheckItem<LoadBalancer<Consistent>>>,
     /// Global limit on concurrent probes
     concurrency_limiter: Arc<Semaphore>,
+    /// Keep quality's waiters ahead of the global semaphore bounded so an
+    /// unselected-path backlog cannot starve business health checks.
+    quality_limiter: Arc<Semaphore>,
+    runtime_config: parking_lot::RwLock<Option<Weak<crate::config::ConfigStore>>>,
 }
 
 impl GlobalHealthManager {
@@ -30,7 +34,59 @@ impl GlobalHealthManager {
             registry: DashMap::new(),
             parent_registry: DashMap::new(),
             concurrency_limiter: Arc::new(Semaphore::new(max_concurrency)),
+            quality_limiter: Arc::new(Semaphore::new(max_concurrency.saturating_sub(1).min(12))),
+            runtime_config: parking_lot::RwLock::new(None),
         })
+    }
+
+    pub fn attach_runtime_config(&self, config: &Arc<crate::config::ConfigStore>) {
+        *self.runtime_config.write() = Some(Arc::downgrade(config));
+    }
+
+    async fn schedule_origin_quality(&self) {
+        let Some(weak_config) = self.runtime_config.read().clone() else {
+            return;
+        };
+        let Some(config) = weak_config.upgrade() else {
+            return;
+        };
+        let now = crate::origin_route::unix_now();
+        for (id, pool, host) in config.active_origin_quality_targets() {
+            let weak_pool = Arc::downgrade(&pool);
+            for job in pool.take_active_origin_probes(now) {
+                let limiter = Arc::clone(&self.concurrency_limiter);
+                let quality_limiter = Arc::clone(&self.quality_limiter);
+                let weak_pool = weak_pool.clone();
+                let weak_config = weak_config.clone();
+                let host = host.clone();
+                tokio::spawn(async move {
+                    let remaining = Duration::from_secs(
+                        job.valid_until
+                            .saturating_sub(crate::origin_route::unix_now()),
+                    );
+                    let permits = tokio::time::timeout(remaining, async {
+                        let quality = quality_limiter.acquire().await.ok()?;
+                        let global = limiter.acquire().await.ok()?;
+                        Some((quality, global))
+                    })
+                    .await;
+                    let Ok(Some((_quality_permit, _permit))) = permits else {
+                        return;
+                    };
+                    let (Some(pool), Some(config)) = (weak_pool.upgrade(), weak_config.upgrade())
+                    else {
+                        return;
+                    };
+                    let Some(current) = config.get_lb_by_id(id).await else {
+                        return;
+                    };
+                    if !Arc::ptr_eq(&pool, &current) {
+                        return;
+                    }
+                    crate::origin_quality::execute_quality_job(job, &host).await;
+                });
+            }
+        }
     }
 
     /// Registers a load balancer for periodic health monitoring.
@@ -181,6 +237,7 @@ impl GlobalHealthManager {
         loop {
             interval.tick().await;
             self.schedule_probes().await;
+            self.schedule_origin_quality().await;
         }
     }
 
@@ -267,6 +324,58 @@ impl GlobalHealthManager {
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[tokio::test]
+    async fn origin_quality_queued_probe_drops_replaced_generation_before_network_io() {
+        use std::collections::HashMap;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let now = crate::origin_route::unix_now();
+        let rp=serde_json::from_value(serde_json::json!({"isOn":true,"originRoute":{
+            "siteId":"weak-quality-site","deploymentId":"weak-quality-deployment","revision":1,
+            "mode":"smart_shield","role":"ingress","validUntil":now+120,"cacheNamespace":"weak-quality",
+            "paths":[{"id":"shield","kind":"shield","priority":1,"ready":true,"validUntil":now+120,
+                "origins":[{"id":830001,"weight":1,"addr":format!("https://{}",listener.local_addr().unwrap()),
+                    "requestHost":"content.example","tlsServerName":"shield.example",
+                    "originAuthentication":{"deploymentId":"weak-quality-deployment","token":"0123456789abcdef0123456789abcdef"}}]}]
+        }})).unwrap();
+        let (pool, _) = crate::lb_factory::build_lb(830000, &rp, 1, &HashMap::new(), false, true);
+        let weak_pool = Arc::downgrade(&pool);
+        let config = Arc::new(crate::config::ConfigStore::new());
+        let server = Arc::new(
+            serde_json::from_value(serde_json::json!({"id":830000,"isOn":true,
+            "serverNames":[{"name":"content.example","type":"full"}]}))
+            .unwrap(),
+        );
+        config
+            .replace_all_servers(
+                vec![Arc::clone(&server)],
+                HashMap::from([("content.example".into(), server)]),
+                HashMap::from([("content.example".into(), Arc::clone(&pool))]),
+                HashMap::from([(830000, Arc::clone(&pool))]),
+            )
+            .await
+            .unwrap();
+        let manager = GlobalHealthManager::new(0);
+        manager.attach_runtime_config(&config);
+        manager.schedule_origin_quality().await;
+        config
+            .replace_all_servers(Vec::new(), HashMap::new(), HashMap::new(), HashMap::new())
+            .await
+            .unwrap();
+        drop(pool);
+        tokio::task::yield_now().await;
+        assert!(
+            weak_pool.upgrade().is_none(),
+            "queued quality work must not pin replaced runtime pools"
+        );
+        manager.concurrency_limiter.add_permits(1);
+        manager.quality_limiter.add_permits(1);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(30), listener.accept())
+                .await
+                .is_err()
+        );
+    }
 
     #[tokio::test]
     async fn immediate_probe_does_not_pin_replaced_load_balancer() {

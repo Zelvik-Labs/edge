@@ -8,6 +8,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
+use pingora_core::server::Server;
+use pingora_core::server::configuration::ServerConf;
+use serde_json::{Value, json};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpListener;
+use tracing::info;
+use tracing_subscriber::EnvFilter;
 use zelvik_edge::api_config::{AccessLogPipelineConfig, ApiConfig};
 use zelvik_edge::config::ConfigStore;
 use zelvik_edge::config_models::{
@@ -22,13 +29,6 @@ use zelvik_edge::firewall::verifier::WafVerifier;
 use zelvik_edge::lb_factory;
 use zelvik_edge::proxy::EdgeProxy;
 use zelvik_edge::ssl::DynamicCertSelector;
-use pingora_core::server::Server;
-use pingora_core::server::configuration::ServerConf;
-use serde_json::{Value, json};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
-use tracing::info;
-use tracing_subscriber::EnvFilter;
 
 const DEFAULT_PROXY_PORT: u16 = 19080;
 const DEFAULT_ORIGIN_PORT: u16 = 19081;
@@ -210,58 +210,59 @@ fn main() -> anyhow::Result<()> {
         all_servers.push(server);
     }
 
-    runtime.block_on(config_store.update_config(
-        1,
-        1,
-        0,
-        0,
-        all_servers,
-        servers,
-        routes,
-        id_to_lb,
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-        None,
-        0,
-        1,
-        true,
-        false,
-        HashMap::new(),
-        false,
-        false,
-        "random".to_string(),
-        HashMap::new(),
-        None,
-        true,
-        false,
-        "zelvik-edge-uam-lab".to_string(),
-        false,
-        false,
-        0,
-        true,
-        false,
-        false,
-        String::new(),
-        None,
-        Some(GlobalHTTPAllConfig {
-            allow_lan_ip: true,
-            server_name: "zelvik-edge-uam-lab".to_string(),
-            ..Default::default()
-        }),
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-        HashMap::new(),
-        HashMap::new(),
-        HashMap::new(),
-        HashMap::new(),
-        HashMap::new(),
-        None,
-        None,
-    ))
-    .expect("local lab configuration installs");
+    runtime
+        .block_on(config_store.update_config(
+            1,
+            1,
+            0,
+            0,
+            all_servers,
+            servers,
+            routes,
+            id_to_lb,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            None,
+            0,
+            1,
+            true,
+            false,
+            HashMap::new(),
+            false,
+            false,
+            "random".to_string(),
+            HashMap::new(),
+            None,
+            true,
+            false,
+            "zelvik-edge-uam-lab".to_string(),
+            false,
+            false,
+            0,
+            true,
+            false,
+            false,
+            String::new(),
+            None,
+            Some(GlobalHTTPAllConfig {
+                allow_lan_ip: true,
+                server_name: "zelvik-edge-uam-lab".to_string(),
+                ..Default::default()
+            }),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            HashMap::new(),
+            HashMap::new(),
+            HashMap::new(),
+            HashMap::new(),
+            HashMap::new(),
+            None,
+            None,
+        ))
+        .expect("local lab configuration installs");
 
     let challenge_key = api_config
         .challenge_key()
@@ -373,8 +374,11 @@ fn build_server(
             }],
         }),
         reverse_proxy: Some(ReverseProxyConfig {
+            origin_route: None,
             is_on: true,
             primary_origins: vec![OriginConfig {
+                origin_authentication: None,
+                tls_server_name: String::new(),
                 id: 2001,
                 name: "local origin".to_string(),
                 addr: Some(FlexibleAddr::String(format!(
@@ -827,9 +831,7 @@ fn cookie_value<'a>(cookies: &'a str, name: &str) -> Option<&'a str> {
 
 fn init_logging() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        EnvFilter::new(
-            "info,zelvik_edge::proxy=debug,zelvik_edge::http_proxy_manager=debug",
-        )
+        EnvFilter::new("info,zelvik_edge::proxy=debug,zelvik_edge::http_proxy_manager=debug")
     });
     let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)

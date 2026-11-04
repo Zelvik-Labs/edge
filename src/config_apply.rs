@@ -343,6 +343,98 @@ pub async fn materialize_runtime_servers(
     } = args;
     let started = Instant::now();
     let servers_in = servers.len();
+    let route_now = crate::origin_route::unix_now();
+    for server in &servers {
+        let names = server.get_plain_server_names();
+        let validation = server
+            .reverse_proxy
+            .as_ref()
+            .and_then(|proxy| proxy.origin_route.as_ref())
+            .map(|route| route.validate(route_now, &names))
+            .unwrap_or(Ok(()))
+            .and_then(|()| {
+                server
+                    .origin_ingress
+                    .as_ref()
+                    .map(|ingress| ingress.validate(route_now))
+                    .unwrap_or(Ok(()))
+            })
+            .and_then(|()| {
+                if let Some(ingress) = &server.origin_ingress {
+                    let route = server
+                        .reverse_proxy
+                        .as_ref()
+                        .and_then(|proxy| proxy.origin_route.as_ref())
+                        .ok_or("protected ingress requires an origin execution plan")?;
+                    if route.role != crate::origin_route::RouteRole::Shield
+                        || route.site_id != ingress.site_id
+                        || route.deployment_id != ingress.deployment_id
+                        || server.enable_proxy_protocol
+                    {
+                        return Err(
+                            "protected ingress identity, role or routing scope is invalid"
+                                .to_string(),
+                        );
+                    }
+                } else if server
+                    .reverse_proxy
+                    .as_ref()
+                    .and_then(|proxy| proxy.origin_route.as_ref())
+                    .is_some_and(|route| route.role == crate::origin_route::RouteRole::Shield)
+                {
+                    return Err("shield role requires protected ingress authorization".to_string());
+                }
+                for location in &server.locations {
+                    if let Some(route) = location
+                        .reverse_proxy
+                        .as_ref()
+                        .and_then(|proxy| proxy.origin_route.as_ref())
+                    {
+                        route.validate(route_now, &names)?;
+                        if let Some(base)=server.reverse_proxy.as_ref().and_then(|proxy|proxy.origin_route.as_ref())
+                            && (route.site_id!=base.site_id || route.deployment_id!=base.deployment_id
+                                || route.revision!=base.revision || route.role!=base.role || route.mode!=base.mode
+                                || route.allow_direct_fallback!=base.allow_direct_fallback)
+                        {
+                            return Err("managed location changes its server origin identity or authorization".to_string());
+                        }
+                        if let Some(ingress) = &server.origin_ingress {
+                            if route.role != crate::origin_route::RouteRole::Shield
+                                || route.site_id != ingress.site_id
+                                || route.deployment_id != ingress.deployment_id
+                            {
+                                return Err(
+                                    "protected location has a different origin identity or role"
+                                        .to_string(),
+                                );
+                            }
+                        } else if route.role == crate::origin_route::RouteRole::Shield {
+                            return Err("shield location requires protected ingress authorization"
+                                .to_string());
+                        }
+                    } else if location.reverse_proxy.is_some()
+                        && (server.origin_ingress.is_some() || server.reverse_proxy.as_ref().is_some_and(|proxy|proxy.origin_route.is_some())) {
+                        return Err(
+                            "protected location requires an origin execution plan".to_string()
+                        );
+                    }
+                }
+                Ok(())
+            });
+        if let Err(reason) = validation {
+            tracing::error!(target: "config_apply", server_id=server.numeric_id(), %reason,
+                "origin execution plan rejected; keeping previous generation");
+            return RuntimeServerMaps {
+                stats: ConfigApplyStats {
+                    servers_in,
+                    admitted: false,
+                    elapsed: started.elapsed(),
+                    ..ConfigApplyStats::default()
+                },
+                ..RuntimeServerMaps::default()
+            };
+        }
+    }
     let (permit, admission_retries) = admit_config_sync(&MEMORY_GOVERNOR).await;
     if permit.is_none() {
         // Never trade a memory-death build for a config refresh: keep the
@@ -673,6 +765,88 @@ mod tests {
         assert!(Arc::ptr_eq(a, &maps.all_servers[0]));
         assert_eq!(maps.stats.servers_in, 1);
         assert_eq!(maps.stats.hosts_indexed, 2);
+    }
+
+    #[tokio::test]
+    async fn managed_origin_location_cannot_escape_server_authorization() {
+        let now = crate::origin_route::unix_now();
+        let plan = serde_json::json!({"siteId":"site-a","deploymentId":"dep-a","revision":1,
+            "mode":"fixed_shield","role":"ingress","cacheNamespace":"content-a","validUntil":now+60,
+            "paths":[{"id":"shield","kind":"shield","ready":true,"priority":1,"validUntil":now+60,
+                "origins":[{"id":910041,"addr":"https://192.0.2.10:443","weight":1,
+                    "originAuthentication":{"deploymentId":"dep-a","token":"0123456789abcdef0123456789abcdef"}}]}]});
+        for escape in ["missing_plan", "direct_mode", "wrong_revision"] {
+            let mut server = sample_server(910040, &["content.example"]);
+            server.reverse_proxy.as_mut().unwrap().origin_route =
+                Some(serde_json::from_value(plan.clone()).unwrap());
+            let mut location: crate::config_models::LocationConfig =
+                serde_json::from_value(serde_json::json!({
+                    "isOn":true,"pattern":"/api","patternType":"prefix","reverseProxy":{"isOn":true}
+                }))
+                .unwrap();
+            if escape != "missing_plan" {
+                let mut route: crate::origin_route::OriginRoute =
+                    serde_json::from_value(plan.clone()).unwrap();
+                if escape == "wrong_revision" {
+                    route.revision += 1
+                } else {
+                    route.mode = crate::origin_route::RouteMode::Direct;
+                    route.paths[0].kind = crate::origin_route::PathKind::Direct;
+                    route.paths[0].origins[0].origin_authentication = None;
+                }
+                location.reverse_proxy.as_mut().unwrap().origin_route = Some(route);
+            }
+            server.locations = vec![location];
+            let health = GlobalHealthManager::new(1);
+            let maps = materialize_runtime_servers(MaterializeRuntimeServersArgs {
+                servers: vec![server],
+                health_manager: &health,
+                node_level: 1,
+                parent_nodes: Arc::new(HashMap::new()),
+                tiered_origin_bypass: false,
+                allow_lan: false,
+                global_http: None,
+                payload_bytes: 0,
+                limits: ConfigApplyLimits::synthetic(
+                    8 * 1024 * 1024 * 1024,
+                    4 * 1024 * 1024 * 1024,
+                ),
+            })
+            .await;
+            assert!(!maps.stats.admitted, "location escaped using {escape}");
+            assert!(maps.routes.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn expired_origin_plan_rejects_the_entire_snapshot_before_publication() {
+        let now = crate::origin_route::unix_now();
+        let mut server = sample_server(910020, &["content.example"]);
+        let mut proxy = server.reverse_proxy.clone().unwrap();
+        proxy.origin_route = Some(serde_json::from_value(serde_json::json!({
+            "siteId":"site-a","deploymentId":"dep-a","revision":1,
+            "mode":"direct","role":"ingress","cacheNamespace":"content-a",
+            "validUntil":now-1,
+            "paths":[{"id":"direct","kind":"direct","ready":true,"priority":1,
+                "validUntil":now+60,"origins":[{"id":910021,"addr":"https://192.0.2.10:443","weight":1}]}]
+        })).unwrap());
+        server.reverse_proxy = Some(proxy);
+        let health = GlobalHealthManager::new(1);
+        let maps = materialize_runtime_servers(MaterializeRuntimeServersArgs {
+            servers: vec![sample_server(910022, &["unchanged.example"]), server],
+            health_manager: &health,
+            node_level: 1,
+            parent_nodes: Arc::new(HashMap::new()),
+            tiered_origin_bypass: false,
+            allow_lan: false,
+            global_http: None,
+            payload_bytes: 0,
+            limits: ConfigApplyLimits::synthetic(8 * 1024 * 1024 * 1024, 4 * 1024 * 1024 * 1024),
+        })
+        .await;
+        assert!(!maps.stats.admitted);
+        assert!(maps.all_servers.is_empty());
+        assert!(maps.routes.is_empty());
     }
 
     #[tokio::test]

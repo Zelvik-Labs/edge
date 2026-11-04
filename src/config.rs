@@ -1130,7 +1130,10 @@ impl ConfigStore {
         )
     }
 
-    #[expect(clippy::too_many_arguments, reason = "configuration snapshot carries explicit global settings")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "configuration snapshot carries explicit global settings"
+    )]
     pub fn set_enabled_features(
         &self,
         has_dns: bool,
@@ -1347,6 +1350,70 @@ impl ConfigStore {
         lock.id_to_lb.get(&server_id).cloned()
     }
 
+    /// Origin execution evidence comes from the published runtime pools under
+    /// one snapshot lock. Pending/failed configuration never appears here.
+    pub fn loaded_origin_routes(&self) -> serde_json::Value {
+        let lock = self.inner.read();
+        let mut pools: Vec<_> = lock.id_to_lb.iter().collect();
+        pools.sort_unstable_by_key(|(server_id, _)| **server_id);
+        serde_json::Value::Array(pools.into_iter().filter_map(|(server_id, pool)| {
+            let route = pool.managed_route()?;
+            Some(serde_json::json!({
+                "serverId":server_id,"siteId":route.site_id,"deploymentId":route.deployment_id,
+                "revision":route.revision,"role":route.role,"validUntil":route.valid_until,
+                "selectedPathId":route.selected_path_id,"holdUntil":route.hold_until
+            }))
+        }).collect())
+    }
+
+    pub fn loaded_origin_path_observations(&self) -> serde_json::Value {
+        let pools: Vec<_> = {
+            let lock = self.inner.read();
+            lock.id_to_lb
+                .iter()
+                .map(|(id, pool)| (*id, Arc::clone(pool)))
+                .collect()
+        };
+        let now = crate::origin_route::unix_now();
+        serde_json::Value::Array(
+            pools
+                .into_iter()
+                .flat_map(|(id, pool)| pool.origin_path_observations(id, now))
+                .collect(),
+        )
+    }
+
+    /// Snapshot only published smart-origin pools. Queued probes retain weak
+    /// pool ownership and revalidate this generation before any network I/O.
+    pub(crate) fn active_origin_quality_targets(
+        &self,
+    ) -> Vec<(i64, Arc<crate::lb_factory::AnyLoadBalancer>, String)> {
+        let lock = self.inner.read();
+        lock.all_servers
+            .iter()
+            .filter_map(|server| {
+                let id = server.id?;
+                let pool = lock.id_to_lb.get(&id)?;
+                let route = pool.managed_route()?;
+                if route.mode != crate::origin_route::RouteMode::SmartShield {
+                    return None;
+                }
+                let host = server
+                    .origin_ingress
+                    .as_ref()
+                    .map(|ingress| ingress.hostname.clone())
+                    .or_else(|| {
+                        server
+                            .server_names
+                            .iter()
+                            .find(|name| !name.name.contains('*'))
+                            .map(|name| name.name.clone())
+                    })?;
+                Some((id, Arc::clone(pool), host))
+            })
+            .collect()
+    }
+
     pub async fn find_upstream_by_server_id(
         &self,
         server_id: i64,
@@ -1467,7 +1534,10 @@ impl ConfigStore {
         lock.deleted_contents.clone()
     }
 
-    #[expect(clippy::too_many_arguments, reason = "configuration snapshot carries explicit global settings")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "configuration snapshot carries explicit global settings"
+    )]
     pub async fn update_config(
         &self,
         id: i64,
@@ -1835,7 +1905,10 @@ impl ConfigStore {
             .await
     }
 
-    pub async fn remove_user_servers(&self, user_id: i64) -> Result<(), crate::metrics::MetricCapacityError> {
+    pub async fn remove_user_servers(
+        &self,
+        user_id: i64,
+    ) -> Result<(), crate::metrics::MetricCapacityError> {
         let stale_ids = {
             let lock = self.inner.read();
             lock.all_servers
@@ -1855,7 +1928,10 @@ impl ConfigStore {
         Ok(())
     }
 
-    pub async fn remove_server(&self, server_id: i64) -> Result<(), crate::metrics::MetricCapacityError> {
+    pub async fn remove_server(
+        &self,
+        server_id: i64,
+    ) -> Result<(), crate::metrics::MetricCapacityError> {
         self.replace_servers_snapshot(
             std::iter::once(server_id).collect(),
             Vec::new(),
@@ -2417,9 +2493,13 @@ mod tests {
 
         assert!(!crate::metrics::METRICS.servers.contains_key(&removed_id));
         assert!(crate::metrics::METRICS.servers.contains_key(&readded_id));
-        let removed = crate::metrics::METRICS.find_server(removed_id).expect("installed instance");
+        let removed = crate::metrics::METRICS
+            .find_server(removed_id)
+            .expect("installed instance");
         let removed_instance = removed.instance_id;
-        let readded = crate::metrics::METRICS.find_server(readded_id).expect("installed instance");
+        let readded = crate::metrics::METRICS
+            .find_server(readded_id)
+            .expect("installed instance");
         drop(removed);
 
         let sample = crate::metrics::METRICS
@@ -2588,7 +2668,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
     }
 
     #[tokio::test]
@@ -2806,7 +2887,8 @@ mod tests {
                     sample_rate: 1.0,
                 }),
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         let snapshot = store.get_hot_path_snapshot_sync();
         assert!(snapshot.is_on);
@@ -2882,7 +2964,8 @@ mod tests {
 
         store
             .cache_server_route("*.example.com".to_string(), server, lb)
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         for host in ["example.com", "www.example.com", "a.b.example.com"] {
             assert_eq!(
@@ -2915,7 +2998,8 @@ mod tests {
 
         store
             .cache_server_route("*.example.com".to_string(), server, lb)
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         for host in ["example.com", "www.example.com", "a.b.example.com"] {
             assert_eq!(
@@ -3022,7 +3106,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         assert_eq!(
             store
@@ -3136,7 +3221,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         let route = store
             .inspect_tls_route_sync("rancher.mymya.cn", 443)
@@ -3231,7 +3317,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         assert!(store.has_any_sni_passthrough_sync());
         let route = store
@@ -3316,7 +3403,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         assert!(store.has_any_quic_passthrough_sync());
         assert_eq!(
@@ -3411,7 +3499,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         assert!(store.has_any_quic_passthrough_sync());
         assert_eq!(
@@ -3502,7 +3591,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         assert_eq!(
             store
@@ -3613,7 +3703,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         assert_eq!(
             store
@@ -3698,7 +3789,8 @@ mod tests {
                 None,
                 None,
             )
-            .await.expect("configuration installs");
+            .await
+            .expect("configuration installs");
 
         assert_eq!(
             store

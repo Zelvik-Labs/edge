@@ -70,7 +70,7 @@ pub async fn fetch_snapshot(api: &ApiConfig, version: i64) -> Result<FetchedSnap
         meta: Some(envelope(version)),
         node_id: api.instance_id.clone(),
         software_version: crate::RELEASE_VERSION.into(),
-        capabilities_json: r#"{"snapshotHmac":true,"structuredHealth":true}"#.into(),
+        capabilities_json: r#"{"snapshotHmac":true,"structuredHealth":true,"originRoutingV1":true,"protectedOriginIngressV1":true,"objectOriginAffinityV1":true}"#.into(),
         region: String::new(),
         comm_mode: mode.into(),
         cert_fingerprint: String::new(),
@@ -398,7 +398,7 @@ pub async fn report_health(
         .as_rpc_client();
     let response = crate::rpc::track_rpc(rpc.node_control_service().report_node_health(ReportNodeHealthRequest {
         meta:Some(envelope(version)),node_id:api.instance_id.clone(),ready:status.get("isHealthy").and_then(|value|value.as_bool()).unwrap_or(false),
-        listeners_json:serde_json::json!({"connections":status["connectionCount"],"transports":status["connectionShadow"]}).to_string(),
+        listeners_json:serde_json::json!({"connections":status["connectionCount"],"transports":status["connectionShadow"],"originRoutes":status["originRoutes"],"originPathObservations":status["originPathObservations"],"certificateBindings":status["certificateBindings"]}).to_string(),
         cache_json:serde_json::json!({"diskBytes":status["cacheTotalDiskSize"],"memoryBytes":status["cacheTotalMemorySize"]}).to_string(),
         xdp_json:status["xdp"].to_string(),resource_pressure_json:status["resourceGovernor"].to_string(),task_status_json:status["pipelines"].to_string(),
     })).await?.into_inner();
@@ -930,8 +930,7 @@ mod loopback_tests {
     }
 
     /// The credential key every loopback fixture shares (test-only dummy).
-    const TEST_SECRET: &str =
-        "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+    const TEST_SECRET: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
 
     fn desired_response(
         pair: &Ed25519KeyPair,

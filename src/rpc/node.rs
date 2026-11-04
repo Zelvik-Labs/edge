@@ -1718,7 +1718,7 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
             "metricsCardinalityDropped": pipeline_metrics.metrics_cardinality_dropped,
         });
 
-        let status = serde_json::json!({
+        let mut status = serde_json::json!({
                    "buildVersion": crate::RELEASE_VERSION,
                    "runtimeDir": crate::paths::NodePaths::current().runtime_root(),
                    "buildVersionCode": build_version_code(),
@@ -1770,6 +1770,8 @@ pub async fn start_metrics_reporter(config_store: Arc<ConfigStore>, api_config: 
                    "isActive": true,
                    "isHealthy": true,
                });
+        status["originRoutes"] = config_store.loaded_origin_routes();
+        status["originPathObservations"] = config_store.loaded_origin_path_observations();
 
         #[cfg(feature = "node-control")]
         if let Err(err) = crate::node_control::transport::report_health(
@@ -1845,7 +1847,7 @@ pub async fn report_node_online_once(
     let xdp_status = serde_json::to_value(crate::xdp::status_snapshot())
         .unwrap_or_else(|_| serde_json::json!({"available": false}));
     let shadow_connections = crate::metrics::shadow_connection_metrics();
-    let status = serde_json::json!({
+    let mut status = serde_json::json!({
         "buildVersion": crate::RELEASE_VERSION,
         "buildVersionCode": build_version_code(),
         "configVersion": config_store.get_config_version().await,
@@ -1884,6 +1886,9 @@ pub async fn report_node_online_once(
         "isActive": true,
         "isHealthy": true,
     });
+    status["certificateBindings"] = crate::ssl::loaded_certificate_bindings();
+    status["originRoutes"] = config_store.loaded_origin_routes();
+    status["originPathObservations"] = config_store.loaded_origin_path_observations();
 
     let client = SharedRpcClient::get(api_config).await?.as_rpc_client();
     // updateNodeUp / updateNodeIsInstalled require admin credentials on cloud API
