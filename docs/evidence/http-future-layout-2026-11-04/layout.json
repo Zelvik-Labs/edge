@@ -1,0 +1,30 @@
+{
+  "allocator": "mimalloc, as in the production executable",
+  "callbacks": {
+    "early_request_filter": {
+      "alignment": 8,
+      "frame_bytes": 32
+    },
+    "logging": {
+      "alignment": 8,
+      "frame_bytes": 40
+    },
+    "request_filter": {
+      "alignment": 8,
+      "frame_bytes": 5736
+    },
+    "response_filter": {
+      "alignment": 8,
+      "frame_bytes": 40
+    },
+    "upstream_peer": {
+      "alignment": 8,
+      "frame_bytes": 32
+    },
+    "upstream_response_filter": {
+      "alignment": 8,
+      "frame_bytes": 40
+    }
+  },
+  "scope": "unpolled real callback frame layouts; not request CPU, allocation counts or throughput"
+}

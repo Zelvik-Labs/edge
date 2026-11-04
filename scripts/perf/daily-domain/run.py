@@ -122,7 +122,9 @@ def verify():
         assert all(r['iterations'] == 1000 for r in allocations[variant].values())
     for case in ['hot-1', 'hot-16', 'hot-1024', 'at-cap', 'reject-new']:
         old, new = [allocations[v][case] for v in ['baseline', 'candidate']]
-        assert old['allocations'] == 1000 and new['allocations'] == 0
+        # Occupied entry() can also grow a cold hashbrown shard. Preserve
+        # those allocations; the baseline still copies a String each time.
+        assert old['allocations'] >= 1000 and new['allocations'] == 0
         assert old['capacity_calls'] == 1000
         assert new['capacity_calls'] == (1000 if case == 'reject-new' else 0)
     assert allocations['baseline']['invalid']['capacity_calls'] == 1000

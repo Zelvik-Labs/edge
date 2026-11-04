@@ -12874,6 +12874,99 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
+    #[ignore = "release layout probe; explicitly run without polling request phases"]
+    async fn request_phase_future_layout() {
+        use pingora_proxy::ProxyHttp;
+        use tokio::io::AsyncWriteExt;
+        let proxy = test_proxy();
+        let (mut client, downstream) = tokio::net::UnixStream::pair().unwrap();
+        client
+            .write_all(b"GET / HTTP/1.1\r\nHost: example.test\r\n\r\n")
+            .await
+            .unwrap();
+        let mut session = pingora::proxy::Session::new_h1(Box::new(
+            pingora::protocols::l4::stream::Stream::from(downstream),
+        ));
+        session.downstream_session.read_request().await.unwrap();
+        let mut ctx = proxy.new_ctx();
+        let state = super::RequestFilterState {
+            host: "example.test".to_string(),
+            hot_path: proxy.config.get_request_context_sync("example.test").0,
+        };
+        let mut rows = serde_json::Map::new();
+        macro_rules! frame {
+            ($name:literal, $future:expr) => {{
+                let future = $future;
+                rows.insert(
+                    $name.to_string(),
+                    serde_json::json!({
+                        "frame_bytes": std::mem::size_of_val(&future),
+                        "alignment": std::mem::align_of_val(&future),
+                    }),
+                );
+                drop(future);
+            }};
+        }
+        frame!(
+            "context",
+            proxy.run_request_context_phase(&mut session, &mut ctx)
+        );
+        frame!(
+            "local_service",
+            proxy.run_local_service_phase(&mut session, &mut ctx, &state)
+        );
+        frame!(
+            "protocol_policy",
+            proxy.run_protocol_policy_phase(&mut session, &mut ctx, &state)
+        );
+        frame!(
+            "early_response",
+            proxy.run_early_response_phase(&mut session, &mut ctx, &state)
+        );
+        frame!(
+            "security_state",
+            proxy.run_security_state_phase(&mut session, &mut ctx)
+        );
+        frame!(
+            "limits",
+            proxy.run_limits_phase(&mut session, &mut ctx, &state)
+        );
+        frame!(
+            "lightweight_waf",
+            proxy.run_lightweight_waf_phase(&mut session, &mut ctx)
+        );
+        frame!(
+            "body_waf",
+            proxy.run_body_waf_phase(&mut session, &mut ctx, &state)
+        );
+        frame!(
+            "feature_policy",
+            proxy.run_feature_policy_phase(&mut session, &mut ctx)
+        );
+        frame!(
+            "rewrite",
+            proxy.run_rewrite_phase(&mut session, &mut ctx, &state)
+        );
+        frame!(
+            "status_response",
+            proxy.respond_status_with_pages(&mut session, &mut ctx, 503)
+        );
+        let callback = proxy.request_filter(&mut session, &mut ctx);
+        let callback_frame = std::mem::size_of_val(callback.as_ref().get_ref());
+        drop(callback);
+        let result = serde_json::json!({
+            "scope": "unpolled real phase frame layouts; not CPU or throughput",
+            "request_filter_frame_bytes": callback_frame,
+            "phases": rows,
+        });
+        let output = serde_json::to_string_pretty(&result).unwrap();
+        if let Some(path) = std::env::var_os("EDGE_HTTP_PHASE_LAYOUT_OUTPUT") {
+            std::fs::write(path, &output).unwrap();
+        }
+        println!("{output}");
+    }
+    #[cfg(unix)]
+    #[tokio::test]
     async fn h3_retry_regression_final_empty_chunk_is_a_body_end() {
         use bytes::Bytes;
         use pingora_proxy::ProxyHttp;

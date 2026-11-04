@@ -1,0 +1,28 @@
+{
+  "artifact_id": 13297500892,
+  "archive": "raw.zip",
+  "archive_bytes": 2292617,
+  "archive_sha256": "39c2732dfbb46d494ccd855146a3dfffff37b916e7ed124b82ee2a1f5a8e24d2",
+  "files": [
+    {
+      "path": ".local/http-future-layout-ci/build.log",
+      "bytes": 22941,
+      "sha256": "ee0ccc749ce39f1f3d5176aee5750656baad1748ead3865d39c246826c3ea7ff"
+    },
+    {
+      "path": ".local/http-future-layout-ci/layout.json",
+      "bytes": 658,
+      "sha256": "8e3cbda0d3f66efca59a9d37e3f058ed45326a4eec20f81c6f19ba4e848c6fe5"
+    },
+    {
+      "path": ".local/http-future-layout-ci/metadata.json",
+      "bytes": 595,
+      "sha256": "66d81b4177989448a1050b58fafb7d3141d0d5cf71b38731071b2d68e865d490"
+    },
+    {
+      "path": "target/release/examples/http-future-layout",
+      "bytes": 6086928,
+      "sha256": "8902546aa03c533476cef87a982958cb9d7244f37903f31130b914a594a79db8"
+    }
+  ]
+}
