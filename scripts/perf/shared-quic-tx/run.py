@@ -60,7 +60,7 @@ def verify():
     lines = (OUT / 'controls.log').read_text().splitlines()
     assert len(lines) == 3
     for family, line in zip(['IPv4', 'IPv6'], lines):
-        match = re.fullmatch(r'family=(\w+) segments=(\d+) gro=false fragmentation=(true|false) delivered=16x1200 readiness=PASS oversize_errno=(\d+)', line)
+        match = re.fullmatch(r'family=(\w+) segments=(\d+) gro=false fragmentation=(true|false) delivered=16x1200 initial_readiness=PASS oversize_errno=(\d+)', line)
         assert match and match[1] == family and int(match[2]) >= 8 and int(match[4]) > 0
     assert lines[-1] == 'PASS: candidate only; no production integration or throughput claim'
     (OUT / 'verified-summary.json').write_text(json.dumps({'source': metadata['source'],

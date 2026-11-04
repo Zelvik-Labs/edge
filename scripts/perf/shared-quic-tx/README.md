@@ -17,10 +17,17 @@ No vendor/upstream code is modified.
 
 Actions builds the standalone candidate with exactly the production direct
 dependency versions and verifies IPv4/IPv6 GSO delivery, source addresses,
-readiness clearing/recovery, GRO-off readback and visible EMSGSIZE without
+initial registration readiness and recovery, GRO-off readback and visible EMSGSIZE without
 delivery. The controls use plain datagram reception; they do not establish
 production scheduling, throughput, hardware GSO/zero-copy or mixed-port safety.
 
 Production integration is pending. It must retain the legacy/channel path,
 preserve RX/demux ownership, handle capabilities and backpressure explicitly,
 and pass independent same-binary node comparisons before default changes.
+
+The initial control incorrectly manufactured WouldBlock while the socket was
+still writable. That violates Tokio's try_io contract and is not accepted as
+a kernel-backpressure test. The corrected control observes actual initial
+registration readiness on a current-thread runtime, then awaits the real
+writable event. A ten-second per-family watchdog bounds test failure. It does
+not claim to exercise a genuinely exhausted kernel egress buffer.
