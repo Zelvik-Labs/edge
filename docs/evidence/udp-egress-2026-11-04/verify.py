@@ -11,11 +11,12 @@ sys.path.insert(0, str(HERE.parent))
 from verify_archive import verify_archive
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('stage', choices=['reserve-first'])
+parser.add_argument('stage', choices=['reserve-first', 'snapshot'])
 parser.add_argument('download', type=Path)
 args = parser.parse_args()
 stage = HERE / args.stage
-source = '838945d73a1fcc21c9b32e8d980786e2424cc85b'
+source = {'reserve-first': '838945d73a1fcc21c9b32e8d980786e2424cc85b',
+          'snapshot': 'f240a9abbfd24386a2c28be74d4ba708fc604d88'}[args.stage]
 root = verify_archive(args.download, source)
 spec = importlib.util.spec_from_file_location('frozen_egress', stage / 'frozen_probe.py')
 module = importlib.util.module_from_spec(spec)

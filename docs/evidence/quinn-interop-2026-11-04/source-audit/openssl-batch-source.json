@@ -1,0 +1,50 @@
+[
+  {
+    "url": "https://raw.githubusercontent.com/openssl/openssl/openssl-3.5.7/ssl/quic/quic_record_rx.c",
+    "repository": "openssl/openssl",
+    "ref": "openssl-3.5.7",
+    "path": "ssl/quic/quic_record_rx.c",
+    "sha256": "74e9886c4a153a91e3537eae3c2e8d36c4ac24e5fbee3ad153c095dd3214f174",
+    "git_blob_sha1": "8897cc6c2df0dba742938a6c72c25b70c0cfbc9d",
+    "bytes": 49888,
+    "fragments": [
+      {
+        "start_line": 975,
+        "text": "\n    /* Pretend to authenticate the tag but ignore it */\n    if (EVP_CipherFinal_ex(cctx, NULL, &l2) != 1) {\n        /* We don't care */\n    }\n#else\n    /* Ensure authentication succeeded. */\n    if (EVP_CipherFinal_ex(cctx, NULL, &l2) != 1) {\n        /* Authentication failed, increment failed auth counter. */\n        ++qrx->forged_pkt_count;\n        return 0;\n    }\n#endif\n\n    *dec_len = l;\n    return 1;\n}\n\nstatic ossl_inline void ignore_res(int x)\n{\n    /* No-op. */\n}\n\nstatic void qrx_key_update_initiated(OSSL_QRX *qrx, QUIC_PN pn)\n{\n    if (!ossl_qrl_enc_level_set_key_update(&qrx->el_set, QUIC_ENC_LEVEL_1RTT))\n        /* We are already in RXKU, so we don't call the callback again. */\n        return;\n\n    qrx->cur_epoch_start_pn = pn;\n\n    if (qrx->key_update_cb != NULL)\n        qrx->key_update_cb(pn, qrx->key_update_cb_arg);\n}\n\n"
+      },
+      {
+        "start_line": 1234,
+        "text": "     * corrupted.\n     */\n    dst = (unsigned char *)rxe_data(rxe) + i;\n    if (!qrx_decrypt_pkt_body(qrx, dst, rxe->hdr.data, rxe->hdr.len,\n            &dec_len, sop, aad_len, rxe->pn, enc_level,\n            rxe->hdr.key_phase, &rx_key_epoch))\n        goto malformed;\n\n    /*\n     * -----------------------------------------------------\n     *   IMPORTANT: ANYTHING ABOVE THIS LINE IS UNVERIFIED\n     *              AND MUST BE TIMING-CHANNEL SAFE.\n     * -----------------------------------------------------\n     *\n     * At this point, we have successfully authenticated the AEAD tag and no\n     * longer need to worry about exposing the PN, PN length or Key Phase bit in\n     * timing channels. Invoke any configured validation callback to allow for\n     * rejection of duplicate PNs.\n     */\n    if (!qrx_validate_hdr_late(qrx, rxe))\n        goto malformed;\n\n    /* Check for a Key Phase bit differing from our expectation. */\n    if (rxe->hdr.type == QUIC_PKT_TYPE_1RTT\n        && rxe->hdr.key_phase != (el->key_epoch & 1))\n        qrx_key_update_initiated(qrx, rxe->pn);\n\n"
+      },
+      {
+        "start_line": 1436,
+        "text": "static int qrx_process_pending_urxl(OSSL_QRX *qrx)\n{\n    QUIC_URXE *e;\n\n    while ((e = ossl_list_urxe_head(&qrx->urx_pending)) != NULL)\n        if (!qrx_process_one_urxe(qrx, e))\n            return 0;\n\n    return 1;\n}\n\nint ossl_qrx_read_pkt(OSSL_QRX *qrx, OSSL_QRX_PKT **ppkt)\n{\n    RXE *rxe;\n\n    if (!ossl_qrx_processed_read_pending(qrx)) {\n        if (!qrx_process_pending_urxl(qrx))\n            return 0;\n\n        if (!ossl_qrx_processed_read_pending(qrx))\n            return 0;\n    }\n\n    rxe = qrx_pop_pending_rxe(qrx);\n"
+      }
+    ],
+    "license": "Apache-2.0; Copyright The OpenSSL Project Authors; quoted for source diagnosis, upstream files unmodified"
+  },
+  {
+    "url": "https://raw.githubusercontent.com/openssl/openssl/openssl-3.5.7/ssl/quic/quic_channel.c",
+    "repository": "openssl/openssl",
+    "ref": "openssl-3.5.7",
+    "path": "ssl/quic/quic_channel.c",
+    "sha256": "0787ab3c9bc05dd7a47e6ff08a1035764c8b6fad2e74b1049bb126bc5ad7649e",
+    "git_blob_sha1": "9534cbcaf7f9435afa3497c966102afd07c437c8",
+    "bytes": 133510,
+    "fragments": [
+      {
+        "start_line": 824,
+        "text": "static int rxku_allowed(QUIC_CHANNEL *ch)\n{\n    /*\n     * RFC 9001 s. 6.1: An endpoint MUST NOT initiate a key update prior to\n     * having confirmed the handshake (Section 4.1.2).\n     *\n     * RFC 9001 s. 6.1: An endpoint MUST NOT initiate a subsequent key update\n     * unless it has received an acknowledgment for a packet that was sent\n     * protected with keys from the current key phase.\n     *\n     * RFC 9001 s. 6.2: If an endpoint detects a second update before it has\n     * sent any packets with updated keys containing an acknowledgment for the\n     * packet that initiated the key update, it indicates that its peer has\n     * updated keys twice without awaiting confirmation. An endpoint MAY treat\n     * such consecutive key updates as a connection error of type\n     * KEY_UPDATE_ERROR.\n     */\n    return ch->handshake_confirmed && !ch->rxku_pending_confirm;\n}\n\n/*\n * Called when the QRX detects a new RX key update event.\n */\nenum rxku_decision {\n    DECISION_RXKU_ONLY,\n    DECISION_PROTOCOL_VIOLATION,\n    DECISION_SOLICITED_TXKU\n};\n\n/* Called when the QRX detects a key update has occurred. */\nQUIC_NEEDS_LOCK\nstatic void rxku_detected(QUIC_PN pn, void *arg)\n{\n    QUIC_CHANNEL *ch = arg;\n    enum rxku_decision decision;\n    OSSL_TIME pto;\n\n    /*\n     * Note: rxku_in_progress is always 0 here as an RXKU cannot be detected\n     * when we are still in UPDATING or COOLDOWN (see quic_record_rx.h).\n     */\n    assert(!ch->rxku_in_progress);\n\n    if (!rxku_allowed(ch))\n        /* Is RXKU even allowed at this time? */\n        decision = DECISION_PROTOCOL_VIOLATION;\n\n    else if (ch->ku_locally_initiated)\n        /*\n         * If this key update was locally initiated (meaning that this detected\n         * RXKU event is a result of our own spontaneous TXKU), we do not\n         * trigger another TXKU; after all, to do so would result in an infinite\n         * ping-pong of key updates. We still process it as an RXKU.\n         */\n        decision = DECISION_RXKU_ONLY;\n\n    else\n        /*\n         * Otherwise, a peer triggering a KU means we have to trigger a KU also.\n         */\n        decision = DECISION_SOLICITED_TXKU;\n\n    if (decision == DECISION_PROTOCOL_VIOLATION) {\n        ossl_quic_channel_raise_protocol_error(ch, OSSL_QUIC_ERR_KEY_UPDATE_ERROR,\n            0, \"RX key update again too soon\");\n        return;\n    }\n\n    pto = ossl_ackm_get_pto_duration(ch->ackm);\n\n    ch->ku_locally_initiated = 0;\n    ch->rxku_in_progress = 1;\n    ch->rxku_pending_confirm = 1;\n    ch->rxku_trigger_pn = pn;\n    ch->rxku_update_end_deadline = ossl_time_add(get_time(ch), pto);\n"
+      },
+      {
+        "start_line": 2220,
+        "text": "}\n\n/* Process queued incoming packets and handle frames, if any. */\nstatic int ch_rx(QUIC_CHANNEL *ch, int channel_only, int *notify_other_threads)\n{\n    int handled_any = 0;\n    const int closing = ossl_quic_channel_is_closing(ch);\n\n    if (!ch->is_server && !ch->have_sent_any_pkt)\n        /*\n         * We have not sent anything yet, therefore there is no need to check\n         * for incoming data.\n         */\n        return 1;\n\n    for (;;) {\n        assert(ch->qrx_pkt == NULL);\n\n        if (!ossl_qrx_read_pkt(ch->qrx, &ch->qrx_pkt))\n            break;\n\n        /* Track the amount of data received while in the closing state */\n        if (closing)\n            ossl_quic_tx_packetiser_record_received_closing_bytes(\n                ch->txp, ch->qrx_pkt->hdr->len);\n\n        if (!handled_any) {\n            ch_update_idle(ch);\n            ch_update_ping_deadline(ch);\n        }\n\n        ch_rx_handle_packet(ch, channel_only); /* best effort */\n\n        /*\n         * Regardless of the outcome of frame handling, unref the packet.\n         * This will free the packet unless something added another\n         * reference to it during frame processing.\n         */\n        ossl_qrx_pkt_release(ch->qrx_pkt);\n"
+      },
+      {
+        "start_line": 3029,
+        "text": "int ossl_quic_channel_on_handshake_confirmed(QUIC_CHANNEL *ch)\n{\n    if (ch->handshake_confirmed)\n        return 1;\n\n    if (!ch->handshake_complete) {\n        /*\n         * Does not make sense for handshake to be confirmed before it is\n         * completed.\n         */\n        ossl_quic_channel_raise_protocol_error(ch, OSSL_QUIC_ERR_PROTOCOL_VIOLATION,\n            OSSL_QUIC_FRAME_TYPE_HANDSHAKE_DONE,\n            \"handshake cannot be confirmed \"\n            \"before it is completed\");\n        return 0;\n    }\n\n    ch_discard_el(ch, QUIC_ENC_LEVEL_HANDSHAKE);\n    ch->handshake_confirmed = 1;\n    ch_record_state_transition(ch, ch->state);\n    ossl_ackm_on_handshake_confirmed(ch->ackm);\n    return 1;\n"
+      }
+    ],
+    "license": "Apache-2.0; Copyright The OpenSSL Project Authors; quoted for source diagnosis, upstream files unmodified"
+  }
+]

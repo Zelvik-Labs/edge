@@ -12,6 +12,8 @@
 - [H3 传输后端](h3-transport-backends.md)：共享/原生 Quinn 与实验性 tokio-quiche 的实现、选择和功能边界。
 - [五项性能工作的交付与边界](performance-five-priorities-2026-11-04.md)：H3 回源池、WAF 内存、UDP 实验、三产品矩阵和 tokio-quiche 的实现、收益与未解决项。
 - [全程序性能优化进度](performance-program-wide-2026-11-04.md)：缓存、SNI/TCP、统计、XDP 与 io_uring 的本轮交付、收益与未解决项。
+- [缓存优化后的实际 CPU 复核](performance-http-cpu-after-cache-2026-11-04.md)：实际 ba474 二进制的 18 个条件、496 万次响应与 43,074 个样本。
+- [UDP 出口候选的收益与退步](performance-udp-egress-2026-11-04.md)：避免失败前复制的两种方案及正常发送代价，均未接入生产。
 - [实际 HTTP CPU 归因](performance-http-cpu-2026-11-04.md)：生产二进制采样、热点与可复核证据。
 - [Range 缓存预检查优化与四目标对比](performance-range-preflight-2026-11-04.md)：192 个独立单元、前后 Edge/Nginx/OpenResty 吞吐、CPU 与延迟。
 - [已存响应头校验优化](performance-stored-headers-2026-11-04.md)：三万多组语义差分、组件计时及 192 格真实节点前后/Nginx/OpenResty 对比。

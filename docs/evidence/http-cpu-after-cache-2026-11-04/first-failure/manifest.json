@@ -1,0 +1,73 @@
+{
+  "artifact_id": 13292677638,
+  "archive": "raw.zip",
+  "archive_bytes": 1988398,
+  "archive_sha256": "64107163962b670c6ff00473b2b3611d2bd6584a8a50b88b119fd80ea932fc38",
+  "files": [
+    {
+      "path": "curl-version.txt",
+      "bytes": 582,
+      "sha256": "84e18a4933237f9f02d1a77d2ea64c83ee91681ca46646c3191237aca4ee5c33"
+    },
+    {
+      "path": "kernel.txt",
+      "bytes": 106,
+      "sha256": "d876a5e7990f46856a5684bff010df402aad07b337ab04bada6fa5d4f5ee4673"
+    },
+    {
+      "path": "packages.txt",
+      "bytes": 4464,
+      "sha256": "efc85dad9d9b777f502dc961ebbf35c80cbc6bf9db28b676885e52c2d0354c24"
+    },
+    {
+      "path": "perf-version.txt",
+      "bytes": 22,
+      "sha256": "f0fa60ef0aeb6572285b3ccba91b78b1ac3545d8d4bb38bbce58aec25d7d47dc"
+    },
+    {
+      "path": "profile/manifest.json",
+      "bytes": 6538,
+      "sha256": "7fdd1fdcd0291fb88013df661cc1b5b5e1070474bf012911e69b7c5545677db4"
+    },
+    {
+      "path": "profile/origin-reference.0.client.tsv.gz",
+      "bytes": 996629,
+      "sha256": "abe87ca429d4fdac4cab9c496135eface1161ce9d85fd8510dd4861fb64d2f80"
+    },
+    {
+      "path": "profile/origin-reference.0.stderr",
+      "bytes": 93,
+      "sha256": "68c833b85a88b69545a9f942356bcddba16025a6517af6a1bcd8643b12d9021b"
+    },
+    {
+      "path": "profile/origin-reference.1.client.tsv.gz",
+      "bytes": 982531,
+      "sha256": "7f9a2cd23644474035e35b4e8699521de12aef86ef3d931f960401b72db292eb"
+    },
+    {
+      "path": "profile/origin-reference.1.stderr",
+      "bytes": 93,
+      "sha256": "2349ffb3efc5f75207a5308f82546b420ddb55e0ec287c5d0fec43566583afef"
+    },
+    {
+      "path": "profile/origin-reference.command.json",
+      "bytes": 1003,
+      "sha256": "288874d3cc21d4cf48729468d1f630879ecfc2a42b879c285c33f2649aa86331"
+    },
+    {
+      "path": "profile/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "provenance.json",
+      "bytes": 1492,
+      "sha256": "481ce1771890aa0b218bd3b1c89b48b9d5e4b98260ac6b6bdc95bb4a1830cc2e"
+    },
+    {
+      "path": "retained-manifest.json",
+      "bytes": 2046,
+      "sha256": "d56b981410dc747c242d225d9e229a702267b457264fd5406683a8b1a729960d"
+    }
+  ]
+}
