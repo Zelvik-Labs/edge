@@ -31,9 +31,12 @@ def sanitize_futex_script(stacks):
 
 
 def verify_effective_period(report, period):
-    values = re.findall(r'sample_period(?:,\s*sample_freq)?\}?\s*[:=]\s*(\d+)', report)
+    # evlist -F selects sample_period or sample_freq from the actual attr.freq
+    # bit. Verbose output omits zero-valued flags and prints the union with
+    # spaces, so requiring a literal "freq: 0" rejects valid period mode.
+    values = re.findall(r'\bsample_period\s*=\s*(\d+)', report)
     assert values and all(int(value) == period for value in values), 'effective tracepoint period differs'
-    assert re.search(r'\bfreq\s*[:=]\s*0\b', report), 'tracepoint configured in frequency mode'
+    assert not re.search(r'\bsample_freq\s*=', report), 'tracepoint configured in frequency mode'
 
 
 def main(options):
@@ -94,6 +97,7 @@ def main(options):
             with Path(str(stem) + '.perf-preflight.log').open('w') as log:
                 subprocess.run(preflight, env=matrix.ENV, stdout=log, stderr=subprocess.STDOUT, check=True)
             effective = original_docker('exec', target, 'perf', 'evlist', '-v', '-i', remote + '.preflight.perf.data')
+            effective += '\n' + original_docker('exec', target, 'perf', 'evlist', '-F', '-i', remote + '.preflight.perf.data')
             Path(str(stem) + '.perf-preflight.txt').write_text(effective + '\n')
             verify_effective_period(effective, options.period)
         with Path(str(stem) + '.perf-record.log').open('x') as log:
@@ -107,6 +111,7 @@ def main(options):
                 raise RuntimeError('perf record failed; see instrumented run log')
         if options.event == 'syscalls:sys_enter_futex':
             effective = original_docker('exec', target, 'perf', 'evlist', '-v', '-i', remote + '.perf.data')
+            effective += '\n' + original_docker('exec', target, 'perf', 'evlist', '-F', '-i', remote + '.perf.data')
             Path(str(stem) + '.perf-effective.txt').write_text(effective + '\n')
             verify_effective_period(effective, options.period)
         for label, flags in [('flat', ['--no-children', '--call-graph', 'none']),
