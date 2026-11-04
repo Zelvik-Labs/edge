@@ -10,6 +10,7 @@ import subprocess
 ROOT = Path.cwd()
 BASE = 'a4e95a239abb82420f65d79f813654ba67fedad9'
 CANDIDATE = '0cf22db48e2e6a64c34f82599b6285d0efc90de5'
+EXPECTED_RUNTIME_CHANGES = ['src/cache/partial.rs', 'src/proxy.rs']
 OUT = ROOT / '.local/cache-range-binaries'
 LOGS = ROOT / '.local/cache-range-private'
 
@@ -28,7 +29,7 @@ def main():
     changes = command('git', 'diff', '--name-only', BASE, CANDIDATE).splitlines()
     runtime_changes = [p for p in changes if p.startswith(('src/', 'crates/', 'vendor/', 'pingora-main/'))
                        or p in ['Cargo.toml', 'Cargo.lock', 'build.rs', 'rust-toolchain.toml', '.cargo/config.toml']]
-    assert sorted(runtime_changes) == ['src/cache/partial.rs', 'src/proxy.rs'], runtime_changes
+    assert sorted(runtime_changes) == EXPECTED_RUNTIME_CHANGES, runtime_changes
     OUT.mkdir(parents=True, exist_ok=False)
     LOGS.mkdir(parents=True, exist_ok=True)
     metadata = {'harness_source': source, 'baseline': BASE, 'runtime_changes': runtime_changes,

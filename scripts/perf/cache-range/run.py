@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -79,7 +80,8 @@ def main():
                 payload_size=1024, concurrency=32, cold_requests=None, fresh_requests=2048,
                 protocols=['h1', 'h1-tls', 'h2', 'h3'], states=['hit', 'off', 'miss'],
                 connections=['reuse'], multiplex=False, seed=20261104,
-                experiment='defer ordinary-request Range preflight; all builds completed',
+                experiment=os.environ.get('EDGE_CACHE_COMPARISON_DESCRIPTION',
+                    'defer ordinary-request Range preflight; all builds completed'),
                 comparison_variant=target, binary_source=build['variants'][variant]['source'])
             failure = None
             try:
