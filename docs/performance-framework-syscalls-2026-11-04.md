@@ -39,3 +39,9 @@ HTTP Kernel 上游连接从 UpstreamL4Stream 直接拆出 Pingora TcpStream，�
 历史 CPU profile 的客户端 ELF 一直核对正确，但其 manifest 的 client_source_sha256 曾误标当前 harness C 源。本轮明确记录历史源 revision/SHA，并另存 harness_client_source_sha256；旧归档不重写，不能把该旧字段视为历史源证明。
 
 已修复：诊断观察器的 worker 身份读取。仍未解决：业务层 futex/额外写的调用源及整体容量差距。设计限制：只覆盖 H1/H2 OFF/复用、固定旧 Edge、受 ptrace 扰动；不包含 H3、真实 NIC、长期稳定性或未插桩收益。经审批的功能降级：无。
+
+
+## 观察器复测的线程退出竞态
+
+41804384847 完成 Edge 两格（99,992 成功、零 HTTP 错误）后，裸 Pingora 的短生命周期线程 51 在枚举 /proc/1/task 后、读取 status 前退出，观察器抛 FileNotFoundError，整轮失败。归档 13309526019（7,844,034 字节、79 文件，SHA-256 `38d1aa0d8ce30bb76cc7bf25b2070639e8e15d79d56592427221e5d22c385021`）及[冻结记录](evidence/framework-syscalls-2026-11-04/compatibility-failure/verification.json) 保留，没有把未完成裸框架格算通过。
+观察器现在只接受已经消失的线程，同时要求目标进程仍存活且 starttime 相同；记录退出 TID/阶段，活线程的 status 缺失、未附加、权限错误和 PID 复用仍失败。四项边界测试通过并加入 Actions。修正后运行 41806190842 已显示通过，原始归档复核尚在收尾。

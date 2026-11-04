@@ -1,0 +1,40 @@
+{
+  "source": "2fde11a06f315aa35482aebb294cf206c4c8254f",
+  "stage": "compatibility-failure",
+  "runs": [
+    {
+      "path": "round-0-edge/manifest.json",
+      "status": "completed",
+      "cases": [
+        {
+          "stem": "0000-h2-off-reuse",
+          "status": "passed",
+          "successful": 52395,
+          "failed": 0,
+          "error": null
+        },
+        {
+          "stem": "0001-h1-off-reuse",
+          "status": "passed",
+          "successful": 47597,
+          "failed": 0,
+          "error": null
+        }
+      ]
+    },
+    {
+      "path": "round-0-pingora/manifest.json",
+      "status": "failed",
+      "cases": [
+        {
+          "stem": "0000-h2-off-reuse",
+          "status": null,
+          "successful": null,
+          "failed": null,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "entire_run_passed": false
+}

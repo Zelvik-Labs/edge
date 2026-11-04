@@ -1,0 +1,90 @@
+{
+  "source": "953cf477b282c0093d149ba0de1ed76d19d3a8ad",
+  "scope": "user CPU stacks only; all instrumented timing and normalized CPU excluded from capacity rankings",
+  "orders": [
+    [
+      "edge",
+      "nginx",
+      "openresty"
+    ],
+    [
+      "openresty",
+      "nginx",
+      "edge"
+    ]
+  ],
+  "images": {
+    "edge": {
+      "ref": "edge-architecture-profiler:20261104",
+      "id": "sha256:2853180ae8cd4893621d5e014284f3d95e61de028144fc9d5a0e68cee62424d6",
+      "repo_digests": []
+    },
+    "nginx": {
+      "ref": "edge-nginx-profiler:20261104",
+      "id": "sha256:68dfffd07261d2874d564974049f3aff0723c0ebf7c9d21101aff4656e441442",
+      "repo_digests": [],
+      "base_ref": "nginx:1.28.0",
+      "base_id": "sha256:34e04bb6b4bb37d45845842374be0cd181723daffb230849b1984aaeaa96faba",
+      "base_repo_digests": [
+        "nginx@sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609"
+      ],
+      "executable_sha256": "7b9544766afdaf9674cf139bea598d5f14fae36b69182e03acb1d0f1587da9bd"
+    },
+    "openresty": {
+      "ref": "edge-openresty-profiler:20261104",
+      "id": "sha256:31d7a25f260bc20671f4c2c286b7101df93a6d1b6e40eb37c690daf3efc28c05",
+      "repo_digests": [],
+      "base_ref": "openresty/openresty:1.27.1.2-0-bookworm-fat",
+      "base_id": "sha256:a122f8f9c6f368bc1d3a89437051db5936a8869734dfcadc566e8d34dc0e72e2",
+      "base_repo_digests": [
+        "openresty/openresty@sha256:9a7fc041a1ff93cca037875ed664e549e923d97bd5a968c6e9ac4fb28d897464"
+      ],
+      "executable_sha256": "005f25b4b28324b070642e912e02352674f48be7c3d9fc1a38d0011c033e1a9f"
+    },
+    "origin": {
+      "ref": "nginx:1.28.0",
+      "id": "sha256:34e04bb6b4bb37d45845842374be0cd181723daffb230849b1984aaeaa96faba",
+      "repo_digests": [
+        "nginx@sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609"
+      ]
+    }
+  },
+  "runs": [
+    {
+      "round": 0,
+      "target": "edge",
+      "manifest": "round-0-edge/manifest.json",
+      "exit": 0
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "manifest": "round-0-nginx/manifest.json",
+      "exit": 0
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "manifest": "round-0-openresty/manifest.json",
+      "exit": 0
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "manifest": "round-1-openresty/manifest.json",
+      "exit": 0
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "manifest": "round-1-nginx/manifest.json",
+      "exit": 0
+    },
+    {
+      "round": 1,
+      "target": "edge",
+      "manifest": "round-1-edge/manifest.json",
+      "exit": 0
+    }
+  ]
+}

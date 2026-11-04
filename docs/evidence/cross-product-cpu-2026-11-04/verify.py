@@ -94,7 +94,7 @@ def main():
     parser.add_argument('download', type=Path)
     parser.add_argument('binaries', type=Path, help='original immutable header-node binary download')
     parser.add_argument('client', type=Path, help='original actual C client executable')
-    parser.add_argument('--stage', choices=['pass', 'first-failure'], default='pass')
+    parser.add_argument('--stage', choices=['pass', 'first-failure', 'retention-repeat', 'compatibility-repeat'], default='pass')
     parser.add_argument('--write-summary', type=Path)
     args = parser.parse_args()
     frozen = HERE / args.stage

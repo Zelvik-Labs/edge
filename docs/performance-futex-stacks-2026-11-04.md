@@ -18,3 +18,13 @@
 
 改用内核 syscalls:sys_enter_futex tracepoint，每 64 次事件采样用户栈，仅运行固定 Edge 的 H1/H2 OFF 各两次。测量不再逐 syscall ptrace 停顿。先检查 runner tracefs 能力；符号化后只公开操作值和调用栈，丢弃原始参数载荷与 perf.data。专门验证参数过滤；保留所有 HTTP 失败并要求无丢失样本。
 采样窗口不声明覆盖每个请求或每个线程的全部事件，不据采样数倒算每响应调用数；确切计数来自此前独立 counts-only 对照。采样步骤仍待 Actions 结果。
+
+
+## 采样器的失败边界与修正
+
+首次 tracepoint 运行 41805597028 没有有效采样率配置证明：H2/H1 写出约 2352/5073MB，发生丢样本且代理触及原 2GiB cgroup 上限，累计 93,264 成功和 103,625 失败，结束时正文/TLS 完整性也失败。没有 oom_kill，不能写成 OOM 杀进程；本轮不能作正常负载归因。归档 13309567487（44 文件、8,444,292 字节）及[冻结失败记录](evidence/futex-attribution-2026-11-04/sampled-first-failure/verification.json) 保留。
+
+随后两次预检查拒绝了测量：41806679819 的 perf 6.12 不接受 tracepoint /period=512/ 语法，归档 13309074426；41807179476 已真实显示 512 周期，但输出为带空格的 union 且省略零值 flags，校验器错误拒绝，归档 13310132831。这两轮均未启动实际压测，不按 HTTP 性能失败统计。
+现在把 -c 放在事件之后，并保留短预采样与实际 perf.data 的 evlist -v 和 -F。核查 Linux v6.12 util/evsel_fprintf.c 71–78 行，-F 依实际 attr.freq 输出 sample_period 或 sample_freq；因此要求明确 sample_period=512 且拒绝 sample_freq，不能只凭命令行或模糊 union 猜测采样模式。原始参数仍不公开，全部 HTTP、丢样本和资源门不变。正在独立运行 41807941740，尚不声明最终模块归因。
+
+四种失败均由[公共复核器](evidence/verify_diagnostic_failure.py)按冻结 stage 检查 ZIP、原始记录及错误边界；不将校验器修正后的重放或 partial 数据标成整轮通过。逐 syscall unwind workflow 已改手动运行，以免自动重复已知扰动方案。

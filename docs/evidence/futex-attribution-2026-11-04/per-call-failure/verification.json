@@ -1,0 +1,27 @@
+{
+  "source": "2fde11a06f315aa35482aebb294cf206c4c8254f",
+  "stage": "per-call-failure",
+  "runs": [
+    {
+      "path": "round-0-edge/manifest.json",
+      "status": "completed",
+      "cases": [
+        {
+          "stem": "0000-h2-off-reuse",
+          "status": "traffic-errors",
+          "successful": 0,
+          "failed": 64,
+          "error": null
+        },
+        {
+          "stem": "0001-h1-off-reuse",
+          "status": "traffic-errors",
+          "successful": 0,
+          "failed": 32,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "entire_run_passed": false
+}

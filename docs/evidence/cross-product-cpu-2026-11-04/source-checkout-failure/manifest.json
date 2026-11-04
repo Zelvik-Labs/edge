@@ -1,0 +1,33 @@
+{
+  "artifact_id": 13310246681,
+  "archive": "raw.zip",
+  "archive_bytes": 3273,
+  "archive_sha256": "028daad1546f98eb9c97014e7d107f8b5adb45f1184742d8bec0ca2c9ba66826",
+  "files": [
+    {
+      "path": "0-edge.driver.log",
+      "bytes": 1527,
+      "sha256": "efc9bfe9d0496d7e28c9bf5650d43856a80c3b89717c7599edcf0db4be2dad57"
+    },
+    {
+      "path": "provenance.json",
+      "bytes": 1492,
+      "sha256": "ad683dd4e8e3a0103469c6d717a3747bc76e1a4fa2961efe9dc2af845bb898b9"
+    },
+    {
+      "path": "retained-manifest.json",
+      "bytes": 740,
+      "sha256": "82b9446178ac7b855be541d6a355389b3dea254d3aef4456e297750b0e3ca41d"
+    },
+    {
+      "path": "round-0-edge/payload",
+      "bytes": 1024,
+      "sha256": "b054669e1068a1420691089a5e02f60b294df0b76180212b95528e65b6cd3dd6"
+    },
+    {
+      "path": "suite.json",
+      "bytes": 2010,
+      "sha256": "996702376c1bfb3a11e3c7cdfed836a7a988b4dbcd57de1fda700a8492770f1b"
+    }
+  ]
+}

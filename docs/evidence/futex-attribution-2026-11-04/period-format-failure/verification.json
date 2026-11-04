@@ -1,0 +1,20 @@
+{
+  "source": "89bc26be5463559a14289ec24b75ebcf46e63cd2",
+  "stage": "period-format-failure",
+  "runs": [
+    {
+      "path": "round-0-edge/manifest.json",
+      "status": "failed",
+      "cases": [
+        {
+          "stem": "0000-h2-off-reuse",
+          "status": null,
+          "successful": null,
+          "failed": null,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "entire_run_passed": false
+}

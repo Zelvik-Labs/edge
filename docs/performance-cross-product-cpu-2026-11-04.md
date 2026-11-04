@@ -58,3 +58,16 @@ Edge包含Rust http头表/hash、mimalloc、业务过滤与异步H2状态机；�
 [冻结复核器](evidence/cross-product-cpu-2026-11-04/verify.py)校验原ZIP/每个文件、实际竞品ELF、固定Edge/controller/client，重算所有响应、栈和未知叶子。
 同一复核器first-failure阶段保留首轮4通过/4诊断失败/16未运行以及缺失的Nginx原始响应，失败不被完整复跑覆盖。
 尚未解决：整体性能差距、纯框架/业务成本分摊与H3长期稳定性。经审批的功能降级：无。
+
+
+## 留存修复与接口兼容两轮复测已收齐
+
+| 运行 / harness | 完整格 | 有效响应 | 用户 CPU 样本 | HTTP 错误 / 丢样本 / steal |
+|---|---:|---:|---:|---|
+| [41786924585](https://github.com/Zelvik-Labs/edge/actions/runs/41786924585) / 953cf477 | 24 | 5,526,214 | 38,753 | 0 / 0 / 0 |
+| [41790435694](https://github.com/Zelvik-Labs/edge/actions/runs/41790435694) / 95906b87 | 24 | 9,216,810 | 35,845 | 0 / 0 / 0 |
+
+两轮均继续固定同一 ba474 Edge、实际客户端和 nginx/OpenResty ELF，分别确认失败前未压缩记录的 collector 留存以及新增裸 Pingora target 接口对原三产品流程的兼容。已独立核对全部 ZIP/解压字节、实际输入 ELF、每个 HTTP 记录、24 个采样及失样计数，新增冻结 stage retention-repeat / compatibility-repeat 可重算。不是新的业务运行时容量，也不把不同 runner 的样本占比当版本收益。
+归档分别为 13301488681（51,919,573 字节、320 文件，SHA-256 `0b817f1a5df03094087938cdf169da5b87ca714f2bf08771dde00d3e0dfc82f0`）和 13303971109（74,528,923 字节、320 文件，SHA-256 `c70103b5e76a632e6fa4308a289324e89982be703f1d5e5bda0c7192cdcf4618`）。
+
+后续共同 driver 补正历史 C 客户端源码身份时，41805597108 / 41806679966 因旧 workflow 浅克隆缺历史文件而在首目标测量前失败，不能视为性能回退。43958aa 失败归档 13310246681 的[冻结记录](evidence/cross-product-cpu-2026-11-04/source-checkout-failure/verification.json) 保留；公共[失败复核器](evidence/verify_diagnostic_failure.py)检查该原始归档。两个 CPU workflow 现显式 fetch-depth: 0，修复后重复仍待 Actions 结果。旧归档的客户端 ELF 已核验正确，但旧 client_source_sha256 标的是当时 harness C 源；不能据其证明历史 C 源，旧 ZIP 不重写。
