@@ -5,6 +5,7 @@ use dashmap::DashMap;
 use quinn::{AsyncUdpSocket, Endpoint, UdpPoller};
 use std::collections::{HashSet, VecDeque};
 use std::fmt;
+use std::future::Future;
 use std::io::{self, IoSliceMut};
 use std::net::{IpAddr as StdIpAddr, SocketAddr};
 use std::pin::Pin;
@@ -174,9 +175,7 @@ impl SharedQuinnUdpSocket {
 
 impl AsyncUdpSocket for SharedQuinnUdpSocket {
     fn create_io_poller(self: Arc<Self>) -> Pin<Box<dyn UdpPoller>> {
-        Box::pin(SharedUdpPoller {
-            downstream_sender: self.downstream_sender.clone(),
-        })
+        Box::pin(SharedUdpPoller::new(self.downstream_sender.clone()))
     }
 
     fn try_send(&self, transmit: &quinn::udp::Transmit<'_>) -> io::Result<()> {
@@ -251,14 +250,52 @@ impl AsyncUdpSocket for SharedQuinnUdpSocket {
     }
 }
 
-#[derive(Debug)]
+type PendingUdpWritable = Pin<Box<dyn Future<Output = io::Result<()>> + Send>>;
+
 struct SharedUdpPoller {
     downstream_sender: UdpDownstreamSender,
+    // Each Quinn connection needs its own waiter. Mutex provides the Sync
+    // contract for the stored future; exclusive poll access needs no lock.
+    pending: Mutex<Option<PendingUdpWritable>>,
+}
+
+impl SharedUdpPoller {
+    fn new(downstream_sender: UdpDownstreamSender) -> Self {
+        Self {
+            downstream_sender,
+            pending: Mutex::new(None),
+        }
+    }
+}
+
+impl fmt::Debug for SharedUdpPoller {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SharedUdpPoller")
+            .field("downstream_sender", &self.downstream_sender)
+            .finish_non_exhaustive()
+    }
 }
 
 impl UdpPoller for SharedUdpPoller {
     fn poll_writable(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<io::Result<()>> {
-        self.downstream_sender.poll_send_ready(cx)
+        let this = self.get_mut();
+        let pending = this
+            .pending
+            .get_mut()
+            .unwrap_or_else(|err| err.into_inner());
+        let ready = pending
+            .get_or_insert_with(|| {
+                let sender = this.downstream_sender.clone();
+                Box::pin(async move { sender.writable().await })
+            })
+            .as_mut()
+            .poll(cx);
+        if ready.is_ready() {
+            // Futures are single-use, while UdpPoller may be reused after
+            // either success or a closed channel error.
+            *pending = None;
+        }
+        ready
     }
 }
 
@@ -2422,6 +2459,170 @@ mod tests {
     use crate::config_models::{NetworkAddressConfig, ServerNameConfig, UDPConfig};
     use std::collections::{HashMap, HashSet};
 
+    #[derive(Default)]
+    struct WritableWake {
+        calls: AtomicUsize,
+        notify: tokio::sync::Notify,
+    }
+
+    impl std::task::Wake for WritableWake {
+        fn wake(self: Arc<Self>) {
+            self.wake_by_ref();
+        }
+
+        fn wake_by_ref(self: &Arc<Self>) {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            self.notify.notify_one();
+        }
+    }
+
+    #[tokio::test]
+    async fn shared_channel_writable_waits_recovers_and_reports_close() {
+        let address = "127.0.0.1:443".parse().unwrap();
+        let (tx, mut rx) = mpsc::channel(1);
+        let sender = UdpDownstreamSender::channel(address, tx);
+        let mut poller = Box::pin(SharedUdpPoller::new(sender.clone()));
+        let wake = Arc::new(WritableWake::default());
+        let waker = std::task::Waker::from(wake.clone());
+        let mut cx = TaskContext::from_waker(&waker);
+        for payload in [b"one", b"two"] {
+            assert_eq!(sender.try_send_to(payload, address).unwrap(), 3);
+            assert_eq!(
+                sender.try_send_to(b"full", address).unwrap_err().kind(),
+                io::ErrorKind::WouldBlock
+            );
+            let before = wake.calls.load(Ordering::Relaxed);
+            for _ in 0..16 {
+                assert!(poller.as_mut().poll_writable(&mut cx).is_pending());
+            }
+            assert_eq!(wake.calls.load(Ordering::Relaxed), before);
+            assert_eq!(rx.recv().await.unwrap().payload.as_ref(), payload);
+            assert!(wake.calls.load(Ordering::Relaxed) > before);
+            assert!(matches!(
+                poller.as_mut().poll_writable(&mut cx),
+                Poll::Ready(Ok(()))
+            ));
+        }
+        sender.try_send_to(b"last", address).unwrap();
+        assert!(poller.as_mut().poll_writable(&mut cx).is_pending());
+        let before = wake.calls.load(Ordering::Relaxed);
+        drop(rx);
+        assert!(wake.calls.load(Ordering::Relaxed) > before);
+        for _ in 0..3 {
+            match poller.as_mut().poll_writable(&mut cx) {
+                Poll::Ready(Err(error)) => assert_eq!(error.kind(), io::ErrorKind::BrokenPipe),
+                other => panic!("closed channel must remain an observable error: {other:?}"),
+            }
+        }
+        assert_eq!(
+            sender.try_send_to(b"closed", address).unwrap_err().kind(),
+            io::ErrorKind::BrokenPipe
+        );
+    }
+
+    #[tokio::test]
+    async fn shared_channel_writable_has_independent_cancellable_waiters() {
+        let address = "127.0.0.1:443".parse().unwrap();
+        let (tx, mut rx) = mpsc::channel(1);
+        let sender = UdpDownstreamSender::channel(address, tx);
+        let mut first = Box::pin(SharedUdpPoller::new(sender.clone()));
+        let mut second = Box::pin(SharedUdpPoller::new(sender.clone()));
+        let first_wake = Arc::new(WritableWake::default());
+        let second_wake = Arc::new(WritableWake::default());
+        let first_waker = std::task::Waker::from(first_wake.clone());
+        let second_waker = std::task::Waker::from(second_wake.clone());
+        let mut first_cx = TaskContext::from_waker(&first_waker);
+        let mut second_cx = TaskContext::from_waker(&second_waker);
+        sender.try_send_to(b"full", address).unwrap();
+        assert!(first.as_mut().poll_writable(&mut first_cx).is_pending());
+        assert!(second.as_mut().poll_writable(&mut second_cx).is_pending());
+        rx.recv().await.unwrap();
+        assert!(first_wake.calls.load(Ordering::Relaxed) > 0);
+        assert!(matches!(
+            first.as_mut().poll_writable(&mut first_cx),
+            Poll::Ready(Ok(()))
+        ));
+        // Dropping the advisory permit must wake the next connection.
+        assert!(second_wake.calls.load(Ordering::Relaxed) > 0);
+        assert!(matches!(
+            second.as_mut().poll_writable(&mut second_cx),
+            Poll::Ready(Ok(()))
+        ));
+        sender.try_send_to(b"full again", address).unwrap();
+        assert!(first.as_mut().poll_writable(&mut first_cx).is_pending());
+        assert!(second.as_mut().poll_writable(&mut second_cx).is_pending());
+        drop(first);
+        let before = second_wake.calls.load(Ordering::Relaxed);
+        rx.recv().await.unwrap();
+        assert!(second_wake.calls.load(Ordering::Relaxed) > before);
+        assert!(matches!(
+            second.as_mut().poll_writable(&mut second_cx),
+            Poll::Ready(Ok(()))
+        ));
+        sender.try_send_to(b"after cancellation", address).unwrap();
+        assert_eq!(
+            rx.recv().await.unwrap().payload.as_ref(),
+            b"after cancellation"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn shared_socket_writable_wakes_each_connection_on_initial_registration() {
+        for bind in ["127.0.0.1:0", "[::1]:0"] {
+            let receiver = UdpSocket::bind(bind).await.unwrap();
+            let address = receiver.local_addr().unwrap();
+            let socket = std::net::UdpSocket::bind(bind).unwrap();
+            socket.set_nonblocking(true).unwrap();
+            let sender =
+                UdpDownstreamSender::socket(Arc::new(UdpSocket::from_std(socket).unwrap()));
+            // No yield after registration: the single reactor thread has not
+            // yet observed the real initial writable event.
+            assert_eq!(
+                sender.try_send_to(b"wait", address).unwrap_err().kind(),
+                io::ErrorKind::WouldBlock
+            );
+            let mut first = Box::pin(SharedUdpPoller::new(sender.clone()));
+            let mut second = Box::pin(SharedUdpPoller::new(sender.clone()));
+            let first_wake = Arc::new(WritableWake::default());
+            let second_wake = Arc::new(WritableWake::default());
+            let first_waker = std::task::Waker::from(first_wake.clone());
+            let second_waker = std::task::Waker::from(second_wake.clone());
+            let mut first_cx = TaskContext::from_waker(&first_waker);
+            let mut second_cx = TaskContext::from_waker(&second_waker);
+            assert!(first.as_mut().poll_writable(&mut first_cx).is_pending());
+            assert!(second.as_mut().poll_writable(&mut second_cx).is_pending());
+            tokio::time::timeout(Duration::from_secs(2), async {
+                first_wake.notify.notified().await;
+                second_wake.notify.notified().await;
+            })
+            .await
+            .expect("both connection waiters must receive the socket event");
+            assert!(first_wake.calls.load(Ordering::Relaxed) > 0);
+            assert!(second_wake.calls.load(Ordering::Relaxed) > 0);
+            for poller in [&mut first, &mut second] {
+                assert!(matches!(
+                    poller.as_mut().poll_writable(&mut first_cx),
+                    Poll::Ready(Ok(()))
+                ));
+            }
+            assert_eq!(sender.try_send_to(b"ready", address).unwrap(), 5);
+            let mut data = [0; 16];
+            let (length, peer) =
+                tokio::time::timeout(Duration::from_secs(2), receiver.recv_from(&mut data))
+                    .await
+                    .unwrap()
+                    .unwrap();
+            assert_eq!(&data[..length], b"ready");
+            let UdpDownstreamSender::Socket(socket) = &sender else {
+                unreachable!()
+            };
+            assert_eq!(peer, socket.local_addr().unwrap());
+            assert!(matches!(
+                second.as_mut().poll_writable(&mut second_cx),
+                Poll::Ready(Ok(()))
+            ));
+        }
+    }
     fn test_demux_manager(store: ConfigStore) -> Arc<QuicUdpDemuxManager> {
         let waf_state = Arc::new(crate::firewall::state::WafStateManager::new());
         let cert_selector = Arc::new(crate::ssl::DynamicCertSelector::new());

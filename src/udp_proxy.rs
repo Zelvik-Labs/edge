@@ -9,7 +9,6 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::LazyLock as Lazy;
 use std::sync::atomic::{AtomicU8, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use tokio::net::UdpSocket;
 use tokio::sync::{Notify, RwLock, mpsc, watch};
@@ -943,12 +942,24 @@ impl UdpDownstreamSender {
         }
     }
 
-    pub(crate) fn poll_send_ready(&self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+    pub(crate) async fn writable(&self) -> io::Result<()> {
         match self {
-            Self::Socket(socket) => socket.poll_send_ready(cx),
-            Self::Channel(_) => Poll::Ready(Ok(())),
+            Self::Socket(socket) => socket.writable().await,
+            Self::Channel(sender) => {
+                // Readiness is advisory: release the slot before Quinn retries
+                // try_send. A competing sender may reclaim it in the meantime.
+                let permit = sender.tx.reserve().await.map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::BrokenPipe,
+                        "UDP downstream channel is closed",
+                    )
+                })?;
+                drop(permit);
+                Ok(())
+            }
         }
     }
+
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
