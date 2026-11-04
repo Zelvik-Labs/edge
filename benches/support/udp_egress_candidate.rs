@@ -1,3 +1,32 @@
+// Zero-sized error payloads keep the existing Display and Debug text.
+// io::Error still owns its custom error representation; no zero-allocation
+// claim is made about that outer representation.
+struct UdpDownstreamChannelError<const CLOSED: bool>;
+
+impl<const CLOSED: bool> UdpDownstreamChannelError<CLOSED> {
+    fn message(&self) -> &'static str {
+        if CLOSED {
+            "UDP downstream channel is closed"
+        } else {
+            "UDP downstream channel is full"
+        }
+    }
+}
+
+impl<const CLOSED: bool> std::fmt::Display for UdpDownstreamChannelError<CLOSED> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.message())
+    }
+}
+
+impl<const CLOSED: bool> std::fmt::Debug for UdpDownstreamChannelError<CLOSED> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self.message(), formatter)
+    }
+}
+
+impl<const CLOSED: bool> std::error::Error for UdpDownstreamChannelError<CLOSED> {}
+
 #[derive(Debug)]
 pub struct ChannelUdpDownstreamSender {
     listen_addr: SocketAddr,
@@ -6,21 +35,6 @@ pub struct ChannelUdpDownstreamSender {
 
 impl ChannelUdpDownstreamSender {
     fn try_send_to(&self, data: &[u8], target: SocketAddr) -> io::Result<usize> {
-        // Advisory snapshots reject known-unavailable queues before copying.
-        // A competing producer may still fill the queue after this check;
-        // try_send remains the authoritative admission operation below.
-        if self.tx.is_closed() {
-            return Err(io::Error::new(
-                io::ErrorKind::BrokenPipe,
-                "UDP downstream channel is closed",
-            ));
-        }
-        if self.tx.capacity() == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::WouldBlock,
-                "UDP downstream channel is full",
-            ));
-        }
         self.try_send_owned_to(Bytes::copy_from_slice(data), target)
     }
 
@@ -36,11 +50,11 @@ impl ChannelUdpDownstreamSender {
             Ok(()) => Ok(len),
             Err(mpsc::error::TrySendError::Full(_)) => Err(io::Error::new(
                 io::ErrorKind::WouldBlock,
-                "UDP downstream channel is full",
+                UdpDownstreamChannelError::<false>,
             )),
             Err(mpsc::error::TrySendError::Closed(_)) => Err(io::Error::new(
                 io::ErrorKind::BrokenPipe,
-                "UDP downstream channel is closed",
+                UdpDownstreamChannelError::<true>,
             )),
         }
     }

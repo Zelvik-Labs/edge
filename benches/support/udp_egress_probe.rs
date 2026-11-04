@@ -119,6 +119,14 @@ fn controls<S: Sender>() {
                 let error = fixture.send(&case).unwrap_err();
                 assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
                 assert_eq!(error.to_string(), "UDP downstream channel is full");
+                assert_eq!(error.raw_os_error(), None);
+                assert_eq!(
+                    format!("{error:?}"),
+                    format!(
+                        "{:?}",
+                        io::Error::new(io::ErrorKind::WouldBlock, "UDP downstream channel is full")
+                    )
+                );
                 let queued = fixture.rx.as_mut().unwrap().try_recv().unwrap();
                 assert_eq!(queued.payload.as_ref(), b"already queued");
                 assert_eq!(fixture.send(&case).unwrap(), case.size);
@@ -127,6 +135,17 @@ fn controls<S: Sender>() {
                 let error = fixture.send(&case).unwrap_err();
                 assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
                 assert_eq!(error.to_string(), "UDP downstream channel is closed");
+                assert_eq!(error.raw_os_error(), None);
+                assert_eq!(
+                    format!("{error:?}"),
+                    format!(
+                        "{:?}",
+                        io::Error::new(
+                            io::ErrorKind::BrokenPipe,
+                            "UDP downstream channel is closed"
+                        )
+                    )
+                );
             }
         }
         if case.state != State::Closed {

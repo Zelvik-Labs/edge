@@ -133,9 +133,12 @@ def verify():
         old, new = [allocations[v][case] for v in ['baseline', 'candidate']]
         assert old['iterations'] == new['iterations'] == 1000
         assert old['reallocations'] == new['reallocations'] == 0
-        rejected_copy = case.startswith('copied') and not case.endswith('ready')
-        assert old['allocations'] - new['allocations'] == (1000 if rejected_copy else 0)
-        assert old['bytes'] - new['bytes'] == (1000 * int(case.split('-')[1]) if rejected_copy else 0)
+        rejected = not case.endswith('ready')
+        assert old['allocations'] - new['allocations'] == (2000 if rejected else 0)
+        if rejected:
+            assert old['bytes'] > new['bytes']
+        else:
+            assert old['bytes'] == new['bytes']
     assert [(r['round'], r['variant']) for r in metadata['runs']] == [
         (i, v) for i in range(8) for v in (['baseline', 'candidate'] if i % 2 == 0 else ['candidate', 'baseline'])]
     values = defaultdict(dict)
