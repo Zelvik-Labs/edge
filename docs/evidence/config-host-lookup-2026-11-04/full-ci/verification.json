@@ -1,0 +1,19 @@
+{
+  "run": 41797920565,
+  "source": "436e8fdd81919f2d35f292c2519c0383805f5fb3",
+  "library_passed": 1374,
+  "binary_passed": 16,
+  "ignored": 5,
+  "native_combinations": 32,
+  "h3_repeat": 64,
+  "logs": {
+    "test": {
+      "bytes": 3000487,
+      "sha256": "4e0575dde538a0f72d6e68bff2c7e6d19ac344a6f2112e94f11538ad303d1fec"
+    },
+    "check": {
+      "bytes": 130385,
+      "sha256": "db1b4d38fd544ddeefa35b598558ad3b9a72d637ee9c408233026e2ac7303196"
+    }
+  }
+}

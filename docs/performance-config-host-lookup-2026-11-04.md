@@ -123,3 +123,10 @@ Proxy已经规范化主机名，get_request_context_sync在持读锁时还会调
 [冻结复核器](evidence/config-host-lookup-2026-11-04/h3-repeat/verify.py) 核对每份日志、wire JSON、源码身份及汇总；归档未包含实际 libtest ELF，不能宣称校验了该 ELF 字节。该运行的库/二进制/integration/vendor 与 check/Clippy 步骤已成功，但完整 native32 gate 仍在执行，尚不记为全部 CI 通过。
 
 累计节点结果见 [同批四目标协议和缓存报告](performance-cumulative-node-2026-11-04.md)：192 格及全部控制通过，但累计吞吐收益很小，H3 MISS 四轮均负向；不能把上面的 helper 改善外推为节点收益。
+
+
+## 修正 fixture 后的完整默认 CI 通过
+
+[41797920565](https://github.com/Zelvik-Labs/edge/actions/runs/41797920565) 已全部完成：1374 库测试、16 二进制测试、integration、vendored Pingora、all-targets check/Clippy 及 native32 均通过，5 ignored 保持原设置。源 436e8fdd81919f2d35f292c2519c0383805f5fb3，业务实现仍为 59b，之后只补强 H3 测试和可选重复工具。
+已核对实际 test/check 日志身份、35 条原始测试汇总，以及 native 归档 13308014961 的 69 文件/32 组合、退出状态、完成标记、无残留网络空间和退出后链接。归档 SHA-256 `5f2561e1d2421dfd77db8435a2bdf11e1d66e3af077a04a6444fe191f9459dbe`，137,480 字节。[冻结 CI 复核器](evidence/config-host-lookup-2026-11-04/full-ci/verify_ci.py) 可独立检查。
+正确性门通过并不改变累计节点收益小的结论。native 归档未包含实际节点 ELF，故只证明记录的一致性与正确性检查；实际累计节点对照另行下载并核对了被测 ELF。最初失败的 59b CI 仍保留，不改写为通过。后续 feature-only phase poll 探针在独立 Actions 构建，不能将该默认 CI 视为其编译证明。
