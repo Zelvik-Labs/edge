@@ -655,6 +655,13 @@ pub(crate) async fn with_http1_parse_tracking<F: std::future::Future>(future: F)
         .scope(std::cell::Cell::new(false), future)
         .await
 }
+
+/// Use the same parse-mark task scope as the production HTTP/1 manager.
+#[cfg(feature = "http-layout-probe")]
+#[doc(hidden)]
+pub async fn inspect_with_http1_parse_tracking<F: std::future::Future>(future: F) -> F::Output {
+    with_http1_parse_tracking(future).await
+}
 static HTTP_REQUEST_PARSE_MARK_SWEEP_AT_MS: LazyLock<std::sync::atomic::AtomicI64> =
     LazyLock::new(|| std::sync::atomic::AtomicI64::new(0));
 static HTTP_REQUEST_PARSE_MARK_WARN_AT_MS: LazyLock<std::sync::atomic::AtomicI64> =
