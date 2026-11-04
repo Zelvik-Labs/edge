@@ -265,3 +265,7 @@ lto = "fat"
 codegen-units = 1
 panic = "abort"
 opt-level = 3
+
+[[example]]
+name = "http-phase-poll"
+required-features = ["http-layout-probe"]

@@ -8125,6 +8125,56 @@ p {{ margin: 0; color: #475569; font-size: 17px; line-height: 1.7; }}
         Ok((false, waf_action))
     }
 
+    /// Diagnostic active poll wall time for the actual ten request phases.
+    /// The caller supplies a valid request/config fixture and must reject
+    /// pending polls when interpreting a ready-only component measurement.
+    #[cfg(feature = "http-layout-probe")]
+    #[doc(hidden)]
+    pub async fn inspect_request_phase_polls(
+        &self,
+        session: &mut Session,
+        ctx: &mut ProxyCTX,
+    ) -> Result<[[u64; 3]; 10]> {
+        let mut costs = [[0_u64; 3]; 10];
+        macro_rules! measured {
+            ($index:expr, $future:expr) => {{
+                let mut future = std::pin::pin!($future);
+                let result = std::future::poll_fn(|cx| {
+                    costs[$index][1] += 1;
+                    let started = std::time::Instant::now();
+                    let result = std::future::Future::poll(future.as_mut(), cx);
+                    costs[$index][0] += started.elapsed().as_nanos() as u64;
+                    if result.is_pending() {
+                        costs[$index][2] += 1;
+                    }
+                    result
+                })
+                .await?;
+                match result {
+                    PhaseOutcome::Continue(value) => value,
+                    PhaseOutcome::Done(_) => {
+                        return Err(Error::explain(
+                            InternalError,
+                            format!("phase-poll fixture stopped in phase {}", $index),
+                        ));
+                    }
+                }
+            }};
+        }
+        let state = measured!(0, self.run_request_context_phase(session, ctx));
+        measured!(1, self.run_local_service_phase(session, ctx, &state));
+        measured!(2, self.run_protocol_policy_phase(session, ctx, &state));
+        measured!(3, self.run_early_response_phase(session, ctx, &state));
+        measured!(4, self.run_security_state_phase(session, ctx));
+        measured!(5, self.run_limits_phase(session, ctx, &state));
+        measured!(6, self.run_lightweight_waf_phase(session, ctx));
+        measured!(7, self.run_body_waf_phase(session, ctx, &state));
+        measured!(8, self.run_feature_policy_phase(session, ctx));
+        measured!(9, self.run_rewrite_phase(session, ctx, &state));
+        ctx.request_phase = RequestPhase::Proxy;
+        Ok(costs)
+    }
+
     /// Inspect concrete phase layouts without polling any request logic.
     /// Available only to explicit diagnostics and the ignored layout test.
     #[cfg(any(test, feature = "http-layout-probe"))]
