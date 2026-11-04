@@ -39,8 +39,12 @@ flush 时将共享域名转为输出 String；它的分配与新 key/兼容入�
 全部六项计数和并发 flush 的总量均通过；无统计删除、队列/缓存/TLS 降级或上限放宽。
 
 现将被测 tracker 原样接入性能分支，worker 把已有 event.domain 移给 record_shared；公开借用入口继续可用。
-补充实际所有权、全部计数、兼容入口、flush 边界、动态容量和无效 key 的回归，完整 CI 与节点对照待执行。
+补充实际所有权、全部计数、兼容入口、flush 边界、动态容量和无效 key 的回归。
+[完整 CI 41777560016](https://github.com/Zelvik-Labs/edge/actions/runs/41777560016) 与 [192 格四目标对照 41777536889](https://github.com/Zelvik-Labs/edge/actions/runs/41777536889) 已启动；节点前后严格仅 src/metrics.rs 与 src/metrics/daily.rs 不同。
 构建器同时断言实际 tracker 与被测区域一致，后续归档保留实际源码。
+[集成复测 41777467367](https://github.com/Zelvik-Labs/edge/actions/runs/41777467367) 已通过并核验实际 tracker 源码、二进制、全部控制和计时块；冻结复核器支持 integrated 阶段。
+归档 `13297941325`：682,775字节、37文件，SHA-256 `0c5d89ce0a4cdfc8269388d0f1cd1b4789a075c8112a700ec8af63976b0b3eb9`。
+冷 shard 扩容的解释也已核对锁定版源码：DashMap entry 调用 hashbrown find_or_find_insert_slot，后者先 reserve(1) 再查找；[引用与 crate 校验和](evidence/daily-domain-2026-11-04/source-audit/sources.json)保留。
 
 通过归档 `13296859075`：680,112字节、36文件，SHA-256 `57c7a1815b9b1a6f6e9eaed79de99f6ea365831949e173c4455a0f9276bd2be3`。
 [冻结复核器](evidence/daily-domain-2026-11-04/verify.py)分别支持 setup-failure / first-measure / pass，保留状态差别；第一次完整测量可离线重算，未将其原失败工作流重写成成功。

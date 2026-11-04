@@ -27,6 +27,16 @@ def function(source, signature):
     return source[start:source.index('\n}\n', start) + 3]
 
 
+def integrated_candidate(lb, proxy):
+    strip = function(lb, 'pub(crate) fn strip_addr_port_ref(').replace(
+        'pub(crate) fn strip_addr_port_ref(', 'fn candidate_strip_addr_port(', 1)
+    start = proxy.index('    fn normalize_request_host(')
+    normalize = textwrap.dedent(proxy[start:proxy.index('\n    }\n', start) + 7])
+    normalize = normalize.replace('fn normalize_request_host(', 'fn candidate(', 1).replace(
+        'crate::lb_factory::strip_addr_port_ref(', 'candidate_strip_addr_port(')
+    return (strip + '\n' + normalize).strip()
+
+
 def build():
     OUT.mkdir(parents=True, exist_ok=False)
     source = OUT / 'source'
@@ -42,6 +52,11 @@ def build():
     normalize = textwrap.dedent(normalize).replace('fn normalize_request_host(', 'fn baseline(', 1).replace('crate::lb_factory::strip_addr_port(', 'baseline_strip_addr_port(')
     (source / 'original.rs').write_text(strip + '\n' + normalize)
     (source / 'candidate.rs').write_text((ROOT / 'benches/support/host_normalize_candidate.rs').read_text())
+    integrated_lb = (ROOT / 'src/lb_factory.rs').read_text()
+    integrated_proxy = (ROOT / 'src/proxy.rs').read_text()
+    assert integrated_candidate(integrated_lb, integrated_proxy) == (source / 'candidate.rs').read_text().strip()
+    (source / 'integrated-lb-factory.rs').write_text(integrated_lb)
+    (source / 'integrated-proxy.rs').write_text(integrated_proxy)
     shutil.copy2(ROOT / 'benches/support/host_normalize_probe.rs', source / 'main.rs')
     allocator = (ROOT / 'benches/support/sni_client_hello_probe.rs').read_text()
     (source / 'allocator.rs').write_text(allocator[allocator.index('#[cfg(feature = "count-allocations")]'):
@@ -113,6 +128,8 @@ def verify():
         assert sha(OUT / name) == value
     for name, value in metadata['sources'].items():
         assert sha(OUT / 'source' / name) == value
+    assert integrated_candidate((OUT / 'source/integrated-lb-factory.rs').read_text(),
+        (OUT / 'source/integrated-proxy.rs').read_text()) == (OUT / 'source/candidate.rs').read_text().strip()
     controls = read(OUT / 'controls.tsv')
     assert len(controls) == 65567
     assert all(int(row['case']) == i and row['baseline'] == row['candidate'] 

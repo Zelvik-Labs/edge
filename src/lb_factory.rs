@@ -1177,17 +1177,21 @@ fn origin_addr_host(addr: &crate::config_models::FlexibleAddr) -> String {
 }
 
 pub(crate) fn strip_addr_port(value: &str) -> String {
+    strip_addr_port_ref(value).to_string()
+}
+
+pub(crate) fn strip_addr_port_ref(value: &str) -> &str {
     if let Some(rest) = value.strip_prefix('[')
         && let Some(end) = rest.find(']')
     {
-        return rest[..end].to_string();
+        return &rest[..end];
     }
     if value.matches(':').count() == 1
         && let Some((host, _)) = value.rsplit_once(':')
     {
-        return host.to_string();
+        return host;
     }
-    value.to_string()
+    value
 }
 
 fn is_local_addr(addr: &str) -> bool {

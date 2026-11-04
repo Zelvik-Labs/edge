@@ -13,7 +13,8 @@ from verify_archive import verify_archive
 parser = argparse.ArgumentParser(description=__doc__)
 sources = {'setup-failure': '3e3e2e5e5d178fa8ad89666bd18b86d4e4dc64be',
            'first-measure': '8486c1bec1633655af64e756473ecfa927e67ca5',
-           'pass': '739aa162d367040393e1d6d91293af231e7233e6'}
+           'pass': '739aa162d367040393e1d6d91293af231e7233e6',
+           'integrated': 'e3c1d50fa0c5300483102362b9de6beda8f3d0c5'}
 parser.add_argument('stage', choices=sources)
 parser.add_argument('download', type=Path)
 args = parser.parse_args()
@@ -22,7 +23,8 @@ if args.stage == 'setup-failure':
     assert json.loads((root / 'setup.json').read_text()) == json.loads((HERE / args.stage / 'setup.json').read_text())
     assert not (root / 'metadata.json').exists()
 else:
-    spec = importlib.util.spec_from_file_location('frozen_daily', HERE / 'frozen_probe.py')
+    probe = HERE / 'integrated/frozen_probe.py' if args.stage == 'integrated' else HERE / 'frozen_probe.py'
+    spec = importlib.util.spec_from_file_location('frozen_daily', probe)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     module.OUT = root

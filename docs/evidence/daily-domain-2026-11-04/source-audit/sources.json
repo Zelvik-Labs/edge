@@ -1,0 +1,28 @@
+[
+  {
+    "package": "hashbrown",
+    "version": "0.14.5",
+    "crate_sha256": "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1",
+    "source_path": "src/raw/mod.rs",
+    "source_sha256": "16bbabf42dde9f3fb17c4f7e768aef47752d839bf624b81d24a48af3d418b3a2",
+    "lines_inclusive": [
+      1399,
+      1433
+    ],
+    "excerpt": "hashbrown-excerpt.rs",
+    "excerpt_sha256": "17404878ba4071b777e650372143048d43ee066feb18e50f7c6fdf085e6b5d93"
+  },
+  {
+    "package": "dashmap",
+    "version": "6.2.1",
+    "crate_sha256": "e6361d5c062261c78a176addb82d4c821ae42bed6089de0e12603cd25de2059c",
+    "source_path": "src/lib.rs",
+    "source_sha256": "64b90c70475da6b2def36975f9ae21ed3c71b1d0fb8d4ccd1fcbd3bb260be582",
+    "lines_inclusive": [
+      1183,
+      1207
+    ],
+    "excerpt": "dashmap-excerpt.rs",
+    "excerpt_sha256": "9a655bc468ead91de97ec40a7e8f0e5fb9aca291a8ec972519cb47225dbd6e1c"
+  }
+]

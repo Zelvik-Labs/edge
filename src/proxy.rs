@@ -1673,7 +1673,7 @@ impl EdgeProxy {
 
     fn normalize_request_host(host: &str) -> String {
         let host = host.rsplit('@').next().unwrap_or(host).trim();
-        crate::lb_factory::strip_addr_port(host)
+        crate::lb_factory::strip_addr_port_ref(host)
             .trim_end_matches('.')
             .to_ascii_lowercase()
     }
