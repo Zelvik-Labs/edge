@@ -1,0 +1,16 @@
+{
+  "source": "186fedc728ea868afbeaea37575df2698fb0cfe7",
+  "traces": 22,
+  "errors_by_client": {
+    "default": 14,
+    "x25519": 8
+  },
+  "phase_one_packet_numbers": {
+    "11": 9,
+    "10": 7,
+    "12": 6
+  },
+  "received_handshake_done_before_close": 0,
+  "dropped_trace_bytes": 0,
+  "scope": "all retained local KEY_UPDATE_ERROR traces; hybrid group is not necessary for reproduction; no determination of the violating endpoint"
+}

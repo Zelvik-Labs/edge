@@ -172,6 +172,30 @@ pub fn parse_single_range_header(value: &str) -> Option<RequestedRange> {
     })
 }
 
+/// Decide whether a request needs the partial store. The full-object probe
+/// validates metadata and stored headers, so defer it until a Range exists.
+/// A seekable full object leaves Range handling to Pingora, including syntax
+/// it may support beyond this partial store's single-range parser.
+pub(crate) fn select_cache_range(
+    requested_range: Option<&str>,
+    partial_cache_allowed: bool,
+    full_object_cached: impl FnOnce() -> bool,
+) -> Result<Option<&str>, &'static str> {
+    let Some(requested_range) = requested_range else {
+        return Ok(None);
+    };
+    if full_object_cached() {
+        return Ok(None);
+    }
+    if !partial_cache_allowed {
+        return Err("RangeRequiresSeekableCache");
+    }
+    if parse_single_range_header(requested_range).is_none() {
+        return Err("UnsupportedRange");
+    }
+    Ok(Some(requested_range))
+}
+
 pub fn parse_content_range(value: &str) -> Option<ContentRange> {
     let value = value.trim();
     let value = value
@@ -1405,6 +1429,56 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn ordinary_cache_request_never_probes_range_metadata() {
+        for partial_allowed in [false, true] {
+            assert_eq!(
+                select_cache_range(None, partial_allowed, || {
+                    panic!("ordinary requests must not probe full-object Range metadata")
+                }),
+                Ok(None)
+            );
+        }
+    }
+
+    #[test]
+    fn range_selection_preserves_full_partial_and_bypass_precedence() {
+        for range in [
+            "bytes=0-3",
+            "bytes=2-",
+            "bytes=-4",
+            "BYTES= 0 - 3",
+            "bytes=0-1,4-5",
+            "bytes=4-2",
+            "bytes=-0",
+            "other=0-3",
+        ] {
+            for full in [false, true] {
+                for partial in [false, true] {
+                    let calls = std::cell::Cell::new(0);
+                    let result = select_cache_range(Some(range), partial, || {
+                        calls.set(calls.get() + 1);
+                        full
+                    });
+                    let expected = if full {
+                        Ok(None)
+                    } else if !partial {
+                        Err("RangeRequiresSeekableCache")
+                    } else if matches!(
+                        range,
+                        "bytes=0-3" | "bytes=2-" | "bytes=-4" | "BYTES= 0 - 3"
+                    ) {
+                        Ok(Some(range))
+                    } else {
+                        Err("UnsupportedRange")
+                    };
+                    assert_eq!(result, expected, "{range}: full={full}, partial={partial}");
+                    assert_eq!(calls.get(), 1);
+                }
+            }
+        }
+    }
 
     fn test_base_key(label: &str) -> String {
         let sequence = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);

@@ -1,0 +1,22 @@
+{
+  "src/main.rs": {
+    "new_format_edits_applied": 0,
+    "preexisting_edits_unchanged": 34
+  },
+  "src/runtime_mode.rs": {
+    "new_format_edits_applied": 0,
+    "preexisting_edits_unchanged": 1
+  },
+  "src/udp_proxy.rs": {
+    "new_format_edits_applied": 7,
+    "preexisting_edits_unchanged": 0
+  },
+  "src/xdp/smoke.rs": {
+    "new_format_edits_applied": 0,
+    "preexisting_edits_unchanged": 1
+  },
+  "src/xdp/af_xdp/dial.rs": {
+    "new_format_edits_applied": 7,
+    "preexisting_edits_unchanged": 0
+  }
+}

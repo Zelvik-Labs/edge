@@ -1,0 +1,89 @@
+# Edge 主进程 RSS 观测
+
+下表为成功场景结束时主进程 RSS 的中位数，不是峰值、PSS、分配器账本或优化前后差值。
+控制器及 Nginx/OpenResty 各进程的独立 RSS 均保留在 CSV；不把多进程 RSS 相加冒充去重物理内存。
+失败/缺失观测保留在 JSON，不构成完整单元格的内存结果。
+
+| 实验 | 后端 | 批次 | 正文 B | 协议 | 缓存 | 连接 | RSS MiB | 独立样本 |
+|---|---|---:|---:|---|---|---|---:|---:|
+| native | quinn-native | 1 | 1024 | h3 | hit | fresh | 182.20 | 3/3 |
+| native | quinn-native | 1 | 1024 | h3 | hit | multiplex | 162.23 | 3/3 |
+| native | quinn-native | 1 | 1024 | h3 | hit | reuse | 167.56 | 3/3 |
+| native | quinn-native | 1 | 1024 | h3 | miss | fresh | 185.28 | 3/3 |
+| native | quinn-native | 1 | 1024 | h3 | miss | multiplex | 172.56 | 3/3 |
+| native | quinn-native | 1 | 1024 | h3 | miss | reuse | 176.67 | 3/3 |
+| native | quinn-native | 1 | 1024 | h3 | off | fresh | 179.23 | 3/3 |
+| native | quinn-native | 1 | 1024 | h3 | off | multiplex | 163.86 | 3/3 |
+| native | quinn-native | 1 | 1024 | h3 | off | reuse | 170.31 | 3/3 |
+| native | quinn-native | 1 | 32768 | h3 | hit | fresh | 失败/缺失 | 3/3 |
+| native | quinn-native | 1 | 32768 | h3 | hit | multiplex | 165.23 | 3/3 |
+| native | quinn-native | 1 | 32768 | h3 | hit | reuse | 170.09 | 3/3 |
+| native | quinn-native | 1 | 32768 | h3 | miss | fresh | 183.32 | 3/3 |
+| native | quinn-native | 1 | 32768 | h3 | miss | multiplex | 176.43 | 3/3 |
+| native | quinn-native | 1 | 32768 | h3 | miss | reuse | 179.40 | 3/3 |
+| native | quinn-native | 1 | 32768 | h3 | off | fresh | 178.75 | 3/3 |
+| native | quinn-native | 1 | 32768 | h3 | off | multiplex | 166.26 | 3/3 |
+| native | quinn-native | 1 | 32768 | h3 | off | reuse | 172.22 | 3/3 |
+| native | quinn-native | 1 | 131072 | h3 | hit | fresh | 失败/缺失 | 3/3 |
+| native | quinn-native | 1 | 131072 | h3 | hit | multiplex | 174.98 | 3/3 |
+| native | quinn-native | 1 | 131072 | h3 | hit | reuse | 179.83 | 3/3 |
+| native | quinn-native | 1 | 131072 | h3 | miss | fresh | 178.78 | 3/3 |
+| native | quinn-native | 1 | 131072 | h3 | miss | multiplex | 181.69 | 3/3 |
+| native | quinn-native | 1 | 131072 | h3 | miss | reuse | 176.80 | 3/3 |
+| native | quinn-native | 1 | 131072 | h3 | off | fresh | 失败/缺失 | 3/3 |
+| native | quinn-native | 1 | 131072 | h3 | off | multiplex | 171.37 | 3/3 |
+| native | quinn-native | 1 | 131072 | h3 | off | reuse | 172.13 | 3/3 |
+| native | quinn-shared | 1 | 1024 | h3 | hit | fresh | 171.48 | 3/3 |
+| native | quinn-shared | 1 | 1024 | h3 | hit | multiplex | 159.84 | 3/3 |
+| native | quinn-shared | 1 | 1024 | h3 | hit | reuse | 170.41 | 3/3 |
+| native | quinn-shared | 1 | 1024 | h3 | miss | fresh | 176.91 | 3/3 |
+| native | quinn-shared | 1 | 1024 | h3 | miss | multiplex | 170.38 | 3/3 |
+| native | quinn-shared | 1 | 1024 | h3 | miss | reuse | 171.55 | 3/3 |
+| native | quinn-shared | 1 | 1024 | h3 | off | fresh | 170.89 | 3/3 |
+| native | quinn-shared | 1 | 1024 | h3 | off | multiplex | 158.08 | 3/3 |
+| native | quinn-shared | 1 | 1024 | h3 | off | reuse | 168.30 | 3/3 |
+| native | quinn-shared | 1 | 32768 | h3 | hit | fresh | 170.24 | 3/3 |
+| native | quinn-shared | 1 | 32768 | h3 | hit | multiplex | 164.08 | 3/3 |
+| native | quinn-shared | 1 | 32768 | h3 | hit | reuse | 170.90 | 3/3 |
+| native | quinn-shared | 1 | 32768 | h3 | miss | fresh | 175.84 | 3/3 |
+| native | quinn-shared | 1 | 32768 | h3 | miss | multiplex | 176.17 | 3/3 |
+| native | quinn-shared | 1 | 32768 | h3 | miss | reuse | 170.29 | 3/3 |
+| native | quinn-shared | 1 | 32768 | h3 | off | fresh | 171.12 | 3/3 |
+| native | quinn-shared | 1 | 32768 | h3 | off | multiplex | 162.07 | 3/3 |
+| native | quinn-shared | 1 | 32768 | h3 | off | reuse | 169.81 | 3/3 |
+| native | quinn-shared | 1 | 131072 | h3 | hit | fresh | 178.64 | 3/3 |
+| native | quinn-shared | 1 | 131072 | h3 | hit | multiplex | 175.62 | 3/3 |
+| native | quinn-shared | 1 | 131072 | h3 | hit | reuse | 176.80 | 3/3 |
+| native | quinn-shared | 1 | 131072 | h3 | miss | fresh | 174.75 | 3/3 |
+| native | quinn-shared | 1 | 131072 | h3 | miss | multiplex | 176.60 | 3/3 |
+| native | quinn-shared | 1 | 131072 | h3 | miss | reuse | 174.87 | 3/3 |
+| native | quinn-shared | 1 | 131072 | h3 | off | fresh | 169.04 | 3/3 |
+| native | quinn-shared | 1 | 131072 | h3 | off | multiplex | 166.43 | 3/3 |
+| native | quinn-shared | 1 | 131072 | h3 | off | reuse | 172.74 | 3/3 |
+| native | tokio-quiche-native | 1 | 1024 | h3 | hit | fresh | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 1024 | h3 | hit | multiplex | 158.15 | 3/3 |
+| native | tokio-quiche-native | 1 | 1024 | h3 | hit | reuse | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 1024 | h3 | miss | fresh | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 1024 | h3 | miss | multiplex | 172.64 | 3/3 |
+| native | tokio-quiche-native | 1 | 1024 | h3 | miss | reuse | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 1024 | h3 | off | fresh | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 1024 | h3 | off | multiplex | 155.80 | 3/3 |
+| native | tokio-quiche-native | 1 | 1024 | h3 | off | reuse | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 32768 | h3 | hit | fresh | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 32768 | h3 | hit | multiplex | 160.63 | 3/3 |
+| native | tokio-quiche-native | 1 | 32768 | h3 | hit | reuse | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 32768 | h3 | miss | fresh | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 32768 | h3 | miss | multiplex | 173.43 | 3/3 |
+| native | tokio-quiche-native | 1 | 32768 | h3 | miss | reuse | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 32768 | h3 | off | fresh | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 32768 | h3 | off | multiplex | 160.05 | 3/3 |
+| native | tokio-quiche-native | 1 | 32768 | h3 | off | reuse | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 131072 | h3 | hit | fresh | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 131072 | h3 | hit | multiplex | 163.42 | 3/3 |
+| native | tokio-quiche-native | 1 | 131072 | h3 | hit | reuse | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 131072 | h3 | miss | fresh | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 131072 | h3 | miss | multiplex | 169.49 | 3/3 |
+| native | tokio-quiche-native | 1 | 131072 | h3 | miss | reuse | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 131072 | h3 | off | fresh | 失败/缺失 | 3/3 |
+| native | tokio-quiche-native | 1 | 131072 | h3 | off | multiplex | 164.82 | 3/3 |
+| native | tokio-quiche-native | 1 | 131072 | h3 | off | reuse | 失败/缺失 | 3/3 |

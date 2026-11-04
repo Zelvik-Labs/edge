@@ -23,8 +23,28 @@ HOST_BYPASS_IP="${HOST_BYPASS_ADDR%/*}"
 HOST_IP6="${HOST_ADDR6%/*}"
 TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT_DIR/target}"
 XDP_SMOKE_PROFILE="${XDP_SMOKE_PROFILE:-debug}"
-NODE_BIN="$TARGET_DIR/$XDP_SMOKE_PROFILE/zelvik-edge"
+NODE_BIN="${XDP_SMOKE_NODE_BIN:-$TARGET_DIR/$XDP_SMOKE_PROFILE/Zelvik-Edge}"
 H3_PROBE_BIN="$TARGET_DIR/$XDP_SMOKE_PROFILE/h3-probe"
+export XDP_SMOKE_WAKE="${XDP_SMOKE_WAKE:-worker}"
+case "$XDP_SMOKE_WAKE" in
+    worker|readable) ;;
+    *) printf 'invalid XDP_SMOKE_WAKE: %s\n' "$XDP_SMOKE_WAKE" >&2; exit 2 ;;
+esac
+export XDP_SMOKE_RX_STATS="${XDP_SMOKE_RX_STATS:-bridge}"
+case "$XDP_SMOKE_RX_STATS" in
+    full|bridge) ;;
+    *) printf 'invalid XDP_SMOKE_RX_STATS: %s\n' "$XDP_SMOKE_RX_STATS" >&2; exit 2 ;;
+esac
+export XDP_SMOKE_IDLE_YIELD="${XDP_SMOKE_IDLE_YIELD:-eager}"
+case "$XDP_SMOKE_IDLE_YIELD" in
+    eager|cooperative) ;;
+    *) printf 'invalid XDP_SMOKE_IDLE_YIELD: %s\n' "$XDP_SMOKE_IDLE_YIELD" >&2; exit 2 ;;
+esac
+export XDP_SMOKE_UDP_PAYLOAD="${XDP_SMOKE_UDP_PAYLOAD:-copied}"
+case "$XDP_SMOKE_UDP_PAYLOAD" in
+    copied|owned) ;;
+    *) printf 'invalid XDP_SMOKE_UDP_PAYLOAD: %s\n' "$XDP_SMOKE_UDP_PAYLOAD" >&2; exit 2 ;;
+esac
 PIDS_TO_KILL=()
 
 log() {
@@ -57,7 +77,9 @@ trap cleanup EXIT
 [[ "$(uname -s)" == "Linux" ]] || die "Linux is required for XDP/AF_XDP smoke tests"
 [[ "${EUID:-$(id -u)}" -eq 0 ]] || die "root or CAP_NET_ADMIN/CAP_BPF/CAP_NET_RAW is required"
 require_cmd ip
-require_cmd cargo
+if [[ "${XDP_SMOKE_SKIP_BUILD:-0}" != "1" ]]; then
+    require_cmd cargo
+fi
 require_cmd ethtool
 require_cmd ping
 require_cmd python3
@@ -69,6 +91,20 @@ disable_offloads() {
 
 disable_netns_offloads() {
     ip netns exec "$NS_NAME" ethtool -K "$1" tx off rx off tso off gso off gro off >/dev/null 2>&1 || true
+}
+
+run_checksum_probe() {
+    local target_ip=$1
+    shift
+    local host_mac
+    local ipv6_args=()
+    host_mac=$(ip -j link show "$HOST_IF" | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["address"])')
+    if [[ -n "$HOST_IP6" ]]; then
+        ipv6_args=(--source6 "${PEER_ADDR6%/*}" --destination6 "$HOST_IP6")
+    fi
+    ip netns exec "$NS_NAME" python3 "$ROOT_DIR/scripts/perf/afxdp-node/corrupt_udp.py" \
+        --interface "$PEER_IF" --destination-mac "$host_mac" \
+        --source4 "${PEER_ADDR%/*}" --destination4 "$target_ip" "${ipv6_args[@]}" "$@"
 }
 
 run_raw_smoke() {
@@ -130,6 +166,13 @@ for target in targets:
         tcp.close()
 PY
 
+    local expected_parse_errors=0
+    if [[ "$expect_redirect" == yes ]]; then
+        local corruption_output
+        corruption_output=$(run_checksum_probe "$target_ip" --raw-errors-only)
+        printf '%s\n' "$corruption_output"
+        expected_parse_errors=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["udp_checksum_probe"]["invalid_sent"])' <<< "$corruption_output")
+    fi
     if ! wait "$raw_pid"; then
         raw_output="$(cat "$raw_output_file" 2>/dev/null || true)"
         rm -f "$raw_output_file" "$raw_ready_file"
@@ -139,7 +182,7 @@ PY
     raw_output="$(cat "$raw_output_file")"
     rm -f "$raw_output_file" "$raw_ready_file"
     printf '%s\n' "$raw_output"
-    RAW_SMOKE_OUTPUT="$raw_output" python3 - "$label" "$expect_redirect" <<'PY'
+    RAW_SMOKE_OUTPUT="$raw_output" python3 - "$label" "$expect_redirect" "$expected_parse_errors" <<'PY'
 import json
 import os
 import sys
@@ -147,6 +190,13 @@ import sys
 label = sys.argv[1]
 expect_redirect = sys.argv[2] == "yes"
 report = json.loads(os.environ["RAW_SMOKE_OUTPUT"])
+poll_stats = report.get("pollStats")
+if not isinstance(poll_stats, dict) or not {'packets', 'parsed', 'parseErrors', 'refilled'} <= poll_stats.keys():
+    raise SystemExit(f"{label}: complete raw polling statistics missing")
+if poll_stats['packets'] != report['frames'] or poll_stats['parsed']+poll_stats['parseErrors'] != report['frames']:
+    raise SystemExit(f"{label}: raw polling classification count mismatch")
+if poll_stats['parseErrors'] != int(sys.argv[3]):
+    raise SystemExit(f"{label}: corrupt wire frames not reflected in full statistics: {poll_stats!r}")
 if report.get("proxyReady") is not True:
     raise SystemExit(f"{label}: proxyReady was not true")
 if int(report.get("xskReadyQueues", 0)) < 1:
@@ -183,7 +233,7 @@ run_proxy_smoke() {
     proxy_output_file="$(mktemp)"
     proxy_ready_file="$(mktemp)"
     rm -f "$proxy_ready_file"
-    setsid "$NODE_BIN" xdp proxy-smoke --duration-ms 25000 --ready-file "$proxy_ready_file" >"$proxy_output_file" 2>&1 &
+    setsid "$NODE_BIN" xdp proxy-smoke --wake "$XDP_SMOKE_WAKE" --rx-stats "$XDP_SMOKE_RX_STATS" --idle-yield "$XDP_SMOKE_IDLE_YIELD" --udp-payload "$XDP_SMOKE_UDP_PAYLOAD" --duration-ms 25000 --ready-file "$proxy_ready_file" >"$proxy_output_file" 2>&1 &
     proxy_pid=$!
     PIDS_TO_KILL+=("$proxy_pid")
     for _ in $(seq 1 "${XDP_SMOKE_READY_TICKS:-400}"); do
@@ -316,6 +366,9 @@ for target in targets:
         raise SystemExit(f"UDP/{fam} AF_XDP proxy response mismatch: {udp_response!r}")
 PY
 
+    run_checksum_probe "$target_ip"
+    local expected_udp=3
+    if [[ -n "$HOST_IP6" ]]; then expected_udp=5; fi
     for h3_target in "$target_ip" ${HOST_IP6:+"[$HOST_IP6]"}; do
         h3_output="$(ip netns exec "$NS_NAME" "$H3_PROBE_BIN" 1 "$h3_target:8443" \
             xdp-smoke-h3.local https://xdp-smoke-h3.local/xdp-proxy-smoke 1 1)"
@@ -334,7 +387,7 @@ PY
     # stream must carry the smoke body. Requires a curl built with nghttp2.
     if command -v curl >/dev/null 2>&1 && curl --version | grep -q nghttp2; then
         for h2_ip in "$target_ip" ${HOST_IP6:+"$HOST_IP6"}; do
-            h2_body="$(ip netns exec "$NS_NAME" curl -sk --http2 --max-time 10 \
+            h2_body="$(ip netns exec "$NS_NAME" curl -sk --noproxy '*' --http2 --max-time 10 \
                 --resolve "xdp-smoke-https.local:9444:[$h2_ip]" \
                 "https://xdp-smoke-https.local:9444/xdp-proxy-smoke" \
                 -w '\n%{http_version}')" || die "h2 curl failed for $h2_ip"
@@ -357,13 +410,21 @@ PY
     proxy_output="$(cat "$proxy_output_file")"
     rm -f "$proxy_output_file" "$proxy_ready_file"
     printf '%s\n' "$proxy_output"
-    PROXY_SMOKE_OUTPUT="$proxy_output" python3 - "$label" <<'PY'
+    PROXY_SMOKE_OUTPUT="$proxy_output" PROXY_SMOKE_EXPECTED_UDP="$expected_udp" python3 - "$label" <<'PY'
 import json
 import os
 import sys
 
 label = sys.argv[1]
 report = json.loads(os.environ["PROXY_SMOKE_OUTPUT"])
+if report.get("xskWakeMode") != os.environ["XDP_SMOKE_WAKE"]:
+    raise SystemExit(f"{label}: wrong XSK wake mechanism: {report.get('xskWakeMode')!r}")
+if report.get("xskRxStatsMode") != os.environ["XDP_SMOKE_RX_STATS"]:
+    raise SystemExit(f"{label}: wrong XSK RX statistics mode: {report.get('xskRxStatsMode')!r}")
+if report.get("xskIdleYieldMode") != os.environ["XDP_SMOKE_IDLE_YIELD"]:
+    raise SystemExit(f"{label}: wrong XSK idle yield mode: {report.get('xskIdleYieldMode')!r}")
+if report.get("xskUdpPayloadMode") != os.environ["XDP_SMOKE_UDP_PAYLOAD"]:
+    raise SystemExit(f"{label}: wrong UDP payload mode: {report.get('xskUdpPayloadMode')!r}")
 if report.get("proxyReady") is not True:
     raise SystemExit(f"{label}: proxyReady was not true")
 if report.get("proxyRedirectEnabled") is not True:
@@ -379,8 +440,8 @@ if int(app.get("httpsRequests", 0)) < 1:
     raise SystemExit(f"{label}: HTTPS backend did not receive traffic")
 if int(app.get("tcpConnections", 0)) < 1:
     raise SystemExit(f"{label}: TCP backend did not receive traffic")
-if int(app.get("udpDatagrams", 0)) < 1:
-    raise SystemExit(f"{label}: UDP backend did not receive traffic")
+if app.get("udpDatagrams") != int(os.environ["PROXY_SMOKE_EXPECTED_UDP"]):
+    raise SystemExit(f"{label}: UDP valid controls missing or corrupt datagrams reached backend: {app!r}")
 if int(app.get("h3Requests", 0)) < 1:
     raise SystemExit(f"{label}: H3 backend did not receive traffic")
 if int(app.get("sniConnections", 0)) < 1:
@@ -400,7 +461,7 @@ run_proxy_reload_smoke() {
     reload_output_file="$(mktemp)"
     reload_ready_file="$(mktemp)"
     rm -f "$reload_ready_file"
-    if ! "$NODE_BIN" xdp proxy-reload-smoke --duration-ms 3000 --ready-file "$reload_ready_file" >"$reload_output_file" 2>&1; then
+    if ! "$NODE_BIN" xdp proxy-reload-smoke --wake "$XDP_SMOKE_WAKE" --rx-stats "$XDP_SMOKE_RX_STATS" --idle-yield "$XDP_SMOKE_IDLE_YIELD" --udp-payload "$XDP_SMOKE_UDP_PAYLOAD" --duration-ms 3000 --ready-file "$reload_ready_file" >"$reload_output_file" 2>&1; then
         reload_output="$(cat "$reload_output_file" 2>/dev/null || true)"
         rm -f "$reload_output_file" "$reload_ready_file"
         printf '%s\n' "$reload_output"
@@ -417,6 +478,14 @@ import sys
 
 label = sys.argv[1]
 report = json.loads(os.environ["PROXY_RELOAD_SMOKE_OUTPUT"])
+if report.get("xskWakeMode") != os.environ["XDP_SMOKE_WAKE"]:
+    raise SystemExit(f"{label}: wrong XSK wake mechanism after reload")
+if report.get("xskRxStatsMode") != os.environ["XDP_SMOKE_RX_STATS"]:
+    raise SystemExit(f"{label}: wrong XSK RX statistics mode after reload")
+if report.get("xskIdleYieldMode") != os.environ["XDP_SMOKE_IDLE_YIELD"]:
+    raise SystemExit(f"{label}: wrong XSK idle yield mode after reload")
+if report.get("xskUdpPayloadMode") != os.environ["XDP_SMOKE_UDP_PAYLOAD"]:
+    raise SystemExit(f"{label}: wrong UDP payload mode after reload")
 before = report.get("beforeReload") or {}
 after = report.get("afterReload") or {}
 if report.get("bridgeSupervisorAlive") is not True:
@@ -453,9 +522,9 @@ if [[ "${XDP_SMOKE_SKIP_BUILD:-0}" != "1" ]]; then
 
     log "building smoke binaries"
     if [[ "$XDP_SMOKE_PROFILE" == "release" ]]; then
-        cargo build -q --release --bin zelvik-edge --bin h3-probe
+        cargo build -q --release --bin Zelvik-Edge --bin h3-probe
     else
-        cargo build -q --bin zelvik-edge --bin h3-probe
+        cargo build -q --bin Zelvik-Edge --bin h3-probe
     fi
 fi
 [[ -x "$NODE_BIN" ]] || die "missing node binary: $NODE_BIN"

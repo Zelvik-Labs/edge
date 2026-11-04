@@ -1,0 +1,119 @@
+{
+  "passed": true,
+  "cache_hit": "false",
+  "phases": [
+    {
+      "phase": "initial",
+      "elapsed_ns": 220989965,
+      "artifacts": {
+        "edge_cache_probe": {
+          "fresh": false,
+          "profile": {
+            "opt_level": "0",
+            "debuginfo": 2,
+            "debug_assertions": true,
+            "overflow_checks": true,
+            "test": false
+          }
+        },
+        "edge-cache-probe": {
+          "fresh": false,
+          "profile": {
+            "opt_level": "0",
+            "debuginfo": 2,
+            "debug_assertions": true,
+            "overflow_checks": true,
+            "test": false
+          }
+        }
+      },
+      "binary_sha256": "497a571155cd4b2ec72d875c39d204fdaf66ad472fc34b5c60273466e7bcdf13",
+      "source_sha256": "1ddf026d62031ab43e6096cf90d32423485d1dceeb1b9e203c795946953f83a9"
+    },
+    {
+      "phase": "changed",
+      "elapsed_ns": 142284488,
+      "artifacts": {
+        "edge_cache_probe": {
+          "fresh": false,
+          "profile": {
+            "opt_level": "0",
+            "debuginfo": 2,
+            "debug_assertions": true,
+            "overflow_checks": true,
+            "test": false
+          }
+        },
+        "edge-cache-probe": {
+          "fresh": false,
+          "profile": {
+            "opt_level": "0",
+            "debuginfo": 2,
+            "debug_assertions": true,
+            "overflow_checks": true,
+            "test": false
+          }
+        }
+      },
+      "binary_sha256": "51dee3124e9d1eb8a0ac2ccf933ccd1d4131439ffb031b41c561b26ff8651fea",
+      "source_sha256": "5c6c5dfbc3ee80f49d16c6a92dfc805b8c8a90355ca8411a1f2789720f023bb5"
+    },
+    {
+      "phase": "restored",
+      "elapsed_ns": 148674756,
+      "artifacts": {
+        "edge_cache_probe": {
+          "fresh": false,
+          "profile": {
+            "opt_level": "0",
+            "debuginfo": 2,
+            "debug_assertions": true,
+            "overflow_checks": true,
+            "test": false
+          }
+        },
+        "edge-cache-probe": {
+          "fresh": false,
+          "profile": {
+            "opt_level": "0",
+            "debuginfo": 2,
+            "debug_assertions": true,
+            "overflow_checks": true,
+            "test": false
+          }
+        }
+      },
+      "binary_sha256": "497a571155cd4b2ec72d875c39d204fdaf66ad472fc34b5c60273466e7bcdf13",
+      "source_sha256": "1ddf026d62031ab43e6096cf90d32423485d1dceeb1b9e203c795946953f83a9"
+    },
+    {
+      "phase": "unchanged-in-job",
+      "elapsed_ns": 47569925,
+      "artifacts": {
+        "edge_cache_probe": {
+          "fresh": true,
+          "profile": {
+            "opt_level": "0",
+            "debuginfo": 2,
+            "debug_assertions": true,
+            "overflow_checks": true,
+            "test": false
+          }
+        },
+        "edge-cache-probe": {
+          "fresh": true,
+          "profile": {
+            "opt_level": "0",
+            "debuginfo": 2,
+            "debug_assertions": true,
+            "overflow_checks": true,
+            "test": false
+          }
+        }
+      },
+      "binary_sha256": "497a571155cd4b2ec72d875c39d204fdaf66ad472fc34b5c60273466e7bcdf13",
+      "source_sha256": "1ddf026d62031ab43e6096cf90d32423485d1dceeb1b9e203c795946953f83a9"
+    }
+  ],
+  "interpretation": "Initial freshness measures restored workspace reuse on a fresh checkout. In-job freshness and source-change invalidation are separate controls. No timestamp normalization or Cargo validation bypass applied."
+}

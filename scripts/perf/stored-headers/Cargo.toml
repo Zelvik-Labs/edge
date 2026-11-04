@@ -1,0 +1,17 @@
+[package]
+name = "stored-headers-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[features]
+count-allocations = []
+
+[dependencies]
+http = "=1.5.0"
+
+[[bin]]
+name = "stored-headers-probe"
+path = "../../../benches/support/stored_headers_probe.rs"

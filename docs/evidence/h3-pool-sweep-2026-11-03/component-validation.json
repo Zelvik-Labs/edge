@@ -1,0 +1,112 @@
+{
+  "h3": {
+    "processes": 40,
+    "blocks": 800,
+    "raw_and_binary_hashes_verified": true,
+    "ratios": [
+      {
+        "keys": 1,
+        "candidate_over_baseline": [
+          0.835751214138268,
+          0.9745521211633033,
+          0.9465623343159908,
+          0.9484564098600408,
+          0.9520750885735878
+        ],
+        "paired_median": 0.9484564098600408
+      },
+      {
+        "keys": 16,
+        "candidate_over_baseline": [
+          0.5471130981119008,
+          0.5469963909109204,
+          0.5489864053186866,
+          0.5805564797410223,
+          0.5378869278062801
+        ],
+        "paired_median": 0.5471130981119008
+      },
+      {
+        "keys": 256,
+        "candidate_over_baseline": [
+          0.05692188965908662,
+          0.05610048809999835,
+          0.05753120777324055,
+          0.05724788380023387,
+          0.054979322230716374
+        ],
+        "paired_median": 0.05692188965908662
+      },
+      {
+        "keys": 1024,
+        "candidate_over_baseline": [
+          0.013159784286161843,
+          0.012654451231608492,
+          0.013084027399396542,
+          0.01313342486164734,
+          0.012181468845293154
+        ],
+        "paired_median": 0.013084027399396542
+      }
+    ],
+    "host_process_window_steal": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "waf": {
+    "waf-evidence": {
+      "rows": 30,
+      "all_medians_recomputed": true,
+      "source_and_binary_hashes_verified": true
+    },
+    "waf-bitmap-evidence": {
+      "rows": 30,
+      "all_medians_recomputed": true,
+      "source_and_binary_hashes_verified": true
+    },
+    "waf-live-evidence": {
+      "rows": 30,
+      "all_medians_recomputed": true,
+      "source_and_binary_hashes_verified": true
+    }
+  }
+}

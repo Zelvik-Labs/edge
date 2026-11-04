@@ -1,0 +1,36 @@
+{
+  "run": 41789512638,
+  "source": "1c441cea3b416f2d4316abed4ec1863e4666852f",
+  "library_tests": 1372,
+  "binary_tests": 16,
+  "library_ignored": 5,
+  "native_combinations": 32,
+  "jobs": [
+    {
+      "id": 126439353480,
+      "name": "Check / Clippy - linux-x64",
+      "conclusion": "success"
+    },
+    {
+      "id": 126439353743,
+      "name": "Test - linux-x64",
+      "conclusion": "success"
+    },
+    {
+      "id": 126439355301,
+      "name": "Isolated BPF / AF_XDP capability",
+      "conclusion": "skipped"
+    }
+  ],
+  "logs": {
+    "test.log": {
+      "bytes": 2995591,
+      "sha256": "3aa0c8fae02a983dfebb8c40bb47fbacd8fcda1bfecbf957aaac60fc2b9d5f90"
+    },
+    "check.log": {
+      "bytes": 127838,
+      "sha256": "3f019a3bfaef9928c23e70bb88a655ca6a90385239d1d9050db77d88b3b0c1d6"
+    }
+  },
+  "scope": "default full correctness including integration/vendor/Clippy; native artifact contains no actual node ELF"
+}

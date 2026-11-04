@@ -1,10 +1,10 @@
+use criterion::{Criterion, criterion_group, criterion_main};
+use std::collections::HashMap;
+use std::hint::black_box;
 use zelvik_edge::firewall::matcher::evaluate_operator;
 use zelvik_edge::logging::{next_request_id, set_numeric_node_id};
 use zelvik_edge::utils::fnv_hash64;
 use zelvik_edge::utils::time::{local_from_timestamp_millis, now_timestamp_millis};
-use criterion::{Criterion, criterion_group, criterion_main};
-use std::collections::HashMap;
-use std::hint::black_box;
 
 /// Simulates the full request processing pipeline in isolation
 fn bench_request_pipeline(c: &mut Criterion) {
@@ -252,11 +252,28 @@ fn bench_traffic_quota(c: &mut Criterion) {
     group.finish();
 }
 
+// Compare the old diagnostic API with the ingress-specific API in one
+// executable. This isolates accessor work, not end-to-end UDP throughput.
+fn bench_h3_governor_reads(c: &mut Criterion) {
+    use zelvik_edge::memory_governor::MemoryGovernor;
+    let governor = MemoryGovernor::new();
+    black_box(governor.quic_ingress_snapshot());
+    let mut group = c.benchmark_group("h3_governor_reads");
+    group.bench_function("diagnostic_snapshot", |b| {
+        b.iter(|| black_box(governor.snapshot(black_box(2))))
+    });
+    group.bench_function("quic_ingress_snapshot", |b| {
+        b.iter(|| black_box(governor.quic_ingress_snapshot()))
+    });
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_request_pipeline,
     bench_firewall_comprehensive,
     bench_string_operations,
     bench_traffic_quota,
+    bench_h3_governor_reads,
 );
 criterion_main!(benches);

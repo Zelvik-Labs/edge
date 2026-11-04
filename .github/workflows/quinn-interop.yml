@@ -1,0 +1,72 @@
+name: Quinn same-version client interoperability
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Compare TLS backends, selected groups, or same-client receive spacing
+        type: choice
+        options: [tls-backend, groups, pacing]
+        default: tls-backend
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: quinn-interop-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  diagnose:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - name: Restore exact original server executables
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/perf/quinn-diagnostic/restore.py
+      - name: Prepare all images before timing
+        run: |
+          docker pull nginx:1.28.0
+          docker pull openresty/openresty:1.27.1.2-0-bookworm-fat
+          docker build -t edge-http-state-fixture:20261103 -f scripts/perf/http-state/Dockerfile .
+          docker build -t edge-quinn-interop-fixture:20261104 -f scripts/perf/quinn-interop/Dockerfile .
+      - name: Compare two same-version libcurl QUIC client backends
+        run: |
+          docker run --rm --name edge-quinn-interop-harness --network host --pid host \
+            --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
+            -e GITHUB_SHA -e EDGE_MATRIX_HARNESS_NAME=edge-quinn-interop-harness \
+            -e EDGE_QUIC_INTEROP_MODE="${{ inputs.mode }}" \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
+            edge-quinn-interop-fixture:20261104 bash scripts/perf/quinn-interop/run-ci.sh
+      - name: Recompute all interoperability outcomes
+        if: always()
+        run: |
+          if [ -f .local/quinn-interop-private/suite.json ]; then
+            python3 scripts/perf/quinn-interop/verify.py .local/quinn-interop-private .local/quinn-diagnostic-binaries
+          fi
+      - name: Collect public evidence without runtime secrets
+        if: always()
+        run: |
+          if [ -d .local/quinn-interop-private ]; then
+            sudo chown -R "$(id -u):$(id -g)" .local/quinn-interop-private
+          fi
+          python3 scripts/perf/quinn-interop/collect.py
+      - name: Retain all samples, controls and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quinn-interop-${{ github.sha }}
+          path: .local/quinn-interop-ci/
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Retain original server and diagnostic client executables
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quinn-interop-binaries-${{ github.sha }}
+          path: |
+            .local/quinn-diagnostic-binaries/
+            .local/quinn-interop-private/clients/
+            .local/quinn-interop-private/client-libraries/
+          include-hidden-files: true
+          if-no-files-found: error

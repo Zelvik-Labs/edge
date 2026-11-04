@@ -1,0 +1,15 @@
+{
+  "manifest_sha256": "2bc7ec93d19d1058449c5d8c56199e822fe6e53ad41bf7b13ba1e7a0b3f4194b",
+  "edge_log_sha256": "510db01a21baa0025089f9b0cffd723e358eabdd891e05e5663a5e950864f3a6",
+  "source_build_sha256": "cf918862690bf5b06595146f6135d3759e37e9154513d52751057666042ccbdb",
+  "last_process_list": "PID                 COMMAND             RSS                 NLWP\n299222              controller          6880                3",
+  "last_node_health_updated_at": 1793588933,
+  "status_counts": {
+    "passed": 47,
+    "failed": 28,
+    "traffic-errors": 15
+  },
+  "data_fs_size_mib": 512,
+  "oom_kills_in_measured_rows": 0,
+  "excluded_reason": "mixed state accumulation, then disk exhaustion and production process exit; not capacity acceptance"
+}

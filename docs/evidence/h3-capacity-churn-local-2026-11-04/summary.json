@@ -1,0 +1,61 @@
+{
+  "runtime_source": "b30f0cfa1cdaa044e295ee50c77ee1d9c09979b6",
+  "runtime_artifact": 13256920105,
+  "harness_checkout": "cd48559ff856c54843e80e5e08be9cb9bc8e84ab",
+  "binary_digests": {
+    "/workspace/edge/.worktrees/perf-h3-pool/.local/five-priorities/native-confirmation-probe-binaries/extracted/target/release/Zelvik-Edge": "3a17eeb3f5f5ddf61fa0084edf161ac7d326c4b45fa24f2ffb260b99290219c3",
+    "/workspace/edge/.worktrees/perf-h3-pool/.local/five-priorities/native-admission-probe-binaries/extracted/target/release/examples/issue34-controller": "c626e86c136d3f295cb458697024d1d4be5dc4efd95f5646895a7e815651d915"
+  },
+  "driver_sha256": "1f5465629bb6ab157ed6e25c8dd817cd49a0e6e3e37db3bdd89ed194258914e6",
+  "client_sha256": "368312b058eb6a98373260a6b4977beb1655744418406c7c1c1bcedce92b3c1b",
+  "rows": [
+    {
+      "protocol": "h3",
+      "cache": "hit",
+      "connection": "fresh",
+      "status": "traffic-errors",
+      "error": null,
+      "origin_requests": 0,
+      "payload_bytes": 1024,
+      "target": "edge",
+      "source": "cd48559ff856c54843e80e5e08be9cb9bc8e84ab",
+      "manifest": "capacity-continuous-2g/manifest.json",
+      "stem": "0000-h3-hit-fresh",
+      "backend": "tokio-quiche-native",
+      "batch": "1",
+      "rps": 336.62144318230526,
+      "p99_ms": 449.13599999999997,
+      "successful": 260579,
+      "failed": 1565,
+      "elapsed": 774.1010125100001,
+      "new_connections": 260701,
+      "unique_connections_per_client": [
+        131072,
+        131071
+      ],
+      "cpu_usec_per_request": 3070.6929798640717,
+      "client_cpu_fraction": 0.6510458129564705,
+      "proxy_cpu_fraction": 0.5168305512258087,
+      "origin_cpu_fraction": 5.308480332141297e-05,
+      "max_host_steal_fraction": 0.43027105828865114,
+      "cgroup_peak_mib": 182.2109375,
+      "proxy_processes_after": "PID                 COMMAND             RSS                 NLWP\n13657               controller          7064                3\n13747               Zelvik-Edge         195948              28"
+    }
+  ],
+  "first_rejections": [
+    "2026-11-03T18:02:02.356000+00:00  WARN zelvik_edge::http3_proxy_manager::quiche_backend: HTTP/3 native first admission rejection; subsequent rejections retain L4 events address=0.0.0.0:19443 class=\"quiche_connection\" workspace_used=0 account=SharedAccountView { headroom_bytes: Some(1978712064), safety_margin_bytes: 167772160, grantable_bytes: 65077248, pending_bytes: 838860800, committed_unconfirmed_bytes: 907001856, committed_live_bytes: 4621312, grants_total: 44109, rejects_total: 75, reclaimable_bytes: 40960 }"
+  ],
+  "sample_count": 68,
+  "rss_mib": {
+    "first": 174.23828125,
+    "last": 195.14453125,
+    "min": 174.23828125,
+    "max": 202.078125
+  },
+  "fd_observation_errors": 68,
+  "scope": "Failure retained: 2 GiB, two proxy CPUs, 32 concurrent fresh H3 cache-hit requests; 43% max observed host steal. First quiche_connection rejection is directly observed; other stream-reset/timeouts are not all attributed to one cause. Host /proc denied every FD observation.",
+  "excluded": [
+    "overrides.json contains generated test private key",
+    "TLS directory"
+  ]
+}

@@ -1,0 +1,1874 @@
+[
+  {
+    "cohort": "comparison-c1",
+    "round": 1,
+    "engine": "readiness",
+    "concurrency": 1,
+    "bytes": 1024,
+    "completed_roundtrips": 197835,
+    "fds": 18,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 1,
+    "engine": "readiness",
+    "concurrency": 1,
+    "bytes": 65536,
+    "completed_roundtrips": 86107,
+    "fds": 18,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 1,
+    "engine": "readiness",
+    "concurrency": 1,
+    "bytes": 1048576,
+    "completed_roundtrips": 7507,
+    "fds": 18,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 1,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 1024,
+    "completed_roundtrips": 84637,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-29959": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 1,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 65536,
+    "completed_roundtrips": 48513,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-29964": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 1,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 1048576,
+    "completed_roundtrips": 6457,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-29967": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 2,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 1024,
+    "completed_roundtrips": 84637,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-29975": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 2,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 65536,
+    "completed_roundtrips": 48093,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-29982": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 2,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 1048576,
+    "completed_roundtrips": 6457,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-29985": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 2,
+    "engine": "readiness",
+    "concurrency": 1,
+    "bytes": 1024,
+    "completed_roundtrips": 198045,
+    "fds": 18,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 2,
+    "engine": "readiness",
+    "concurrency": 1,
+    "bytes": 65536,
+    "completed_roundtrips": 86317,
+    "fds": 18,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 2,
+    "engine": "readiness",
+    "concurrency": 1,
+    "bytes": 1048576,
+    "completed_roundtrips": 7717,
+    "fds": 18,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 3,
+    "engine": "readiness",
+    "concurrency": 1,
+    "bytes": 1024,
+    "completed_roundtrips": 196995,
+    "fds": 18,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 3,
+    "engine": "readiness",
+    "concurrency": 1,
+    "bytes": 65536,
+    "completed_roundtrips": 84217,
+    "fds": 18,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 3,
+    "engine": "readiness",
+    "concurrency": 1,
+    "bytes": 1048576,
+    "completed_roundtrips": 7717,
+    "fds": 18,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 3,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 1024,
+    "completed_roundtrips": 82747,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30006": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 3,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 65536,
+    "completed_roundtrips": 47253,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30012": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c1",
+    "round": 3,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 1048576,
+    "completed_roundtrips": 6877,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30015": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 1,
+    "engine": "readiness",
+    "concurrency": 16,
+    "bytes": 1024,
+    "completed_roundtrips": 413296,
+    "fds": 138,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 1,
+    "engine": "readiness",
+    "concurrency": 16,
+    "bytes": 65536,
+    "completed_roundtrips": 113392,
+    "fds": 138,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 1,
+    "engine": "readiness",
+    "concurrency": 16,
+    "bytes": 1048576,
+    "completed_roundtrips": 8752,
+    "fds": 138,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 1,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 1024,
+    "completed_roundtrips": 240240,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30038": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 1,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 65536,
+    "completed_roundtrips": 96592,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30043": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 1,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 1048576,
+    "completed_roundtrips": 8752,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30046": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 2,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 1024,
+    "completed_roundtrips": 240240,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30061": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 2,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 65536,
+    "completed_roundtrips": 96592,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30066": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 2,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 1048576,
+    "completed_roundtrips": 8752,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30069": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 2,
+    "engine": "readiness",
+    "concurrency": 16,
+    "bytes": 1024,
+    "completed_roundtrips": 409936,
+    "fds": 138,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 2,
+    "engine": "readiness",
+    "concurrency": 16,
+    "bytes": 65536,
+    "completed_roundtrips": 110032,
+    "fds": 138,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 2,
+    "engine": "readiness",
+    "concurrency": 16,
+    "bytes": 1048576,
+    "completed_roundtrips": 8752,
+    "fds": 138,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 3,
+    "engine": "readiness",
+    "concurrency": 16,
+    "bytes": 1024,
+    "completed_roundtrips": 403216,
+    "fds": 138,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 3,
+    "engine": "readiness",
+    "concurrency": 16,
+    "bytes": 65536,
+    "completed_roundtrips": 110032,
+    "fds": 138,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 3,
+    "engine": "readiness",
+    "concurrency": 16,
+    "bytes": 1048576,
+    "completed_roundtrips": 8752,
+    "fds": 138,
+    "thread_count": 5,
+    "thread_name_counts": {
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 0,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 5
+    },
+    "io_wq_report": null
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 3,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 1024,
+    "completed_roundtrips": 236880,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30090": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 3,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 65536,
+    "completed_roundtrips": 93232,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30095": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "comparison-c16",
+    "round": 3,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 1048576,
+    "completed_roundtrips": 8752,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30099": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 1,
+    "engine": "uring-unbounded",
+    "concurrency": 1,
+    "bytes": 1024,
+    "completed_roundtrips": 85477,
+    "fds": 20,
+    "thread_count": 291,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30114": 285,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 285,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 291
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 1,
+    "engine": "uring-unbounded",
+    "concurrency": 1,
+    "bytes": 65536,
+    "completed_roundtrips": 46833,
+    "fds": 20,
+    "thread_count": 228,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30402": 222,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 222,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 228
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 1,
+    "engine": "uring-unbounded",
+    "concurrency": 1,
+    "bytes": 1048576,
+    "completed_roundtrips": 6247,
+    "fds": 20,
+    "thread_count": 12,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30626": 6,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 6,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 12
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 1,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 1024,
+    "completed_roundtrips": 82957,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30637": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 1,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 65536,
+    "completed_roundtrips": 47253,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30642": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 1,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 1048576,
+    "completed_roundtrips": 6457,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30645": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 2,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 1024,
+    "completed_roundtrips": 83167,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30652": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 2,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 65536,
+    "completed_roundtrips": 47463,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30657": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 2,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 1048576,
+    "completed_roundtrips": 6667,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30660": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 2,
+    "engine": "uring-unbounded",
+    "concurrency": 1,
+    "bytes": 1024,
+    "completed_roundtrips": 84847,
+    "fds": 20,
+    "thread_count": 316,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30668": 310,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 310,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 316
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 2,
+    "engine": "uring-unbounded",
+    "concurrency": 1,
+    "bytes": 65536,
+    "completed_roundtrips": 47463,
+    "fds": 20,
+    "thread_count": 136,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-30982": 130,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 130,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 136
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 2,
+    "engine": "uring-unbounded",
+    "concurrency": 1,
+    "bytes": 1048576,
+    "completed_roundtrips": 6457,
+    "fds": 20,
+    "thread_count": 11,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-31113": 5,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 5,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 11
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 3,
+    "engine": "uring-unbounded",
+    "concurrency": 1,
+    "bytes": 1024,
+    "completed_roundtrips": 86527,
+    "fds": 20,
+    "thread_count": 280,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-31123": 274,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 274,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 280
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 3,
+    "engine": "uring-unbounded",
+    "concurrency": 1,
+    "bytes": 65536,
+    "completed_roundtrips": 47673,
+    "fds": 20,
+    "thread_count": 170,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-31400": 164,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 164,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 170
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 3,
+    "engine": "uring-unbounded",
+    "concurrency": 1,
+    "bytes": 1048576,
+    "completed_roundtrips": 6457,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-31565": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 3,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 1024,
+    "completed_roundtrips": 65733,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-31573": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 3,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 65536,
+    "completed_roundtrips": 47463,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-31578": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c1",
+    "round": 3,
+    "engine": "uring",
+    "concurrency": 1,
+    "bytes": 1048576,
+    "completed_roundtrips": 6667,
+    "fds": 20,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-31582": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 1,
+    "engine": "uring-unbounded",
+    "concurrency": 16,
+    "bytes": 1024,
+    "completed_roundtrips": 329296,
+    "fds": 140,
+    "thread_count": 362,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-31598": 356,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 356,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 362
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 1,
+    "engine": "uring-unbounded",
+    "concurrency": 16,
+    "bytes": 65536,
+    "completed_roundtrips": 96592,
+    "fds": 140,
+    "thread_count": 61,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-31957": 55,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 55,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 61
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 1,
+    "engine": "uring-unbounded",
+    "concurrency": 16,
+    "bytes": 1048576,
+    "completed_roundtrips": 8752,
+    "fds": 140,
+    "thread_count": 18,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32013": 12,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 12,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 18
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 1,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 1024,
+    "completed_roundtrips": 236880,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32031": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 1,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 65536,
+    "completed_roundtrips": 96592,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32036": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 1,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 1048576,
+    "completed_roundtrips": 8752,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32039": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 2,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 1024,
+    "completed_roundtrips": 236880,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32047": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 2,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 65536,
+    "completed_roundtrips": 93232,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32052": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 2,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 1048576,
+    "completed_roundtrips": 8752,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32056": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 2,
+    "engine": "uring-unbounded",
+    "concurrency": 16,
+    "bytes": 1024,
+    "completed_roundtrips": 263760,
+    "fds": 140,
+    "thread_count": 306,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32063": 300,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 300,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 306
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 2,
+    "engine": "uring-unbounded",
+    "concurrency": 16,
+    "bytes": 65536,
+    "completed_roundtrips": 96592,
+    "fds": 140,
+    "thread_count": 82,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32366": 76,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 76,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 82
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 2,
+    "engine": "uring-unbounded",
+    "concurrency": 16,
+    "bytes": 1048576,
+    "completed_roundtrips": 8752,
+    "fds": 140,
+    "thread_count": 18,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32443": 12,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 12,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 18
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 3,
+    "engine": "uring-unbounded",
+    "concurrency": 16,
+    "bytes": 1024,
+    "completed_roundtrips": 332656,
+    "fds": 140,
+    "thread_count": 400,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32460": 394,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 394,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 400
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 3,
+    "engine": "uring-unbounded",
+    "concurrency": 16,
+    "bytes": 65536,
+    "completed_roundtrips": 96592,
+    "fds": 140,
+    "thread_count": 87,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32857": 81,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 81,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 87
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 3,
+    "engine": "uring-unbounded",
+    "concurrency": 16,
+    "bytes": 1048576,
+    "completed_roundtrips": 8752,
+    "fds": 140,
+    "thread_count": 17,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32939": 11,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 11,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 17
+    },
+    "io_wq_report": {
+      "limits": [
+        16,
+        63801
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 3,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 1024,
+    "completed_roundtrips": 243600,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32959": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 3,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 65536,
+    "completed_roundtrips": 96592,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32964": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  },
+  {
+    "cohort": "workers-c16",
+    "round": 3,
+    "engine": "uring",
+    "concurrency": 16,
+    "bytes": 1048576,
+    "completed_roundtrips": 8752,
+    "fds": 140,
+    "thread_count": 8,
+    "thread_name_counts": {
+      "edge-uring": 1,
+      "iou-wrk-32967": 2,
+      "splice-66176a96": 3,
+      "tokio-rt-worker": 2
+    },
+    "io_wq_threads": 2,
+    "affinity_within_budget": true,
+    "observed_cpu_masks": {
+      "0-1": 8
+    },
+    "io_wq_report": {
+      "limits": [
+        2,
+        2
+      ],
+      "cpus": 2
+    }
+  }
+]

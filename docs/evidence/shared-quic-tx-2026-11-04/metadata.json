@@ -1,0 +1,15 @@
+{
+  "source": "27a47d67d54c95087af7c2f24ef0cc844a0e192e",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "rustflags": "-C target-cpu=x86-64-v2 -D warnings",
+  "kernel": "Linux runnervmcwoy2 6.8.0-1070-azure #78~22.04.1-Ubuntu SMP Thu Sep 24 18:46:45 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux",
+  "scope": "Linux loopback TX candidate correctness; no production integration or throughput claim",
+  "binary_sha256": "e596235a84fb4ae1acb6d6fc0452d20640457fc8af592d63eea40063358c7e32",
+  "sources": {
+    "Cargo.lock": "16978dc84fc39fcf65d6df17122e9d9797bfe9a15e2321233bc2b99b0ca5a5d6",
+    "candidate.rs": "0200eb0463699acacd2449e088d09d477a2ba04907cd7aa4c2b568efd552b44d",
+    "main.rs": "4c3afe2d2a729352d84cf6bbc7a653c7fd19bc320aba1a8a42bb081aeb2d039c",
+    "Cargo.toml": "1bd44133d954e8724dec26b03b8bb56613d6fe0626e97b743d8298205dd306db"
+  },
+  "run_exit": 0
+}

@@ -1,0 +1,506 @@
+{
+  "source": "59b9c849c2678b1c0f7aaae4ad0ffc23faeb5d9f",
+  "baseline": "1c441cea3b416f2d4316abed4ec1863e4666852f",
+  "integrated": true,
+  "scope": "exact ConfigStore host lookup normalization; System allocator; not the full getter or node throughput",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "rustflags": "-C target-cpu=x86-64-v2 -D warnings",
+  "binaries": {
+    "timing": "12164b01428c42adcfbc2a412b8d65d8f7f7f003632f54472f7a30d4864e11bb",
+    "allocations": "6e922d8fb57cd4bd2df64bd034147aa512e5eeb03600907731e39143c02b9477"
+  },
+  "sources": {
+    "allocator.rs": "e58d551ed0afbbc1767da29b8726ffda84032eec0132b1faa872c93cd8cc4a37",
+    "original-lb-factory.rs": "a722cebb2dc1a08f0317a2f0249df3f395e203d7ac99dd7e38ba8b5b711f5a17",
+    "Cargo.lock": "b06c247b78fc9befba5c15f98e7ffed7a98eb4cb9fe57812ec9d0613c049435a",
+    "candidate.rs": "05f91ca9e71aa53e6b8746dab6f0bf86586c3f026f69b548a31e0e7eadacf47b",
+    "original-config.rs": "dd45682e32168c6967aaf0306b32bafff45d397b5f920212978646a966831147",
+    "main.rs": "6064fecd982e05dbf92b6fecede6fb3e89616494664deb169c28c67cd278eb5b",
+    "integrated-config.rs": "fe99062dac91f9d8095797b5d930fe99d64517497b3889ad3968d00060699420",
+    "Cargo.toml": "c420d8cc15f19c33991904b8d40376bfa2002b1c044b0a32710b1f3c46226319",
+    "original.rs": "0cc03938defbb9ecafdd12329178613842d68688ab87d9e700543448e119dbb4"
+  },
+  "runs": [
+    {
+      "round": 0,
+      "variant": "baseline",
+      "file": "round-0-baseline.tsv",
+      "cpu_before": [
+        478,
+        0,
+        325,
+        194367,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        582,
+        0,
+        325,
+        194370,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 0,
+      "variant": "candidate",
+      "file": "round-0-candidate.tsv",
+      "cpu_before": [
+        582,
+        0,
+        325,
+        194370,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        653,
+        0,
+        325,
+        194370,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 1,
+      "variant": "candidate",
+      "file": "round-1-candidate.tsv",
+      "cpu_before": [
+        653,
+        0,
+        325,
+        194370,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        724,
+        0,
+        326,
+        194371,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 1,
+      "variant": "baseline",
+      "file": "round-1-baseline.tsv",
+      "cpu_before": [
+        724,
+        0,
+        326,
+        194371,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        831,
+        0,
+        326,
+        194371,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 2,
+      "variant": "baseline",
+      "file": "round-2-baseline.tsv",
+      "cpu_before": [
+        831,
+        0,
+        326,
+        194371,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        940,
+        0,
+        326,
+        194371,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 2,
+      "variant": "candidate",
+      "file": "round-2-candidate.tsv",
+      "cpu_before": [
+        940,
+        0,
+        326,
+        194372,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1011,
+        0,
+        326,
+        194372,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 3,
+      "variant": "candidate",
+      "file": "round-3-candidate.tsv",
+      "cpu_before": [
+        1011,
+        0,
+        326,
+        194372,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1082,
+        0,
+        326,
+        194372,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 3,
+      "variant": "baseline",
+      "file": "round-3-baseline.tsv",
+      "cpu_before": [
+        1082,
+        0,
+        326,
+        194372,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1185,
+        0,
+        326,
+        194373,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 4,
+      "variant": "baseline",
+      "file": "round-4-baseline.tsv",
+      "cpu_before": [
+        1185,
+        0,
+        326,
+        194373,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1289,
+        0,
+        326,
+        194373,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 4,
+      "variant": "candidate",
+      "file": "round-4-candidate.tsv",
+      "cpu_before": [
+        1289,
+        0,
+        326,
+        194373,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1361,
+        0,
+        327,
+        194373,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 5,
+      "variant": "candidate",
+      "file": "round-5-candidate.tsv",
+      "cpu_before": [
+        1361,
+        0,
+        327,
+        194374,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1434,
+        0,
+        327,
+        194374,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 5,
+      "variant": "baseline",
+      "file": "round-5-baseline.tsv",
+      "cpu_before": [
+        1434,
+        0,
+        327,
+        194374,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1538,
+        0,
+        327,
+        194374,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 6,
+      "variant": "baseline",
+      "file": "round-6-baseline.tsv",
+      "cpu_before": [
+        1538,
+        0,
+        327,
+        194374,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1642,
+        0,
+        327,
+        194375,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 6,
+      "variant": "candidate",
+      "file": "round-6-candidate.tsv",
+      "cpu_before": [
+        1642,
+        0,
+        327,
+        194375,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1714,
+        0,
+        327,
+        194375,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 7,
+      "variant": "candidate",
+      "file": "round-7-candidate.tsv",
+      "cpu_before": [
+        1714,
+        0,
+        327,
+        194375,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1788,
+        0,
+        327,
+        194375,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    },
+    {
+      "round": 7,
+      "variant": "baseline",
+      "file": "round-7-baseline.tsv",
+      "cpu_before": [
+        1788,
+        0,
+        327,
+        194376,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "cpu_after": [
+        1892,
+        0,
+        327,
+        194376,
+        821,
+        0,
+        166,
+        0,
+        0,
+        0
+      ],
+      "host_steal_fraction": 0.0
+    }
+  ],
+  "cpu": 0
+}

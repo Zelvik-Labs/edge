@@ -1,0 +1,14 @@
+{
+  "profile": "cloud",
+  "automatic_cache_gc": false,
+  "physical_capacity_bytes": 33770192896,
+  "mbx_soft_limit_gib": 32,
+  "compiler_start_free_floor_gib": 6,
+  "compiler_runtime_free_floor_gib": 5,
+  "local_rust_compilation": false,
+  "immutable_archive_copies_hardlinked": 28,
+  "observed_free_increase_bytes": 96223232,
+  "archive_paths_and_bytes_retained": true,
+  "undo_manifest_and_script": "ignored local checkpoint; no absolute workstation paths published",
+  "build_caches_removed": false
+}

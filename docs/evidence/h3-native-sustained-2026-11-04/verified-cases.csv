@@ -1,0 +1,4 @@
+backend,batch,cache,cgroup_peak_mib,client_cpu_fraction,connection,cpu_usec_per_request,elapsed,error,failed,manifest,max_host_steal_fraction,new_connections,origin_cpu_fraction,origin_requests,p99_ms,payload_bytes,protocol,proxy_cpu_fraction,proxy_processes_after,rps,source,status,stem,successful,target,unique_connections_per_client
+tokio-quiche-native,1,hit,168.26171875,0.6658731894154923,fresh,962.7974090576172,254.8154388810001,,0,admission-quiche/manifest.json,0.0,262144,5.7457272072268e-05,0,41.056000000000004,1024,h3,0.9904877236181436,"PID                 COMMAND             RSS                 NLWP
+22871               controller          6112                2
+22966               Zelvik-Edge         187124              25",1028.760271164034,1911e52f0ff4835845e6d01a1bd5b65f8a5cab1c,passed,0000-h3-hit-fresh,262144,edge,"[131072, 131072]"

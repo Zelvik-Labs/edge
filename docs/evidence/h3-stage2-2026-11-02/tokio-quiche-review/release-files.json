@@ -1,0 +1,18 @@
+{
+  "crate_sha256": "39272b0b2b311cc3e5cab36d9094bfa8e7ebc9725b4b2b4cb7a52aa57f17f075",
+  "vcs": {
+    "git": {
+      "sha1": "925b225825e2188f8e58e359114150500557bf61"
+    },
+    "path_in_vcs": "tokio-quiche"
+  },
+  "files": {
+    "Cargo.toml": "cc9fd5fc05b065093504e91b1ea94c346844cc090a80a299a0a6c3cca5eb5042",
+    "src/http3/driver/server.rs": "6545d62ee9fc087daf585442a7a5be13b11af156f8a3ef61f85f01071883880c",
+    "src/http3/driver/hooks.rs": "d824d7b8de7d6b9d49362f545ef538b02853a4f076dd397e7625d824caa141d4",
+    "src/http3/driver/mod.rs": "947400507c657945fd3234253cef52fcceca008232f0da59f97e3c76ff96b5e8",
+    "src/quic/hooks.rs": "7158d754e6f919edaeaa2837087fb9d951b313a5d0cb2ce7ce8d83f1c889167e",
+    "src/socket/listener.rs": "52ce120765e80382e4c8d378f5549b907a9531f53e5a62264617bd0cded01da4",
+    "src/lib.rs": "80fd942c2ce3c491cf62df612d60a9dbbc8f4d6c7cfc51b09e80c3e861264019"
+  }
+}

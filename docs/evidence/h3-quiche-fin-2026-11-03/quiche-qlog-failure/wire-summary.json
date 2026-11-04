@@ -1,0 +1,56 @@
+[
+  {
+    "fixture": "edge-quiche-test-2946-0",
+    "missing": {}
+  },
+  {
+    "fixture": "edge-quiche-test-2908-0",
+    "missing": {}
+  },
+  {
+    "fixture": "edge-quiche-test-2896-0",
+    "missing": {}
+  },
+  {
+    "fixture": "edge-quiche-test-2884-0",
+    "missing": {}
+  },
+  {
+    "fixture": "edge-quiche-test-2984-0",
+    "missing": {
+      "24": {
+        "end": 131091,
+        "fin": false
+      }
+    }
+  },
+  {
+    "fixture": "edge-quiche-test-2921-0",
+    "missing": {}
+  },
+  {
+    "fixture": "edge-quiche-test-2872-0",
+    "missing": {}
+  },
+  {
+    "fixture": "edge-quiche-test-2843-2",
+    "missing": {}
+  },
+  {
+    "fixture": "edge-quiche-test-2933-0",
+    "missing": {}
+  },
+  {
+    "fixture": "edge-quiche-test-2959-0",
+    "missing": {
+      "12": {
+        "end": 131091,
+        "fin": false
+      }
+    }
+  },
+  {
+    "fixture": "edge-quiche-test-2972-0",
+    "missing": {}
+  }
+]

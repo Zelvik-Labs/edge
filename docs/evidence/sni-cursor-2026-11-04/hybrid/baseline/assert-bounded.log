@@ -1,0 +1,11 @@
+case	allocations	reallocations	requested_bytes	max_allocation_bytes
+single	1	0	11	11
+fragmented	2	0	8274	8263
+partial	1	0	8263	8263
+oversized	1	0	16777219	16777219
+
+thread 'main' (2231) panicked at /home/runner/work/edge/edge/.local/sni-client-hello-ci/baseline/probe.rs:219:21:
+assertion `left == right` failed: incomplete untrusted length must not allocate
+  left: [1, 0, 16777219, 16777219]
+ right: [0, 0, 0, 0]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

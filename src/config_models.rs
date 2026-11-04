@@ -1048,13 +1048,15 @@ impl ServerConfig {
     }
 
     fn has_server_name_marker(&self, marker: &str) -> bool {
-        self.server_names.iter().any(|sn| {
-            sn.name.to_ascii_lowercase().ends_with(marker)
-                || sn
-                    .sub_names
-                    .iter()
-                    .any(|sub| sub.to_ascii_lowercase().ends_with(marker))
-        })
+        let marker = marker.as_bytes();
+        let matches = |name: &str| {
+            name.as_bytes()
+                .get(name.len().saturating_sub(marker.len())..)
+                .is_some_and(|suffix| suffix.eq_ignore_ascii_case(marker))
+        };
+        self.server_names
+            .iter()
+            .any(|sn| matches(&sn.name) || sn.sub_names.iter().any(|sub| matches(sub)))
     }
 
     pub fn listens_on_https_port(&self, port: u16) -> bool {
@@ -3386,41 +3388,28 @@ pub(crate) fn first_port_in_range(port_range: &str) -> Option<u16> {
 }
 
 pub(crate) fn ports_in_range(port_range: &str) -> Vec<u16> {
+    port_range_bounds(port_range)
+        .map(|(start, end)| (start..=end).collect())
+        .unwrap_or_default()
+}
+
+pub(crate) fn port_range_bounds(port_range: &str) -> Option<(u16, u16)> {
     let raw = port_range.trim();
     let Some((start, end)) = raw.split_once('-') else {
-        return first_port_in_range(raw).into_iter().collect();
+        return first_port_in_range(raw).map(|port| (port, port));
     };
-    let Some(start) = first_port_in_range(start) else {
-        return Vec::new();
-    };
-    let Some(end) = first_port_in_range(end) else {
-        return Vec::new();
-    };
+    let start = first_port_in_range(start)?;
+    let end = first_port_in_range(end)?;
     let (start, end) = if start <= end {
         (start, end)
     } else {
         (end, start)
     };
-    (start..=end).collect()
+    Some((start, end))
 }
 
 pub(crate) fn port_range_contains(port_range: &str, port: u16) -> bool {
-    let raw = port_range.trim();
-    let Some((start, end)) = raw.split_once('-') else {
-        return first_port_in_range(raw) == Some(port);
-    };
-    let Some(start) = first_port_in_range(start) else {
-        return false;
-    };
-    let Some(end) = first_port_in_range(end) else {
-        return false;
-    };
-    let (start, end) = if start <= end {
-        (start, end)
-    } else {
-        (end, start)
-    };
-    (start..=end).contains(&port)
+    port_range_bounds(port_range).is_some_and(|(start, end)| (start..=end).contains(&port))
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, Default, Eq, PartialEq)]
@@ -3587,6 +3576,127 @@ pub fn parse_life_to_seconds(v: &Value) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn port_bounds_and_membership_preserve_the_legacy_parser() {
+        fn legacy_first(value: &str) -> Option<u16> {
+            let raw = value.trim();
+            let first = raw.split(['-', ':']).next().unwrap_or(raw).trim();
+            first.parse::<u16>().ok()
+        }
+        fn legacy_ports(value: &str) -> Vec<u16> {
+            let raw = value.trim();
+            let Some((start, end)) = raw.split_once('-') else {
+                return legacy_first(raw).into_iter().collect();
+            };
+            let Some(start) = legacy_first(start) else {
+                return Vec::new();
+            };
+            let Some(end) = legacy_first(end) else {
+                return Vec::new();
+            };
+            let (start, end) = if start <= end {
+                (start, end)
+            } else {
+                (end, start)
+            };
+            (start..=end).collect()
+        }
+        for raw in [
+            "",
+            " \t",
+            "443",
+            " 443 ",
+            "0",
+            "65535",
+            "65536",
+            "-1",
+            "+443",
+            "0443",
+            "443-444",
+            "444-443",
+            "0-65535",
+            "65535-0",
+            "63-64",
+            "127-128",
+            "1-1",
+            "bad",
+            "443-bad",
+            "bad-443",
+            "443:444",
+            "443:999-444:1",
+            "0:9-65535:1",
+            "-",
+            "443-",
+            "-443",
+            "443--444",
+            "443-444-445",
+            "443-65536",
+            "65536-443",
+            " 443 : 999 - 444 : 1 ",
+            "+0-+65535",
+            "443.0",
+            "443 - 444",
+            "０",
+            "443:",
+            "443:bad",
+        ] {
+            let expected = legacy_ports(raw);
+            assert_eq!(super::ports_in_range(raw), expected, "{raw:?}");
+            let mut membership = [false; 65536];
+            for port in expected {
+                membership[usize::from(port)] = true;
+            }
+            for port in 0..=u16::MAX {
+                assert_eq!(
+                    super::port_range_contains(raw, port),
+                    membership[usize::from(port)],
+                    "{raw:?}, port={port}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn forwarding_markers_preserve_ascii_suffix_semantics() {
+        let names = [
+            "",
+            "x",
+            "@quic",
+            "HOST@QuIc",
+            "域名@QUIC",
+            "😀@qUiC",
+            "@quic ",
+            "@quic\n",
+            "host@quic/path",
+            "@SNI_PASSTHROUGH",
+            "域名@sni_passthrough",
+            "x@quic@SNI_PASSTHROUGH",
+            "中文",
+            "@sni_passthroughmore",
+        ];
+        for primary in names {
+            for secondary in names {
+                let server = super::ServerConfig {
+                    server_names: vec![super::ServerNameConfig {
+                        name: primary.into(),
+                        sub_names: vec![secondary.into()],
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                };
+                for (marker, actual) in [
+                    ("@quic", server.is_quic_passthrough()),
+                    ("@sni_passthrough", server.is_sni_passthrough()),
+                ] {
+                    let expected = [primary, secondary]
+                        .iter()
+                        .any(|name| name.to_ascii_lowercase().ends_with(marker));
+                    assert_eq!(actual, expected, "{primary:?}, {secondary:?}, {marker}");
+                }
+            }
+        }
+    }
+
     use super::*;
 
     #[test]

@@ -1,0 +1,6 @@
+{"target": "edge", "protocol": "h1", "cache": "miss", "connection": "reuse", "repeat": 0, "status": "passed", "rps": 771.2320701218358, "error": null}
+{"target": "edge", "protocol": "h2", "cache": "off", "connection": "reuse", "repeat": 0, "status": "passed", "rps": 6582.385206511375, "error": null}
+{"target": "edge", "protocol": "h1", "cache": "off", "connection": "reuse", "repeat": 0, "status": "passed", "rps": 2559.0337678942847, "error": null}
+{"target": "edge", "protocol": "h2", "cache": "hit", "connection": "reuse", "repeat": 0, "status": "passed", "rps": 3518.868990107269, "error": null}
+{"target": "edge", "protocol": "h1", "cache": "hit", "connection": "reuse", "repeat": 0, "status": "passed", "rps": 16327.451456537574, "error": null}
+{"target": "edge", "protocol": "h2", "cache": "miss", "connection": "reuse", "repeat": 0, "status": "passed", "rps": 679.0200861330247, "error": null}

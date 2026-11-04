@@ -1,0 +1,11 @@
+{
+  "id": 13291664074,
+  "name": "quinn-interop-186fedc728ea868afbeaea37575df2698fb0cfe7",
+  "size_in_bytes": 2583718,
+  "digest": "sha256:9fdc6819163b2fd6df960c3bc35d6068fd912902dd49429501cde6b102e809aa",
+  "workflow_run": {
+    "id": 41764056727,
+    "head_sha": "186fedc728ea868afbeaea37575df2698fb0cfe7",
+    "head_branch": "perf/program-wide-20261104"
+  }
+}

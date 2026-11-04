@@ -1,0 +1,824 @@
+[
+  {
+    "round": 1,
+    "engine": "readiness",
+    "command": [
+      "/home/runner/work/edge/edge/target/release/deps/splice-66176a96fc8eeb89",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 1990268000\nuser_usec 1599792000\nsystem_usec 390476000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          159544,
+          435,
+          37326,
+          654892,
+          7829,
+          0,
+          1721,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          40129,
+          288,
+          10908,
+          160413,
+          2633,
+          0,
+          701,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          37870,
+          2,
+          11101,
+          162941,
+          2321,
+          0,
+          918,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 0.348292,
+      "child_system_seconds": 0.046214
+    },
+    "started_unix": 1793654224.666521,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 2020087000\nuser_usec 1608041000\nsystem_usec 412046000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          160369,
+          435,
+          39036,
+          658543,
+          7845,
+          0,
+          2168,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          40545,
+          288,
+          11745,
+          160589,
+          2634,
+          0,
+          920,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          38270,
+          2,
+          11968,
+          163102,
+          2321,
+          0,
+          1136,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 8.604709,
+      "child_system_seconds": 21.66241
+    },
+    "finished_unix": 1793654241.432356,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 539231.4619236581,
+        "mean_per_roundtrip_ns": 33701.966370228634,
+        "roundtrips_per_second": 29671.859173278735,
+        "median_ns": 538880.4708333333,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 537390.1953703018,
+          "upper_bound": 541170.7905339218
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 27190210.592578303,
+        "mean_per_roundtrip_ns": 1699388.162036144,
+        "roundtrips_per_second": 588.4470789780229,
+        "median_ns": 27154638.613636363,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 27088381.757634062,
+          "upper_bound": 27293845.12556051
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 1653945.8609360526,
+        "mean_per_roundtrip_ns": 103371.61630850329,
+        "roundtrips_per_second": 9673.83538838737,
+        "median_ns": 1653804.5691721132,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 1650418.3993601995,
+          "upper_bound": 1657917.839750253
+        }
+      }
+    ],
+    "passed": true
+  },
+  {
+    "round": 1,
+    "engine": "uring",
+    "command": [
+      "/home/runner/work/edge/edge/target/release/deps/splice-66176a96fc8eeb89",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 2020089000\nuser_usec 1608043000\nsystem_usec 412046000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          160369,
+          435,
+          39036,
+          658543,
+          7845,
+          0,
+          2168,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          40545,
+          288,
+          11745,
+          160590,
+          2634,
+          0,
+          920,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          38271,
+          2,
+          11968,
+          163102,
+          2321,
+          0,
+          1136,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 8.604709,
+      "child_system_seconds": 21.66241
+    },
+    "started_unix": 1793654241.4341116,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 2048506000\nuser_usec 1614669000\nsystem_usec 433837000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          161031,
+          435,
+          40802,
+          661643,
+          7977,
+          0,
+          2581,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          40865,
+          288,
+          12631,
+          160623,
+          2700,
+          0,
+          1124,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          38608,
+          2,
+          12842,
+          163134,
+          2386,
+          0,
+          1336,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 15.211859,
+      "child_system_seconds": 43.379665
+    },
+    "finished_unix": 1793654256.7115421,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 727666.7649872967,
+        "mean_per_roundtrip_ns": 45479.17281170604,
+        "roundtrips_per_second": 21988.086813720733,
+        "median_ns": 728041.3573863637,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 721688.8900793571,
+          "upper_bound": 733539.392390553
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 29751019.874999993,
+        "mean_per_roundtrip_ns": 1859438.7421874995,
+        "roundtrips_per_second": 537.796689566428,
+        "median_ns": 29716213.75,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 29676176.911875,
+          "upper_bound": 29831480.817500003
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 1844667.4134713742,
+        "mean_per_roundtrip_ns": 115291.71334196089,
+        "roundtrips_per_second": 8673.650265166507,
+        "median_ns": 1844256.4142628205,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 1839827.6582752443,
+          "upper_bound": 1849693.9912226524
+        }
+      }
+    ],
+    "passed": true
+  },
+  {
+    "round": 2,
+    "engine": "uring",
+    "command": [
+      "/home/runner/work/edge/edge/target/release/deps/splice-66176a96fc8eeb89",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 2048508000\nuser_usec 1614670000\nsystem_usec 433838000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          161031,
+          435,
+          40802,
+          661644,
+          7977,
+          0,
+          2581,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          40866,
+          288,
+          12631,
+          160623,
+          2700,
+          0,
+          1124,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          38608,
+          2,
+          12842,
+          163134,
+          2386,
+          0,
+          1336,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 15.211859,
+      "child_system_seconds": 43.379665
+    },
+    "started_unix": 1793654256.7135692,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 2075240000\nuser_usec 1620693000\nsystem_usec 454547000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          161634,
+          435,
+          42470,
+          664627,
+          8137,
+          0,
+          2984,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          41157,
+          288,
+          13469,
+          160661,
+          2776,
+          0,
+          1321,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          38914,
+          2,
+          13663,
+          163170,
+          2470,
+          0,
+          1532,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 21.239553,
+      "child_system_seconds": 64.055455
+    },
+    "finished_unix": 1793654271.3866992,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 745434.6067940223,
+        "mean_per_roundtrip_ns": 46589.66292462639,
+        "roundtrips_per_second": 21463.988731101537,
+        "median_ns": 746444.9329545455,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 740579.8430627015,
+          "upper_bound": 750189.1545114617
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 29961919.258333333,
+        "mean_per_roundtrip_ns": 1872619.9536458333,
+        "roundtrips_per_second": 534.0111847324303,
+        "median_ns": 29966052.5,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 29840296.81645833,
+          "upper_bound": 30080254.776250005
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 1933380.3808559566,
+        "mean_per_roundtrip_ns": 120836.27380349729,
+        "roundtrips_per_second": 8275.660681379415,
+        "median_ns": 1939986.4085784312,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 1920997.110759216,
+          "upper_bound": 1944568.4776087643
+        }
+      }
+    ],
+    "passed": true
+  },
+  {
+    "round": 2,
+    "engine": "readiness",
+    "command": [
+      "/home/runner/work/edge/edge/target/release/deps/splice-66176a96fc8eeb89",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 2075242000\nuser_usec 1620694000\nsystem_usec 454548000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          161634,
+          435,
+          42470,
+          664628,
+          8137,
+          0,
+          2984,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          41157,
+          288,
+          13469,
+          160661,
+          2776,
+          0,
+          1321,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          38914,
+          2,
+          13663,
+          163170,
+          2470,
+          0,
+          1532,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 21.239553,
+      "child_system_seconds": 64.055455
+    },
+    "started_unix": 1793654271.3889596,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 2104929000\nuser_usec 1628769000\nsystem_usec 476160000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          162441,
+          435,
+          44189,
+          668292,
+          8137,
+          0,
+          3426,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          41553,
+          288,
+          14331,
+          160832,
+          2776,
+          0,
+          1534,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          39319,
+          2,
+          14514,
+          163342,
+          2470,
+          0,
+          1751,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 29.329141,
+      "child_system_seconds": 85.702958
+    },
+    "finished_unix": 1793654288.1075592,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 543675.9409009625,
+        "mean_per_roundtrip_ns": 33979.74630631015,
+        "roundtrips_per_second": 29429.29564527963,
+        "median_ns": 543965.5592592593,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 541728.9426152892,
+          "upper_bound": 545566.3985749006
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 27287719.182759356,
+        "mean_per_roundtrip_ns": 1705482.4489224597,
+        "roundtrips_per_second": 586.3443512020951,
+        "median_ns": 27256894.566433564,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 27211500.411988202,
+          "upper_bound": 27371682.761640575
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 1643973.7463039903,
+        "mean_per_roundtrip_ns": 102748.35914399939,
+        "roundtrips_per_second": 9732.515519771208,
+        "median_ns": 1639503.1348278103,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 1636499.7595499381,
+          "upper_bound": 1651743.2174845769
+        }
+      }
+    ],
+    "passed": true
+  },
+  {
+    "round": 3,
+    "engine": "readiness",
+    "command": [
+      "/home/runner/work/edge/edge/target/release/deps/splice-66176a96fc8eeb89",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 2104931000\nuser_usec 1628769000\nsystem_usec 476162000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          162441,
+          435,
+          44189,
+          668293,
+          8137,
+          0,
+          3426,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          41554,
+          288,
+          14332,
+          160832,
+          2776,
+          0,
+          1534,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          39319,
+          2,
+          14514,
+          163342,
+          2470,
+          0,
+          1751,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 29.329141,
+      "child_system_seconds": 85.702958
+    },
+    "started_unix": 1793654288.1099133,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 2134540000\nuser_usec 1636889000\nsystem_usec 497651000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          163253,
+          435,
+          45895,
+          671942,
+          8137,
+          0,
+          3869,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          41956,
+          288,
+          15196,
+          160992,
+          2776,
+          0,
+          1752,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          39723,
+          2,
+          15351,
+          163521,
+          2470,
+          0,
+          1966,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 37.465322,
+      "child_system_seconds": 107.234943
+    },
+    "finished_unix": 1793654304.77816,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 539455.451410917,
+        "mean_per_roundtrip_ns": 33715.96571318231,
+        "roundtrips_per_second": 29659.53900021374,
+        "median_ns": 539522.9183006536,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 538473.0093487828,
+          "upper_bound": 540433.600618316
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 27177613.898081012,
+        "mean_per_roundtrip_ns": 1698600.8686300633,
+        "roundtrips_per_second": 588.7198213942448,
+        "median_ns": 27176417.667857144,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 27061759.4002767,
+          "upper_bound": 27289552.296941947
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 1610993.7660557604,
+        "mean_per_roundtrip_ns": 100687.11037848503,
+        "roundtrips_per_second": 9931.757860971264,
+        "median_ns": 1611419.888888889,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 1606584.0414155344,
+          "upper_bound": 1615431.7588533664
+        }
+      }
+    ],
+    "passed": true
+  },
+  {
+    "round": 3,
+    "engine": "uring",
+    "command": [
+      "/home/runner/work/edge/edge/target/release/deps/splice-66176a96fc8eeb89",
+      "--bench",
+      "--noplot"
+    ],
+    "cpu_before": {
+      "cgroup": "usage_usec 2134544000\nuser_usec 1636892000\nsystem_usec 497652000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          163254,
+          435,
+          45895,
+          671943,
+          8137,
+          0,
+          3869,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          41956,
+          288,
+          15196,
+          160993,
+          2776,
+          0,
+          1752,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          39723,
+          2,
+          15351,
+          163521,
+          2470,
+          0,
+          1966,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 37.465322,
+      "child_system_seconds": 107.234943
+    },
+    "started_unix": 1793654304.780835,
+    "returncode": 0,
+    "cpu_after": {
+      "cgroup": "usage_usec 2161997000\nuser_usec 1643192000\nsystem_usec 518805000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "proc": {
+        "cpu": [
+          163884,
+          435,
+          47589,
+          675002,
+          8283,
+          0,
+          4291,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          42276,
+          288,
+          16020,
+          161033,
+          2864,
+          0,
+          1946,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          40028,
+          2,
+          16216,
+          163554,
+          2529,
+          0,
+          2187,
+          0,
+          0,
+          0
+        ]
+      },
+      "child_user_seconds": 43.773073,
+      "child_system_seconds": 128.449203
+    },
+    "finished_unix": 1793654319.7975647,
+    "cases": [
+      {
+        "bytes": 1024,
+        "mean_ns": 764495.8466762003,
+        "mean_per_roundtrip_ns": 47780.99041726252,
+        "roundtrips_per_second": 20928.825276897478,
+        "median_ns": 762349.76125,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 759368.7883429809,
+          "upper_bound": 769820.5031732187
+        }
+      },
+      {
+        "bytes": 1048576,
+        "mean_ns": 30150811.130000006,
+        "mean_per_roundtrip_ns": 1884425.6956250004,
+        "roundtrips_per_second": 530.6656570867517,
+        "median_ns": 30111254.5,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 30029250.845000006,
+          "upper_bound": 30267679.292499993
+        }
+      },
+      {
+        "bytes": 65536,
+        "mean_ns": 1854135.5626902592,
+        "mean_per_roundtrip_ns": 115883.4726681412,
+        "roundtrips_per_second": 8629.358242169084,
+        "median_ns": 1854983.855654762,
+        "mean_confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 1845735.0568826005,
+          "upper_bound": 1862662.0010070633
+        }
+      }
+    ],
+    "passed": true
+  }
+]

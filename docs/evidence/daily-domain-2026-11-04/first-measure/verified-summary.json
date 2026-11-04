@@ -1,0 +1,264 @@
+{
+  "source": "8486c1bec1633655af64e756473ecfa927e67ca5",
+  "baseline": "e866d8bc52145f71d5bab641a18f33fe5afaab18",
+  "scope": "exact daily map helpers; fixed-capacity governor and counted drop sink fixtures; System allocator; no actual governor CPU or node throughput claim",
+  "differential_controls": 20566,
+  "raw_blocks": 2560,
+  "allocations": {
+    "baseline": {
+      "hot-1": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 16000,
+        "largest": 16,
+        "capacity_calls": 1000
+      },
+      "hot-16": {
+        "iterations": 1000,
+        "allocations": 1001,
+        "reallocations": 0,
+        "bytes": 17100,
+        "largest": 728,
+        "capacity_calls": 1000
+      },
+      "hot-1024": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 17890,
+        "largest": 18,
+        "capacity_calls": 1000
+      },
+      "at-cap": {
+        "iterations": 1000,
+        "allocations": 1001,
+        "reallocations": 0,
+        "bytes": 17100,
+        "largest": 728,
+        "capacity_calls": 1000
+      },
+      "reject-new": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 16000,
+        "largest": 16,
+        "capacity_calls": 1000
+      },
+      "insert-new": {
+        "iterations": 1000,
+        "allocations": 1093,
+        "reallocations": 0,
+        "bytes": 344050,
+        "largest": 11408,
+        "capacity_calls": 1000
+      },
+      "invalid": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0,
+        "capacity_calls": 1000
+      },
+      "legacy-hot": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 16000,
+        "largest": 16,
+        "capacity_calls": 1000
+      }
+    },
+    "candidate": {
+      "hot-1": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0,
+        "capacity_calls": 0
+      },
+      "hot-16": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0,
+        "capacity_calls": 0
+      },
+      "hot-1024": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0,
+        "capacity_calls": 0
+      },
+      "at-cap": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0,
+        "capacity_calls": 0
+      },
+      "reject-new": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0,
+        "capacity_calls": 1000
+      },
+      "insert-new": {
+        "iterations": 1000,
+        "allocations": 92,
+        "reallocations": 0,
+        "bytes": 286592,
+        "largest": 10384,
+        "capacity_calls": 1000
+      },
+      "invalid": {
+        "iterations": 1000,
+        "allocations": 0,
+        "reallocations": 0,
+        "bytes": 0,
+        "largest": 0,
+        "capacity_calls": 0
+      },
+      "legacy-hot": {
+        "iterations": 1000,
+        "allocations": 1000,
+        "reallocations": 0,
+        "bytes": 32000,
+        "largest": 32,
+        "capacity_calls": 0
+      }
+    }
+  },
+  "cases": {
+    "hot-1": {
+      "baseline_ns": 130.7314,
+      "candidate_ns": 60.030815000000004,
+      "paired_percent_changes": [
+        -54.29483308354205,
+        -51.572827515678185,
+        -54.4704476100776,
+        -53.10836019125216,
+        -53.76478309648288,
+        -53.594322850269194,
+        -54.299727793962106,
+        -53.95682436147886
+      ],
+      "paired_median_percent": -53.86080372898087
+    },
+    "hot-16": {
+      "baseline_ns": 132.40748375,
+      "candidate_ns": 61.2182875,
+      "paired_percent_changes": [
+        -54.08871836290784,
+        -53.51563196870519,
+        -53.18024414385067,
+        -53.68079295424556,
+        -54.18679738500893,
+        -53.723386583325514,
+        -53.673531750226466,
+        -53.72857358575246
+      ],
+      "paired_median_percent": -53.70208976878554
+    },
+    "hot-1024": {
+      "baseline_ns": 142.11703875,
+      "candidate_ns": 64.71817,
+      "paired_percent_changes": [
+        -63.60948642691346,
+        -55.3627725263945,
+        -53.92573117881461,
+        -54.2390538999487,
+        -54.61278858215556,
+        -53.3457213596722,
+        -55.692856125249776,
+        -54.03863461046811
+      ],
+      "paired_median_percent": -54.42592124105213
+    },
+    "at-cap": {
+      "baseline_ns": 132.57925125,
+      "candidate_ns": 61.106350000000006,
+      "paired_percent_changes": [
+        -68.21881967405261,
+        -54.10734239566624,
+        -52.95489265717757,
+        -54.01820331701251,
+        -52.5068049772467,
+        -51.84378144398377,
+        -54.76286024044199,
+        -53.89669790473014
+      ],
+      "paired_median_percent": -53.95745061087132
+    },
+    "reject-new": {
+      "baseline_ns": 106.78415625,
+      "candidate_ns": 97.42115625,
+      "paired_percent_changes": [
+        -8.874203063664055,
+        -8.399955368989499,
+        -9.092370612205636,
+        -9.173558051587005,
+        -7.718498093533233,
+        -8.622339123303025,
+        -8.728330707604215,
+        -8.570893418527092
+      ],
+      "paired_median_percent": -8.67533491545362
+    },
+    "insert-new": {
+      "baseline_ns": 312.86558837890624,
+      "candidate_ns": 273.7167114257812,
+      "paired_percent_changes": [
+        -15.218168382347164,
+        14.785739217447812,
+        -15.423588695140788,
+        -17.14048198283402,
+        -11.852275637328468,
+        -12.218001607861195,
+        -11.147491613070049,
+        -11.615344492080792
+      ],
+      "paired_median_percent": -12.035138622594832
+    },
+    "invalid": {
+      "baseline_ns": 4.7424712499999995,
+      "candidate_ns": 4.84791875,
+      "paired_percent_changes": [
+        5.40114777374765,
+        5.596557690913118,
+        -0.05058155547552623,
+        -1.9271328088317219,
+        -2.7878793425711867,
+        -1.1808170133656315,
+        6.433219682530966,
+        -9.120099971624185
+      ],
+      "paired_median_percent": -0.6156992844205789
+    },
+    "legacy-hot": {
+      "baseline_ns": 130.28767625,
+      "candidate_ns": 78.36908125,
+      "paired_percent_changes": [
+        -40.42633779831395,
+        -37.807369455934236,
+        -39.44048989112372,
+        -39.9878542958802,
+        -39.582700637196375,
+        -38.95030192347413,
+        -40.19603056496226,
+        -39.955004557038755
+      ],
+      "paired_median_percent": -39.768852597117565
+    }
+  },
+  "max_host_steal_fraction": 0.0
+}

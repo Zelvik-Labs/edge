@@ -1,0 +1,27 @@
+{
+  "source": "2c0b5b7822d9ff9d69e56946f786ca19408c92fc",
+  "stage": "sampled-first-failure",
+  "runs": [
+    {
+      "path": "round-0-edge/manifest.json",
+      "status": "completed",
+      "cases": [
+        {
+          "stem": "0000-h2-off-reuse",
+          "status": "failed",
+          "successful": 81199,
+          "failed": 7217,
+          "error": "integrity failed: 0\t1\t000 curl: (35) TLS connect error: error:0A000126:SSL routines::unexpected eof while reading\n"
+        },
+        {
+          "stem": "0001-h1-off-reuse",
+          "status": "failed",
+          "successful": 12065,
+          "failed": 96408,
+          "error": "integrity failed: 0\t0\t000 curl: (52) Empty reply from server\n"
+        }
+      ]
+    }
+  ],
+  "entire_run_passed": false
+}

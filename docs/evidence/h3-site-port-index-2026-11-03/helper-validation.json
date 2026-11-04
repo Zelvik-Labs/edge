@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "source_commit": "88a35c70341075864839d9505f25861b70630c1c",
+  "unique_tests": 2,
+  "negative_controls": 1,
+  "scope": "bitmap reference union and immutable clone only; root parser/config tests pending"
+}

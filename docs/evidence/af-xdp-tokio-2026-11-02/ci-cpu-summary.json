@@ -1,0 +1,821 @@
+[
+  {
+    "round": 1,
+    "engine": "worker",
+    "steal_percent": 0.0,
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5815,
+          164,
+          1557,
+          25725,
+          1866,
+          0,
+          40,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1754,
+          139,
+          421,
+          6070,
+          402,
+          0,
+          8,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1024,
+          24,
+          391,
+          6852,
+          473,
+          0,
+          17,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 75775000\nuser_usec 59804000\nsystem_usec 15971000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 0.22011499999999998,
+      "child_system_seconds": 0.032008999999999996
+    },
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5863,
+          164,
+          1752,
+          26407,
+          1888,
+          0,
+          95,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1766,
+          139,
+          502,
+          6184,
+          402,
+          0,
+          8,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1060,
+          24,
+          505,
+          6891,
+          473,
+          0,
+          71,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 78763000\nuser_usec 60285000\nsystem_usec 18478000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 0.748834,
+      "child_system_seconds": 2.887775
+    }
+  },
+  {
+    "round": 1,
+    "engine": "readable",
+    "steal_percent": 0.0,
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5864,
+          164,
+          1753,
+          26408,
+          1888,
+          0,
+          95,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1766,
+          139,
+          503,
+          6184,
+          402,
+          0,
+          8,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1060,
+          24,
+          505,
+          6892,
+          473,
+          0,
+          71,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 78771000\nuser_usec 60290000\nsystem_usec 18481000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 0.748834,
+      "child_system_seconds": 2.887775
+    },
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5878,
+          164,
+          1805,
+          26681,
+          1894,
+          0,
+          116,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1767,
+          139,
+          503,
+          6275,
+          402,
+          0,
+          8,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1073,
+          24,
+          557,
+          6896,
+          473,
+          0,
+          92,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 79647000\nuser_usec 60429000\nsystem_usec 19218000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 0.884952,
+      "child_system_seconds": 3.62041
+    }
+  },
+  {
+    "round": 1,
+    "engine": "read-write",
+    "steal_percent": 0.0,
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5878,
+          164,
+          1805,
+          26682,
+          1894,
+          0,
+          116,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1767,
+          139,
+          503,
+          6275,
+          402,
+          0,
+          8,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1073,
+          24,
+          557,
+          6897,
+          473,
+          0,
+          92,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 79652000\nuser_usec 60433000\nsystem_usec 19219000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 0.884952,
+      "child_system_seconds": 3.62041
+    },
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5893,
+          164,
+          1858,
+          26952,
+          1902,
+          0,
+          136,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1781,
+          139,
+          550,
+          6286,
+          402,
+          0,
+          27,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1074,
+          24,
+          562,
+          6981,
+          473,
+          0,
+          93,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 80526000\nuser_usec 60580000\nsystem_usec 19946000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.02908,
+      "child_system_seconds": 4.345058
+    }
+  },
+  {
+    "round": 2,
+    "engine": "read-write",
+    "steal_percent": 0.0,
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5893,
+          164,
+          1858,
+          26953,
+          1902,
+          0,
+          136,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1781,
+          139,
+          550,
+          6287,
+          402,
+          0,
+          27,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1075,
+          24,
+          562,
+          6981,
+          473,
+          0,
+          93,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 80531000\nuser_usec 60585000\nsystem_usec 19946000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.02908,
+      "child_system_seconds": 4.345058
+    },
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5910,
+          164,
+          1911,
+          27226,
+          1907,
+          0,
+          154,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1786,
+          139,
+          565,
+          6352,
+          402,
+          0,
+          34,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1086,
+          24,
+          600,
+          7011,
+          473,
+          0,
+          105,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 81408000\nuser_usec 60749000\nsystem_usec 20659000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.19119,
+      "child_system_seconds": 5.058538
+    }
+  },
+  {
+    "round": 2,
+    "engine": "readable",
+    "steal_percent": 0.0,
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5910,
+          164,
+          1911,
+          27227,
+          1907,
+          0,
+          154,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1786,
+          139,
+          565,
+          6352,
+          402,
+          0,
+          34,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1086,
+          24,
+          600,
+          7011,
+          473,
+          0,
+          105,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 81412000\nuser_usec 60753000\nsystem_usec 20659000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.19119,
+      "child_system_seconds": 5.058538
+    },
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5923,
+          164,
+          1965,
+          27502,
+          1912,
+          0,
+          173,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1798,
+          139,
+          619,
+          6358,
+          402,
+          0,
+          53,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1086,
+          24,
+          601,
+          7102,
+          473,
+          0,
+          105,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 82271000\nuser_usec 60876000\nsystem_usec 21395000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.314365,
+      "child_system_seconds": 5.790578
+    }
+  },
+  {
+    "round": 2,
+    "engine": "worker",
+    "steal_percent": 0.0,
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5923,
+          164,
+          1966,
+          27503,
+          1912,
+          0,
+          173,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1798,
+          139,
+          619,
+          6359,
+          402,
+          0,
+          53,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1086,
+          24,
+          601,
+          7102,
+          473,
+          0,
+          105,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 82276000\nuser_usec 60879000\nsystem_usec 21397000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.314365,
+      "child_system_seconds": 5.790578
+    },
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5963,
+          164,
+          2157,
+          28151,
+          1933,
+          0,
+          232,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1807,
+          139,
+          695,
+          6466,
+          402,
+          0,
+          53,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1115,
+          24,
+          715,
+          7135,
+          473,
+          0,
+          163,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 85177000\nuser_usec 61284000\nsystem_usec 23893000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.7563719999999998,
+      "child_system_seconds": 8.684671
+    }
+  },
+  {
+    "round": 3,
+    "engine": "readable",
+    "steal_percent": 0.0,
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5964,
+          164,
+          2157,
+          28152,
+          1933,
+          0,
+          232,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1808,
+          139,
+          695,
+          6466,
+          402,
+          0,
+          53,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1115,
+          24,
+          715,
+          7135,
+          473,
+          0,
+          163,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 85181000\nuser_usec 61288000\nsystem_usec 23893000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.7563719999999998,
+      "child_system_seconds": 8.684671
+    },
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          5981,
+          164,
+          2205,
+          28425,
+          1939,
+          0,
+          253,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1821,
+          139,
+          733,
+          6489,
+          402,
+          0,
+          70,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1118,
+          24,
+          725,
+          7210,
+          473,
+          0,
+          166,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 86048000\nuser_usec 61462000\nsystem_usec 24586000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.916427,
+      "child_system_seconds": 9.37591
+    }
+  },
+  {
+    "round": 3,
+    "engine": "worker",
+    "steal_percent": 0.0,
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          5982,
+          164,
+          2205,
+          28426,
+          1939,
+          0,
+          253,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1821,
+          139,
+          733,
+          6489,
+          402,
+          0,
+          70,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1118,
+          24,
+          725,
+          7210,
+          473,
+          0,
+          166,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 86054000\nuser_usec 61466000\nsystem_usec 24588000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 1.916427,
+      "child_system_seconds": 9.37591
+    },
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          6026,
+          164,
+          2398,
+          29075,
+          1958,
+          0,
+          310,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1853,
+          139,
+          850,
+          6522,
+          402,
+          0,
+          125,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1130,
+          24,
+          801,
+          7315,
+          473,
+          0,
+          166,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 88990000\nuser_usec 61906000\nsystem_usec 27084000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.412235,
+      "child_system_seconds": 12.2343
+    }
+  },
+  {
+    "round": 3,
+    "engine": "read-write",
+    "steal_percent": 0.0,
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          6026,
+          164,
+          2398,
+          29077,
+          1958,
+          0,
+          310,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1853,
+          139,
+          850,
+          6522,
+          402,
+          0,
+          125,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1130,
+          24,
+          801,
+          7315,
+          473,
+          0,
+          166,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 88995000\nuser_usec 61911000\nsystem_usec 27084000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.412235,
+      "child_system_seconds": 12.2343
+    },
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          6042,
+          164,
+          2448,
+          29347,
+          1965,
+          0,
+          332,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1855,
+          139,
+          855,
+          6604,
+          402,
+          0,
+          128,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1144,
+          24,
+          846,
+          7328,
+          473,
+          0,
+          186,
+          0,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 89874000\nuser_usec 62072000\nsystem_usec 27802000\nnice_usec 1646000\ncore_sched.force_idle_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.572418,
+      "child_system_seconds": 12.949117
+    }
+  }
+]

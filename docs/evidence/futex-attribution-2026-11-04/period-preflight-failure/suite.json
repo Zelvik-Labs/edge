@@ -1,0 +1,26 @@
+{
+  "source": "43958aa66304d09f82f3718d1d727b9fc99a94b6",
+  "orders": [
+    [
+      "edge"
+    ],
+    [
+      "edge"
+    ]
+  ],
+  "runs": [
+    {
+      "round": 0,
+      "target": "edge",
+      "manifest": "round-0-edge/manifest.json",
+      "exit": 1
+    }
+  ],
+  "event": "syscalls:sys_enter_futex",
+  "period": 512,
+  "scope": "sampled futex callsites of fixed ba474 Edge; raw payload excluded; no CPU, wait time or capacity attribution",
+  "source_hashes": {
+    "scripts/perf/profile_architecture.py": "f21682be879384d75bb8b80c3f43a7facdddc6b161ca8a5ace94b40081a851a6",
+    "scripts/perf/futex-sampled/evidence.py": "43fcf5f7fea815ba3e799caa386e25a4b251415fe7bf0bf514da4e5b12d67592"
+  }
+}

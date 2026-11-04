@@ -1,0 +1,3 @@
+timestamp_same_millisecond_accepts_mixed	true
+version_same_millisecond_rejects_mixed	true
+interrupted_writer_recovers_without_partial_commit	true

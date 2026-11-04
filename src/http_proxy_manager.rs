@@ -9,6 +9,7 @@ use crate::net_bind::{
 use crate::proxy::EdgeProxy;
 use crate::proxy_protocol;
 use crate::ssl::{DynamicCertSelector, TlsPolicy};
+use crate::tls_client_hello::{ClientHelloParse, parse_tls_client_hello_sni};
 use anyhow::Context;
 use dashmap::DashMap;
 use pingora_core::apps::HttpServerApp;
@@ -58,7 +59,7 @@ struct ListenerHandle {
 }
 
 const H2_CHURN_WINDOW: Duration = Duration::from_secs(30);
-const H2_CHURN_STREAM_LIMIT: u64 = 200;
+const H2_ABUSE_EVENT_LIMIT: u64 = 200;
 const H2_CHURN_HINT_STREAM_LIMIT: u64 = 100;
 const H2_L4_EVENT_FLUSH_STREAMS: u64 = 10;
 
@@ -151,7 +152,11 @@ impl H2ConnectionDefenseState {
 
     fn should_close_for_churn(&mut self) -> bool {
         self.refresh_window();
-        self.accepted_streams >= H2_CHURN_STREAM_LIMIT
+        // Accepted requests are normal work, not connection churn. A healthy
+        // multiplexed connection can complete this many streams in milliseconds.
+        // Keep the bounded abuse window for rejected/error events instead;
+        // stream admission, malformed-frame limits and lifetime remain active.
+        self.rejected_streams.saturating_add(self.errors) >= H2_ABUSE_EVENT_LIMIT
             && self.window_started_at.elapsed() <= H2_CHURN_WINDOW
     }
 
@@ -2869,6 +2874,10 @@ struct ProcessHttp1StreamArgs {
 }
 
 async fn process_http1_stream(args: ProcessHttp1StreamArgs) {
+    crate::proxy::with_http1_parse_tracking(process_http1_stream_tracked(args)).await;
+}
+
+async fn process_http1_stream_tracked(args: ProcessHttp1StreamArgs) {
     let ProcessHttp1StreamArgs {
         stream,
         proxy_inner,
@@ -2940,7 +2949,13 @@ fn is_benign_tls_accept_error(message: &str) -> bool {
 }
 
 fn stream_with_socket_digest(client_stream: TcpStream, client_addr: SocketAddr) -> L4Stream {
-    let mut stream = L4Stream::from(client_stream);
+    let mut stream = L4Stream::from_tcp_with_buffer(
+        client_stream,
+        pingora_core::protocols::l4::stream::L4BufferSettings::new(
+            0,
+            crate::memory_governor::HTTP_DOWNSTREAM_WRITE_BUFFER_BYTES,
+        ),
+    );
     #[cfg(unix)]
     let digest = SocketDigest::from_raw_fd(stream.as_raw_fd());
     #[cfg(windows)]
@@ -3214,143 +3229,39 @@ enum ClientHelloPeek {
     NotClientHello { plaintext_connect: bool },
 }
 
-#[derive(Debug)]
-enum ClientHelloParse {
-    Found(String),
-    NeedMore,
-    NotClientHello,
-}
-
 fn starts_with_ascii_ci(value: &[u8], prefix: &[u8]) -> bool {
     value.len() >= prefix.len() && value[..prefix.len()].eq_ignore_ascii_case(prefix)
-}
-
-fn parse_tls_client_hello_sni(buf: &[u8]) -> ClientHelloParse {
-    if buf.len() < 9 {
-        return ClientHelloParse::NeedMore;
-    }
-    if buf[0] != 22 {
-        return ClientHelloParse::NotClientHello;
-    }
-
-    let first_record_len = usize::from(u16::from_be_bytes([buf[3], buf[4]]));
-    if buf.len() < 5 + first_record_len {
-        return ClientHelloParse::NeedMore;
-    }
-    let first_record = &buf[5..5 + first_record_len];
-    if first_record.len() < 4 {
-        return ClientHelloParse::NeedMore;
-    }
-    if first_record[0] != 1 {
-        return ClientHelloParse::NotClientHello;
-    }
-    let hello_len = ((usize::from(first_record[1])) << 16)
-        | ((usize::from(first_record[2])) << 8)
-        | usize::from(first_record[3]);
-    let needed_handshake_len = 4 + hello_len;
-
-    let hello_storage;
-    let hello = if first_record.len() >= needed_handshake_len {
-        &first_record[4..needed_handshake_len]
-    } else {
-        let mut handshake = Vec::with_capacity(needed_handshake_len);
-        let mut pos = 0usize;
-        while pos + 5 <= buf.len() && handshake.len() < needed_handshake_len {
-            if buf[pos] != 22 {
-                return ClientHelloParse::NotClientHello;
-            }
-            let record_len = usize::from(u16::from_be_bytes([buf[pos + 3], buf[pos + 4]]));
-            if buf.len() < pos + 5 + record_len {
-                return ClientHelloParse::NeedMore;
-            }
-            handshake.extend_from_slice(&buf[pos + 5..pos + 5 + record_len]);
-            pos += 5 + record_len;
-        }
-        if handshake.len() < needed_handshake_len {
-            return ClientHelloParse::NeedMore;
-        }
-        hello_storage = handshake;
-        &hello_storage[4..needed_handshake_len]
-    };
-    let mut pos = 0usize;
-
-    pos += 2; // legacy_version
-    pos += 32; // random
-    if hello.len() < pos + 1 {
-        return ClientHelloParse::NotClientHello;
-    }
-    let session_len = usize::from(hello[pos]);
-    pos += 1 + session_len;
-    if hello.len() < pos + 2 {
-        return ClientHelloParse::NotClientHello;
-    }
-    let cipher_len = usize::from(u16::from_be_bytes([hello[pos], hello[pos + 1]]));
-    pos += 2 + cipher_len;
-    if hello.len() < pos + 1 {
-        return ClientHelloParse::NotClientHello;
-    }
-    let compression_len = usize::from(hello[pos]);
-    pos += 1 + compression_len;
-    if hello.len() < pos + 2 {
-        return ClientHelloParse::NotClientHello;
-    }
-    let extensions_len = usize::from(u16::from_be_bytes([hello[pos], hello[pos + 1]]));
-    pos += 2;
-    if hello.len() < pos + extensions_len {
-        return ClientHelloParse::NotClientHello;
-    }
-
-    let extensions = &hello[pos..pos + extensions_len];
-    let mut ext_pos = 0usize;
-    while ext_pos + 4 <= extensions.len() {
-        let ext_type = u16::from_be_bytes([extensions[ext_pos], extensions[ext_pos + 1]]);
-        let ext_len = usize::from(u16::from_be_bytes([
-            extensions[ext_pos + 2],
-            extensions[ext_pos + 3],
-        ]));
-        ext_pos += 4;
-        if extensions.len() < ext_pos + ext_len {
-            return ClientHelloParse::NotClientHello;
-        }
-        if ext_type == 0 {
-            let ext = &extensions[ext_pos..ext_pos + ext_len];
-            if ext.len() < 2 {
-                return ClientHelloParse::NotClientHello;
-            }
-            let list_len = usize::from(u16::from_be_bytes([ext[0], ext[1]]));
-            if ext.len() < 2 + list_len {
-                return ClientHelloParse::NotClientHello;
-            }
-            let mut name_pos = 2usize;
-            while name_pos + 3 <= 2 + list_len {
-                let name_type = ext[name_pos];
-                let name_len =
-                    usize::from(u16::from_be_bytes([ext[name_pos + 1], ext[name_pos + 2]]));
-                name_pos += 3;
-                if ext.len() < name_pos + name_len {
-                    return ClientHelloParse::NotClientHello;
-                }
-                if name_type == 0 {
-                    let Some(host) = std::str::from_utf8(&ext[name_pos..name_pos + name_len])
-                        .ok()
-                        .map(|host| host.to_ascii_lowercase())
-                    else {
-                        return ClientHelloParse::NotClientHello;
-                    };
-                    return ClientHelloParse::Found(host);
-                }
-                name_pos += name_len;
-            }
-        }
-        ext_pos += ext_len;
-    }
-    ClientHelloParse::NotClientHello
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[tokio::test]
+    async fn buffered_kernel_stream_preserves_peer_and_flushes_response() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let (client, accepted) = tokio::join!(
+            TcpStream::connect(listener.local_addr().unwrap()),
+            listener.accept()
+        );
+        let mut client = client.unwrap();
+        let (server, peer) = accepted.unwrap();
+        let mut stream = stream_with_socket_digest(server, peer);
+        let observed_peer = stream
+            .get_socket_digest()
+            .and_then(|digest| digest.peer_addr().cloned())
+            .and_then(|addr| addr.as_inet().copied());
+        assert_eq!(observed_peer, Some(client.local_addr().unwrap()));
+        stream.write_all(b"response header\r\n").await.unwrap();
+        stream.write_all(b"response body").await.unwrap();
+        stream.flush().await.unwrap();
+        let mut received = [0; 30];
+        client.read_exact(&mut received).await.unwrap();
+        assert_eq!(&received, b"response header\r\nresponse body");
+        let boxed: pingora_core::protocols::Stream = Box::new(stream);
+        assert!(boxed.as_any().is::<L4Stream>());
+    }
 
     #[test]
     fn shared_sni_listener_merges_optional_proxy_protocol_in_both_orders() {
@@ -3390,6 +3301,26 @@ mod tests {
         drop(guard);
         assert!(!state.has_active_streams());
         assert!(state.next_idle_deadline() <= TokioInstant::now());
+    }
+
+    #[test]
+    fn h2_successful_reuse_does_not_trigger_abuse_rotation() {
+        let mut state = H2ConnectionDefenseState::new(
+            "127.0.0.1".parse().unwrap(),
+            443,
+            crate::l4_defense::L4PressureLevel::Normal,
+        );
+        for _ in 0..10_000 {
+            state.record_stream();
+        }
+        assert!(!state.should_close_for_churn());
+        for _ in 0..H2_ABUSE_EVENT_LIMIT / 2 {
+            state.record_reject();
+            state.record_error();
+        }
+        assert!(state.should_close_for_churn());
+        state.window_started_at = TokioInstant::now() - H2_CHURN_WINDOW - Duration::from_secs(1);
+        assert!(!state.should_close_for_churn());
     }
 
     #[test]

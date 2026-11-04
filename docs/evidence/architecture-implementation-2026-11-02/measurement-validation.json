@@ -1,0 +1,96 @@
+{
+  "all_candidate_source_and_binary_hashes_match": true,
+  "comparison_case_count": 96,
+  "comparison_statuses": {
+    "passed": 91,
+    "traffic-errors": 5
+  },
+  "candidate_statuses": {
+    "passed": 24
+  },
+  "known_native_failed_transfers": 656,
+  "groups": {
+    "h1": {
+      "cases": 36,
+      "statuses": {
+        "passed": 36
+      },
+      "quality_flags": {
+        "high_cpu_steal": 12,
+        "rps_spread_over_15pct": 9,
+        "client_cpu_above_80pct": 1,
+        "short_batch_under_1s": 1
+      }
+    },
+    "tls-h2": {
+      "cases": 36,
+      "statuses": {
+        "passed": 31,
+        "traffic-errors": 5
+      },
+      "quality_flags": {
+        "high_cpu_steal": 36,
+        "client_cpu_above_80pct": 4,
+        "short_batch_under_1s": 3,
+        "traffic_or_state_failure": 5
+      }
+    },
+    "cold-long": {
+      "cases": 12,
+      "statuses": {
+        "passed": 12
+      },
+      "quality_flags": {
+        "high_cpu_steal": 4,
+        "rps_spread_over_15pct": 3
+      }
+    },
+    "32k": {
+      "cases": 12,
+      "statuses": {
+        "passed": 12
+      },
+      "quality_flags": {
+        "high_cpu_steal": 12,
+        "short_batch_under_1s": 4
+      }
+    }
+  },
+  "engine_diagnostic": {
+    "minimal": {
+      "cases": 3,
+      "manifest_sha256": "17777e08a1cd891fdea899d21f4c6c3b706dfd400be13bf07f8471843ae63a99"
+    },
+    "edge": {
+      "cases": 3,
+      "manifest_sha256": "40ee2a827c3c0c783093adfc23f110d2b9d49021d056b1250da6301d238d8b20"
+    },
+    "nginx": {
+      "cases": 3,
+      "manifest_sha256": "5146a47bd02aca30fe777d7b021fa8b79535bd8c13efea81b9809d0588218b2e"
+    },
+    "openresty": {
+      "cases": 3,
+      "manifest_sha256": "6df8af134e2115c5719b054498d247e7b950e4ca609c218b7c68fa92bf95831e"
+    }
+  },
+  "functional_only": {
+    "functional-128k": {
+      "cases": 2,
+      "successful": 27531,
+      "failed": 0
+    },
+    "functional-h3": {
+      "cases": 1,
+      "successful": 4512,
+      "failed": 0
+    }
+  },
+  "raw_file_hash_count": 1164,
+  "long_stability_completed": false,
+  "full_fresh_connection_matrix_completed_for_candidate": false,
+  "h3_cache_fixed": false,
+  "production_deployed": false,
+  "all_failed_cases_retained": true,
+  "parent_cpu_quota_cores": 4
+}

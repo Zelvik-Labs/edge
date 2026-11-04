@@ -1,0 +1,76 @@
+{
+  "harness_source": "eac073017173e748d46b64482d905d63d4119415",
+  "baseline": "ba474745fae3c08332d9e0862d9d5650550664ff",
+  "runtime_changes": [
+    "Cargo.toml",
+    "src/client_ip.rs",
+    "src/config.rs",
+    "src/lb_factory.rs",
+    "src/memory_governor.rs",
+    "src/memory_governor/snapshot_sequence.rs",
+    "src/metrics.rs",
+    "src/metrics/daily.rs",
+    "src/proxy.rs",
+    "src/quic_udp_demux.rs",
+    "src/udp_proxy.rs"
+  ],
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1",
+  "rustflags": "-C target-cpu=x86-64-v2",
+  "variants": {
+    "before": {
+      "source": "ba474745fae3c08332d9e0862d9d5650550664ff",
+      "binaries": {
+        "Zelvik-Edge": {
+          "bytes": 45053048,
+          "sha256": "6fca846c5ef2b975f98967b1f2e23ec4c9dc6cb797999fe053a5f952506a0e38"
+        },
+        "issue34-controller": {
+          "bytes": 4326224,
+          "sha256": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2"
+        }
+      },
+      "source_hashes": {
+        "Cargo.toml": "b70e1fa34407a22fd85b697edd158954ff286c1e3b35affbca26b32d38b0e626",
+        "src/client_ip.rs": "bc89728471d5359749a60a1ab17a0f9149a71fcb40ab30510fef7ce300c9d6aa",
+        "src/config.rs": "dd45682e32168c6967aaf0306b32bafff45d397b5f920212978646a966831147",
+        "src/lb_factory.rs": "0aaa2305152701205d9dc24d1535dffc3c3bf2b0b8d12eb0e1a3ae9723226592",
+        "src/memory_governor.rs": "abd71cdbfb1773911ec34276c79fcaea850000faaa9551906d4f579fbce6bf4c",
+        "src/memory_governor/snapshot_sequence.rs": null,
+        "src/metrics.rs": "a010c87318c1d697c3b542519c38c4f44592947f75bb0fac494667d4307a2bc5",
+        "src/metrics/daily.rs": "afb042ceec0b228ef88ebdcb44dae2f83498a58f5c79f94359db7836a63d8b2b",
+        "src/proxy.rs": "27280369106649fcdd2427e4ceca4b0b04a662390045a883c976ad032698641e",
+        "src/quic_udp_demux.rs": "b638920db64d3ed47e780d6a9c8d101054cf9f7c38d74bce67f15222999e7493",
+        "src/udp_proxy.rs": "44b4abcaea2a9b6c3f11196e91b4ffc8ed65dba352a0281ea4f29391351778b7",
+        "Cargo.lock": "e7e9e1ae18947ab0f94c146545d24be7d014a45d0749584675e8a4931a9962c6"
+      }
+    },
+    "after": {
+      "source": "59b9c849c2678b1c0f7aaae4ad0ffc23faeb5d9f",
+      "binaries": {
+        "Zelvik-Edge": {
+          "bytes": 45064256,
+          "sha256": "724d82b6c9bf1d495c8293710b2c729323348b44425b7a5b5075bc56a8ecda5f"
+        },
+        "issue34-controller": {
+          "bytes": 4326224,
+          "sha256": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2"
+        }
+      },
+      "source_hashes": {
+        "Cargo.toml": "61f466f9bbb9aaf1db34a6c25d494649ae2579be72237e14769caf747f3c5e22",
+        "src/client_ip.rs": "417337695d13a019b8f617998e4a8e1e8ffbfcf979bc0b6d277be1a8ddd1649d",
+        "src/config.rs": "fe99062dac91f9d8095797b5d930fe99d64517497b3889ad3968d00060699420",
+        "src/lb_factory.rs": "a722cebb2dc1a08f0317a2f0249df3f395e203d7ac99dd7e38ba8b5b711f5a17",
+        "src/memory_governor.rs": "aa06c87a1c65d2246429fdba95670f9eea07ebda0fd63fe7dd108f8e29c5bb45",
+        "src/memory_governor/snapshot_sequence.rs": "43111fc93562dbcb211ffd1606134c8eb9fd8e3833445afb491a1a73c82fde0f",
+        "src/metrics.rs": "4d3cb092600508dd69131eb77baf4973540e79da08b47feaf36edf762e4129d8",
+        "src/metrics/daily.rs": "e50fefb01d421e329c3410dbd331c85c62015116033a0115982df34e99c2e52f",
+        "src/proxy.rs": "03a84d9e0e4e654340eeb14fd321ed9899fa845b26f267b6376d8074f0fd6347",
+        "src/quic_udp_demux.rs": "08914bed4bd4b945cb36a32de9ba78c441e9976a4c4ff28aeb8b8f9af655f15f",
+        "src/udp_proxy.rs": "7d9840f6b58bd934e2a6e17561af8f8d30b50caf70ea75bbacbe353ed7a6dc75",
+        "Cargo.lock": "e7e9e1ae18947ab0f94c146545d24be7d014a45d0749584675e8a4931a9962c6"
+      }
+    }
+  },
+  "builds_complete_before_measurement": true
+}

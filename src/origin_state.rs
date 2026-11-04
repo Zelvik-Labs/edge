@@ -232,6 +232,13 @@ pub fn start_origin_state_cleanup_task() {
     });
 }
 
+fn now_seconds() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -296,11 +303,4 @@ mod tests {
         counters.remove_idle();
         assert!(counters.counts.is_empty());
     }
-}
-
-fn now_seconds() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs() as i64)
-        .unwrap_or(0)
 }

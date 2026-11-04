@@ -1,11 +1,11 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Barrier};
+use std::thread;
 use zelvik_edge::config_apply::ConfigApplyLimits;
 use zelvik_edge::memory_governor::{
     AdmissionClass, MEMORY_GOVERNOR, MemoryPressureLevel, reported_memory_totals,
 };
 use zelvik_edge::memory_plan::current_memory_plan;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Barrier};
-use std::thread;
 
 struct ActiveGuard {
     active: Arc<AtomicU64>,
@@ -171,10 +171,14 @@ fn concurrent_mixed_admission_never_exceeds_per_class_limits() {
                         let current = active[idx].fetch_add(1, Ordering::AcqRel) + 1;
                         peak_active[idx].fetch_max(current, Ordering::AcqRel);
                         permits.push((
-                            permit,
+                            // Tuple fields drop in declaration order. End the
+                            // observed interval before returning the permit;
+                            // otherwise another thread can acquire it while
+                            // this test still counts the previous holder.
                             ActiveGuard {
                                 active: Arc::clone(&active[idx]),
                             },
+                            permit,
                         ));
                     }
                 }

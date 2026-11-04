@@ -1,0 +1,12 @@
+{
+  "source": "4ed520090c4b26260e6a9acdbc8ecca939e5c845",
+  "run": 41777560016,
+  "workflow_conclusion": "failure",
+  "failure": "incorrect equality assertion between unit-test and production layouts",
+  "production_frame_bytes": 5736,
+  "unit_frame_bytes": 5808,
+  "unit_probe_result": "1 passed, 1373 filtered out",
+  "native32": "not run after diagnostic assertion failed",
+  "binary_sha256": "cde746d22c4961a3ed9444ba623f935b5fe12a3bf4032beec9cd55a5ee82f2d7",
+  "unit_log_sha256": "1c5361cad8f189888052c4c4d98bf86873fc8e9daf22de41ebb7c5708342a61b"
+}

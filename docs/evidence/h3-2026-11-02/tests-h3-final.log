@@ -1,0 +1,41 @@
+      ┌─────────┐  mr boxington
+     ╱ ═══════ ╱│
+    ╱─────────╱ │
+    │ •    (◉)│≡│
+    │  ◟▄▄▄◞  │ ╱
+    │   ◀◆▶   │╱
+    └─────────┘
+    Finished `test` profile [optimized] target(s) in 1.09s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-75af530afd7038e8)
+
+running 27 tests
+test h3_downstream::tests::h3_body_timeout_preserves_stream_for_later_fin ... ok
+test h3_downstream::tests::h3_bodyless_cache_proof_requires_fin_not_method_or_content_length ... ok
+test h3_downstream::tests::h3_cache_probe_does_not_admit_trailers_or_lose_resets ... ok
+test h3_downstream::tests::h3_request_adapter_preserves_duplicate_headers ... ok
+test h3_downstream::tests::h3_cache_probe_preserves_body_and_retry_accounting_even_with_false_zero_length ... ok
+test http3_proxy_manager::tests::h3_final_resort_closes_oldest_and_guard_cleans_registry ... ok
+test http3_proxy_manager::tests::h3_incoming_refuse_is_prompt ... ok
+test http3_proxy_manager::tests::h3_retry_budget_bounded ... ok
+test http3_proxy_manager::tests::h3_retry_required_matrix ... ok
+test http3_proxy_manager::tests::h3_retry_roundtrip_validates_without_loop ... ok
+test http3_proxy_manager::tests::h3_incoming_ignore_is_silent ... ok
+test memory_reclaim::tests::high_and_critical_reclaim_sweep_origin_h3_pool ... ok
+test origin_h3_pool::tests::idle_expiry_boundary_matches_pool_ttl ... ok
+test origin_h3_pool::tests::owner_sweep_is_callable_without_pooled_entries ... ok
+test origin_h3_pool::tests::pool_sweep_removes_stale_entries_without_panicking ... ok
+test origin_h3_state::tests::capacity_refuses_new_entries_after_idle_sweep_cannot_free_space ... ok
+test origin_h3_state::tests::failure_marks_unsupported_and_backs_off ... ok
+test origin_h3_state::tests::idle_entries_are_swept ... ok
+test origin_h3_state::tests::success_marks_supported_and_allows_attempts ... ok
+test origin_h3_state::tests::unknown_origin_is_attempted ... ok
+test quic_udp_demux::tests::generic_h3_fallback_requires_bound_http3_host ... ok
+test quic_udp_demux::tests::h3_queue_byte_accounting_releases_when_datagram_is_dropped ... ok
+test quic_udp_demux::tests::native_h3_routes_do_not_exhaust_a_nat_address_window ... ok
+test quic_udp_demux::tests::non_h3_quic_alpns_do_not_match_http3 ... ok
+test quic_udp_demux::tests::shared_quinn_udp_socket_receives_h3_datagram_and_releases_budget ... ok
+test xdp::tests::xdp_dataplane_supports_tcp_udp_and_h3_proxy_protocols ... ok
+test http3_proxy_manager::tests::h3_run_endpoint_retry_gate_and_budget ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 1256 filtered out; finished in 9.59s
+

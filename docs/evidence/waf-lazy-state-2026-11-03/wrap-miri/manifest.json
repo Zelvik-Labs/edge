@@ -1,0 +1,18 @@
+{
+  "artifact_id": 13240729658,
+  "archive": "raw.zip",
+  "archive_bytes": 1646,
+  "archive_sha256": "f7dedd3294d00da46810f365cb0bff30b102b41a35f723e5627206582a65c8c9",
+  "files": [
+    {
+      "path": "setup.log",
+      "bytes": 3948,
+      "sha256": "b58fed5630c5510b5142bbf1df021e4641d09867779a32d34089961b41907acd"
+    },
+    {
+      "path": "test.log",
+      "bytes": 2035,
+      "sha256": "4f8e5adc27db8b615604ad572a4c23a5154a27069c5885dae4f3dc0b830fcdba"
+    }
+  ]
+}

@@ -1,0 +1,140 @@
+{
+  "candidate-smoke": [
+    {
+      "protocol": "h3",
+      "state": "miss",
+      "status": "passed",
+      "success": 128,
+      "failed": 0,
+      "new_connections": 32,
+      "origin_requests": 128
+    },
+    {
+      "protocol": "h3",
+      "state": "hit",
+      "status": "passed",
+      "success": 7934,
+      "failed": 0,
+      "new_connections": 32,
+      "origin_requests": 0
+    },
+    {
+      "protocol": "h3",
+      "state": "off",
+      "status": "passed",
+      "success": 7950,
+      "failed": 0,
+      "new_connections": 32,
+      "origin_requests": 7950
+    }
+  ],
+  "candidate-large": [
+    {
+      "protocol": "h3",
+      "state": "miss",
+      "status": "passed",
+      "success": 128,
+      "failed": 0,
+      "new_connections": 32,
+      "origin_requests": 128
+    },
+    {
+      "protocol": "h3",
+      "state": "hit",
+      "status": "passed",
+      "success": 2308,
+      "failed": 0,
+      "new_connections": 32,
+      "origin_requests": 0
+    }
+  ],
+  "candidate-fresh": [
+    {
+      "protocol": "h3",
+      "state": "off",
+      "status": "passed",
+      "success": 2048,
+      "failed": 0,
+      "new_connections": 2048,
+      "origin_requests": 2048
+    },
+    {
+      "protocol": "h3",
+      "state": "hit",
+      "status": "passed",
+      "success": 2048,
+      "failed": 0,
+      "new_connections": 2048,
+      "origin_requests": 0
+    }
+  ],
+  "batched-smoke": [
+    {
+      "protocol": "h3",
+      "state": "miss",
+      "status": "passed",
+      "success": 128,
+      "failed": 0,
+      "new_connections": 32,
+      "origin_requests": 128
+    },
+    {
+      "protocol": "h3",
+      "state": "hit",
+      "status": "passed",
+      "success": 18599,
+      "failed": 0,
+      "new_connections": 32,
+      "origin_requests": 0
+    },
+    {
+      "protocol": "h3",
+      "state": "off",
+      "status": "passed",
+      "success": 8405,
+      "failed": 0,
+      "new_connections": 32,
+      "origin_requests": 8405
+    }
+  ],
+  "batched-large": [
+    {
+      "protocol": "h3",
+      "state": "miss",
+      "status": "passed",
+      "success": 128,
+      "failed": 0,
+      "new_connections": 32,
+      "origin_requests": 128
+    },
+    {
+      "protocol": "h3",
+      "state": "hit",
+      "status": "passed",
+      "success": 2094,
+      "failed": 0,
+      "new_connections": 32,
+      "origin_requests": 0
+    }
+  ],
+  "batched-fresh": [
+    {
+      "protocol": "h3",
+      "state": "off",
+      "status": "passed",
+      "success": 2048,
+      "failed": 0,
+      "new_connections": 2048,
+      "origin_requests": 2048
+    },
+    {
+      "protocol": "h3",
+      "state": "hit",
+      "status": "passed",
+      "success": 2048,
+      "failed": 0,
+      "new_connections": 2048,
+      "origin_requests": 0
+    }
+  ]
+}

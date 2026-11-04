@@ -1,0 +1,14 @@
+{
+  "runtime_revision": "562d49c1b1dc2f754acaa33f842bb266911fbcfb",
+  "sustained_harness_revision": "1911e52f0ff4835845e6d01a1bd5b65f8a5cab1c",
+  "git_objects": {
+    "src": "9fc0b0bb2f180e0156349c9afec1fe0891ee2b57",
+    "crates": "b6c740d0b156ec808d663cd85097f23925bae462",
+    "Cargo.toml": "97f8fff05a4e24d1711c46e7d18bb531b497260f",
+    "Cargo.lock": "0595f7752f7cc80ebba820a8d866ebbffc269134"
+  },
+  "changes": [
+    ".github/workflows/h3-native-comparison.yml",
+    "scripts/perf/http-state/run-ci.sh"
+  ]
+}

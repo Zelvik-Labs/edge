@@ -1,0 +1,10 @@
+{
+  "removed": "ignored local udp/extracted",
+  "bytes_in_manifest": 90119288,
+  "archive_sha256": "7df64f2f0a9c251288423af9b0b979dc8df7bf59508ab49e9e114dd2384e349d",
+  "archive_retained": "udp-raw.zip",
+  "restore": "python3 -m zipfile -e udp-raw.zip /path/to/new/extraction",
+  "free_before": 5389074432,
+  "free_after": 5486309376,
+  "prior_archive_and_all_file_sha_validation": "archive-validation.json"
+}

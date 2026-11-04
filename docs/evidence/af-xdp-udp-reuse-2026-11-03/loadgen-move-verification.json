@@ -1,0 +1,7 @@
+{
+  "same_source_sha256_as_measured_commit": true,
+  "same_local_binary_bytes": true,
+  "binary_sha256": "7d7072ed25c34612213d3c46ced41bce9e24832fefcdf07cd62faf7a5469e8f0",
+  "tests": "5passed0failed",
+  "source_path": "benches/support/udp-bench.c"
+}

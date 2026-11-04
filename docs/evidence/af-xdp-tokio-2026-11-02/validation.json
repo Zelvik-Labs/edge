@@ -1,0 +1,10 @@
+{
+  "local_tests_passed": 8,
+  "local_tests_ignored": 0,
+  "clippy": "passed; no Rust/C compiler warning suppression",
+  "release_build": "passed",
+  "local_native_status": "EAFNOSUPPORT97, not a native functional or performance pass",
+  "denied_cases": 11,
+  "interface_cleanup": true,
+  "candidate_binary_sha256": "cc07c9a3dab4b67f16a461daa97045de58699ebf460f33b9b09ecb1b9012a298"
+}

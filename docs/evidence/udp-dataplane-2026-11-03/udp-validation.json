@@ -1,0 +1,827 @@
+{
+  "passed": true,
+  "source_commit": "b8c72e4a7a68c3c5b62cb77f6f40c8e30c3d0a76",
+  "checked_cases": 136,
+  "rtt_samples": 27200000,
+  "failures": [],
+  "same_binaries_and_sources_across_budgets": true,
+  "checks": [
+    {
+      "budget": 1,
+      "case": "direct-c1-b64",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b64-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b64-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b64-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b64-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b64-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b64-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b64-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b64-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b64-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b64-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b64-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b64-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b64-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b64-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b64-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b64-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "direct-c1-b1200",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b1200-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b1200-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b1200-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b1200-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b1200-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b1200-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b1200-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b1200-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b1200-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b1200-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b1200-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b1200-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b1200-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b1200-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b1200-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b1200-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 1,
+      "case": "direct-c16-b64",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b64-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b64-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b64-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b64-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b64-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b64-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b64-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b64-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b64-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b64-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b64-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b64-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b64-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b64-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b64-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b64-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "direct-c16-b1200",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b1200-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b1200-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b1200-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b1200-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b1200-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b1200-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b1200-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b1200-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b1200-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b1200-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b1200-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b1200-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b1200-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b1200-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b1200-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b1200-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "direct-c1-b64",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b64-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b64-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b64-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b64-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b64-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b64-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b64-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b64-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b64-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b64-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b64-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b64-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b64-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b64-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b64-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b64-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "direct-c1-b1200",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b1200-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b1200-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b1200-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b1200-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b1200-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b1200-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b1200-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b1200-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b1200-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b1200-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b1200-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b1200-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b1200-openresty",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b1200-afxdp",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b1200-nginx",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b1200-kernel",
+      "rtt_samples": 80000,
+      "requests_including_warmup": 81000
+    },
+    {
+      "budget": 2,
+      "case": "direct-c16-b64",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b64-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b64-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b64-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b64-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b64-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b64-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b64-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b64-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b64-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b64-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b64-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b64-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b64-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b64-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b64-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b64-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "direct-c16-b1200",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b1200-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b1200-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b1200-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b1200-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b1200-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b1200-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b1200-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b1200-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b1200-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b1200-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b1200-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b1200-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b1200-openresty",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b1200-afxdp",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b1200-nginx",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b1200-kernel",
+      "rtt_samples": 320000,
+      "requests_including_warmup": 336000
+    }
+  ],
+  "scope": "independent recomputation of retained outputs; full byte/sequence verification happened in the pinned C client, not reconstructed from RTTs"
+}

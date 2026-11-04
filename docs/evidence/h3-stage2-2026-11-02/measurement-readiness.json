@@ -1,0 +1,8 @@
+{
+  "required_checks_passed": true,
+  "intended_benchmark_artifact_completed": true,
+  "supplemental_cargo_build_cancelled": true,
+  "supplemental_cargo_returncode": 130,
+  "benchmark_sha256": "f1ae299da305471940d5af9bac6f8729f1acf3055de2879af403ee9e8402fb1f",
+  "no_active_rust_compilers": true
+}

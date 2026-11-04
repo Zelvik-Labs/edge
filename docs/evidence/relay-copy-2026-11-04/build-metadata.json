@@ -1,0 +1,38 @@
+{
+  "source": "9992eab3502a55c521c5cea630b2ce377137e3d6",
+  "baseline": "b4d635519973b2ec9aa24a533129fdbb86d3fc4f",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "scope": "exact one-direction copy loops; fixed 64KiB buffer, pressure off, atomic metric fixture, in-memory I/O; not Node throughput",
+  "variants": {
+    "baseline": {
+      "binaries": {
+        "timing": "a61895ea1f75ba7f3458980ad1ab97a327356ed858f0b2d1821a31ff58030064",
+        "allocations": "1a084a0e70a01ffe0d28a31465771ed948be3a9786ee50b7bb0cccaf9818143e"
+      },
+      "sources": {
+        "Cargo.lock": "54faf6b0b0f1839284689abc2b01922474ae9f2d37e623675d106683504f474e",
+        "Cargo.toml": "8e45531775a838f7020d06da830ac68061a92813e7e0d1c5a7474e8363b6c884",
+        "original.rs": "bb190b55316759153aa26b0311be136a1b27f0288226fcde47b334a62212d746",
+        "src/allocator.rs": "e58d551ed0afbbc1767da29b8726ffda84032eec0132b1faa872c93cd8cc4a37",
+        "src/main.rs": "49442cc56f0ed0cd9c2a6f2835baf528cfd8f440721d261748e8f3f19bd465ef",
+        "src/production.rs": "b25f2da39d0b33b7045220c8d6bbfe96c595096aa7a50129fc94c7d628fe6d44",
+        "src/counter.rs": "42f962f98acbde186c429d8bb800015fc66aa20529f4ed03502d8f9da18b8dd2"
+      }
+    },
+    "candidate": {
+      "binaries": {
+        "timing": "801890b8eed618d221adac1a04040611a31fba0e18e766998d84058c650a2391",
+        "allocations": "49fb04e90b54774f008b653a7f3c094901f20cef676c7f623016858984b92a38"
+      },
+      "sources": {
+        "Cargo.lock": "54faf6b0b0f1839284689abc2b01922474ae9f2d37e623675d106683504f474e",
+        "Cargo.toml": "d78230794fc986ccdeb688e2e51ccfd7b428196fff6b37d3d0bda8c6444e8ca6",
+        "original.rs": "68e5fede1e5bc361c88498f3901063ba65af9729d19c1856ac6129f5fd35a93e",
+        "src/allocator.rs": "e58d551ed0afbbc1767da29b8726ffda84032eec0132b1faa872c93cd8cc4a37",
+        "src/main.rs": "49442cc56f0ed0cd9c2a6f2835baf528cfd8f440721d261748e8f3f19bd465ef",
+        "src/production.rs": "8c6ad26faa94fb681863bc85063c005be45afb6e220ab039c72d54c250307a48",
+        "src/counter.rs": "98886cd9fd998f8e34867b916a7d014ff03a78633215e9deb8c82209a6ac14ed"
+      }
+    }
+  }
+}

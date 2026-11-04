@@ -1,0 +1,14 @@
+{
+  "source_files_per_version": 177,
+  "binary_hashes": 2,
+  "red_expected_failures": 2,
+  "passed_unique": 411,
+  "ignored_unique": 1,
+  "functional_contracts": 12,
+  "before_warning_count": 10897,
+  "after_warning_count": 0,
+  "raw_hashes_match": true,
+  "live_source_matches_after": true,
+  "release_capacity_completed": false,
+  "no_runtime_secrets": true
+}

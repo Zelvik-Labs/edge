@@ -1,0 +1,101 @@
+{
+  "source": "11d4d6f7420d853f34161a472804179002d7d11e",
+  "scope": "unpolled real callback construction/drop only; not request execution, allocation counts or node capacity",
+  "raw_blocks": 120,
+  "measured_constructions": 12000000,
+  "host_steal_fraction": 0.0,
+  "callbacks": {
+    "early_request_filter": {
+      "frame_bytes": 32,
+      "alignment": 8,
+      "median_ns": 10.32536,
+      "min_ns": 10.19771,
+      "max_ns": 18.41753
+    },
+    "logging": {
+      "frame_bytes": 40,
+      "alignment": 8,
+      "median_ns": 5.9725,
+      "min_ns": 5.80608,
+      "max_ns": 6.28047
+    },
+    "request_filter": {
+      "frame_bytes": 5736,
+      "alignment": 8,
+      "median_ns": 27.311860000000003,
+      "min_ns": 26.96546,
+      "max_ns": 53.63487
+    },
+    "response_filter": {
+      "frame_bytes": 40,
+      "alignment": 8,
+      "median_ns": 5.95341,
+      "min_ns": 5.8701,
+      "max_ns": 6.12629
+    },
+    "upstream_peer": {
+      "frame_bytes": 32,
+      "alignment": 8,
+      "median_ns": 5.762705,
+      "min_ns": 5.61974,
+      "max_ns": 6.01568
+    },
+    "upstream_response_filter": {
+      "frame_bytes": 40,
+      "alignment": 8,
+      "median_ns": 5.968185,
+      "min_ns": 5.77082,
+      "max_ns": 6.17978
+    }
+  },
+  "request_phases": {
+    "phases": {
+      "body_waf": {
+        "alignment": 8,
+        "frame_bytes": 5600
+      },
+      "context": {
+        "alignment": 8,
+        "frame_bytes": 2560
+      },
+      "early_response": {
+        "alignment": 8,
+        "frame_bytes": 1456
+      },
+      "feature_policy": {
+        "alignment": 8,
+        "frame_bytes": 1168
+      },
+      "lightweight_waf": {
+        "alignment": 8,
+        "frame_bytes": 1992
+      },
+      "limits": {
+        "alignment": 8,
+        "frame_bytes": 1912
+      },
+      "local_service": {
+        "alignment": 8,
+        "frame_bytes": 2280
+      },
+      "protocol_policy": {
+        "alignment": 8,
+        "frame_bytes": 2344
+      },
+      "rewrite": {
+        "alignment": 8,
+        "frame_bytes": 688
+      },
+      "security_state": {
+        "alignment": 8,
+        "frame_bytes": 32
+      },
+      "status_response": {
+        "alignment": 8,
+        "frame_bytes": 1768
+      }
+    },
+    "request_filter_frame_bytes": 5736,
+    "scope": "unpolled real phase frame layouts; not CPU or throughput"
+  }
+}

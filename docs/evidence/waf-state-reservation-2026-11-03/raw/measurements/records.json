@@ -1,0 +1,2657 @@
+[
+  {
+    "allocator": "Rust default/System; not Edge mimalloc",
+    "capacity_requested": 65536,
+    "construction_ns": 9605804,
+    "empty_lookup_ns": 4329971,
+    "empty_retain_ns": 449838,
+    "empty_visit_ns": 622158,
+    "first_write_ns": [
+      361,
+      100,
+      50,
+      70,
+      60,
+      80,
+      61
+    ],
+    "hit_lookup_ns": 2427560,
+    "live_entries": 7,
+    "lookup_iterations": 200000,
+    "page_size": 4096,
+    "physical_slots_per_table": 65536,
+    "repeat": 1,
+    "rss_before": 2183168,
+    "rss_empty": 20557824,
+    "rss_live_empty_delta_bytes": 18374656,
+    "rss_one_entry_per_table": 20557824,
+    "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network",
+    "segments_per_table": 64,
+    "slot_alignment_bytes": 8,
+    "slot_payload_bytes_all_tables": 18350080,
+    "slot_size_bytes": 40,
+    "tables": 7,
+    "verified_hits": 200000,
+    "verified_misses": 200000,
+    "cpu_before": {
+      "monotonic_ns": 59930572826,
+      "proc": {
+        "cpu": [
+          5393,
+          3,
+          1972,
+          15143,
+          872,
+          0,
+          108,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1487,
+          1,
+          448,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1511,
+          0,
+          495,
+          3569,
+          275,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1397,
+          1,
+          516,
+          3601,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          997,
+          0,
+          512,
+          4206,
+          139,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "cpu_after": {
+      "monotonic_ns": 59950696762,
+      "proc": {
+        "cpu": [
+          5394,
+          3,
+          1973,
+          15147,
+          874,
+          0,
+          108,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1488,
+          1,
+          449,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1511,
+          0,
+          495,
+          3569,
+          277,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1397,
+          1,
+          516,
+          3603,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          997,
+          0,
+          512,
+          4208,
+          139,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "memory_before": {
+      "MemTotal": 16765386752,
+      "MemAvailable": 15438544896,
+      "cgroup_v2": {
+        "memory.max": null,
+        "memory.current": null
+      }
+    },
+    "child_user_seconds": 0.008838000000000002,
+    "child_system_seconds": 0.010801999999999999,
+    "steal_pct": 0.0,
+    "quality_flags": []
+  },
+  {
+    "allocator": "Rust default/System; not Edge mimalloc",
+    "capacity_requested": 1677721,
+    "construction_ns": 259352089,
+    "empty_lookup_ns": 4348826,
+    "empty_retain_ns": 25166805,
+    "empty_visit_ns": 24975137,
+    "first_write_ns": [
+      451,
+      120,
+      70,
+      60,
+      60,
+      60,
+      60
+    ],
+    "hit_lookup_ns": 2408174,
+    "live_entries": 7,
+    "lookup_iterations": 200000,
+    "page_size": 4096,
+    "physical_slots_per_table": 1677696,
+    "repeat": 1,
+    "rss_before": 2166784,
+    "rss_empty": 471945216,
+    "rss_live_empty_delta_bytes": 469778432,
+    "rss_one_entry_per_table": 471945216,
+    "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network",
+    "segments_per_table": 64,
+    "slot_alignment_bytes": 8,
+    "slot_payload_bytes_all_tables": 469754880,
+    "slot_size_bytes": 40,
+    "tables": 7,
+    "verified_hits": 200000,
+    "verified_misses": 200000,
+    "cpu_before": {
+      "monotonic_ns": 59956770340,
+      "proc": {
+        "cpu": [
+          5395,
+          3,
+          1973,
+          15148,
+          875,
+          0,
+          108,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1488,
+          1,
+          449,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1511,
+          0,
+          495,
+          3569,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1397,
+          1,
+          516,
+          3604,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          997,
+          0,
+          512,
+          4208,
+          139,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "cpu_after": {
+      "monotonic_ns": 60307134962,
+      "proc": {
+        "cpu": [
+          5415,
+          3,
+          2002,
+          15233,
+          879,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1500,
+          1,
+          472,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1518,
+          0,
+          496,
+          3595,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1398,
+          1,
+          518,
+          3636,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          515,
+          4236,
+          143,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "memory_before": {
+      "MemTotal": 16765386752,
+      "MemAvailable": 15438553088,
+      "cgroup_v2": {
+        "memory.max": null,
+        "memory.current": null
+      }
+    },
+    "child_user_seconds": 0.118607,
+    "child_system_seconds": 0.231236,
+    "steal_pct": 0.0,
+    "quality_flags": []
+  },
+  {
+    "allocator": "Rust default/System; not Edge mimalloc",
+    "capacity_requested": 8000000,
+    "construction_ns": 1100821037,
+    "empty_lookup_ns": 4397978,
+    "empty_retain_ns": 114815027,
+    "empty_visit_ns": 114184844,
+    "first_write_ns": [
+      691,
+      91,
+      60,
+      60,
+      50,
+      60,
+      60
+    ],
+    "hit_lookup_ns": 2515012,
+    "live_entries": 7,
+    "lookup_iterations": 200000,
+    "page_size": 4096,
+    "physical_slots_per_table": 8000000,
+    "repeat": 1,
+    "rss_before": 2129920,
+    "rss_empty": 2242691072,
+    "rss_live_empty_delta_bytes": 2240561152,
+    "rss_one_entry_per_table": 2242691072,
+    "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network",
+    "segments_per_table": 64,
+    "slot_alignment_bytes": 8,
+    "slot_payload_bytes_all_tables": 2240000000,
+    "slot_size_bytes": 40,
+    "tables": 7,
+    "verified_hits": 200000,
+    "verified_misses": 200000,
+    "cpu_before": {
+      "monotonic_ns": 60313845105,
+      "proc": {
+        "cpu": [
+          5415,
+          3,
+          2003,
+          15235,
+          879,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1500,
+          1,
+          473,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1518,
+          0,
+          496,
+          3595,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1398,
+          1,
+          518,
+          3637,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          515,
+          4237,
+          143,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "cpu_after": {
+      "monotonic_ns": 61799683449,
+      "proc": {
+        "cpu": [
+          5467,
+          3,
+          2103,
+          15675,
+          879,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1549,
+          1,
+          573,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1521,
+          0,
+          497,
+          3739,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1398,
+          1,
+          518,
+          3785,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          515,
+          4384,
+          143,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "memory_before": {
+      "MemTotal": 16765386752,
+      "MemAvailable": 15065141248,
+      "cgroup_v2": {
+        "memory.max": null,
+        "memory.current": null
+      }
+    },
+    "child_user_seconds": 0.482092,
+    "child_system_seconds": 1.00319,
+    "steal_pct": 0.0,
+    "quality_flags": []
+  },
+  {
+    "allocator": "Rust default/System; not Edge mimalloc",
+    "capacity_requested": 8000000,
+    "construction_ns": 1095606308,
+    "empty_lookup_ns": 4416262,
+    "empty_retain_ns": 118027307,
+    "empty_visit_ns": 117751965,
+    "first_write_ns": [
+      521,
+      100,
+      60,
+      50,
+      60,
+      60,
+      60
+    ],
+    "hit_lookup_ns": 2366917,
+    "live_entries": 7,
+    "lookup_iterations": 200000,
+    "page_size": 4096,
+    "physical_slots_per_table": 8000000,
+    "repeat": 2,
+    "rss_before": 2179072,
+    "rss_empty": 2242740224,
+    "rss_live_empty_delta_bytes": 2240561152,
+    "rss_one_entry_per_table": 2242740224,
+    "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network",
+    "segments_per_table": 64,
+    "slot_alignment_bytes": 8,
+    "slot_payload_bytes_all_tables": 2240000000,
+    "slot_size_bytes": 40,
+    "tables": 7,
+    "verified_hits": 200000,
+    "verified_misses": 200000,
+    "cpu_before": {
+      "monotonic_ns": 61807216393,
+      "proc": {
+        "cpu": [
+          5468,
+          3,
+          2103,
+          15678,
+          879,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1549,
+          1,
+          573,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1521,
+          0,
+          497,
+          3740,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1398,
+          1,
+          518,
+          3785,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          515,
+          4385,
+          143,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "cpu_after": {
+      "monotonic_ns": 63296264503,
+      "proc": {
+        "cpu": [
+          5514,
+          3,
+          2206,
+          16122,
+          879,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1596,
+          1,
+          676,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1521,
+          0,
+          497,
+          3888,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1398,
+          1,
+          518,
+          3934,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          515,
+          4534,
+          143,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "memory_before": {
+      "MemTotal": 16765386752,
+      "MemAvailable": 15022592000,
+      "cgroup_v2": {
+        "memory.max": null,
+        "memory.current": null
+      }
+    },
+    "child_user_seconds": 0.46189199999999997,
+    "child_system_seconds": 1.025759,
+    "steal_pct": 0.0,
+    "quality_flags": []
+  },
+  {
+    "allocator": "Rust default/System; not Edge mimalloc",
+    "capacity_requested": 1677721,
+    "construction_ns": 229126227,
+    "empty_lookup_ns": 4267636,
+    "empty_retain_ns": 23800962,
+    "empty_visit_ns": 23893885,
+    "first_write_ns": [
+      451,
+      100,
+      50,
+      60,
+      60,
+      60,
+      51
+    ],
+    "hit_lookup_ns": 2380793,
+    "live_entries": 7,
+    "lookup_iterations": 200000,
+    "page_size": 4096,
+    "physical_slots_per_table": 1677696,
+    "repeat": 2,
+    "rss_before": 2183168,
+    "rss_empty": 471961600,
+    "rss_live_empty_delta_bytes": 469778432,
+    "rss_one_entry_per_table": 471961600,
+    "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network",
+    "segments_per_table": 64,
+    "slot_alignment_bytes": 8,
+    "slot_payload_bytes_all_tables": 469754880,
+    "slot_size_bytes": 40,
+    "tables": 7,
+    "verified_hits": 200000,
+    "verified_misses": 200000,
+    "cpu_before": {
+      "monotonic_ns": 63303424132,
+      "proc": {
+        "cpu": [
+          5515,
+          3,
+          2206,
+          16124,
+          879,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1596,
+          1,
+          676,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1521,
+          0,
+          497,
+          3889,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1398,
+          1,
+          518,
+          3934,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          515,
+          4534,
+          143,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "cpu_after": {
+      "monotonic_ns": 63617708562,
+      "proc": {
+        "cpu": [
+          5525,
+          3,
+          2227,
+          16218,
+          879,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1607,
+          1,
+          697,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1521,
+          0,
+          497,
+          3920,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1398,
+          1,
+          518,
+          3966,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          515,
+          4566,
+          143,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "memory_before": {
+      "MemTotal": 16765386752,
+      "MemAvailable": 15071453184,
+      "cgroup_v2": {
+        "memory.max": null,
+        "memory.current": null
+      }
+    },
+    "child_user_seconds": 0.10591400000000006,
+    "child_system_seconds": 0.20783099999999965,
+    "steal_pct": 0.0,
+    "quality_flags": []
+  },
+  {
+    "allocator": "Rust default/System; not Edge mimalloc",
+    "capacity_requested": 65536,
+    "construction_ns": 9193796,
+    "empty_lookup_ns": 4461356,
+    "empty_retain_ns": 744877,
+    "empty_visit_ns": 892682,
+    "first_write_ns": [
+      441,
+      100,
+      60,
+      51,
+      61,
+      60,
+      71
+    ],
+    "hit_lookup_ns": 2424734,
+    "live_entries": 7,
+    "lookup_iterations": 200000,
+    "page_size": 4096,
+    "physical_slots_per_table": 65536,
+    "repeat": 2,
+    "rss_before": 2174976,
+    "rss_empty": 20549632,
+    "rss_live_empty_delta_bytes": 18374656,
+    "rss_one_entry_per_table": 20549632,
+    "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network",
+    "segments_per_table": 64,
+    "slot_alignment_bytes": 8,
+    "slot_payload_bytes_all_tables": 18350080,
+    "slot_size_bytes": 40,
+    "tables": 7,
+    "verified_hits": 200000,
+    "verified_misses": 200000,
+    "cpu_before": {
+      "monotonic_ns": 63625237269,
+      "proc": {
+        "cpu": [
+          5525,
+          3,
+          2228,
+          16220,
+          879,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1607,
+          1,
+          697,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1521,
+          0,
+          497,
+          3921,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1398,
+          1,
+          518,
+          3966,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          515,
+          4566,
+          143,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "cpu_after": {
+      "monotonic_ns": 63645462934,
+      "proc": {
+        "cpu": [
+          5526,
+          3,
+          2229,
+          16226,
+          879,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1608,
+          1,
+          698,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1521,
+          0,
+          497,
+          3923,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1398,
+          1,
+          518,
+          3968,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          515,
+          4568,
+          143,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "memory_before": {
+      "MemTotal": 16765386752,
+      "MemAvailable": 15071510528,
+      "cgroup_v2": {
+        "memory.max": null,
+        "memory.current": null
+      }
+    },
+    "child_user_seconds": 0.010885000000000034,
+    "child_system_seconds": 0.00890600000000008,
+    "steal_pct": 0.0,
+    "quality_flags": []
+  },
+  {
+    "allocator": "Rust default/System; not Edge mimalloc",
+    "capacity_requested": 65536,
+    "construction_ns": 9222440,
+    "empty_lookup_ns": 4377610,
+    "empty_retain_ns": 568609,
+    "empty_visit_ns": 854641,
+    "first_write_ns": [
+      441,
+      101,
+      60,
+      60,
+      60,
+      60,
+      60
+    ],
+    "hit_lookup_ns": 2373709,
+    "live_entries": 7,
+    "lookup_iterations": 200000,
+    "page_size": 4096,
+    "physical_slots_per_table": 65536,
+    "repeat": 3,
+    "rss_before": 2187264,
+    "rss_empty": 20561920,
+    "rss_live_empty_delta_bytes": 18374656,
+    "rss_one_entry_per_table": 20561920,
+    "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network",
+    "segments_per_table": 64,
+    "slot_alignment_bytes": 8,
+    "slot_payload_bytes_all_tables": 18350080,
+    "slot_size_bytes": 40,
+    "tables": 7,
+    "verified_hits": 200000,
+    "verified_misses": 200000,
+    "cpu_before": {
+      "monotonic_ns": 63652205597,
+      "proc": {
+        "cpu": [
+          5527,
+          3,
+          2229,
+          16228,
+          879,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1608,
+          1,
+          698,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1521,
+          0,
+          497,
+          3924,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1398,
+          1,
+          518,
+          3969,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          515,
+          4569,
+          143,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "cpu_after": {
+      "monotonic_ns": 63672222384,
+      "proc": {
+        "cpu": [
+          5528,
+          3,
+          2230,
+          16234,
+          879,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1609,
+          1,
+          700,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1521,
+          0,
+          497,
+          3926,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1398,
+          1,
+          518,
+          3971,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          515,
+          4571,
+          143,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "memory_before": {
+      "MemTotal": 16765386752,
+      "MemAvailable": 15071510528,
+      "cgroup_v2": {
+        "memory.max": null,
+        "memory.current": null
+      }
+    },
+    "child_user_seconds": 0.008795999999999804,
+    "child_system_seconds": 0.010752000000000095,
+    "steal_pct": 0.0,
+    "quality_flags": []
+  },
+  {
+    "allocator": "Rust default/System; not Edge mimalloc",
+    "capacity_requested": 1677721,
+    "construction_ns": 228455197,
+    "empty_lookup_ns": 4347363,
+    "empty_retain_ns": 23742803,
+    "empty_visit_ns": 24846969,
+    "first_write_ns": [
+      451,
+      100,
+      60,
+      61,
+      51,
+      60,
+      60
+    ],
+    "hit_lookup_ns": 2366536,
+    "live_entries": 7,
+    "lookup_iterations": 200000,
+    "page_size": 4096,
+    "physical_slots_per_table": 1677696,
+    "repeat": 3,
+    "rss_before": 2191360,
+    "rss_empty": 471969792,
+    "rss_live_empty_delta_bytes": 469778432,
+    "rss_one_entry_per_table": 471969792,
+    "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network",
+    "segments_per_table": 64,
+    "slot_alignment_bytes": 8,
+    "slot_payload_bytes_all_tables": 469754880,
+    "slot_size_bytes": 40,
+    "tables": 7,
+    "verified_hits": 200000,
+    "verified_misses": 200000,
+    "cpu_before": {
+      "monotonic_ns": 63678941142,
+      "proc": {
+        "cpu": [
+          5528,
+          3,
+          2231,
+          16236,
+          879,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1610,
+          1,
+          700,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1521,
+          0,
+          497,
+          3926,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1398,
+          1,
+          518,
+          3972,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          515,
+          4572,
+          143,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "cpu_after": {
+      "monotonic_ns": 63993473294,
+      "proc": {
+        "cpu": [
+          5539,
+          3,
+          2251,
+          16330,
+          879,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1620,
+          1,
+          721,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1522,
+          0,
+          497,
+          3957,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1398,
+          1,
+          518,
+          4003,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          515,
+          4603,
+          143,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "memory_before": {
+      "MemTotal": 16765386752,
+      "MemAvailable": 15071510528,
+      "cgroup_v2": {
+        "memory.max": null,
+        "memory.current": null
+      }
+    },
+    "child_user_seconds": 0.10600600000000004,
+    "child_system_seconds": 0.20801000000000025,
+    "steal_pct": 0.0,
+    "quality_flags": []
+  },
+  {
+    "allocator": "Rust default/System; not Edge mimalloc",
+    "capacity_requested": 8000000,
+    "construction_ns": 1095845594,
+    "empty_lookup_ns": 4444625,
+    "empty_retain_ns": 115710164,
+    "empty_visit_ns": 114340945,
+    "first_write_ns": [
+      471,
+      100,
+      60,
+      60,
+      50,
+      61,
+      60
+    ],
+    "hit_lookup_ns": 2395670,
+    "live_entries": 7,
+    "lookup_iterations": 200000,
+    "page_size": 4096,
+    "physical_slots_per_table": 8000000,
+    "repeat": 3,
+    "rss_before": 2183168,
+    "rss_empty": 2242744320,
+    "rss_live_empty_delta_bytes": 2240561152,
+    "rss_one_entry_per_table": 2242744320,
+    "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network",
+    "segments_per_table": 64,
+    "slot_alignment_bytes": 8,
+    "slot_payload_bytes_all_tables": 2240000000,
+    "slot_size_bytes": 40,
+    "tables": 7,
+    "verified_hits": 200000,
+    "verified_misses": 200000,
+    "cpu_before": {
+      "monotonic_ns": 64001116373,
+      "proc": {
+        "cpu": [
+          5540,
+          3,
+          2252,
+          16333,
+          879,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1621,
+          1,
+          721,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1522,
+          0,
+          497,
+          3958,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1398,
+          1,
+          518,
+          4004,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          515,
+          4604,
+          143,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "cpu_after": {
+      "monotonic_ns": 65483810703,
+      "proc": {
+        "cpu": [
+          5591,
+          3,
+          2360,
+          16764,
+          879,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1668,
+          1,
+          822,
+          3765,
+          163,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1522,
+          0,
+          497,
+          4105,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1402,
+          1,
+          520,
+          4146,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          519,
+          4746,
+          143,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "memory_before": {
+      "MemTotal": 16765386752,
+      "MemAvailable": 15071510528,
+      "cgroup_v2": {
+        "memory.max": null,
+        "memory.current": null
+      }
+    },
+    "child_user_seconds": 0.465039,
+    "child_system_seconds": 1.0170879999999998,
+    "steal_pct": 0.0,
+    "quality_flags": []
+  },
+  {
+    "allocator": "Rust default/System; not Edge mimalloc",
+    "capacity_requested": 8000000,
+    "construction_ns": 1109099994,
+    "empty_lookup_ns": 4419228,
+    "empty_retain_ns": 111256932,
+    "empty_visit_ns": 110973273,
+    "first_write_ns": [
+      431,
+      101,
+      60,
+      50,
+      60,
+      50,
+      50
+    ],
+    "hit_lookup_ns": 2377948,
+    "live_entries": 7,
+    "lookup_iterations": 200000,
+    "page_size": 4096,
+    "physical_slots_per_table": 8000000,
+    "repeat": 4,
+    "rss_before": 2174976,
+    "rss_empty": 2242736128,
+    "rss_live_empty_delta_bytes": 2240561152,
+    "rss_one_entry_per_table": 2242736128,
+    "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network",
+    "segments_per_table": 64,
+    "slot_alignment_bytes": 8,
+    "slot_payload_bytes_all_tables": 2240000000,
+    "slot_size_bytes": 40,
+    "tables": 7,
+    "verified_hits": 200000,
+    "verified_misses": 200000,
+    "cpu_before": {
+      "monotonic_ns": 65626914135,
+      "proc": {
+        "cpu": [
+          5591,
+          3,
+          2364,
+          16793,
+          901,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1668,
+          1,
+          823,
+          3765,
+          176,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1522,
+          0,
+          498,
+          4118,
+          278,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1402,
+          1,
+          521,
+          4159,
+          294,
+          0,
+          19,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          521,
+          4750,
+          152,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "cpu_after": {
+      "monotonic_ns": 67116405347,
+      "proc": {
+        "cpu": [
+          5642,
+          3,
+          2472,
+          17198,
+          933,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1718,
+          1,
+          922,
+          3765,
+          176,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1522,
+          0,
+          504,
+          4230,
+          309,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1402,
+          1,
+          524,
+          4303,
+          295,
+          0,
+          20,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          521,
+          4898,
+          152,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "memory_before": {
+      "MemTotal": 16765386752,
+      "MemAvailable": 15156596736,
+      "cgroup_v2": {
+        "memory.max": null,
+        "memory.current": null
+      }
+    },
+    "child_user_seconds": 0.5009310000000002,
+    "child_system_seconds": 0.9878629999999995,
+    "steal_pct": 0.0,
+    "quality_flags": []
+  },
+  {
+    "allocator": "Rust default/System; not Edge mimalloc",
+    "capacity_requested": 1677721,
+    "construction_ns": 228171475,
+    "empty_lookup_ns": 4390284,
+    "empty_retain_ns": 24714662,
+    "empty_visit_ns": 24560886,
+    "first_write_ns": [
+      461,
+      90,
+      60,
+      50,
+      60,
+      51,
+      60
+    ],
+    "hit_lookup_ns": 2377135,
+    "live_entries": 7,
+    "lookup_iterations": 200000,
+    "page_size": 4096,
+    "physical_slots_per_table": 1677696,
+    "repeat": 4,
+    "rss_before": 2179072,
+    "rss_empty": 471957504,
+    "rss_live_empty_delta_bytes": 469778432,
+    "rss_one_entry_per_table": 471957504,
+    "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network",
+    "segments_per_table": 64,
+    "slot_alignment_bytes": 8,
+    "slot_payload_bytes_all_tables": 469754880,
+    "slot_size_bytes": 40,
+    "tables": 7,
+    "verified_hits": 200000,
+    "verified_misses": 200000,
+    "cpu_before": {
+      "monotonic_ns": 67124699188,
+      "proc": {
+        "cpu": [
+          5643,
+          3,
+          2472,
+          17200,
+          933,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1719,
+          1,
+          922,
+          3765,
+          176,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1522,
+          0,
+          504,
+          4231,
+          309,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1402,
+          1,
+          524,
+          4304,
+          295,
+          0,
+          20,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          521,
+          4899,
+          152,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "cpu_after": {
+      "monotonic_ns": 67440192735,
+      "proc": {
+        "cpu": [
+          5655,
+          3,
+          2492,
+          17294,
+          933,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1730,
+          1,
+          942,
+          3765,
+          176,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1522,
+          0,
+          504,
+          4262,
+          309,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1402,
+          1,
+          524,
+          4335,
+          295,
+          0,
+          20,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          521,
+          4930,
+          152,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "memory_before": {
+      "MemTotal": 16765386752,
+      "MemAvailable": 15113420800,
+      "cgroup_v2": {
+        "memory.max": null,
+        "memory.current": null
+      }
+    },
+    "child_user_seconds": 0.11793599999999982,
+    "child_system_seconds": 0.19689200000000007,
+    "steal_pct": 0.0,
+    "quality_flags": []
+  },
+  {
+    "allocator": "Rust default/System; not Edge mimalloc",
+    "capacity_requested": 65536,
+    "construction_ns": 9314922,
+    "empty_lookup_ns": 4379684,
+    "empty_retain_ns": 546377,
+    "empty_visit_ns": 939750,
+    "first_write_ns": [
+      511,
+      100,
+      50,
+      60,
+      51,
+      60,
+      60
+    ],
+    "hit_lookup_ns": 2363240,
+    "live_entries": 7,
+    "lookup_iterations": 200000,
+    "page_size": 4096,
+    "physical_slots_per_table": 65536,
+    "repeat": 4,
+    "rss_before": 2179072,
+    "rss_empty": 20553728,
+    "rss_live_empty_delta_bytes": 18374656,
+    "rss_one_entry_per_table": 20553728,
+    "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network",
+    "segments_per_table": 64,
+    "slot_alignment_bytes": 8,
+    "slot_payload_bytes_all_tables": 18350080,
+    "slot_size_bytes": 40,
+    "tables": 7,
+    "verified_hits": 200000,
+    "verified_misses": 200000,
+    "cpu_before": {
+      "monotonic_ns": 67448048440,
+      "proc": {
+        "cpu": [
+          5655,
+          3,
+          2492,
+          17297,
+          933,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1731,
+          1,
+          942,
+          3765,
+          176,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1522,
+          0,
+          504,
+          4263,
+          309,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1402,
+          1,
+          524,
+          4336,
+          295,
+          0,
+          20,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          521,
+          4931,
+          152,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "cpu_after": {
+      "monotonic_ns": 67468288512,
+      "proc": {
+        "cpu": [
+          5656,
+          3,
+          2493,
+          17303,
+          933,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1732,
+          1,
+          943,
+          3765,
+          176,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1522,
+          0,
+          504,
+          4265,
+          309,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1402,
+          1,
+          524,
+          4338,
+          295,
+          0,
+          20,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          521,
+          4933,
+          152,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "memory_before": {
+      "MemTotal": 16765386752,
+      "MemAvailable": 15181008896,
+      "cgroup_v2": {
+        "memory.max": null,
+        "memory.current": null
+      }
+    },
+    "child_user_seconds": 0.008885000000000254,
+    "child_system_seconds": 0.010860000000000092,
+    "steal_pct": 0.0,
+    "quality_flags": []
+  },
+  {
+    "allocator": "Rust default/System; not Edge mimalloc",
+    "capacity_requested": 65536,
+    "construction_ns": 9246535,
+    "empty_lookup_ns": 4468489,
+    "empty_retain_ns": 497366,
+    "empty_visit_ns": 762490,
+    "first_write_ns": [
+      612,
+      91,
+      60,
+      60,
+      50,
+      50,
+      50
+    ],
+    "hit_lookup_ns": 2377677,
+    "live_entries": 7,
+    "lookup_iterations": 200000,
+    "page_size": 4096,
+    "physical_slots_per_table": 65536,
+    "repeat": 5,
+    "rss_before": 2162688,
+    "rss_empty": 20537344,
+    "rss_live_empty_delta_bytes": 18374656,
+    "rss_one_entry_per_table": 20537344,
+    "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network",
+    "segments_per_table": 64,
+    "slot_alignment_bytes": 8,
+    "slot_payload_bytes_all_tables": 18350080,
+    "slot_size_bytes": 40,
+    "tables": 7,
+    "verified_hits": 200000,
+    "verified_misses": 200000,
+    "cpu_before": {
+      "monotonic_ns": 67475563586,
+      "proc": {
+        "cpu": [
+          5656,
+          3,
+          2493,
+          17305,
+          933,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1732,
+          1,
+          943,
+          3765,
+          176,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1522,
+          0,
+          504,
+          4265,
+          309,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1402,
+          1,
+          524,
+          4339,
+          295,
+          0,
+          20,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          521,
+          4934,
+          152,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "cpu_after": {
+      "monotonic_ns": 67495531321,
+      "proc": {
+        "cpu": [
+          5657,
+          3,
+          2494,
+          17311,
+          933,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1733,
+          1,
+          944,
+          3765,
+          176,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1522,
+          0,
+          504,
+          4267,
+          309,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1402,
+          1,
+          524,
+          4341,
+          295,
+          0,
+          20,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          521,
+          4936,
+          152,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "memory_before": {
+      "MemTotal": 16765386752,
+      "MemAvailable": 15181008896,
+      "cgroup_v2": {
+        "memory.max": null,
+        "memory.current": null
+      }
+    },
+    "child_user_seconds": 0.00974599999999981,
+    "child_system_seconds": 0.009746000000000699,
+    "steal_pct": 0.0,
+    "quality_flags": []
+  },
+  {
+    "allocator": "Rust default/System; not Edge mimalloc",
+    "capacity_requested": 1677721,
+    "construction_ns": 229595878,
+    "empty_lookup_ns": 4455285,
+    "empty_retain_ns": 24529337,
+    "empty_visit_ns": 24565995,
+    "first_write_ns": [
+      1933,
+      181,
+      60,
+      50,
+      60,
+      60,
+      60
+    ],
+    "hit_lookup_ns": 2467364,
+    "live_entries": 7,
+    "lookup_iterations": 200000,
+    "page_size": 4096,
+    "physical_slots_per_table": 1677696,
+    "repeat": 5,
+    "rss_before": 2162688,
+    "rss_empty": 471941120,
+    "rss_live_empty_delta_bytes": 469778432,
+    "rss_one_entry_per_table": 471941120,
+    "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network",
+    "segments_per_table": 64,
+    "slot_alignment_bytes": 8,
+    "slot_payload_bytes_all_tables": 469754880,
+    "slot_size_bytes": 40,
+    "tables": 7,
+    "verified_hits": 200000,
+    "verified_misses": 200000,
+    "cpu_before": {
+      "monotonic_ns": 67502964550,
+      "proc": {
+        "cpu": [
+          5658,
+          3,
+          2495,
+          17313,
+          933,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1734,
+          1,
+          945,
+          3765,
+          176,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1522,
+          0,
+          504,
+          4268,
+          309,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1402,
+          1,
+          524,
+          4341,
+          295,
+          0,
+          20,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          521,
+          4937,
+          152,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "cpu_after": {
+      "monotonic_ns": 67820222822,
+      "proc": {
+        "cpu": [
+          5669,
+          3,
+          2516,
+          17408,
+          933,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1744,
+          1,
+          966,
+          3765,
+          176,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1522,
+          0,
+          504,
+          4300,
+          309,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1402,
+          1,
+          524,
+          4373,
+          295,
+          0,
+          20,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          521,
+          4968,
+          152,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "memory_before": {
+      "MemTotal": 16765386752,
+      "MemAvailable": 15181008896,
+      "cgroup_v2": {
+        "memory.max": null,
+        "memory.current": null
+      }
+    },
+    "child_user_seconds": 0.10521699999999967,
+    "child_system_seconds": 0.21143599999999996,
+    "steal_pct": 0.0,
+    "quality_flags": []
+  },
+  {
+    "allocator": "Rust default/System; not Edge mimalloc",
+    "capacity_requested": 8000000,
+    "construction_ns": 1092794507,
+    "empty_lookup_ns": 4349418,
+    "empty_retain_ns": 118734202,
+    "empty_visit_ns": 114949015,
+    "first_write_ns": [
+      501,
+      101,
+      60,
+      60,
+      60,
+      60,
+      60
+    ],
+    "hit_lookup_ns": 2357349,
+    "live_entries": 7,
+    "lookup_iterations": 200000,
+    "page_size": 4096,
+    "physical_slots_per_table": 8000000,
+    "repeat": 5,
+    "rss_before": 2191360,
+    "rss_empty": 2242752512,
+    "rss_live_empty_delta_bytes": 2240561152,
+    "rss_one_entry_per_table": 2242752512,
+    "scope": "unchanged production table source; representative fixed capacities, not the full node governor or network",
+    "segments_per_table": 64,
+    "slot_alignment_bytes": 8,
+    "slot_payload_bytes_all_tables": 2240000000,
+    "slot_size_bytes": 40,
+    "tables": 7,
+    "verified_hits": 200000,
+    "verified_misses": 200000,
+    "cpu_before": {
+      "monotonic_ns": 67828294238,
+      "proc": {
+        "cpu": [
+          5669,
+          3,
+          2516,
+          17410,
+          933,
+          0,
+          109,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1745,
+          1,
+          966,
+          3765,
+          176,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1522,
+          0,
+          504,
+          4300,
+          309,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1402,
+          1,
+          524,
+          4374,
+          295,
+          0,
+          20,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          521,
+          4969,
+          152,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "cpu_after": {
+      "monotonic_ns": 69314570356,
+      "proc": {
+        "cpu": [
+          5719,
+          3,
+          2615,
+          17854,
+          933,
+          0,
+          110,
+          0,
+          0,
+          0
+        ],
+        "cpu0": [
+          1795,
+          1,
+          1065,
+          3765,
+          176,
+          0,
+          16,
+          0,
+          0,
+          0
+        ],
+        "cpu1": [
+          1522,
+          0,
+          504,
+          4448,
+          309,
+          0,
+          50,
+          0,
+          0,
+          0
+        ],
+        "cpu2": [
+          1402,
+          1,
+          524,
+          4522,
+          295,
+          0,
+          20,
+          0,
+          0,
+          0
+        ],
+        "cpu3": [
+          998,
+          0,
+          521,
+          5117,
+          152,
+          0,
+          22,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "memory_before": {
+      "MemTotal": 16765386752,
+      "MemAvailable": 15138816000,
+      "cgroup_v2": {
+        "memory.max": null,
+        "memory.current": null
+      }
+    },
+    "child_user_seconds": 0.4975820000000004,
+    "child_system_seconds": 0.9871719999999993,
+    "steal_pct": 0.0,
+    "quality_flags": []
+  }
+]

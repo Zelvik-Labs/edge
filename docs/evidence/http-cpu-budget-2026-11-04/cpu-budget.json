@@ -1,0 +1,3994 @@
+{
+  "source": "4171ea700386d8ed7c755255c7eeccb7e804d644",
+  "runtime": "ba474745fae3c08332d9e0862d9d5650550664ff",
+  "cases": 192,
+  "successful": 6854656,
+  "independent_medians": [
+    {
+      "protocol": "h1",
+      "cache": "hit",
+      "target": "after",
+      "total_usec_per_request": 88.47600734276503,
+      "user_usec_per_request": 52.51674457361891,
+      "system_usec_per_request": 36.20804790549133,
+      "rps": 10418.194622125477,
+      "client_cpu_fraction": 0.6669827529438067,
+      "proxy_cpu_fraction": 0.9217946942318332
+    },
+    {
+      "protocol": "h1",
+      "cache": "hit",
+      "target": "before",
+      "total_usec_per_request": 89.82236757172691,
+      "user_usec_per_request": 53.39705800769056,
+      "system_usec_per_request": 36.425299933836044,
+      "rps": 10260.379737502795,
+      "client_cpu_fraction": 0.6612061130460416,
+      "proxy_cpu_fraction": 0.9214250674806232
+    },
+    {
+      "protocol": "h1",
+      "cache": "hit",
+      "target": "nginx",
+      "total_usec_per_request": 58.47340154601048,
+      "user_usec_per_request": 16.335979274059092,
+      "system_usec_per_request": 42.19835422660694,
+      "rps": 16041.234000189103,
+      "client_cpu_fraction": 0.7764082301257922,
+      "proxy_cpu_fraction": 0.9379790936459502
+    },
+    {
+      "protocol": "h1",
+      "cache": "hit",
+      "target": "openresty",
+      "total_usec_per_request": 58.42207749857255,
+      "user_usec_per_request": 16.149517690611802,
+      "system_usec_per_request": 42.36270826595707,
+      "rps": 16036.107493441636,
+      "client_cpu_fraction": 0.773623298928938,
+      "proxy_cpu_fraction": 0.9368526880170834
+    },
+    {
+      "protocol": "h1",
+      "cache": "miss",
+      "target": "after",
+      "total_usec_per_request": 361.1096325569783,
+      "user_usec_per_request": 190.99940808287874,
+      "system_usec_per_request": 170.55068334599474,
+      "rps": 2768.5281543673436,
+      "client_cpu_fraction": 0.2686648615795881,
+      "proxy_cpu_fraction": 0.998713468650896
+    },
+    {
+      "protocol": "h1",
+      "cache": "miss",
+      "target": "before",
+      "total_usec_per_request": 366.3687165132085,
+      "user_usec_per_request": 192.6620644919753,
+      "system_usec_per_request": 171.82651161481328,
+      "rps": 2725.2218754303117,
+      "client_cpu_fraction": 0.26597768305314234,
+      "proxy_cpu_fraction": 0.9984335609723853
+    },
+    {
+      "protocol": "h1",
+      "cache": "miss",
+      "target": "nginx",
+      "total_usec_per_request": 291.8456775952176,
+      "user_usec_per_request": 40.53509486271171,
+      "system_usec_per_request": 251.47316038867265,
+      "rps": 3408.1187850246806,
+      "client_cpu_fraction": 0.35764220362818966,
+      "proxy_cpu_fraction": 0.9946423625774699
+    },
+    {
+      "protocol": "h1",
+      "cache": "miss",
+      "target": "openresty",
+      "total_usec_per_request": 293.3106346257796,
+      "user_usec_per_request": 40.53481619708744,
+      "system_usec_per_request": 253.20514323090345,
+      "rps": 3392.2271697089063,
+      "client_cpu_fraction": 0.3562741582693606,
+      "proxy_cpu_fraction": 0.9941073278274426
+    },
+    {
+      "protocol": "h1",
+      "cache": "off",
+      "target": "after",
+      "total_usec_per_request": 163.99721315949853,
+      "user_usec_per_request": 92.50825110899828,
+      "system_usec_per_request": 71.61260639642825,
+      "rps": 5833.159764059797,
+      "client_cpu_fraction": 0.484073842063178,
+      "proxy_cpu_fraction": 0.9568065429097061
+    },
+    {
+      "protocol": "h1",
+      "cache": "off",
+      "target": "before",
+      "total_usec_per_request": 164.08814387685578,
+      "user_usec_per_request": 94.18731647087336,
+      "system_usec_per_request": 69.89083039126217,
+      "rps": 5825.902120896426,
+      "client_cpu_fraction": 0.4843029630856286,
+      "proxy_cpu_fraction": 0.9555946590077146
+    },
+    {
+      "protocol": "h1",
+      "cache": "off",
+      "target": "nginx",
+      "total_usec_per_request": 54.40983692319831,
+      "user_usec_per_request": 15.07962103517659,
+      "system_usec_per_request": 39.29701205133304,
+      "rps": 15943.740842885662,
+      "client_cpu_fraction": 0.5982464532003837,
+      "proxy_cpu_fraction": 0.8679808285968513
+    },
+    {
+      "protocol": "h1",
+      "cache": "off",
+      "target": "openresty",
+      "total_usec_per_request": 54.861269663159305,
+      "user_usec_per_request": 15.302702666524267,
+      "system_usec_per_request": 39.49923941137832,
+      "rps": 15857.613588743658,
+      "client_cpu_fraction": 0.5956654068547549,
+      "proxy_cpu_fraction": 0.8697371899703354
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "target": "after",
+      "total_usec_per_request": 107.59856420903876,
+      "user_usec_per_request": 66.14694560619407,
+      "system_usec_per_request": 41.106444022390036,
+      "rps": 8629.288936077342,
+      "client_cpu_fraction": 0.7603737439927913,
+      "proxy_cpu_fraction": 0.927565111552836
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "target": "before",
+      "total_usec_per_request": 107.08515932848752,
+      "user_usec_per_request": 66.0685469923013,
+      "system_usec_per_request": 40.95530244247717,
+      "rps": 8640.832209194306,
+      "client_cpu_fraction": 0.7526687339518672,
+      "proxy_cpu_fraction": 0.9252882379884713
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "target": "nginx",
+      "total_usec_per_request": 69.69084694004309,
+      "user_usec_per_request": 31.779245471682337,
+      "system_usec_per_request": 37.66575157023395,
+      "rps": 13420.85240783061,
+      "client_cpu_fraction": 0.8196063999944625,
+      "proxy_cpu_fraction": 0.9352959861085999
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "target": "openresty",
+      "total_usec_per_request": 67.69791765617423,
+      "user_usec_per_request": 29.651533011862078,
+      "system_usec_per_request": 37.99485929049535,
+      "rps": 13835.530112231401,
+      "client_cpu_fraction": 0.8286623903550541,
+      "proxy_cpu_fraction": 0.9358919695431582
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "target": "after",
+      "total_usec_per_request": 381.5744200859213,
+      "user_usec_per_request": 208.93896819098626,
+      "system_usec_per_request": 172.5524667093464,
+      "rps": 2615.829761888847,
+      "client_cpu_fraction": 0.34341963719193036,
+      "proxy_cpu_fraction": 0.9977733412890946
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "target": "before",
+      "total_usec_per_request": 385.26224806065386,
+      "user_usec_per_request": 216.0694356485459,
+      "system_usec_per_request": 172.18155668768085,
+      "rps": 2590.4688572438117,
+      "client_cpu_fraction": 0.3406411653703917,
+      "proxy_cpu_fraction": 0.9978992695714518
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "target": "nginx",
+      "total_usec_per_request": 305.2474714392232,
+      "user_usec_per_request": 61.4674455495789,
+      "system_usec_per_request": 243.0936062234362,
+      "rps": 3259.5257417087482,
+      "client_cpu_fraction": 0.4212794648600486,
+      "proxy_cpu_fraction": 0.9951426007868963
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "target": "openresty",
+      "total_usec_per_request": 302.37592140606233,
+      "user_usec_per_request": 59.154618480611745,
+      "system_usec_per_request": 243.22130292545057,
+      "rps": 3290.778899049199,
+      "client_cpu_fraction": 0.4246679515871138,
+      "proxy_cpu_fraction": 0.9949508134993175
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "off",
+      "target": "after",
+      "total_usec_per_request": 183.06684220143242,
+      "user_usec_per_request": 107.52953160161674,
+      "system_usec_per_request": 75.89935860426363,
+      "rps": 5104.5727573582835,
+      "client_cpu_fraction": 0.5566193159946133,
+      "proxy_cpu_fraction": 0.9361895004140864
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "off",
+      "target": "before",
+      "total_usec_per_request": 183.99944438135753,
+      "user_usec_per_request": 108.71867586285117,
+      "system_usec_per_request": 74.67104323232371,
+      "rps": 5105.430769810304,
+      "client_cpu_fraction": 0.5565464990377079,
+      "proxy_cpu_fraction": 0.9390709289819148
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "off",
+      "target": "nginx",
+      "total_usec_per_request": 74.33446120911441,
+      "user_usec_per_request": 30.194284103109887,
+      "system_usec_per_request": 44.310075088349905,
+      "rps": 12166.748764188316,
+      "client_cpu_fraction": 0.652441092555092,
+      "proxy_cpu_fraction": 0.9045901945592731
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "off",
+      "target": "openresty",
+      "total_usec_per_request": 72.42145549792612,
+      "user_usec_per_request": 28.005118870932602,
+      "system_usec_per_request": 44.41632072051448,
+      "rps": 12452.804614026292,
+      "client_cpu_fraction": 0.6495256472194428,
+      "proxy_cpu_fraction": 0.9009562176645233
+    },
+    {
+      "protocol": "h2",
+      "cache": "hit",
+      "target": "after",
+      "total_usec_per_request": 110.40643369058108,
+      "user_usec_per_request": 76.38776334380009,
+      "system_usec_per_request": 34.06639476608926,
+      "rps": 8749.180486751331,
+      "client_cpu_fraction": 0.6883639694828665,
+      "proxy_cpu_fraction": 0.9654156885759941
+    },
+    {
+      "protocol": "h2",
+      "cache": "hit",
+      "target": "before",
+      "total_usec_per_request": 110.72016811462083,
+      "user_usec_per_request": 77.64898729768706,
+      "system_usec_per_request": 32.57230630284279,
+      "rps": 8698.291529570928,
+      "client_cpu_fraction": 0.6898848902116677,
+      "proxy_cpu_fraction": 0.9631866713166705
+    },
+    {
+      "protocol": "h2",
+      "cache": "hit",
+      "target": "nginx",
+      "total_usec_per_request": 75.95720521565508,
+      "user_usec_per_request": 37.81770486342893,
+      "system_usec_per_request": 38.12678191808733,
+      "rps": 12194.671857260819,
+      "client_cpu_fraction": 0.8312293000578814,
+      "proxy_cpu_fraction": 0.92805651912627
+    },
+    {
+      "protocol": "h2",
+      "cache": "hit",
+      "target": "openresty",
+      "total_usec_per_request": 74.06682930093076,
+      "user_usec_per_request": 34.878231263236074,
+      "system_usec_per_request": 38.92232085483677,
+      "rps": 12544.530907907956,
+      "client_cpu_fraction": 0.8368346583751927,
+      "proxy_cpu_fraction": 0.9286947202352915
+    },
+    {
+      "protocol": "h2",
+      "cache": "miss",
+      "target": "after",
+      "total_usec_per_request": 348.37030530673474,
+      "user_usec_per_request": 204.6301263870211,
+      "system_usec_per_request": 143.8860221080716,
+      "rps": 2845.7893500967207,
+      "client_cpu_fraction": 0.27521895686864783,
+      "proxy_cpu_fraction": 0.9910589954957864
+    },
+    {
+      "protocol": "h2",
+      "cache": "miss",
+      "target": "before",
+      "total_usec_per_request": 349.2835970458279,
+      "user_usec_per_request": 201.67157017515922,
+      "system_usec_per_request": 147.09802415695037,
+      "rps": 2836.352610731734,
+      "client_cpu_fraction": 0.2747314270022121,
+      "proxy_cpu_fraction": 0.9903228993820077
+    },
+    {
+      "protocol": "h2",
+      "cache": "miss",
+      "target": "nginx",
+      "total_usec_per_request": 358.21104638289296,
+      "user_usec_per_request": 73.97501035406219,
+      "system_usec_per_request": 284.5530456113497,
+      "rps": 2764.808634723232,
+      "client_cpu_fraction": 0.5714776013052286,
+      "proxy_cpu_fraction": 0.9895095189533347
+    },
+    {
+      "protocol": "h2",
+      "cache": "miss",
+      "target": "openresty",
+      "total_usec_per_request": 349.84601750754445,
+      "user_usec_per_request": 69.84163345386611,
+      "system_usec_per_request": 279.82815093876604,
+      "rps": 2825.4486631108675,
+      "client_cpu_fraction": 0.5714913724064061,
+      "proxy_cpu_fraction": 0.9885012788558065
+    },
+    {
+      "protocol": "h2",
+      "cache": "off",
+      "target": "after",
+      "total_usec_per_request": 166.80553769740993,
+      "user_usec_per_request": 109.49619476543984,
+      "system_usec_per_request": 57.55965739565611,
+      "rps": 5851.501898551516,
+      "client_cpu_fraction": 0.4735446439258934,
+      "proxy_cpu_fraction": 0.9757585531304066
+    },
+    {
+      "protocol": "h2",
+      "cache": "off",
+      "target": "before",
+      "total_usec_per_request": 166.9154162321189,
+      "user_usec_per_request": 108.85889551975201,
+      "system_usec_per_request": 58.18536553822406,
+      "rps": 5842.839667010381,
+      "client_cpu_fraction": 0.47201809874257183,
+      "proxy_cpu_fraction": 0.9752305052907213
+    },
+    {
+      "protocol": "h2",
+      "cache": "off",
+      "target": "nginx",
+      "total_usec_per_request": 83.30860561342153,
+      "user_usec_per_request": 35.42243058312228,
+      "system_usec_per_request": 48.02374477286905,
+      "rps": 10880.563974589593,
+      "client_cpu_fraction": 0.7271546485751121,
+      "proxy_cpu_fraction": 0.9061194477820818
+    },
+    {
+      "protocol": "h2",
+      "cache": "off",
+      "target": "openresty",
+      "total_usec_per_request": 81.52226331959085,
+      "user_usec_per_request": 33.02455885664867,
+      "system_usec_per_request": 48.46202286791111,
+      "rps": 11101.194893165539,
+      "client_cpu_fraction": 0.7303069156717032,
+      "proxy_cpu_fraction": 0.9045949622345442
+    },
+    {
+      "protocol": "h3",
+      "cache": "hit",
+      "target": "after",
+      "total_usec_per_request": 142.85381074120778,
+      "user_usec_per_request": 112.50729408595996,
+      "system_usec_per_request": 29.810593986541715,
+      "rps": 6338.907248214731,
+      "client_cpu_fraction": 0.9592285659163229,
+      "proxy_cpu_fraction": 0.9055295874610103
+    },
+    {
+      "protocol": "h3",
+      "cache": "hit",
+      "target": "before",
+      "total_usec_per_request": 142.28500410717533,
+      "user_usec_per_request": 112.32893348245717,
+      "system_usec_per_request": 29.925555710617793,
+      "rps": 6353.746455276669,
+      "client_cpu_fraction": 0.9575867358671477,
+      "proxy_cpu_fraction": 0.9024861789078791
+    },
+    {
+      "protocol": "h3",
+      "cache": "hit",
+      "target": "nginx",
+      "total_usec_per_request": 120.18439438758057,
+      "user_usec_per_request": 52.71521210708398,
+      "system_usec_per_request": 67.26666746470016,
+      "rps": 6430.36719433749,
+      "client_cpu_fraction": 0.9641220740620227,
+      "proxy_cpu_fraction": 0.7749587661499011
+    },
+    {
+      "protocol": "h3",
+      "cache": "hit",
+      "target": "openresty",
+      "total_usec_per_request": 115.7878418734181,
+      "user_usec_per_request": 48.83036285998719,
+      "system_usec_per_request": 66.95746364536575,
+      "rps": 6515.493649360857,
+      "client_cpu_fraction": 0.9721834339810046,
+      "proxy_cpu_fraction": 0.7529528125042138
+    },
+    {
+      "protocol": "h3",
+      "cache": "miss",
+      "target": "after",
+      "total_usec_per_request": 435.9817549299545,
+      "user_usec_per_request": 264.64856074886234,
+      "system_usec_per_request": 171.00031977264592,
+      "rps": 2228.4069685110417,
+      "client_cpu_fraction": 0.7656047014320706,
+      "proxy_cpu_fraction": 0.9713112050564277
+    },
+    {
+      "protocol": "h3",
+      "cache": "miss",
+      "target": "before",
+      "total_usec_per_request": 438.1286565595015,
+      "user_usec_per_request": 267.278978095035,
+      "system_usec_per_request": 171.18413873429347,
+      "rps": 2217.1528176418306,
+      "client_cpu_fraction": 0.7672986446674361,
+      "proxy_cpu_fraction": 0.97203124875229
+    },
+    {
+      "protocol": "h3",
+      "cache": "miss",
+      "target": "nginx",
+      "total_usec_per_request": 405.52224874857774,
+      "user_usec_per_request": 93.89529886922665,
+      "system_usec_per_request": 311.9229472497003,
+      "rps": 2312.5175586195273,
+      "client_cpu_fraction": 0.8483778817499238,
+      "proxy_cpu_fraction": 0.9377737588519262
+    },
+    {
+      "protocol": "h3",
+      "cache": "miss",
+      "target": "openresty",
+      "total_usec_per_request": 398.98268334981174,
+      "user_usec_per_request": 84.47770672498245,
+      "system_usec_per_request": 313.87779171195007,
+      "rps": 2347.467855518422,
+      "client_cpu_fraction": 0.8450773011759354,
+      "proxy_cpu_fraction": 0.9371731278563524
+    },
+    {
+      "protocol": "h3",
+      "cache": "off",
+      "target": "after",
+      "total_usec_per_request": 218.293867484038,
+      "user_usec_per_request": 149.47144682246903,
+      "system_usec_per_request": 69.19601759326984,
+      "rps": 4219.436779629309,
+      "client_cpu_fraction": 0.9115975378525567,
+      "proxy_cpu_fraction": 0.9221899043153747
+    },
+    {
+      "protocol": "h3",
+      "cache": "off",
+      "target": "before",
+      "total_usec_per_request": 218.2451796209328,
+      "user_usec_per_request": 149.894859253172,
+      "system_usec_per_request": 68.1851333623439,
+      "rps": 4230.216720271484,
+      "client_cpu_fraction": 0.910108938425958,
+      "proxy_cpu_fraction": 0.9223615844869641
+    },
+    {
+      "protocol": "h3",
+      "cache": "off",
+      "target": "nginx",
+      "total_usec_per_request": 151.53590747645202,
+      "user_usec_per_request": 58.35101890258695,
+      "system_usec_per_request": 92.57303120236146,
+      "rps": 5249.925358120601,
+      "client_cpu_fraction": 0.9169812761952055,
+      "proxy_cpu_fraction": 0.7958256781449458
+    },
+    {
+      "protocol": "h3",
+      "cache": "off",
+      "target": "openresty",
+      "total_usec_per_request": 144.55371655827133,
+      "user_usec_per_request": 51.19552802230717,
+      "system_usec_per_request": 93.0914991796853,
+      "rps": 5337.295334738726,
+      "client_cpu_fraction": 0.9221778223216854,
+      "proxy_cpu_fraction": 0.7698364540309616
+    }
+  ],
+  "records": [
+    {
+      "round": 0,
+      "target": "before",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 13714,
+      "cpu_delta_usec": {
+        "usage_usec": 5015019,
+        "user_usec": 2660029,
+        "system_usec": 2354990
+      },
+      "total_usec_per_request": 365.6860872101502,
+      "user_usec_per_request": 193.9644888435176,
+      "system_usec_per_request": 171.72159836663263,
+      "rps": 2729.09276860037,
+      "client_cpu_fraction": 0.2650624883987069,
+      "proxy_cpu_fraction": 0.9979912561829852
+    },
+    {
+      "round": 0,
+      "target": "before",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 29150,
+      "cpu_delta_usec": {
+        "usage_usec": 4898468,
+        "user_usec": 3203469,
+        "system_usec": 1695000
+      },
+      "total_usec_per_request": 168.04349914236707,
+      "user_usec_per_request": 109.89602058319039,
+      "system_usec_per_request": 58.147512864494,
+      "rps": 5794.268693003306,
+      "client_cpu_fraction": 0.4743979473512683,
+      "proxy_cpu_fraction": 0.9736891861433454
+    },
+    {
+      "round": 0,
+      "target": "before",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 43705,
+      "cpu_delta_usec": {
+        "usage_usec": 4847811,
+        "user_usec": 3462913,
+        "system_usec": 1384899
+      },
+      "total_usec_per_request": 110.92119894748885,
+      "user_usec_per_request": 79.23379476032491,
+      "system_usec_per_request": 31.68742706784121,
+      "rps": 8689.535661959791,
+      "client_cpu_fraction": 0.690594111623385,
+      "proxy_cpu_fraction": 0.9638537139215412
+    },
+    {
+      "round": 0,
+      "target": "before",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 29260,
+      "cpu_delta_usec": {
+        "usage_usec": 4816815,
+        "user_usec": 2797963,
+        "system_usec": 2018852
+      },
+      "total_usec_per_request": 164.62115516062883,
+      "user_usec_per_request": 95.62416267942584,
+      "system_usec_per_request": 68.99699248120301,
+      "rps": 5820.046759492901,
+      "client_cpu_fraction": 0.4843748833684583,
+      "proxy_cpu_fraction": 0.958102820636596
+    },
+    {
+      "round": 0,
+      "target": "before",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 51179,
+      "cpu_delta_usec": {
+        "usage_usec": 4630547,
+        "user_usec": 2789733,
+        "system_usec": 1840815
+      },
+      "total_usec_per_request": 90.47748099806562,
+      "user_usec_per_request": 54.50932999863225,
+      "system_usec_per_request": 35.968170538697514,
+      "rps": 10177.353745309842,
+      "client_cpu_fraction": 0.6575016160255313,
+      "proxy_cpu_fraction": 0.9208213301018631
+    },
+    {
+      "round": 0,
+      "target": "before",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 25636,
+      "cpu_delta_usec": {
+        "usage_usec": 4726006,
+        "user_usec": 2770620,
+        "system_usec": 1955385
+      },
+      "total_usec_per_request": 184.35036667186768,
+      "user_usec_per_request": 108.07536277110313,
+      "system_usec_per_request": 76.27496489311905,
+      "rps": 5098.964826960605,
+      "client_cpu_fraction": 0.5524019117560071,
+      "proxy_cpu_fraction": 0.939996035497144
+    },
+    {
+      "round": 0,
+      "target": "before",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 31951,
+      "cpu_delta_usec": {
+        "usage_usec": 4550997,
+        "user_usec": 3569201,
+        "system_usec": 981796
+      },
+      "total_usec_per_request": 142.43676254264344,
+      "user_usec_per_request": 111.70858502081312,
+      "system_usec_per_request": 30.728177521830304,
+      "rps": 6354.813791336037,
+      "client_cpu_fraction": 0.9589860723647614,
+      "proxy_cpu_fraction": 0.9051591029992467
+    },
+    {
+      "round": 0,
+      "target": "before",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 14166,
+      "cpu_delta_usec": {
+        "usage_usec": 4978702,
+        "user_usec": 2868642,
+        "system_usec": 2110061
+      },
+      "total_usec_per_request": 351.4543272624594,
+      "user_usec_per_request": 202.50190597204573,
+      "system_usec_per_request": 148.95249188197093,
+      "rps": 2817.526028321822,
+      "client_cpu_fraction": 0.2773936517918955,
+      "proxy_cpu_fraction": 0.9902317148283153
+    },
+    {
+      "round": 0,
+      "target": "before",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 12769,
+      "cpu_delta_usec": {
+        "usage_usec": 5016149,
+        "user_usec": 2821334,
+        "system_usec": 2194816
+      },
+      "total_usec_per_request": 392.8380452658783,
+      "user_usec_per_request": 220.95183647897252,
+      "system_usec_per_request": 171.8862871015741,
+      "rps": 2540.2566278849545,
+      "client_cpu_fraction": 0.33671351271506,
+      "proxy_cpu_fraction": 0.9979094481720172
+    },
+    {
+      "round": 0,
+      "target": "before",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 43278,
+      "cpu_delta_usec": {
+        "usage_usec": 4659542,
+        "user_usec": 2870524,
+        "system_usec": 1789017
+      },
+      "total_usec_per_request": 107.665372706687,
+      "user_usec_per_request": 66.32755672628124,
+      "system_usec_per_request": 41.33779287397754,
+      "rps": 8612.125763507865,
+      "client_cpu_fraction": 0.7615844019852455,
+      "proxy_cpu_fraction": 0.9272277301249356
+    },
+    {
+      "round": 0,
+      "target": "before",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 21358,
+      "cpu_delta_usec": {
+        "usage_usec": 4640321,
+        "user_usec": 3178320,
+        "system_usec": 1462001
+      },
+      "total_usec_per_request": 217.26383556512783,
+      "user_usec_per_request": 148.81168648749883,
+      "system_usec_per_request": 68.45214907762899,
+      "rps": 4242.831043702284,
+      "client_cpu_fraction": 0.9112484850594558,
+      "proxy_cpu_fraction": 0.9218137462095527
+    },
+    {
+      "round": 0,
+      "target": "before",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11144,
+      "cpu_delta_usec": {
+        "usage_usec": 4886711,
+        "user_usec": 2877176,
+        "system_usec": 2009536
+      },
+      "total_usec_per_request": 438.50601220387654,
+      "user_usec_per_request": 258.1816223977028,
+      "system_usec_per_request": 180.32447954055993,
+      "rps": 2217.395039709281,
+      "client_cpu_fraction": 0.7678387942599827,
+      "proxy_cpu_fraction": 0.9723410563435734
+    },
+    {
+      "round": 0,
+      "target": "after",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 13944,
+      "cpu_delta_usec": {
+        "usage_usec": 5018200,
+        "user_usec": 2625987,
+        "system_usec": 2392212
+      },
+      "total_usec_per_request": 359.8823866896156,
+      "user_usec_per_request": 188.3237951807229,
+      "system_usec_per_request": 171.55851979345954,
+      "rps": 2775.137597433041,
+      "client_cpu_fraction": 0.26896096637835337,
+      "proxy_cpu_fraction": 0.9987231419562885
+    },
+    {
+      "round": 0,
+      "target": "after",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 29560,
+      "cpu_delta_usec": {
+        "usage_usec": 4915125,
+        "user_usec": 3215892,
+        "system_usec": 1699234
+      },
+      "total_usec_per_request": 166.27621786197565,
+      "user_usec_per_request": 108.79201623815968,
+      "system_usec_per_request": 57.48423545331529,
+      "rps": 5876.466637549787,
+      "client_cpu_fraction": 0.47403166213028114,
+      "proxy_cpu_fraction": 0.97711664688386
+    },
+    {
+      "round": 0,
+      "target": "after",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 43984,
+      "cpu_delta_usec": {
+        "usage_usec": 4826630,
+        "user_usec": 3340085,
+        "system_usec": 1486544
+      },
+      "total_usec_per_request": 109.73604037831939,
+      "user_usec_per_request": 75.93863677700982,
+      "system_usec_per_request": 33.79738086576937,
+      "rps": 8745.884117915766,
+      "client_cpu_fraction": 0.6856542292419666,
+      "proxy_cpu_fraction": 0.9597386927077067
+    },
+    {
+      "round": 0,
+      "target": "after",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 29634,
+      "cpu_delta_usec": {
+        "usage_usec": 4808186,
+        "user_usec": 2739490,
+        "system_usec": 2068696
+      },
+      "total_usec_per_request": 162.25234527907133,
+      "user_usec_per_request": 92.44415198758183,
+      "system_usec_per_request": 69.8081932914895,
+      "rps": 5892.615633264856,
+      "client_cpu_fraction": 0.48416196931935024,
+      "proxy_cpu_fraction": 0.956090706325343
+    },
+    {
+      "round": 0,
+      "target": "after",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 52525,
+      "cpu_delta_usec": {
+        "usage_usec": 4639637,
+        "user_usec": 2770183,
+        "system_usec": 1869455
+      },
+      "total_usec_per_request": 88.33197524988101,
+      "user_usec_per_request": 52.740276059019514,
+      "system_usec_per_request": 35.59171822941457,
+      "rps": 10446.94446794634,
+      "client_cpu_fraction": 0.6683594076699454,
+      "proxy_cpu_fraction": 0.9227992401795174
+    },
+    {
+      "round": 0,
+      "target": "after",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 25606,
+      "cpu_delta_usec": {
+        "usage_usec": 4713025,
+        "user_usec": 2795495,
+        "system_usec": 1917530
+      },
+      "total_usec_per_request": 184.05940014059206,
+      "user_usec_per_request": 109.17343591345778,
+      "system_usec_per_request": 74.88596422713427,
+      "rps": 5089.290819366671,
+      "client_cpu_fraction": 0.5567659510911013,
+      "proxy_cpu_fraction": 0.9367318153536516
+    },
+    {
+      "round": 0,
+      "target": "after",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 31986,
+      "cpu_delta_usec": {
+        "usage_usec": 4557837,
+        "user_usec": 3581134,
+        "system_usec": 976702
+      },
+      "total_usec_per_request": 142.49474770211967,
+      "user_usec_per_request": 111.95941974613893,
+      "system_usec_per_request": 30.535296692302882,
+      "rps": 6359.708279548984,
+      "client_cpu_fraction": 0.9606574370802166,
+      "proxy_cpu_fraction": 0.9062250267534141
+    },
+    {
+      "round": 0,
+      "target": "after",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 14320,
+      "cpu_delta_usec": {
+        "usage_usec": 4981242,
+        "user_usec": 2946297,
+        "system_usec": 2034946
+      },
+      "total_usec_per_request": 347.85209497206705,
+      "user_usec_per_request": 205.74699720670392,
+      "system_usec_per_request": 142.10516759776536,
+      "rps": 2849.262058089263,
+      "client_cpu_fraction": 0.2767004538972988,
+      "proxy_cpu_fraction": 0.9911217760307736
+    },
+    {
+      "round": 0,
+      "target": "after",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 13131,
+      "cpu_delta_usec": {
+        "usage_usec": 5012208,
+        "user_usec": 2771012,
+        "system_usec": 2241196
+      },
+      "total_usec_per_request": 381.70801919122687,
+      "user_usec_per_request": 211.02825375066635,
+      "system_usec_per_request": 170.67976544056052,
+      "rps": 2613.411533569682,
+      "client_cpu_fraction": 0.3442775126262813,
+      "proxy_cpu_fraction": 0.9975601398103898
+    },
+    {
+      "round": 0,
+      "target": "after",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 43822,
+      "cpu_delta_usec": {
+        "usage_usec": 4602029,
+        "user_usec": 2861542,
+        "system_usec": 1740488
+      },
+      "total_usec_per_request": 105.0164072840126,
+      "user_usec_per_request": 65.29921044224362,
+      "system_usec_per_request": 39.71721966135731,
+      "rps": 8717.57192871177,
+      "client_cpu_fraction": 0.7416041344153587,
+      "proxy_cpu_fraction": 0.9154880841932704
+    },
+    {
+      "round": 0,
+      "target": "after",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 21226,
+      "cpu_delta_usec": {
+        "usage_usec": 4652710,
+        "user_usec": 3183337,
+        "system_usec": 1469374
+      },
+      "total_usec_per_request": 219.19862432865355,
+      "user_usec_per_request": 149.97347592575144,
+      "system_usec_per_request": 69.22519551493451,
+      "rps": 4217.010953399754,
+      "client_cpu_fraction": 0.9087843369496222,
+      "proxy_cpu_fraction": 0.9243629997640898
+    },
+    {
+      "round": 0,
+      "target": "after",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11207,
+      "cpu_delta_usec": {
+        "usage_usec": 4888957,
+        "user_usec": 2962233,
+        "system_usec": 1926725
+      },
+      "total_usec_per_request": 436.24136700276614,
+      "user_usec_per_request": 264.3198893548675,
+      "system_usec_per_request": 171.9215668778442,
+      "rps": 2229.448468072718,
+      "client_cpu_fraction": 0.7650502513566648,
+      "proxy_cpu_fraction": 0.9725776473742651
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 17125,
+      "cpu_delta_usec": {
+        "usage_usec": 4984900,
+        "user_usec": 644188,
+        "system_usec": 4340713
+      },
+      "total_usec_per_request": 291.0890510948905,
+      "user_usec_per_request": 37.616817518248176,
+      "system_usec_per_request": 253.47229197080293,
+      "rps": 3407.9249993783856,
+      "client_cpu_fraction": 0.35498170661481226,
+      "proxy_cpu_fraction": 0.9920096542716096
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 55935,
+      "cpu_delta_usec": {
+        "usage_usec": 4580026,
+        "user_usec": 1844873,
+        "system_usec": 2735153
+      },
+      "total_usec_per_request": 81.88121927236972,
+      "user_usec_per_request": 32.982443908107626,
+      "system_usec_per_request": 48.89877536426209,
+      "rps": 11092.169381324691,
+      "client_cpu_fraction": 0.7360365802362793,
+      "proxy_cpu_fraction": 0.9082403533185126
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 63483,
+      "cpu_delta_usec": {
+        "usage_usec": 4655558,
+        "user_usec": 2211590,
+        "system_usec": 2443968
+      },
+      "total_usec_per_request": 73.33550714364476,
+      "user_usec_per_request": 34.837515555345526,
+      "system_usec_per_request": 38.49799158829923,
+      "rps": 12623.83547006939,
+      "client_cpu_fraction": 0.8326418036842486,
+      "proxy_cpu_fraction": 0.92577537629547
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 80016,
+      "cpu_delta_usec": {
+        "usage_usec": 4371182,
+        "user_usec": 1216488,
+        "system_usec": 3154694
+      },
+      "total_usec_per_request": 54.62884923015397,
+      "user_usec_per_request": 15.203059388122375,
+      "system_usec_per_request": 39.42578984203159,
+      "rps": 15885.910141079434,
+      "client_cpu_fraction": 0.5986353177683628,
+      "proxy_cpu_fraction": 0.8678289899808024
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 81443,
+      "cpu_delta_usec": {
+        "usage_usec": 4709895,
+        "user_usec": 1348888,
+        "system_usec": 3361006
+      },
+      "total_usec_per_request": 57.83056861854303,
+      "user_usec_per_request": 16.562356494726373,
+      "system_usec_per_request": 41.268199845290575,
+      "rps": 16183.382691981367,
+      "client_cpu_fraction": 0.7745742554407449,
+      "proxy_cpu_fraction": 0.93589422324877
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 62734,
+      "cpu_delta_usec": {
+        "usage_usec": 4530265,
+        "user_usec": 1801638,
+        "system_usec": 2728627
+      },
+      "total_usec_per_request": 72.21387126598017,
+      "user_usec_per_request": 28.71868524245226,
+      "system_usec_per_request": 43.495186023527914,
+      "rps": 12435.752337990125,
+      "client_cpu_fraction": 0.646525514646618,
+      "proxy_cpu_fraction": 0.8980338184312309
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 32816,
+      "cpu_delta_usec": {
+        "usage_usec": 3801883,
+        "user_usec": 1584194,
+        "system_usec": 2217689
+      },
+      "total_usec_per_request": 115.85455265724038,
+      "user_usec_per_request": 48.275048756704045,
+      "system_usec_per_request": 67.57950390053632,
+      "rps": 6525.292333439536,
+      "client_cpu_fraction": 0.972081345263794,
+      "proxy_cpu_fraction": 0.7559848242483577
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 14228,
+      "cpu_delta_usec": {
+        "usage_usec": 4973588,
+        "user_usec": 1027351,
+        "system_usec": 3946237
+      },
+      "total_usec_per_request": 349.5633961203261,
+      "user_usec_per_request": 72.2062833848749,
+      "system_usec_per_request": 277.3571127354512,
+      "rps": 2829.9223985752324,
+      "client_cpu_fraction": 0.5722625993066817,
+      "proxy_cpu_fraction": 0.9892372844029372
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 16522,
+      "cpu_delta_usec": {
+        "usage_usec": 4999046,
+        "user_usec": 991398,
+        "system_usec": 4007648
+      },
+      "total_usec_per_request": 302.5690594359036,
+      "user_usec_per_request": 60.00472097808982,
+      "system_usec_per_request": 242.56433845781382,
+      "rps": 3287.4038355087037,
+      "client_cpu_fraction": 0.42433793586927543,
+      "proxy_cpu_fraction": 0.9946666864958505
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 69667,
+      "cpu_delta_usec": {
+        "usage_usec": 4709429,
+        "user_usec": 2060275,
+        "system_usec": 2649153
+      },
+      "total_usec_per_request": 67.59913588930196,
+      "user_usec_per_request": 29.573183860364306,
+      "system_usec_per_request": 38.02593767493936,
+      "rps": 13849.891971101239,
+      "client_cpu_fraction": 0.830037184487857,
+      "proxy_cpu_fraction": 0.936240729406625
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 26771,
+      "cpu_delta_usec": {
+        "usage_usec": 3889358,
+        "user_usec": 1371460,
+        "system_usec": 2517897
+      },
+      "total_usec_per_request": 145.2825071906167,
+      "user_usec_per_request": 51.2293153038736,
+      "system_usec_per_request": 94.05315453289006,
+      "rps": 5304.022278478449,
+      "client_cpu_fraction": 0.9197873221989702,
+      "proxy_cpu_fraction": 0.7705816548122366
+    },
+    {
+      "round": 0,
+      "target": "openresty",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11796,
+      "cpu_delta_usec": {
+        "usage_usec": 4715539,
+        "user_usec": 976500,
+        "system_usec": 3739038
+      },
+      "total_usec_per_request": 399.7574601559851,
+      "user_usec_per_request": 82.78229908443541,
+      "system_usec_per_request": 316.97507629704984,
+      "rps": 2345.0151524855305,
+      "client_cpu_fraction": 0.8419365791796937,
+      "proxy_cpu_fraction": 0.9374373013849158
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 16950,
+      "cpu_delta_usec": {
+        "usage_usec": 4996345,
+        "user_usec": 711757,
+        "system_usec": 4284588
+      },
+      "total_usec_per_request": 294.76961651917406,
+      "user_usec_per_request": 41.99156342182891,
+      "system_usec_per_request": 252.77805309734512,
+      "rps": 3373.1469717856476,
+      "client_cpu_fraction": 0.3532776425839527,
+      "proxy_cpu_fraction": 0.9943012393360684
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 54917,
+      "cpu_delta_usec": {
+        "usage_usec": 4585650,
+        "user_usec": 1955531,
+        "system_usec": 2630120
+      },
+      "total_usec_per_request": 83.50146584846223,
+      "user_usec_per_request": 35.60884607680682,
+      "system_usec_per_request": 47.892637980953076,
+      "rps": 10878.591849493445,
+      "client_cpu_fraction": 0.7322369734471081,
+      "proxy_cpu_fraction": 0.9083783657998363
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 61199,
+      "cpu_delta_usec": {
+        "usage_usec": 4660620,
+        "user_usec": 2257352,
+        "system_usec": 2403269
+      },
+      "total_usec_per_request": 76.1551659340839,
+      "user_usec_per_request": 36.8854393045638,
+      "system_usec_per_request": 39.26974296965637,
+      "rps": 12168.120161865136,
+      "client_cpu_fraction": 0.8326621622278867,
+      "proxy_cpu_fraction": 0.9266652100327112
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 80511,
+      "cpu_delta_usec": {
+        "usage_usec": 4382307,
+        "user_usec": 1188096,
+        "system_usec": 3194211
+      },
+      "total_usec_per_request": 54.43115847523941,
+      "user_usec_per_request": 14.756940045459627,
+      "system_usec_per_request": 39.674218429779785,
+      "rps": 15970.184710305866,
+      "client_cpu_fraction": 0.5994187887412595,
+      "proxy_cpu_fraction": 0.8692756548455041
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 79763,
+      "cpu_delta_usec": {
+        "usage_usec": 4712946,
+        "user_usec": 1326106,
+        "system_usec": 3386840
+      },
+      "total_usec_per_request": 59.08686985193636,
+      "user_usec_per_request": 16.625578275641587,
+      "system_usec_per_request": 42.46129157629478,
+      "rps": 15841.514645071491,
+      "client_cpu_fraction": 0.7677860585816703,
+      "proxy_cpu_fraction": 0.9360255140908829
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 60862,
+      "cpu_delta_usec": {
+        "usage_usec": 4559316,
+        "user_usec": 1820998,
+        "system_usec": 2738318
+      },
+      "total_usec_per_request": 74.91235910748907,
+      "user_usec_per_request": 29.920114357070094,
+      "system_usec_per_request": 44.99224475041898,
+      "rps": 12073.057469580823,
+      "client_cpu_fraction": 0.6529639200765593,
+      "proxy_cpu_fraction": 0.904421216686592
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 32230,
+      "cpu_delta_usec": {
+        "usage_usec": 3891805,
+        "user_usec": 1692633,
+        "system_usec": 2199172
+      },
+      "total_usec_per_request": 120.75100837728824,
+      "user_usec_per_request": 52.51731306236426,
+      "system_usec_per_request": 68.23369531492398,
+      "rps": 6404.58797768759,
+      "client_cpu_fraction": 0.9673599570954875,
+      "proxy_cpu_fraction": 0.7733604565468337
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 13785,
+      "cpu_delta_usec": {
+        "usage_usec": 4973583,
+        "user_usec": 1036483,
+        "system_usec": 3937101
+      },
+      "total_usec_per_request": 360.7967355821545,
+      "user_usec_per_request": 75.18919114980051,
+      "system_usec_per_request": 285.6076169749728,
+      "rps": 2740.549643578876,
+      "client_cpu_fraction": 0.5687532158242766,
+      "proxy_cpu_fraction": 0.9887813651040954
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 16287,
+      "cpu_delta_usec": {
+        "usage_usec": 5001252,
+        "user_usec": 1045673,
+        "system_usec": 3955579
+      },
+      "total_usec_per_request": 307.070178670105,
+      "user_usec_per_request": 64.20292257628783,
+      "system_usec_per_request": 242.86725609381716,
+      "rps": 3240.499277123747,
+      "client_cpu_fraction": 0.4217958369723026,
+      "proxy_cpu_fraction": 0.9950606920067352
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 68732,
+      "cpu_delta_usec": {
+        "usage_usec": 4673116,
+        "user_usec": 2170422,
+        "system_usec": 2502694
+      },
+      "total_usec_per_request": 67.99039748588721,
+      "user_usec_per_request": 31.578042251062097,
+      "system_usec_per_request": 36.41235523482512,
+      "rps": 13668.157852307333,
+      "client_cpu_fraction": 0.7937449778351597,
+      "proxy_cpu_fraction": 0.929303485278226
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 26433,
+      "cpu_delta_usec": {
+        "usage_usec": 4003582,
+        "user_usec": 1511225,
+        "system_usec": 2492357
+      },
+      "total_usec_per_request": 151.4615064502705,
+      "user_usec_per_request": 57.1719063292097,
+      "system_usec_per_request": 94.2896001210608,
+      "rps": 5229.4691239538315,
+      "client_cpu_fraction": 0.917189888855073,
+      "proxy_cpu_fraction": 0.7920632714492236
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11604,
+      "cpu_delta_usec": {
+        "usage_usec": 4714409,
+        "user_usec": 1110612,
+        "system_usec": 3603797
+      },
+      "total_usec_per_request": 406.2744743192003,
+      "user_usec_per_request": 95.70941054808686,
+      "system_usec_per_request": 310.5650637711134,
+      "rps": 2307.782556015788,
+      "client_cpu_fraction": 0.8494094600122708,
+      "proxy_cpu_fraction": 0.9375931447883347
+    },
+    {
+      "round": 1,
+      "target": "after",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 13713,
+      "cpu_delta_usec": {
+        "usage_usec": 5016431,
+        "user_usec": 2618089,
+        "system_usec": 2398342
+      },
+      "total_usec_per_request": 365.81572230729967,
+      "user_usec_per_request": 190.92022168744987,
+      "system_usec_per_request": 174.89550061984977,
+      "rps": 2728.8342585950368,
+      "client_cpu_fraction": 0.2644176319817035,
+      "proxy_cpu_fraction": 0.9982504753648479
+    },
+    {
+      "round": 1,
+      "target": "after",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 29203,
+      "cpu_delta_usec": {
+        "usage_usec": 4912104,
+        "user_usec": 3207518,
+        "system_usec": 1704585
+      },
+      "total_usec_per_request": 168.20545834332088,
+      "user_usec_per_request": 109.83522240865665,
+      "system_usec_per_request": 58.37020169160703,
+      "rps": 5800.299298899716,
+      "client_cpu_fraction": 0.4718531463146084,
+      "proxy_cpu_fraction": 0.9756420020998695
+    },
+    {
+      "round": 1,
+      "target": "after",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 43578,
+      "cpu_delta_usec": {
+        "usage_usec": 4858080,
+        "user_usec": 3337096,
+        "system_usec": 1520984
+      },
+      "total_usec_per_request": 111.48010463995594,
+      "user_usec_per_request": 76.57753912524669,
+      "system_usec_per_request": 34.90256551470926,
+      "rps": 8665.061970548813,
+      "client_cpu_fraction": 0.6864849513481385,
+      "proxy_cpu_fraction": 0.9659820151884845
+    },
+    {
+      "round": 1,
+      "target": "after",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 29295,
+      "cpu_delta_usec": {
+        "usage_usec": 4832796,
+        "user_usec": 2711907,
+        "system_usec": 2120889
+      },
+      "total_usec_per_request": 164.9699948796723,
+      "user_usec_per_request": 92.57235023041474,
+      "system_usec_per_request": 72.39764464925756,
+      "rps": 5826.703157744047,
+      "client_cpu_fraction": 0.48398571480700575,
+      "proxy_cpu_fraction": 0.9612311900984059
+    },
+    {
+      "round": 1,
+      "target": "after",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 51894,
+      "cpu_delta_usec": {
+        "usage_usec": 4637678,
+        "user_usec": 2713704,
+        "system_usec": 1923975
+      },
+      "total_usec_per_request": 89.36828920491772,
+      "user_usec_per_request": 52.293213088218295,
+      "system_usec_per_request": 37.075095386749915,
+      "rps": 10317.914602939449,
+      "client_cpu_fraction": 0.665606098217668,
+      "proxy_cpu_fraction": 0.9220943762271364
+    },
+    {
+      "round": 1,
+      "target": "after",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 25743,
+      "cpu_delta_usec": {
+        "usage_usec": 4708142,
+        "user_usec": 2728178,
+        "system_usec": 1979965
+      },
+      "total_usec_per_request": 182.89018373926893,
+      "user_usec_per_request": 105.97746960338733,
+      "system_usec_per_request": 76.912752981393,
+      "rps": 5117.7565596307,
+      "client_cpu_fraction": 0.5585389254195221,
+      "proxy_cpu_fraction": 0.9359874375237077
+    },
+    {
+      "round": 1,
+      "target": "after",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 31625,
+      "cpu_delta_usec": {
+        "usage_usec": 4535521,
+        "user_usec": 3551199,
+        "system_usec": 984321
+      },
+      "total_usec_per_request": 143.4156837944664,
+      "user_usec_per_request": 112.29087747035572,
+      "system_usec_per_request": 31.12477470355731,
+      "rps": 6290.230962224082,
+      "client_cpu_fraction": 0.9577996947524293,
+      "proxy_cpu_fraction": 0.902117774672491
+    },
+    {
+      "round": 1,
+      "target": "after",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 14289,
+      "cpu_delta_usec": {
+        "usage_usec": 4985268,
+        "user_usec": 2903834,
+        "system_usec": 2081434
+      },
+      "total_usec_per_request": 348.8885156414025,
+      "user_usec_per_request": 203.2216390230247,
+      "system_usec_per_request": 145.66687661837778,
+      "rps": 2842.3166421041783,
+      "client_cpu_fraction": 0.2736689042432592,
+      "proxy_cpu_fraction": 0.9916516342465822
+    },
+    {
+      "round": 1,
+      "target": "after",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 13117,
+      "cpu_delta_usec": {
+        "usage_usec": 5010833,
+        "user_usec": 2747636,
+        "system_usec": 2263197
+      },
+      "total_usec_per_request": 382.01059693527486,
+      "user_usec_per_request": 209.47137302736905,
+      "system_usec_per_request": 172.53922390790578,
+      "rps": 2609.3862078702577,
+      "client_cpu_fraction": 0.3433717112369107,
+      "proxy_cpu_fraction": 0.9968131829031902
+    },
+    {
+      "round": 1,
+      "target": "after",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 43049,
+      "cpu_delta_usec": {
+        "usage_usec": 4665299,
+        "user_usec": 2868305,
+        "system_usec": 1796993
+      },
+      "total_usec_per_request": 108.37183209830658,
+      "user_usec_per_request": 66.6288415526493,
+      "system_usec_per_request": 41.742967316313965,
+      "rps": 8563.087644450905,
+      "client_cpu_fraction": 0.7655965073547788,
+      "proxy_cpu_fraction": 0.9279974964475172
+    },
+    {
+      "round": 1,
+      "target": "after",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 21248,
+      "cpu_delta_usec": {
+        "usage_usec": 4642509,
+        "user_usec": 3167117,
+        "system_usec": 1475392
+      },
+      "total_usec_per_request": 218.49157567771084,
+      "user_usec_per_request": 149.05482868975903,
+      "system_usec_per_request": 69.4367469879518,
+      "rps": 4221.862605858864,
+      "client_cpu_fraction": 0.9113915102736616,
+      "proxy_cpu_fraction": 0.9224414130489096
+    },
+    {
+      "round": 1,
+      "target": "after",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11200,
+      "cpu_delta_usec": {
+        "usage_usec": 4880088,
+        "user_usec": 2967745,
+        "system_usec": 1912342
+      },
+      "total_usec_per_request": 435.72214285714284,
+      "user_usec_per_request": 264.97723214285713,
+      "system_usec_per_request": 170.74482142857144,
+      "rps": 2227.365468949366,
+      "client_cpu_fraction": 0.762823253443813,
+      "proxy_cpu_fraction": 0.9705124550566228
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 17105,
+      "cpu_delta_usec": {
+        "usage_usec": 5000122,
+        "user_usec": 688742,
+        "system_usec": 4311381
+      },
+      "total_usec_per_request": 292.31932183572053,
+      "user_usec_per_request": 40.26553639286758,
+      "system_usec_per_request": 252.05384390529085,
+      "rps": 3403.107506844328,
+      "client_cpu_fraction": 0.3598791659721848,
+      "proxy_cpu_fraction": 0.9947940785347836
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 54905,
+      "cpu_delta_usec": {
+        "usage_usec": 4563470,
+        "user_usec": 1911737,
+        "system_usec": 2651733
+      },
+      "total_usec_per_request": 83.11574537838084,
+      "user_usec_per_request": 34.81899644841089,
+      "system_usec_per_request": 48.29674892996995,
+      "rps": 10882.53609968574,
+      "client_cpu_fraction": 0.7241741578174489,
+      "proxy_cpu_fraction": 0.9045100995325176
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 60955,
+      "cpu_delta_usec": {
+        "usage_usec": 4672138,
+        "user_usec": 2344425,
+        "system_usec": 2327712
+      },
+      "total_usec_per_request": 76.64897055204659,
+      "user_usec_per_request": 38.46157001066361,
+      "system_usec_per_request": 38.18738413583792,
+      "rps": 12126.03145907498,
+      "client_cpu_fraction": 0.829796437887876,
+      "proxy_cpu_fraction": 0.9294478282198286
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 80190,
+      "cpu_delta_usec": {
+        "usage_usec": 4366291,
+        "user_usec": 1208758,
+        "system_usec": 3157532
+      },
+      "total_usec_per_request": 54.449320364135176,
+      "user_usec_per_request": 15.07367502182317,
+      "system_usec_per_request": 39.37563287192917,
+      "rps": 15917.296975465457,
+      "client_cpu_fraction": 0.5952538095268696,
+      "proxy_cpu_fraction": 0.8666860023481986
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 81389,
+      "cpu_delta_usec": {
+        "usage_usec": 4733229,
+        "user_usec": 1326024,
+        "system_usec": 3407205
+      },
+      "total_usec_per_request": 58.15563528240917,
+      "user_usec_per_request": 16.2924228089791,
+      "system_usec_per_request": 41.86321247343007,
+      "rps": 16173.001749824665,
+      "client_cpu_fraction": 0.7840543635225761,
+      "proxy_cpu_fraction": 0.9405511911845685
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 61624,
+      "cpu_delta_usec": {
+        "usage_usec": 4566407,
+        "user_usec": 1877588,
+        "system_usec": 2688818
+      },
+      "total_usec_per_request": 74.10111320264832,
+      "user_usec_per_request": 30.468453849149682,
+      "system_usec_per_request": 43.63264312605478,
+      "rps": 12209.791909031923,
+      "client_cpu_fraction": 0.6519182650336246,
+      "proxy_cpu_fraction": 0.9047591724319541
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 32766,
+      "cpu_delta_usec": {
+        "usage_usec": 3926510,
+        "user_usec": 1733751,
+        "system_usec": 2192758
+      },
+      "total_usec_per_request": 119.8348898248184,
+      "user_usec_per_request": 52.9131111518037,
+      "system_usec_per_request": 66.92174815357383,
+      "rps": 6515.950010543211,
+      "client_cpu_fraction": 0.9709502303684383,
+      "proxy_cpu_fraction": 0.7808381516174699
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 14128,
+      "cpu_delta_usec": {
+        "usage_usec": 4966857,
+        "user_usec": 1027965,
+        "system_usec": 3938892
+      },
+      "total_usec_per_request": 351.56122593431485,
+      "user_usec_per_request": 72.76082955832389,
+      "system_usec_per_request": 278.80039637599094,
+      "rps": 2809.6346578916377,
+      "client_cpu_fraction": 0.57784040556666,
+      "proxy_cpu_fraction": 0.9877586047559235
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 16476,
+      "cpu_delta_usec": {
+        "usage_usec": 5003012,
+        "user_usec": 1015907,
+        "system_usec": 3987105
+      },
+      "total_usec_per_request": 303.6545277980092,
+      "user_usec_per_request": 61.659808205875215,
+      "system_usec_per_request": 241.994719592134,
+      "rps": 3278.5522062937494,
+      "client_cpu_fraction": 0.4242996960103323,
+      "proxy_cpu_fraction": 0.9955472220632496
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 67124,
+      "cpu_delta_usec": {
+        "usage_usec": 4704008,
+        "user_usec": 2182039,
+        "system_usec": 2521969
+      },
+      "total_usec_per_request": 70.07937548417854,
+      "user_usec_per_request": 32.50758298075204,
+      "system_usec_per_request": 37.571792503426494,
+      "rps": 13352.197840829296,
+      "client_cpu_fraction": 0.8213627655886434,
+      "proxy_cpu_fraction": 0.9357136860265142
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 26445,
+      "cpu_delta_usec": {
+        "usage_usec": 4026169,
+        "user_usec": 1612316,
+        "system_usec": 2413853
+      },
+      "total_usec_per_request": 152.2468897712233,
+      "user_usec_per_request": 60.96865191907733,
+      "system_usec_per_request": 91.27823785214596,
+      "rps": 5236.911871976316,
+      "client_cpu_fraction": 0.916772663535338,
+      "proxy_cpu_fraction": 0.7973035445143888
+    },
+    {
+      "round": 1,
+      "target": "nginx",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11531,
+      "cpu_delta_usec": {
+        "usage_usec": 4710391,
+        "user_usec": 1092286,
+        "system_usec": 3618105
+      },
+      "total_usec_per_request": 408.498048738184,
+      "user_usec_per_request": 94.7260428410372,
+      "system_usec_per_request": 313.7720058971468,
+      "rps": 2292.224653787195,
+      "client_cpu_fraction": 0.8306294779961136,
+      "proxy_cpu_fraction": 0.9363692983416287
+    },
+    {
+      "round": 1,
+      "target": "before",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 13676,
+      "cpu_delta_usec": {
+        "usage_usec": 5019968,
+        "user_usec": 2743947,
+        "system_usec": 2276022
+      },
+      "total_usec_per_request": 367.0640538169055,
+      "user_usec_per_request": 200.63958759871306,
+      "system_usec_per_request": 166.424539338988,
+      "rps": 2721.350982260253,
+      "client_cpu_fraction": 0.265969972691668,
+      "proxy_cpu_fraction": 0.9989101234070662
+    },
+    {
+      "round": 1,
+      "target": "before",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 29231,
+      "cpu_delta_usec": {
+        "usage_usec": 4904548,
+        "user_usec": 3239393,
+        "system_usec": 1665155
+      },
+      "total_usec_per_request": 167.78584379597004,
+      "user_usec_per_request": 110.82046457527967,
+      "system_usec_per_request": 56.965379220690366,
+      "rps": 5808.93712637732,
+      "client_cpu_fraction": 0.4705786560367518,
+      "proxy_cpu_fraction": 0.9746574173069562
+    },
+    {
+      "round": 1,
+      "target": "before",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 43279,
+      "cpu_delta_usec": {
+        "usage_usec": 4841873,
+        "user_usec": 3336276,
+        "system_usec": 1505598
+      },
+      "total_usec_per_request": 111.8758058180642,
+      "user_usec_per_request": 77.08764065713163,
+      "system_usec_per_request": 34.788188266826864,
+      "rps": 8603.465438068693,
+      "client_cpu_fraction": 0.6851357446155513,
+      "proxy_cpu_fraction": 0.9625196287117997
+    },
+    {
+      "round": 1,
+      "target": "before",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 29364,
+      "cpu_delta_usec": {
+        "usage_usec": 4792542,
+        "user_usec": 2714021,
+        "system_usec": 2078521
+      },
+      "total_usec_per_request": 163.21148344912137,
+      "user_usec_per_request": 92.42681514780003,
+      "system_usec_per_request": 70.78466830132135,
+      "rps": 5837.652673625409,
+      "client_cpu_fraction": 0.4842310428027989,
+      "proxy_cpu_fraction": 0.9527719527231325
+    },
+    {
+      "round": 1,
+      "target": "before",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 51299,
+      "cpu_delta_usec": {
+        "usage_usec": 4633485,
+        "user_usec": 2751601,
+        "system_usec": 1881884
+      },
+      "total_usec_per_request": 90.32310571356167,
+      "user_usec_per_request": 53.63849197840114,
+      "system_usec_per_request": 36.68461373516053,
+      "rps": 10197.865351272469,
+      "client_cpu_fraction": 0.6603250509058387,
+      "proxy_cpu_fraction": 0.9211028701756508
+    },
+    {
+      "round": 1,
+      "target": "before",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 25707,
+      "cpu_delta_usec": {
+        "usage_usec": 4729650,
+        "user_usec": 2805118,
+        "system_usec": 1924532
+      },
+      "total_usec_per_request": 183.98296183918777,
+      "user_usec_per_request": 109.11883922666978,
+      "system_usec_per_request": 74.86412261251799,
+      "rps": 5111.896712660003,
+      "client_cpu_fraction": 0.5562280325798638,
+      "proxy_cpu_fraction": 0.9405018978111946
+    },
+    {
+      "round": 1,
+      "target": "before",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 31446,
+      "cpu_delta_usec": {
+        "usage_usec": 4501077,
+        "user_usec": 3542256,
+        "system_usec": 958820
+      },
+      "total_usec_per_request": 143.1367105514215,
+      "user_usec_per_request": 112.64567830566686,
+      "system_usec_per_request": 30.491000445207657,
+      "rps": 6251.707082236865,
+      "client_cpu_fraction": 0.9511082859952485,
+      "proxy_cpu_fraction": 0.8948487870824099
+    },
+    {
+      "round": 1,
+      "target": "before",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 14198,
+      "cpu_delta_usec": {
+        "usage_usec": 4979400,
+        "user_usec": 2923889,
+        "system_usec": 2055511
+      },
+      "total_usec_per_request": 350.71136779828146,
+      "user_usec_per_request": 205.93668122270742,
+      "system_usec_per_request": 144.77468657557404,
+      "rps": 2824.0147736110916,
+      "client_cpu_fraction": 0.27450445957292047,
+      "proxy_cpu_fraction": 0.9904140839357
+    },
+    {
+      "round": 1,
+      "target": "before",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 13032,
+      "cpu_delta_usec": {
+        "usage_usec": 5014943,
+        "user_usec": 2767224,
+        "system_usec": 2247718
+      },
+      "total_usec_per_request": 384.8176028238183,
+      "user_usec_per_request": 212.34069981583795,
+      "system_usec_per_request": 172.4768262737876,
+      "rps": 2593.1482438649036,
+      "client_cpu_fraction": 0.3423085020940863,
+      "proxy_cpu_fraction": 0.9978890909708864
+    },
+    {
+      "round": 1,
+      "target": "before",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 42953,
+      "cpu_delta_usec": {
+        "usage_usec": 4637267,
+        "user_usec": 2837492,
+        "system_usec": 1799774
+      },
+      "total_usec_per_request": 107.96142295066701,
+      "user_usec_per_request": 66.06039159080856,
+      "system_usec_per_request": 41.901008078597535,
+      "rps": 8544.34849318404,
+      "client_cpu_fraction": 0.7440876708440157,
+      "proxy_cpu_fraction": 0.9224600215105365
+    },
+    {
+      "round": 1,
+      "target": "before",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 21250,
+      "cpu_delta_usec": {
+        "usage_usec": 4637446,
+        "user_usec": 3194186,
+        "system_usec": 1443260
+      },
+      "total_usec_per_request": 218.23275294117647,
+      "user_usec_per_request": 150.31463529411764,
+      "system_usec_per_request": 67.91811764705882,
+      "rps": 4223.999044626549,
+      "client_cpu_fraction": 0.9117968068544533,
+      "proxy_cpu_fraction": 0.9218149399297512
+    },
+    {
+      "round": 1,
+      "target": "before",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11130,
+      "cpu_delta_usec": {
+        "usage_usec": 4888018,
+        "user_usec": 2941784,
+        "system_usec": 1946234
+      },
+      "total_usec_per_request": 439.17502246181493,
+      "user_usec_per_request": 264.31123090745734,
+      "system_usec_per_request": 174.8637915543576,
+      "rps": 2213.4807868557523,
+      "client_cpu_fraction": 0.7667584950748897,
+      "proxy_cpu_fraction": 0.9721054742861708
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 17025,
+      "cpu_delta_usec": {
+        "usage_usec": 4999847,
+        "user_usec": 707419,
+        "system_usec": 4292428
+      },
+      "total_usec_per_request": 293.67676945668137,
+      "user_usec_per_request": 41.55177679882526,
+      "system_usec_per_request": 252.1249926578561,
+      "rps": 3388.6959684422472,
+      "client_cpu_fraction": 0.35867351426426225,
+      "proxy_cpu_fraction": 0.9951812846829994
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 55696,
+      "cpu_delta_usec": {
+        "usage_usec": 4521956,
+        "user_usec": 1880836,
+        "system_usec": 2641120
+      },
+      "total_usec_per_request": 81.18995978167193,
+      "user_usec_per_request": 33.76967825337547,
+      "system_usec_per_request": 47.420281528296464,
+      "rps": 11054.59551701556,
+      "client_cpu_fraction": 0.7175890531671084,
+      "proxy_cpu_fraction": 0.8975221654291441
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 62699,
+      "cpu_delta_usec": {
+        "usage_usec": 4659268,
+        "user_usec": 2217670,
+        "system_usec": 2441599
+      },
+      "total_usec_per_request": 74.31167961211503,
+      "user_usec_per_request": 35.37010159651669,
+      "system_usec_per_request": 38.94159396481603,
+      "rps": 12461.942538496827,
+      "client_cpu_fraction": 0.8332700467239158,
+      "proxy_cpu_fraction": 0.9260678812653637
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 79764,
+      "cpu_delta_usec": {
+        "usage_usec": 4380797,
+        "user_usec": 1232067,
+        "system_usec": 3148731
+      },
+      "total_usec_per_request": 54.92198234792638,
+      "user_usec_per_request": 15.446404392959229,
+      "system_usec_per_request": 39.47559049195126,
+      "rps": 15829.317036407883,
+      "client_cpu_fraction": 0.5940594003603346,
+      "proxy_cpu_fraction": 0.8693774708533242
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 80257,
+      "cpu_delta_usec": {
+        "usage_usec": 4718771,
+        "user_usec": 1274644,
+        "system_usec": 3444128
+      },
+      "total_usec_per_request": 58.795756133421385,
+      "user_usec_per_request": 15.88202898189566,
+      "system_usec_per_request": 42.91373961149806,
+      "rps": 15938.305966263197,
+      "client_cpu_fraction": 0.7757358818903763,
+      "proxy_cpu_fraction": 0.937104750772266
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 62059,
+      "cpu_delta_usec": {
+        "usage_usec": 4532364,
+        "user_usec": 1704977,
+        "system_usec": 2827386
+      },
+      "total_usec_per_request": 73.0331458773103,
+      "user_usec_per_request": 27.473484909521584,
+      "system_usec_per_request": 45.559644854090465,
+      "rps": 12315.770244671867,
+      "client_cpu_fraction": 0.646690262019985,
+      "proxy_cpu_fraction": 0.8994594448705581
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 32737,
+      "cpu_delta_usec": {
+        "usage_usec": 3773641,
+        "user_usec": 1511646,
+        "system_usec": 2261995
+      },
+      "total_usec_per_request": 115.27143598985857,
+      "user_usec_per_request": 46.17545896080887,
+      "system_usec_per_request": 69.0959770290497,
+      "rps": 6505.694965282178,
+      "client_cpu_fraction": 0.9739111013958512,
+      "proxy_cpu_fraction": 0.7499208007600697
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 14042,
+      "cpu_delta_usec": {
+        "usage_usec": 4965313,
+        "user_usec": 983086,
+        "system_usec": 3982228
+      },
+      "total_usec_per_request": 353.6044010824669,
+      "user_usec_per_request": 70.0103973792907,
+      "system_usec_per_request": 283.5940749181028,
+      "rps": 2793.5908469527526,
+      "client_cpu_fraction": 0.5707201455061307,
+      "proxy_cpu_fraction": 0.9878260183061894
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 16527,
+      "cpu_delta_usec": {
+        "usage_usec": 4999579,
+        "user_usec": 983229,
+        "system_usec": 4016350
+      },
+      "total_usec_per_request": 302.509771888425,
+      "user_usec_per_request": 59.49228535124342,
+      "system_usec_per_request": 243.01748653718158,
+      "rps": 3288.0374380802677,
+      "client_cpu_fraction": 0.42436294113490064,
+      "proxy_cpu_fraction": 0.994663455354263
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 69687,
+      "cpu_delta_usec": {
+        "usage_usec": 4700606,
+        "user_usec": 2055024,
+        "system_usec": 2645582
+      },
+      "total_usec_per_request": 67.45312612108428,
+      "user_usec_per_request": 29.489345215032934,
+      "system_usec_per_request": 37.96378090605134,
+      "rps": 13862.6097592296,
+      "client_cpu_fraction": 0.8272875962222512,
+      "proxy_cpu_fraction": 0.9350763644566878
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 27000,
+      "cpu_delta_usec": {
+        "usage_usec": 3883273,
+        "user_usec": 1381367,
+        "system_usec": 2501906
+      },
+      "total_usec_per_request": 143.82492592592592,
+      "user_usec_per_request": 51.16174074074074,
+      "system_usec_per_request": 92.66318518518518,
+      "rps": 5347.412823600487,
+      "client_cpu_fraction": 0.9216346212667802,
+      "proxy_cpu_fraction": 0.7690912532496865
+    },
+    {
+      "round": 1,
+      "target": "openresty",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11880,
+      "cpu_delta_usec": {
+        "usage_usec": 4714914,
+        "user_usec": 964150,
+        "system_usec": 3750763
+      },
+      "total_usec_per_request": 396.8782828282828,
+      "user_usec_per_request": 81.1574074074074,
+      "system_usec_per_request": 315.72079124579125,
+      "rps": 2362.5915633097693,
+      "client_cpu_fraction": 0.8368310255167062,
+      "proxy_cpu_fraction": 0.9376612826709694
+    },
+    {
+      "round": 2,
+      "target": "nginx",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 17149,
+      "cpu_delta_usec": {
+        "usage_usec": 4996739,
+        "user_usec": 699759,
+        "system_usec": 4296981
+      },
+      "total_usec_per_request": 291.3720333547146,
+      "user_usec_per_request": 40.80465333255584,
+      "system_usec_per_request": 250.56743833459677,
+      "rps": 3413.130063205034,
+      "client_cpu_fraction": 0.3574307860944534,
+      "proxy_cpu_fraction": 0.9944906466201561
+    },
+    {
+      "round": 2,
+      "target": "nginx",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 55217,
+      "cpu_delta_usec": {
+        "usage_usec": 4560133,
+        "user_usec": 1957751,
+        "system_usec": 2602382
+      },
+      "total_usec_per_request": 82.58567107955884,
+      "user_usec_per_request": 35.45558433091258,
+      "system_usec_per_request": 47.13008674864625,
+      "rps": 10963.310364665189,
+      "client_cpu_fraction": 0.7260534041775667,
+      "proxy_cpu_fraction": 0.9054123437193574
+    },
+    {
+      "round": 2,
+      "target": "nginx",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 61469,
+      "cpu_delta_usec": {
+        "usage_usec": 4656845,
+        "user_usec": 2316955,
+        "system_usec": 2339890
+      },
+      "total_usec_per_request": 75.75924449722625,
+      "user_usec_per_request": 37.69306479688949,
+      "system_usec_per_request": 38.066179700336754,
+      "rps": 12221.2235526565,
+      "client_cpu_fraction": 0.8270331157089699,
+      "proxy_cpu_fraction": 0.9258706631809638
+    },
+    {
+      "round": 2,
+      "target": "nginx",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 80020,
+      "cpu_delta_usec": {
+        "usage_usec": 4352169,
+        "user_usec": 1242192,
+        "system_usec": 3109978
+      },
+      "total_usec_per_request": 54.38851537115721,
+      "user_usec_per_request": 15.523519120219945,
+      "system_usec_per_request": 38.86500874781305,
+      "rps": 15867.451028520782,
+      "client_cpu_fraction": 0.5970741176595079,
+      "proxy_cpu_fraction": 0.8630071041657869
+    },
+    {
+      "round": 2,
+      "target": "nginx",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 80472,
+      "cpu_delta_usec": {
+        "usage_usec": 4714011,
+        "user_usec": 1318094,
+        "system_usec": 3395918
+      },
+      "total_usec_per_request": 58.579518341783476,
+      "user_usec_per_request": 16.37953573913908,
+      "system_usec_per_request": 42.19999502932697,
+      "rps": 15980.703142879229,
+      "client_cpu_fraction": 0.7747765482722873,
+      "proxy_cpu_fraction": 0.9361418928728906
+    },
+    {
+      "round": 2,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 61179,
+      "cpu_delta_usec": {
+        "usage_usec": 4561984,
+        "user_usec": 1873882,
+        "system_usec": 2688102
+      },
+      "total_usec_per_request": 74.56780921558051,
+      "user_usec_per_request": 30.629497049641216,
+      "system_usec_per_request": 43.938312165939294,
+      "rps": 12123.70561934471,
+      "client_cpu_fraction": 0.6495540978993227,
+      "proxy_cpu_fraction": 0.9040381676091577
+    },
+    {
+      "round": 2,
+      "target": "nginx",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 32002,
+      "cpu_delta_usec": {
+        "usage_usec": 3843023,
+        "user_usec": 1679316,
+        "system_usec": 2163706
+      },
+      "total_usec_per_request": 120.08696331479283,
+      "user_usec_per_request": 52.475345290919314,
+      "system_usec_per_request": 67.61158677582651,
+      "rps": 6360.456094032003,
+      "client_cpu_fraction": 0.9607448856100342,
+      "proxy_cpu_fraction": 0.7638078576293716
+    },
+    {
+      "round": 2,
+      "target": "nginx",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 13850,
+      "cpu_delta_usec": {
+        "usage_usec": 4979742,
+        "user_usec": 1051816,
+        "system_usec": 3927926
+      },
+      "total_usec_per_request": 359.54815884476534,
+      "user_usec_per_request": 75.94339350180505,
+      "system_usec_per_request": 283.60476534296026,
+      "rps": 2754.116933832245,
+      "client_cpu_fraction": 0.5728199320999918,
+      "proxy_cpu_fraction": 0.9902376728025741
+    },
+    {
+      "round": 2,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 16286,
+      "cpu_delta_usec": {
+        "usage_usec": 4997203,
+        "user_usec": 997926,
+        "system_usec": 3999277
+      },
+      "total_usec_per_request": 306.8404150804372,
+      "user_usec_per_request": 61.27508289328257,
+      "system_usec_per_request": 245.5653321871546,
+      "rps": 3239.704153956381,
+      "client_cpu_fraction": 0.41713090722742086,
+      "proxy_cpu_fraction": 0.9940721673377926
+    },
+    {
+      "round": 2,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 67205,
+      "cpu_delta_usec": {
+        "usage_usec": 4702072,
+        "user_usec": 2144015,
+        "system_usec": 2558056
+      },
+      "total_usec_per_request": 69.96610371252139,
+      "user_usec_per_request": 31.902611412841306,
+      "system_usec_per_request": 38.06347741983483,
+      "rps": 13367.866062388317,
+      "client_cpu_fraction": 0.8190099978589651,
+      "proxy_cpu_fraction": 0.9352975033361559
+    },
+    {
+      "round": 2,
+      "target": "nginx",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 26580,
+      "cpu_delta_usec": {
+        "usage_usec": 4029802,
+        "user_usec": 1561633,
+        "system_usec": 2468168
+      },
+      "total_usec_per_request": 151.61030850263356,
+      "user_usec_per_request": 58.752182091798346,
+      "system_usec_per_request": 92.85808878856282,
+      "rps": 5262.938844264887,
+      "client_cpu_fraction": 0.9175265612425046,
+      "proxy_cpu_fraction": 0.7979157818094932
+    },
+    {
+      "round": 2,
+      "target": "nginx",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11693,
+      "cpu_delta_usec": {
+        "usage_usec": 4718993,
+        "user_usec": 1069135,
+        "system_usec": 3649857
+      },
+      "total_usec_per_request": 403.574189686137,
+      "user_usec_per_request": 91.4337637903019,
+      "system_usec_per_request": 312.1403403745831,
+      "rps": 2325.78296406919,
+      "client_cpu_fraction": 0.8473463034875768,
+      "proxy_cpu_fraction": 0.9386259751100453
+    },
+    {
+      "round": 2,
+      "target": "openresty",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 17063,
+      "cpu_delta_usec": {
+        "usage_usec": 4998512,
+        "user_usec": 682631,
+        "system_usec": 4315881
+      },
+      "total_usec_per_request": 292.9444997948778,
+      "user_usec_per_request": 40.00650530387388,
+      "system_usec_per_request": 252.93799449100393,
+      "rps": 3395.758370975565,
+      "client_cpu_fraction": 0.35756660992390893,
+      "proxy_cpu_fraction": 0.9947687374097061
+    },
+    {
+      "round": 2,
+      "target": "openresty",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 56067,
+      "cpu_delta_usec": {
+        "usage_usec": 4589340,
+        "user_usec": 1843653,
+        "system_usec": 2745686
+      },
+      "total_usec_per_request": 81.85456685750977,
+      "user_usec_per_request": 32.883032800042805,
+      "system_usec_per_request": 48.971516221663364,
+      "rps": 11128.842677183222,
+      "client_cpu_fraction": 0.7419862632923219,
+      "proxy_cpu_fraction": 0.9109465969662021
+    },
+    {
+      "round": 2,
+      "target": "openresty",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 62661,
+      "cpu_delta_usec": {
+        "usage_usec": 4681627,
+        "user_usec": 2181975,
+        "system_usec": 2499653
+      },
+      "total_usec_per_request": 74.71356984408165,
+      "user_usec_per_request": 34.821898788720254,
+      "system_usec_per_request": 39.89168701425129,
+      "rps": 12465.226345746521,
+      "client_cpu_fraction": 0.8403992700264696,
+      "proxy_cpu_fraction": 0.9313215592052193
+    },
+    {
+      "round": 2,
+      "target": "openresty",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 79631,
+      "cpu_delta_usec": {
+        "usage_usec": 4383797,
+        "user_usec": 1220563,
+        "system_usec": 3163233
+      },
+      "total_usec_per_request": 55.05138702264193,
+      "user_usec_per_request": 15.327736685461693,
+      "system_usec_per_request": 39.72363777925682,
+      "rps": 15805.176874644174,
+      "client_cpu_fraction": 0.5947202186895327,
+      "proxy_cpu_fraction": 0.8700969090873466
+    },
+    {
+      "round": 2,
+      "target": "openresty",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 80470,
+      "cpu_delta_usec": {
+        "usage_usec": 4716788,
+        "user_usec": 1252696,
+        "system_usec": 3464092
+      },
+      "total_usec_per_request": 58.615484031316015,
+      "user_usec_per_request": 15.56724245060271,
+      "system_usec_per_request": 43.04824158071331,
+      "rps": 15984.264672718738,
+      "client_cpu_fraction": 0.7726723424171312,
+      "proxy_cpu_fraction": 0.936925410676074
+    },
+    {
+      "round": 2,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 62915,
+      "cpu_delta_usec": {
+        "usage_usec": 4549305,
+        "user_usec": 1754908,
+        "system_usec": 2794396
+      },
+      "total_usec_per_request": 72.30874990065962,
+      "user_usec_per_request": 27.893316379241835,
+      "system_usec_per_request": 44.41541762695701,
+      "rps": 12480.550302671683,
+      "client_cpu_fraction": 0.6523610324189006,
+      "proxy_cpu_fraction": 0.9024529904584885
+    },
+    {
+      "round": 2,
+      "target": "openresty",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 32865,
+      "cpu_delta_usec": {
+        "usage_usec": 3813826,
+        "user_usec": 1644060,
+        "system_usec": 2169767
+      },
+      "total_usec_per_request": 116.04521527460824,
+      "user_usec_per_request": 50.024646280237334,
+      "system_usec_per_request": 66.02059942187738,
+      "rps": 6534.7912974666815,
+      "client_cpu_fraction": 0.9691149180242243,
+      "proxy_cpu_fraction": 0.7583312628891575
+    },
+    {
+      "round": 2,
+      "target": "openresty",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 14187,
+      "cpu_delta_usec": {
+        "usage_usec": 4967275,
+        "user_usec": 988449,
+        "system_usec": 3978826
+      },
+      "total_usec_per_request": 350.1286388947628,
+      "user_usec_per_request": 69.67286952844154,
+      "system_usec_per_request": 280.4557693663213,
+      "rps": 2820.974927646503,
+      "client_cpu_fraction": 0.5767266203263004,
+      "proxy_cpu_fraction": 0.9877041117731221
+    },
+    {
+      "round": 2,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 16613,
+      "cpu_delta_usec": {
+        "usage_usec": 5001782,
+        "user_usec": 932330,
+        "system_usec": 4069452
+      },
+      "total_usec_per_request": 301.0763859628002,
+      "user_usec_per_request": 56.12050803587552,
+      "system_usec_per_request": 244.9558779269247,
+      "rps": 3305.5895012163173,
+      "client_cpu_fraction": 0.42677800873191074,
+      "proxy_cpu_fraction": 0.9952349405027843
+    },
+    {
+      "round": 2,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 69503,
+      "cpu_delta_usec": {
+        "usage_usec": 4712074,
+        "user_usec": 2066316,
+        "system_usec": 2645757
+      },
+      "total_usec_per_request": 67.79669942304649,
+      "user_usec_per_request": 29.729882163359854,
+      "system_usec_per_request": 38.06680287181848,
+      "rps": 13821.168253361564,
+      "client_cpu_fraction": 0.834568246155947,
+      "proxy_cpu_fraction": 0.9370295897485064
+    },
+    {
+      "round": 2,
+      "target": "openresty",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 26906,
+      "cpu_delta_usec": {
+        "usage_usec": 3910292,
+        "user_usec": 1419780,
+        "system_usec": 2490512
+      },
+      "total_usec_per_request": 145.33159889987363,
+      "user_usec_per_request": 52.768155801679924,
+      "system_usec_per_request": 92.56344309819372,
+      "rps": 5331.277816431465,
+      "client_cpu_fraction": 0.9236636961538215,
+      "proxy_cpu_fraction": 0.7748031292414117
+    },
+    {
+      "round": 2,
+      "target": "openresty",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11813,
+      "cpu_delta_usec": {
+        "usage_usec": 4704030,
+        "user_usec": 1017963,
+        "system_usec": 3686067
+      },
+      "total_usec_per_request": 398.2079065436384,
+      "user_usec_per_request": 86.1731143655295,
+      "system_usec_per_request": 312.0347921781089,
+      "rps": 2349.9205585513137,
+      "client_cpu_fraction": 0.8521720443333889,
+      "proxy_cpu_fraction": 0.9357569461645759
+    },
+    {
+      "round": 2,
+      "target": "after",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 13877,
+      "cpu_delta_usec": {
+        "usage_usec": 5017893,
+        "user_usec": 2695932,
+        "system_usec": 2321960
+      },
+      "total_usec_per_request": 361.597823737119,
+      "user_usec_per_request": 194.2734020321395,
+      "system_usec_per_request": 167.32434964329465,
+      "rps": 2761.9187113016465,
+      "client_cpu_fraction": 0.2683687567808228,
+      "proxy_cpu_fraction": 0.9987037953455036
+    },
+    {
+      "round": 2,
+      "target": "after",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 29305,
+      "cpu_delta_usec": {
+        "usage_usec": 4903748,
+        "user_usec": 3214752,
+        "system_usec": 1688996
+      },
+      "total_usec_per_request": 167.3348575328442,
+      "user_usec_per_request": 109.6997781948473,
+      "system_usec_per_request": 57.63507933799693,
+      "rps": 5826.537159553244,
+      "client_cpu_fraction": 0.475750129991154,
+      "proxy_cpu_fraction": 0.9749827655036649
+    },
+    {
+      "round": 2,
+      "target": "after",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 44047,
+      "cpu_delta_usec": {
+        "usage_usec": 4853886,
+        "user_usec": 3369417,
+        "system_usec": 1484470
+      },
+      "total_usec_per_request": 110.19787953776648,
+      "user_usec_per_request": 76.49594751061366,
+      "system_usec_per_request": 33.701954730174585,
+      "rps": 8755.607331199466,
+      "client_cpu_fraction": 0.6902429876175945,
+      "proxy_cpu_fraction": 0.9648493619635038
+    },
+    {
+      "round": 2,
+      "target": "after",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 29361,
+      "cpu_delta_usec": {
+        "usage_usec": 4815329,
+        "user_usec": 2723851,
+        "system_usec": 2091478
+      },
+      "total_usec_per_request": 164.00425734818296,
+      "user_usec_per_request": 92.77105684411293,
+      "system_usec_per_request": 71.23320050407003,
+      "rps": 5838.399532892844,
+      "client_cpu_fraction": 0.48274194381701924,
+      "proxy_cpu_fraction": 0.9575223794940692
+    },
+    {
+      "round": 2,
+      "target": "after",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 52237,
+      "cpu_delta_usec": {
+        "usage_usec": 4629245,
+        "user_usec": 2785210,
+        "system_usec": 1844034
+      },
+      "total_usec_per_request": 88.62003943564906,
+      "user_usec_per_request": 53.318720447192604,
+      "system_usec_per_request": 35.301299844937496,
+      "rps": 10389.444776304612,
+      "client_cpu_fraction": 0.6639704872415937,
+      "proxy_cpu_fraction": 0.9207130057906129
+    },
+    {
+      "round": 2,
+      "target": "after",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 25955,
+      "cpu_delta_usec": {
+        "usage_usec": 4710407,
+        "user_usec": 2830167,
+        "system_usec": 1880240
+      },
+      "total_usec_per_request": 181.48360624157195,
+      "user_usec_per_request": 109.04130225390098,
+      "system_usec_per_request": 72.44230398767097,
+      "rps": 5159.648205678913,
+      "client_cpu_fraction": 0.5564726808981255,
+      "proxy_cpu_fraction": 0.9363915633044652
+    },
+    {
+      "round": 2,
+      "target": "after",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 31770,
+      "cpu_delta_usec": {
+        "usage_usec": 4549873,
+        "user_usec": 3662038,
+        "system_usec": 887836
+      },
+      "total_usec_per_request": 143.21287378029587,
+      "user_usec_per_request": 115.26717028643374,
+      "system_usec_per_request": 27.945734970097575,
+      "rps": 6318.106216880478,
+      "client_cpu_fraction": 0.9564171003415426,
+      "proxy_cpu_fraction": 0.9048341481686065
+    },
+    {
+      "round": 2,
+      "target": "after",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 14145,
+      "cpu_delta_usec": {
+        "usage_usec": 4978799,
+        "user_usec": 2878695,
+        "system_usec": 2100103
+      },
+      "total_usec_per_request": 351.98296217744786,
+      "user_usec_per_request": 203.5132555673383,
+      "system_usec_per_request": 148.46963591375044,
+      "rps": 2813.565637612369,
+      "client_cpu_fraction": 0.2737374598399969,
+      "proxy_cpu_fraction": 0.9903271674074815
+    },
+    {
+      "round": 2,
+      "target": "after",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 13164,
+      "cpu_delta_usec": {
+        "usage_usec": 5015120,
+        "user_usec": 2743464,
+        "system_usec": 2271655
+      },
+      "total_usec_per_request": 380.97234883014283,
+      "user_usec_per_request": 208.40656335460346,
+      "system_usec_per_request": 172.565709510787,
+      "rps": 2619.5773678387172,
+      "client_cpu_fraction": 0.3428514161974297,
+      "proxy_cpu_fraction": 0.9979865427677992
+    },
+    {
+      "round": 2,
+      "target": "after",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 43269,
+      "cpu_delta_usec": {
+        "usage_usec": 4661672,
+        "user_usec": 2910578,
+        "system_usec": 1751093
+      },
+      "total_usec_per_request": 107.7369941528577,
+      "user_usec_per_request": 67.26705031315723,
+      "system_usec_per_request": 40.46992072846611,
+      "rps": 8605.518781624214,
+      "client_cpu_fraction": 0.7577867414276841,
+      "proxy_cpu_fraction": 0.927132726658155
+    },
+    {
+      "round": 2,
+      "target": "after",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 21194,
+      "cpu_delta_usec": {
+        "usage_usec": 4622330,
+        "user_usec": 3156408,
+        "system_usec": 1465922
+      },
+      "total_usec_per_request": 218.0961592903652,
+      "user_usec_per_request": 148.92931961876002,
+      "system_usec_per_request": 69.16683967160517,
+      "rps": 4210.134743545007,
+      "client_cpu_fraction": 0.9118035654314518,
+      "proxy_cpu_fraction": 0.9182142176620925
+    },
+    {
+      "round": 2,
+      "target": "after",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11172,
+      "cpu_delta_usec": {
+        "usage_usec": 4889871,
+        "user_usec": 2976601,
+        "system_usec": 1913270
+      },
+      "total_usec_per_request": 437.6898496240602,
+      "user_usec_per_request": 266.4340315073398,
+      "system_usec_per_request": 171.25581811672038,
+      "rps": 2221.001825587675,
+      "client_cpu_fraction": 0.7661591515074763,
+      "proxy_cpu_fraction": 0.9721099550562324
+    },
+    {
+      "round": 2,
+      "target": "before",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 13868,
+      "cpu_delta_usec": {
+        "usage_usec": 5014469,
+        "user_usec": 2630123,
+        "system_usec": 2384345
+      },
+      "total_usec_per_request": 361.5855927314681,
+      "user_usec_per_request": 189.65409576002307,
+      "system_usec_per_request": 171.93142486299394,
+      "rps": 2760.4113233418516,
+      "client_cpu_fraction": 0.26812674564342315,
+      "proxy_cpu_fraction": 0.9981249645332197
+    },
+    {
+      "round": 2,
+      "target": "before",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 29641,
+      "cpu_delta_usec": {
+        "usage_usec": 4917893,
+        "user_usec": 3184044,
+        "system_usec": 1733850
+      },
+      "total_usec_per_request": 165.91521878479134,
+      "user_usec_per_request": 107.4202624742755,
+      "system_usec_per_request": 58.494990047569246,
+      "rps": 5891.349835364105,
+      "client_cpu_fraction": 0.4734575414483918,
+      "proxy_cpu_fraction": 0.97746459687218
+    },
+    {
+      "round": 2,
+      "target": "before",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 44154,
+      "cpu_delta_usec": {
+        "usage_usec": 4853558,
+        "user_usec": 3438964,
+        "system_usec": 1414595
+      },
+      "total_usec_per_request": 109.92340444806813,
+      "user_usec_per_request": 77.88567287221996,
+      "system_usec_per_request": 32.03775422385288,
+      "rps": 8780.69486489574,
+      "client_cpu_fraction": 0.6916185285331774,
+      "proxy_cpu_fraction": 0.9652038729690093
+    },
+    {
+      "round": 2,
+      "target": "before",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 29239,
+      "cpu_delta_usec": {
+        "usage_usec": 4800511,
+        "user_usec": 2711931,
+        "system_usec": 2088581
+      },
+      "total_usec_per_request": 164.18177776257738,
+      "user_usec_per_request": 92.75047026232087,
+      "system_usec_per_request": 71.43134170115258,
+      "rps": 5815.585141849727,
+      "client_cpu_fraction": 0.485514938066583,
+      "proxy_cpu_fraction": 0.9548131073185188
+    },
+    {
+      "round": 2,
+      "target": "before",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 51920,
+      "cpu_delta_usec": {
+        "usage_usec": 4637579,
+        "user_usec": 2759840,
+        "system_usec": 1877738
+      },
+      "total_usec_per_request": 89.32162942989214,
+      "user_usec_per_request": 53.15562403697997,
+      "system_usec_per_request": 36.165986132511556,
+      "rps": 10322.894123733122,
+      "client_cpu_fraction": 0.6681106510702741,
+      "proxy_cpu_fraction": 0.9220577235641011
+    },
+    {
+      "round": 2,
+      "target": "before",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 25617,
+      "cpu_delta_usec": {
+        "usage_usec": 4713936,
+        "user_usec": 2806035,
+        "system_usec": 1907902
+      },
+      "total_usec_per_request": 184.01592692352733,
+      "user_usec_per_request": 109.53800210797517,
+      "system_usec_per_request": 74.47796385212945,
+      "rps": 5095.37201859747,
+      "client_cpu_fraction": 0.5575355784281218,
+      "proxy_cpu_fraction": 0.937629605022418
+    },
+    {
+      "round": 2,
+      "target": "before",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 31941,
+      "cpu_delta_usec": {
+        "usage_usec": 4539878,
+        "user_usec": 3632758,
+        "system_usec": 907119
+      },
+      "total_usec_per_request": 142.13324567170721,
+      "user_usec_per_request": 113.73338342569112,
+      "system_usec_per_request": 28.399830938292478,
+      "rps": 6352.6791192173005,
+      "client_cpu_fraction": 0.9586118406816062,
+      "proxy_cpu_fraction": 0.9029269019252372
+    },
+    {
+      "round": 2,
+      "target": "before",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 14323,
+      "cpu_delta_usec": {
+        "usage_usec": 4982339,
+        "user_usec": 2867819,
+        "system_usec": 2114521
+      },
+      "total_usec_per_request": 347.8558262933743,
+      "user_usec_per_request": 200.22474341967464,
+      "system_usec_per_request": 147.63115269147525,
+      "rps": 2849.459268809769,
+      "client_cpu_fraction": 0.27325892628920756,
+      "proxy_cpu_fraction": 0.9912010084411362
+    },
+    {
+      "round": 2,
+      "target": "before",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 13017,
+      "cpu_delta_usec": {
+        "usage_usec": 5013608,
+        "user_usec": 2725630,
+        "system_usec": 2287977
+      },
+      "total_usec_per_request": 385.1584850580011,
+      "user_usec_per_request": 209.39002842436813,
+      "system_usec_per_request": 175.76837981101636,
+      "rps": 2590.434538894496,
+      "client_cpu_fraction": 0.339992294435361,
+      "proxy_cpu_fraction": 0.9977278426425258
+    },
+    {
+      "round": 2,
+      "target": "before",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 44093,
+      "cpu_delta_usec": {
+        "usage_usec": 4670648,
+        "user_usec": 2881671,
+        "system_usec": 1788977
+      },
+      "total_usec_per_request": 105.92719932869163,
+      "user_usec_per_request": 65.35438731771482,
+      "system_usec_per_request": 40.5728120109768,
+      "rps": 8772.202688367137,
+      "client_cpu_fraction": 0.7575978671505073,
+      "proxy_cpu_fraction": 0.9292148627223503
+    },
+    {
+      "round": 2,
+      "target": "before",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 20874,
+      "cpu_delta_usec": {
+        "usage_usec": 4649368,
+        "user_usec": 3237192,
+        "system_usec": 1412175
+      },
+      "total_usec_per_request": 222.73488550349717,
+      "user_usec_per_request": 155.08249496981892,
+      "system_usec_per_request": 67.65234262719173,
+      "rps": 4143.527974784563,
+      "client_cpu_fraction": 0.9064189766932519,
+      "proxy_cpu_fraction": 0.9229082290441772
+    },
+    {
+      "round": 2,
+      "target": "before",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11146,
+      "cpu_delta_usec": {
+        "usage_usec": 4879176,
+        "user_usec": 3012170,
+        "system_usec": 1867005
+      },
+      "total_usec_per_request": 437.7513009151265,
+      "user_usec_per_request": 270.2467252826126,
+      "system_usec_per_request": 167.50448591422932,
+      "rps": 2216.9105955743803,
+      "client_cpu_fraction": 0.7682971583781896,
+      "proxy_cpu_fraction": 0.9704554972252127
+    },
+    {
+      "round": 3,
+      "target": "openresty",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 16744,
+      "cpu_delta_usec": {
+        "usage_usec": 4992939,
+        "user_usec": 687561,
+        "system_usec": 4305377
+      },
+      "total_usec_per_request": 298.19272575250835,
+      "user_usec_per_request": 41.063127090301,
+      "system_usec_per_request": 257.12953893932155,
+      "rps": 3331.556515130123,
+      "client_cpu_fraction": 0.35106445902826555,
+      "proxy_cpu_fraction": 0.9934459182451792
+    },
+    {
+      "round": 3,
+      "target": "openresty",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 56034,
+      "cpu_delta_usec": {
+        "usage_usec": 4543907,
+        "user_usec": 1852858,
+        "system_usec": 2691048
+      },
+      "total_usec_per_request": 81.09196202305743,
+      "user_usec_per_request": 33.06667380518971,
+      "system_usec_per_request": 48.025270371560126,
+      "rps": 11110.220405006386,
+      "client_cpu_fraction": 0.7245772511071273,
+      "proxy_cpu_fraction": 0.9009495711505757
+    },
+    {
+      "round": 3,
+      "target": "openresty",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 63588,
+      "cpu_delta_usec": {
+        "usage_usec": 4694192,
+        "user_usec": 2220426,
+        "system_usec": 2473767
+      },
+      "total_usec_per_request": 73.8219789897465,
+      "user_usec_per_request": 34.91894697112663,
+      "system_usec_per_request": 38.90304774485752,
+      "rps": 12645.230792840157,
+      "client_cpu_fraction": 0.8431994328820921,
+      "proxy_cpu_fraction": 0.9334959619095414
+    },
+    {
+      "round": 3,
+      "target": "openresty",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 80434,
+      "cpu_delta_usec": {
+        "usage_usec": 4407828,
+        "user_usec": 1228844,
+        "system_usec": 3178984
+      },
+      "total_usec_per_request": 54.80055697839222,
+      "user_usec_per_request": 15.277668647586841,
+      "system_usec_per_request": 39.52288833080538,
+      "rps": 15956.396221041017,
+      "client_cpu_fraction": 0.5966105950199769,
+      "proxy_cpu_fraction": 0.8744194002809605
+    },
+    {
+      "round": 3,
+      "target": "openresty",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 80946,
+      "cpu_delta_usec": {
+        "usage_usec": 4713378,
+        "user_usec": 1328891,
+        "system_usec": 3384488
+      },
+      "total_usec_per_request": 58.228670965829075,
+      "user_usec_per_request": 16.417006399327946,
+      "system_usec_per_request": 41.81167692041608,
+      "rps": 16087.950314164531,
+      "client_cpu_fraction": 0.7673840602822867,
+      "proxy_cpu_fraction": 0.9367799653580928
+    },
+    {
+      "round": 3,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 62820,
+      "cpu_delta_usec": {
+        "usage_usec": 4556596,
+        "user_usec": 1766305,
+        "system_usec": 2790290
+      },
+      "total_usec_per_request": 72.53416109519262,
+      "user_usec_per_request": 28.11692136262337,
+      "system_usec_per_request": 44.41722381407195,
+      "rps": 12469.85689006246,
+      "client_cpu_fraction": 0.6551374387529046,
+      "proxy_cpu_fraction": 0.904490608497788
+    },
+    {
+      "round": 3,
+      "target": "openresty",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 32535,
+      "cpu_delta_usec": {
+        "usage_usec": 3764987,
+        "user_usec": 1606763,
+        "system_usec": 2158223
+      },
+      "total_usec_per_request": 115.72113108959581,
+      "user_usec_per_request": 49.38567696327033,
+      "system_usec_per_request": 66.33542339019517,
+      "rps": 6469.0713867991935,
+      "client_cpu_fraction": 0.9722855226982152,
+      "proxy_cpu_fraction": 0.748608257979743
+    },
+    {
+      "round": 3,
+      "target": "openresty",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 14272,
+      "cpu_delta_usec": {
+        "usage_usec": 4973026,
+        "user_usec": 988276,
+        "system_usec": 3984750
+      },
+      "total_usec_per_request": 348.4463284753363,
+      "user_usec_per_request": 69.24579596412556,
+      "system_usec_per_request": 279.2005325112108,
+      "rps": 2838.8203822771493,
+      "client_cpu_fraction": 0.5640047080960514,
+      "proxy_cpu_fraction": 0.9891765394054235
+    },
+    {
+      "round": 3,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 16553,
+      "cpu_delta_usec": {
+        "usage_usec": 5003013,
+        "user_usec": 973597,
+        "system_usec": 4029416
+      },
+      "total_usec_per_request": 302.24207092369966,
+      "user_usec_per_request": 58.816951609980066,
+      "system_usec_per_request": 243.42511931371956,
+      "rps": 3293.5203600181303,
+      "client_cpu_fraction": 0.4249729620393269,
+      "proxy_cpu_fraction": 0.9954404142412484
+    },
+    {
+      "round": 3,
+      "target": "openresty",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 68292,
+      "cpu_delta_usec": {
+        "usage_usec": 4702307,
+        "user_usec": 2133867,
+        "system_usec": 2568439
+      },
+      "total_usec_per_request": 68.85589820183917,
+      "user_usec_per_request": 31.246222105078193,
+      "system_usec_per_request": 37.6096614537574,
+      "rps": 13586.972708384521,
+      "client_cpu_fraction": 0.8205739081724118,
+      "proxy_cpu_fraction": 0.9355432096796915
+    },
+    {
+      "round": 3,
+      "target": "openresty",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 26977,
+      "cpu_delta_usec": {
+        "usage_usec": 3876163,
+        "user_usec": 1353279,
+        "system_usec": 2522884
+      },
+      "total_usec_per_request": 143.68399006561145,
+      "user_usec_per_request": 50.16417689142603,
+      "system_usec_per_request": 93.51981317418542,
+      "rps": 5343.312853045986,
+      "client_cpu_fraction": 0.9227210233765907,
+      "proxy_cpu_fraction": 0.7677485108945135
+    },
+    {
+      "round": 3,
+      "target": "openresty",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11728,
+      "cpu_delta_usec": {
+        "usage_usec": 4713023,
+        "user_usec": 1065529,
+        "system_usec": 3647494
+      },
+      "total_usec_per_request": 401.8607605729877,
+      "user_usec_per_request": 90.85342769440655,
+      "system_usec_per_request": 311.00733287858117,
+      "rps": 2331.426818064819,
+      "client_cpu_fraction": 0.848218023172177,
+      "proxy_cpu_fraction": 0.936908954327789
+    },
+    {
+      "round": 3,
+      "target": "before",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 13672,
+      "cpu_delta_usec": {
+        "usage_usec": 5018326,
+        "user_usec": 2616269,
+        "system_usec": 2402058
+      },
+      "total_usec_per_request": 367.0513458162668,
+      "user_usec_per_request": 191.35964014043302,
+      "system_usec_per_request": 175.69177881802224,
+      "rps": 2720.987591505758,
+      "client_cpu_fraction": 0.2659853934146167,
+      "proxy_cpu_fraction": 0.998742157411551
+    },
+    {
+      "round": 3,
+      "target": "before",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 29563,
+      "cpu_delta_usec": {
+        "usage_usec": 4908788,
+        "user_usec": 3187535,
+        "system_usec": 1721253
+      },
+      "total_usec_per_request": 166.04498866826776,
+      "user_usec_per_request": 107.82177045631363,
+      "system_usec_per_request": 58.22321821195413,
+      "rps": 5876.742207643443,
+      "client_cpu_fraction": 0.4697162583288645,
+      "proxy_cpu_fraction": 0.9758035932744864
+    },
+    {
+      "round": 3,
+      "target": "before",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 43815,
+      "cpu_delta_usec": {
+        "usage_usec": 4842396,
+        "user_usec": 3391820,
+        "system_usec": 1450577
+      },
+      "total_usec_per_request": 110.51913728175282,
+      "user_usec_per_request": 77.41230172315417,
+      "system_usec_per_request": 33.10685838183271,
+      "rps": 8707.047397182067,
+      "client_cpu_fraction": 0.6891756687999502,
+      "proxy_cpu_fraction": 0.9622953666078936
+    },
+    {
+      "round": 3,
+      "target": "before",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 29326,
+      "cpu_delta_usec": {
+        "usage_usec": 4809303,
+        "user_usec": 2810973,
+        "system_usec": 1998330
+      },
+      "total_usec_per_request": 163.99450999113415,
+      "user_usec_per_request": 95.85258814703676,
+      "system_usec_per_request": 68.14192184409738,
+      "rps": 5831.7574822999495,
+      "client_cpu_fraction": 0.4837617430322149,
+      "proxy_cpu_fraction": 0.9563762106969104
+    },
+    {
+      "round": 3,
+      "target": "before",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 52391,
+      "cpu_delta_usec": {
+        "usage_usec": 4632925,
+        "user_usec": 2708826,
+        "system_usec": 1924100
+      },
+      "total_usec_per_request": 88.42978755893188,
+      "user_usec_per_request": 51.7040331354622,
+      "system_usec_per_request": 36.72577351071749,
+      "rps": 10423.492922804093,
+      "client_cpu_fraction": 0.6620871751862446,
+      "proxy_cpu_fraction": 0.9217472647855958
+    },
+    {
+      "round": 3,
+      "target": "before",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 25842,
+      "cpu_delta_usec": {
+        "usage_usec": 4719167,
+        "user_usec": 2799167,
+        "system_usec": 1919999
+      },
+      "total_usec_per_request": 182.61616747929727,
+      "user_usec_per_request": 108.31851249903258,
+      "system_usec_per_request": 74.29761628356938,
+      "rps": 5137.255016443387,
+      "client_cpu_fraction": 0.5568649654955521,
+      "proxy_cpu_fraction": 0.9381458224666855
+    },
+    {
+      "round": 3,
+      "target": "before",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 32079,
+      "cpu_delta_usec": {
+        "usage_usec": 4535082,
+        "user_usec": 3593239,
+        "system_usec": 941843
+      },
+      "total_usec_per_request": 141.37229963527543,
+      "user_usec_per_request": 112.01218865924749,
+      "system_usec_per_request": 29.36011097602793,
+      "rps": 6380.637920000569,
+      "client_cpu_fraction": 0.9565616310526892,
+      "proxy_cpu_fraction": 0.902045455890521
+    },
+    {
+      "round": 3,
+      "target": "before",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 14323,
+      "cpu_delta_usec": {
+        "usage_usec": 4975898,
+        "user_usec": 2876649,
+        "system_usec": 2099249
+      },
+      "total_usec_per_request": 347.40613000069817,
+      "user_usec_per_request": 200.8412343782727,
+      "system_usec_per_request": 146.56489562242547,
+      "rps": 2848.690447852376,
+      "client_cpu_fraction": 0.2749583944315037,
+      "proxy_cpu_fraction": 0.9896525240583498
+    },
+    {
+      "round": 3,
+      "target": "before",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 13016,
+      "cpu_delta_usec": {
+        "usage_usec": 5015924,
+        "user_usec": 2860893,
+        "system_usec": 2155031
+      },
+      "total_usec_per_request": 385.3660110633067,
+      "user_usec_per_request": 219.79817148125383,
+      "system_usec_per_request": 165.56783958205287,
+      "rps": 2590.503175593127,
+      "client_cpu_fraction": 0.34129003630542243,
+      "proxy_cpu_fraction": 0.998291875425152
+    },
+    {
+      "round": 3,
+      "target": "before",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 43571,
+      "cpu_delta_usec": {
+        "usage_usec": 4640527,
+        "user_usec": 2879028,
+        "system_usec": 1761499
+      },
+      "total_usec_per_request": 106.50494595028803,
+      "user_usec_per_request": 66.07670239379404,
+      "system_usec_per_request": 40.428243556493996,
+      "rps": 8669.538654880747,
+      "client_cpu_fraction": 0.7477396007532271,
+      "proxy_cpu_fraction": 0.9233487458520069
+    },
+    {
+      "round": 3,
+      "target": "before",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 21331,
+      "cpu_delta_usec": {
+        "usage_usec": 4655653,
+        "user_usec": 3188453,
+        "system_usec": 1467201
+      },
+      "total_usec_per_request": 218.25760630068913,
+      "user_usec_per_request": 149.47508321222634,
+      "system_usec_per_request": 68.78256996859031,
+      "rps": 4236.434395916418,
+      "client_cpu_fraction": 0.9089693917924602,
+      "proxy_cpu_fraction": 0.9246340305026234
+    },
+    {
+      "round": 3,
+      "target": "before",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11192,
+      "cpu_delta_usec": {
+        "usage_usec": 4890000,
+        "user_usec": 3035104,
+        "system_usec": 1854896
+      },
+      "total_usec_per_request": 436.9192280200143,
+      "user_usec_per_request": 271.18513223731236,
+      "system_usec_per_request": 165.73409578270193,
+      "rps": 2224.5691214438516,
+      "client_cpu_fraction": 0.7630410227683498,
+      "proxy_cpu_fraction": 0.9719570232184092
+    },
+    {
+      "round": 3,
+      "target": "nginx",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 17187,
+      "cpu_delta_usec": {
+        "usage_usec": 5000097,
+        "user_usec": 688008,
+        "system_usec": 4312089
+      },
+      "total_usec_per_request": 290.9231977657532,
+      "user_usec_per_request": 40.03072089369873,
+      "system_usec_per_request": 250.89247687205446,
+      "rps": 3420.4239454695908,
+      "client_cpu_fraction": 0.35785362116192587,
+      "proxy_cpu_fraction": 0.9950806719305676
+    },
+    {
+      "round": 3,
+      "target": "nginx",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 54704,
+      "cpu_delta_usec": {
+        "usage_usec": 4570197,
+        "user_usec": 1935935,
+        "system_usec": 2634263
+      },
+      "total_usec_per_request": 83.5441101199181,
+      "user_usec_per_request": 35.38927683533197,
+      "system_usec_per_request": 48.15485156478503,
+      "rps": 10854.464193144904,
+      "client_cpu_fraction": 0.7282558929726575,
+      "proxy_cpu_fraction": 0.906826551844806
+    },
+    {
+      "round": 3,
+      "target": "nginx",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 61972,
+      "cpu_delta_usec": {
+        "usage_usec": 4674421,
+        "user_usec": 2351363,
+        "system_usec": 2323058
+      },
+      "total_usec_per_request": 75.42795133286,
+      "user_usec_per_request": 37.94234492996837,
+      "system_usec_per_request": 37.48560640289163,
+      "rps": 12328.062861404487,
+      "client_cpu_fraction": 0.8353577513011174,
+      "proxy_cpu_fraction": 0.9298805255384566
+    },
+    {
+      "round": 3,
+      "target": "nginx",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 80919,
+      "cpu_delta_usec": {
+        "usage_usec": 4394223,
+        "user_usec": 1220709,
+        "system_usec": 3173513
+      },
+      "total_usec_per_request": 54.30397063730397,
+      "user_usec_per_request": 15.085567048530011,
+      "system_usec_per_request": 39.21839123073691,
+      "rps": 16057.124748742895,
+      "client_cpu_fraction": 0.5996374380645046,
+      "proxy_cpu_fraction": 0.871965630875261
+    },
+    {
+      "round": 3,
+      "target": "nginx",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 81057,
+      "cpu_delta_usec": {
+        "usage_usec": 4731077,
+        "user_usec": 1310737,
+        "system_usec": 3420339
+      },
+      "total_usec_per_request": 58.36728475023749,
+      "user_usec_per_request": 16.17055898935317,
+      "system_usec_per_request": 42.1967134238869,
+      "rps": 16101.764857498978,
+      "client_cpu_fraction": 0.7780399119792972,
+      "proxy_cpu_fraction": 0.9398162944190098
+    },
+    {
+      "round": 3,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 61893,
+      "cpu_delta_usec": {
+        "usage_usec": 4559948,
+        "user_usec": 1794456,
+        "system_usec": 2765493
+      },
+      "total_usec_per_request": 73.6746966539027,
+      "user_usec_per_request": 28.992874800058164,
+      "system_usec_per_request": 44.68183801076051,
+      "rps": 12281.770409102272,
+      "client_cpu_fraction": 0.6544280829730839,
+      "proxy_cpu_fraction": 0.9048557092634884
+    },
+    {
+      "round": 3,
+      "target": "nginx",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 32474,
+      "cpu_delta_usec": {
+        "usage_usec": 3906032,
+        "user_usec": 1734933,
+        "system_usec": 2171100
+      },
+      "total_usec_per_request": 120.2818254603683,
+      "user_usec_per_request": 53.42529408141898,
+      "system_usec_per_request": 66.85656217281517,
+      "rps": 6456.146410987391,
+      "client_cpu_fraction": 0.9608841910285578,
+      "proxy_cpu_fraction": 0.7765570757529686
+    },
+    {
+      "round": 3,
+      "target": "nginx",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 13953,
+      "cpu_delta_usec": {
+        "usage_usec": 4979462,
+        "user_usec": 995862,
+        "system_usec": 3983600
+      },
+      "total_usec_per_request": 356.8739339210206,
+      "user_usec_per_request": 71.37260804128144,
+      "system_usec_per_request": 285.5013258797391,
+      "rps": 2775.5003356142192,
+      "client_cpu_fraction": 0.5701352705104654,
+      "proxy_cpu_fraction": 0.9905037233697592
+    },
+    {
+      "round": 3,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 16496,
+      "cpu_delta_usec": {
+        "usage_usec": 5000912,
+        "user_usec": 987107,
+        "system_usec": 4013806
+      },
+      "total_usec_per_request": 303.15906886517945,
+      "user_usec_per_request": 59.839173132880696,
+      "system_usec_per_request": 243.3199563530553,
+      "rps": 3282.8459108694933,
+      "client_cpu_fraction": 0.42076309274779455,
+      "proxy_cpu_fraction": 0.9952245095670574
+    },
+    {
+      "round": 3,
+      "target": "nginx",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 67735,
+      "cpu_delta_usec": {
+        "usage_usec": 4701865,
+        "user_usec": 2144211,
+        "system_usec": 2557654
+      },
+      "total_usec_per_request": 69.41559016756477,
+      "user_usec_per_request": 31.655879530523364,
+      "system_usec_per_request": 37.75971063704141,
+      "rps": 13473.838753272903,
+      "client_cpu_fraction": 0.82020280212996,
+      "proxy_cpu_fraction": 0.9352944688810438
+    },
+    {
+      "round": 3,
+      "target": "nginx",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 26683,
+      "cpu_delta_usec": {
+        "usage_usec": 4008797,
+        "user_usec": 1546276,
+        "system_usec": 2462520
+      },
+      "total_usec_per_request": 150.23786680658097,
+      "user_usec_per_request": 57.949855713375555,
+      "system_usec_per_request": 92.2879736161601,
+      "rps": 5287.267642039679,
+      "client_cpu_fraction": 0.914581581790167,
+      "proxy_cpu_fraction": 0.7943478117755027
+    },
+    {
+      "round": 3,
+      "target": "nginx",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11649,
+      "cpu_delta_usec": {
+        "usage_usec": 4715166,
+        "user_usec": 1084109,
+        "system_usec": 3631058
+      },
+      "total_usec_per_request": 404.7700231779552,
+      "user_usec_per_request": 93.06455489741609,
+      "system_usec_per_request": 311.7055541248176,
+      "rps": 2317.252561223267,
+      "client_cpu_fraction": 0.8542429527766211,
+      "proxy_cpu_fraction": 0.9379543729155176
+    },
+    {
+      "round": 3,
+      "target": "after",
+      "protocol": "h1",
+      "cache": "miss",
+      "successful": 13945,
+      "cpu_delta_usec": {
+        "usage_usec": 5028866,
+        "user_usec": 2664591,
+        "system_usec": 2364275
+      },
+      "total_usec_per_request": 360.6214413768376,
+      "user_usec_per_request": 191.07859447830765,
+      "system_usec_per_request": 169.54284689852994,
+      "rps": 2775.505117206361,
+      "client_cpu_fraction": 0.2697668569073578,
+      "proxy_cpu_fraction": 1.0009066559157465
+    },
+    {
+      "round": 3,
+      "target": "after",
+      "protocol": "h2",
+      "cache": "off",
+      "successful": 29640,
+      "cpu_delta_usec": {
+        "usage_usec": 4912716,
+        "user_usec": 3239433,
+        "system_usec": 1673283
+      },
+      "total_usec_per_request": 165.74615384615385,
+      "user_usec_per_request": 109.2926113360324,
+      "system_usec_per_request": 56.45354251012146,
+      "rps": 5887.76922731344,
+      "client_cpu_fraction": 0.47305762572150567,
+      "proxy_cpu_fraction": 0.9758751041609437
+    },
+    {
+      "round": 3,
+      "target": "after",
+      "protocol": "h2",
+      "cache": "hit",
+      "successful": 44009,
+      "cpu_delta_usec": {
+        "usage_usec": 4868055,
+        "user_usec": 3356988,
+        "system_usec": 1511067
+      },
+      "total_usec_per_request": 110.61498784339567,
+      "user_usec_per_request": 76.27957917698653,
+      "system_usec_per_request": 34.335408666409144,
+      "rps": 8752.476855586898,
+      "client_cpu_fraction": 0.6926803139672215,
+      "proxy_cpu_fraction": 0.9681551209803467
+    },
+    {
+      "round": 3,
+      "target": "after",
+      "protocol": "h1",
+      "cache": "off",
+      "successful": 29295,
+      "cpu_delta_usec": {
+        "usage_usec": 4804092,
+        "user_usec": 2695087,
+        "system_usec": 2109006
+      },
+      "total_usec_per_request": 163.99016897081412,
+      "user_usec_per_request": 91.99819081754566,
+      "system_usec_per_request": 71.99201228878648,
+      "rps": 5827.919995226752,
+      "client_cpu_fraction": 0.48630973459811155,
+      "proxy_cpu_fraction": 0.9557215847656213
+    },
+    {
+      "round": 3,
+      "target": "after",
+      "protocol": "h1",
+      "cache": "hit",
+      "successful": 52778,
+      "cpu_delta_usec": {
+        "usage_usec": 4635291,
+        "user_usec": 2691774,
+        "system_usec": 1943517
+      },
+      "total_usec_per_request": 87.82619652127781,
+      "user_usec_per_request": 51.00181893970973,
+      "system_usec_per_request": 36.82437758156808,
+      "rps": 10492.256852012006,
+      "client_cpu_fraction": 0.6709064486729308,
+      "proxy_cpu_fraction": 0.9214950122365301
+    },
+    {
+      "round": 3,
+      "target": "after",
+      "protocol": "h1-tls",
+      "cache": "off",
+      "successful": 25618,
+      "cpu_delta_usec": {
+        "usage_usec": 4694332,
+        "user_usec": 2715963,
+        "system_usec": 1978369
+      },
+      "total_usec_per_request": 183.2435006635959,
+      "user_usec_per_request": 106.0177609493325,
+      "system_usec_per_request": 77.22573971426341,
+      "rps": 5091.388955085867,
+      "client_cpu_fraction": 0.547698246949143,
+      "proxy_cpu_fraction": 0.9329639353699019
+    },
+    {
+      "round": 3,
+      "target": "after",
+      "protocol": "h3",
+      "cache": "hit",
+      "successful": 32285,
+      "cpu_delta_usec": {
+        "usage_usec": 4578323,
+        "user_usec": 3639285,
+        "system_usec": 939038
+      },
+      "total_usec_per_request": 141.80960198234473,
+      "user_usec_per_request": 112.72371070156419,
+      "system_usec_per_request": 29.085891280780547,
+      "rps": 6419.37826435526,
+      "client_cpu_fraction": 0.9614579306174147,
+      "proxy_cpu_fraction": 0.9103294766423344
+    },
+    {
+      "round": 3,
+      "target": "after",
+      "protocol": "h2",
+      "cache": "miss",
+      "successful": 14363,
+      "cpu_delta_usec": {
+        "usage_usec": 4981380,
+        "user_usec": 2957900,
+        "system_usec": 2023480
+      },
+      "total_usec_per_request": 346.8203021652858,
+      "user_usec_per_request": 205.9388707094618,
+      "system_usec_per_request": 140.88143145582399,
+      "rps": 2857.3765975456517,
+      "client_cpu_fraction": 0.27758091688218006,
+      "proxy_cpu_fraction": 0.9909962149607991
+    },
+    {
+      "round": 3,
+      "target": "after",
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "successful": 13155,
+      "cpu_delta_usec": {
+        "usage_usec": 5017854,
+        "user_usec": 2696750,
+        "system_usec": 2321104
+      },
+      "total_usec_per_request": 381.44082098061574,
+      "user_usec_per_request": 204.998099581908,
+      "system_usec_per_request": 176.4427213987077,
+      "rps": 2618.2479902080117,
+      "client_cpu_fraction": 0.34346756314695004,
+      "proxy_cpu_fraction": 0.9987066629157911
+    },
+    {
+      "round": 3,
+      "target": "after",
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "successful": 43496,
+      "cpu_delta_usec": {
+        "usage_usec": 4674086,
+        "user_usec": 2856167,
+        "system_usec": 1817918
+      },
+      "total_usec_per_request": 107.46013426521979,
+      "user_usec_per_request": 65.66504965973883,
+      "system_usec_per_request": 41.79506161486113,
+      "rps": 8653.05909053047,
+      "client_cpu_fraction": 0.7629607465578986,
+      "proxy_cpu_fraction": 0.9298588916732851
+    },
+    {
+      "round": 3,
+      "target": "after",
+      "protocol": "h3",
+      "cache": "off",
+      "successful": 21307,
+      "cpu_delta_usec": {
+        "usage_usec": 4642329,
+        "user_usec": 3193665,
+        "system_usec": 1448664
+      },
+      "total_usec_per_request": 217.8781151734172,
+      "user_usec_per_request": 149.88806495517906,
+      "system_usec_per_request": 67.99005021823814,
+      "rps": 4231.441027695853,
+      "client_cpu_fraction": 0.9125088575353482,
+      "proxy_cpu_fraction": 0.9219383955818399
+    },
+    {
+      "round": 3,
+      "target": "after",
+      "protocol": "h3",
+      "cache": "miss",
+      "successful": 11260,
+      "cpu_delta_usec": {
+        "usage_usec": 4878187,
+        "user_usec": 2962062,
+        "system_usec": 1916126
+      },
+      "total_usec_per_request": 433.2315275310835,
+      "user_usec_per_request": 263.06056838365896,
+      "system_usec_per_request": 170.17104795737123,
+      "rps": 2238.704436436987,
+      "client_cpu_fraction": 0.7662898395855251,
+      "proxy_cpu_fraction": 0.9698773426882092
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+name: Four-target OFF syscall counts
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - .github/workflows/framework-syscalls.yml
+      - scripts/perf/framework-syscalls/**
+      - scripts/perf/afxdp-node/syscall_profile.py
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: framework-syscalls-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  profile:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      EDGE_PROFILE_RUNTIME: headers
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: http-state-binaries-a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a
+          run-id: 41665387055
+          github-token: ${{ github.token }}
+          path: .local/architecture-profile-binaries
+      - uses: actions/download-artifact@v4
+        with:
+          name: header-node-binaries-4171ea700386d8ed7c755255c7eeccb7e804d644
+          run-id: 41757321970
+          github-token: ${{ github.token }}
+          path: .local/architecture-header-binaries
+      - uses: actions/download-artifact@v4
+        with:
+          name: bare-pingora-3b25c01f2b0d40ad90beb20a41e7cff917e54510
+          run-id: 41787477297
+          github-token: ${{ github.token }}
+          path: .local/framework-profile-input
+      - name: Prepare images before sampling; no compilation
+        run: |
+          python3 scripts/perf/framework-syscalls/test_thread_exit.py
+          docker pull nginx:1.28.0
+          docker pull openresty/openresty:1.27.1.2-0-bookworm-fat
+          docker build -t edge-http-state-fixture:20261103 -f scripts/perf/http-state/Dockerfile .
+          docker build -t edge-syscall-sidecar:20261104 -f scripts/perf/framework-syscalls/Dockerfile .
+      - name: Count syscalls with checked thread coverage for four independent targets
+        run: |
+          docker run --rm --name edge-syscalls-harness --network host --pid host \
+            --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
+            -e GITHUB_SHA -e EDGE_PROFILE_RUNTIME -e EDGE_MATRIX_HARNESS_NAME=edge-syscalls-harness \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
+            edge-http-state-fixture:20261103 bash scripts/perf/framework-syscalls/run.sh
+      - name: Retain counts and failed transfers without syscall argument or stack dumps
+        if: always()
+        run: |
+          if [ -d .local/framework-syscalls-private ]; then
+            sudo chown -R "$(id -u):$(id -g)" .local/framework-syscalls-private
+          fi
+          python3 scripts/perf/framework-syscalls/evidence.py collect
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: framework-syscalls-${{ github.sha }}
+          path: .local/framework-syscalls-ci/
+          include-hidden-files: true
+          if-no-files-found: error

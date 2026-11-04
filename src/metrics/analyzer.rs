@@ -82,12 +82,7 @@ static GEO_ASN_AVAILABLE: std::sync::atomic::AtomicBool = std::sync::atomic::Ato
 /// identity is part of a geo answer, and serving a cached country for an IP
 /// after the data changed would silently mix generations. In-flight lookups
 /// keep the snapshot they already loaded (ArcSwap), so a clear cannot tear one.
-pub fn install_geo_store(
-    store: Arc<GeoStore>,
-    city_bytes: u64,
-    asn_bytes: u64,
-    asn_loaded: bool,
-) {
+pub fn install_geo_store(store: Arc<GeoStore>, city_bytes: u64, asn_bytes: u64, asn_loaded: bool) {
     let generation = store.generation();
     GEO_CITY_BYTES.store(city_bytes, Ordering::Release);
     GEO_ASN_BYTES.store(asn_bytes, Ordering::Release);
@@ -207,6 +202,10 @@ pub fn analyze_request(ip: IpAddr, ua: &str) -> RequestStats {
     request_stats_from_geo(cached_geo(ip), ua)
 }
 
+pub(crate) fn without_analysis() -> RequestStats {
+    request_stats_from_geo(None, "")
+}
+
 /// Combines a geo answer with UA parsing. Geo lookup happens unconditionally,
 /// so an empty User-Agent still carries city/country/ASN.
 fn request_stats_from_geo(geo: Option<GeoInfo>, ua: &str) -> RequestStats {
@@ -224,11 +223,11 @@ fn request_stats_from_geo(geo: Option<GeoInfo>, ua: &str) -> RequestStats {
 fn analyze_ua(ua: &str) -> UaCacheValue {
     if ua.is_empty() {
         return (
-            Arc::from(""),
-            Arc::from(""),
-            Arc::from(""),
-            Arc::from(""),
-            Arc::from(""),
+            Arc::clone(&super::EMPTY_ARC_STR),
+            Arc::clone(&super::EMPTY_ARC_STR),
+            Arc::clone(&super::EMPTY_ARC_STR),
+            Arc::clone(&super::EMPTY_ARC_STR),
+            Arc::clone(&super::EMPTY_ARC_STR),
         );
     }
 

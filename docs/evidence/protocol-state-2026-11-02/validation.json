@@ -1,0 +1,35 @@
+{
+  "total_cases": 342,
+  "status_counts_by_target": {
+    "edge": {
+      "passed": 71,
+      "failed": 25,
+      "traffic-errors": 18
+    },
+    "nginx": {
+      "passed": 113,
+      "traffic-errors": 1
+    },
+    "openresty": {
+      "passed": 111,
+      "failed": 2,
+      "traffic-errors": 1
+    }
+  },
+  "measurement_sources_and_binaries_match": true,
+  "case_isolation_verified": true,
+  "raw_files_indexed": 2402,
+  "all_original_error_samples_retained": true,
+  "long_stability_completed": false,
+  "deployed": false,
+  "report_sha256": "95006c10f97c6ccb360dc0da2ea543d757def8068194a4a0e414a6415ff35471",
+  "report_groups": 42,
+  "report_cases_csv_rows": 342,
+  "summary_unit_tests_passed": 3,
+  "driver_evidence_tests_passed": 4,
+  "controller_override_test_passed": true,
+  "production_and_controller_release_build_passed": true,
+  "controller_clippy_passed": true,
+  "observed_capacity_ranking_exploratory_due_to_steal": true,
+  "containers_cleaned": true
+}

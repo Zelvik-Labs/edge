@@ -1,0 +1,10 @@
+{
+  "status": "completed",
+  "runs": [
+    {
+      "label": "candidate",
+      "repeat": 0,
+      "manifest": "manifest.json"
+    }
+  ]
+}

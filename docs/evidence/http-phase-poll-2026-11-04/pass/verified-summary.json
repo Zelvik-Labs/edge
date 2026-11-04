@@ -1,0 +1,127 @@
+{
+  "source": "61e525b85d021acb518af09f1f170132b796f317",
+  "scope": "One parsed H1 loopback GET, minimal live route, mimalloc, current-thread Tokio; actual new_ctx/request_filter/private phase methods. Active poll wall time includes clock and instrumentation overhead and preemption; not node CPU, capacity, cache, upstream IO, early admission, response or logging lifecycle. Do not add phase percentages or subtract the clock floor as an exact correction.",
+  "raw_blocks": 640,
+  "total_iterations": 12800000,
+  "host_steal_fraction": 0.0,
+  "scenarios": {
+    "new-context": {
+      "median_ns": 185.367325,
+      "min_ns": 181.86845,
+      "max_ns": 195.8146,
+      "round_medians_ns": [
+        185.066525,
+        185.24562500000002,
+        192.126,
+        185.29694999999998,
+        184.82459999999998,
+        185.377,
+        184.992025,
+        185.34855
+      ]
+    },
+    "request-filter": {
+      "median_ns": 2387.734975,
+      "min_ns": 2371.3626,
+      "max_ns": 2657.09315,
+      "round_medians_ns": [
+        2384.3098,
+        2382.927425,
+        2383.311,
+        2388.4678750000003,
+        2389.5511500000002,
+        2384.872475,
+        2389.8306249999996,
+        2391.2778749999998
+      ]
+    },
+    "phase-polls": {
+      "median_ns": 3008.2500250000003,
+      "min_ns": 2979.0061,
+      "max_ns": 3418.98375,
+      "round_medians_ns": [
+        3006.4422,
+        2996.2779,
+        3022.2977499999997,
+        3005.094575,
+        3012.7063,
+        3005.476925,
+        3004.8537749999996,
+        3005.6668250000002
+      ]
+    },
+    "clock-calibration": {
+      "median_ns": 62.576499999999996,
+      "min_ns": 62.43875,
+      "max_ns": 68.9339,
+      "round_medians_ns": [
+        62.637575,
+        62.60255,
+        62.61105,
+        62.57775,
+        62.507875,
+        62.60785,
+        62.567025,
+        62.50285
+      ]
+    }
+  },
+  "active_phase_poll_wall_ns": {
+    "context": {
+      "median_ns": 1234.913825,
+      "min_ns": 1212.20125,
+      "max_ns": 1399.30685
+    },
+    "local_service": {
+      "median_ns": 36.709475,
+      "min_ns": 35.8197,
+      "max_ns": 46.0286
+    },
+    "protocol_policy": {
+      "median_ns": 32.620125,
+      "min_ns": 32.0769,
+      "max_ns": 71.3536
+    },
+    "early_response": {
+      "median_ns": 52.5095,
+      "min_ns": 51.4461,
+      "max_ns": 64.88185
+    },
+    "security_state": {
+      "median_ns": 300.19735000000003,
+      "min_ns": 294.4806,
+      "max_ns": 342.9596
+    },
+    "limits": {
+      "median_ns": 501.284025,
+      "min_ns": 493.55635,
+      "max_ns": 572.7172
+    },
+    "lightweight_waf": {
+      "median_ns": 62.111625000000004,
+      "min_ns": 60.79215,
+      "max_ns": 77.1575
+    },
+    "body_waf": {
+      "median_ns": 47.732025,
+      "min_ns": 46.7376,
+      "max_ns": 59.8607
+    },
+    "feature_policy": {
+      "median_ns": 33.2725,
+      "min_ns": 32.51435,
+      "max_ns": 39.6031
+    },
+    "rewrite": {
+      "median_ns": 33.389624999999995,
+      "min_ns": 32.8278,
+      "max_ns": 45.4506
+    }
+  },
+  "clock_calibration_active_ns": {
+    "median_ns": 28.7811,
+    "min_ns": 28.35185,
+    "max_ns": 33.74535
+  },
+  "pending_polls": 0
+}

@@ -1,0 +1,113 @@
+{
+  "source": "cd51c20d193418d225c2777c3fd4d39defdf9522",
+  "binary_sha256": {
+    "target/release/Zelvik-Edge": "c581410ef37b2c0a1eb1a95656ab4b32b8b442c9abc96ed5f8b21314a865a9f9",
+    "target/release/examples/issue34-controller": "4394df7e2975712fee179cee61ed6cbe59f0f6cd3f05728af7a38797110239bb",
+    ".local/http-state-ci/protocol-state-client": "368312b058eb6a98373260a6b4977beb1655744418406c7c1c1bcedce92b3c1b"
+  },
+  "scope": "real production startup; one target/case at a time; two rounds, not long soak",
+  "runs": [
+    {
+      "label": "round-0-edge-1024",
+      "exit_code": 0
+    },
+    {
+      "label": "round-0-nginx-1024",
+      "exit_code": 1
+    },
+    {
+      "label": "round-0-openresty-1024",
+      "exit_code": 0
+    },
+    {
+      "label": "round-0-edge-32768",
+      "exit_code": 0
+    },
+    {
+      "label": "round-0-nginx-32768",
+      "exit_code": 0
+    },
+    {
+      "label": "round-0-openresty-32768",
+      "exit_code": 0
+    },
+    {
+      "label": "round-0-edge-131072",
+      "exit_code": 0
+    },
+    {
+      "label": "round-0-nginx-131072",
+      "exit_code": 1
+    },
+    {
+      "label": "round-0-openresty-131072",
+      "exit_code": 0
+    },
+    {
+      "label": "round-1-openresty-1024",
+      "exit_code": 0
+    },
+    {
+      "label": "round-1-nginx-1024",
+      "exit_code": 1
+    },
+    {
+      "label": "round-1-edge-1024",
+      "exit_code": 0
+    },
+    {
+      "label": "round-1-openresty-32768",
+      "exit_code": 0
+    },
+    {
+      "label": "round-1-nginx-32768",
+      "exit_code": 0
+    },
+    {
+      "label": "round-1-edge-32768",
+      "exit_code": 0
+    },
+    {
+      "label": "round-1-openresty-131072",
+      "exit_code": 1
+    },
+    {
+      "label": "round-1-nginx-131072",
+      "exit_code": 1
+    },
+    {
+      "label": "round-1-edge-131072",
+      "exit_code": 0
+    },
+    {
+      "label": "rx-round-0-batch-1",
+      "exit_code": 0,
+      "rx_batch": "1"
+    },
+    {
+      "label": "rx-round-0-batch-32",
+      "exit_code": 0,
+      "rx_batch": "32"
+    },
+    {
+      "label": "rx-round-1-batch-32",
+      "exit_code": 0,
+      "rx_batch": "32"
+    },
+    {
+      "label": "rx-round-1-batch-1",
+      "exit_code": 0,
+      "rx_batch": "1"
+    },
+    {
+      "label": "rx-round-2-batch-1",
+      "exit_code": 0,
+      "rx_batch": "1"
+    },
+    {
+      "label": "rx-round-2-batch-32",
+      "exit_code": 0,
+      "rx_batch": "32"
+    }
+  ]
+}

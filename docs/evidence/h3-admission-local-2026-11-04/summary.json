@@ -1,0 +1,35 @@
+{
+  "binary_source": "a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a",
+  "binary_sha256": "ca5b4e2dca600455b2b324a80ac5254d00c04064654b6f896afca908043b1ccd",
+  "binary_artifact": 13250420934,
+  "harness_checkout": "5e19ac4647a569de368ed034e037cd5e2f4f17ca",
+  "source_revision_field_means": "local harness checkout, NOT downloaded executable source; actual binary source and digest above",
+  "scope": "diagnosis only; old pre-ingress binary, two proxy CPUs, debug logs enabled, one sample each; no capacity ranking",
+  "excluded": [
+    "generated TLS directory",
+    "each overrides.json contains a generated test private key"
+  ],
+  "results": [
+    {
+      "directory": "admission-local-pre-ingress",
+      "proxy_memory_gib": 2,
+      "concurrency": 32,
+      "successful": 179,
+      "failed": 333
+    },
+    {
+      "directory": "admission-local-pre-ingress-4g",
+      "proxy_memory_gib": 4,
+      "concurrency": 32,
+      "successful": 512,
+      "failed": 0
+    },
+    {
+      "directory": "admission-local-pre-ingress-c2",
+      "proxy_memory_gib": 2,
+      "concurrency": 2,
+      "successful": 512,
+      "failed": 0
+    }
+  ]
+}

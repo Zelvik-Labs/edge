@@ -1,0 +1,93 @@
+      ┌─────────┐  mr boxington
+     ╱ ═══════ ╱│
+    ╱─────────╱ │
+    │ •    (◉)│≡│
+    │  ◟▄▄▄◞  │ ╱
+    │   ◀◆▶   │╱
+    └─────────┘
+   Compiling zelvik-edge v26.11.1 (/workspace/edge/.worktrees/perf-next)
+mbx[warning]: cc cache bypassed: compiler invocation names no output file
+mbx[progress]: 15s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 60s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 75s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 90s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 105s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 120s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 135s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 150s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 165s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 180s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 195s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 210s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 225s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 241s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 256s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 271s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 286s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 301s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 316s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 331s elapsed; 0 hits, 0 misses, 3 bypassed, 0 not looked up; ~0.0s compiler work saved
+    Finished `test` profile [optimized] target(s) in 5m 33s
+     Running unittests src/lib.rs (/workspace/edge/target/debug/deps/zelvik_edge-ca49dcf30a597835)
+
+running 53 tests
+test memory_governor::tests::admission_profile_fits_512mib_floor_and_scales_256gib_ceiling ... ok
+test memory_governor::tests::admission_profile_scales_with_machine_size_and_fd_budget ... ok
+test memory_governor::tests::admission_reject_total_counts_control_plane_rejects ... ok
+test memory_governor::tests::admission_rejects_at_limit ... ok
+test memory_governor::tests::backlog_and_keepalive_stay_in_expected_bounds ... ok
+test memory_governor::tests::borrowing_preserves_every_reserve_and_connection_working_set ... ok
+test memory_governor::tests::borrowing_refuses_unknown_stale_and_pressure_observations ... ok
+test memory_governor::tests::cache_read_memory_admission_tracks_bytes_and_object_limit ... ok
+test memory_governor::tests::cache_read_object_limit_tightens_under_pressure ... ok
+test memory_governor::tests::cgroup_unlimited_threshold_does_not_hide_large_real_limits ... ok
+test memory_governor::tests::admission_never_settles_above_limit ... ok
+test memory_governor::tests::config_sync_budget_tightens_and_defers_with_pressure ... ok
+test memory_governor::tests::control_plane_admission_classes_roll_back_and_track_rejects ... ok
+test memory_governor::tests::effective_memory_available_respects_host_pressure_and_container_usage ... ok
+test memory_governor::tests::effective_memory_total_uses_the_smaller_host_or_cgroup_limit ... ok
+test memory_governor::tests::fd_equivalent_snapshot_reuses_cached_fd_count ... ok
+test memory_governor::tests::firewall_state_capacities_are_bounded_by_hard_guardrails ... ok
+test memory_governor::tests::governor_rolls_back_when_limit_is_full ... ok
+test memory_governor::tests::governor_snapshot_budget_fields_stay_within_available_memory ... ok
+test memory_governor::tests::high_cost_admission_classes_have_limits_and_release ... ok
+test memory_governor::tests::concurrent_http_admission_never_exceeds_limit_or_leaks_counters ... ok
+test memory_governor::tests::limits_table_tracks_reseeded_memory ... ok
+test memory_governor::tests::logical_release_does_not_create_observed_headroom ... ok
+test memory_governor::tests::low_available_memory_does_not_expand_fixed_budget_floors ... ok
+test memory_governor::tests::low_fd_limit_reduces_connection_admission_without_touching_protocol_caps ... ok
+test memory_governor::tests::limits_table_rebuilds_on_snapshot_ttl_expiry ... ok
+test memory_governor::tests::permit_drop_refunds_across_threads ... ok
+test memory_governor::tests::pressure_reduces_high_cost_admission_minimums ... ok
+test memory_governor::tests::psi_stall_ratios_escalate_pressure_level ... ok
+test memory_governor::tests::quic_and_udp_budgets_shrink_under_memory_pressure ... ok
+test memory_governor::tests::quic_ingress_does_not_wait_for_diagnostic_owner_accounting ... ok
+test memory_governor::tests::quic_ingress_sees_live_usage_without_a_budget_generation_change ... ok
+test memory_governor::tests::quic_ingress_tracks_pressure_and_budget_changes ... ok
+test memory_governor::tests::raw_availability_does_not_apply_reserve_twice ... ok
+test memory_governor::tests::relay_copy_buffer_scales_with_memory_pressure_and_active_tcp ... ok
+test memory_governor::tests::scheduler_scales_workers_without_legacy_caps ... ok
+test memory_governor::tests::security_work_is_not_classified_as_discardable_analytics ... ok
+test memory_governor::tests::shared_connection_admission_rolls_back_when_budget_is_full ... ok
+test memory_governor::tests::shared_connection_budget_is_elastic_not_average_partitioned ... ok
+test memory_governor::tests::small_machine_uses_reduced_cache_and_bloom_floors ... ok
+test memory_governor::tests::state_and_event_queues_scale_continuously_with_machine_size ... ok
+test memory_governor::tests::tcp_queue_byte_permit_tracks_budget_and_releases ... ok
+test memory_governor::tests::tcp_relay_idle_timeout_engages_under_pressure ... ok
+test memory_governor::tests::udp_direct_workers_match_demux_snapshot_bounds ... ok
+test memory_governor::tests::udp_queue_byte_permit_tracks_budget_and_releases ... ok
+test memory_governor::tests::unaccounted_rss_saturates_and_reports_gap ... ok
+test memory_governor::tests::very_low_raw_availability_limits_new_allocations ... ok
+test memory_governor::tests::zero_copy_relay_admission_tracks_bytes_and_releases ... ok
+test memory_governor::tests::zero_copy_relay_capacity_tracks_resources_without_a_blocking_pool_cap ... ok
+test memory_governor::tests::mixed_connection_admission_respects_shared_connection_budget ... ok
+test memory_governor::tests::zero_copy_relay_disabled_under_high_memory_pressure ... ok
+test memory_governor::tests::zero_copy_relay_disabled_when_connection_admission_is_saturated ... ok
+test memory_governor::tests::zero_copy_relay_disabled_under_high_fd_pressure ... ok
+
+test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 1241 filtered out; finished in 0.07s
+
+mbx[cache]: 0 hits, 0 misses, 3 bypassed; 0 B downloaded, 0 B uploaded, 6.1 KiB stored locally
+mbx[savings]: 10.9 GiB logical of old build output has been shown the door.

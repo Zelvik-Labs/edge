@@ -1,0 +1,19 @@
+{
+  "id": 13262858779,
+  "name": "h3-native-562d49c1b1dc2f754acaa33f842bb266911fbcfb",
+  "size_in_bytes": 26591423,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13262858779",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13262858779/zip",
+  "expired": false,
+  "created_at": "2026-11-03T19:14:12Z",
+  "expires_at": "2027-02-01T18:15:50Z",
+  "updated_at": "2026-11-03T19:14:12Z",
+  "digest": "sha256:cea6a1cc546c8f30b84253ad96922697ec4b3f72a6d8101c6fc88370fa3a3ddc",
+  "workflow_run": {
+    "id": 41692105912,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/h3-admission-gates-matrix-20261104",
+    "head_sha": "562d49c1b1dc2f754acaa33f842bb266911fbcfb"
+  }
+}

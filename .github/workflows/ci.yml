@@ -4,12 +4,163 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      splice_benchmark:
+        description: Run isolated blocking/readiness splice component comparison
+        type: boolean
+        default: false
+      http_future_layout:
+        description: Inspect real release HTTP callback future frames without polling request logic
+        type: boolean
+        default: false
+      h3_origin_drain_repeat:
+        description: Repeat the actual H3 draining and replacement-connection wire regression 64 times
+        type: boolean
+        default: false
+      io_uring_benchmark:
+        description: Test io_uring splice against readiness and default io-wq limits at 1 and 16 connections
+        type: boolean
+        default: false
+      xdp_kernel_probe:
+        description: Probe BPF load and AF_XDP socket creation inside an isolated network namespace
+        type: boolean
+        default: false
+      xdp_wake_probe:
+        description: Exercise real AF_XDP copy-mode RX, readiness, fill recovery, TX and teardown on isolated veths
+        type: boolean
+        default: false
+      xdp_tokio_benchmark:
+        description: Compare the owned XSK poll worker with Tokio readable and read/write registrations
+        type: boolean
+        default: false
+      xdp_node_smoke:
+        description: Validate XSK wake, statistics, idle yield and UDP ownership across protocols, IPv4/IPv6 and reload
+        type: boolean
+        default: false
+      xdp_udp_benchmark:
+        description: Compare release Edge variants with Nginx and OpenResty UDP reuse on isolated veths
+        type: boolean
+        default: false
+      xdp_udp_comparison:
+        description: Choose the same-binary Edge comparison inside the UDP matrix
+        type: choice
+        options: [wake, rx-stats, idle-yield, udp-payload, dataplane]
+        default: wake
+      udp_demux_benchmark:
+        description: Compare production UDP listener-set queries with snapshot point queries
+        type: boolean
+        default: false
+      xdp_udp_profile:
+        description: Collect counts-only UDP proxy syscall diagnostics after warmup, with perturbed timing
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  xdp-kernel:
+    name: Isolated BPF / AF_XDP capability
+    if: github.event_name == 'workflow_dispatch' && (inputs.xdp_kernel_probe || inputs.xdp_wake_probe || inputs.xdp_tokio_benchmark)
+    # The standalone ring fixture uses libbpf >= 1.0 APIs; noble ships 1.3.
+    # Rust correctness and timed splice comparisons keep their 22.04 baseline.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      RUSTFLAGS: "-C target-cpu=x86-64-v2"
+      CARGO_BUILD_JOBS: "2"
+      RUST_TEST_THREADS: "2"
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.local/afxdp-cargo-target
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+      - name: Compile and probe without attaching interfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/xdp-kernel-ci
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, platform, subprocess
+          source = pathlib.Path('scripts/perf/kernel-capability.c')
+          metadata = {'commit': os.environ['GITHUB_SHA'], 'kernel': platform.uname()._asdict(), 'cpus': sorted(os.sched_getaffinity(0)), 'source_sha256': hashlib.sha256(source.read_bytes()).hexdigest(), 'compiler': subprocess.check_output(['cc', '--version'], text=True).splitlines()[0], 'scope': 'minimal XDP_PASS load/close and AF_XDP socket open/close; no attachment or traffic'}
+          pathlib.Path('.local/xdp-kernel-ci/metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
+          PY
+          cc -std=gnu11 -O2 -Wall -Wextra -Werror scripts/perf/kernel-capability.c -o .local/xdp-kernel-ci/probe > .local/xdp-kernel-ci/build.log 2>&1
+          sudo unshare --net -- .local/xdp-kernel-ci/probe > .local/xdp-kernel-ci/result.json 2> .local/xdp-kernel-ci/probe.log
+          cat .local/xdp-kernel-ci/result.json
+      - name: Install real AF_XDP probe dependencies
+        if: inputs.xdp_wake_probe || inputs.xdp_tokio_benchmark
+        run: |
+          set -euo pipefail
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends libxdp-dev libbpf-dev pkg-config
+      - name: Build and exercise real copy-mode AF_XDP rings
+        if: inputs.xdp_wake_probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, pathlib, subprocess
+          files = ['scripts/perf/afxdp-wake.c', 'scripts/perf/afxdp-wake.sh']
+          metadata = {'sources': {p: hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in files}, 'library_versions': subprocess.check_output(['pkg-config', '--modversion', 'libxdp', 'libbpf'], text=True).splitlines(), 'scope': 'veth SKB / forced copy mode; no hardware zero-copy or Tokio throughput claim'}
+          pathlib.Path('.local/xdp-kernel-ci/wake-metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
+          PY
+          read -ra native_flags <<< "$(pkg-config --cflags --libs libxdp libbpf)"
+          pkg-config --atleast-version=1.0 libbpf
+          cc -std=gnu11 -O2 -Wall -Wextra -Werror scripts/perf/afxdp-wake.c -o .local/xdp-kernel-ci/wake-probe "${native_flags[@]}" > .local/xdp-kernel-ci/wake-build.log 2>&1
+          parent_net=$(readlink /proc/self/ns/net)
+          sudo unshare --net -- bash scripts/perf/afxdp-wake.sh "$GITHUB_WORKSPACE/.local/xdp-kernel-ci/wake-probe" "$GITHUB_WORKSPACE/.local/xdp-kernel-ci" "$parent_net"
+      - name: Install Rust for isolated Tokio comparison
+        if: inputs.xdp_tokio_benchmark
+        uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: clippy
+      - name: Cache standalone Tokio probe dependencies
+        if: inputs.xdp_tokio_benchmark
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: scripts/perf/afxdp-tokio -> ../../../.local/afxdp-cargo-target
+          key: afxdp-tokio
+          cache-on-failure: true
+      - name: Test, lint and build the real Tokio wake comparison
+        if: inputs.xdp_tokio_benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked --manifest-path scripts/perf/afxdp-tokio/Cargo.toml > .local/xdp-kernel-ci/tokio-tests.log 2>&1
+          cargo clippy --locked --manifest-path scripts/perf/afxdp-tokio/Cargo.toml --all-targets -- -D clippy::correctness -D clippy::suspicious > .local/xdp-kernel-ci/tokio-clippy.log 2>&1
+          cargo build --locked --release --manifest-path scripts/perf/afxdp-tokio/Cargo.toml --bench wake --message-format=json > .local/xdp-kernel-ci/tokio-build.jsonl 2> .local/xdp-kernel-ci/tokio-build.log
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          records = [json.loads(line) for line in pathlib.Path('.local/xdp-kernel-ci/tokio-build.jsonl').read_text().splitlines() if line.startswith('{')]
+          binaries = [r['executable'] for r in records if r.get('reason') == 'compiler-artifact' and r['target']['name'] == 'wake' and r.get('executable')]
+          generated = [str(pathlib.Path(r['out_dir']) / 'legacy_worker.rs') for r in records if r.get('reason') == 'build-script-executed' and r['package_id'].rsplit('#', 1)[-1].split('@', 1)[0] == 'edge-afxdp-wake-bench']
+          assert len(binaries) == len(generated) == 1
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write(f'EDGE_XDP_WAKE_BENCH_BINARY={binaries[0]}\nEDGE_XDP_WAKE_GENERATED_WORKER={generated[0]}\n')
+          libraries = subprocess.check_output(['pkg-config', '--modversion', 'libxdp', 'libbpf'], text=True).splitlines()
+          metadata = {'libxdp': libraries[0], 'libbpf': libraries[1], 'rustc': subprocess.check_output(['rustc', '--version'], text=True).strip(), 'scope': 'forced-copy veth wake component; no complete Edge or hardware zero-copy claim'}
+          pathlib.Path('.local/xdp-kernel-ci/tokio-native-metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
+          PY
+      - name: Compare XSK wake variants after all compilation finishes
+        if: inputs.xdp_tokio_benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          parent_net=$(readlink /proc/self/ns/net)
+          sudo unshare --net -- bash scripts/perf/afxdp-tokio/run.sh "$EDGE_XDP_WAKE_BENCH_BINARY" "$EDGE_XDP_WAKE_GENERATED_WORKER" "$GITHUB_WORKSPACE/.local/xdp-kernel-ci/tokio" "$parent_net"
+      - name: Upload kernel capability and failures
+        if: always() && hashFiles('.local/xdp-kernel-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: xdp-kernel-${{ github.sha }}
+          path: |
+            .local/xdp-kernel-ci/**/*.json
+            .local/xdp-kernel-ci/**/*.log
+            .local/xdp-kernel-ci/**/*.jsonl
+          if-no-files-found: error
+
   check:
     name: Check / Clippy - linux-x64
     runs-on: ubuntu-22.04
@@ -21,6 +172,7 @@ jobs:
       # (observed twice compiling pingora-pool). RUSTFLAGS env overrides
       # config.toml; pin the CI baseline to the minimum release target.
       RUSTFLAGS: "-C target-cpu=x86-64-v2"
+      CARGO_BUILD_JOBS: "2"
       # cargo 默认用内置 git 后端，**不读** GIT_CONFIG_COUNT/KEY/VALUE 环境变量；
       # 凭据步骤靠 url.*.insteadOf 把 https 改写成 ssh，必须切到 git CLI 后端才生效。
       # 暖缓存命中（rust-cache 里已有 ~/.cargo/git/db）时不会暴露，冷缓存才失败。
@@ -59,9 +211,34 @@ jobs:
           printf '%s\n' "$PROTOCOL_DEPLOY_KEY" > "$key"
 
           # 主机密钥来自 HTTPS 接口而不是首次连接的 TOFU，避免第一次连接就被固定成伪造密钥。
-          curl -fsSL https://api.github.com/meta \
-            | grep -oE '"ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+"' \
-            | tr -d '"' | sed 's/^/github.com /' > "$RUNNER_TEMP/known_hosts"
+          if ! curl --fail-with-body --silent --show-error --location --retry 3 --retry-delay 2 \
+            -D "$RUNNER_TEMP/github-meta.headers" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $CI_METADATA_TOKEN" \
+            https://api.github.com/meta > "$RUNNER_TEMP/github-meta.json"; then
+            python3 - <<'PYMETAERROR'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          headers = root / 'github-meta.headers'
+          if headers.exists():
+              for line in headers.read_text().splitlines():
+                  if line.lower().startswith(('http/', 'x-ratelimit-')):
+                      print(line)
+          try:
+              message = json.loads((root / 'github-meta.json').read_text()).get('message', 'no API message')
+          except json.JSONDecodeError:
+              message = 'metadata endpoint returned a non-JSON error'
+          print(f'::error::GitHub metadata API failed: {message}')
+          PYMETAERROR
+            exit 1
+          fi
+          python3 - <<'PYMETA'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          keys = json.loads((root / 'github-meta.json').read_text())['ssh_keys']
+          assert isinstance(keys, list) and keys and all(isinstance(key, str) and key for key in keys)
+          (root / 'known_hosts').write_text(''.join(f'github.com {key}\n' for key in keys))
+          PYMETA
 
           {
             echo "GIT_SSH_COMMAND=ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
@@ -71,6 +248,7 @@ jobs:
           } >> "$GITHUB_ENV"
         env:
           PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
+          CI_METADATA_TOKEN: ${{ github.token }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.99.1
@@ -178,6 +356,7 @@ jobs:
       # 「runner 失联」，连失败原因都留不下来。
       # 限到 2 个并发：不改产物、不降可调试性，只是构建慢一些。
       CARGO_BUILD_JOBS: "2"
+      RUST_TEST_THREADS: "2"
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -212,9 +391,34 @@ jobs:
           printf '%s\n' "$PROTOCOL_DEPLOY_KEY" > "$key"
 
           # 主机密钥来自 HTTPS 接口而不是首次连接的 TOFU，避免第一次连接就被固定成伪造密钥。
-          curl -fsSL https://api.github.com/meta \
-            | grep -oE '"ssh-[a-z0-9-]+ [A-Za-z0-9+/=]+"' \
-            | tr -d '"' | sed 's/^/github.com /' > "$RUNNER_TEMP/known_hosts"
+          if ! curl --fail-with-body --silent --show-error --location --retry 3 --retry-delay 2 \
+            -D "$RUNNER_TEMP/github-meta.headers" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $CI_METADATA_TOKEN" \
+            https://api.github.com/meta > "$RUNNER_TEMP/github-meta.json"; then
+            python3 - <<'PYMETAERROR'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          headers = root / 'github-meta.headers'
+          if headers.exists():
+              for line in headers.read_text().splitlines():
+                  if line.lower().startswith(('http/', 'x-ratelimit-')):
+                      print(line)
+          try:
+              message = json.loads((root / 'github-meta.json').read_text()).get('message', 'no API message')
+          except json.JSONDecodeError:
+              message = 'metadata endpoint returned a non-JSON error'
+          print(f'::error::GitHub metadata API failed: {message}')
+          PYMETAERROR
+            exit 1
+          fi
+          python3 - <<'PYMETA'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          keys = json.loads((root / 'github-meta.json').read_text())['ssh_keys']
+          assert isinstance(keys, list) and keys and all(isinstance(key, str) and key for key in keys)
+          (root / 'known_hosts').write_text(''.join(f'github.com {key}\n' for key in keys))
+          PYMETA
 
           {
             echo "GIT_SSH_COMMAND=ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
@@ -224,9 +428,12 @@ jobs:
           } >> "$GITHUB_ENV"
         env:
           PROTOCOL_DEPLOY_KEY: ${{ secrets.PROTOCOL_DEPLOY_KEY }}
+          CI_METADATA_TOKEN: ${{ github.token }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: clippy
 
       - name: Install dependencies
         timeout-minutes: 15
@@ -256,9 +463,12 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
+          cache-on-failure: true
           workspaces: |
             . -> target
             pingora-main -> pingora-main/target
+            scripts/perf/idle-yield -> ../../../.local/idle-yield-target
+            scripts/perf/h3-index -> ../../../.local/h3-index-target
 
       - name: Install eBPF Toolchain
         shell: bash
@@ -291,8 +501,66 @@ jobs:
           echo "ZELVIK_EDGE_XDP_EBPF_SOURCE=data/zelvik-edge-xdp-ebpf.o" >> "$GITHUB_ENV"
           echo "ZELVIK_EDGE_XDP_EBPF_SHA256=$(sha256sum data/zelvik-edge-xdp-ebpf.o | awk '{print $1}')" >> "$GITHUB_ENV"
 
+      - name: Validate idle cooperation and scheduling fault controls
+        if: github.event_name == 'workflow_dispatch' && inputs.xdp_udp_comparison == 'idle-yield'
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/.local/idle-yield-target
+        run: |
+          set -euo pipefail
+          python3 scripts/perf/idle-yield/validate.py --output .local/idle-yield-ci/results
+
+      - name: Upload idle cooperation validation and failures
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.xdp_udp_comparison == 'idle-yield' && hashFiles('.local/idle-yield-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: idle-yield-${{ github.sha }}
+          path: .local/idle-yield-ci/
+          if-no-files-found: error
+
+      - name: Validate H3 site bitmap and range-union fault control
+        if: github.event_name == 'workflow_dispatch' && inputs.udp_demux_benchmark
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/.local/h3-index-target
+        run: |
+          set -euo pipefail
+          python3 scripts/perf/h3-index/validate.py --output .local/h3-index-ci/results
+
+      - name: Upload H3 site bitmap validation and failures
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.udp_demux_benchmark && hashFiles('.local/h3-index-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3-index-${{ github.sha }}
+          path: .local/h3-index-ci/
+          if-no-files-found: error
+
       - name: cargo test
+        env:
+          EDGE_H3_TEST_OUTPUT: ${{ github.workspace }}/.local/h3-origin-reuse-ci
         run: cargo test --lib --bins
+
+      - name: Repeat actual H3 draining and replacement lifecycle
+        if: github.event_name == 'workflow_dispatch' && inputs.h3_origin_drain_repeat
+        run: python3 scripts/perf/h3-drain-repeat/run.py
+
+      - name: Retain every H3 drain repeat including failures
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.h3_origin_drain_repeat
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3-drain-repeat-${{ github.sha }}
+          path: .local/h3-drain-repeat-ci/
+          include-hidden-files: true
+          if-no-files-found: warn
+
+      - name: Upload H3 origin reuse wire evidence
+        if: always() && hashFiles('.local/h3-origin-reuse-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3-origin-reuse-${{ github.sha }}
+          path: .local/h3-origin-reuse-ci/
+          include-hidden-files: true
+          if-no-files-found: error
 
       - name: cargo test (integration)
         run: cargo test --no-fail-fast --test '*'
@@ -301,3 +569,255 @@ jobs:
         # --locked: see the vendored check step; without it cargo re-resolves
         # the whole workspace and tests tokio versions the product never ships.
         run: cargo test --locked --manifest-path pingora-main/Cargo.toml -p pingora-core -p pingora-http -p pingora-cache --lib
+
+      - name: io_uring behavior tests and Clippy
+        if: github.event_name == 'workflow_dispatch' && inputs.io_uring_benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/splice-ci
+          cargo test --locked -p zelvik-edge-io --features io-uring > .local/splice-ci/uring-tests.log 2>&1
+          cargo clippy --locked -p zelvik-edge-io --features io-uring --all-targets -- -D clippy::correctness -D clippy::suspicious > .local/splice-ci/uring-clippy.log 2>&1
+
+      - name: Inspect real release HTTP callback future layouts
+        if: github.event_name == 'workflow_dispatch' && inputs.http_future_layout
+        run: |
+          mkdir -p .local/http-future-layout-ci
+          cargo build --locked --release --features http-layout-probe --example http-future-layout > .local/http-future-layout-ci/build.log 2>&1
+          target/release/examples/http-future-layout > .local/http-future-layout-ci/layout.json
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          root = pathlib.Path('.local/http-future-layout-ci')
+          binary = pathlib.Path('target/release/examples/http-future-layout')
+          source = pathlib.Path('examples/http-future-layout.rs')
+          layout = json.loads((root / 'layout.json').read_text())
+          assert len(layout['callbacks']) == 6
+          assert all(row['frame_bytes'] > 0 and row['alignment'] > 0 for row in layout['callbacks'].values())
+          phases = layout['request_phases']
+          assert len(phases['phases']) == 11
+          assert phases['request_filter_frame_bytes'] == layout['callbacks']['request_filter']['frame_bytes']
+          (root / 'phases.json').write_text(json.dumps(phases, indent=2) + '\n')
+          meta = {'source': os.environ['GITHUB_SHA'], 'rustflags': os.environ['RUSTFLAGS'],
+              'rustc': subprocess.check_output(['rustc', '-vV'], text=True),
+              'example_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
+              'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
+              'scope': layout['scope'], 'features': ['http-layout-probe']}
+          (root / 'metadata.json').write_text(json.dumps(meta, indent=2) + '\n')
+          PY
+
+      - name: Retain callback layouts and actual release probe
+        if: always() && inputs.http_future_layout
+        uses: actions/upload-artifact@v4
+        with:
+          name: http-future-layout-${{ github.sha }}
+          path: |
+            .local/http-future-layout-ci/
+            target/release/examples/http-future-layout
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Build splice component benchmark
+        if: github.event_name == 'workflow_dispatch' && (inputs.splice_benchmark || inputs.io_uring_benchmark)
+        shell: bash
+        env:
+          IO_URING_BENCHMARK: ${{ inputs.io_uring_benchmark }}
+        run: |
+          set -euo pipefail
+          mkdir -p .local/splice-ci
+          features=()
+          if [ "$IO_URING_BENCHMARK" = "true" ]; then
+            features=(--features io-uring)
+          fi
+          cargo build --locked --release -p zelvik-edge-io --bench splice "${features[@]}" --message-format=json > .local/splice-ci/build.jsonl 2> .local/splice-ci/build.stderr
+          python3 - <<'PY'
+          import json, pathlib, os
+          records = [json.loads(line) for line in pathlib.Path('.local/splice-ci/build.jsonl').read_text().splitlines() if line.startswith('{')]
+          binaries = [r['executable'] for r in records if r.get('reason') == 'compiler-artifact' and r['target']['name'] == 'splice' and 'bench' in r['target']['kind'] and r.get('executable')]
+          assert len(binaries) == 1, binaries
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write(f'EDGE_SPLICE_BENCH_BINARY={binaries[0]}\n')
+          PY
+
+      - name: Compare splice engines after all compilation finishes
+        if: github.event_name == 'workflow_dispatch' && (inputs.splice_benchmark || inputs.io_uring_benchmark)
+        shell: bash
+        env:
+          IO_URING_BENCHMARK: ${{ inputs.io_uring_benchmark }}
+        run: |
+          set -euo pipefail
+          if [ "$IO_URING_BENCHMARK" = "true" ]; then
+            python3 scripts/perf/compare-splice.py --binary "$EDGE_SPLICE_BENCH_BINARY" --baseline-engine readiness --candidate-engine uring --concurrency 1 --output .local/splice-ci/comparison-c1
+            python3 scripts/perf/compare-splice.py --binary "$EDGE_SPLICE_BENCH_BINARY" --baseline-engine readiness --candidate-engine uring --concurrency 16 --output .local/splice-ci/comparison-c16
+            python3 scripts/perf/compare-splice.py --binary "$EDGE_SPLICE_BENCH_BINARY" --baseline-engine uring-unbounded --candidate-engine uring --concurrency 1 --output .local/splice-ci/workers-c1
+            python3 scripts/perf/compare-splice.py --binary "$EDGE_SPLICE_BENCH_BINARY" --baseline-engine uring-unbounded --candidate-engine uring --concurrency 16 --output .local/splice-ci/workers-c16
+          else
+            python3 scripts/perf/compare-splice.py --binary "$EDGE_SPLICE_BENCH_BINARY" --output .local/splice-ci/comparison
+          fi
+
+      - name: Upload splice samples and failures
+        if: always() && github.event_name == 'workflow_dispatch' && (inputs.splice_benchmark || inputs.io_uring_benchmark) && hashFiles('.local/splice-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: splice-component-${{ github.sha }}
+          path: .local/splice-ci/
+          if-no-files-found: error
+
+      - name: Build matching full-node XSK validation binaries
+        if: ((github.event_name == 'workflow_dispatch' && inputs.xdp_node_smoke) || (github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/')))
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/afxdp-node-ci
+          sudo apt-get install -y --no-install-recommends iproute2 ethtool iputils-ping curl
+          cargo build --locked --bin Zelvik-Edge --bin h3-probe > .local/afxdp-node-ci/build.log 2>&1
+          python3 scripts/perf/afxdp-node/test_corrupt_udp.py > .local/afxdp-node-ci/wire-control-tests.log 2>&1
+
+      - name: Validate XSK wake modes in isolated full nodes
+        if: ((github.event_name == 'workflow_dispatch' && inputs.xdp_node_smoke) || (github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/')))
+        shell: bash
+        run: |
+          set -euo pipefail
+          parent_net=$(readlink /proc/self/ns/net)
+          parent_mount=$(readlink /proc/self/ns/mnt)
+          sudo unshare --net --mount --propagation private -- bash scripts/perf/afxdp-node/run.sh "$GITHUB_WORKSPACE/target" "$GITHUB_WORKSPACE/.local/afxdp-node-ci" "$parent_net" "$parent_mount"
+
+      - name: Upload full-node validation and failures
+        if: always() && ((github.event_name == 'workflow_dispatch' && inputs.xdp_node_smoke) || (github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/'))) && hashFiles('.local/afxdp-node-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: afxdp-node-${{ github.sha }}
+          path: .local/afxdp-node-ci/
+          if-no-files-found: error
+
+      - name: Cache pinned UDP comparison baselines
+        if: github.event_name == 'workflow_dispatch' && (inputs.xdp_udp_benchmark || inputs.xdp_udp_profile)
+        uses: actions/cache@v4
+        with:
+          path: .local/afxdp-udp-baselines
+          key: udp-baselines-ubuntu22-v1-${{ hashFiles('scripts/perf/afxdp-node/build-baselines.sh') }}
+
+      - name: Build all release UDP comparison binaries
+        if: github.event_name == 'workflow_dispatch' && (inputs.xdp_udp_benchmark || inputs.xdp_udp_profile)
+        shell: bash
+        env:
+          EDGE_UDP_SYSCALL_PROFILE: ${{ inputs.xdp_udp_profile }}
+        run: |
+          set -euo pipefail
+          mkdir -p .local/afxdp-udp-ci
+          { rustc --version; cc --version; uname -a; lscpu; } > .local/afxdp-udp-ci/toolchain-host.log
+          sudo apt-get install -y --no-install-recommends iproute2 ethtool curl libssl-dev libpcre2-dev
+          cargo build --locked --release --bin Zelvik-Edge > .local/afxdp-udp-ci/edge-build.log 2>&1
+          bash scripts/perf/afxdp-node/build-baselines.sh "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines" > .local/afxdp-udp-ci/baseline-build.log 2>&1
+          cp .local/afxdp-udp-baselines/*-build.log .local/afxdp-udp-baselines/*-version.log .local/afxdp-udp-ci/
+          cc -std=gnu11 -O3 -march=x86-64-v2 -Wall -Wextra -Werror benches/support/udp-bench.c -o .local/afxdp-udp-ci/udp-bench
+          UDP_BENCH_BINARY="$GITHUB_WORKSPACE/.local/afxdp-udp-ci/udp-bench" UDP_BENCH_TEST_OUTPUT="$GITHUB_WORKSPACE/.local/afxdp-udp-ci/loadgen-tests" python3 scripts/perf/afxdp-node/test_udp_bench.py > .local/afxdp-udp-ci/loadgen-tests.log 2>&1
+          python3 scripts/perf/afxdp-node/test_udp_summary.py > .local/afxdp-udp-ci/summary-tests.log 2>&1
+          python3 scripts/perf/afxdp-node/test_thread_cpu.py > .local/afxdp-udp-ci/thread-cpu-tests.log 2>&1
+          python3 scripts/perf/afxdp-node/test_memory_maps.py > .local/afxdp-udp-ci/memory-map-tests.log 2>&1
+          python3 scripts/perf/afxdp-node/test_node_control.py > .local/afxdp-udp-ci/dataplane-control-tests.log 2>&1
+          if [[ "$EDGE_UDP_SYSCALL_PROFILE" == true ]]; then
+            sudo apt-get install -y --no-install-recommends strace
+            sudo python3 scripts/perf/afxdp-node/test_syscall_profile.py > .local/afxdp-udp-ci/profile-helper-tests.log 2>&1
+          fi
+
+      - name: Compare UDP proxy implementations after all compilation
+        if: github.event_name == 'workflow_dispatch' && inputs.xdp_udp_benchmark
+        shell: bash
+        env:
+          EDGE_UDP_COMPARISON: ${{ inputs.xdp_udp_comparison }}
+        run: |
+          set -euo pipefail
+          parent_net=$(readlink /proc/self/ns/net)
+          parent_mount=$(readlink /proc/self/ns/mnt)
+          result=0
+          resource_options=()
+          if [[ "$EDGE_UDP_COMPARISON" == dataplane ]]; then
+            resource_options+=(--resource-profile --iterations 20000 --single-flow-iterations 80000)
+          fi
+          for proxy_cpus in 1 2; do
+            if sudo unshare --net --mount --propagation private -- bash scripts/perf/afxdp-node/udp-run.sh "$GITHUB_WORKSPACE/target/release/Zelvik-Edge" "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines/nginx/sbin/nginx" "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines/openresty/nginx/sbin/nginx" "$GITHUB_WORKSPACE/.local/afxdp-udp-ci/udp-bench" "$GITHUB_WORKSPACE/.local/afxdp-udp-ci/results-cpu$proxy_cpus" "$parent_net" "$parent_mount" --comparison "$EDGE_UDP_COMPARISON" --proxy-cpus "$proxy_cpus" --single-flow-iterations 40000 "${resource_options[@]}"; then
+              :
+            else
+              result=1
+            fi
+          done
+          exit "$result"
+
+      - name: Upload UDP comparison samples and failures
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.xdp_udp_benchmark && hashFiles('.local/afxdp-udp-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: afxdp-udp-${{ github.sha }}
+          path: |
+            .local/afxdp-udp-ci/**/*.json
+            .local/afxdp-udp-ci/**/*.log
+            .local/afxdp-udp-ci/**/*.conf
+            .local/afxdp-udp-ci/**/*.yaml
+          if-no-files-found: error
+
+      - name: Retain matched UDP binaries for observer-only follow-ups
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.xdp_udp_benchmark
+        uses: actions/upload-artifact@v4
+        with:
+          name: udp-comparison-binaries-${{ github.sha }}
+          path: |
+            target/release/Zelvik-Edge
+            .local/afxdp-udp-baselines/nginx/sbin/nginx
+            .local/afxdp-udp-baselines/openresty/nginx/sbin/nginx
+            .local/afxdp-udp-ci/udp-bench
+            .local/afxdp-udp-ci/results-cpu*/comparison/metadata.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Collect isolated UDP syscall diagnostics after compilation
+        if: github.event_name == 'workflow_dispatch' && inputs.xdp_udp_profile
+        shell: bash
+        env:
+          EDGE_UDP_COMPARISON: ${{ inputs.xdp_udp_comparison }}
+        run: |
+          set -euo pipefail
+          parent_net=$(readlink /proc/self/ns/net)
+          parent_mount=$(readlink /proc/self/ns/mnt)
+          result=0
+          for proxy_cpus in 1 2; do
+            if sudo unshare --net --mount --propagation private -- bash scripts/perf/afxdp-node/udp-run.sh "$GITHUB_WORKSPACE/target/release/Zelvik-Edge" "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines/nginx/sbin/nginx" "$GITHUB_WORKSPACE/.local/afxdp-udp-baselines/openresty/nginx/sbin/nginx" "$GITHUB_WORKSPACE/.local/afxdp-udp-ci/udp-bench" "$GITHUB_WORKSPACE/.local/afxdp-udp-syscalls-ci/results-cpu$proxy_cpus" "$parent_net" "$parent_mount" --comparison "$EDGE_UDP_COMPARISON" --proxy-cpus "$proxy_cpus" --syscall-profile --iterations 1000 --single-flow-iterations 2000; then
+              :
+            else
+              result=1
+            fi
+          done
+          exit "$result"
+
+      - name: Upload UDP syscall diagnostics and failures
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.xdp_udp_profile && hashFiles('.local/afxdp-udp-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: afxdp-udp-syscalls-${{ github.sha }}
+          path: |
+            .local/afxdp-udp-syscalls-ci/
+            .local/afxdp-udp-ci/*
+          if-no-files-found: error
+
+      - name: Build UDP demux configuration benchmark
+        if: github.event_name == 'workflow_dispatch' && inputs.udp_demux_benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .local/udp-demux-ci
+          cargo bench --locked --bench udp_demux_bench --no-run --message-format=json > .local/udp-demux-ci/build.jsonl 2> .local/udp-demux-ci/build.log
+
+      - name: Measure UDP demux configuration lookup after compilation
+        if: github.event_name == 'workflow_dispatch' && inputs.udp_demux_benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/perf/udp-demux/run.py --build-messages .local/udp-demux-ci/build.jsonl --output .local/udp-demux-ci/results
+
+      - name: Upload UDP demux configuration samples and failures
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.udp_demux_benchmark && hashFiles('.local/udp-demux-ci/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: udp-demux-${{ github.sha }}
+          path: .local/udp-demux-ci/
+          if-no-files-found: error

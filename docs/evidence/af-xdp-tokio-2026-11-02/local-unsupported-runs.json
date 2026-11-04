@@ -1,0 +1,1250 @@
+[
+  {
+    "round": null,
+    "engine": "readable",
+    "functional": true,
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/bin/wake-publish",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "readable",
+      "--output",
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/local-unsupported-final/comparison/functional-readable/result.json",
+      "--functional"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          4192013,
+          0,
+          1844111,
+          53829128,
+          24256,
+          0,
+          423667,
+          5933704,
+          0,
+          0
+        ],
+        "cpu0": [
+          714840,
+          0,
+          379458,
+          10886948,
+          9335,
+          0,
+          95729,
+          1218585,
+          0,
+          0
+        ],
+        "cpu1": [
+          965739,
+          0,
+          368538,
+          10466830,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694041485\nuser_usec 68159279409\nsystem_usec 35534762075\nnice_usec 0\nnr_periods 659680\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.37601,
+      "child_system_seconds": 0.417299
+    },
+    "started_unix": 1793660462.7678313,
+    "returncode": 1,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          4192013,
+          0,
+          1844111,
+          53829130,
+          24256,
+          0,
+          423667,
+          5933704,
+          0,
+          0
+        ],
+        "cpu0": [
+          714840,
+          0,
+          379459,
+          10886948,
+          9335,
+          0,
+          95729,
+          1218586,
+          0,
+          0
+        ],
+        "cpu1": [
+          965739,
+          0,
+          368538,
+          10466830,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694047975\nuser_usec 68159281332\nsystem_usec 35534766642\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.378675,
+      "child_system_seconds": 0.417299
+    },
+    "finished_unix": 1793660462.7718997,
+    "result": {
+      "error": "umem-create: Address family not supported by protocol (os error 97) (errno 97)",
+      "passed": false
+    },
+    "passed": false
+  },
+  {
+    "round": null,
+    "engine": "read-write",
+    "functional": true,
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/bin/wake-publish",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "read-write",
+      "--output",
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/local-unsupported-final/comparison/functional-read-write/result.json",
+      "--functional"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          4192013,
+          0,
+          1844111,
+          53829130,
+          24256,
+          0,
+          423667,
+          5933704,
+          0,
+          0
+        ],
+        "cpu0": [
+          714840,
+          0,
+          379459,
+          10886948,
+          9335,
+          0,
+          95729,
+          1218586,
+          0,
+          0
+        ],
+        "cpu1": [
+          965739,
+          0,
+          368538,
+          10466830,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694048380\nuser_usec 68159281737\nsystem_usec 35534766642\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.378675,
+      "child_system_seconds": 0.417299
+    },
+    "started_unix": 1793660462.772604,
+    "returncode": 1,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          4192013,
+          0,
+          1844111,
+          53829132,
+          24256,
+          0,
+          423667,
+          5933704,
+          0,
+          0
+        ],
+        "cpu0": [
+          714840,
+          0,
+          379459,
+          10886949,
+          9335,
+          0,
+          95729,
+          1218586,
+          0,
+          0
+        ],
+        "cpu1": [
+          965739,
+          0,
+          368538,
+          10466830,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694052691\nuser_usec 68159282750\nsystem_usec 35534769941\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.378675,
+      "child_system_seconds": 0.419993
+    },
+    "finished_unix": 1793660462.7772524,
+    "result": {
+      "error": "umem-create: Address family not supported by protocol (os error 97) (errno 97)",
+      "passed": false
+    },
+    "passed": false
+  },
+  {
+    "round": 1,
+    "engine": "worker",
+    "functional": false,
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/bin/wake-publish",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "worker",
+      "--output",
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/local-unsupported-final/comparison/round-1-worker/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          4192013,
+          0,
+          1844111,
+          53829133,
+          24256,
+          0,
+          423667,
+          5933704,
+          0,
+          0
+        ],
+        "cpu0": [
+          714840,
+          0,
+          379459,
+          10886949,
+          9335,
+          0,
+          95729,
+          1218586,
+          0,
+          0
+        ],
+        "cpu1": [
+          965739,
+          0,
+          368538,
+          10466830,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694055870\nuser_usec 68159282964\nsystem_usec 35534772905\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.378675,
+      "child_system_seconds": 0.419993
+    },
+    "started_unix": 1793660462.7804558,
+    "returncode": 1,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          4192013,
+          0,
+          1844111,
+          53829135,
+          24256,
+          0,
+          423667,
+          5933704,
+          0,
+          0
+        ],
+        "cpu0": [
+          714840,
+          0,
+          379459,
+          10886949,
+          9335,
+          0,
+          95729,
+          1218586,
+          0,
+          0
+        ],
+        "cpu1": [
+          965739,
+          0,
+          368538,
+          10466830,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694058754\nuser_usec 68159284860\nsystem_usec 35534773893\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.381179,
+      "child_system_seconds": 0.419993
+    },
+    "finished_unix": 1793660462.7834907,
+    "result": {
+      "error": "umem-create: Address family not supported by protocol (os error 97) (errno 97)",
+      "passed": false
+    },
+    "passed": false
+  },
+  {
+    "round": 1,
+    "engine": "readable",
+    "functional": false,
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/bin/wake-publish",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "readable",
+      "--output",
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/local-unsupported-final/comparison/round-1-readable/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          4192014,
+          0,
+          1844111,
+          53829135,
+          24256,
+          0,
+          423667,
+          5933704,
+          0,
+          0
+        ],
+        "cpu0": [
+          714840,
+          0,
+          379459,
+          10886949,
+          9335,
+          0,
+          95729,
+          1218586,
+          0,
+          0
+        ],
+        "cpu1": [
+          965739,
+          0,
+          368538,
+          10466830,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694059567\nuser_usec 68159285673\nsystem_usec 35534773893\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.381179,
+      "child_system_seconds": 0.419993
+    },
+    "started_unix": 1793660462.7844696,
+    "returncode": 1,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          4192014,
+          0,
+          1844111,
+          53829137,
+          24256,
+          0,
+          423667,
+          5933704,
+          0,
+          0
+        ],
+        "cpu0": [
+          714841,
+          0,
+          379459,
+          10886949,
+          9335,
+          0,
+          95729,
+          1218586,
+          0,
+          0
+        ],
+        "cpu1": [
+          965739,
+          0,
+          368538,
+          10466831,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694062468\nuser_usec 68159288574\nsystem_usec 35534773893\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.3834049999999998,
+      "child_system_seconds": 0.419993
+    },
+    "finished_unix": 1793660462.7882483,
+    "result": {
+      "error": "umem-create: Address family not supported by protocol (os error 97) (errno 97)",
+      "passed": false
+    },
+    "passed": false
+  },
+  {
+    "round": 1,
+    "engine": "read-write",
+    "functional": false,
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/bin/wake-publish",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "read-write",
+      "--output",
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/local-unsupported-final/comparison/round-1-read-write/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          4192014,
+          0,
+          1844111,
+          53829137,
+          24256,
+          0,
+          423667,
+          5933704,
+          0,
+          0
+        ],
+        "cpu0": [
+          714841,
+          0,
+          379459,
+          10886949,
+          9335,
+          0,
+          95729,
+          1218586,
+          0,
+          0
+        ],
+        "cpu1": [
+          965739,
+          0,
+          368538,
+          10466831,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694062468\nuser_usec 68159288574\nsystem_usec 35534773893\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.3834049999999998,
+      "child_system_seconds": 0.419993
+    },
+    "started_unix": 1793660462.7891796,
+    "returncode": 1,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          4192014,
+          0,
+          1844111,
+          53829139,
+          24256,
+          0,
+          423667,
+          5933704,
+          0,
+          0
+        ],
+        "cpu0": [
+          714841,
+          0,
+          379459,
+          10886950,
+          9335,
+          0,
+          95729,
+          1218586,
+          0,
+          0
+        ],
+        "cpu1": [
+          965739,
+          0,
+          368538,
+          10466831,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694066108\nuser_usec 68159292214\nsystem_usec 35534773893\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.385709,
+      "child_system_seconds": 0.419993
+    },
+    "finished_unix": 1793660462.792934,
+    "result": {
+      "error": "umem-create: Address family not supported by protocol (os error 97) (errno 97)",
+      "passed": false
+    },
+    "passed": false
+  },
+  {
+    "round": 2,
+    "engine": "read-write",
+    "functional": false,
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/bin/wake-publish",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "read-write",
+      "--output",
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/local-unsupported-final/comparison/round-2-read-write/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          4192014,
+          0,
+          1844111,
+          53829139,
+          24256,
+          0,
+          423667,
+          5933704,
+          0,
+          0
+        ],
+        "cpu0": [
+          714841,
+          0,
+          379459,
+          10886950,
+          9335,
+          0,
+          95729,
+          1218586,
+          0,
+          0
+        ],
+        "cpu1": [
+          965739,
+          0,
+          368538,
+          10466831,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694067215\nuser_usec 68159293321\nsystem_usec 35534773893\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.385709,
+      "child_system_seconds": 0.419993
+    },
+    "started_unix": 1793660462.7939844,
+    "returncode": 1,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          4192014,
+          0,
+          1844112,
+          53829141,
+          24256,
+          0,
+          423667,
+          5933705,
+          0,
+          0
+        ],
+        "cpu0": [
+          714841,
+          0,
+          379459,
+          10886950,
+          9335,
+          0,
+          95729,
+          1218586,
+          0,
+          0
+        ],
+        "cpu1": [
+          965739,
+          0,
+          368538,
+          10466831,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694069749\nuser_usec 68159293321\nsystem_usec 35534776427\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.385709,
+      "child_system_seconds": 0.422222
+    },
+    "finished_unix": 1793660462.7983167,
+    "result": {
+      "error": "umem-create: Address family not supported by protocol (os error 97) (errno 97)",
+      "passed": false
+    },
+    "passed": false
+  },
+  {
+    "round": 2,
+    "engine": "readable",
+    "functional": false,
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/bin/wake-publish",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "readable",
+      "--output",
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/local-unsupported-final/comparison/round-2-readable/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          4192014,
+          0,
+          1844112,
+          53829141,
+          24256,
+          0,
+          423667,
+          5933705,
+          0,
+          0
+        ],
+        "cpu0": [
+          714841,
+          0,
+          379459,
+          10886950,
+          9335,
+          0,
+          95729,
+          1218586,
+          0,
+          0
+        ],
+        "cpu1": [
+          965739,
+          0,
+          368538,
+          10466831,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694075034\nuser_usec 68159295305\nsystem_usec 35534779728\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.385709,
+      "child_system_seconds": 0.422222
+    },
+    "started_unix": 1793660462.802533,
+    "returncode": 1,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          4192015,
+          0,
+          1844112,
+          53829144,
+          24256,
+          0,
+          423667,
+          5933705,
+          0,
+          0
+        ],
+        "cpu0": [
+          714841,
+          0,
+          379459,
+          10886950,
+          9335,
+          0,
+          95729,
+          1218587,
+          0,
+          0
+        ],
+        "cpu1": [
+          965740,
+          0,
+          368538,
+          10466832,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694077648\nuser_usec 68159297919\nsystem_usec 35534779728\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.387787,
+      "child_system_seconds": 0.422222
+    },
+    "finished_unix": 1793660462.8063662,
+    "result": {
+      "error": "umem-create: Address family not supported by protocol (os error 97) (errno 97)",
+      "passed": false
+    },
+    "passed": false
+  },
+  {
+    "round": 2,
+    "engine": "worker",
+    "functional": false,
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/bin/wake-publish",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "worker",
+      "--output",
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/local-unsupported-final/comparison/round-2-worker/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          4192015,
+          0,
+          1844112,
+          53829145,
+          24256,
+          0,
+          423667,
+          5933705,
+          0,
+          0
+        ],
+        "cpu0": [
+          714841,
+          0,
+          379459,
+          10886950,
+          9335,
+          0,
+          95729,
+          1218587,
+          0,
+          0
+        ],
+        "cpu1": [
+          965740,
+          0,
+          368538,
+          10466832,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694078736\nuser_usec 68159299007\nsystem_usec 35534779728\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.387787,
+      "child_system_seconds": 0.422222
+    },
+    "started_unix": 1793660462.807316,
+    "returncode": 1,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          4192015,
+          0,
+          1844112,
+          53829148,
+          24256,
+          0,
+          423667,
+          5933705,
+          0,
+          0
+        ],
+        "cpu0": [
+          714841,
+          0,
+          379459,
+          10886951,
+          9335,
+          0,
+          95729,
+          1218587,
+          0,
+          0
+        ],
+        "cpu1": [
+          965740,
+          0,
+          368538,
+          10466832,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694084687\nuser_usec 68159304958\nsystem_usec 35534779728\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.391902,
+      "child_system_seconds": 0.423693
+    },
+    "finished_unix": 1793660462.8152912,
+    "result": {
+      "error": "umem-create: Address family not supported by protocol (os error 97) (errno 97)",
+      "passed": false
+    },
+    "passed": false
+  },
+  {
+    "round": 3,
+    "engine": "readable",
+    "functional": false,
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/bin/wake-publish",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "readable",
+      "--output",
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/local-unsupported-final/comparison/round-3-readable/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          4192015,
+          0,
+          1844112,
+          53829150,
+          24256,
+          0,
+          423667,
+          5933706,
+          0,
+          0
+        ],
+        "cpu0": [
+          714841,
+          0,
+          379459,
+          10886951,
+          9335,
+          0,
+          95729,
+          1218587,
+          0,
+          0
+        ],
+        "cpu1": [
+          965740,
+          0,
+          368538,
+          10466832,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694088979\nuser_usec 68159306886\nsystem_usec 35534782092\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.391902,
+      "child_system_seconds": 0.423693
+    },
+    "started_unix": 1793660462.8194995,
+    "returncode": 1,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          4192016,
+          0,
+          1844112,
+          53829151,
+          24256,
+          0,
+          423667,
+          5933706,
+          0,
+          0
+        ],
+        "cpu0": [
+          714841,
+          0,
+          379459,
+          10886951,
+          9335,
+          0,
+          95729,
+          1218587,
+          0,
+          0
+        ],
+        "cpu1": [
+          965741,
+          0,
+          368538,
+          10466833,
+          8568,
+          0,
+          91127,
+          1390531,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694091393\nuser_usec 68159309301\nsystem_usec 35534782092\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.394005,
+      "child_system_seconds": 0.423693
+    },
+    "finished_unix": 1793660462.8232148,
+    "result": {
+      "error": "umem-create: Address family not supported by protocol (os error 97) (errno 97)",
+      "passed": false
+    },
+    "passed": false
+  },
+  {
+    "round": 3,
+    "engine": "worker",
+    "functional": false,
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/bin/wake-publish",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "worker",
+      "--output",
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/local-unsupported-final/comparison/round-3-worker/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          4192016,
+          0,
+          1844112,
+          53829152,
+          24256,
+          0,
+          423667,
+          5933706,
+          0,
+          0
+        ],
+        "cpu0": [
+          714841,
+          0,
+          379459,
+          10886951,
+          9335,
+          0,
+          95729,
+          1218587,
+          0,
+          0
+        ],
+        "cpu1": [
+          965741,
+          0,
+          368538,
+          10466833,
+          8568,
+          0,
+          91127,
+          1390532,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694092475\nuser_usec 68159309301\nsystem_usec 35534783174\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.394005,
+      "child_system_seconds": 0.423693
+    },
+    "started_unix": 1793660462.8242338,
+    "returncode": 1,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          4192016,
+          0,
+          1844113,
+          53829154,
+          24256,
+          0,
+          423667,
+          5933706,
+          0,
+          0
+        ],
+        "cpu0": [
+          714841,
+          0,
+          379459,
+          10886952,
+          9335,
+          0,
+          95729,
+          1218587,
+          0,
+          0
+        ],
+        "cpu1": [
+          965741,
+          0,
+          368539,
+          10466833,
+          8568,
+          0,
+          91127,
+          1390532,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694096616\nuser_usec 68159309301\nsystem_usec 35534787315\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.394005,
+      "child_system_seconds": 0.42591399999999996
+    },
+    "finished_unix": 1793660462.8292527,
+    "result": {
+      "error": "umem-create: Address family not supported by protocol (os error 97) (errno 97)",
+      "passed": false
+    },
+    "passed": false
+  },
+  {
+    "round": 3,
+    "engine": "read-write",
+    "functional": false,
+    "command": [
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/bin/wake-publish",
+      "--rx",
+      "ew-rx",
+      "--peer",
+      "ew-peer",
+      "--engine",
+      "read-write",
+      "--output",
+      "/workspace/edge/.worktrees/perf-next/.local/perf-round6-tokio/local-unsupported-final/comparison/round-3-read-write/result.json",
+      "--warmup",
+      "2000",
+      "--roundtrips",
+      "100000"
+    ],
+    "cpu_before": {
+      "proc": {
+        "cpu": [
+          4192016,
+          0,
+          1844113,
+          53829154,
+          24256,
+          0,
+          423667,
+          5933706,
+          0,
+          0
+        ],
+        "cpu0": [
+          714841,
+          0,
+          379459,
+          10886952,
+          9335,
+          0,
+          95729,
+          1218587,
+          0,
+          0
+        ],
+        "cpu1": [
+          965741,
+          0,
+          368539,
+          10466833,
+          8568,
+          0,
+          91127,
+          1390532,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694097767\nuser_usec 68159309301\nsystem_usec 35534788466\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.394005,
+      "child_system_seconds": 0.42591399999999996
+    },
+    "started_unix": 1793660462.8303072,
+    "returncode": 1,
+    "cpu_after": {
+      "proc": {
+        "cpu": [
+          4192016,
+          0,
+          1844113,
+          53829156,
+          24256,
+          0,
+          423667,
+          5933706,
+          0,
+          0
+        ],
+        "cpu0": [
+          714841,
+          0,
+          379459,
+          10886952,
+          9335,
+          0,
+          95729,
+          1218588,
+          0,
+          0
+        ],
+        "cpu1": [
+          965741,
+          0,
+          368539,
+          10466833,
+          8568,
+          0,
+          91127,
+          1390532,
+          0,
+          0
+        ]
+      },
+      "cgroup_cpu_stat": "usage_usec 103694100409\nuser_usec 68159310375\nsystem_usec 35534790033\nnice_usec 0\nnr_periods 659681\nnr_throttled 12067\nthrottled_usec 946038844\nnr_bursts 0\nburst_usec 0\n",
+      "child_user_seconds": 2.396439,
+      "child_system_seconds": 0.42591399999999996
+    },
+    "finished_unix": 1793660462.8337815,
+    "result": {
+      "error": "umem-create: Address family not supported by protocol (os error 97) (errno 97)",
+      "passed": false
+    },
+    "passed": false
+  }
+]

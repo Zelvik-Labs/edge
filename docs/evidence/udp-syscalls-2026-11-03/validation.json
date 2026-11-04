@@ -1,0 +1,964 @@
+{
+  "passed": true,
+  "source_commit": "d30b4ab9a253fefd91038f273a4b8d35ac7f6f6f",
+  "checked_cases": 136,
+  "rtt_samples": 1224000,
+  "failures": [],
+  "completed_trace_cases": 128,
+  "same_binaries_and_sources_across_budgets": true,
+  "checks": [
+    {
+      "budget": 1,
+      "case": "direct-c1-b64",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": null
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b64-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36651
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b64-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36617
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b64-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14036
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b64-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14041
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b64-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36593
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b64-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b64-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36683
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b64-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14002
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b64-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14000
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b64-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14001
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b64-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36566
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b64-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36526
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b64-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14010
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b64-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36782
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b64-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14002
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b64-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36603
+    },
+    {
+      "budget": 1,
+      "case": "direct-c1-b1200",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": null
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b1200-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36593
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b1200-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36531
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b1200-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14000
+    },
+    {
+      "budget": 1,
+      "case": "r1-c1-b1200-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14000
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b1200-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36612
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b1200-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14058
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b1200-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36515
+    },
+    {
+      "budget": 1,
+      "case": "r2-c1-b1200-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14006
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b1200-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14002
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b1200-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14001
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b1200-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36632
+    },
+    {
+      "budget": 1,
+      "case": "r3-c1-b1200-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36506
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b1200-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14001
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b1200-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36557
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b1200-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14002
+    },
+    {
+      "budget": 1,
+      "case": "r4-c1-b1200-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 36539
+    },
+    {
+      "budget": 1,
+      "case": "direct-c16-b64",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": null
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b64-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 21164
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b64-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 21158
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b64-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96003
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b64-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96001
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b64-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 21135
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b64-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96001
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b64-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 21213
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b64-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96001
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b64-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96001
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b64-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96005
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b64-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 21151
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b64-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 21243
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b64-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96001
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b64-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 21140
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b64-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96001
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b64-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 21130
+    },
+    {
+      "budget": 1,
+      "case": "direct-c16-b1200",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": null
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b1200-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 21180
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b1200-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 21068
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b1200-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96001
+    },
+    {
+      "budget": 1,
+      "case": "r1-c16-b1200-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96001
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b1200-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 20705
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b1200-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96001
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b1200-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 21168
+    },
+    {
+      "budget": 1,
+      "case": "r2-c16-b1200-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96001
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b1200-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96001
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b1200-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96001
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b1200-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 21157
+    },
+    {
+      "budget": 1,
+      "case": "r3-c16-b1200-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 21089
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b1200-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96003
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b1200-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 21154
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b1200-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96001
+    },
+    {
+      "budget": 1,
+      "case": "r4-c16-b1200-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 21049
+    },
+    {
+      "budget": 2,
+      "case": "direct-c1-b64",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": null
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b64-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 44938
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b64-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 44808
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b64-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14002
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b64-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14001
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b64-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 45359
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b64-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14002
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b64-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 44747
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b64-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b64-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14002
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b64-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b64-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 44859
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b64-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 44798
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b64-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14001
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b64-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 44807
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b64-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14003
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b64-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 44829
+    },
+    {
+      "budget": 2,
+      "case": "direct-c1-b1200",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": null
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b1200-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 44685
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b1200-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 44746
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b1200-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14001
+    },
+    {
+      "budget": 2,
+      "case": "r1-c1-b1200-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14001
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b1200-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 44669
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b1200-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14035
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b1200-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 44626
+    },
+    {
+      "budget": 2,
+      "case": "r2-c1-b1200-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14001
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b1200-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14004
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b1200-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14000
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b1200-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 44612
+    },
+    {
+      "budget": 2,
+      "case": "r3-c1-b1200-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 44657
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b1200-openresty",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14001
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b1200-full-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 44586
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b1200-nginx",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 14001
+    },
+    {
+      "budget": 2,
+      "case": "r4-c1-b1200-bridge-stats",
+      "rtt_samples": 2000,
+      "requests_including_warmup": 3000,
+      "traced_syscall_calls": 44730
+    },
+    {
+      "budget": 2,
+      "case": "direct-c16-b64",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": null
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b64-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 27628
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b64-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 27400
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b64-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96002
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b64-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96002
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b64-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 27074
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b64-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96002
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b64-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 28864
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b64-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96002
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b64-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96002
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b64-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96002
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b64-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 29093
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b64-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 26110
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b64-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96008
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b64-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 27808
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b64-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96002
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b64-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 27192
+    },
+    {
+      "budget": 2,
+      "case": "direct-c16-b1200",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": null
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b1200-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 26673
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b1200-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 28483
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b1200-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96002
+    },
+    {
+      "budget": 2,
+      "case": "r1-c16-b1200-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96002
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b1200-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 28435
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b1200-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96006
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b1200-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 27927
+    },
+    {
+      "budget": 2,
+      "case": "r2-c16-b1200-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96002
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b1200-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96002
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b1200-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96002
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b1200-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 27562
+    },
+    {
+      "budget": 2,
+      "case": "r3-c16-b1200-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 25096
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b1200-openresty",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96002
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b1200-full-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 28695
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b1200-nginx",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 96006
+    },
+    {
+      "budget": 2,
+      "case": "r4-c16-b1200-bridge-stats",
+      "rtt_samples": 16000,
+      "requests_including_warmup": 32000,
+      "traced_syscall_calls": 27143
+    }
+  ],
+  "scope": "ptrace diagnostics only, not native performance; counts/timing/source/coverage independent recomputation; byte/sequence checked by runtime C client, not reconstructable from RTTs"
+}

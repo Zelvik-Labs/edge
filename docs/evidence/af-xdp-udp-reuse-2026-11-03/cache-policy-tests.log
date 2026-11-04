@@ -1,0 +1,9 @@
+test_cloud_keeps_large_caches_until_disk_headroom_is_exhausted (__main__.CloudBudgetProfileTest.test_cloud_keeps_large_caches_until_disk_headroom_is_exhausted) ... ok
+test_invalid_profile_is_rejected_without_changing_budgets (__main__.CloudBudgetProfileTest.test_invalid_profile_is_rejected_without_changing_budgets) ... ok
+test_local_profile_restores_laptop_quotas (__main__.CloudBudgetProfileTest.test_local_profile_restores_laptop_quotas) ... ok
+test_workspace_cloud_selection_persists_but_explicit_local_wins (__main__.CloudBudgetProfileTest.test_workspace_cloud_selection_persists_but_explicit_local_wins) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.006s
+
+OK

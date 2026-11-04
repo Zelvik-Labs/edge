@@ -1,0 +1,43 @@
+name: Memory snapshot publication model and cost
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - benches/support/snapshot_sequence_*.rs
+      - scripts/perf/snapshot-sequence/**
+      - .github/workflows/snapshot-sequence.yml
+      - src/memory_governor/snapshot_sequence.rs
+      - src/memory_governor.rs
+permissions:
+  contents: read
+concurrency:
+  group: snapshot-sequence-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  publication:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      RUSTFLAGS: "-C target-cpu=x86-64-v2"
+      CARGO_BUILD_JOBS: "2"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: scripts/perf/snapshot-sequence -> ../../../.local/snapshot-sequence-target
+          cache-on-failure: true
+      - name: Verify negative controls, model publication, then measure all costs
+        run: python3 scripts/perf/snapshot-sequence/run.py run
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: snapshot-sequence-${{ github.sha }}
+          path: .local/snapshot-sequence-ci/
+          include-hidden-files: true
+          if-no-files-found: error

@@ -1,0 +1,77 @@
+name: Same-ELF Pingora downstream buffering factorial
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - scripts/perf/pingora-buffers/**
+      - .github/workflows/pingora-buffers.yml
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: pingora-buffers-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  compare:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 50
+    env:
+      CARGO_BUILD_JOBS: "2"
+      RUSTFLAGS: "-C target-cpu=x86-64-v2"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: http-state-binaries-a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a
+          run-id: 41665387055
+          github-token: ${{ github.token }}
+          path: .local/architecture-profile-binaries
+      - uses: actions/download-artifact@v4
+        with:
+          name: header-node-binaries-4171ea700386d8ed7c755255c7eeccb7e804d644
+          run-id: 41757321970
+          github-token: ${{ github.token }}
+          path: .local/architecture-header-binaries
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: clippy
+      - name: Install compiler prerequisites
+        run: |
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends cmake build-essential clang pkg-config libclang-dev perl
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: scripts/perf/bare-pingora -> ../../../.local/pingora-buffers-target
+          cache-on-failure: true
+      - name: Build control with identical vendor, locked versions, TLS and allocator
+        run: python3 scripts/perf/pingora-buffers/build.py
+      - name: Prepare all images before measurement
+        run: |
+          docker pull nginx:1.28.0
+          docker pull openresty/openresty:1.27.1.2-0-bookworm-fat
+          docker build -t edge-http-state-fixture:20261103 -f scripts/perf/http-state/Dockerfile .
+      - name: Run four read/write settings independently in position-balanced order
+        run: |
+          docker run --rm --name edge-pingora-buffers-harness --network host --pid host \
+            --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
+            -e GITHUB_SHA -e EDGE_MATRIX_HARNESS_NAME=edge-pingora-buffers-harness \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
+            edge-http-state-fixture:20261103 bash scripts/perf/pingora-buffers/run.sh
+      - name: Collect source, actual baseline and complete records including failures
+        if: always()
+        run: |
+          if [ -d .local/pingora-buffers-private ]; then
+            sudo chown -R "$(id -u):$(id -g)" .local/pingora-buffers-private
+          fi
+          python3 scripts/perf/pingora-buffers/collect.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pingora-buffers-${{ github.sha }}
+          path: .local/pingora-buffers-ci/
+          include-hidden-files: true
+          if-no-files-found: error

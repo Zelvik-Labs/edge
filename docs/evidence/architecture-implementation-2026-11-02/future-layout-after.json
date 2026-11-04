@@ -1,0 +1,23 @@
+{
+  "binary": "/home/agent/Library/Caches/mbx/targets/v1/31094add7081c711197af99a404c9380121ddcf5db39845201bf2f8d71b76d09/release/Zelvik-Edge",
+  "sha256": "64d0dc7bae0e0ebcd8b52862c46ad7bb00d038f1f8cf4e22fd34a2fe4ab563ff",
+  "symbols": {
+    "drop": {
+      "address": 28759344,
+      "code_bytes": 576
+    },
+    "poll": {
+      "address": 28759920,
+      "code_bytes": 71026
+    }
+  },
+  "layouts": [
+    {
+      "vtable_address": 39238472,
+      "file_offset": 39230280,
+      "size_bytes": 5736,
+      "alignment": 8
+    }
+  ],
+  "layout_is_not_allocation_count_or_throughput": true
+}

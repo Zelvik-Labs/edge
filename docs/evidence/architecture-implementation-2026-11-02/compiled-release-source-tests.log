@@ -1,0 +1,47 @@
+      ┌─────────┐  mr boxington
+     ╱ ═══════ ╱│
+    ╱─────────╱ │
+    │ •    (◉)│≡│
+    │  ◟▄▄▄◞  │ ╱
+    │   ◀◆▶   │╱
+    └─────────┘
+    Finished `test` profile [optimized] target(s) in 0.52s
+     Running unittests src/lib.rs (target/debug/deps/zelvik_edge-75af530afd7038e8)
+
+running 33 tests
+test cache::compiled::tests::cache_condition_compile_preserves_request_and_response_phase_metadata ... ok
+test cache::compiled::tests::cache_operator_supports_mime_version_number_mod_and_ip ... ok
+test cache::compiled::tests::cache_variable_classifies_response_variables ... ok
+test cache::compiled::tests::invalid_negative_and_numeric_configs_do_not_match ... ok
+test cache::compiled::tests::cache_operator_supports_frontend_string_and_list_variants ... ok
+test compiled::tests::recompile_servers_removes_and_inserts_without_full_rebuild_panic ... ok
+test firewall::compiled::tests::action_captcha_options_do_not_blank_policy_defaults ... ok
+test firewall::compiled::tests::action_js_cookie_options_do_not_blank_policy_defaults ... ok
+test firewall::compiled::tests::compiled_action_metadata_matches_legacy_for_challenge_fail_block_actions ... ok
+test compiled::tests::compiled_url_patterns_support_mixed_only_and_except_rules ... ok
+test firewall::compiled::tests::compiled_action_metadata_matches_legacy_for_scope_and_flow_actions ... ok
+test firewall::compiled::tests::compiled_cc_plan_precompiles_period_and_key_templates ... ok
+test firewall::compiled::tests::compiled_firewall_rule_applies_reverse_after_operator ... ok
+test firewall::compiled::tests::compiled_and_legacy_request_body_dependency_detection_match ... ok
+test firewall::compiled::tests::compiled_group_prefilter_keeps_unindexed_or_sets_and_filters_indexed_sets ... ok
+test firewall::compiled::tests::compiled_group_prefilter_uses_and_rules_as_necessary_conditions_only ... ok
+test firewall::compiled::tests::compiled_operator_matches_legacy_numeric_ip_binary_and_version ... ok
+test firewall::compiled::tests::compiled_operator_matches_legacy_invalid_config ... ok
+test firewall::compiled::tests::compiled_operator_matches_legacy_p0_regex_wildcard_and_cidr_aliases ... ok
+test firewall::compiled::tests::compiled_policy_stats_expose_prefilter_coverage ... ok
+test firewall::compiled::tests::compiled_preset_groups_require_request_body ... ok
+test firewall::compiled::tests::compiled_regex_prefilter_only_indexes_safe_same_value_or_sets ... ok
+test firewall::compiled::tests::compiled_operator_matches_legacy_string_and_regex ... ok
+test firewall::compiled::tests::compiled_request_prefilter_indexes_method_and_headers ... ok
+test firewall::compiled::tests::compiled_set_fast_path_conditions_match_full_rule_results ... ok
+test firewall::compiled::tests::compiled_set_fast_path_rejects_side_effect_and_reversed_rules ... ok
+test firewall::compiled::tests::compiled_region_deny_matches_legacy_for_stable_paths ... ok
+test firewall::compiled::tests::compiled_variable_types_dynamic_request_and_response_variables ... ok
+test firewall::compiled::tests::default_action_captcha_method_inherits_policy_geetest ... ok
+test firewall::compiled::tests::empty_action_captcha_options_inherit_policy_geetest ... ok
+test firewall::compiled::tests::real_control_plane_captcha_fields_select_site_method ... ok
+test firewall::compiled::tests::explicit_action_captcha_method_does_not_inherit_policy_geetest ... ok
+test firewall::compiled::tests::real_control_plane_geetest_fields_enable_geetest ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 1239 filtered out; finished in 0.01s
+

@@ -1,0 +1,73 @@
+name: Fixed-ELF idle and loaded CPU diagnosis
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - .github/workflows/idle-cpu.yml
+      - scripts/perf/idle-cpu/**
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: idle-cpu-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  observe:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check counter identity and thread-exit boundaries
+        run: python3 -m unittest discover -s scripts/perf/idle-cpu -p 'test_*.py' -v
+      - uses: actions/download-artifact@v4
+        with:
+          name: http-state-binaries-a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a
+          run-id: 41665387055
+          github-token: ${{ github.token }}
+          path: .local/architecture-profile-binaries
+      - uses: actions/download-artifact@v4
+        with:
+          name: header-node-binaries-4171ea700386d8ed7c755255c7eeccb7e804d644
+          run-id: 41757321970
+          github-token: ${{ github.token }}
+          path: .local/architecture-header-binaries
+      - uses: actions/download-artifact@v4
+        with:
+          name: bare-pingora-3b25c01f2b0d40ad90beb20a41e7cff917e54510
+          run-id: 41787477297
+          github-token: ${{ github.token }}
+          path: .local/framework-profile-input
+      - name: Verify actual existing input executables without building Rust
+        run: python3 scripts/perf/idle-cpu/prepare.py
+      - name: Prepare images before all observations
+        run: |
+          docker pull nginx:1.28.0
+          docker pull openresty/openresty:1.27.1.2-0-bookworm-fat
+          docker build -t edge-http-state-fixture:20261103 -f scripts/perf/http-state/Dockerfile .
+      - name: Observe four independent targets in reversed orders
+        run: |
+          docker run --rm --name edge-idle-cpu-harness --network host --pid host --cgroupns host \
+            --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
+            -e GITHUB_SHA -e EDGE_MATRIX_HARNESS_NAME=edge-idle-cpu-harness \
+            -v /sys/fs/cgroup:/host-cgroup:ro \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE" \
+            edge-http-state-fixture:20261103 bash scripts/perf/idle-cpu/run.sh
+      - name: Preserve complete raw counters and all original failures
+        if: always()
+        run: |
+          if [ -d .local/idle-cpu-private ]; then
+            sudo chown -R "$(id -u):$(id -g)" .local/idle-cpu-private
+          fi
+          python3 scripts/perf/idle-cpu/collect.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: idle-cpu-${{ github.sha }}
+          path: .local/idle-cpu-ci/
+          include-hidden-files: true
+          if-no-files-found: error

@@ -1,0 +1,34 @@
+{
+  "capacity_cases": 117,
+  "capacity_statuses": {
+    "passed": 112,
+    "traffic-errors": 4,
+    "failed": 1
+  },
+  "candidate_cases": 39,
+  "candidate_statuses": {
+    "passed": 39
+  },
+  "candidate_native_failures": 0,
+  "known_native_failures": 64,
+  "cases_without_native_result": 1,
+  "functional": {
+    "smoke": {
+      "statuses": {
+        "passed": 3
+      },
+      "successful": 34560,
+      "failed": 0
+    },
+    "functional-128k": {
+      "statuses": {
+        "passed": 2
+      },
+      "successful": 1947,
+      "failed": 0
+    }
+  },
+  "raw_hashes": 1409,
+  "production_deployed": false,
+  "long_stability_completed": false
+}

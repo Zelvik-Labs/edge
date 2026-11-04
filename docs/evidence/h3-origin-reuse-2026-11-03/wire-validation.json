@@ -1,0 +1,70 @@
+{
+  "passed": true,
+  "source_commit": "28feef16bbb39b11d3701fbbac1959c608bfa9e5",
+  "artifact_id": 13224688996,
+  "archive_sha256": "0a410f4c07cd3e02ffb34d2b226029fed249551b430ba2a9379e75cb35503eee",
+  "wire_cases": 7,
+  "resolved_h3_requests": 21,
+  "accepted_quic_connections": 10,
+  "closed_quic_connections": 10,
+  "sequential_requests_on_one_quic_and_driver": 12,
+  "scope": "Kernel-loopback H3 origin correctness; six abnormal/aborted/timeout controls are included in 21 resolved requests, not 21 successful responses; no throughput, RSS or real-NIC AF_XDP claim",
+  "cases": {
+    "abandoned_request_body_writer_cannot_be_finished_into_a_healthy_pool_entry": {
+      "accepted_quic_connections": 2,
+      "closed_quic_connections": 2,
+      "passed": true,
+      "resolved_h3_requests": 2,
+      "scope": "real Kernel-loopback H3 origin, not throughput or real-NIC AF_XDP",
+      "test": "origin_h3::wire_tests::abandoned_request_body_writer_cannot_be_finished_into_a_healthy_pool_entry"
+    },
+    "idle_expiration_releases_the_sender_driver_and_endpoint": {
+      "accepted_quic_connections": 1,
+      "closed_quic_connections": 1,
+      "passed": true,
+      "resolved_h3_requests": 1,
+      "scope": "real Kernel-loopback H3 origin, not throughput or real-NIC AF_XDP",
+      "test": "origin_h3::wire_tests::idle_expiration_releases_the_sender_driver_and_endpoint"
+    },
+    "pending_header_and_trailer_timeouts_do_not_prove_reusable_completion": {
+      "accepted_quic_connections": 2,
+      "closed_quic_connections": 2,
+      "passed": true,
+      "resolved_h3_requests": 2,
+      "scope": "real Kernel-loopback H3 origin, not throughput or real-NIC AF_XDP",
+      "test": "origin_h3::wire_tests::pending_header_and_trailer_timeouts_do_not_prove_reusable_completion"
+    },
+    "partial_response_and_reset_are_not_returned_to_the_idle_pool": {
+      "accepted_quic_connections": 2,
+      "closed_quic_connections": 2,
+      "passed": true,
+      "resolved_h3_requests": 2,
+      "scope": "real Kernel-loopback H3 origin, not throughput or real-NIC AF_XDP",
+      "test": "origin_h3::wire_tests::partial_response_and_reset_are_not_returned_to_the_idle_pool"
+    },
+    "pooled_h3_contexts_keep_peer_trust_and_group_isolation": {
+      "accepted_quic_connections": 1,
+      "closed_quic_connections": 1,
+      "passed": true,
+      "resolved_h3_requests": 1,
+      "scope": "real Kernel-loopback H3 origin, not throughput or real-NIC AF_XDP",
+      "test": "origin_h3::wire_tests::pooled_h3_contexts_keep_peer_trust_and_group_isolation"
+    },
+    "request_upload_progresses_while_response_headers_are_pending": {
+      "accepted_quic_connections": 1,
+      "closed_quic_connections": 1,
+      "passed": true,
+      "resolved_h3_requests": 1,
+      "scope": "real Kernel-loopback H3 origin, not throughput or real-NIC AF_XDP",
+      "test": "origin_h3::wire_tests::request_upload_progresses_while_response_headers_are_pending"
+    },
+    "sequential_h3_requests_reuse_one_protocol_driver_and_quic_connection": {
+      "accepted_quic_connections": 1,
+      "closed_quic_connections": 1,
+      "passed": true,
+      "resolved_h3_requests": 12,
+      "scope": "real Kernel-loopback H3 origin, not throughput or real-NIC AF_XDP",
+      "test": "origin_h3::wire_tests::sequential_h3_requests_reuse_one_protocol_driver_and_quic_connection"
+    }
+  }
+}

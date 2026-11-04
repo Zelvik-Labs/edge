@@ -1,10 +1,11 @@
 use std::fmt::Debug;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr as StdSocketAddr};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use bytes::{Buf, Bytes, BytesMut};
+use bytes::{Buf, Bytes};
 use futures_util::Stream;
 use h3::error::Code;
 use http::{HeaderMap, Response, Version};
@@ -24,7 +25,130 @@ use tokio::sync::Mutex;
 use crate::origin_h3_state::{ORIGIN_H3_STATE_MANAGER, OriginH3Key};
 
 type H3SendRequest = h3::client::SendRequest<h3_quinn::OpenStreams, Bytes>;
-type H3RequestStream = h3::client::RequestStream<h3_quinn::BidiStream<Bytes>, Bytes>;
+type H3RequestStream = h3::client::RequestStream<h3_quinn::SendStream<Bytes>, Bytes>;
+type H3ResponseStream = h3::client::RequestStream<h3_quinn::RecvStream, Bytes>;
+
+/// Reuse is scoped to the peer's full policy and the concrete upstream path,
+/// not just authority. An AF socket retains its registry, so its pointer cannot
+/// be recycled while a pooled context with that identity is alive.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct OriginH3PoolKey {
+    target: OriginH3Key,
+    peer_reuse_hash: u64,
+    verify_cert: bool,
+    verify_hostname: bool,
+    af_registry_identity: Option<usize>,
+    transport: Option<(u8, bool, bool)>,
+}
+
+struct H3ConnectionPlan {
+    key: OriginH3PoolKey,
+    server_addr: StdSocketAddr,
+    transport: Option<crate::runtime_mode::XdpTransportSettings>,
+    #[cfg(target_os = "linux")]
+    registry: Option<Arc<crate::xdp::af_xdp::AfXdpDialRegistry>>,
+}
+
+fn connection_plan<P: Peer>(peer: &P) -> PingoraResult<H3ConnectionPlan> {
+    let server_addr = peer.address().as_inet().copied().ok_or_else(|| {
+        Error::explain(
+            ErrorType::ConnectError,
+            "HTTP/3 origin requires an IP socket address",
+        )
+    })?;
+    #[cfg(target_os = "linux")]
+    let (transport, registry, af_registry_identity) = {
+        let runtime = crate::runtime_mode::RuntimeConfig::current();
+        let selected = runtime.as_ref().is_some_and(|runtime| {
+            runtime.xdp.upstream_mode() == crate::runtime_mode::XdpUpstreamMode::Afxdp
+        });
+        let transport = selected.then(|| {
+            runtime
+                .and_then(|runtime| runtime.xdp.transport)
+                .unwrap_or_default()
+                .resolved()
+        });
+        let requested = selected && !server_addr.ip().is_loopback();
+        let registry = if requested {
+            crate::xdp::af_xdp_dial_registry()
+        } else {
+            None
+        };
+        let identity = requested.then(|| {
+            registry
+                .as_ref()
+                .map_or(0, |registry| Arc::as_ptr(registry) as usize)
+        });
+        (transport, registry, identity)
+    };
+    #[cfg(not(target_os = "linux"))]
+    let (transport, af_registry_identity): (
+        Option<crate::runtime_mode::XdpTransportSettings>,
+        Option<usize>,
+    ) = (None, None);
+    let key = OriginH3PoolKey {
+        target: origin_h3_key(peer),
+        peer_reuse_hash: peer.reuse_hash(),
+        verify_cert: peer.verify_cert(),
+        verify_hostname: peer.verify_hostname(),
+        af_registry_identity,
+        transport: transport.as_ref().map(|settings| {
+            (
+                settings.controller as u8,
+                settings.trusted_ecn,
+                settings.aggregation,
+            )
+        }),
+    };
+    Ok(H3ConnectionPlan {
+        key,
+        server_addr,
+        transport,
+        #[cfg(target_os = "linux")]
+        registry,
+    })
+}
+
+/// One H3 protocol context for the lifetime of one QUIC connection. Retaining
+/// only QUIC handles drops the final h3 SendRequest and closes that connection.
+pub struct OriginH3Connection {
+    key: OriginH3PoolKey,
+    _endpoint: Endpoint,
+    quic: quinn::Connection,
+    sender: Mutex<H3SendRequest>,
+    driver: tokio::task::JoinHandle<()>,
+    server_addr: StdSocketAddr,
+    client_addr: StdSocketAddr,
+    request_slots: Arc<tokio::sync::Semaphore>,
+    reusable: AtomicBool,
+}
+
+impl OriginH3Connection {
+    pub(crate) fn is_open(&self) -> bool {
+        self.quic.close_reason().is_none() && !self.driver.is_finished()
+    }
+
+    pub(crate) fn can_open_request(&self) -> bool {
+        self.reusable.load(Ordering::Acquire) && self.is_open()
+    }
+}
+
+impl Drop for OriginH3Connection {
+    fn drop(&mut self) {
+        crate::origin_h3_active::remove(&self.key, self as *const Self);
+        self.quic.close(
+            quinn::VarInt::from_u32(Code::H3_NO_ERROR.value() as u32),
+            b"origin H3 context released",
+        );
+        self.driver.abort();
+    }
+}
+
+struct H3RequestSend {
+    stream: Mutex<H3RequestStream>,
+    finished: AtomicBool,
+    failed: AtomicBool,
+}
 
 #[derive(Clone, Default)]
 pub struct OriginH3Connector;
@@ -38,10 +162,10 @@ impl CustomConnector for OriginH3Connector {
         peer: &P,
     ) -> PingoraResult<(Connection<Self::Session>, bool)> {
         let key = origin_h3_key(peer);
-        match connect_h3(peer, key.clone()).await {
-            Ok(session) => {
+        match connect_h3(peer).await {
+            Ok((session, reused)) => {
                 ORIGIN_H3_STATE_MANAGER.record_success(key);
-                Ok((Connection::Session(session), false))
+                Ok((Connection::Session(session), reused))
             }
             Err(err) => {
                 ORIGIN_H3_STATE_MANAGER.record_failure(key);
@@ -54,45 +178,74 @@ impl CustomConnector for OriginH3Connector {
         &self,
         peer: &P,
     ) -> Option<Self::Session> {
-        let key = origin_h3_key(peer);
-        let (endpoint, connection) = crate::origin_h3_pool::take(&key)?;
-        build_h3_session(peer, key, endpoint, connection).await.ok()
+        let plan = match connection_plan(peer) {
+            Ok(plan) => plan,
+            Err(error) => {
+                tracing::debug!(%error, "HTTP/3 peer is not eligible for idle connection reuse");
+                return None;
+            }
+        };
+        reuse_session(peer, &plan.key)
     }
 
     async fn release_http_session<P: Peer + Send + Sync + 'static>(
         &self,
         mut session: Self::Session,
-        peer: &P,
+        _peer: &P,
         _idle_timeout: Option<Duration>,
     ) {
-        let _ = session.finish_custom().await;
+        if let Err(error) = session.finish_custom().await {
+            tracing::warn!(%error, "HTTP/3 origin request could not finish; connection not pooled");
+            return;
+        }
         if session.can_reuse_connection() {
-            let key = origin_h3_key(peer);
-            crate::origin_h3_pool::offer(key, session._endpoint, session._connection);
+            let context = session.context.clone();
+            crate::origin_h3_pool::offer(context.key.clone(), context);
         }
     }
 }
 
 pub struct OriginH3ClientSession {
-    send_request: Arc<Mutex<H3SendRequest>>,
-    request_stream: Option<Arc<Mutex<H3RequestStream>>>,
+    context: Arc<OriginH3Connection>,
+    _request_slot: tokio::sync::OwnedSemaphorePermit,
+    request_send: Option<Arc<H3RequestSend>>,
+    response_stream: Option<Mutex<H3ResponseStream>>,
     response_header: Option<ResponseHeader>,
     response_finished: bool,
-    request_body_finished: bool,
+    response_trailers_finished: bool,
+    failed: bool,
     read_timeout: Option<Duration>,
     write_timeout: Option<Duration>,
     digest: Digest,
     server_addr: SocketAddr,
     client_addr: SocketAddr,
-    _endpoint: Endpoint,
-    _connection: quinn::Connection,
 }
 
 impl OriginH3ClientSession {
     fn can_reuse_connection(&self) -> bool {
-        self._connection.close_reason().is_none()
-            && self.request_body_finished
-            && self.request_stream.is_none()
+        self.context.can_open_request()
+            && !self.failed
+            && self.request_send.as_ref().is_some_and(|send| {
+                send.finished.load(Ordering::Acquire) && !send.failed.load(Ordering::Acquire)
+            })
+            && self
+                .response_header
+                .as_ref()
+                .is_some_and(|header| header.status.as_u16() >= 200)
+            && self.response_finished
+            && self.response_trailers_finished
+            && self.response_stream.is_none()
+    }
+}
+
+impl Drop for OriginH3ClientSession {
+    fn drop(&mut self) {
+        if self.failed || (self.request_send.is_some() && !self.can_reuse_connection()) {
+            // Stop admitting new requests on a context with an incomplete or
+            // failed request, but let other independently owned streams finish.
+            self.context.reusable.store(false, Ordering::Release);
+            crate::origin_h3_pool::discard(&self.context.key, &self.context);
+        }
     }
 }
 
@@ -101,19 +254,24 @@ impl OriginH3ClientSession {
 /// dials a node-originated AF_XDP UDP flow and hands quinn an abstract
 /// socket over it — an explicit failure surfaces as `ConnectError`
 /// (never a silent kernel fallback).
-async fn create_h3_endpoint(server_addr: StdSocketAddr) -> PingoraResult<Endpoint> {
+async fn create_h3_endpoint(plan: &H3ConnectionPlan) -> PingoraResult<Endpoint> {
+    let server_addr = plan.server_addr;
     #[cfg(target_os = "linux")]
     // Loopback upstreams take the kernel path — `lo` has no XSK/reactor
     // queue, so an AF_XDP dial to one can only fail.
-    if crate::xdp::afxdp_upstream_selected() && !server_addr.ip().is_loopback() {
-        let socket = crate::xdp::af_xdp_dial_udp(server_addr, None)
-            .await
-            .map_err(|err| {
-                Error::explain(
-                    ErrorType::ConnectError,
-                    format!("AF_XDP H3 UDP dial to {server_addr}: {err}"),
-                )
-            })?;
+    if plan.key.af_registry_identity.is_some() {
+        let registry = plan.registry.as_ref().ok_or_else(|| {
+            Error::explain(
+                ErrorType::ConnectError,
+                "XDP enabled but no live AF_XDP registry for HTTP/3 origin",
+            )
+        })?;
+        let socket = registry.dial_udp(server_addr, None).await.map_err(|err| {
+            Error::explain(
+                ErrorType::ConnectError,
+                format!("AF_XDP H3 UDP dial to {server_addr}: {err}"),
+            )
+        })?;
         let runtime: Arc<dyn quinn::Runtime> = Arc::new(quinn::TokioRuntime);
         return Endpoint::new_with_abstract_socket(
             quinn::EndpointConfig::default(),
@@ -300,21 +458,15 @@ mod af_xdp_quinn {
 
 async fn connect_h3<P: Peer + Send + Sync + 'static>(
     peer: &P,
-    key: OriginH3Key,
-) -> PingoraResult<OriginH3ClientSession> {
-    if let Some((endpoint, connection)) = crate::origin_h3_pool::take(&key) {
-        return build_h3_session(peer, key, endpoint, connection).await;
+) -> PingoraResult<(OriginH3ClientSession, bool)> {
+    let plan = connection_plan(peer)?;
+    if let Some(session) = reuse_session(peer, &plan.key) {
+        return Ok((session, true));
     }
 
-    let Some(server_addr) = peer.address().as_inet().copied() else {
-        return Error::e_explain(
-            ErrorType::ConnectError,
-            "HTTP/3 origin requires an IP socket address",
-        );
-    };
-
-    let mut endpoint = create_h3_endpoint(server_addr).await?;
-    endpoint.set_default_client_config(client_config(peer.verify_cert())?);
+    let server_addr = plan.server_addr;
+    let mut endpoint = create_h3_endpoint(&plan).await?;
+    endpoint.set_default_client_config(client_config(peer.verify_cert(), plan.transport.as_ref())?);
 
     let sni = peer.sni();
     let connecting = endpoint.connect(server_addr, sni).map_err(|err| {
@@ -338,24 +490,41 @@ async fn connect_h3<P: Peer + Send + Sync + 'static>(
         )
     })?;
 
-    build_h3_session(peer, key, endpoint, connection).await
+    let context = build_h3_connection(plan.key, endpoint, connection).await?;
+    let session = session_for_connection(peer, context).ok_or_else(|| {
+        Error::explain(
+            ErrorType::ConnectError,
+            "new H3 context has no request capacity",
+        )
+    })?;
+    crate::origin_h3_active::register(&session.context.key, &session.context);
+    Ok((session, false))
 }
 
-async fn build_h3_session<P: Peer + Send + Sync + 'static>(
-    peer: &P,
-    _key: OriginH3Key,
+fn reuse_session<P: Peer>(peer: &P, key: &OriginH3PoolKey) -> Option<OriginH3ClientSession> {
+    if let Some(context) = crate::origin_h3_pool::take(key)
+        && let Some(session) = session_for_connection(peer, context)
+    {
+        // A concurrent cold connection may have replaced this key's weak
+        // index before this context became the final idle survivor.
+        crate::origin_h3_active::register(key, &session.context);
+        return Some(session);
+    }
+    session_for_connection(peer, crate::origin_h3_active::get(key)?)
+}
+
+async fn build_h3_connection(
+    key: OriginH3PoolKey,
     endpoint: Endpoint,
     connection: quinn::Connection,
-) -> PingoraResult<OriginH3ClientSession> {
-    let Some(server_addr) = peer.address().as_inet().copied() else {
-        return Error::e_explain(
+) -> PingoraResult<Arc<OriginH3Connection>> {
+    let server_addr = connection.remote_address();
+    let local_addr = endpoint.local_addr().map_err(|error| {
+        Error::explain(
             ErrorType::ConnectError,
-            "HTTP/3 origin requires an IP socket address",
-        );
-    };
-    let local_addr = endpoint
-        .local_addr()
-        .unwrap_or_else(|_| StdSocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0));
+            format!("reading H3 endpoint local address: {error}"),
+        )
+    })?;
     let h3_conn = h3_quinn::Connection::new(connection.clone());
     let (mut driver, send_request) = h3::client::builder().build(h3_conn).await.map_err(|err| {
         Error::explain(
@@ -363,38 +532,82 @@ async fn build_h3_session<P: Peer + Send + Sync + 'static>(
             format!("starting H3 client: {err}"),
         )
     })?;
-    tokio::spawn(async move {
-        let _ = futures_util::future::poll_fn(|cx| driver.poll_close(cx)).await;
+    let driver = tokio::spawn(async move {
+        let reason = futures_util::future::poll_fn(|cx| driver.poll_close(cx)).await;
+        tracing::debug!(%reason, "HTTP/3 origin connection driver closed");
     });
 
-    Ok(OriginH3ClientSession {
-        send_request: Arc::new(Mutex::new(send_request)),
-        request_stream: None,
+    Ok(Arc::new(OriginH3Connection {
+        key,
+        _endpoint: endpoint,
+        quic: connection,
+        sender: Mutex::new(send_request),
+        driver,
+        server_addr,
+        client_addr: local_addr,
+        // Bound per-origin request contention before opening a QUIC stream.
+        // Saturation creates another context through the ordinary connector;
+        // it never discards a request or waits indefinitely on this semaphore.
+        request_slots: Arc::new(tokio::sync::Semaphore::new(32)),
+        reusable: AtomicBool::new(true),
+    }))
+}
+
+fn session_for_connection<P: Peer>(
+    peer: &P,
+    context: Arc<OriginH3Connection>,
+) -> Option<OriginH3ClientSession> {
+    if !context.can_open_request() {
+        return None;
+    }
+    let request_slot = context.request_slots.clone().try_acquire_owned().ok()?;
+    let server_addr = context.server_addr.into();
+    let client_addr = context.client_addr.into();
+    Some(OriginH3ClientSession {
+        context,
+        _request_slot: request_slot,
+        request_send: None,
+        response_stream: None,
         response_header: None,
         response_finished: false,
-        request_body_finished: false,
+        response_trailers_finished: false,
+        failed: false,
         read_timeout: peer.get_peer_options().and_then(|opts| opts.read_timeout),
         write_timeout: peer.get_peer_options().and_then(|opts| opts.write_timeout),
         digest: Digest::default(),
-        server_addr: server_addr.into(),
-        client_addr: local_addr.into(),
-        _endpoint: endpoint,
-        _connection: connection,
+        server_addr,
+        client_addr,
     })
 }
 
-fn client_config(verify_cert: bool) -> PingoraResult<ClientConfig> {
+fn client_config(
+    verify_cert: bool,
+    _transport: Option<&crate::runtime_mode::XdpTransportSettings>,
+) -> PingoraResult<ClientConfig> {
+    let builder = rustls::ClientConfig::builder_with_provider(Arc::new(
+        crate::tls_crypto::default_crypto_provider(),
+    ))
+    .with_protocol_versions(&[&rustls::version::TLS13])
+    .map_err(|error| {
+        Error::explain(
+            ErrorType::ConnectError,
+            format!("building H3 TLS provider: {error}"),
+        )
+    })?;
     let mut crypto = if verify_cert {
         let mut roots = rustls::RootCertStore::empty();
         let certs = rustls_native_certs::load_native_certs();
-        for cert in certs.certs {
-            let _ = roots.add(cert);
+        for error in certs.errors {
+            tracing::warn!(%error, "loading native root certificates for H3 origin");
         }
-        rustls::ClientConfig::builder()
-            .with_root_certificates(roots)
-            .with_no_client_auth()
+        for cert in certs.certs {
+            if let Err(error) = roots.add(cert) {
+                tracing::warn!(%error, "native root certificate rejected for H3 origin");
+            }
+        }
+        builder.with_root_certificates(roots).with_no_client_auth()
     } else {
-        rustls::ClientConfig::builder()
+        builder
             .dangerous()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth()
@@ -406,20 +619,23 @@ fn client_config(verify_cert: bool) -> PingoraResult<ClientConfig> {
             format!("building H3 TLS config: {err}"),
         )
     })?;
-    #[allow(unused_mut)]
-    let mut config = ClientConfig::new(Arc::new(quic));
+    let config = ClientConfig::new(Arc::new(quic));
     // T5: when this client will run over the AF_XDP upstream path,
     // apply the policy-selected transport controller. The stock
     // controller stays for kernel-socket H3 (non-XDP contract
     // unchanged) and for the cubic default.
     #[cfg(target_os = "linux")]
-    if crate::xdp::afxdp_upstream_selected()
-        && let Some(factory) = crate::xdp::xdp_quic_cc_factory()
-    {
-        let mut transport = crate::quic_transport::tuned_transport_config(None);
-        transport.congestion_controller_factory(factory);
-        config.transport_config(Arc::new(transport));
-    }
+    let config = {
+        let mut config = config;
+        if let Some(settings) = _transport {
+            let mut transport = crate::quic_transport::tuned_transport_config(None);
+            transport.congestion_controller_factory(Arc::new(
+                crate::quic_cc::XdpTransportControllerFactory::new(settings.clone()),
+            ));
+            config.transport_config(Arc::new(transport));
+        }
+        config
+    };
     Ok(config)
 }
 
@@ -485,34 +701,49 @@ impl CustomClientSession for OriginH3ClientSession {
         end: bool,
     ) -> PingoraResult<()> {
         let request = build_h3_request(&req)?;
-        let mut send_request = self.send_request.lock().await;
-        let stream = match self.write_timeout {
-            Some(timeout) => tokio::time::timeout(timeout, send_request.send_request(request))
-                .await
-                .map_err(|_| {
-                    Error::explain(ErrorType::WriteTimedout, "sending HTTP/3 request header")
-                })?,
-            None => send_request.send_request(request).await,
+        let mut send_request = self.context.sender.lock().await;
+        let result = async {
+            match self.write_timeout {
+                Some(timeout) => tokio::time::timeout(timeout, send_request.send_request(request))
+                    .await
+                    .map_err(|_| {
+                        Error::explain(ErrorType::WriteTimedout, "sending HTTP/3 request header")
+                    })?,
+                None => send_request.send_request(request).await,
+            }
+            .map_err(|err| {
+                Error::explain(
+                    ErrorType::WriteError,
+                    format!("sending HTTP/3 request header: {err}"),
+                )
+            })
         }
-        .map_err(|err| {
-            Error::explain(
-                ErrorType::WriteError,
-                format!("sending HTTP/3 request header: {err}"),
-            )
-        })?;
+        .await;
+        let stream = match result {
+            Ok(stream) => stream,
+            Err(error) => {
+                self.failed = true;
+                return Err(error);
+            }
+        };
         drop(send_request);
 
-        let stream = Arc::new(Mutex::new(stream));
+        let (send, recv) = stream.split();
+        let send = Arc::new(H3RequestSend {
+            stream: Mutex::new(send),
+            finished: AtomicBool::new(false),
+            failed: AtomicBool::new(false),
+        });
+        self.request_send = Some(send.clone());
+        self.response_stream = Some(Mutex::new(recv));
         if end {
-            finish_h3_body(stream.clone(), self.write_timeout).await?;
-            self.request_body_finished = true;
+            finish_h3_body(send, self.write_timeout).await?;
         }
-        self.request_stream = Some(stream);
         Ok(())
     }
 
     async fn write_request_body(&mut self, data: Bytes, end: bool) -> PingoraResult<()> {
-        let Some(stream) = self.request_stream.as_ref().cloned() else {
+        let Some(stream) = self.request_send.as_ref().cloned() else {
             return Error::e_explain(
                 ErrorType::WriteError,
                 "HTTP/3 request stream is not initialized",
@@ -522,14 +753,10 @@ impl CustomClientSession for OriginH3ClientSession {
     }
 
     async fn finish_request_body(&mut self) -> PingoraResult<()> {
-        if self.request_body_finished {
-            return Ok(());
-        }
-        let Some(stream) = self.request_stream.as_ref().cloned() else {
+        let Some(stream) = self.request_send.as_ref().cloned() else {
             return Ok(());
         };
         finish_h3_body(stream, self.write_timeout).await?;
-        self.request_body_finished = true;
         Ok(())
     }
 
@@ -542,27 +769,37 @@ impl CustomClientSession for OriginH3ClientSession {
     }
 
     async fn read_response_header(&mut self) -> PingoraResult<()> {
-        let Some(stream) = self.request_stream.as_ref().cloned() else {
+        let Some(stream) = self.response_stream.as_mut() else {
             return Error::e_explain(
                 ErrorType::ReadError,
                 "HTTP/3 request stream is not initialized",
             );
         };
-        let mut stream = stream.lock().await;
-        let response = match self.read_timeout {
-            Some(timeout) => tokio::time::timeout(timeout, stream.recv_response())
-                .await
-                .map_err(|_| {
-                    Error::explain(ErrorType::ReadTimedout, "reading HTTP/3 response header")
-                })?,
-            None => stream.recv_response().await,
+        let stream = stream.get_mut();
+        let result = async {
+            match self.read_timeout {
+                Some(timeout) => tokio::time::timeout(timeout, stream.recv_response())
+                    .await
+                    .map_err(|_| {
+                        Error::explain(ErrorType::ReadTimedout, "reading HTTP/3 response header")
+                    })?,
+                None => stream.recv_response().await,
+            }
+            .map_err(|err| {
+                Error::explain(
+                    ErrorType::ReadError,
+                    format!("reading HTTP/3 response header: {err}"),
+                )
+            })
         }
-        .map_err(|err| {
-            Error::explain(
-                ErrorType::ReadError,
-                format!("reading HTTP/3 response header: {err}"),
-            )
-        })?;
+        .await;
+        let response = match result {
+            Ok(response) => response,
+            Err(error) => {
+                self.failed = true;
+                return Err(error);
+            }
+        };
         self.response_header = Some(build_response_header(response)?);
         Ok(())
     }
@@ -571,38 +808,43 @@ impl CustomClientSession for OriginH3ClientSession {
         if self.response_finished {
             return Ok(None);
         }
-        let Some(stream) = self.request_stream.as_ref().cloned() else {
+        let Some(stream) = self.response_stream.as_mut() else {
             return Error::e_explain(
                 ErrorType::ReadError,
                 "HTTP/3 request stream is not initialized",
             );
         };
-        let mut stream = stream.lock().await;
-        let result = match self.read_timeout {
-            Some(timeout) => tokio::time::timeout(timeout, stream.recv_data())
-                .await
-                .map_err(|_| {
-                    Error::explain(ErrorType::ReadTimedout, "reading HTTP/3 response body")
-                })?,
-            None => stream.recv_data().await,
+        let stream = stream.get_mut();
+        let result = async {
+            match self.read_timeout {
+                Some(timeout) => tokio::time::timeout(timeout, stream.recv_data())
+                    .await
+                    .map_err(|_| {
+                        Error::explain(ErrorType::ReadTimedout, "reading HTTP/3 response body")
+                    })?,
+                None => stream.recv_data().await,
+            }
+            .map_err(|err| {
+                Error::explain(
+                    ErrorType::ReadError,
+                    format!("reading HTTP/3 response body: {err}"),
+                )
+            })
         }
-        .map_err(|err| {
-            Error::explain(
-                ErrorType::ReadError,
-                format!("reading HTTP/3 response body: {err}"),
-            )
-        })?;
+        .await;
+        let result = match result {
+            Ok(result) => result,
+            Err(error) => {
+                self.failed = true;
+                return Err(error);
+            }
+        };
         let Some(mut chunk) = result else {
             self.response_finished = true;
             return Ok(None);
         };
-        let mut out = BytesMut::with_capacity(chunk.remaining());
-        while chunk.has_remaining() {
-            out.extend_from_slice(chunk.chunk());
-            let remaining = chunk.remaining();
-            chunk.advance(remaining);
-        }
-        Ok(Some(out.freeze()))
+        let len = chunk.remaining();
+        Ok(Some(chunk.copy_to_bytes(len)))
     }
 
     fn response_finished(&self) -> bool {
@@ -610,8 +852,16 @@ impl CustomClientSession for OriginH3ClientSession {
     }
 
     async fn shutdown(&mut self, _code: u32, _ctx: &str) {
-        if let Some(stream) = self.request_stream.as_ref() {
-            stream.lock().await.stop_stream(Code::H3_REQUEST_CANCELLED);
+        self.failed = true;
+        if let Some(send) = self.request_send.as_ref() {
+            send.failed.store(true, Ordering::Release);
+            send.stream
+                .lock()
+                .await
+                .stop_stream(Code::H3_REQUEST_CANCELLED);
+        }
+        if let Some(recv) = self.response_stream.as_mut() {
+            recv.get_mut().stop_sending(Code::H3_REQUEST_CANCELLED);
         }
     }
 
@@ -640,16 +890,38 @@ impl CustomClientSession for OriginH3ClientSession {
     }
 
     async fn read_trailers(&mut self) -> PingoraResult<Option<HeaderMap>> {
-        let Some(stream) = self.request_stream.as_ref().cloned() else {
+        let Some(stream) = self.response_stream.as_mut() else {
             return Ok(None);
         };
-        let mut stream = stream.lock().await;
-        stream.recv_trailers().await.map_err(|err| {
-            Error::explain(
-                ErrorType::ReadError,
-                format!("reading HTTP/3 trailers: {err}"),
-            )
-        })
+        let stream = stream.get_mut();
+        let result = async {
+            match self.read_timeout {
+                Some(timeout) => tokio::time::timeout(timeout, stream.recv_trailers())
+                    .await
+                    .map_err(|_| {
+                        Error::explain(ErrorType::ReadTimedout, "reading HTTP/3 response trailers")
+                    })?,
+                None => stream.recv_trailers().await,
+            }
+            .map_err(|err| {
+                Error::explain(
+                    ErrorType::ReadError,
+                    format!("reading HTTP/3 trailers: {err}"),
+                )
+            })
+        }
+        .await;
+        match result {
+            Ok(trailers) => {
+                self.response_trailers_finished = true;
+                self.response_stream = None;
+                Ok(trailers)
+            }
+            Err(error) => {
+                self.failed = true;
+                Err(error)
+            }
+        }
     }
 
     fn fd(&self) -> UniqueIDType {
@@ -669,11 +941,10 @@ impl CustomClientSession for OriginH3ClientSession {
     }
 
     fn take_request_body_writer(&mut self) -> Option<Box<dyn BodyWrite>> {
-        self.request_stream.as_ref().map(|stream| {
+        self.request_send.as_ref().map(|stream| {
             Box::new(OriginH3BodyWriter {
                 stream: stream.clone(),
                 write_timeout: self.write_timeout,
-                finished: false,
             }) as Box<dyn BodyWrite>
         })
     }
@@ -698,9 +969,16 @@ impl CustomClientSession for OriginH3ClientSession {
 }
 
 struct OriginH3BodyWriter {
-    stream: Arc<Mutex<H3RequestStream>>,
+    stream: Arc<H3RequestSend>,
     write_timeout: Option<Duration>,
-    finished: bool,
+}
+
+impl Drop for OriginH3BodyWriter {
+    fn drop(&mut self) {
+        if !self.stream.finished.load(Ordering::Acquire) {
+            self.stream.failed.store(true, Ordering::Release);
+        }
+    }
 }
 
 #[async_trait]
@@ -714,14 +992,17 @@ impl BodyWrite for OriginH3BodyWriter {
     }
 
     async fn finish(&mut self) -> PingoraResult<()> {
-        if self.finished {
-            return Ok(());
-        }
-        self.finished = true;
         finish_h3_body(self.stream.clone(), self.write_timeout).await
     }
 
     async fn cleanup(&mut self) -> PingoraResult<()> {
+        if !self.stream.finished.load(Ordering::Acquire) {
+            let mut stream = self.stream.stream.lock().await;
+            if !self.stream.finished.load(Ordering::Acquire) {
+                self.stream.failed.store(true, Ordering::Release);
+                stream.stop_stream(Code::H3_REQUEST_CANCELLED);
+            }
+        }
         Ok(())
     }
 
@@ -729,49 +1010,71 @@ impl BodyWrite for OriginH3BodyWriter {
 }
 
 async fn write_h3_body(
-    stream: Arc<Mutex<H3RequestStream>>,
+    send: Arc<H3RequestSend>,
     data: Bytes,
     end: bool,
     write_timeout: Option<Duration>,
 ) -> PingoraResult<()> {
-    let mut stream = stream.lock().await;
-    if !data.is_empty() {
-        match write_timeout {
-            Some(timeout) => tokio::time::timeout(timeout, stream.send_data(data))
-                .await
-                .map_err(|_| {
-                    Error::explain(ErrorType::WriteTimedout, "writing HTTP/3 request body")
-                })?,
-            None => stream.send_data(data).await,
-        }
-        .map_err(|err| {
-            Error::explain(
-                ErrorType::WriteError,
-                format!("writing HTTP/3 request body: {err}"),
-            )
-        })?;
+    let mut stream = send.stream.lock().await;
+    if send.failed.load(Ordering::Acquire) {
+        return Error::e_explain(ErrorType::WriteError, "HTTP/3 request body writer failed");
     }
-    if end {
-        match write_timeout {
-            Some(timeout) => tokio::time::timeout(timeout, stream.finish())
-                .await
-                .map_err(|_| {
-                    Error::explain(ErrorType::WriteTimedout, "finishing HTTP/3 request body")
-                })?,
-            None => stream.finish().await,
-        }
-        .map_err(|err| {
-            Error::explain(
+    if send.finished.load(Ordering::Acquire) {
+        return if data.is_empty() {
+            Ok(())
+        } else {
+            Error::e_explain(
                 ErrorType::WriteError,
-                format!("finishing HTTP/3 request body: {err}"),
+                "HTTP/3 request body already finished",
             )
-        })?;
+        };
     }
-    Ok(())
+    let result = async {
+        if !data.is_empty() {
+            match write_timeout {
+                Some(timeout) => tokio::time::timeout(timeout, stream.send_data(data))
+                    .await
+                    .map_err(|_| {
+                        Error::explain(ErrorType::WriteTimedout, "writing HTTP/3 request body")
+                    })?,
+                None => stream.send_data(data).await,
+            }
+            .map_err(|err| {
+                Error::explain(
+                    ErrorType::WriteError,
+                    format!("writing HTTP/3 request body: {err}"),
+                )
+            })?;
+        }
+        if end {
+            match write_timeout {
+                Some(timeout) => tokio::time::timeout(timeout, stream.finish())
+                    .await
+                    .map_err(|_| {
+                        Error::explain(ErrorType::WriteTimedout, "finishing HTTP/3 request body")
+                    })?,
+                None => stream.finish().await,
+            }
+            .map_err(|err| {
+                Error::explain(
+                    ErrorType::WriteError,
+                    format!("finishing HTTP/3 request body: {err}"),
+                )
+            })?;
+        }
+        Ok(())
+    }
+    .await;
+    if result.is_err() {
+        send.failed.store(true, Ordering::Release);
+    } else if end {
+        send.finished.store(true, Ordering::Release);
+    }
+    result
 }
 
 async fn finish_h3_body(
-    stream: Arc<Mutex<H3RequestStream>>,
+    stream: Arc<H3RequestSend>,
     write_timeout: Option<Duration>,
 ) -> PingoraResult<()> {
     write_h3_body(stream, Bytes::new(), true, write_timeout).await
@@ -797,7 +1100,7 @@ fn build_h3_request(req: &RequestHeader) -> PingoraResult<http::Request<()>> {
         .uri(uri)
         .version(Version::HTTP_3);
     for (name, value) in &req.headers {
-        if is_h3_forbidden_header(name.as_str()) {
+        if is_h3_forbidden_header(name) {
             continue;
         }
         builder = builder.header(name, value);
@@ -814,19 +1117,19 @@ fn build_response_header(response: Response<()>) -> PingoraResult<ResponseHeader
     let (parts, _) = response.into_parts();
     let mut header = ResponseHeader::build(parts.status, Some(parts.headers.len()))?;
     header.set_version(Version::HTTP_3);
-    for (name, value) in parts.headers {
-        if let Some(name) = name
-            && !is_h3_forbidden_header(name.as_str())
-        {
-            header.append_header(name, value)?;
+    // The owning HeaderMap iterator uses None for subsequent values of the
+    // same name. Borrowed iteration preserves every field, including Set-Cookie.
+    for (name, value) in &parts.headers {
+        if !is_h3_forbidden_header(name) {
+            header.append_header(name.clone(), value.clone())?;
         }
     }
     Ok(header)
 }
 
-fn is_h3_forbidden_header(name: &str) -> bool {
+fn is_h3_forbidden_header(name: &http::header::HeaderName) -> bool {
     matches!(
-        name.to_ascii_lowercase().as_str(),
+        name.as_str(),
         "connection"
             | "keep-alive"
             | "proxy-connection"
@@ -847,3 +1150,7 @@ fn origin_h3_key<P: Peer>(peer: &P) -> OriginH3Key {
 pub fn should_try_origin_h3_for_peer<P: Peer>(peer: &P) -> bool {
     ORIGIN_H3_STATE_MANAGER.should_try_h3(&origin_h3_key(peer))
 }
+
+#[cfg(test)]
+#[path = "origin_h3_tests.rs"]
+pub(crate) mod wire_tests;

@@ -1,0 +1,54 @@
+{
+  "schema_version": 3,
+  "scope": "single-process client + echo origin + relay component",
+  "algorithm_reference_commits": {
+    "blocking": "6f942440df52b7797fbb46cec86cef916681deef",
+    "readiness": "2df8b242b1b0d24f199e22592b6924e592f960a2"
+  },
+  "baseline_engine": "uring-unbounded",
+  "candidate_engine": "uring",
+  "uring_worker_policy": {
+    "uring": "explicit [2,2] worker limits and issuer CPU affinity",
+    "uring-unbounded": "kernel worker-count defaults with explicit issuer CPU affinity; differs from round 3 which did not register affinity"
+  },
+  "concurrency": 16,
+  "baseline_splice_normalized_sha256": "cd1f8753c1b37beb7cf2080c6aa45269257bcb4223196eaf7548f1cacc7225e6",
+  "commit": "112815b891ea26e6d0e132e7a2d1487b9d6d8f9a",
+  "tracked_dirty": false,
+  "kernel": {
+    "system": "Linux",
+    "node": "runnervmcwoy2",
+    "release": "6.8.0-1070-azure",
+    "version": "#78~22.04.1-Ubuntu SMP Thu Sep 24 18:46:45 UTC 2026",
+    "machine": "x86_64",
+    "processor": "x86_64"
+  },
+  "cpus": [
+    0,
+    1
+  ],
+  "binary_sha256": "40027ecaada4ba106aacb6f3a940b7c8b86bbb1e4d27713364682be240b882d2",
+  "sources": {
+    "Cargo.toml": "7510c8fb3b5281c34806fb44f234f00ab844e2bd1e2f1d11be8f4534f7779fa3",
+    "Cargo.lock": "b2193be03731b279b403f6c9e84be1ae8ff5c63ce39bd06946dd01cdfbafcc46",
+    "scripts/perf/compare-splice.py": "56d3b8d5b355804c1948b06ddfb2cf948dcff810bfd725c09427c28bfb9cfaf5",
+    "crates/zelvik-edge-io/benches/splice.rs": "2874e0f39d6a642f6a2c7985edd3569a1984707f3edf392e948f38a8ca83a791",
+    "crates/zelvik-edge-io/benches/support/blocking.rs": "8f616459df542a41589fa611b32dba1e057756001478105eb79792c75e12e998",
+    "crates/zelvik-edge-io/benches/support/mod.rs": "87e70079047a98521a2afac560a3a853f01dddd0f7e8cf7dd607b37e8bf39629",
+    "crates/zelvik-edge-io/src/lib.rs": "1550f33c83a0461145eb976507fcc95e8c1b7afaa814fb79c5dda675f9523605",
+    "crates/zelvik-edge-io/src/splice.rs": "4b846e4316930f8ae28a927a316fc33a8d18ec6c2945485ce97580e9681057b9",
+    "crates/zelvik-edge-io/src/uring.rs": "361f5869376e2e1805be31e04af5f54cfcfa5af1e111e5871caaab7be959e73c",
+    "crates/zelvik-edge-io/tests/splice.rs": "229cf005385765d5256722e35d10f7acbe7654dfbe2d5a125042a5badf065f13",
+    "crates/zelvik-edge-io/tests/uring.rs": "3f6fd5b40346246763c34a04d2911b99ae4cdd5e507ddb415c8a6ccee5d08200",
+    "crates/zelvik-edge-io/Cargo.toml": "e336f46decaf78521a1e509f7966ee83a8bd82687e14258a9a35056572933407"
+  },
+  "cpu_max": null,
+  "started_unix": 1793656214.8424075,
+  "rounds": 3,
+  "warmup_seconds": 1,
+  "measurement_seconds": 3,
+  "sample_size": 20,
+  "finished_unix": 1793656305.0983102,
+  "binary_unchanged": true,
+  "sources_unchanged": true
+}

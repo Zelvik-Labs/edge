@@ -1,0 +1,19 @@
+{
+  "id": 13235805409,
+  "name": "waf-miri-dce629200dbc448835e644ea5bbce6f3ea846eb9",
+  "size_in_bytes": 1640,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13235805409",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13235805409/zip",
+  "expired": false,
+  "created_at": "2026-11-03T13:40:41Z",
+  "expires_at": "2027-02-01T13:39:53Z",
+  "updated_at": "2026-11-03T13:40:41Z",
+  "digest": "sha256:49f66d71c227573b3c4e5329805a5b7e8df60229c84294fa56f7ce14c2dd17b7",
+  "workflow_run": {
+    "id": 41646346126,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/five-priorities-20261103",
+    "head_sha": "dce629200dbc448835e644ea5bbce6f3ea846eb9"
+  }
+}

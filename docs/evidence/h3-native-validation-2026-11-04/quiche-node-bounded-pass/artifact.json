@@ -1,0 +1,19 @@
+{
+  "id": 13248848793,
+  "name": "h3-quiche-node-ed01addd08abcb5718f767f13704b7d19692ec55",
+  "size_in_bytes": 106522,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13248848793",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13248848793/zip",
+  "expired": false,
+  "created_at": "2026-11-03T16:26:51Z",
+  "expires_at": "2027-02-01T16:18:41Z",
+  "updated_at": "2026-11-03T16:26:51Z",
+  "digest": "sha256:2264142dd88877e625519e241f8eb1141cbaf942af87188444c7e039344c66d7",
+  "workflow_run": {
+    "id": 41672874652,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/five-priorities-20261103",
+    "head_sha": "ed01addd08abcb5718f767f13704b7d19692ec55"
+  }
+}

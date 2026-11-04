@@ -1,0 +1,52 @@
+{
+  "source_commit": "9239da7ccf39cd31dc5712fef5829e692d36a326",
+  "source_sha256": {
+    "src/firewall/bounded_map.rs": "18c1290becaf477bc7dfc13adbc0819dfee45c1530b0317d33a368ea29eccc15",
+    "src/firewall/state.rs": "fecb6150bde1c9101bcbe30f8daeabb5d60057828aa22435f8a7d587b4931c45",
+    "src/memory_governor.rs": "bdeaacfcd529cc6dfb45f7ac4edf4d51d9443712f86222dfc8dac04bc801c8ae",
+    ".github/workflows/waf-state-probe.yml": "3e8b05ecd455f209f887c5b10db61feaa22f133c6d8bc183355cde31de3ad86a",
+    "scripts/perf/waf-state/Cargo.lock": "2cd232c7f29a70b3ae712c36f58ef0a815b4f2fc8db26abd0256ba832bec75cc",
+    "scripts/perf/waf-state/run.py": "9443a729e63c673e5e020c735563b4c57e792a42042f8e3827ed272f37035497",
+    "scripts/perf/waf-state/README.md": "aa64ddd1174c3e16f4fab6a8cc93313e5a6c9111bd4df0d7d13347ff41bcf83d",
+    "scripts/perf/waf-state/Cargo.toml": "e6318052a2852f6999bd9529d48690b6c469ca8c502e6bb8a284ac7d155d9e1e",
+    "scripts/perf/waf-state/src/main.rs": "39d44a0ee488bdfa1aadda0b92cf1fce3227aecc1b437dfb3255ee9c716a1f0d",
+    "scripts/perf/waf-state/src/lib.rs": "837bf8234b6bc23d16aaab224536d3fd88369ac67480368ecb327ab89780b47a"
+  },
+  "binary_sha256": "6af2963f64410f291759b9990eb227642e3eaa9e96577668ba540baed8d8737c",
+  "uname": {
+    "system": "Linux",
+    "node": "runnervmcwoy2",
+    "release": "6.8.0-1070-azure",
+    "version": "#78~22.04.1-Ubuntu SMP Thu Sep 24 18:46:45 UTC 2026",
+    "machine": "x86_64",
+    "processor": "x86_64"
+  },
+  "allowed_cpus_before": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "measurement_cpus": [
+    0
+  ],
+  "page_size": 4096,
+  "clock_ticks": 100,
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "rustflags": "-C target-cpu=x86-64-v2",
+  "memory_before": {
+    "MemTotal": 16765386752,
+    "MemAvailable": 15438790656,
+    "cgroup_v2": {
+      "memory.max": null,
+      "memory.current": null
+    }
+  },
+  "capacities": [
+    65536,
+    1677721,
+    8000000
+  ],
+  "rounds": 5,
+  "scope": "representative capacities, not runtime governor capacity; System allocator, not Edge mimalloc; no network or whole-node throughput claim"
+}

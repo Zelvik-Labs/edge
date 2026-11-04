@@ -1,0 +1,114 @@
+{
+  "rows": [
+    {
+      "protocol": "h3",
+      "cache": "hit",
+      "connection": "fresh",
+      "status": "traffic-errors",
+      "error": null,
+      "origin_requests": 0,
+      "payload_bytes": 1024,
+      "target": "edge",
+      "source": "74f53256ba85ad0ed3bae8424db7d21a037c10c2",
+      "manifest": "admission-quiche/manifest.json",
+      "stem": "0000-h3-hit-fresh",
+      "backend": "tokio-quiche-native",
+      "batch": "1",
+      "rps": 234.2373162146088,
+      "p99_ms": 41.568,
+      "successful": 62,
+      "failed": 450,
+      "elapsed": 0.26468882500000745,
+      "new_connections": 62,
+      "unique_connections_per_client": [
+        256,
+        256
+      ],
+      "cpu_usec_per_request": 2566.032258064516,
+      "client_cpu_fraction": 0.7283099314827335,
+      "proxy_cpu_fraction": 0.6010605094491447,
+      "origin_cpu_fraction": 0.083815400971308,
+      "max_host_steal_fraction": 0.0,
+      "cgroup_peak_mib": 137.453125,
+      "proxy_processes_after": "PID                 COMMAND             RSS                 NLWP\n9703                controller          5928                2\n9798                Zelvik-Edge         162960              24"
+    },
+    {
+      "protocol": "h3",
+      "cache": "hit",
+      "connection": "fresh",
+      "status": "traffic-errors",
+      "error": null,
+      "origin_requests": 0,
+      "payload_bytes": 1024,
+      "target": "edge",
+      "source": "74f53256ba85ad0ed3bae8424db7d21a037c10c2",
+      "manifest": "admission-quiche/manifest.json",
+      "stem": "0001-h3-hit-fresh",
+      "backend": "tokio-quiche-native",
+      "batch": "1",
+      "rps": 265.08265425986866,
+      "p99_ms": 41.781,
+      "successful": 57,
+      "failed": 455,
+      "elapsed": 0.21502727199992933,
+      "new_connections": 57,
+      "unique_connections_per_client": [
+        256,
+        256
+      ],
+      "cpu_usec_per_request": 2684.3508771929824,
+      "client_cpu_fraction": 0.8860945787381922,
+      "proxy_cpu_fraction": 0.7115748554911224,
+      "origin_cpu_fraction": 0.10708874174810518,
+      "max_host_steal_fraction": 0.0,
+      "cgroup_peak_mib": 137.14453125,
+      "proxy_processes_after": "PID                 COMMAND             RSS                 NLWP\n10269               controller          5964                2\n10359               Zelvik-Edge         163644              24"
+    },
+    {
+      "protocol": "h3",
+      "cache": "hit",
+      "connection": "fresh",
+      "status": "traffic-errors",
+      "error": null,
+      "origin_requests": 0,
+      "payload_bytes": 1024,
+      "target": "edge",
+      "source": "74f53256ba85ad0ed3bae8424db7d21a037c10c2",
+      "manifest": "admission-quiche/manifest.json",
+      "stem": "0002-h3-hit-fresh",
+      "backend": "tokio-quiche-native",
+      "batch": "1",
+      "rps": 228.77029478482856,
+      "p99_ms": 44.455,
+      "successful": 61,
+      "failed": 451,
+      "elapsed": 0.26664300999993884,
+      "new_connections": 61,
+      "unique_connections_per_client": [
+        256,
+        256
+      ],
+      "cpu_usec_per_request": 2635.1147540983607,
+      "client_cpu_fraction": 0.7364228299104679,
+      "proxy_cpu_fraction": 0.602835979086933,
+      "origin_cpu_fraction": 0.08365117090451805,
+      "max_host_steal_fraction": 0.0,
+      "cgroup_peak_mib": 139.8203125,
+      "proxy_processes_after": "PID                 COMMAND             RSS                 NLWP\n10789               controller          5968                2\n10878               Zelvik-Edge         167228              25"
+    }
+  ],
+  "first_rejections": [
+    {
+      "file": "edge-boot-0000.log",
+      "line": "2026-11-03T16:56:56.815000+00:00  WARN zelvik_edge::http3_proxy_manager::quiche_backend: HTTP/3 native first admission rejection; subsequent rejections retain L4 events address=0.0.0.0:19443 class=\"quiche_transport_bytes\" workspace_used=498073600 account=SharedAccountView { headroom_bytes: Some(2012987392), safety_margin_bytes: 167772160, grantable_bytes: 1682119680, pending_bytes: 0, committed_unconfirmed_bytes: 163095552, committed_live_bytes: 499549184, grants_total: 78, rejects_total: 0, reclaimable_bytes: 57344 }"
+    },
+    {
+      "file": "edge-boot-0001.log",
+      "line": "2026-11-03T16:57:03.589000+00:00  WARN zelvik_edge::http3_proxy_manager::quiche_backend: HTTP/3 native first admission rejection; subsequent rejections retain L4 events address=0.0.0.0:19443 class=\"quiche_transport_bytes\" workspace_used=498073600 account=SharedAccountView { headroom_bytes: Some(2010836992), safety_margin_bytes: 167772160, grantable_bytes: 1689546752, pending_bytes: 0, committed_unconfirmed_bytes: 153518080, committed_live_bytes: 499549184, grants_total: 78, rejects_total: 0, reclaimable_bytes: 32768 }"
+    },
+    {
+      "file": "edge.log",
+      "line": "2026-11-03T16:57:10.322000+00:00  WARN zelvik_edge::http3_proxy_manager::quiche_backend: HTTP/3 native first admission rejection; subsequent rejections retain L4 events address=0.0.0.0:19443 class=\"quiche_transport_bytes\" workspace_used=498073600 account=SharedAccountView { headroom_bytes: Some(2010271744), safety_margin_bytes: 167772160, grantable_bytes: 1688981504, pending_bytes: 0, committed_unconfirmed_bytes: 153518080, committed_live_bytes: 499549184, grants_total: 78, rejects_total: 0, reclaimable_bytes: 32768 }"
+    }
+  ]
+}

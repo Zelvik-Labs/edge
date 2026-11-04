@@ -1,0 +1,84 @@
+{
+  "source": "7df4a6e402f9421d2db030a1d79ba95dcbd5fc8d",
+  "build": {
+    "runtime_source": "82e3cf0db722497fb594acdcfabc645a6deb2b56",
+    "binaries": {
+      "Zelvik-Edge": "0ba4c5d56b52540f327a55478bd036a7e9516c72933aea4f5aa2da69f09b6aa6",
+      "issue34-controller": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2"
+    },
+    "archive_sha256": "2045fa18ed0085a1092208de2ba359b5ce977289673137e60883d3006a168078",
+    "build": "reuse exact original executables; no Rust compilation"
+  },
+  "clients": {
+    "unpaced": {
+      "binary": "openssl",
+      "curves": null,
+      "interval_us": 0,
+      "sha256": "da79e498b2a8da9ecab0a504e6936bf616d6671e5e18853f3e3c7a6b3fcf96cc",
+      "version": "libcurl/8.14.1 OpenSSL/3.5.7 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10"
+    },
+    "paced": {
+      "binary": "openssl",
+      "curves": null,
+      "interval_us": 100,
+      "sha256": "da79e498b2a8da9ecab0a504e6936bf616d6671e5e18853f3e3c7a6b3fcf96cc",
+      "version": "libcurl/8.14.1 OpenSSL/3.5.7 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10"
+    }
+  },
+  "runs": [
+    {
+      "round": 0,
+      "client": "unpaced",
+      "exit": 1,
+      "infrastructure_error": null,
+      "native_listener_startup": [
+        "2026-11-04T03:55:55.280000+00:00  INFO zelvik_edge::http3_proxy_manager: HTTP/3 experimental native Quinn listener on 0.0.0.0:19443 gso=Auto",
+        "2026-11-04T03:55:55.300000+00:00  INFO zelvik_edge::http3_proxy_manager: HTTP/3 experimental native Quinn listener on [::]:19443 gso=Auto"
+      ],
+      "manifest": "round-0-unpaced/manifest.json"
+    },
+    {
+      "round": 0,
+      "client": "paced",
+      "exit": 0,
+      "infrastructure_error": null,
+      "native_listener_startup": [
+        "2026-11-04T03:56:44.805000+00:00  INFO zelvik_edge::http3_proxy_manager: HTTP/3 experimental native Quinn listener on 0.0.0.0:19443 gso=Auto",
+        "2026-11-04T03:56:44.825000+00:00  INFO zelvik_edge::http3_proxy_manager: HTTP/3 experimental native Quinn listener on [::]:19443 gso=Auto"
+      ],
+      "manifest": "round-0-paced/manifest.json"
+    },
+    {
+      "round": 1,
+      "client": "paced",
+      "exit": 1,
+      "infrastructure_error": null,
+      "native_listener_startup": [
+        "2026-11-04T03:58:16.841000+00:00  INFO zelvik_edge::http3_proxy_manager: HTTP/3 experimental native Quinn listener on [::]:19443 gso=Auto",
+        "2026-11-04T03:58:16.861000+00:00  INFO zelvik_edge::http3_proxy_manager: HTTP/3 experimental native Quinn listener on 0.0.0.0:19443 gso=Auto"
+      ],
+      "manifest": "round-1-paced/manifest.json"
+    },
+    {
+      "round": 1,
+      "client": "unpaced",
+      "exit": 1,
+      "infrastructure_error": null,
+      "native_listener_startup": [
+        "2026-11-04T03:59:48.948000+00:00  INFO zelvik_edge::http3_proxy_manager: HTTP/3 experimental native Quinn listener on [::]:19443 gso=Auto",
+        "2026-11-04T03:59:48.968000+00:00  INFO zelvik_edge::http3_proxy_manager: HTTP/3 experimental native Quinn listener on 0.0.0.0:19443 gso=Auto"
+      ],
+      "manifest": "round-1-unpaced/manifest.json"
+    }
+  ],
+  "request_limit": 16384,
+  "client_mode": "pacing",
+  "client_package_version": {
+    "libcurl4t64": "8.14.1-2+deb13u7",
+    "libcurl3t64-gnutls": "8.14.1-2+deb13u7"
+  },
+  "client_fixture_ca_only": true,
+  "scope": "client interoperability/group/receive-spacing diagnosis; no capacity ranking; groups/pacing are instrumented",
+  "client_source_sha256": "a701692547e3385da31d1a97e92dc6b6334f86505337ffa3abf2736d87efc983",
+  "relay_source_sha256": "5adb66f41c9797f1fbb4eb4b0f01b5ebcf7420cc6f89b3aa5091fdae0581ad4d"
+}

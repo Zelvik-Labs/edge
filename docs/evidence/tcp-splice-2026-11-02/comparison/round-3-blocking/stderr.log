@@ -1,0 +1,13 @@
+Gnuplot not found, using plotters backend
+Benchmarking kernel_relay_roundtrip/blocking/1024
+Benchmarking kernel_relay_roundtrip/blocking/1024: Warming up for 1.0000 s
+Benchmarking kernel_relay_roundtrip/blocking/1024: Collecting 20 samples in estimated 3.0240 s (12k iterations)
+Benchmarking kernel_relay_roundtrip/blocking/1024: Analyzing
+Benchmarking kernel_relay_roundtrip/blocking/65536
+Benchmarking kernel_relay_roundtrip/blocking/65536: Warming up for 1.0000 s
+Benchmarking kernel_relay_roundtrip/blocking/65536: Collecting 20 samples in estimated 3.0071 s (6510 iterations)
+Benchmarking kernel_relay_roundtrip/blocking/65536: Analyzing
+Benchmarking kernel_relay_roundtrip/blocking/1048576
+Benchmarking kernel_relay_roundtrip/blocking/1048576: Warming up for 1.0000 s
+Benchmarking kernel_relay_roundtrip/blocking/1048576: Collecting 20 samples in estimated 3.3832 s (840 iterations)
+Benchmarking kernel_relay_roundtrip/blocking/1048576: Analyzing

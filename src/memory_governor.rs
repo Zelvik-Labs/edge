@@ -6,6 +6,9 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
+mod snapshot_sequence;
+use snapshot_sequence::SnapshotSequence;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AdmissionClass {
     HttpConnection,
@@ -608,15 +611,17 @@ const UDP_FD_BUDGET_PCT: u64 = 25;
 const ORIGIN_FD_BUDGET_PCT: u64 = 25;
 const KEEPALIVE_FD_BUDGET_PCT: u64 = 10;
 
-const HTTP_CONN_ESTIMATED_BYTES: u64 = 32 * 1024;
+/// Kernel HTTP transports own this write buffer for the connection lifetime.
+pub(crate) const HTTP_DOWNSTREAM_WRITE_BUFFER_BYTES: usize = 1460;
+const HTTP_CONN_ESTIMATED_BYTES: u64 = 32 * 1024 + HTTP_DOWNSTREAM_WRITE_BUFFER_BYTES as u64;
 const TCP_CONN_ESTIMATED_BYTES: u64 = 24 * 1024;
 const SNI_RELAY_ESTIMATED_BYTES: u64 = 256 * 1024;
 const H3_CONN_ESTIMATED_BYTES: u64 = 48 * 1024;
 const UDP_SESSION_ESTIMATED_BYTES: u64 = 96 * 1024;
 const UDP_DATAGRAM_ESTIMATED_BYTES: u64 = 2 * 1024;
 const ZERO_COPY_RELAY_ESTIMATED_BYTES: u64 = 768 * 1024;
-const ZERO_COPY_RELAY_FD_EQUIVALENT: u64 = 10;
-const ZERO_COPY_RELAY_BLOCKING_TASKS: u64 = 2;
+// Two owned pipes (four fds); the async splice engine borrows both sockets.
+const ZERO_COPY_RELAY_FD_EQUIVALENT: u64 = 4;
 const H2_STREAM_ESTIMATED_BYTES: u64 = 16 * 1024;
 const H3_REQUEST_ESTIMATED_BYTES: u64 = 24 * 1024;
 const ORIGIN_CONNECT_ESTIMATED_BYTES: u64 = 32 * 1024;
@@ -877,6 +882,10 @@ struct GovernorLimits {
     zero_copy_relay_limit: u64,
     zero_copy_relay_budget_bytes: u64,
     udp_queue_budget_bytes: u64,
+    quic_route_limit: usize,
+    quic_pending_route_limit: usize,
+    quic_pending_reassembly_budget_bytes: usize,
+    h3_datagram_queue_budget_bytes: usize,
     tcp_queue_budget_bytes: u64,
     /// Budget for the per-connection workspace pool (`memory_ticket`).
     /// Request-scoped classes that draw from a connection's ticket charge
@@ -947,6 +956,11 @@ pub struct MemoryGovernor {
     /// checked out to connection ticket buckets. Bounded by
     /// `request_workspace_budget_bytes` in the materialized limits table.
     request_workspace_bytes: PaddedAtomicU64,
+    /// Native QUIC worst-case queue owners. While present, retired queue
+    /// commitments can obstruct any shared-account consumer, not only the
+    /// next transport reservation (connection admission precedes that gate).
+    #[cfg(feature = "h3-quiche")]
+    native_transport_reservations: AtomicU64,
     /// Observational gauge for metrics trackers (aggregators, top-IP, daily
     /// domain, unique-IP sets) that live outside the resident ledger. Kept
     /// out of `resident.total` on purpose: the ledger enforces cache budgets,
@@ -969,6 +983,7 @@ pub struct MemoryGovernor {
     cached_fd_used: AtomicU64,
     cached_fd_used_at_millis: AtomicU64,
     cached_at_millis: AtomicU64,
+    snapshot_sequence: SnapshotSequence,
     /// True only on the process-global `MEMORY_GOVERNOR`: a dedicated
     /// refresher thread republishes the snapshot every SNAPSHOT_TTL_MS,
     /// so readers serve the cache up to SNAPSHOT_HARD_STALE_MS old
@@ -980,8 +995,8 @@ pub struct MemoryGovernor {
     /// (refresher-internal reads excluded via `MEMGOV_REFRESHING`).
     /// Drives the refresher's idle backoff.
     snapshot_consumer_at_millis: AtomicU64,
-    /// Serializes cache refreshers; readers use `cached_at_millis` as a
-    /// seqlock version (0 = update in progress).
+    /// Serializes refreshers; readers validate the independent snapshot
+    /// sequence. The timestamp is only the freshness clock.
     snapshot_update: Mutex<()>,
     cached_cgroup_managed: AtomicU64,
     cached_cgroup_memory_max_bytes: AtomicU64,
@@ -1308,6 +1323,27 @@ pub struct SharedPermit<'a> {
 
 pub type StaticSharedPermit = SharedPermit<'static>;
 
+/// Worst-case capacity for a native QUIC queue, including growth after the
+/// latest RSS observation. Keep the entire capacity pending while any owner
+/// or buffer can still use it; observing a sparsely filled queue must not
+/// make its unfilled slots available to another connection.
+#[cfg(feature = "h3-quiche")]
+pub(crate) struct TransportCapacityReservation<'a>(SharedPermit<'a>);
+
+#[cfg(feature = "h3-quiche")]
+impl Drop for TransportCapacityReservation<'_> {
+    fn drop(&mut self) {
+        // Retire through the committed path: ownership ends now, but capacity
+        // is not promised again until a physical observation accounts for any
+        // allocator-retained pages. An ordinary pending drop refunds too soon.
+        self.0.commit();
+        self.0
+            .governor
+            .native_transport_reservations
+            .fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
 impl std::fmt::Debug for SharedPermit<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SharedPermit")
@@ -1453,6 +1489,27 @@ pub struct FdEquivalentSnapshot {
     pub pressure_level: MemoryPressureLevel,
 }
 
+/// The pressure inputs consumed by L4 admission, without the diagnostic
+/// counters, resident-owner locking and budget recomputation of `snapshot`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct L4PressureSnapshot {
+    pub memory_pressure_level: MemoryPressureLevel,
+    pub connection_admission_used_bytes: u64,
+    pub connection_budget_bytes: u64,
+    pub fd_used_pct: u64,
+}
+
+/// One materialized budget generation for a QUIC ingress decision. Live
+/// connection and fd usage are still sampled for each call.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct QuicIngressSnapshot {
+    pub pressure: L4PressureSnapshot,
+    pub route_limit: usize,
+    pub pending_route_limit: usize,
+    pub pending_reassembly_budget_bytes: usize,
+    pub h3_datagram_queue_budget_bytes: usize,
+}
+
 impl Default for MemoryGovernor {
     fn default() -> Self {
         Self::new()
@@ -1486,6 +1543,8 @@ impl MemoryGovernor {
             sni_relays: PaddedAtomicU64::new(0),
             cache_read_memory_bytes: PaddedAtomicU64::new(0),
             request_workspace_bytes: PaddedAtomicU64::new(0),
+            #[cfg(feature = "h3-quiche")]
+            native_transport_reservations: AtomicU64::new(0),
             metrics_aggregator_bytes: AtomicU64::new(0),
             cache_l1_bytes: AtomicU64::new(0),
             admission_rejects: std::array::from_fn(|_| PaddedAtomicU64::new(0)),
@@ -1499,6 +1558,7 @@ impl MemoryGovernor {
             cached_fd_used: AtomicU64::new(0),
             cached_fd_used_at_millis: AtomicU64::new(0),
             cached_at_millis: AtomicU64::new(0),
+            snapshot_sequence: SnapshotSequence::new(),
             refresher_owned: AtomicBool::new(false),
             snapshot_consumer_at_millis: AtomicU64::new(0),
             snapshot_update: Mutex::new(()),
@@ -1549,6 +1609,10 @@ impl MemoryGovernor {
                 zero_copy_relay_limit: 0,
                 zero_copy_relay_budget_bytes: 0,
                 udp_queue_budget_bytes: 0,
+                quic_route_limit: 0,
+                quic_pending_route_limit: 0,
+                quic_pending_reassembly_budget_bytes: 0,
+                h3_datagram_queue_budget_bytes: 0,
                 tcp_queue_budget_bytes: 0,
                 request_workspace_budget_bytes: 0,
                 fd_soft_limit: 0,
@@ -1702,7 +1766,29 @@ impl MemoryGovernor {
         purpose: SharedGrantPurpose,
         priority: AccountPriority,
     ) -> bool {
-        self.try_charge_account_before_cas(bytes, committed, purpose, priority, || {})
+        let granted =
+            self.try_charge_account_before_cas(bytes, committed, purpose, priority, || {});
+        #[cfg(feature = "h3-quiche")]
+        if !granted && self.native_transport_reservations.load(Ordering::Acquire) != 0 {
+            // Retired native queues can fill the account between background
+            // observations. Confirm at the common byte gate, before callers
+            // record a final connection/request/workspace rejection. Class
+            // ceilings and listener quotas are still checked by their owners.
+            if self
+                .account_committed_unconfirmed_bytes
+                .load(Ordering::Acquire)
+                >= bytes.max(1)
+            {
+                self.invalidate_snapshot_cache();
+                let _ = self.memory_snapshot();
+            }
+            // Another thread may already have confirmed the debt. Recheck
+            // once even when no unconfirmed bytes remain; never loop or clear
+            // live pending capacity. With no retired debt, a full pool still
+            // rejects without a physical refresh.
+            return self.try_charge_account_before_cas(bytes, committed, purpose, priority, || {});
+        }
+        granted
     }
 
     fn try_charge_account_before_cas(
@@ -1846,6 +1932,24 @@ impl MemoryGovernor {
         )
     }
 
+    /// Reserve long-lived native transport capacity in the global account,
+    /// outside the short-lived request-workspace partition. New transport
+    /// capacity still leaves both control and established-traffic reserves.
+    #[cfg(feature = "h3-quiche")]
+    pub(crate) fn try_reserve_transport_capacity(
+        &self,
+        bytes: u64,
+    ) -> Option<TransportCapacityReservation<'_>> {
+        let permit = self.try_grant_shared_with_priority(
+            SharedGrantPurpose::Admission,
+            bytes,
+            AccountPriority::ConnectionEstablishment,
+        )?;
+        self.native_transport_reservations
+            .fetch_add(1, Ordering::AcqRel);
+        Some(TransportCapacityReservation(permit))
+    }
+
     fn try_grant_shared_with_priority(
         &self,
         purpose: SharedGrantPurpose,
@@ -1947,6 +2051,8 @@ impl MemoryGovernor {
         fd_used: u64,
         now_ms: u64,
     ) {
+        let _update = lock_recover(&self.snapshot_update);
+        let version = self.snapshot_sequence.begin_write();
         self.cached_total_bytes
             .store(total_bytes, Ordering::Release);
         self.cached_used_bytes.store(
@@ -1965,6 +2071,7 @@ impl MemoryGovernor {
         self.cached_fd_used_at_millis
             .store(now_ms, Ordering::Release);
         self.cached_at_millis.store(now_ms, Ordering::Release);
+        self.snapshot_sequence.finish_write(version);
         self.cached_generation.fetch_add(1, Ordering::Release);
     }
 
@@ -2740,6 +2847,10 @@ impl MemoryGovernor {
     }
 
     pub fn fd_equivalent_snapshot(&self) -> FdEquivalentSnapshot {
+        self.fd_equivalent_snapshot_with_limit(self.limits().fd_soft_limit)
+    }
+
+    fn fd_equivalent_snapshot_with_limit(&self, soft_limit: u64) -> FdEquivalentSnapshot {
         let live_fd_count = self.live_fd_count();
         let estimated_extra = self.origin_connects.load(Ordering::Relaxed).saturating_add(
             self.zero_copy_relays
@@ -2747,13 +2858,39 @@ impl MemoryGovernor {
                 .saturating_mul(ZERO_COPY_RELAY_FD_EQUIVALENT),
         );
         let used = live_fd_count.saturating_add(estimated_extra);
-        let soft_limit = self.limits().fd_soft_limit.max(1);
+        let soft_limit = soft_limit.max(1);
         let used_pct = used.saturating_mul(100).saturating_div(soft_limit);
         FdEquivalentSnapshot {
             soft_limit,
             used,
             used_pct,
             pressure_level: pressure_level_from_pct(used_pct),
+        }
+    }
+
+    fn l4_pressure_with_limits(&self, limits: &GovernorLimits) -> L4PressureSnapshot {
+        L4PressureSnapshot {
+            memory_pressure_level: limits.memory_pressure_level,
+            connection_admission_used_bytes: self.shared_connection_used_bytes(),
+            connection_budget_bytes: limits.connection_budget_bytes,
+            fd_used_pct: self
+                .fd_equivalent_snapshot_with_limit(limits.fd_soft_limit)
+                .used_pct,
+        }
+    }
+
+    pub fn l4_pressure_snapshot(&self) -> L4PressureSnapshot {
+        self.l4_pressure_with_limits(&self.limits())
+    }
+
+    pub fn quic_ingress_snapshot(&self) -> QuicIngressSnapshot {
+        let limits = self.limits();
+        QuicIngressSnapshot {
+            pressure: self.l4_pressure_with_limits(&limits),
+            route_limit: limits.quic_route_limit,
+            pending_route_limit: limits.quic_pending_route_limit,
+            pending_reassembly_budget_bytes: limits.quic_pending_reassembly_budget_bytes,
+            h3_datagram_queue_budget_bytes: limits.h3_datagram_queue_budget_bytes,
         }
     }
 
@@ -3422,6 +3559,8 @@ impl MemoryGovernor {
         for class in ALL_ADMISSION_CLASSES {
             class_limit[class_index(class)] = self.limit_for_in(class, &snapshot) as u64;
         }
+        let quic_route_limit = (class_limit[class_index(AdmissionClass::UdpSession)] as usize)
+            .clamp(1, MAX_UDP_ROUTE_LIMIT_PER_PORT);
         self.cached_limits
             .store(std::sync::Arc::new(GovernorLimits {
                 generation,
@@ -3457,6 +3596,15 @@ impl MemoryGovernor {
                 zero_copy_relay_limit: zero_copy_relay_limit(&snapshot) as u64,
                 zero_copy_relay_budget_bytes: zero_copy_relay_budget_bytes(&snapshot),
                 udp_queue_budget_bytes: udp_queued_bytes_budget(&snapshot),
+                quic_route_limit,
+                quic_pending_route_limit: quic_pending_route_limit_per_port(
+                    &snapshot,
+                    quic_route_limit,
+                ),
+                quic_pending_reassembly_budget_bytes: quic_pending_reassembly_budget_bytes(
+                    &snapshot,
+                ),
+                h3_datagram_queue_budget_bytes: h3_datagram_queue_budget_bytes(&snapshot),
                 tcp_queue_budget_bytes: tcp_queue_bytes_budget(&snapshot),
                 request_workspace_budget_bytes: request_workspace_budget_bytes(&snapshot),
                 fd_soft_limit: snapshot.fd_soft_limit,
@@ -3575,29 +3723,30 @@ impl MemoryGovernor {
         );
     }
 
+    #[inline]
+    fn try_cached_memory_snapshot(&self, now: i64) -> Option<BudgetedMemorySnapshot> {
+        let version = self.snapshot_sequence.begin_read()?;
+        let cached_at = self.cached_at_millis.load(Ordering::Acquire) as i64;
+        if !self.snapshot_usable(now, cached_at) {
+            return None;
+        }
+        let mem = self.budgeted_from_cached();
+        self.snapshot_sequence.read_valid(version).then_some(mem)
+    }
+
     fn memory_snapshot(&self) -> BudgetedMemorySnapshot {
         self.note_snapshot_consumer();
         let now = crate::utils::time::system_timestamp_millis();
-        let cached_at = self.cached_at_millis.load(Ordering::Acquire) as i64;
-        if self.snapshot_usable(now, cached_at) {
-            let mem = self.budgeted_from_cached();
-            // Seqlock validation: a writer marks the timestamp 0 while it
-            // updates the fields, so if it changed mid-read this snapshot is
-            // torn — take the refresh path instead of returning it.
-            if self.cached_at_millis.load(Ordering::Acquire) as i64 == cached_at {
-                notify_pressure_reclaim(memory_pressure_level(&mem));
-                return mem;
-            }
+        if let Some(mem) = self.try_cached_memory_snapshot(now) {
+            notify_pressure_reclaim(memory_pressure_level(&mem));
+            return mem;
         }
 
-        // Serialize refreshers: without this lock, two readers that both see
-        // an expired TTL can interleave their per-field stores and leave a
-        // permanently torn cached snapshot until the next refresh.
+        // The writer mutex also lets a refresh recover a publication that
+        // panicked with an odd sequence. A fresh timestamp alone is not enough.
         let _update = lock_recover(&self.snapshot_update);
         let now = crate::utils::time::system_timestamp_millis();
-        let cached_at = self.cached_at_millis.load(Ordering::Relaxed) as i64;
-        if self.snapshot_usable(now, cached_at) {
-            let mem = self.budgeted_from_cached();
+        if let Some(mem) = self.try_cached_memory_snapshot(now) {
             notify_pressure_reclaim(memory_pressure_level(&mem));
             return mem;
         }
@@ -3617,8 +3766,9 @@ impl MemoryGovernor {
             .account_committed_unconfirmed_bytes
             .load(Ordering::Acquire);
         let snapshot = read_memory_snapshot();
-        // Mark the update in progress before storing fields so concurrent
-        // seqlock readers detect the tear and retry.
+        // A separate sequence cannot repeat just because two samples have
+        // the same millisecond. Its fences publish the relaxed atomic fields.
+        let version = self.snapshot_sequence.begin_write();
         self.cached_at_millis.store(0, Ordering::Relaxed);
         self.cached_total_bytes
             .store(snapshot.total_bytes, Ordering::Relaxed);
@@ -3673,6 +3823,7 @@ impl MemoryGovernor {
         self.cached_psi_full_avg10_x100
             .store(snapshot.psi_full_avg10_x100 as u64, Ordering::Relaxed);
         self.cached_at_millis.store(now as u64, Ordering::Relaxed);
+        self.snapshot_sequence.finish_write(version);
         // New inputs → new limits epoch. Acquirers pair this with the
         // Acquire load in `limits()` so a rebuilt table is never stamped
         // with a generation older than its inputs.
@@ -4768,13 +4919,9 @@ fn zero_copy_relay_limit(snapshot: &BudgetedMemorySnapshot) -> usize {
     let fd_target = fd_budget(snapshot, TCP_FD_BUDGET_PCT)
         .saturating_div(ZERO_COPY_RELAY_FD_EQUIVALENT.max(1))
         .max(1) as usize;
-    let blocking_target = snapshot
-        .cpu_parallelism
-        .max(1)
-        .saturating_mul(128)
-        .saturating_div(ZERO_COPY_RELAY_BLOCKING_TASKS as usize)
-        .max(1);
-    memory_target.min(fd_target).min(blocking_target).max(1)
+    // The readiness-driven engine owns no blocking workers. Byte and FD
+    // budgets bound idle relays without a legacy blocking-pool CPU cap.
+    memory_target.min(fd_target).max(1)
 }
 
 fn zero_copy_relay_budget_bytes(snapshot: &BudgetedMemorySnapshot) -> u64 {
@@ -5415,6 +5562,105 @@ fn read_current_fd_count() -> Option<u64> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn snapshot_publication_rejects_partial_fields_and_same_millisecond_aba() {
+        let governor = MemoryGovernor::new();
+        let now = crate::utils::time::system_timestamp_millis();
+        governor.seed_cached_for_test(64 << 30, 32 << 30, 1024, 4, now as u64);
+        let old_version = governor.snapshot_sequence.begin_read().unwrap();
+        let _update = lock_recover(&governor.snapshot_update);
+        let version = governor.snapshot_sequence.begin_write();
+        governor
+            .cached_used_bytes
+            .store(48 << 30, Ordering::Relaxed);
+        assert!(governor.try_cached_memory_snapshot(now).is_none());
+        governor
+            .cached_available_bytes
+            .store(16 << 30, Ordering::Relaxed);
+        governor.snapshot_sequence.finish_write(version);
+        assert_eq!(
+            governor.cached_at_millis.load(Ordering::Relaxed),
+            now as u64
+        );
+        assert!(!governor.snapshot_sequence.read_valid(old_version));
+        let published = governor.try_cached_memory_snapshot(now).unwrap();
+        assert_eq!(published.total_bytes, 64 << 30);
+        assert_eq!(published.used_bytes, 48 << 30);
+        assert_eq!(published.available_bytes, 16 << 30);
+        governor.invalidate_snapshot_cache();
+        assert!(governor.try_cached_memory_snapshot(now).is_none());
+    }
+
+    #[test]
+    fn snapshot_refresh_recovers_interrupted_publication_despite_fresh_timestamp() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(64 << 30, 32 << 30, 1024, 4, i64::MAX as u64);
+        {
+            let _update = lock_recover(&governor.snapshot_update);
+            let _unfinished = governor.snapshot_sequence.begin_write();
+            governor
+                .cached_total_bytes
+                .store(u64::MAX, Ordering::Relaxed);
+        }
+        // The mutex is available and the timestamp still looks fresh, but the
+        // half-written fields must force an actual refresh before returning.
+        let recovered = governor.memory_snapshot();
+        assert_ne!(recovered.total_bytes, u64::MAX);
+        assert!(governor.snapshot_sequence.begin_read().is_some());
+    }
+
+    #[test]
+    fn concurrent_cached_snapshots_keep_total_used_and_available_in_one_publication() {
+        let governor = std::sync::Arc::new(MemoryGovernor::new());
+        governor.seed_cached_for_test(64 << 30, 32 << 30, 1024, 4, i64::MAX as u64);
+        let start = std::sync::Arc::new(std::sync::Barrier::new(5));
+        let readers: Vec<_> = (0..4)
+            .map(|_| {
+                let governor = governor.clone();
+                let start = start.clone();
+                std::thread::spawn(move || {
+                    start.wait();
+                    for _ in 0..10_000 {
+                        if let Some(snapshot) = governor.try_cached_memory_snapshot(1) {
+                            assert_eq!(
+                                snapshot.total_bytes,
+                                snapshot.used_bytes + snapshot.available_bytes
+                            );
+                            assert!(
+                                snapshot.total_bytes == 64 << 30
+                                    || snapshot.total_bytes == 16 << 30
+                            );
+                        }
+                    }
+                })
+            })
+            .collect();
+        start.wait();
+        for update in 0..10_000 {
+            let _guard = lock_recover(&governor.snapshot_update);
+            let version = governor.snapshot_sequence.begin_write();
+            let (total, used, available) = if update % 2 == 0 {
+                (16 << 30, 12 << 30, 4 << 30)
+            } else {
+                (64 << 30, 32 << 30, 32 << 30)
+            };
+            governor.cached_total_bytes.store(total, Ordering::Relaxed);
+            governor.cached_used_bytes.store(used, Ordering::Relaxed);
+            governor
+                .cached_available_bytes
+                .store(available, Ordering::Relaxed);
+            governor.snapshot_sequence.finish_write(version);
+        }
+        for reader in readers {
+            reader.join().unwrap();
+        }
+        let final_snapshot = governor.try_cached_memory_snapshot(1).unwrap();
+        assert_eq!(
+            final_snapshot.total_bytes,
+            final_snapshot.used_bytes + final_snapshot.available_bytes
+        );
+    }
+
     fn borrowing_inputs() -> BorrowingInputs {
         BorrowingInputs {
             observed_headroom_bytes: Some(1_000),
@@ -5618,6 +5864,94 @@ mod tests {
     /// including same-millisecond reseeds — and must always equal the live
     /// `limit_for` computation, or a tightened budget would silently keep
     /// serving the stale limit.
+    #[test]
+    fn quic_ingress_tracks_pressure_and_budget_changes() {
+        let governor = MemoryGovernor::new();
+        for (total, available, fd_limit, fd_used) in [
+            (64 << 30, 60 << 30, 1 << 20, 12),
+            (2 << 30, 300 << 20, 1024, 900),
+            (2 << 30, 100 << 20, 1024, 990),
+            (2 << 30, 10 << 20, 1024, 1000),
+            (64 << 30, 60 << 30, 1 << 20, 12),
+        ] {
+            governor.seed_cached_for_test(total, available, fd_limit, fd_used, i64::MAX as u64);
+            let ingress = governor.quic_ingress_snapshot();
+            let diagnostic = governor.snapshot(1);
+            assert_eq!(
+                ingress.pressure.memory_pressure_level,
+                diagnostic.memory_pressure_level
+            );
+            assert_eq!(
+                ingress.pressure.connection_budget_bytes,
+                diagnostic.connection_budget_bytes
+            );
+            assert_eq!(
+                ingress.pressure.connection_admission_used_bytes,
+                diagnostic.connection_admission_used_bytes
+            );
+            assert_eq!(ingress.pressure.fd_used_pct, diagnostic.fd_used_pct);
+            assert_eq!(ingress.route_limit, diagnostic.udp_route_limit_per_port);
+            assert_eq!(
+                ingress.pending_route_limit,
+                diagnostic.quic_pending_route_limit_per_port
+            );
+            assert_eq!(
+                ingress.pending_reassembly_budget_bytes,
+                diagnostic.quic_pending_reassembly_budget_bytes
+            );
+            assert_eq!(
+                ingress.h3_datagram_queue_budget_bytes,
+                diagnostic.h3_datagram_queue_budget_bytes
+            );
+        }
+    }
+
+    #[test]
+    fn quic_ingress_sees_live_usage_without_a_budget_generation_change() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(64 << 30, 60 << 30, 1024, 12, i64::MAX as u64);
+        let before = governor.quic_ingress_snapshot();
+        let generation = governor.cached_generation.load(Ordering::Acquire);
+        let permit = governor.try_admit(AdmissionClass::Http3Connection).unwrap();
+        governor.cached_fd_used.store(990, Ordering::Relaxed);
+        let after = governor.quic_ingress_snapshot();
+        assert_eq!(
+            governor.cached_generation.load(Ordering::Acquire),
+            generation
+        );
+        assert!(
+            after.pressure.connection_admission_used_bytes
+                > before.pressure.connection_admission_used_bytes
+        );
+        assert!(after.pressure.fd_used_pct > before.pressure.fd_used_pct);
+        drop(permit);
+        assert_eq!(
+            governor
+                .quic_ingress_snapshot()
+                .pressure
+                .connection_admission_used_bytes,
+            before.pressure.connection_admission_used_bytes
+        );
+    }
+
+    #[test]
+    fn quic_ingress_does_not_wait_for_diagnostic_owner_accounting() {
+        let governor = std::sync::Arc::new(MemoryGovernor::new());
+        governor.seed_cached_for_test(64 << 30, 60 << 30, 1 << 20, 12, i64::MAX as u64);
+        let owner_guard = governor.resident.owners.lock().unwrap();
+        let worker_governor = governor.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let worker =
+            std::thread::spawn(move || tx.send(worker_governor.quic_ingress_snapshot()).unwrap());
+        let result = rx.recv_timeout(std::time::Duration::from_secs(5));
+        drop(owner_guard);
+        worker.join().unwrap();
+        assert!(
+            result.is_ok(),
+            "ingress must not depend on the diagnostic owner lock"
+        );
+    }
+
     #[test]
     fn limits_table_tracks_reseeded_memory() {
         let governor = MemoryGovernor::new();
@@ -5927,6 +6261,20 @@ mod tests {
             governor.cache_read_memory_bytes.load(Ordering::Acquire),
             baseline
         );
+    }
+
+    #[test]
+    fn zero_copy_relay_capacity_tracks_resources_without_a_blocking_pool_cap() {
+        let one_core = synthetic_snapshot(64, 48, 1_048_576, 1);
+        let many_cores = synthetic_snapshot(64, 48, 1_048_576, 64);
+        let limit = zero_copy_relay_limit(&one_core);
+        assert!(limit > 64, "idle relays no longer occupy blocking workers");
+        assert_eq!(limit, zero_copy_relay_limit(&many_cores));
+
+        let few_fds = synthetic_snapshot(64, 48, 512, 1);
+        assert!(zero_copy_relay_limit(&few_fds) < limit);
+        let little_memory = synthetic_snapshot(1, 1, 1_048_576, 64);
+        assert!(zero_copy_relay_limit(&little_memory) < limit);
     }
 
     #[test]
@@ -7727,6 +8075,259 @@ mod en16_pool_tests {
         let after = governor.account_view();
         assert_eq!(after.pending_bytes, 0);
         assert_eq!(after.grantable_bytes, before, "cancel refunds fully");
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    #[test]
+    fn transport_capacity_survives_observation_and_retires_without_early_refund() {
+        let governor = MemoryGovernor::new();
+        seed_governor_memory(&governor, 2 << 30, 1 << 30, 1 << 20, 0);
+        let bytes = 8 << 20;
+        let capacity = governor
+            .try_reserve_transport_capacity(bytes)
+            .expect("bounded transport capacity");
+        assert_eq!(
+            governor
+                .native_transport_reservations
+                .load(Ordering::Acquire),
+            1
+        );
+        let observed = governor.account_view_fresh();
+        assert_eq!(observed.pending_bytes, bytes);
+        assert_eq!(observed.committed_unconfirmed_bytes, 0);
+        assert_eq!(observed.committed_live_bytes, 0);
+        assert_eq!(
+            governor.account_outstanding_bytes.load(Ordering::Acquire),
+            bytes
+        );
+
+        drop(capacity);
+        assert_eq!(
+            governor
+                .native_transport_reservations
+                .load(Ordering::Acquire),
+            0
+        );
+        let retired = governor.account_view();
+        assert_eq!(retired.pending_bytes, 0);
+        assert_eq!(retired.committed_unconfirmed_bytes, bytes);
+        assert_eq!(retired.committed_live_bytes, 0);
+        assert_eq!(retired.grantable_bytes, observed.grantable_bytes);
+        assert_eq!(
+            governor.account_outstanding_bytes.load(Ordering::Acquire),
+            bytes
+        );
+
+        let confirmed = governor.account_view_fresh();
+        assert_eq!(confirmed.pending_bytes, 0);
+        assert_eq!(confirmed.committed_unconfirmed_bytes, 0);
+        assert_eq!(confirmed.committed_live_bytes, 0);
+        assert_eq!(
+            governor.account_outstanding_bytes.load(Ordering::Acquire),
+            0
+        );
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    #[test]
+    fn transport_capacity_does_not_consume_request_workspace_partition() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(2 << 30, 1920 << 20, 1 << 20, 0, i64::MAX as u64);
+        let workspace_limit = governor.limits().request_workspace_budget_bytes;
+        // The dual-stack backlog plus 32 connections exceeds the workspace
+        // partition, but fits in the globally accounted connection capacity.
+        let bytes = (33 * 2 + 32) * 5 * 1024 * 1024;
+        assert!(bytes > workspace_limit);
+        let capacity = governor
+            .try_reserve_transport_capacity(bytes)
+            .expect("transport queues fit the global account");
+        assert_eq!(governor.request_workspace_used_bytes(), 0);
+        assert_eq!(governor.account_view().pending_bytes, bytes);
+        assert!(governor.try_admit_workspace(64 << 10));
+        assert_eq!(governor.request_workspace_used_bytes(), 64 << 10);
+        governor.workspace_refund(64 << 10);
+        drop(capacity);
+        assert_eq!(governor.request_workspace_used_bytes(), 0);
+        assert_eq!(governor.account_view().pending_bytes, 0);
+        assert_eq!(governor.account_view().committed_live_bytes, 0);
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    #[test]
+    fn transport_capacity_confirms_retired_bytes_on_pressure_without_refunding_live_capacity() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(2 << 30, 1 << 30, 1 << 20, 0, i64::MAX as u64);
+        let limits = governor.limits();
+        let protected =
+            limits.control_plane_reserve_bytes + limits.established_traffic_reserve_bytes;
+        let available = governor.account_view().grantable_bytes - protected;
+        let held_bytes = 1 << 20;
+        let held = governor.try_reserve_transport_capacity(held_bytes).unwrap();
+        let retired = governor
+            .try_reserve_transport_capacity(available - held_bytes)
+            .unwrap();
+        let generation = governor.cached_generation.load(Ordering::Acquire);
+        assert!(governor.try_reserve_transport_capacity(1).is_none());
+        assert_eq!(
+            governor.cached_generation.load(Ordering::Acquire),
+            generation,
+            "fully live reservations must not trigger a futile physical refresh"
+        );
+        drop(retired);
+        assert_eq!(governor.account_view().grantable_bytes, protected);
+        let replacement = governor
+            .try_reserve_transport_capacity(1)
+            .expect("retired capacity can be reused after a real physical observation");
+        let view = governor.account_view();
+        assert!(governor.cached_generation.load(Ordering::Acquire) > generation);
+        assert_eq!(view.committed_unconfirmed_bytes, 0);
+        assert_eq!(view.pending_bytes, held_bytes + 1);
+        assert_eq!(
+            governor.account_outstanding_bytes.load(Ordering::Acquire),
+            held_bytes + 1
+        );
+        drop((held, replacement));
+        assert_eq!(governor.account_view().pending_bytes, 0);
+        assert_eq!(governor.account_view().committed_live_bytes, 0);
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    fn seed_retired_native_capacity(
+        governor: &MemoryGovernor,
+    ) -> super::TransportCapacityReservation<'_> {
+        governor.seed_cached_for_test(2 << 30, 1 << 30, 1 << 20, 0, i64::MAX as u64);
+        let limits = governor.limits();
+        let protected =
+            limits.control_plane_reserve_bytes + limits.established_traffic_reserve_bytes;
+        let available = governor.account_view().grantable_bytes - protected;
+        let held = governor.try_reserve_transport_capacity(1 << 20).unwrap();
+        let retired = governor
+            .try_reserve_transport_capacity(available - (1 << 20))
+            .unwrap();
+        drop(retired);
+        assert_eq!(
+            governor
+                .native_transport_reservations
+                .load(Ordering::Acquire),
+            1
+        );
+        assert_eq!(governor.account_view().grantable_bytes, protected);
+        held
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    #[test]
+    fn native_retirement_confirmation_covers_connection_and_request_admission() {
+        for class in [
+            AdmissionClass::Http3Connection,
+            AdmissionClass::Http3Request,
+        ] {
+            let governor = MemoryGovernor::new();
+            let held = seed_retired_native_capacity(&governor);
+            let permit = governor.try_admit(class).expect(
+                "retired transport debt cannot block an earlier connection or request gate",
+            );
+            assert_eq!(governor.account_view().pending_bytes, 1 << 20);
+            assert_eq!(governor.counter(class).load(Ordering::Acquire), 1);
+            assert_eq!(
+                governor.admission_rejects[super::class_index(class)].load(Ordering::Acquire),
+                0,
+                "a recovered byte-gate attempt is not a final class rejection"
+            );
+            drop((permit, held));
+            assert_eq!(governor.counter(class).load(Ordering::Acquire), 0);
+            assert_eq!(
+                governor
+                    .native_transport_reservations
+                    .load(Ordering::Acquire),
+                0
+            );
+            assert_eq!(governor.account_view().committed_live_bytes, 0);
+        }
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    #[test]
+    fn native_retirement_confirmation_covers_request_workspace() {
+        let governor = MemoryGovernor::new();
+        let held = seed_retired_native_capacity(&governor);
+        assert!(governor.try_admit_workspace(64 << 10));
+        assert_eq!(governor.request_workspace_used_bytes(), 64 << 10);
+        assert_eq!(governor.account_view().pending_bytes, 1 << 20);
+        governor.workspace_refund(64 << 10);
+        drop(held);
+        assert_eq!(governor.request_workspace_used_bytes(), 0);
+        assert_eq!(
+            governor
+                .native_transport_reservations
+                .load(Ordering::Acquire),
+            0
+        );
+        assert_eq!(governor.account_view().committed_live_bytes, 0);
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    #[test]
+    fn native_retirement_confirmation_does_not_bypass_class_quota() {
+        let governor = MemoryGovernor::new();
+        let held = seed_retired_native_capacity(&governor);
+        let class = AdmissionClass::Http3Connection;
+        let limit = governor.limits().class_limit[super::class_index(class)];
+        governor.counter(class).store(limit, Ordering::Release);
+        let generation = governor.cached_generation.load(Ordering::Acquire);
+        assert!(governor.try_admit(class).is_none());
+        assert_eq!(
+            governor.cached_generation.load(Ordering::Acquire),
+            generation,
+            "a class quota rejection never reaches the physical byte-gate retry"
+        );
+        assert_eq!(governor.counter(class).load(Ordering::Acquire), limit);
+        assert_eq!(
+            governor.admission_rejects[super::class_index(class)].load(Ordering::Acquire),
+            1
+        );
+        governor.counter(class).store(0, Ordering::Release);
+        drop(held);
+        assert_eq!(
+            governor
+                .native_transport_reservations
+                .load(Ordering::Acquire),
+            0
+        );
+    }
+
+    #[cfg(feature = "h3-quiche")]
+    #[test]
+    fn transport_capacity_keeps_global_hard_bound_and_protected_reserves() {
+        let governor = MemoryGovernor::new();
+        governor.seed_cached_for_test(2 << 30, 1 << 30, 1 << 20, 0, i64::MAX as u64);
+        let available = governor.account_view().grantable_bytes;
+        let limits = governor.limits();
+        let protected =
+            limits.control_plane_reserve_bytes + limits.established_traffic_reserve_bytes;
+        let capacity = governor
+            .try_reserve_transport_capacity(available - protected)
+            .expect("capacity outside the protected reserves");
+        assert!(governor.try_reserve_transport_capacity(1).is_none());
+        assert_eq!(governor.account_view().grantable_bytes, protected);
+        let continuation = governor
+            .try_grant_shared(
+                SharedGrantPurpose::TcpQueue,
+                limits.established_traffic_reserve_bytes,
+            )
+            .expect("existing traffic retains its reserve");
+        let control = governor
+            .try_grant_shared(
+                SharedGrantPurpose::ConfigPublish,
+                limits.control_plane_reserve_bytes,
+            )
+            .expect("control plane retains its reserve");
+        assert_eq!(governor.account_view().grantable_bytes, 0);
+        assert!(governor.try_reserve_transport_capacity(1).is_none());
+        drop((capacity, continuation, control));
+        assert_eq!(governor.account_view().pending_bytes, 0);
+        assert_eq!(governor.account_view().committed_live_bytes, 0);
+        assert_eq!(governor.account_view().grantable_bytes, protected);
     }
 
     /// commit() moves the charge to committed-unconfirmed; the deduction

@@ -1,0 +1,84 @@
+{
+  "source_commit": "708785cfdc711e920a82699424d1d7648bebf378",
+  "binaries": {
+    "edge": "5f8ec488f98bae46f316795f229f810ea480c0ac9bf937e47789a3970611b346",
+    "nginx": "5e06a61af70cf1a37fb6b023155fb37fe818072e5441b434cefa589ee4e26e87",
+    "openresty": "ba7393cac684b88566c9ab52cdfd1b9a1ccdbb2d2a4319d191f380ae60525059",
+    "loadgen": "2ddcb7e4a190219ef996b973a4398197dd70c0f943dda0f9cf27066544826146"
+  },
+  "sources": {
+    "src/xdp/af_xdp/bridge.rs": "6a0be16add9ed603481e8841f523527b2849a158e426aac3f20b9f88bcd199b2",
+    "src/xdp/af_xdp/readiness.rs": "0f9fec3aa5ac3b7e58e6f9ee7a07f1ebe3974e5d4e16b3fb97160ea255634814",
+    "src/xdp/af_xdp/wake.rs": "38b077c37687956a286df528a93a8a68c66552bfcd756b23c76217fa5d3a347f",
+    "src/xdp/smoke.rs": "3e6253b9c70bf3c04f8dde18a0f6ef7768057a2245ddf76c269bce57256a995d",
+    "benches/support/udp-bench.c": "96e8a40d43ec8fd6d2ff79bb4843301d486cb05daa1a79b2c83db02d66367be4",
+    "src/xdp/af_xdp/cooperation.rs": "658f3b75c323bb74854f3280d75e7151a1a324190f63e02f3161094adadc0061",
+    "src/xdp/af_xdp/cooperation_tests.rs": "bff00e8c5f05d8b30372dd33661698fc1f09c4d23f0007b91bb826ef446237a4",
+    "src/udp_proxy.rs": "44b4abcaea2a9b6c3f11196e91b4ffc8ed65dba352a0281ea4f29391351778b7",
+    "src/xdp/af_xdp/dial.rs": "41192dafa53f021b070b290800c367aae46498c6dcb0cab914ba0ab0fa082b15",
+    "src/xdp/linux.rs": "6c5a1aa9d98144a18b15e459e2b2b45d26673bee75064dcd1b0c7f70843cf759",
+    "src/runtime_mode.rs": "c69af3fe3f00d003e90d8891a02bc222bec83ffd02ba8b8f1934a6e28a22b2f4",
+    "src/main.rs": "5a06a206f5d9f78210383cadbdbc1f9cba89e3decc904a16e0c50de0abc2f50b",
+    "scripts/xdp-netns-smoke.sh": "90e23682a1dac8b7bf7701c3d225234425a0a4b64f8e71518d2c4dd2c15da45c",
+    "scripts/perf/afxdp-node/README.md": "2954482093889b6ca09c40a9dcbfaa501e38dce52bc513e67d440f7584056ddb",
+    "scripts/perf/afxdp-node/build-baselines.sh": "2eace14454312383716f6a1fb5ca1c087e82f6821f89b3d8afcbceb558fe5c92",
+    "scripts/perf/afxdp-node/corrupt_udp.py": "3765c57c147ed2e566ed3ffafe79e75355d4a3e2e9ebd28317fd2487e7867c50",
+    "scripts/perf/afxdp-node/run.sh": "ef74fb62f3af6114f9e88229bc7a1371773f65e9e9b83e5602f71d3e5c78e031",
+    "scripts/perf/afxdp-node/syscall_profile.py": "a15805165e61b2d6c198dc81249185b8ed2c9ba6679b22066de5300b4b975ece",
+    "scripts/perf/afxdp-node/test_corrupt_udp.py": "fc338065ca442e26e9222bce9013b401d7a78436440c6e93c5431512d3e49288",
+    "scripts/perf/afxdp-node/test_syscall_profile.py": "799f79a488f9af9d40d63886f93d282c579ced97e68e3d8d6541d10eaf775921",
+    "scripts/perf/afxdp-node/test_udp_bench.py": "528cd03dd2bfe9da17608ecf310d5c7eb00fe7cf587259b97159bdee10335623",
+    "scripts/perf/afxdp-node/test_udp_summary.py": "75b7dabc013de6409dcd1f6ea19cd6cc9864a1b7795375882dc1d002968ed582",
+    "scripts/perf/afxdp-node/udp-compare.py": "1da280997126c3e91586495935356ef26cffd515e9cbca657131ee92dd9348b5",
+    "scripts/perf/afxdp-node/udp-run.sh": "8cdbdf734daeebd629968361dda12a8394378e3e7e08f0da0e61181841da9fd5",
+    "scripts/perf/afxdp-node/udp_summary.py": "6ef51031bbeb58c9aefb32352d883fcbbf26353395928436f7b7f0bc4e04961e"
+  },
+  "cpus": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "uname": {
+    "system": "Linux",
+    "node": "runnervmcwoy2",
+    "release": "6.8.0-1070-azure",
+    "version": "#78~22.04.1-Ubuntu SMP Thu Sep 24 18:46:45 UTC 2026",
+    "machine": "x86_64",
+    "processor": "x86_64"
+  },
+  "clock_ticks": 100,
+  "page_size": 4096,
+  "scope": "IPv4 UDP steady-flow reuse; single XSK queue, 2 proxy CPUs, separate client and remote origin CPUs; no HTTP/cache/hardware-zero-copy claim",
+  "comparison": "udp-payload",
+  "targets": [
+    "copied",
+    "owned",
+    "nginx",
+    "openresty"
+  ],
+  "node_modes": {
+    "copied": [
+      "worker",
+      "bridge",
+      "eager",
+      "copied"
+    ],
+    "owned": [
+      "worker",
+      "bridge",
+      "eager",
+      "owned"
+    ]
+  },
+  "proxy_cpus": [
+    0,
+    1
+  ],
+  "syscall_profile": false,
+  "single_flow_iterations": 40000,
+  "iterations": 10000,
+  "warmup": 1000,
+  "rounds": 4,
+  "nginx_udp_policy": "proxy_requests 0; proxy_responses 2147483647; proxy_timeout 60s; actual peer ports verified"
+}

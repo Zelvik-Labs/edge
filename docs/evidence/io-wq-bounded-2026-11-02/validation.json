@@ -1,0 +1,11 @@
+{
+  "feature_tests_passed": 16,
+  "ignored": 0,
+  "counterfactual_missing_max_workers": "fails: limits [8,71955] instead of [1,1]",
+  "candidate_restored": true,
+  "clippy_default": "passed",
+  "clippy_io_uring": "passed",
+  "benchmark_build": "passed",
+  "workflow_bash_and_yaml": "parsed",
+  "kernel_probe_local_current_source": "compiled with Wall/Wextra/Werror; expected AF_XDP EAFNOSUPPORT observed in isolated Docker"
+}

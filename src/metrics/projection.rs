@@ -77,6 +77,11 @@ pub struct MetricChargePool {
 }
 
 impl MetricChargePool {
+    #[cfg(test)]
+    pub(crate) fn for_test() -> Self {
+        Self::new()
+    }
+
     const fn new() -> Self {
         Self {
             used: AtomicU64::new(0),
@@ -155,7 +160,7 @@ impl MetricProjectionAggregator {
 
     /// Test-only constructor that isolates charge accounting in a local pool.
     #[cfg(test)]
-    fn with_pool(generation: u64, pool: Arc<MetricChargePool>) -> Self {
+    pub(crate) fn with_pool(generation: u64, pool: Arc<MetricChargePool>) -> Self {
         Self {
             data: RwLock::new(DashMap::with_shard_amount(32)),
             entry_count: AtomicUsize::new(0),
@@ -218,9 +223,7 @@ impl MetricProjectionAggregator {
             Entry::Occupied(mut occupied) => {
                 let entry = occupied.get_mut();
                 entry.counters.add(&delta);
-                entry.last_event_time_millis = entry
-                    .last_event_time_millis
-                    .max(event_time_millis);
+                entry.last_event_time_millis = entry.last_event_time_millis.max(event_time_millis);
                 true
             }
             Entry::Vacant(vacant) => {
@@ -309,8 +312,8 @@ impl MetricProjectionAggregator {
 }
 
 fn projection_cost(key: &ProjectionKey) -> u64 {
-    let mut bytes = (std::mem::size_of::<ProjectionKey>() + std::mem::size_of::<ProjectionEntry>())
-        as u64;
+    let mut bytes =
+        (std::mem::size_of::<ProjectionKey>() + std::mem::size_of::<ProjectionEntry>()) as u64;
     let mut key_heap = key.time_key.len() as u64;
     for part in key.keys.iter() {
         key_heap = key_heap.saturating_add(part.capacity() as u64 + 16);
@@ -407,14 +410,13 @@ mod tests {
             window_start: 1_790_000_000,
             window_end: 1_790_000_060,
             server_id: 7,
-            keys: Arc::from(vec![
-                format!("city={city}"),
-                format!("rid={request_id}"),
-            ]),
+            keys: Arc::from(vec![format!("city={city}"), format!("rid={request_id}")]),
         }
     }
 
-    fn aggregator_with_pool(generation: u64) -> (MetricProjectionAggregator, Arc<MetricChargePool>) {
+    fn aggregator_with_pool(
+        generation: u64,
+    ) -> (MetricProjectionAggregator, Arc<MetricChargePool>) {
         let pool = Arc::new(MetricChargePool::new());
         (
             MetricProjectionAggregator::with_pool(generation, Arc::clone(&pool)),

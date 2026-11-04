@@ -1,0 +1,3001 @@
+{
+  "crate": {
+    "id": "tokio-quiche",
+    "name": "tokio-quiche",
+    "updated_at": "2026-10-13T15:23:32.725059Z",
+    "versions": [
+      3485079,
+      3260300,
+      2785585,
+      2398970,
+      2198436,
+      2080601,
+      2068584,
+      2022909,
+      1998907,
+      1959985,
+      1959783,
+      1930782,
+      1823396,
+      1812021,
+      1777695,
+      1751390,
+      1751206,
+      1735062,
+      1731907,
+      1712516,
+      1635061,
+      1605526,
+      1527117,
+      1526876,
+      1525633,
+      1517159,
+      1510639,
+      1504935,
+      1497063,
+      1471349,
+      1460006,
+      1454883,
+      876964
+    ],
+    "keywords": [
+      "quic",
+      "tokio",
+      "http3"
+    ],
+    "categories": [
+      "network-programming"
+    ],
+    "badges": [],
+    "created_at": "2023-08-21T14:37:24.767716Z",
+    "downloads": 1724537,
+    "recent_downloads": 406925,
+    "default_version": "0.20.1",
+    "num_versions": 33,
+    "yanked": false,
+    "max_version": "0.20.1",
+    "newest_version": "0.20.1",
+    "max_stable_version": "0.20.1",
+    "description": "Asynchronous wrapper around quiche",
+    "homepage": null,
+    "documentation": null,
+    "repository": "https://github.com/cloudflare/quiche",
+    "links": {
+      "version_downloads": "/api/v1/crates/tokio-quiche/downloads",
+      "versions": null,
+      "owners": "/api/v1/crates/tokio-quiche/owners",
+      "owner_team": "/api/v1/crates/tokio-quiche/owner_team",
+      "owner_user": "/api/v1/crates/tokio-quiche/owner_user",
+      "reverse_dependencies": "/api/v1/crates/tokio-quiche/reverse_dependencies"
+    },
+    "exact_match": false,
+    "trustpub_only": false
+  },
+  "versions": [
+    {
+      "id": 3485079,
+      "crate": "tokio-quiche",
+      "num": "0.20.1",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.20.1/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.20.1/readme",
+      "updated_at": "2026-10-13T15:23:32.725059Z",
+      "created_at": "2026-10-13T15:23:32.725059Z",
+      "downloads": 4535,
+      "features": {
+        "capture_keylogs": [],
+        "custom-client-dcid": [
+          "quiche/custom-client-dcid"
+        ],
+        "default": [
+          "qlog-gzip",
+          "qlog-zstd"
+        ],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "qlog-gzip": [
+          "qlog/gzip"
+        ],
+        "qlog-zstd": [
+          "qlog/zstd"
+        ],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.20.1/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.20.1/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.20.1/authors"
+      },
+      "crate_size": 512045,
+      "published_by": {
+        "id": 444275,
+        "login": "inamdarminaz",
+        "name": "Minaz Inamdar",
+        "avatar": "https://avatars.githubusercontent.com/u/56728168?v=4",
+        "url": "https://github.com/inamdarminaz",
+        "github_username_matches": true,
+        "created_at": "2026-10-13T15:17:54.666743Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 444275,
+            "login": "inamdarminaz",
+            "name": "Minaz Inamdar",
+            "avatar": "https://avatars.githubusercontent.com/u/56728168?v=4",
+            "url": "https://github.com/inamdarminaz",
+            "github_username_matches": true,
+            "created_at": "2026-10-13T15:17:54.666743Z"
+          },
+          "time": "2026-10-13T15:23:32.725059Z"
+        }
+      ],
+      "checksum": "39272b0b2b311cc3e5cab36d9094bfa8e7ebc9725b4b2b4cb7a52aa57f17f075",
+      "rust_version": "1.88",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 11031,
+            "comment_lines": 2062,
+            "files": 46
+          }
+        },
+        "total_code_lines": 11031,
+        "total_comment_lines": 2062
+      }
+    },
+    {
+      "id": 3260300,
+      "crate": "tokio-quiche",
+      "num": "0.20.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.20.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.20.0/readme",
+      "updated_at": "2026-09-17T16:17:09.081562Z",
+      "created_at": "2026-09-17T16:17:09.081562Z",
+      "downloads": 89317,
+      "features": {
+        "capture_keylogs": [],
+        "custom-client-dcid": [
+          "quiche/custom-client-dcid"
+        ],
+        "default": [
+          "qlog-gzip",
+          "qlog-zstd"
+        ],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "qlog-gzip": [
+          "qlog/gzip"
+        ],
+        "qlog-zstd": [
+          "qlog/zstd"
+        ],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.20.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.20.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.20.0/authors"
+      },
+      "crate_size": 499486,
+      "published_by": {
+        "id": 37600,
+        "login": "ghedo",
+        "name": "Alessandro Ghedini",
+        "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+        "url": "https://github.com/ghedo",
+        "github_username_matches": true,
+        "created_at": "2009-08-20T19:26:54Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2026-09-17T16:17:09.081562Z"
+        }
+      ],
+      "checksum": "b36d680054da76b46de6f673f21a9da631cc02d1850c7550321f40065adbb31a",
+      "rust_version": "1.88",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 9876,
+            "comment_lines": 1944,
+            "files": 44
+          }
+        },
+        "total_code_lines": 9876,
+        "total_comment_lines": 1944
+      }
+    },
+    {
+      "id": 2785585,
+      "crate": "tokio-quiche",
+      "num": "0.19.1",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.19.1/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.19.1/readme",
+      "updated_at": "2026-07-14T14:41:49.776100Z",
+      "created_at": "2026-07-14T14:41:49.776100Z",
+      "downloads": 302563,
+      "features": {
+        "capture_keylogs": [],
+        "custom-client-dcid": [
+          "quiche/custom-client-dcid"
+        ],
+        "default": [
+          "qlog-gzip",
+          "qlog-zstd"
+        ],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "qlog-gzip": [
+          "qlog/gzip"
+        ],
+        "qlog-zstd": [
+          "qlog/zstd"
+        ],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.19.1/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.19.1/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.19.1/authors"
+      },
+      "crate_size": 488649,
+      "published_by": {
+        "id": 37600,
+        "login": "ghedo",
+        "name": "Alessandro Ghedini",
+        "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+        "url": "https://github.com/ghedo",
+        "github_username_matches": true,
+        "created_at": "2009-08-20T19:26:54Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2026-07-14T14:41:49.776100Z"
+        }
+      ],
+      "checksum": "f5474b6d00a60bd3d87029a8cd7764af18e5f4a0cd6a4704d5b1d049d15b3e8d",
+      "rust_version": "1.88",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 9378,
+            "comment_lines": 1785,
+            "files": 43
+          }
+        },
+        "total_code_lines": 9378,
+        "total_comment_lines": 1785
+      }
+    },
+    {
+      "id": 2398970,
+      "crate": "tokio-quiche",
+      "num": "0.19.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.19.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.19.0/readme",
+      "updated_at": "2026-05-14T22:07:20.415201Z",
+      "created_at": "2026-05-14T22:07:20.415201Z",
+      "downloads": 176203,
+      "features": {
+        "capture_keylogs": [],
+        "custom-client-dcid": [
+          "quiche/custom-client-dcid"
+        ],
+        "default": [
+          "qlog-gzip",
+          "qlog-zstd"
+        ],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "qlog-gzip": [
+          "qlog/gzip"
+        ],
+        "qlog-zstd": [
+          "qlog/zstd"
+        ],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.19.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.19.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.19.0/authors"
+      },
+      "crate_size": 486003,
+      "published_by": {
+        "id": 327383,
+        "login": "antoniovicente",
+        "name": "Antonio Vicente",
+        "avatar": "https://avatars.githubusercontent.com/u/28556681?v=4",
+        "url": "https://github.com/antoniovicente",
+        "github_username_matches": true,
+        "created_at": "2017-05-09T06:45:51Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 327383,
+            "login": "antoniovicente",
+            "name": "Antonio Vicente",
+            "avatar": "https://avatars.githubusercontent.com/u/28556681?v=4",
+            "url": "https://github.com/antoniovicente",
+            "github_username_matches": true,
+            "created_at": "2017-05-09T06:45:51Z"
+          },
+          "time": "2026-05-14T22:07:20.415201Z"
+        }
+      ],
+      "checksum": "1ccfade367886d928786ca70071787ae5afa1b9267be923f8a53b2440e8c54da",
+      "rust_version": "1.88",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 8975,
+            "comment_lines": 1721,
+            "files": 43
+          }
+        },
+        "total_code_lines": 8975,
+        "total_comment_lines": 1721
+      }
+    },
+    {
+      "id": 2198436,
+      "crate": "tokio-quiche",
+      "num": "0.18.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.18.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.18.0/readme",
+      "updated_at": "2026-04-01T18:20:06.807104Z",
+      "created_at": "2026-04-01T18:20:06.807104Z",
+      "downloads": 79198,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.18.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.18.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.18.0/authors"
+      },
+      "crate_size": 477379,
+      "published_by": {
+        "id": 327383,
+        "login": "antoniovicente",
+        "name": "Antonio Vicente",
+        "avatar": "https://avatars.githubusercontent.com/u/28556681?v=4",
+        "url": "https://github.com/antoniovicente",
+        "github_username_matches": true,
+        "created_at": "2017-05-09T06:45:51Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 327383,
+            "login": "antoniovicente",
+            "name": "Antonio Vicente",
+            "avatar": "https://avatars.githubusercontent.com/u/28556681?v=4",
+            "url": "https://github.com/antoniovicente",
+            "github_username_matches": true,
+            "created_at": "2017-05-09T06:45:51Z"
+          },
+          "time": "2026-04-01T18:20:06.807104Z"
+        }
+      ],
+      "checksum": "cbc6bca0f8263b1e37f736adcbfaecd3c17732c0a9bb50a5dec3e647df0b07fc",
+      "rust_version": "1.85",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 8564,
+            "comment_lines": 1668,
+            "files": 43
+          }
+        },
+        "total_code_lines": 8564,
+        "total_comment_lines": 1668
+      }
+    },
+    {
+      "id": 2080601,
+      "crate": "tokio-quiche",
+      "num": "0.16.1",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.16.1/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.16.1/readme",
+      "updated_at": "2026-03-02T23:45:33.746925Z",
+      "created_at": "2026-03-02T23:45:33.746925Z",
+      "downloads": 59047,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.16.1/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.16.1/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.16.1/authors"
+      },
+      "crate_size": 474170,
+      "published_by": {
+        "id": 327383,
+        "login": "antoniovicente",
+        "name": "Antonio Vicente",
+        "avatar": "https://avatars.githubusercontent.com/u/28556681?v=4",
+        "url": "https://github.com/antoniovicente",
+        "github_username_matches": true,
+        "created_at": "2017-05-09T06:45:51Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 327383,
+            "login": "antoniovicente",
+            "name": "Antonio Vicente",
+            "avatar": "https://avatars.githubusercontent.com/u/28556681?v=4",
+            "url": "https://github.com/antoniovicente",
+            "github_username_matches": true,
+            "created_at": "2017-05-09T06:45:51Z"
+          },
+          "time": "2026-03-02T23:45:33.746925Z"
+        }
+      ],
+      "checksum": "a7e179b29964fde4aa0bb2e818f8a2a2d0aa2e15d6a27ea7e4ae4836bc05c6d4",
+      "rust_version": "1.85",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 8592,
+            "comment_lines": 1630,
+            "files": 43
+          }
+        },
+        "total_code_lines": 8592,
+        "total_comment_lines": 1630
+      }
+    },
+    {
+      "id": 2068584,
+      "crate": "tokio-quiche",
+      "num": "0.16.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.16.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.16.0/readme",
+      "updated_at": "2026-02-27T02:01:11.198429Z",
+      "created_at": "2026-02-27T02:01:11.198429Z",
+      "downloads": 448,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.16.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.16.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.16.0/authors"
+      },
+      "crate_size": 473270,
+      "published_by": {
+        "id": 327383,
+        "login": "antoniovicente",
+        "name": "Antonio Vicente",
+        "avatar": "https://avatars.githubusercontent.com/u/28556681?v=4",
+        "url": "https://github.com/antoniovicente",
+        "github_username_matches": true,
+        "created_at": "2017-05-09T06:45:51Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 327383,
+            "login": "antoniovicente",
+            "name": "Antonio Vicente",
+            "avatar": "https://avatars.githubusercontent.com/u/28556681?v=4",
+            "url": "https://github.com/antoniovicente",
+            "github_username_matches": true,
+            "created_at": "2017-05-09T06:45:51Z"
+          },
+          "time": "2026-02-27T02:01:11.198429Z"
+        }
+      ],
+      "checksum": "f6f9fbedb398b97e889d73a308eba6bed3aa9e0399b1030a3cb9918cd61b1651",
+      "rust_version": "1.85",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 8579,
+            "comment_lines": 1630,
+            "files": 43
+          }
+        },
+        "total_code_lines": 8579,
+        "total_comment_lines": 1630
+      }
+    },
+    {
+      "id": 2022909,
+      "crate": "tokio-quiche",
+      "num": "0.15.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.15.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.15.0/readme",
+      "updated_at": "2026-02-12T16:58:30.408874Z",
+      "created_at": "2026-02-12T16:58:30.408874Z",
+      "downloads": 108958,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.15.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.15.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.15.0/authors"
+      },
+      "crate_size": 468273,
+      "published_by": {
+        "id": 327383,
+        "login": "antoniovicente",
+        "name": "Antonio Vicente",
+        "avatar": "https://avatars.githubusercontent.com/u/28556681?v=4",
+        "url": "https://github.com/antoniovicente",
+        "github_username_matches": true,
+        "created_at": "2017-05-09T06:45:51Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 327383,
+            "login": "antoniovicente",
+            "name": "Antonio Vicente",
+            "avatar": "https://avatars.githubusercontent.com/u/28556681?v=4",
+            "url": "https://github.com/antoniovicente",
+            "github_username_matches": true,
+            "created_at": "2017-05-09T06:45:51Z"
+          },
+          "time": "2026-02-12T16:58:30.408874Z"
+        }
+      ],
+      "checksum": "f5f03d5dcbe29dc5d040ce6ff8af174566e024074ca8e8cf2f71a993916f6325",
+      "rust_version": "1.85",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 8579,
+            "comment_lines": 1630,
+            "files": 43
+          }
+        },
+        "total_code_lines": 8579,
+        "total_comment_lines": 1630
+      }
+    },
+    {
+      "id": 1998907,
+      "crate": "tokio-quiche",
+      "num": "0.14.2",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.14.2/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.14.2/readme",
+      "updated_at": "2026-02-04T19:29:12.796953Z",
+      "created_at": "2026-02-04T19:29:12.796953Z",
+      "downloads": 116829,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.14.2/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.14.2/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.14.2/authors"
+      },
+      "crate_size": 465774,
+      "published_by": {
+        "id": 22592,
+        "login": "toidiu",
+        "name": "toidiu",
+        "avatar": "https://avatars.githubusercontent.com/u/4350690?v=4",
+        "url": "https://github.com/toidiu",
+        "github_username_matches": true,
+        "created_at": "2013-05-06T03:28:03Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 22592,
+            "login": "toidiu",
+            "name": "toidiu",
+            "avatar": "https://avatars.githubusercontent.com/u/4350690?v=4",
+            "url": "https://github.com/toidiu",
+            "github_username_matches": true,
+            "created_at": "2013-05-06T03:28:03Z"
+          },
+          "time": "2026-02-04T19:29:12.796953Z"
+        }
+      ],
+      "checksum": "a133ab98cbf35eb556917fed2ad0ed0c5ab31aacf45befbf7ac2e9d537e2218f",
+      "rust_version": "1.85",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 8364,
+            "comment_lines": 1605,
+            "files": 43
+          }
+        },
+        "total_code_lines": 8364,
+        "total_comment_lines": 1605
+      }
+    },
+    {
+      "id": 1959985,
+      "crate": "tokio-quiche",
+      "num": "0.14.1",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.14.1/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.14.1/readme",
+      "updated_at": "2026-01-21T00:16:28.790838Z",
+      "created_at": "2026-01-21T00:16:28.790838Z",
+      "downloads": 35837,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.14.1/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.14.1/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.14.1/authors"
+      },
+      "crate_size": 465848,
+      "published_by": {
+        "id": 22592,
+        "login": "toidiu",
+        "name": "toidiu",
+        "avatar": "https://avatars.githubusercontent.com/u/4350690?v=4",
+        "url": "https://github.com/toidiu",
+        "github_username_matches": true,
+        "created_at": "2013-05-06T03:28:03Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 22592,
+            "login": "toidiu",
+            "name": "toidiu",
+            "avatar": "https://avatars.githubusercontent.com/u/4350690?v=4",
+            "url": "https://github.com/toidiu",
+            "github_username_matches": true,
+            "created_at": "2013-05-06T03:28:03Z"
+          },
+          "time": "2026-01-21T00:16:28.790838Z"
+        }
+      ],
+      "checksum": "10f64fe719e3d5865ca0b834223046cfe1edd4756f4c6b82689729bf741d4512",
+      "rust_version": "1.85",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 8385,
+            "comment_lines": 1605,
+            "files": 43
+          }
+        },
+        "total_code_lines": 8385,
+        "total_comment_lines": 1605
+      }
+    },
+    {
+      "id": 1959783,
+      "crate": "tokio-quiche",
+      "num": "0.14.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.14.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.14.0/readme",
+      "updated_at": "2026-01-20T22:08:26.854014Z",
+      "created_at": "2026-01-20T22:08:26.854014Z",
+      "downloads": 27,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.14.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.14.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.14.0/authors"
+      },
+      "crate_size": 465939,
+      "published_by": {
+        "id": 22592,
+        "login": "toidiu",
+        "name": "toidiu",
+        "avatar": "https://avatars.githubusercontent.com/u/4350690?v=4",
+        "url": "https://github.com/toidiu",
+        "github_username_matches": true,
+        "created_at": "2013-05-06T03:28:03Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 22592,
+            "login": "toidiu",
+            "name": "toidiu",
+            "avatar": "https://avatars.githubusercontent.com/u/4350690?v=4",
+            "url": "https://github.com/toidiu",
+            "github_username_matches": true,
+            "created_at": "2013-05-06T03:28:03Z"
+          },
+          "time": "2026-01-20T22:08:26.854014Z"
+        }
+      ],
+      "checksum": "80a7fbafd029882f0f58342e08a12d6f5b6b3782d36fc1bef7f7ff6d8847d0d9",
+      "rust_version": "1.85",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 8385,
+            "comment_lines": 1605,
+            "files": 43
+          }
+        },
+        "total_code_lines": 8385,
+        "total_comment_lines": 1605
+      }
+    },
+    {
+      "id": 1930782,
+      "crate": "tokio-quiche",
+      "num": "0.13.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.13.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.13.0/readme",
+      "updated_at": "2026-01-09T01:34:48.992866Z",
+      "created_at": "2026-01-09T01:34:48.992866Z",
+      "downloads": 4299,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.13.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.13.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.13.0/authors"
+      },
+      "crate_size": 462351,
+      "published_by": {
+        "id": 327383,
+        "login": "antoniovicente",
+        "name": "Antonio Vicente",
+        "avatar": "https://avatars.githubusercontent.com/u/28556681?v=4",
+        "url": "https://github.com/antoniovicente",
+        "github_username_matches": true,
+        "created_at": "2017-05-09T06:45:51Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 327383,
+            "login": "antoniovicente",
+            "name": "Antonio Vicente",
+            "avatar": "https://avatars.githubusercontent.com/u/28556681?v=4",
+            "url": "https://github.com/antoniovicente",
+            "github_username_matches": true,
+            "created_at": "2017-05-09T06:45:51Z"
+          },
+          "time": "2026-01-09T01:34:48.992866Z"
+        }
+      ],
+      "checksum": "994bbd5a3b5bbe8da209eb67338cdecfa4605e18d3dd081e1bbc4c7ef8824a2c",
+      "rust_version": "1.85",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 8310,
+            "comment_lines": 1588,
+            "files": 43
+          }
+        },
+        "total_code_lines": 8310,
+        "total_comment_lines": 1588
+      }
+    },
+    {
+      "id": 1823396,
+      "crate": "tokio-quiche",
+      "num": "0.12.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.12.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.12.0/readme",
+      "updated_at": "2025-11-13T13:03:18.001027Z",
+      "created_at": "2025-11-13T13:03:18.001027Z",
+      "downloads": 158859,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.12.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.12.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.12.0/authors"
+      },
+      "crate_size": 459919,
+      "published_by": {
+        "id": 368315,
+        "login": "jrouviere",
+        "name": "Julien Rouviere",
+        "avatar": "https://avatars.githubusercontent.com/u/1332430?v=4",
+        "url": "https://github.com/jrouviere",
+        "github_username_matches": true,
+        "created_at": "2012-01-15T23:56:02Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 368315,
+            "login": "jrouviere",
+            "name": "Julien Rouviere",
+            "avatar": "https://avatars.githubusercontent.com/u/1332430?v=4",
+            "url": "https://github.com/jrouviere",
+            "github_username_matches": true,
+            "created_at": "2012-01-15T23:56:02Z"
+          },
+          "time": "2025-11-13T13:03:18.001027Z"
+        }
+      ],
+      "checksum": "e3152843e8aafb0dae1f31cb0e1223ffff010de71efca2ec2a6b5405a57001a5",
+      "rust_version": "1.85",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 8309,
+            "comment_lines": 1588,
+            "files": 43
+          }
+        },
+        "total_code_lines": 8309,
+        "total_comment_lines": 1588
+      }
+    },
+    {
+      "id": 1812021,
+      "crate": "tokio-quiche",
+      "num": "0.11.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.11.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.11.0/readme",
+      "updated_at": "2025-11-06T16:30:38.053043Z",
+      "created_at": "2025-11-06T16:30:38.053043Z",
+      "downloads": 4521,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.11.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.11.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.11.0/authors"
+      },
+      "crate_size": 460486,
+      "published_by": {
+        "id": 306797,
+        "login": "evanrittenhouse",
+        "name": "Evan Rittenhouse",
+        "avatar": "https://avatars.githubusercontent.com/u/84083822?v=4",
+        "url": "https://github.com/evanrittenhouse",
+        "github_username_matches": true,
+        "created_at": "2021-05-12T13:37:53Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 306797,
+            "login": "evanrittenhouse",
+            "name": "Evan Rittenhouse",
+            "avatar": "https://avatars.githubusercontent.com/u/84083822?v=4",
+            "url": "https://github.com/evanrittenhouse",
+            "github_username_matches": true,
+            "created_at": "2021-05-12T13:37:53Z"
+          },
+          "time": "2025-11-06T16:30:38.053043Z"
+        }
+      ],
+      "checksum": "f3d02734a14dd4ecacad00832efe3ad35d7edd391e460c7f7dab24c1afa1e9f9",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 8236,
+            "comment_lines": 1581,
+            "files": 43
+          }
+        },
+        "total_code_lines": 8236,
+        "total_comment_lines": 1581
+      }
+    },
+    {
+      "id": 1777695,
+      "crate": "tokio-quiche",
+      "num": "0.10.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.10.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.10.0/readme",
+      "updated_at": "2025-10-16T14:39:45.004449Z",
+      "created_at": "2025-10-16T14:39:45.004449Z",
+      "downloads": 67268,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.10.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.10.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.10.0/authors"
+      },
+      "crate_size": 448709,
+      "published_by": {
+        "id": 70031,
+        "login": "LPardue",
+        "name": "Lucas Pardue",
+        "avatar": "https://avatars.githubusercontent.com/u/6571445?v=4",
+        "url": "https://github.com/LPardue",
+        "github_username_matches": true,
+        "created_at": "2014-02-03T03:49:05Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 70031,
+            "login": "LPardue",
+            "name": "Lucas Pardue",
+            "avatar": "https://avatars.githubusercontent.com/u/6571445?v=4",
+            "url": "https://github.com/LPardue",
+            "github_username_matches": true,
+            "created_at": "2014-02-03T03:49:05Z"
+          },
+          "time": "2025-10-16T14:39:45.004449Z"
+        }
+      ],
+      "checksum": "d3658eec93d2aab8ca0fac2d651f0bd4c4430d657ea70a021060189c99a8a29a",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6776,
+            "comment_lines": 1381,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6776,
+        "total_comment_lines": 1381
+      }
+    },
+    {
+      "id": 1751390,
+      "crate": "tokio-quiche",
+      "num": "0.9.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.9.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.9.0/readme",
+      "updated_at": "2025-09-29T22:07:28.112095Z",
+      "created_at": "2025-09-29T22:07:28.112095Z",
+      "downloads": 59225,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.9.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.9.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.9.0/authors"
+      },
+      "crate_size": 447832,
+      "published_by": {
+        "id": 306797,
+        "login": "evanrittenhouse",
+        "name": "Evan Rittenhouse",
+        "avatar": "https://avatars.githubusercontent.com/u/84083822?v=4",
+        "url": "https://github.com/evanrittenhouse",
+        "github_username_matches": true,
+        "created_at": "2021-05-12T13:37:53Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 306797,
+            "login": "evanrittenhouse",
+            "name": "Evan Rittenhouse",
+            "avatar": "https://avatars.githubusercontent.com/u/84083822?v=4",
+            "url": "https://github.com/evanrittenhouse",
+            "github_username_matches": true,
+            "created_at": "2021-05-12T13:37:53Z"
+          },
+          "time": "2025-09-29T22:07:28.112095Z"
+        }
+      ],
+      "checksum": "287100d0da395f3fed1dc69dfbb2aec2137b3c1b7d3adffb8b74a2737b45e8fe",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6743,
+            "comment_lines": 1381,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6743,
+        "total_comment_lines": 1381
+      }
+    },
+    {
+      "id": 1751206,
+      "crate": "tokio-quiche",
+      "num": "0.8.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.8.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.8.0/readme",
+      "updated_at": "2025-09-30T07:59:46.876031Z",
+      "created_at": "2025-09-29T20:28:32.959754Z",
+      "downloads": 269,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": true,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.8.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.8.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.8.0/authors"
+      },
+      "crate_size": 447838,
+      "published_by": {
+        "id": 306797,
+        "login": "evanrittenhouse",
+        "name": "Evan Rittenhouse",
+        "avatar": "https://avatars.githubusercontent.com/u/84083822?v=4",
+        "url": "https://github.com/evanrittenhouse",
+        "github_username_matches": true,
+        "created_at": "2021-05-12T13:37:53Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 306797,
+            "login": "evanrittenhouse",
+            "name": "Evan Rittenhouse",
+            "avatar": "https://avatars.githubusercontent.com/u/84083822?v=4",
+            "url": "https://github.com/evanrittenhouse",
+            "github_username_matches": true,
+            "created_at": "2021-05-12T13:37:53Z"
+          },
+          "time": "2025-09-29T20:28:32.959754Z"
+        },
+        {
+          "action": "yank",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-09-30T07:59:46.880714Z"
+        }
+      ],
+      "checksum": "7c1aed24095bb5bd9b2600750bbc3dc6dfd5055de7a06e809349f4eae1045905",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6743,
+            "comment_lines": 1381,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6743,
+        "total_comment_lines": 1381
+      }
+    },
+    {
+      "id": 1735062,
+      "crate": "tokio-quiche",
+      "num": "0.7.1",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.7.1/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.7.1/readme",
+      "updated_at": "2025-09-18T08:22:26.892487Z",
+      "created_at": "2025-09-18T08:22:26.892487Z",
+      "downloads": 17585,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.7.1/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.7.1/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.7.1/authors"
+      },
+      "crate_size": 447643,
+      "published_by": {
+        "id": 37600,
+        "login": "ghedo",
+        "name": "Alessandro Ghedini",
+        "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+        "url": "https://github.com/ghedo",
+        "github_username_matches": true,
+        "created_at": "2009-08-20T19:26:54Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-09-18T08:22:26.892487Z"
+        }
+      ],
+      "checksum": "52c40acdc1716e1efa8658da5c67a9ed91fc531e14ad2867e25e173ab19c0406",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6633,
+            "comment_lines": 1370,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6633,
+        "total_comment_lines": 1370
+      }
+    },
+    {
+      "id": 1731907,
+      "crate": "tokio-quiche",
+      "num": "0.7.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.7.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.7.0/readme",
+      "updated_at": "2025-09-16T09:55:42.079998Z",
+      "created_at": "2025-09-16T09:55:42.079998Z",
+      "downloads": 973,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.7.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.7.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.7.0/authors"
+      },
+      "crate_size": 446986,
+      "published_by": {
+        "id": 37600,
+        "login": "ghedo",
+        "name": "Alessandro Ghedini",
+        "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+        "url": "https://github.com/ghedo",
+        "github_username_matches": true,
+        "created_at": "2009-08-20T19:26:54Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-09-16T09:55:42.079998Z"
+        }
+      ],
+      "checksum": "196df6fa2aca6e29e6de0410333a58f33aa6fa3b0ee1cefa6804d71a6ca8df90",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6633,
+            "comment_lines": 1370,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6633,
+        "total_comment_lines": 1370
+      }
+    },
+    {
+      "id": 1712516,
+      "crate": "tokio-quiche",
+      "num": "0.6.1",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.6.1/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.6.1/readme",
+      "updated_at": "2025-09-09T08:51:21.590490Z",
+      "created_at": "2025-09-03T08:18:03.220557Z",
+      "downloads": 3984,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": true,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.6.1/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.6.1/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.6.1/authors"
+      },
+      "crate_size": 446416,
+      "published_by": {
+        "id": 37600,
+        "login": "ghedo",
+        "name": "Alessandro Ghedini",
+        "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+        "url": "https://github.com/ghedo",
+        "github_username_matches": true,
+        "created_at": "2009-08-20T19:26:54Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-09-03T08:18:03.220557Z"
+        },
+        {
+          "action": "yank",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-09-09T08:51:21.592912Z"
+        }
+      ],
+      "checksum": "67ebb975f857e46e715ae2b70f001090b7b4ede3996e4b4df68ae0d663e779da",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6637,
+            "comment_lines": 1371,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6637,
+        "total_comment_lines": 1371
+      }
+    },
+    {
+      "id": 1635061,
+      "crate": "tokio-quiche",
+      "num": "0.6.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.6.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.6.0/readme",
+      "updated_at": "2025-07-09T23:45:03.313925Z",
+      "created_at": "2025-07-09T23:45:03.313925Z",
+      "downloads": 141476,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.6.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.6.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.6.0/authors"
+      },
+      "crate_size": 438075,
+      "published_by": {
+        "id": 306797,
+        "login": "evanrittenhouse",
+        "name": "Evan Rittenhouse",
+        "avatar": "https://avatars.githubusercontent.com/u/84083822?v=4",
+        "url": "https://github.com/evanrittenhouse",
+        "github_username_matches": true,
+        "created_at": "2021-05-12T13:37:53Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 306797,
+            "login": "evanrittenhouse",
+            "name": "Evan Rittenhouse",
+            "avatar": "https://avatars.githubusercontent.com/u/84083822?v=4",
+            "url": "https://github.com/evanrittenhouse",
+            "github_username_matches": true,
+            "created_at": "2021-05-12T13:37:53Z"
+          },
+          "time": "2025-07-09T23:45:03.313925Z"
+        }
+      ],
+      "checksum": "8b802ce2d36505e2d92a8f2625259de9249f4c23e2507428d043deb33263d12e",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6619,
+            "comment_lines": 1354,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6619,
+        "total_comment_lines": 1354
+      }
+    },
+    {
+      "id": 1605526,
+      "crate": "tokio-quiche",
+      "num": "0.5.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.5.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.5.0/readme",
+      "updated_at": "2025-06-17T15:04:03.304272Z",
+      "created_at": "2025-06-17T15:04:03.304272Z",
+      "downloads": 95466,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.5.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.5.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.5.0/authors"
+      },
+      "crate_size": 428427,
+      "published_by": {
+        "id": 37600,
+        "login": "ghedo",
+        "name": "Alessandro Ghedini",
+        "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+        "url": "https://github.com/ghedo",
+        "github_username_matches": true,
+        "created_at": "2009-08-20T19:26:54Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-06-17T15:04:03.304272Z"
+        }
+      ],
+      "checksum": "c9da270343d6393d2065362bbd943562c1df5b04303f7e3f05945acc2db70aca",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6603,
+            "comment_lines": 1354,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6603,
+        "total_comment_lines": 1354
+      }
+    },
+    {
+      "id": 1527117,
+      "crate": "tokio-quiche",
+      "num": "0.4.2",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.4.2/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.4.2/readme",
+      "updated_at": "2025-04-16T19:45:57.524062Z",
+      "created_at": "2025-04-16T19:45:57.524062Z",
+      "downloads": 69316,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.4.2/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.4.2/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.4.2/authors"
+      },
+      "crate_size": 427423,
+      "published_by": {
+        "id": 37600,
+        "login": "ghedo",
+        "name": "Alessandro Ghedini",
+        "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+        "url": "https://github.com/ghedo",
+        "github_username_matches": true,
+        "created_at": "2009-08-20T19:26:54Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-04-16T19:45:57.524062Z"
+        }
+      ],
+      "checksum": "f3defdd30951fe9939232f02b00aaeda42ffde66fc8d3c210b4342f21c4bd2c7",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6541,
+            "comment_lines": 1343,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6541,
+        "total_comment_lines": 1343
+      }
+    },
+    {
+      "id": 1526876,
+      "crate": "tokio-quiche",
+      "num": "0.4.1",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.4.1/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.4.1/readme",
+      "updated_at": "2025-04-16T16:12:39.170861Z",
+      "created_at": "2025-04-16T16:12:39.170861Z",
+      "downloads": 642,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing"
+        ],
+        "gcongestion": [
+          "quiche/gcongestion"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.4.1/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.4.1/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.4.1/authors"
+      },
+      "crate_size": 427423,
+      "published_by": {
+        "id": 37600,
+        "login": "ghedo",
+        "name": "Alessandro Ghedini",
+        "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+        "url": "https://github.com/ghedo",
+        "github_username_matches": true,
+        "created_at": "2009-08-20T19:26:54Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-04-16T16:12:39.170861Z"
+        }
+      ],
+      "checksum": "a4eb11828bcbbc1e9412d509a49e1f69cd96baf6cd4d162f2bad3955df776b42",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6539,
+            "comment_lines": 1343,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6539,
+        "total_comment_lines": 1343
+      }
+    },
+    {
+      "id": 1525633,
+      "crate": "tokio-quiche",
+      "num": "0.4.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.4.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.4.0/readme",
+      "updated_at": "2025-04-15T23:05:01.329934Z",
+      "created_at": "2025-04-15T23:05:01.329934Z",
+      "downloads": 739,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing",
+          "quiche-mallard?/fuzzing"
+        ],
+        "gcongestion": [
+          "dep:quiche-mallard"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal",
+          "quiche-mallard?/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.4.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.4.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.4.0/authors"
+      },
+      "crate_size": 427684,
+      "published_by": {
+        "id": 327383,
+        "login": "antoniovicente",
+        "name": "Antonio Vicente",
+        "avatar": "https://avatars.githubusercontent.com/u/28556681?v=4",
+        "url": "https://github.com/antoniovicente",
+        "github_username_matches": true,
+        "created_at": "2017-05-09T06:45:51Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 327383,
+            "login": "antoniovicente",
+            "name": "Antonio Vicente",
+            "avatar": "https://avatars.githubusercontent.com/u/28556681?v=4",
+            "url": "https://github.com/antoniovicente",
+            "github_username_matches": true,
+            "created_at": "2017-05-09T06:45:51Z"
+          },
+          "time": "2025-04-15T23:05:01.329934Z"
+        }
+      ],
+      "checksum": "dd377fb82fd9f9b50267c0e8dd1923c1bdd1545f68e0487b4a25d3d976bc311a",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6551,
+            "comment_lines": 1343,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6551,
+        "total_comment_lines": 1343
+      }
+    },
+    {
+      "id": 1517159,
+      "crate": "tokio-quiche",
+      "num": "0.3.2",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.3.2/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.3.2/readme",
+      "updated_at": "2025-04-09T13:57:02.149303Z",
+      "created_at": "2025-04-09T13:57:02.149303Z",
+      "downloads": 7443,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing",
+          "quiche-mallard?/fuzzing"
+        ],
+        "gcongestion": [
+          "dep:quiche-mallard"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal",
+          "quiche-mallard?/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.3.2/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.3.2/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.3.2/authors"
+      },
+      "crate_size": 426854,
+      "published_by": {
+        "id": 37600,
+        "login": "ghedo",
+        "name": "Alessandro Ghedini",
+        "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+        "url": "https://github.com/ghedo",
+        "github_username_matches": true,
+        "created_at": "2009-08-20T19:26:54Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-04-09T13:57:02.149303Z"
+        }
+      ],
+      "checksum": "6b10d11245e700cc6c125158cbeab27745f51489fc078e630492b8ed92534078",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6474,
+            "comment_lines": 1343,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6474,
+        "total_comment_lines": 1343
+      }
+    },
+    {
+      "id": 1510639,
+      "crate": "tokio-quiche",
+      "num": "0.3.1",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.3.1/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.3.1/readme",
+      "updated_at": "2025-04-04T16:05:38.275314Z",
+      "created_at": "2025-04-04T16:05:38.275314Z",
+      "downloads": 1702,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing",
+          "quiche-mallard?/fuzzing"
+        ],
+        "gcongestion": [
+          "dep:quiche-mallard"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal",
+          "quiche-mallard?/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.3.1/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.3.1/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.3.1/authors"
+      },
+      "crate_size": 426789,
+      "published_by": {
+        "id": 37600,
+        "login": "ghedo",
+        "name": "Alessandro Ghedini",
+        "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+        "url": "https://github.com/ghedo",
+        "github_username_matches": true,
+        "created_at": "2009-08-20T19:26:54Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-04-04T16:05:38.275314Z"
+        }
+      ],
+      "checksum": "3f77c360149282adcd4856abe42ae951c4448c916f468209a57f57412264027b",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6459,
+            "comment_lines": 1343,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6459,
+        "total_comment_lines": 1343
+      }
+    },
+    {
+      "id": 1504935,
+      "crate": "tokio-quiche",
+      "num": "0.3.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.3.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.3.0/readme",
+      "updated_at": "2025-04-01T08:39:36.842385Z",
+      "created_at": "2025-04-01T08:39:36.842385Z",
+      "downloads": 5135,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing",
+          "quiche-mallard?/fuzzing"
+        ],
+        "gcongestion": [
+          "dep:quiche-mallard"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal",
+          "quiche-mallard?/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.3.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.3.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.3.0/authors"
+      },
+      "crate_size": 426637,
+      "published_by": {
+        "id": 37600,
+        "login": "ghedo",
+        "name": "Alessandro Ghedini",
+        "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+        "url": "https://github.com/ghedo",
+        "github_username_matches": true,
+        "created_at": "2009-08-20T19:26:54Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-04-01T08:39:36.842385Z"
+        }
+      ],
+      "checksum": "69bbc12db6c77dcfad46e285a0ae60805ca2cd95ce4ef5740595a4f69376d0ce",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6443,
+            "comment_lines": 1341,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6443,
+        "total_comment_lines": 1341
+      }
+    },
+    {
+      "id": 1497063,
+      "crate": "tokio-quiche",
+      "num": "0.2.2",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.2.2/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.2.2/readme",
+      "updated_at": "2025-04-03T08:55:52.280985Z",
+      "created_at": "2025-03-26T15:03:59.059399Z",
+      "downloads": 13802,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing",
+          "quiche-mallard?/fuzzing"
+        ],
+        "gcongestion": [
+          "dep:quiche-mallard"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal",
+          "quiche-mallard?/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": true,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.2.2/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.2.2/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.2.2/authors"
+      },
+      "crate_size": 427272,
+      "published_by": {
+        "id": 37600,
+        "login": "ghedo",
+        "name": "Alessandro Ghedini",
+        "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+        "url": "https://github.com/ghedo",
+        "github_username_matches": true,
+        "created_at": "2009-08-20T19:26:54Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-03-26T15:03:59.059399Z"
+        },
+        {
+          "action": "yank",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-04-03T08:55:52.285075Z"
+        }
+      ],
+      "checksum": "22e72a6a0cb1821e9a2d049dbba24493f1008dec4caa3933cb0138a919cc4151",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6462,
+            "comment_lines": 1345,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6462,
+        "total_comment_lines": 1345
+      }
+    },
+    {
+      "id": 1471349,
+      "crate": "tokio-quiche",
+      "num": "0.2.1",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.2.1/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.2.1/readme",
+      "updated_at": "2025-03-06T08:20:38.577935Z",
+      "created_at": "2025-03-06T08:20:38.577935Z",
+      "downloads": 94623,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing",
+          "quiche-mallard?/fuzzing"
+        ],
+        "gcongestion": [
+          "dep:quiche-mallard"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal",
+          "quiche-mallard?/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.2.1/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.2.1/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.2.1/authors"
+      },
+      "crate_size": 428293,
+      "published_by": {
+        "id": 37600,
+        "login": "ghedo",
+        "name": "Alessandro Ghedini",
+        "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+        "url": "https://github.com/ghedo",
+        "github_username_matches": true,
+        "created_at": "2009-08-20T19:26:54Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-03-06T08:20:38.577935Z"
+        }
+      ],
+      "checksum": "c2e5be97ccf4008d8da537c89cae401ef69d841c9dbe9d32b946944c60b8a30e",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6460,
+            "comment_lines": 1345,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6460,
+        "total_comment_lines": 1345
+      }
+    },
+    {
+      "id": 1460006,
+      "crate": "tokio-quiche",
+      "num": "0.2.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.2.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.2.0/readme",
+      "updated_at": "2025-02-25T15:51:19.899856Z",
+      "created_at": "2025-02-25T15:51:19.899856Z",
+      "downloads": 1744,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing",
+          "quiche-mallard?/fuzzing"
+        ],
+        "gcongestion": [
+          "dep:quiche-mallard",
+          "dep:octets-mallard"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal",
+          "quiche-mallard?/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.2.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.2.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.2.0/authors"
+      },
+      "crate_size": 428292,
+      "published_by": {
+        "id": 37600,
+        "login": "ghedo",
+        "name": "Alessandro Ghedini",
+        "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+        "url": "https://github.com/ghedo",
+        "github_username_matches": true,
+        "created_at": "2009-08-20T19:26:54Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-02-25T15:51:19.899856Z"
+        }
+      ],
+      "checksum": "71403c2aa1d28ee99fdd7e99f836c44bf7ca03649bcbb28bb9d78c4685682a94",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6462,
+            "comment_lines": 1345,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6462,
+        "total_comment_lines": 1345
+      }
+    },
+    {
+      "id": 1454883,
+      "crate": "tokio-quiche",
+      "num": "0.1.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.1.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.1.0/readme",
+      "updated_at": "2025-02-21T13:31:27.155046Z",
+      "created_at": "2025-02-21T13:31:27.155046Z",
+      "downloads": 1167,
+      "features": {
+        "capture_keylogs": [],
+        "fuzzing": [
+          "quiche/fuzzing",
+          "quiche-mallard?/fuzzing"
+        ],
+        "gcongestion": [
+          "dep:quiche-mallard",
+          "dep:octets-mallard"
+        ],
+        "perf-quic-listener-metrics": [],
+        "quiche_internal": [
+          "quiche/internal",
+          "quiche-mallard?/internal"
+        ],
+        "rpk": [
+          "boring/rpk"
+        ],
+        "tokio-task-metrics": [],
+        "zero-copy": [
+          "gcongestion"
+        ]
+      },
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "BSD-2-Clause",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.1.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.1.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.1.0/authors"
+      },
+      "crate_size": 430480,
+      "published_by": {
+        "id": 37600,
+        "login": "ghedo",
+        "name": "Alessandro Ghedini",
+        "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+        "url": "https://github.com/ghedo",
+        "github_username_matches": true,
+        "created_at": "2009-08-20T19:26:54Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 37600,
+            "login": "ghedo",
+            "name": "Alessandro Ghedini",
+            "avatar": "https://avatars.githubusercontent.com/u/117643?v=4",
+            "url": "https://github.com/ghedo",
+            "github_username_matches": true,
+            "created_at": "2009-08-20T19:26:54Z"
+          },
+          "time": "2025-02-21T13:31:27.155046Z"
+        }
+      ],
+      "checksum": "d7ed29543678f22eda57b8516769588965249ba5e9a83986186a096b95fdf139",
+      "rust_version": "1.83",
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "Asynchronous wrapper around quiche",
+      "homepage": null,
+      "documentation": null,
+      "repository": "https://github.com/cloudflare/quiche",
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 6451,
+            "comment_lines": 1343,
+            "files": 41
+          }
+        },
+        "total_code_lines": 6451,
+        "total_comment_lines": 1343
+      }
+    },
+    {
+      "id": 876964,
+      "crate": "tokio-quiche",
+      "num": "0.0.0",
+      "dl_path": "/api/v1/crates/tokio-quiche/0.0.0/download",
+      "readme_path": "/api/v1/crates/tokio-quiche/0.0.0/readme",
+      "updated_at": "2023-08-21T14:37:24.767716Z",
+      "created_at": "2023-08-21T14:37:24.767716Z",
+      "downloads": 1337,
+      "features": {},
+      "yanked": false,
+      "yank_message": null,
+      "lib_links": null,
+      "license": "MIT",
+      "links": {
+        "dependencies": "/api/v1/crates/tokio-quiche/0.0.0/dependencies",
+        "version_downloads": "/api/v1/crates/tokio-quiche/0.0.0/downloads",
+        "authors": "/api/v1/crates/tokio-quiche/0.0.0/authors"
+      },
+      "crate_size": 764,
+      "published_by": {
+        "id": 65916,
+        "login": "Noah-Kennedy",
+        "name": "Noah Kennedy",
+        "avatar": "https://avatars.githubusercontent.com/u/9875622?v=4",
+        "url": "https://github.com/Noah-Kennedy",
+        "github_username_matches": true,
+        "created_at": "2014-11-21T01:46:07Z"
+      },
+      "audit_actions": [
+        {
+          "action": "publish",
+          "user": {
+            "id": 65916,
+            "login": "Noah-Kennedy",
+            "name": "Noah Kennedy",
+            "avatar": "https://avatars.githubusercontent.com/u/9875622?v=4",
+            "url": "https://github.com/Noah-Kennedy",
+            "github_username_matches": true,
+            "created_at": "2014-11-21T01:46:07Z"
+          },
+          "time": "2023-08-21T14:37:24.767716Z"
+        }
+      ],
+      "checksum": "fe2c4f97faadb1c109661691c9c325d8b120a742385d74271bb31a34c3b8434e",
+      "rust_version": null,
+      "has_lib": true,
+      "bin_names": [],
+      "edition": "2021",
+      "description": "TODO",
+      "homepage": null,
+      "documentation": null,
+      "repository": null,
+      "trustpub_data": null,
+      "linecounts": {
+        "languages": {
+          "Rust": {
+            "code_lines": 12,
+            "comment_lines": 0,
+            "files": 1
+          }
+        },
+        "total_code_lines": 12,
+        "total_comment_lines": 0
+      }
+    }
+  ],
+  "keywords": [
+    {
+      "id": "quic",
+      "keyword": "quic",
+      "created_at": "2016-04-21T19:35:37.938576Z",
+      "crates_cnt": 578
+    },
+    {
+      "id": "tokio",
+      "keyword": "tokio",
+      "created_at": "2016-09-15T21:21:41.020895Z",
+      "crates_cnt": 1465
+    },
+    {
+      "id": "http3",
+      "keyword": "http3",
+      "created_at": "2019-02-04T08:58:41.315540Z",
+      "crates_cnt": 213
+    }
+  ],
+  "categories": [
+    {
+      "id": "network-programming",
+      "category": "Network programming",
+      "slug": "network-programming",
+      "description": "Crates dealing with higher-level network protocols such as FTP, HTTP, or SSH, or lower-level network protocols such as TCP or UDP.",
+      "created_at": "2017-01-17T19:13:05.112025Z",
+      "crates_cnt": 15898
+    }
+  ]
+}

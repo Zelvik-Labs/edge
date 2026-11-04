@@ -1,0 +1,20 @@
+{
+  "profile": "cloud",
+  "capacity_bytes": 33770192896,
+  "free_bytes": 5574119424,
+  "category_budget_bytes": {
+    "mbx": 33770192896,
+    "go-build": 33770192896,
+    "npm": 33770192896,
+    "pnpm": 33770192896,
+    "build-outputs": 33770192896,
+    "go-mod": 33770192896,
+    "cargo-downloads": 33770192896,
+    "rust-toolchains": 33770192896
+  },
+  "total_budget_bytes": 33770192896,
+  "build_start_free_floor_bytes": 6442450944,
+  "runtime_free_floor_bytes": 5368709120,
+  "automatic_gc": false,
+  "local_compile_started": false
+}

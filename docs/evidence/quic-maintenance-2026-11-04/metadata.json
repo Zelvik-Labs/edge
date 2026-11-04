@@ -1,0 +1,26 @@
+{
+  "network_namespace": "net:[4026532302]",
+  "parent_network_namespace": "net:[4026531840]",
+  "mount_namespace": "mnt:[4026532295]",
+  "parent_mount_namespace": "mnt:[4026531841]",
+  "kernel": {
+    "system": "Linux",
+    "node": "runnervmlby3q",
+    "release": "6.8.0-1070-azure",
+    "version": "#78~22.04.1-Ubuntu SMP Thu Sep 24 18:46:45 UTC 2026",
+    "machine": "x86_64",
+    "processor": "x86_64"
+  },
+  "cpus": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "commit": "e640a76caee4d7dcc12e77d8b2fc0cefbd753a7e",
+  "scope": "full-node copy-mode veth correctness, IPv4/IPv6 and reload; no throughput claim",
+  "binaries": {
+    "Zelvik-Edge": "6a76e4a5571224442844edd889c4d05668fd80f31f617a85f74c6a108a6bdbbe",
+    "h3-probe": "14f098c1ef6b6d86e63f19b51f8902808662441e85333899b97384367cf2ca95"
+  }
+}

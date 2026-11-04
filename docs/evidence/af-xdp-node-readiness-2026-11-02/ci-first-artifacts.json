@@ -1,0 +1,23 @@
+{
+  "artifacts": [
+    {
+      "id": 13190240234,
+      "name": "afxdp-node-68ecbffc98f54373e5abeab49283e54d3b9d243c",
+      "size_in_bytes": 244,
+      "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13190240234",
+      "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13190240234/zip",
+      "expired": false,
+      "created_at": "2026-11-02T23:46:53Z",
+      "expires_at": "2027-01-31T23:40:04Z",
+      "updated_at": "2026-11-02T23:46:53Z",
+      "digest": "sha256:e7b31b12c3d3a3691aeca1d1571de8dd02665cf775e6335a81ddca608a8144d8",
+      "workflow_run": {
+        "id": 41547170519,
+        "repository_id": 1343309127,
+        "head_repository_id": 1343309127,
+        "head_branch": "perf/xdp-tokio-20261102",
+        "head_sha": "68ecbffc98f54373e5abeab49283e54d3b9d243c"
+      }
+    }
+  ]
+}

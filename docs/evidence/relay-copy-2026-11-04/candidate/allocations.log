@@ -1,0 +1,5 @@
+case	allocations	reallocations	requested_bytes	max_allocation_bytes
+1KiB_full	1	0	65536	65536
+64KiB_full	1	0	65536	65536
+1MiB_full	1	0	65536	65536
+64KiB_short64	1	0	65536	65536

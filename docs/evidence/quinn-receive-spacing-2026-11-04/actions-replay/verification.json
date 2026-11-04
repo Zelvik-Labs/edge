@@ -1,0 +1,10 @@
+{
+  "run": 41771115225,
+  "source": "ae2acaf40e4c65b94ca17578f322ce7160daa4bc",
+  "result": "PASS",
+  "traffic_run": 41769962134,
+  "traffic_source": "7df4a6e402f9421d2db030a1d79ba95dcbd5fc8d",
+  "derived_summary_matches_offline": true,
+  "derived_records_match_offline": true,
+  "new_traffic": false
+}

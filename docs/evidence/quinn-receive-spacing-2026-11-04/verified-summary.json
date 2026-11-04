@@ -1,0 +1,1075 @@
+{
+  "source": "7df4a6e402f9421d2db030a1d79ba95dcbd5fc8d",
+  "runtime_source": "82e3cf0db722497fb594acdcfabc645a6deb2b56",
+  "scope": "client interoperability/group/receive-spacing diagnosis; no capacity ranking; groups/pacing are instrumented",
+  "cases": 4,
+  "infrastructure_failures": [],
+  "incomplete_processes": [],
+  "wrong_ca_rejections": 4,
+  "group_observations": [
+    {
+      "client": "unpaced",
+      "round": 0,
+      "shard": 0,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 509,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 506,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 509,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 516,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 519,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 518,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 515,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 505,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 518,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 507,
+          "last_group": 4588,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    },
+    {
+      "client": "unpaced",
+      "round": 0,
+      "shard": 1,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 508,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 514,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 509,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 518,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 515,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 508,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 510,
+          "last_group": 4588,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    },
+    {
+      "client": "paced",
+      "round": 0,
+      "shard": 0,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    },
+    {
+      "client": "paced",
+      "round": 0,
+      "shard": 1,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    },
+    {
+      "client": "paced",
+      "round": 1,
+      "shard": 0,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    },
+    {
+      "client": "paced",
+      "round": 1,
+      "shard": 1,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    },
+    {
+      "client": "unpaced",
+      "round": 1,
+      "shard": 0,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 510,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 509,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 515,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 514,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 509,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 518,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 510,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 510,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    },
+    {
+      "client": "unpaced",
+      "round": 1,
+      "shard": 1,
+      "slots": [
+        {
+          "slot": 0,
+          "observations": 516,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 1,
+          "observations": 507,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 2,
+          "observations": 515,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 3,
+          "observations": 515,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 4,
+          "observations": 506,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 5,
+          "observations": 509,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 6,
+          "observations": 515,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 7,
+          "observations": 510,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 8,
+          "observations": 516,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 9,
+          "observations": 516,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 10,
+          "observations": 514,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 11,
+          "observations": 508,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 12,
+          "observations": 513,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 13,
+          "observations": 512,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 14,
+          "observations": 511,
+          "last_group": 4588,
+          "changed": 0
+        },
+        {
+          "slot": 15,
+          "observations": 509,
+          "last_group": 4588,
+          "changed": 0
+        }
+      ],
+      "scope": "wire-observed selected key-share group; not authentication on its own"
+    }
+  ],
+  "client_mode": "pacing",
+  "clients": {
+    "unpaced": {
+      "statuses": {
+        "traffic-errors": 2
+      },
+      "successful": 32748,
+      "failed": 20,
+      "complete_cases": 2,
+      "version": "libcurl/8.14.1 OpenSSL/3.5.7 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10"
+    },
+    "paced": {
+      "statuses": {
+        "passed": 1,
+        "traffic-errors": 1
+      },
+      "successful": 32767,
+      "failed": 1,
+      "complete_cases": 2,
+      "version": "libcurl/8.14.1 OpenSSL/3.5.7 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10"
+    }
+  },
+  "relay_observations": [
+    {
+      "client": "unpaced",
+      "file": "round-0-unpaced/0000-h3-hit-fresh.relay.json",
+      "source_sha256": "5adb66f41c9797f1fbb4eb4b0f01b5ebcf7420cc6f89b3aa5091fdae0581ad4d",
+      "scope": "IPv4 loopback UDP relay; server-to-client send spacing, not client internal batch proof or capacity",
+      "target_url": "https://localhost:32768/hit/payload",
+      "client_url": "https://localhost:38118/hit/payload",
+      "interval_us": 0,
+      "flows": 10427,
+      "received_client": 204784,
+      "forwarded_client": 204784,
+      "received_server": 576623,
+      "forwarded_server": 576623,
+      "peak_queued": 404,
+      "peak_bytes": 461747,
+      "queued_at_shutdown": 0,
+      "bytes_at_shutdown": 0,
+      "minimum_server_send_interval_ns": 6292,
+      "cpu": 3,
+      "affinity": [
+        3
+      ],
+      "error": null,
+      "wall_ns": 35078092803,
+      "thread_cpu_ns": 16143923011
+    },
+    {
+      "client": "paced",
+      "file": "round-0-paced/0000-h3-hit-fresh.relay.json",
+      "source_sha256": "5adb66f41c9797f1fbb4eb4b0f01b5ebcf7420cc6f89b3aa5091fdae0581ad4d",
+      "scope": "IPv4 loopback UDP relay; server-to-client send spacing, not client internal batch proof or capacity",
+      "target_url": "https://localhost:32769/hit/payload",
+      "client_url": "https://localhost:53722/hit/payload",
+      "interval_us": 100,
+      "flows": 10510,
+      "received_client": 297927,
+      "forwarded_client": 297927,
+      "received_server": 587769,
+      "forwarded_server": 587769,
+      "peak_queued": 559,
+      "peak_bytes": 649822,
+      "queued_at_shutdown": 0,
+      "bytes_at_shutdown": 0,
+      "minimum_server_send_interval_ns": 106159,
+      "cpu": 3,
+      "affinity": [
+        3
+      ],
+      "error": null,
+      "wall_ns": 77210043394,
+      "thread_cpu_ns": 68901633365
+    },
+    {
+      "client": "paced",
+      "file": "round-1-paced/0000-h3-hit-fresh.relay.json",
+      "source_sha256": "5adb66f41c9797f1fbb4eb4b0f01b5ebcf7420cc6f89b3aa5091fdae0581ad4d",
+      "scope": "IPv4 loopback UDP relay; server-to-client send spacing, not client internal batch proof or capacity",
+      "target_url": "https://localhost:32770/hit/payload",
+      "client_url": "https://localhost:40201/hit/payload",
+      "interval_us": 100,
+      "flows": 10488,
+      "received_client": 298386,
+      "forwarded_client": 298386,
+      "received_server": 588099,
+      "forwarded_server": 588099,
+      "peak_queued": 558,
+      "peak_bytes": 648567,
+      "queued_at_shutdown": 0,
+      "bytes_at_shutdown": 0,
+      "minimum_server_send_interval_ns": 106119,
+      "cpu": 3,
+      "affinity": [
+        3
+      ],
+      "error": null,
+      "wall_ns": 77369732272,
+      "thread_cpu_ns": 68835272613
+    },
+    {
+      "client": "unpaced",
+      "file": "round-1-unpaced/0000-h3-hit-fresh.relay.json",
+      "source_sha256": "5adb66f41c9797f1fbb4eb4b0f01b5ebcf7420cc6f89b3aa5091fdae0581ad4d",
+      "scope": "IPv4 loopback UDP relay; server-to-client send spacing, not client internal batch proof or capacity",
+      "target_url": "https://localhost:32771/hit/payload",
+      "client_url": "https://localhost:40180/hit/payload",
+      "interval_us": 0,
+      "flows": 10487,
+      "received_client": 205787,
+      "forwarded_client": 205787,
+      "received_server": 576518,
+      "forwarded_server": 576518,
+      "peak_queued": 377,
+      "peak_bytes": 429986,
+      "queued_at_shutdown": 0,
+      "bytes_at_shutdown": 0,
+      "minimum_server_send_interval_ns": 6252,
+      "cpu": 3,
+      "affinity": [
+        3
+      ],
+      "error": null,
+      "wall_ns": 34683993306,
+      "thread_cpu_ns": 16281102833
+    },
+    {
+      "client": "unpaced",
+      "file": "round-0-unpaced/0000-h3-hit-fresh-before.wrong-ca-relay.json",
+      "source_sha256": "5adb66f41c9797f1fbb4eb4b0f01b5ebcf7420cc6f89b3aa5091fdae0581ad4d",
+      "scope": "IPv4 loopback UDP relay; server-to-client send spacing, not client internal batch proof or capacity",
+      "target_url": "https://localhost:32768/hit/payload",
+      "client_url": "https://localhost:57158/hit/payload",
+      "interval_us": 0,
+      "flows": 1,
+      "received_client": 3,
+      "forwarded_client": 3,
+      "received_server": 4,
+      "forwarded_server": 4,
+      "peak_queued": 3,
+      "peak_bytes": 2630,
+      "queued_at_shutdown": 0,
+      "bytes_at_shutdown": 0,
+      "minimum_server_send_interval_ns": 9468,
+      "cpu": 3,
+      "affinity": [
+        3
+      ],
+      "error": null,
+      "wall_ns": 22253846,
+      "thread_cpu_ns": 479328
+    },
+    {
+      "client": "paced",
+      "file": "round-0-paced/0000-h3-hit-fresh-before.wrong-ca-relay.json",
+      "source_sha256": "5adb66f41c9797f1fbb4eb4b0f01b5ebcf7420cc6f89b3aa5091fdae0581ad4d",
+      "scope": "IPv4 loopback UDP relay; server-to-client send spacing, not client internal batch proof or capacity",
+      "target_url": "https://localhost:32769/hit/payload",
+      "client_url": "https://localhost:48511/hit/payload",
+      "interval_us": 100,
+      "flows": 1,
+      "received_client": 4,
+      "forwarded_client": 4,
+      "received_server": 4,
+      "forwarded_server": 4,
+      "peak_queued": 4,
+      "peak_bytes": 2685,
+      "queued_at_shutdown": 0,
+      "bytes_at_shutdown": 0,
+      "minimum_server_send_interval_ns": 112631,
+      "cpu": 3,
+      "affinity": [
+        3
+      ],
+      "error": null,
+      "wall_ns": 21692307,
+      "thread_cpu_ns": 704873
+    },
+    {
+      "client": "paced",
+      "file": "round-1-paced/0000-h3-hit-fresh-before.wrong-ca-relay.json",
+      "source_sha256": "5adb66f41c9797f1fbb4eb4b0f01b5ebcf7420cc6f89b3aa5091fdae0581ad4d",
+      "scope": "IPv4 loopback UDP relay; server-to-client send spacing, not client internal batch proof or capacity",
+      "target_url": "https://localhost:32770/hit/payload",
+      "client_url": "https://localhost:36549/hit/payload",
+      "interval_us": 100,
+      "flows": 1,
+      "received_client": 4,
+      "forwarded_client": 4,
+      "received_server": 5,
+      "forwarded_server": 5,
+      "peak_queued": 4,
+      "peak_bytes": 2681,
+      "queued_at_shutdown": 0,
+      "bytes_at_shutdown": 0,
+      "minimum_server_send_interval_ns": 107071,
+      "cpu": 3,
+      "affinity": [
+        3
+      ],
+      "error": null,
+      "wall_ns": 21246081,
+      "thread_cpu_ns": 685061
+    },
+    {
+      "client": "unpaced",
+      "file": "round-1-unpaced/0000-h3-hit-fresh-before.wrong-ca-relay.json",
+      "source_sha256": "5adb66f41c9797f1fbb4eb4b0f01b5ebcf7420cc6f89b3aa5091fdae0581ad4d",
+      "scope": "IPv4 loopback UDP relay; server-to-client send spacing, not client internal batch proof or capacity",
+      "target_url": "https://localhost:32771/hit/payload",
+      "client_url": "https://localhost:59765/hit/payload",
+      "interval_us": 0,
+      "flows": 1,
+      "received_client": 3,
+      "forwarded_client": 3,
+      "received_server": 5,
+      "forwarded_server": 5,
+      "peak_queued": 2,
+      "peak_bytes": 2400,
+      "queued_at_shutdown": 0,
+      "bytes_at_shutdown": 0,
+      "minimum_server_send_interval_ns": 8576,
+      "cpu": 3,
+      "affinity": [
+        3
+      ],
+      "error": null,
+      "wall_ns": 20582152,
+      "thread_cpu_ns": 388545
+    }
+  ]
+}

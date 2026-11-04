@@ -1,0 +1,25 @@
+{
+  "baseline_commit": "2df8b242b1b0d24f199e22592b6924e592f960a2",
+  "scope": "readiness vs readiness; only explicit cooperative budget removed",
+  "binaries": {
+    "explicit_budget": {
+      "path": "/workspace/edge/.worktrees/perf-next/.local/perf-round1/bin/splice",
+      "sha256": "909ab226dcdd649c82cfda9f7010c5c6cb0c01cdd621760535ea0834ba71409d"
+    },
+    "tokio_budget_only": {
+      "path": "/workspace/edge/.worktrees/perf-next/.local/perf-round2/bin/splice-no-extra-budget",
+      "sha256": "f42e6e4058cb5fc2088fb037f7c8fe628e31e36b12216499846be936a4050a5c"
+    }
+  },
+  "sources": {
+    "/workspace/edge/.worktrees/perf-next/.local/perf-round2/compare-budget.py": "cfcadb72e392f7840fbb358b4479cf59df55b990192ae1e11e3260d0e88d1df7",
+    "/workspace/edge/.worktrees/perf-next/.local/perf-round2/splice-before.rs": "a1116e1238c347429fef698c26ecac88cc0fe150d006b789e7b3071dedd9250f",
+    "/workspace/edge/.worktrees/perf-next/.local/perf-round2/splice-candidate.rs": "774311025ff977eda427f17578a6c61b8c0bae083784b31d4c12bf5f361444d3",
+    "/workspace/edge/.worktrees/perf-next/crates/zelvik-edge-io/src/splice.rs": "774311025ff977eda427f17578a6c61b8c0bae083784b31d4c12bf5f361444d3"
+  },
+  "cpus": [
+    0,
+    1
+  ],
+  "unchanged": true
+}

@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "python_tests": 23,
+  "retained_real_r16_af_reports_validated": 64,
+  "workflow_dispatch_input_count": 10,
+  "bash_steps_parsed": 33,
+  "runtime_source_unchanged_from": "708785cfdc711e920a82699424d1d7648bebf378",
+  "local_rust_compilation": false
+}

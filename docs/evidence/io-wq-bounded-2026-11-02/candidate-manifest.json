@@ -1,0 +1,24 @@
+{
+  "source_commit": "fa2c2cbc429ff41a61039103db2cd622a5ea76be",
+  "tracked_dirty": true,
+  "binary_sha256": "e67d8696e9942b23dbfb88cd9cd2999af3197ba226a767e72e584ae87f0e4ac7",
+  "sources": {
+    "Cargo.toml": "7510c8fb3b5281c34806fb44f234f00ab844e2bd1e2f1d11be8f4534f7779fa3",
+    "Cargo.lock": "b2193be03731b279b403f6c9e84be1ae8ff5c63ce39bd06946dd01cdfbafcc46",
+    "scripts/perf/compare-splice.py": "56d3b8d5b355804c1948b06ddfb2cf948dcff810bfd725c09427c28bfb9cfaf5",
+    "crates/zelvik-edge-io/Cargo.toml": "e336f46decaf78521a1e509f7966ee83a8bd82687e14258a9a35056572933407",
+    "crates/zelvik-edge-io/benches/splice.rs": "2874e0f39d6a642f6a2c7985edd3569a1984707f3edf392e948f38a8ca83a791",
+    "crates/zelvik-edge-io/benches/support/blocking.rs": "8f616459df542a41589fa611b32dba1e057756001478105eb79792c75e12e998",
+    "crates/zelvik-edge-io/benches/support/mod.rs": "87e70079047a98521a2afac560a3a853f01dddd0f7e8cf7dd607b37e8bf39629",
+    "crates/zelvik-edge-io/src/lib.rs": "1550f33c83a0461145eb976507fcc95e8c1b7afaa814fb79c5dda675f9523605",
+    "crates/zelvik-edge-io/src/splice.rs": "4b846e4316930f8ae28a927a316fc33a8d18ec6c2945485ce97580e9681057b9",
+    "crates/zelvik-edge-io/src/uring.rs": "361f5869376e2e1805be31e04af5f54cfcfa5af1e111e5871caaab7be959e73c",
+    "crates/zelvik-edge-io/tests/splice.rs": "229cf005385765d5256722e35d10f7acbe7654dfbe2d5a125042a5badf065f13",
+    "crates/zelvik-edge-io/tests/uring.rs": "3f6fd5b40346246763c34a04d2911b99ae4cdd5e507ddb415c8a6ccee5d08200"
+  },
+  "builds_completed_unix": 1793654898.1144483,
+  "rustflags": "-C target-cpu=x86-64-v2",
+  "features": [
+    "io-uring"
+  ]
+}

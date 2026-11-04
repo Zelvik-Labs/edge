@@ -1,0 +1,170 @@
+{
+  "1": {
+    "full-stats": {
+      "cases": 16,
+      "flags": {},
+      "min_duration_seconds": 3.34456844,
+      "max_steal_pct": 0.0,
+      "client_cpu_range": [
+        10.580673997167427,
+        51.77232065019375
+      ],
+      "max_snapshot_overhead_pct": 0.2570810899596987,
+      "proxy_cpu_range": [
+        78.51125581337655,
+        99.7538042950838
+      ],
+      "idle_cpu_max": 0.9079566516725434
+    },
+    "bridge-stats": {
+      "cases": 16,
+      "flags": {},
+      "min_duration_seconds": 3.398318831,
+      "max_steal_pct": 0.0,
+      "client_cpu_range": [
+        11.047432061285354,
+        51.731098663158136
+      ],
+      "max_snapshot_overhead_pct": 0.2337198641390703,
+      "proxy_cpu_range": [
+        82.69104606520933,
+        99.77356244136152
+      ],
+      "idle_cpu_max": 1.3616351820256922
+    },
+    "nginx": {
+      "cases": 16,
+      "flags": {
+        "client_cpu_at_least_90pct": 8
+      },
+      "min_duration_seconds": 2.496658263,
+      "max_steal_pct": 0.0,
+      "client_cpu_range": [
+        23.609104686172675,
+        95.28991059795196
+      ],
+      "max_snapshot_overhead_pct": 0.19790041245224543,
+      "proxy_cpu_range": [
+        50.8043708625993,
+        100.1050178232472
+      ],
+      "idle_cpu_max": 0.0
+    },
+    "openresty": {
+      "cases": 16,
+      "flags": {
+        "client_cpu_at_least_90pct": 7
+      },
+      "min_duration_seconds": 2.482300076,
+      "max_steal_pct": 0.0,
+      "client_cpu_range": [
+        23.522567654851155,
+        94.99939030639723
+      ],
+      "max_snapshot_overhead_pct": 0.20645870892552765,
+      "proxy_cpu_range": [
+        49.92113688271462,
+        99.93689921260483
+      ],
+      "idle_cpu_max": 0.0
+    },
+    "direct": {
+      "cases": 4,
+      "flags": {
+        "client_cpu_at_least_90pct": 2,
+        "origin_cpu_at_least_90pct": 2
+      },
+      "min_duration_seconds": 1.219279453,
+      "max_steal_pct": 0.0,
+      "client_cpu_range": [
+        53.83060555880266,
+        97.99066259043605
+      ],
+      "max_snapshot_overhead_pct": 0.29082524338122084
+    }
+  },
+  "2": {
+    "full-stats": {
+      "cases": 16,
+      "flags": {},
+      "min_duration_seconds": 2.843975352,
+      "max_steal_pct": 0.0,
+      "client_cpu_range": [
+        9.78569140228315,
+        59.68121343971479
+      ],
+      "max_snapshot_overhead_pct": 0.3309954905365897,
+      "proxy_cpu_range": [
+        106.55784024440823,
+        155.5247779548521
+      ],
+      "idle_cpu_max": 1.3608427822733697
+    },
+    "bridge-stats": {
+      "cases": 16,
+      "flags": {},
+      "min_duration_seconds": 2.839263706,
+      "max_steal_pct": 0.0,
+      "client_cpu_range": [
+        10.06655664161086,
+        59.54984020776265
+      ],
+      "max_snapshot_overhead_pct": 0.3468279617467651,
+      "proxy_cpu_range": [
+        108.97603875001207,
+        155.46721101519302
+      ],
+      "idle_cpu_max": 1.3607781993328025
+    },
+    "nginx": {
+      "cases": 16,
+      "flags": {
+        "client_cpu_at_least_90pct": 8
+      },
+      "min_duration_seconds": 1.692959418,
+      "max_steal_pct": 0.0,
+      "client_cpu_range": [
+        23.754826612929353,
+        99.10405000602972
+      ],
+      "max_snapshot_overhead_pct": 0.3322406681044443,
+      "proxy_cpu_range": [
+        50.051791345263766,
+        198.3836569337892
+      ],
+      "idle_cpu_max": 0.0
+    },
+    "openresty": {
+      "cases": 16,
+      "flags": {
+        "client_cpu_at_least_90pct": 8
+      },
+      "min_duration_seconds": 1.651655708,
+      "max_steal_pct": 0.0,
+      "client_cpu_range": [
+        23.474775877975638,
+        98.88955622463176
+      ],
+      "max_snapshot_overhead_pct": 0.3540529486265598,
+      "proxy_cpu_range": [
+        50.296722249382455,
+        198.9369634292609
+      ],
+      "idle_cpu_max": 0.0
+    },
+    "direct": {
+      "cases": 4,
+      "flags": {
+        "client_cpu_at_least_90pct": 2,
+        "origin_cpu_at_least_90pct": 2
+      },
+      "min_duration_seconds": 1.214808779,
+      "max_steal_pct": 0.0,
+      "client_cpu_range": [
+        54.1197687953353,
+        97.92814678714254
+      ],
+      "max_snapshot_overhead_pct": 0.2923616189365985
+    }
+  }
+}

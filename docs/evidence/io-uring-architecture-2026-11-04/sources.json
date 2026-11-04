@@ -1,0 +1,12 @@
+{
+  "upstream_url": "https://github.com/torvalds/linux/blob/v6.8/io_uring/splice.c",
+  "upstream_raw_url": "https://raw.githubusercontent.com/torvalds/linux/v6.8/io_uring/splice.c",
+  "upstream_sha256": "0bdd64d1d5f00fe5082d52606f0164a47ec369114b650c91aa64dbb46fb43a11",
+  "upstream_license": "GPL-2.0 (original SPDX retained)",
+  "audited_edge_commit": "0cf22db48e2e6a64c34f82599b6285d0efc90de5",
+  "edge_source": "crates/zelvik-edge-io/src/uring.rs",
+  "edge_source_sha256": "361f5869376e2e1805be31e04af5f54cfcfa5af1e111e5871caaab7be959e73c",
+  "measured_kernel": "6.8.0-1070-azure",
+  "measured_run": 41529553377,
+  "limitation": "upstream v6.8 source inspection, not byte identity of Ubuntu distribution source or per-hop runtime attribution"
+}

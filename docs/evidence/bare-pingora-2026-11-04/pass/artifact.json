@@ -1,0 +1,20 @@
+{
+  "id": 13302238024,
+  "node_id": "MDg6QXJ0aWZhY3QxMzMwMjIzODAyNA==",
+  "name": "bare-pingora-3b25c01f2b0d40ad90beb20a41e7cff917e54510",
+  "size_in_bytes": 27925095,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13302238024",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13302238024/zip",
+  "expired": false,
+  "digest": "sha256:3899a281d3e99253837d649cb7bcf5581b377b0262cdfc3742cd7994025336af",
+  "created_at": "2026-11-04T06:56:58Z",
+  "updated_at": "2026-11-04T06:56:58Z",
+  "expires_at": "2027-02-02T06:43:53Z",
+  "workflow_run": {
+    "id": 41787477297,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/program-wide-20261104",
+    "head_sha": "3b25c01f2b0d40ad90beb20a41e7cff917e54510"
+  }
+}

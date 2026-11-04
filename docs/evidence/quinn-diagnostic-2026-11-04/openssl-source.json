@@ -1,0 +1,34 @@
+[
+  {
+    "repository": "openssl/openssl",
+    "ref": "openssl-3.5.7",
+    "path": "ssl/quic/quic_channel.c",
+    "git_blob_sha": "9534cbcaf7f9435afa3497c966102afd07c437c8",
+    "url": "https://github.com/openssl/openssl/blob/openssl-3.5.7/ssl/quic/quic_channel.c",
+    "fragments": [
+      {
+        "start_line": 824,
+        "text": "static int rxku_allowed(QUIC_CHANNEL *ch)\n{\n    /*\n     * RFC 9001 s. 6.1: An endpoint MUST NOT initiate a key update prior to\n     * having confirmed the handshake (Section 4.1.2).\n     *\n     * RFC 9001 s. 6.1: An endpoint MUST NOT initiate a subsequent key update\n     * unless it has received an acknowledgment for a packet that was sent\n     * protected with keys from the current key phase.\n     *\n     * RFC 9001 s. 6.2: If an endpoint detects a second update before it has\n     * sent any packets with updated keys containing an acknowledgment for the\n     * packet that initiated the key update, it indicates that its peer has\n     * updated keys twice without awaiting confirmation. An endpoint MAY treat\n     * such consecutive key updates as a connection error of type\n     * KEY_UPDATE_ERROR.\n     */\n    return ch->handshake_confirmed && !ch->rxku_pending_confirm;\n}\n"
+      },
+      {
+        "start_line": 82,
+        "text": "static void rxku_detected(QUIC_PN pn, void *arg);\nstatic int ch_retry(QUIC_CHANNEL *ch,\n    const unsigned char *retry_token,\n    size_t retry_token_len,\n    const QUIC_CONN_ID *retry_scid,\n    int drop_later_pn);\nstatic void ch_update_idle(QUIC_CHANNEL *ch);\nstatic int ch_discard_el(QUIC_CHANNEL *ch,\n    uint32_t enc_level);\nstatic void ch_on_idle_timeout(QUIC_CHANNEL *ch);\nstatic void ch_update_idle(QUIC_CHANNEL *ch);\nstatic void ch_update_ping_deadline(QUIC_CHANNEL *ch);\nstatic void ch_on_terminating_timeout(QUIC_CHANNEL *ch);\nstatic void ch_start_terminating(QUIC_CHANNEL *ch,\n    const QUIC_TERMINATE_CAUSE *tcause,\n    int force_immediate);\nstatic void ch_on_txp_ack_tx(const OSSL_QUIC_FRAME_ACK *ack, uint32_t pn_space,\n    void *arg);\nstatic void ch_record_state_transition(QUIC_CHANNEL *ch, uint32_t new_state);\n\nDEFINE_LHASH_OF_EX(QUIC_SRT_ELEM);\n\nQUIC_NEEDS_LOCK\nstatic QLOG *ch_get_qlog(QUIC_CHANNEL *ch)\n{\n#ifndef OPENSSL_NO_QLOG\n    QLOG_TRACE_INFO qti = { 0 };\n\n    if (ch->qlog != NULL)\n        return ch->qlog;\n\n    if (!ch->use_qlog)\n        return NULL;\n\n    if (ch->is_server && ch->init_dcid.id_len == 0)\n        return NULL;\n\n    qti.odcid = ch->init_dcid;\n    qti.title = ch->qlog_title;\n    qti.description = NULL;\n    qti.group_id = NULL;\n    qti.is_server = ch->is_server;\n    qti.now_cb = get_time;\n    qti.now_cb_arg = ch;\n    if ((ch->qlog = ossl_qlog_new_from_env(&qti)) == NULL) {\n        ch->use_qlog = 0; /* don't try again */\n        return NULL;\n    }\n\n    return ch->qlog;\n#else\n    return NULL;\n#endif\n}\n"
+      }
+    ],
+    "license": "Apache-2.0; Copyright The OpenSSL Project Authors, source fragments quoted for diagnosis"
+  },
+  {
+    "repository": "openssl/openssl",
+    "ref": "openssl-3.5.7",
+    "path": "ssl/quic/quic_record_rx.c",
+    "git_blob_sha": "8897cc6c2df0dba742938a6c72c25b70c0cfbc9d",
+    "url": "https://github.com/openssl/openssl/blob/openssl-3.5.7/ssl/quic/quic_record_rx.c",
+    "fragments": [
+      {
+        "start_line": 1200,
+        "text": "    if (qrx->msg_callback != NULL)\n        qrx->msg_callback(0, OSSL_QUIC1_VERSION, SSL3_RT_QUIC_PACKET, sop,\n            eop - sop - rxe->hdr.len, qrx->msg_callback_ssl,\n            qrx->msg_callback_arg);\n\n    /*\n     * The AAD data is the entire (unprotected) packet header including the PN.\n     * The packet header has been unprotected in place, so we can just reuse the\n     * PACKET buffer. The header ends where the payload begins.\n     */\n"
+      }
+    ],
+    "license": "Apache-2.0; Copyright The OpenSSL Project Authors, source fragments quoted for diagnosis"
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "id": 13292677638,
+  "size_in_bytes": 1988398,
+  "digest": "sha256:64107163962b670c6ff00473b2b3611d2bd6584a8a50b88b119fd80ea932fc38",
+  "workflow_run": {
+    "id": 41766617084,
+    "head_sha": "7546a2da100e78352e8b150692ee81a667e809c5",
+    "head_branch": "perf/program-wide-20261104"
+  }
+}

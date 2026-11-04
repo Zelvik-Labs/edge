@@ -1,0 +1,36 @@
+{
+  "run": 41774460518,
+  "source": "c5ebb91a76afe4855993f4822b4ac0657e85f18b",
+  "runtime": "20e56ff",
+  "jobs": [
+    {
+      "id": 126391458624,
+      "name": "Check / Clippy - linux-x64",
+      "conclusion": "success"
+    },
+    {
+      "id": 126391458997,
+      "name": "Test - linux-x64",
+      "conclusion": "success"
+    }
+  ],
+  "library_passed": 1367,
+  "binary_passed": 16,
+  "library_ignored": 4,
+  "integration_vendor": "PASS",
+  "native_combinations": 32,
+  "features": "default (node-control); optional h3-quiche was not rebuilt in this CI",
+  "new_controls": [
+    "2026-11-04T04:43:36.1550105Z test client_ip::tests::fallback_small_and_large_headers_preserve_duplicate_and_mapping_rules ... ok"
+  ],
+  "logs": {
+    "job.log": {
+      "bytes": 3001247,
+      "sha256": "0776f9dcd06c3f9da57d38bdee69cee7de136c209a4ea4136995dc34e8fff601"
+    },
+    "check.log": {
+      "bytes": 130028,
+      "sha256": "c0d0cbf41e07e6763e2078a392b6454249f5d5ceada822ff8eeaceaccf580ee7"
+    }
+  }
+}

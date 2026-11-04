@@ -1,0 +1,8 @@
+2026-11-03T11:43:58.2090953Z test origin_h3::wire_tests::abandoned_request_body_writer_cannot_be_finished_into_a_healthy_pool_entry ... ok
+2026-11-03T11:43:58.2158700Z test origin_h3::wire_tests::idle_expiration_releases_the_sender_driver_and_endpoint ... ok
+2026-11-03T11:43:58.2361398Z test origin_h3::wire_tests::partial_response_and_reset_are_not_returned_to_the_idle_pool ... ok
+2026-11-03T11:43:58.2961824Z test origin_h3::wire_tests::pending_header_and_trailer_timeouts_do_not_prove_reusable_completion ... ok
+2026-11-03T11:43:58.3001206Z test origin_h3::wire_tests::pooled_h3_contexts_keep_peer_trust_and_group_isolation ... ok
+2026-11-03T11:43:58.3051150Z test origin_h3::wire_tests::response_header_conversion_preserves_repeated_fields_and_filters_connection_fields ... ok
+2026-11-03T11:43:58.3141111Z test origin_h3::wire_tests::request_upload_progresses_while_response_headers_are_pending ... ok
+2026-11-03T11:43:58.3411213Z test origin_h3::wire_tests::sequential_h3_requests_reuse_one_protocol_driver_and_quic_connection ... ok

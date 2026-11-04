@@ -1,0 +1,99 @@
+      ┌─────────┐  mr boxington
+     ╱ ═══════ ╱│
+    ╱─────────╱ │
+    │ •    (◉)│≡│
+    │  ◟▄▄▄◞  │ ╱
+    │   ◀◆▶   │╱
+    └─────────┘
+    Finished `test` profile [optimized] target(s) in 0.62s
+     Running unittests src/lib.rs (/workspace/edge/target/debug/deps/zelvik_edge-3fcf64dffcf344d8)
+
+running 85 tests
+test memory_governor::en16_pool_tests::blind_observation_admits_within_policy_ceilings ... ok
+test memory_governor::en16_pool_tests::admission_rejects_when_shared_account_exhausted ... ok
+test memory_governor::en16_pool_tests::cache_admissions_are_closed_outside_normal_pressure ... ok
+test memory_governor::en16_pool_tests::cache_admissions_stop_at_the_connection_budget_reserve ... ok
+test memory_governor::en16_pool_tests::cache_borrowing_requires_observed_physical_headroom ... ok
+test memory_governor::en16_pool_tests::connection_establishment_keeps_the_established_account_reserve ... ok
+test memory_governor::en16_pool_tests::concurrent_connection_grants_preserve_exactly_one_established_reserve ... ok
+test memory_governor::en16_pool_tests::disk_ledger_absolute_report_and_aggregate_envelope ... ok
+test memory_governor::en16_pool_tests::disk_ledger_reservation_commit_and_release ... ok
+test memory_governor::en16_pool_tests::established_traffic_reserve_is_clamped_on_small_budgets ... ok
+test memory_governor::en16_pool_tests::listener_pool_isolates_flooded_listener ... ok
+test memory_governor::en16_pool_tests::listener_pool_map_is_bounded ... ok
+test memory_governor::en16_pool_tests::listener_pool_permit_drop_releases_slot ... ok
+test memory_governor::en16_pool_tests::ordinary_saturation_cannot_consume_the_control_plane_reserve ... ok
+test memory_governor::en16_pool_tests::pinned_alloc_headroom_is_available_minus_reserve ... ok
+test memory_governor::en16_pool_tests::pinned_alloc_reserve_is_bounded ... ok
+test memory_governor::en16_pool_tests::reconcile_resident_category_refunds_dead_owners_only ... ok
+test memory_governor::en16_pool_tests::connection_flood_cannot_consume_the_established_traffic_reserve ... ok
+test memory_governor::en16_pool_tests::reconcile_resident_category_respects_owner_cap ... ok
+test memory_governor::en16_pool_tests::resident_ledger_owner_cap_refuses_new_owners_only ... ok
+test memory_governor::en16_pool_tests::shared_account_commit_transfer_never_opens_capacity ... ok
+test memory_governor::en16_pool_tests::shared_account_fails_closed_without_observation ... ok
+test memory_governor::en16_pool_tests::shared_account_pending_and_committed_charges_use_one_gate ... ok
+test memory_governor::en16_pool_tests::shared_grant_commit_keeps_deduction_until_observation ... ok
+test memory_governor::en16_pool_tests::shared_grant_grow_shrink_transfer ... ok
+test memory_governor::en16_pool_tests::shared_grant_growth_keeps_the_low_priority_gate ... ok
+test memory_governor::en16_pool_tests::shared_account_concurrent_grants_never_overcommit ... ok
+test memory_governor::en16_pool_tests::shared_grant_observation_confirms_commits ... ok
+test memory_governor::en16_pool_tests::shared_grant_pending_cancel_refunds_immediately ... ok
+test memory_governor::resident_memory_tests::l1_gauge_reduces_the_attribution_gap_without_touching_the_resident_ledger ... ok
+test memory_governor::resident_memory_tests::metrics_aggregator_gauge_is_exposed_in_snapshot_without_budget_pressure ... ok
+test memory_governor::resident_memory_tests::resident_budget_is_per_group_not_cross_category_total ... ok
+test memory_governor::resident_memory_tests::resident_owner_replace_and_remove_are_idempotent ... ok
+test memory_governor::tests::admission_profile_fits_512mib_floor_and_scales_256gib_ceiling ... ok
+test memory_governor::tests::admission_profile_scales_with_machine_size_and_fd_budget ... ok
+test memory_governor::tests::admission_reject_total_counts_control_plane_rejects ... ok
+test memory_governor::tests::admission_rejects_at_limit ... ok
+test memory_governor::tests::backlog_and_keepalive_stay_in_expected_bounds ... ok
+test memory_governor::tests::borrowing_preserves_every_reserve_and_connection_working_set ... ok
+test memory_governor::tests::borrowing_refuses_unknown_stale_and_pressure_observations ... ok
+test memory_governor::tests::cache_read_memory_admission_tracks_bytes_and_object_limit ... ok
+test memory_governor::tests::cache_read_object_limit_tightens_under_pressure ... ok
+test memory_governor::tests::admission_never_settles_above_limit ... ok
+test memory_governor::tests::cgroup_unlimited_threshold_does_not_hide_large_real_limits ... ok
+test memory_governor::tests::config_sync_budget_tightens_and_defers_with_pressure ... ok
+test memory_governor::tests::control_plane_admission_classes_roll_back_and_track_rejects ... ok
+test memory_governor::tests::effective_memory_available_respects_host_pressure_and_container_usage ... ok
+test memory_governor::tests::effective_memory_total_uses_the_smaller_host_or_cgroup_limit ... ok
+test memory_governor::tests::fd_equivalent_snapshot_reuses_cached_fd_count ... ok
+test memory_governor::tests::firewall_state_capacities_are_bounded_by_hard_guardrails ... ok
+test memory_governor::tests::governor_rolls_back_when_limit_is_full ... ok
+test memory_governor::tests::concurrent_http_admission_never_exceeds_limit_or_leaks_counters ... ok
+test memory_governor::tests::governor_snapshot_budget_fields_stay_within_available_memory ... ok
+test memory_governor::tests::high_cost_admission_classes_have_limits_and_release ... ok
+test memory_governor::tests::limits_table_tracks_reseeded_memory ... ok
+test memory_governor::tests::logical_release_does_not_create_observed_headroom ... ok
+test memory_governor::tests::limits_table_rebuilds_on_snapshot_ttl_expiry ... ok
+test memory_governor::tests::low_available_memory_does_not_expand_fixed_budget_floors ... ok
+test memory_governor::tests::low_fd_limit_reduces_connection_admission_without_touching_protocol_caps ... ok
+test memory_governor::tests::permit_drop_refunds_across_threads ... ok
+test memory_governor::tests::pressure_reduces_high_cost_admission_minimums ... ok
+test memory_governor::tests::psi_stall_ratios_escalate_pressure_level ... ok
+test memory_governor::tests::quic_and_udp_budgets_shrink_under_memory_pressure ... ok
+test memory_governor::tests::quic_ingress_does_not_wait_for_diagnostic_owner_accounting ... ok
+test memory_governor::tests::quic_ingress_sees_live_usage_without_a_budget_generation_change ... ok
+test memory_governor::tests::quic_ingress_tracks_pressure_and_budget_changes ... ok
+test memory_governor::tests::raw_availability_does_not_apply_reserve_twice ... ok
+test memory_governor::tests::relay_copy_buffer_scales_with_memory_pressure_and_active_tcp ... ok
+test memory_governor::tests::scheduler_scales_workers_without_legacy_caps ... ok
+test memory_governor::tests::security_work_is_not_classified_as_discardable_analytics ... ok
+test memory_governor::tests::shared_connection_admission_rolls_back_when_budget_is_full ... ok
+test memory_governor::tests::shared_connection_budget_is_elastic_not_average_partitioned ... ok
+test memory_governor::tests::small_machine_uses_reduced_cache_and_bloom_floors ... ok
+test memory_governor::tests::state_and_event_queues_scale_continuously_with_machine_size ... ok
+test memory_governor::tests::tcp_queue_byte_permit_tracks_budget_and_releases ... ok
+test memory_governor::tests::tcp_relay_idle_timeout_engages_under_pressure ... ok
+test memory_governor::tests::udp_direct_workers_match_demux_snapshot_bounds ... ok
+test memory_governor::tests::udp_queue_byte_permit_tracks_budget_and_releases ... ok
+test memory_governor::tests::unaccounted_rss_saturates_and_reports_gap ... ok
+test memory_governor::tests::very_low_raw_availability_limits_new_allocations ... ok
+test memory_governor::tests::zero_copy_relay_admission_tracks_bytes_and_releases ... ok
+test memory_governor::tests::zero_copy_relay_disabled_under_high_fd_pressure ... ok
+test memory_governor::tests::zero_copy_relay_disabled_under_high_memory_pressure ... ok
+test memory_governor::tests::zero_copy_relay_disabled_when_connection_admission_is_saturated ... ok
+test memory_governor::tests::mixed_connection_admission_respects_shared_connection_budget ... ok
+
+test result: ok. 85 passed; 0 failed; 0 ignored; 0 measured; 1206 filtered out; finished in 0.06s
+

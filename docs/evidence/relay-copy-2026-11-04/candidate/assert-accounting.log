@@ -1,0 +1,5 @@
+case	accepted	counter	flushed
+partial_error	3	3	3
+partial_zero	3	3	3
+partial_cancel	3	3	3
+read_cancel	6	6	6

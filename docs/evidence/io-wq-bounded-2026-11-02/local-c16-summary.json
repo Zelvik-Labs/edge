@@ -1,0 +1,77 @@
+{
+  "all_passed": true,
+  "comparisons": [
+    {
+      "bytes": 1024,
+      "pairs": [
+        {
+          "round": 1,
+          "uring-unbounded": 1037872.8491995729,
+          "uring": 1175975.5766262964,
+          "change_percent": 13.306324327997498
+        },
+        {
+          "round": 2,
+          "uring": 1203996.9880360872,
+          "uring-unbounded": 33549059.6,
+          "change_percent": -96.41123476368296
+        },
+        {
+          "round": 3,
+          "uring-unbounded": 852144.6512105884,
+          "uring": 816000.6019214521,
+          "change_percent": -4.241539184431742
+        }
+      ],
+      "median_percent": -4.241539184431742
+    },
+    {
+      "bytes": 65536,
+      "pairs": [
+        {
+          "round": 1,
+          "uring-unbounded": 4696621.294436942,
+          "uring": 3153088.7688738457,
+          "change_percent": -32.86474315890406
+        },
+        {
+          "round": 2,
+          "uring": 1988158.144682308,
+          "uring-unbounded": 3586828.272983781,
+          "change_percent": -44.570578980397755
+        },
+        {
+          "round": 3,
+          "uring-unbounded": 2060423.8453479547,
+          "uring": 2295418.810609277,
+          "change_percent": 11.405175968619098
+        }
+      ],
+      "median_percent": -32.86474315890406
+    },
+    {
+      "bytes": 1048576,
+      "pairs": [
+        {
+          "round": 1,
+          "uring-unbounded": 92876842.85,
+          "uring": 86394940.025,
+          "change_percent": -6.979030107072582
+        },
+        {
+          "round": 2,
+          "uring": 223004491.8,
+          "uring-unbounded": 67643987.025,
+          "change_percent": 229.6737841865849
+        },
+        {
+          "round": 3,
+          "uring-unbounded": 42629838.17,
+          "uring": 33476851.159999996,
+          "change_percent": -21.47084624975485
+        }
+      ],
+      "median_percent": -6.979030107072582
+    }
+  ]
+}

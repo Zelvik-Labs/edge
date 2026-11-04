@@ -1,0 +1,10 @@
+{
+  "profile_selector": "/workspace/.local/storage-profile",
+  "selected_profile": "cloud",
+  "tests": "CloudBudgetProfileTest:4 passed",
+  "min_free_start_gib": 6,
+  "min_free_runtime_gib": 5,
+  "auto_gc": false,
+  "scope": "cloud categories follow filesystem capacity; laptop quotas unchanged; physical volume unchanged",
+  "script_sha256": "479a7100703d7f7c115dd317cc913691fb6186ce72aaff77b89a0ecfabada0ec"
+}

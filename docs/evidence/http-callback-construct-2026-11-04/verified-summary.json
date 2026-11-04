@@ -1,0 +1,51 @@
+{
+  "source": "3a51a2a7708ea8065cfb65285f8365d71a6f144f",
+  "scope": "unpolled real callback construction/drop only; not request execution, allocation counts or node capacity",
+  "raw_blocks": 120,
+  "measured_constructions": 12000000,
+  "host_steal_fraction": 0.0,
+  "callbacks": {
+    "early_request_filter": {
+      "frame_bytes": 32,
+      "alignment": 8,
+      "median_ns": 10.859545,
+      "min_ns": 10.32975,
+      "max_ns": 18.96513
+    },
+    "logging": {
+      "frame_bytes": 40,
+      "alignment": 8,
+      "median_ns": 6.106540000000001,
+      "min_ns": 5.81109,
+      "max_ns": 6.55518
+    },
+    "request_filter": {
+      "frame_bytes": 5736,
+      "alignment": 8,
+      "median_ns": 29.224944999999998,
+      "min_ns": 27.34803,
+      "max_ns": 54.86018
+    },
+    "response_filter": {
+      "frame_bytes": 40,
+      "alignment": 8,
+      "median_ns": 6.058999999999999,
+      "min_ns": 5.84936,
+      "max_ns": 6.47513
+    },
+    "upstream_peer": {
+      "frame_bytes": 32,
+      "alignment": 8,
+      "median_ns": 5.927855,
+      "min_ns": 5.68925,
+      "max_ns": 6.96685
+    },
+    "upstream_response_filter": {
+      "frame_bytes": 40,
+      "alignment": 8,
+      "median_ns": 6.161239999999999,
+      "min_ns": 5.7134,
+      "max_ns": 6.29339
+    }
+  }
+}

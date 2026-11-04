@@ -1,0 +1,11 @@
+case	allocations	reallocations	bytes	largest
+public-small	0	0	0	0
+private-no-forward3	0	0	0	0
+private-first4	0	0	0	0
+private-second4	0	0	0	0
+private-forwarded4	0	0	0	0
+private-invalid4	0	0	0	0
+private-priority4	0	0	0	0
+private-large27	0	0	0	0
+private-large-forward28	0	0	0	0
+mapped-private4	0	0	0	0

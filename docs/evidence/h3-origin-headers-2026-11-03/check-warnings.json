@@ -1,0 +1,9 @@
+{
+  "job_conclusion": "success",
+  "unused_import_warning_present": false,
+  "remaining_warning_lines": [
+    "2026-11-03T11:39:21.7112077Z warning: binary `Zelvik-Edge` should have a kebab-case name",
+    "2026-11-03T11:39:21.7124171Z warning: `zelvik-edge` (manifest) generated 1 warning"
+  ],
+  "scope": "full Check job decoded log; no warning suppression"
+}

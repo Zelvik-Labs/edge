@@ -1,0 +1,51 @@
+{
+  "harness_source": "4ed520090c4b26260e6a9acdbc8ecca939e5c845",
+  "baseline": "739aa162d367040393e1d6d91293af231e7233e6",
+  "runtime_changes": [
+    "src/metrics.rs",
+    "src/metrics/daily.rs"
+  ],
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1",
+  "rustflags": "-C target-cpu=x86-64-v2",
+  "variants": {
+    "before": {
+      "source": "739aa162d367040393e1d6d91293af231e7233e6",
+      "binaries": {
+        "Zelvik-Edge": {
+          "bytes": 45061280,
+          "sha256": "1e485492e7c8627127a56ca63c5f264483d92d001c9e912b6d374d0f5ffe51a6"
+        },
+        "issue34-controller": {
+          "bytes": 4326224,
+          "sha256": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2"
+        }
+      },
+      "source_hashes": {
+        "src/metrics.rs": "17d990435034e2a8c365ccc4c536dbd63753d47743e9c3cccd32e382f6d6117a",
+        "src/metrics/daily.rs": "afb042ceec0b228ef88ebdcb44dae2f83498a58f5c79f94359db7836a63d8b2b",
+        "Cargo.lock": "e7e9e1ae18947ab0f94c146545d24be7d014a45d0749584675e8a4931a9962c6",
+        "Cargo.toml": "b70e1fa34407a22fd85b697edd158954ff286c1e3b35affbca26b32d38b0e626"
+      }
+    },
+    "after": {
+      "source": "e3c1d50fa0c5300483102362b9de6beda8f3d0c5",
+      "binaries": {
+        "Zelvik-Edge": {
+          "bytes": 45061736,
+          "sha256": "46aac14341a2b896102b014f85d53682ece8dc2f6894198bfb38ef7325291186"
+        },
+        "issue34-controller": {
+          "bytes": 4326224,
+          "sha256": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2"
+        }
+      },
+      "source_hashes": {
+        "src/metrics.rs": "4d3cb092600508dd69131eb77baf4973540e79da08b47feaf36edf762e4129d8",
+        "src/metrics/daily.rs": "e50fefb01d421e329c3410dbd331c85c62015116033a0115982df34e99c2e52f",
+        "Cargo.lock": "e7e9e1ae18947ab0f94c146545d24be7d014a45d0749584675e8a4931a9962c6",
+        "Cargo.toml": "b70e1fa34407a22fd85b697edd158954ff286c1e3b35affbca26b32d38b0e626"
+      }
+    }
+  },
+  "builds_complete_before_measurement": true
+}

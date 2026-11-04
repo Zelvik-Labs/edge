@@ -1,0 +1,48 @@
+{
+  "source_commit": "d30b4ab9a253fefd91038f273a4b8d35ac7f6f6f",
+  "tests": "4 real ptrace helper +5 existing summary tests passed; initial fixture failures retained",
+  "archive_bytes": 2917,
+  "archive_sha256": "0e0085da3b1963e17963a04891add117081454d8fa763b364943451c9a2f2790",
+  "files": {
+    "helper-tests-attempt1.log": {
+      "bytes": 2170,
+      "sha256": "8ea8c845b9eb1bb52231ad892787e2f27d7c86794f40e3ad4e0bd467bfda3036"
+    },
+    "helper-tests-attempt2.log": {
+      "bytes": 855,
+      "sha256": "c4ebab940c33de37ae63250dca246c209d483687efa4070e384144def7b9e069"
+    },
+    "helper-tests-attempt3.log": {
+      "bytes": 101,
+      "sha256": "5c7655790055daa8df43a45d0f9bf8cec3337dcfe9818954af2d3fafe0190d62"
+    },
+    "helper-tests-final.log": {
+      "bytes": 102,
+      "sha256": "15ee423ebe849000a7fd2672cd59242b6bc9bf17a2b7874102a419cf9304888c"
+    },
+    "summary-tests.log": {
+      "bytes": 103,
+      "sha256": "6afcb558278288108d2ada7aedd3e46b4e9893711260c2d74ab3ec4fc74ba613"
+    },
+    "runtime-unchanged.json": {
+      "bytes": 749,
+      "sha256": "34d36b9923664f52ef587cdd0f02012bc26cb379f360f7c16851f5cb544b488c"
+    },
+    "verification-attempt1.log": {
+      "bytes": 411,
+      "sha256": "9db441111280d46892ff66d58eb3e0e56b33fd2be4979b26567354f4569cbd69"
+    },
+    "parent-trace-probe.log": {
+      "bytes": 72,
+      "sha256": "348eceb9ad04e5ba276d1391e7cddbdad95f4d940963421b885fb5d6d1c3611b"
+    },
+    "parent-trace-probe.stdout": {
+      "bytes": 8,
+      "sha256": "667ada131ac6f1b82f2d7adb1afb2d983001a230fde1486939a70b978528aab2"
+    },
+    "parent-trace-probe.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

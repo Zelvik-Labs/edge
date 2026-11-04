@@ -1,0 +1,40 @@
+name: Persisted cache header validation candidate
+on:
+  workflow_dispatch:
+  push:
+    branches: [perf/program-wide-20261104]
+    paths:
+      - benches/support/stored_headers_candidate.rs
+      - benches/support/stored_headers_probe.rs
+      - scripts/perf/stored-headers/**
+      - .github/workflows/stored-headers.yml
+permissions:
+  contents: read
+concurrency:
+  group: stored-headers-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  compare:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      CARGO_BUILD_JOBS: "2"
+      RUST_TEST_THREADS: "2"
+      RUSTFLAGS: "-C target-cpu=x86-64-v2 -D warnings"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Fetch immutable original validator
+        run: git fetch --depth=1 origin a79b20d22c32e2b77c926e2335792b874b1d8bc8
+      - uses: dtolnay/rust-toolchain@1.99.1
+      - name: Build separate timing and allocation executables
+        run: python3 scripts/perf/stored-headers/run.py build
+      - name: Differential semantics, allocation counts and alternating timing blocks
+        run: python3 scripts/perf/stored-headers/run.py measure
+      - name: Retain sources, actual executables, every comparison and failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stored-headers-${{ github.sha }}
+          path: .local/stored-headers-ci/
+          include-hidden-files: true
+          if-no-files-found: error

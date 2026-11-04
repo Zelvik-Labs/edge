@@ -1,0 +1,25 @@
+      ┌─────────┐  mr boxington
+     ╱ ═══════ ╱│
+    ╱─────────╱ │
+    │ •    (◉)│≡│
+    │  ◟▄▄▄◞  │ ╱
+    │   ◀◆▶   │╱
+    └─────────┘
+   Compiling zelvik-edge v26.11.1 (/workspace/edge/.worktrees/perf-next)
+mbx[warning]: cc cache bypassed: compiler invocation names no output file
+mbx[progress]: 15s elapsed; 0 hits, 0 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 30s elapsed; 0 hits, 0 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 45s elapsed; 0 hits, 0 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 60s elapsed; 0 hits, 0 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 75s elapsed; 0 hits, 0 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 90s elapsed; 0 hits, 0 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 105s elapsed; 0 hits, 0 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 120s elapsed; 0 hits, 0 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 135s elapsed; 0 hits, 0 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 150s elapsed; 0 hits, 0 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 165s elapsed; 0 hits, 0 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 180s elapsed; 0 hits, 0 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+mbx[progress]: 195s elapsed; 0 hits, 0 misses, 2 bypassed, 0 not looked up; ~0.0s compiler work saved
+    Finished `dev` profile [optimized] target(s) in 3m 28s
+mbx[cache]: 0 hits, 2 misses, 32 incremental, 2 bypassed; 0 B downloaded, 0 B uploaded, 6.1 KiB stored locally
+mbx[savings]: the sweep found 10.9 GiB logical nobody would miss. nobody has.

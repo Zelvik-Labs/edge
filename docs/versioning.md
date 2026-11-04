@@ -1,6 +1,6 @@
 # 版本号规划
 
-`cloud-node-rust` 是上游基石，`Zelvik-Edge` 是重新命名后的独立产品。版本策略采用 **Zelvik 统一方案**（与 API / Admin / User / Agent / Portal 一致），不再使用本仓库独立 SemVer。
+`Zelvik-Edge` 是独立产品，维护自己的产品路线和发布周期，不是 `cloud-node-rust` 的替代品或重命名发行版。历史代码来源与兼容关系单独记录，不定义产品定位。版本策略采用 **Zelvik 统一方案**（与 API / Admin / User / Agent / Portal 一致），不再使用本仓库独立 SemVer。
 > 迁移说明：`0.1.0` 仅表示代码来源 provenance（cloud-node-rust 1.2.2 @ 631e5c7）；正式版本与兼容关系以 Zelvik-Docs 的全局兼容矩阵为准。
 
 ## 版本模型

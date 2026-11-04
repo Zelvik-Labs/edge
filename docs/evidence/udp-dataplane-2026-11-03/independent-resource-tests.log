@@ -1,0 +1,7 @@
+test_real_churning_child_preserves_unknowns_and_corruption_controls (__main__.IndependentValidatorTests.test_real_churning_child_preserves_unknowns_and_corruption_controls) ... ok
+test_real_stable_child_and_corruption_controls (__main__.IndependentValidatorTests.test_real_stable_child_and_corruption_controls) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.268s
+
+OK
