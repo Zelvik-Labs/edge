@@ -1,0 +1,13 @@
+case	status	bytes	owned_pointer_checked	recovered	closed
+copied-64-ready	PASS	64	false	n/a	true
+copied-64-full	PASS	64	false	true	true
+copied-64-closed	PASS	64	false	n/a	true
+copied-1200-ready	PASS	1200	false	n/a	true
+copied-1200-full	PASS	1200	false	true	true
+copied-1200-closed	PASS	1200	false	n/a	true
+copied-65507-ready	PASS	65507	false	n/a	true
+copied-65507-full	PASS	65507	false	true	true
+copied-65507-closed	PASS	65507	false	n/a	true
+owned-1200-ready	PASS	1200	true	n/a	true
+owned-1200-full	PASS	1200	true	true	true
+owned-1200-closed	PASS	1200	true	n/a	true
