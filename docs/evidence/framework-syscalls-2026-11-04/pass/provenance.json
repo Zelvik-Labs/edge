@@ -1,0 +1,24 @@
+{
+  "harness_source": "76610685fe3b62947f931a670d6c1a2ec07b066d",
+  "binary_source": "ba474745fae3c08332d9e0862d9d5650550664ff",
+  "runtime": "headers",
+  "binary_run": 41757321970,
+  "binary_artifact": 13290468969,
+  "client_run": 41665387055,
+  "client_artifact": 13250758275,
+  "expected_binaries": {
+    "target/release/Zelvik-Edge": "28e988dbe83f90b9cd5e7f50f6346d0bd0293b4f320bca0a80bf0193fff4b12e",
+    "target/release/examples/issue34-controller": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2",
+    ".local/http-state-ci/protocol-state-client": "368312b058eb6a98373260a6b4977beb1655744418406c7c1c1bcedce92b3c1b"
+  },
+  "capacity_numbers_excluded": true,
+  "scope": "CPU attribution of immutable measured production executables; not a fresh capacity comparison",
+  "source_hashes": {
+    "scripts/perf/profile_architecture.py": "271c9112ef0c880f49a22286c90e68e45ac025257cb7b9292ec295546c0f3c7d",
+    "scripts/perf/protocol_state_matrix.py": "b13f46824dad0d5f6055250e86938d3c2ba9f5f63d0a769a6c9b6ab0d49f0a12",
+    "scripts/perf/summarize_architecture.py": "1365710035e384f1509b2ef8b6e44294502b2a8fa6ab736c560937c975ac69cb",
+    "scripts/perf/http-state/verify.py": "dd9c1f179735015e927cf710a2a21678ba004d38837cd19c24b18780b89bf5f9",
+    "scripts/perf/architecture-ci/evidence.py": "3a9be2af382f76a3b0f81579cd238acf69d4eea6f2d4b1fcf4bbdac41e2cc217",
+    "scripts/perf/architecture-ci/run.sh": "0d889e9f0472f7257929e05fb9b784570f92ba9ae0553ba71e3d25d8f66068e7"
+  }
+}

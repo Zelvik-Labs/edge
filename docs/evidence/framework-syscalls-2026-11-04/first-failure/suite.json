@@ -1,0 +1,67 @@
+{
+  "source": "a45ac544bb8b32efa56429f3976fc3db38764fde",
+  "client_source_revision": "a19f6e20db7c8c4d279b92cdedbaf60e1c35e31a",
+  "client_source_sha256": "528394d1d89ee1830e483a20afae2d244742cf48828845ffffcac429c9185e3b",
+  "orders": [
+    [
+      "edge",
+      "pingora",
+      "nginx",
+      "openresty"
+    ],
+    [
+      "openresty",
+      "nginx",
+      "pingora",
+      "edge"
+    ]
+  ],
+  "scope": "ptrace syscall counts only; tracer shares one client CPU but has a separate cgroup and no network; exclude all timing from capacity rankings",
+  "source_hashes": {
+    "scripts/perf/framework-syscalls/driver.py": "fe47bab301236f98a9f7ce6daf7f5615bd1d64514cb4095f9ae5ae9f9c7762c0",
+    "scripts/perf/framework-syscalls/helper.py": "7bd6f399e77966bf3ded8e3c80794912ba34b8e8f9974cd01038c63c06499066",
+    "scripts/perf/afxdp-node/syscall_profile.py": "a15805165e61b2d6c198dc81249185b8ed2c9ba6679b22066de5300b4b975ece"
+  },
+  "images": {
+    "nginx:1.28.0": {
+      "id": "sha256:34e04bb6b4bb37d45845842374be0cd181723daffb230849b1984aaeaa96faba",
+      "repo_digests": [
+        "nginx@sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609"
+      ]
+    },
+    "openresty/openresty:1.27.1.2-0-bookworm-fat": {
+      "id": "sha256:a122f8f9c6f368bc1d3a89437051db5936a8869734dfcadc566e8d34dc0e72e2",
+      "repo_digests": [
+        "openresty/openresty@sha256:9a7fc041a1ff93cca037875ed664e549e923d97bd5a968c6e9ac4fb28d897464"
+      ]
+    },
+    "edge-http-state-fixture:20261103": {
+      "id": "sha256:b10d816d1f1a38800f8e22bb83cc732cef81b9285d2844d80d2a804073b20b49",
+      "repo_digests": []
+    },
+    "edge-syscall-sidecar:20261104": {
+      "id": "sha256:11fab2d71e560adb1254f632dcab0deca6293d95894efc882a42ea0a00ba11fe",
+      "repo_digests": []
+    }
+  },
+  "runs": [
+    {
+      "round": 0,
+      "target": "edge",
+      "manifest": "round-0-edge/manifest.json",
+      "exit": 0
+    },
+    {
+      "round": 0,
+      "target": "pingora",
+      "manifest": "round-0-pingora/manifest.json",
+      "exit": 0
+    },
+    {
+      "round": 0,
+      "target": "nginx",
+      "manifest": "round-0-nginx/manifest.json",
+      "exit": 1
+    }
+  ]
+}

@@ -114,3 +114,12 @@ Proxy已经规范化主机名，get_request_context_sync在持读锁时还会调
 
 分配计数保持正常小写2→0、需要变换的输出2→1、空输入0→0与仅点号1→0，无realloc；不因组件正向结果将首次完整CI失败改为成功。
 归档13304252445：5,587,332字节、36文件，SHA-256 `994dd552d34abe58f6915fd282f48cbdb2e4e5f2ab3bb4b8ca6fae5897c3523b`；[集成冻结复核器](evidence/config-host-lookup-2026-11-04/integrated/verify.py)独立重算。
+
+
+## H3 生命周期补强的 64 次实际重复
+
+[Actions 41797920565](https://github.com/Zelvik-Labs/edge/actions/runs/41797920565) 的独立重复步骤成功。归档 13306447163（86,840 字节、132 文件，SHA-256 `f3b60a4a4eb603257d5fecf33633163b4654db862649703912ac50f9451feecf`）已逐字节复核。
+64 次真实内核 loopback H3 回归全部保留，无失败替换重试；每次要求两连接都接受并关闭、三个请求都解析，总计 128 连接、192 请求。修补只补足测试 fixture 的 replacement 请求/正文/trailers，不改变生产池逻辑或超时。
+[冻结复核器](evidence/config-host-lookup-2026-11-04/h3-repeat/verify.py) 核对每份日志、wire JSON、源码身份及汇总；归档未包含实际 libtest ELF，不能宣称校验了该 ELF 字节。该运行的库/二进制/integration/vendor 与 check/Clippy 步骤已成功，但完整 native32 gate 仍在执行，尚不记为全部 CI 通过。
+
+累计节点结果见 [同批四目标协议和缓存报告](performance-cumulative-node-2026-11-04.md)：192 格及全部控制通过，但累计吞吐收益很小，H3 MISS 四轮均负向；不能把上面的 helper 改善外推为节点收益。

@@ -1,0 +1,668 @@
+{
+  "artifact_id": 13306447163,
+  "archive": "raw.zip",
+  "archive_bytes": 86840,
+  "archive_sha256": "f3b60a4a4eb603257d5fecf33633163b4654db862649703912ac50f9451feecf",
+  "files": [
+    {
+      "path": "build.jsonl",
+      "bytes": 472418,
+      "sha256": "dfd7f7d3e5da73d05484fc128a4834a3270982c74df946d4a0e2b379653deb1a"
+    },
+    {
+      "path": "case-00/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "build.log",
+      "bytes": 86,
+      "sha256": "a350b75fb9e0e4675a01489ec1203e086661530bd9cea7b87f1b0f96e242854c"
+    },
+    {
+      "path": "case-00/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-01/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-01/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-02/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-02/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-03/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-03/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-04/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-04/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-05/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-05/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-06/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-06/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-07/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-07/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-08/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-08/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-09/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-09/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-10/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-10/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-11/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-11/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-12/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-12/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-13/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-13/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-14/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-14/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-15/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-15/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-16/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-16/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-17/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-17/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-18/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-18/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-19/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-19/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-20/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-20/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-21/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-21/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-22/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-22/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-23/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-23/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-24/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-24/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-25/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-25/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-26/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-26/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-27/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-27/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-28/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-28/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-29/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-29/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-30/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-30/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-31/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-31/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-32/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-32/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-33/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-33/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-34/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-34/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-35/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-35/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-36/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-36/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-37/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-37/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-38/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-38/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-39/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-39/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-40/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-40/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-41/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-41/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-42/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-42/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-43/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-43/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-44/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-44/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-45/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-45/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-46/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-46/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-47/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-47/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-48/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-48/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-49/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-49/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-50/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-50/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-51/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-51/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-52/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-52/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-53/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-53/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-54/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-54/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-55/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-55/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-56/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-56/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-57/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-57/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-58/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-58/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-59/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-59/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-60/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-60/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-61/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-61/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-62/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-62/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "case-63/origin_h3__wire_tests__failed_stream_drains_new_reuse_without_cancelling_an_active_peer.json",
+      "bytes": 296,
+      "sha256": "6813c9fa74c527c9c8a7ea3eb6b76fd42e5c69bb24f6f93eaf2eb4a9add501a6"
+    },
+    {
+      "path": "case-63/test.log",
+      "bytes": 215,
+      "sha256": "a142ad73e58bd5aa46829f094be4b5a671a6bc330ae1d7fdbea59d5ccb616ac1"
+    },
+    {
+      "path": "metadata.json",
+      "bytes": 9457,
+      "sha256": "252597e954f3549cc458869ed5fb848a71678aff3d69a3b415a47e2f13b383c6"
+    },
+    {
+      "path": "verified-summary.json",
+      "bytes": 375,
+      "sha256": "09e5ae707f2086e61a2abaa29ca28c161a1cf7d724c0cd5984581bb62e1f5cdb"
+    }
+  ]
+}
