@@ -64,6 +64,8 @@ def main():
             self.pids = sorted(set(options.pids))
             self.directory = options.directory
             self.stopped, self.ready, self.after = False, None, None
+            self.pid_start_times = {pid: self.pid_start_time(pid) for pid in self.pids}
+            self.raced_thread_exits = []
             self.command = ['strace', '-ff', '-k', '--stack-trace-frame-limit=48', '-qq',
                 '-e', 'trace=futex', '-o', str(self.directory / 'private-futex-raw')]
             for pid in self.pids:

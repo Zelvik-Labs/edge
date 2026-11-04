@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/framework-syscalls.yml
       - scripts/perf/framework-syscalls/**
+      - scripts/perf/afxdp-node/syscall_profile.py
 permissions:
   contents: read
   actions: read
@@ -42,6 +43,7 @@ jobs:
           path: .local/framework-profile-input
       - name: Prepare images before sampling; no compilation
         run: |
+          python3 scripts/perf/framework-syscalls/test_thread_exit.py
           docker pull nginx:1.28.0
           docker pull openresty/openresty:1.27.1.2-0-bookworm-fat
           docker build -t edge-http-state-fixture:20261103 -f scripts/perf/http-state/Dockerfile .

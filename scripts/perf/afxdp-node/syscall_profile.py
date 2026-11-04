@@ -36,6 +36,8 @@ class SyscallProfile:
         self.stopped = False
         self.ready = None
         self.after = None
+        self.pid_start_times = {pid: self.pid_start_time(pid) for pid in self.pids}
+        self.raced_thread_exits = []
         self.command = ['strace', '-f', '-c', '-w', '-qq', '-o', str(self.directory/'syscall-summary.log')]
         for pid in self.pids:
             self.command += ['-p', str(pid)]
@@ -43,14 +45,38 @@ class SyscallProfile:
             self.process = subprocess.Popen(self.command, stdout=log, stderr=subprocess.STDOUT,
                                             start_new_session=True)
 
+    @staticmethod
+    def pid_start_time(pid):
+        # comm may contain spaces or ')'; fields after its last ')' start
+        # with state (field 3), so starttime (field 22) is index 19.
+        fields = Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()
+        return int(fields[19])
+
+    def task_status(self, pid, task, stage):
+        try:
+            return (task / 'status').read_text()
+        except FileNotFoundError:
+            # An enumerated thread can exit before procfs is read. Accept
+            # only that vanished thread under the same still-live process;
+            # a missing status on a live task, process exit/reuse, permission
+            # failure or untraced live thread remains a hard failure.
+            assert not task.exists(), 'live thread lost its status file'
+            assert self.pid_start_time(pid) == self.pid_start_times[pid], 'target process replaced'
+            self.raced_thread_exits.append(dict(pid=pid, tid=int(task.name), stage=stage))
+            return None
+
     def attached_threads(self):
         assert self.process.poll() is None, f'tracer exited early: {self.process.returncode}'
         threads = []
         for pid in self.pids:
+            assert self.pid_start_time(pid) == self.pid_start_times[pid], 'target process replaced'
             tasks = list(Path(f'/proc/{pid}/task').iterdir())
             assert tasks, pid
             for task in tasks:
-                fields = dict(line.split(':', 1) for line in (task/'status').read_text().splitlines() if ':' in line)
+                status = self.task_status(pid, task, 'before' if self.ready is None else 'after')
+                if status is None:
+                    continue
+                fields = dict(line.split(':', 1) for line in status.splitlines() if ':' in line)
                 if int(fields['TracerPid'].strip()) != self.process.pid:
                     return None
                 threads.append(int(task.name))
@@ -92,11 +118,16 @@ class SyscallProfile:
         assert code in [0, -signal.SIGINT], f'tracer detach exited {code}'
         detached = []
         for pid in self.pids:
+            assert self.pid_start_time(pid) == self.pid_start_times[pid], 'target process replaced'
             for task in Path(f'/proc/{pid}/task').iterdir():
-                fields = dict(line.split(':', 1) for line in (task/'status').read_text().splitlines() if ':' in line)
+                status = self.task_status(pid, task, 'detach')
+                if status is None:
+                    continue
+                fields = dict(line.split(':', 1) for line in status.splitlines() if ':' in line)
                 assert int(fields['TracerPid'].strip()) == 0, f'thread {task.name} still traced'
                 detached.append(int(task.name))
         return {'command': self.command, 'tracer_pid': self.process.pid, 'pids': self.pids,
+                'pid_start_times': self.pid_start_times, 'raced_thread_exits': self.raced_thread_exits,
                 'attached_before': self.ready, 'attached_after': self.after,
                 'detached_threads': sorted(detached), 'requested_signal': signal.SIGINT,
                 'stop_requested_monotonic_ns': stop_requested,

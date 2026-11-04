@@ -1,11 +1,6 @@
 name: Futex operation and userspace caller diagnostics
 on:
   workflow_dispatch:
-  push:
-    branches: [perf/program-wide-20261104]
-    paths:
-      - .github/workflows/futex-stacks.yml
-      - scripts/perf/futex-stacks/**
 permissions:
   contents: read
   actions: read
