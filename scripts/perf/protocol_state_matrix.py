@@ -307,16 +307,18 @@ def run(args):
     if any(name != harness for name in running):
         raise RuntimeError('independent benchmark requires no other running containers')
     if getattr(args, 'edge_image', None): IMAGES['edge'] = args.edge_image
-    if args.target == 'pingora':
+    if args.target in {'pingora', 'hyper'}:
+        framework_binary = args.bare_pingora_binary if args.target == 'pingora' else args.bare_hyper_binary
+        framework_entry = '/tools/bare-' + args.target
         if args.states != ['off'] or not args.protocols or 'h3' in args.protocols:
-            raise ValueError('bare Pingora diagnostic supports explicit H1/H1-TLS/H2 OFF only')
-        IMAGES['pingora'] = IMAGES['edge']
+            raise ValueError('bare framework diagnostics support explicit H1/H1-TLS/H2 OFF only')
+        IMAGES[args.target] = IMAGES['edge']
     args.supports_h3 = True
     capability = 'Edge Quinn H3 enabled in this build'
-    if args.target == 'pingora':
+    if args.target in {'pingora', 'hyper'}:
         capability = docker('run', '--rm', '--mount',
-            f'type=bind,src={args.bare_pingora_binary.resolve()},dst=/tools/bare-pingora,readonly',
-            '--entrypoint', '/tools/bare-pingora', IMAGES['pingora'], '--version')
+            f'type=bind,src={framework_binary.resolve()},dst={framework_entry},readonly',
+            '--entrypoint', framework_entry, IMAGES[args.target], '--version')
         args.supports_h3 = False
     elif args.target != 'edge':
         executable = 'openresty' if args.target == 'openresty' else 'nginx'
@@ -348,8 +350,8 @@ def run(args):
                                    'native_libcurl':subprocess.check_output([str(args.client),'--version'],text=True)}}
     if args.target == 'edge':
         manifest['binaries']={str(p):sha(p) for p in [args.edge_binary,args.controller]}
-    elif args.target == 'pingora':
-        manifest['binaries'] = {str(args.bare_pingora_binary): sha(args.bare_pingora_binary)}
+    elif args.target in {'pingora', 'hyper'}:
+        manifest['binaries'] = {str(framework_binary): sha(framework_binary)}
         manifest['scope'] = 'OFF-only framework diagnostic; no Edge business policies or telemetry'
     def save(): write(out/'manifest.json',manifest)
     save(); prefix='edge-state-'+uuid.uuid4().hex[:10]; net=prefix+'-net'; names=[]; made_net=False
@@ -400,9 +402,9 @@ def run(args):
                         '--status-file','/test/controller-status.json',
                         '--ready-file','/test/edge-ready.json','--telemetry-mode','success',
                         '--telemetry-store','/node/accepted.bin']
-        elif args.target == 'pingora':
-            command += ['--mount', f'type=bind,src={args.bare_pingora_binary.resolve()},dst=/tools/bare-pingora,readonly',
-                        '--entrypoint', '/tools/bare-pingora', IMAGES['pingora'],
+        elif args.target in {'pingora', 'hyper'}:
+            command += ['--mount', f'type=bind,src={framework_binary.resolve()},dst={framework_entry},readonly',
+                        '--entrypoint', framework_entry, IMAGES[args.target],
                         '--origin', 'origin:8081', '--cert', '/tls/server.pem', '--key', '/tls/server.key',
                         '--threads', str(len(args.cpu_assignment['proxy'])), '--pool', '256']
         else:
@@ -432,10 +434,10 @@ def run(args):
                     time.sleep(.5)
         endpoints=wait_ready()
         manifest['inspect']={n:json.loads(docker('inspect',n))[0]['HostConfig'] for n in names}
-        executable = {'edge': '/tools/Zelvik-Edge', 'pingora': '/tools/bare-pingora',
+        executable = {'edge': '/tools/Zelvik-Edge', 'pingora': '/tools/bare-pingora', 'hyper': '/tools/bare-hyper',
                       'openresty': 'openresty', 'nginx': 'nginx'}[args.target]
         manifest['server_version'] = docker('exec', target, executable,
-            '--version' if args.target in {'edge', 'pingora'} else '-V')
+            '--version' if args.target in {'edge', 'pingora', 'hyper'} else '-V')
         rng=random.Random(args.seed)
         for repeat in range(args.repeats):
             cases=[(p,s,c) for p in VERSIONS for s in args.states for c in args.connections]
@@ -552,13 +554,14 @@ def run(args):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--target',choices=[*IMAGES, 'pingora'],required=True)
+    p.add_argument('--target',choices=[*IMAGES, 'pingora', 'hyper'],required=True)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--tls',type=Path,required=True)
     p.add_argument('--client',type=Path,required=True)
     p.add_argument('--client-source-revision',help='immutable source commit for a retained client binary')
     p.add_argument('--edge-binary',type=Path,default=Path('/workspace/edge/target/release/Zelvik-Edge'))
     p.add_argument('--controller',type=Path,default=Path('/workspace/edge/target/release/examples/issue34-controller'))
+    p.add_argument('--bare-hyper-binary',type=Path,default=Path('/workspace/edge/.local/bare-hyper-ci/bare-hyper-proxy'))
     p.add_argument('--bare-pingora-binary',type=Path,default=Path('/workspace/edge/.local/bare-pingora-ci/bare-pingora-proxy'))
     p.add_argument('--capture-proxy-process-cpu',action='store_true')
     p.add_argument('--edge-image')
