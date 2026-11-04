@@ -1,0 +1,32 @@
+name: UDP downstream allocation and rejection component
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: udp-egress-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  compare:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      CARGO_BUILD_JOBS: "2"
+      RUSTFLAGS: "-C target-cpu=x86-64-v2 -D warnings"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: clippy
+      - name: Build both frozen helpers and separate timing/allocation binaries
+        run: python3 scripts/perf/udp-egress/run.py build
+      - name: Verify payload, ownership, backpressure and closure then measure
+        run: python3 scripts/perf/udp-egress/run.py measure
+      - name: Preserve all blocks, actual binaries and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: udp-egress-${{ github.sha }}
+          path: .local/udp-egress-ci/
+          include-hidden-files: true
+          if-no-files-found: error

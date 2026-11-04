@@ -1,0 +1,18 @@
+[package]
+name = "udp-egress-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[features]
+count-allocations = []
+
+[dependencies]
+bytes = "=1.12.1"
+tokio = { version = "=1.53.1", features = ["sync"] }
+
+[[bin]]
+name = "udp-egress-probe"
+path = "../../../benches/support/udp_egress_probe.rs"
