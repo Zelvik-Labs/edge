@@ -7761,6 +7761,18 @@ mod en16_pool_tests {
             "the reserve, not the class counter, must stop the flood"
         );
 
+        // A partial connection-sized remainder may still fit a smaller stream
+        // or request. Fill that ordinary capacity before probing the reserve;
+        // connection estimates need not be multiples of the stream estimates.
+        for class in [AdmissionClass::Http2Stream, AdmissionClass::Http3Request] {
+            while let Some(permit) = governor.try_admit(class) {
+                permits.push(permit);
+            }
+            assert!(
+                governor.connection_admission_used_bytes() <= capacity,
+                "smaller admissions must also stop before the established reserve"
+            );
+        }
         assert!(
             governor.try_admit(AdmissionClass::Http2Stream).is_none(),
             "new streams must not use the continuation reserve"
