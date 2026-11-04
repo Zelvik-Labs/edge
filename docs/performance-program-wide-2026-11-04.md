@@ -2,7 +2,9 @@
 
 [最初五项工作](performance-five-priorities-2026-11-04.md)已完成对应实现和短时验证。
 本页记录随后跨缓存、SNI/TCP、统计、XDP 与 io_uring 的推进，独立实验的百分比不能相加。
-源码分支 `perf/program-wide-20261104`，未合入 main 或部署。
+原始源码与验证历史保留在 `perf/program-wide-20261104`；本轮整合候选为
+`release/26.11.1.1`，合并和发布记录见 [PR #42](https://github.com/Zelvik-Labs/edge/pull/42)
+与 [v26.11.1.1](https://github.com/Zelvik-Labs/edge/releases/tag/v26.11.1.1)。发布不等于节点部署，未操作 RKE。
 
 ## 已修复与实测
 
@@ -58,3 +60,9 @@ AF_XDP 的队列线程、运行时交接与拷贝仍有分析空间；目前没�
 ## 经审批的功能降级
 
 无。缓存安全校验、协议、配置兼容、统计与故障可观测性保留；未部署、未操作 RKE。
+
+## 发布前新增验证
+
+[下游小写缓冲](performance-downstream-buffer-2026-11-04.md)已接入并完成384格独立节点前后比较和原始归档复算：724万次成功响应、零传输错误，H1/H1-TLS命中复用吞吐配对中位+19.01%/+18.37%，CPU/响应约−15.58%。H2/H3的小幅波动和26个负向配对轮次全部保留。
+
+[固定旧ELF空闲CPU诊断](performance-idle-cpu-2026-11-04.md)完成8格、587900次成功响应和原始归档复算；没有扣除空闲CPU或由futex等待次数推导CPU。最终发布候选通过默认与h3-quiche功能门禁、32组原生节点和有界恢复验证；完整记录见[发布说明](../release-notes/v26.11.1.1.md)。

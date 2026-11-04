@@ -1,0 +1,54 @@
+{
+  "harness_source": "ebd34770a817b68bd833f876918fc660a0089f49",
+  "baseline": "4613a6b8d468be8df646f7cb628a42b89bfe0e98",
+  "runtime_changes": [
+    "pingora-main/pingora-core/src/protocols/l4/stream.rs",
+    "src/http_proxy_manager.rs",
+    "src/memory_governor.rs"
+  ],
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1",
+  "rustflags": "-C target-cpu=x86-64-v2",
+  "variants": {
+    "before": {
+      "source": "4613a6b8d468be8df646f7cb628a42b89bfe0e98",
+      "binaries": {
+        "Zelvik-Edge": {
+          "bytes": 45064256,
+          "sha256": "850b9d2ae3bf739caac470b1088e19d33960d3c7b4308fdb5c7554f1072a2f61"
+        },
+        "issue34-controller": {
+          "bytes": 4326224,
+          "sha256": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2"
+        }
+      },
+      "source_hashes": {
+        "pingora-main/pingora-core/src/protocols/l4/stream.rs": "fda1bd99ea80e5c8718433ae6ac375d7d959bc718f410b159263d411350b7e03",
+        "src/http_proxy_manager.rs": "994b59c9d2de4348d0a0723edf48722d13d10d899f79a1405145eb9464866dfa",
+        "src/memory_governor.rs": "aa06c87a1c65d2246429fdba95670f9eea07ebda0fd63fe7dd108f8e29c5bb45",
+        "Cargo.lock": "e7e9e1ae18947ab0f94c146545d24be7d014a45d0749584675e8a4931a9962c6",
+        "Cargo.toml": "34668bee6413f9acffb98ee1acde46273ecd670c8cbe8c27cf8a205f488e1d3c"
+      }
+    },
+    "after": {
+      "source": "60cf30ced5f85f68b84f27e170972ca528115434",
+      "binaries": {
+        "Zelvik-Edge": {
+          "bytes": 45064576,
+          "sha256": "eb7033afaea3f90b91bbfd153cab687582b8e0722ddd4674d7696ce71d827a52"
+        },
+        "issue34-controller": {
+          "bytes": 4326224,
+          "sha256": "1a85adaec923f45c490b2bcc949adb35c562241e01024b3020aae1c99486b6b2"
+        }
+      },
+      "source_hashes": {
+        "pingora-main/pingora-core/src/protocols/l4/stream.rs": "7f9261b6b5e8439aa537dffebdab65cbb59fadb9c5d90a2ae0cd844cab51b188",
+        "src/http_proxy_manager.rs": "dfaad898afef5db364149cdef1518c0532d7edcb10b3967c92419c6aad16e6ed",
+        "src/memory_governor.rs": "ff6bc0df9866c4b98e25543712a3d51fef6003ad1c5eec51b133907d754c60fa",
+        "Cargo.lock": "e7e9e1ae18947ab0f94c146545d24be7d014a45d0749584675e8a4931a9962c6",
+        "Cargo.toml": "34668bee6413f9acffb98ee1acde46273ecd670c8cbe8c27cf8a205f488e1d3c"
+      }
+    }
+  },
+  "builds_complete_before_measurement": true
+}

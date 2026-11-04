@@ -1,0 +1,2868 @@
+[
+  {
+    "round": 0,
+    "target": "edge",
+    "successful": 34937,
+    "failed": 0,
+    "idle_before": {
+      "seconds": 10.001865182,
+      "cpu_usec": {
+        "usage_usec": 260473,
+        "user_usec": 97667,
+        "system_usec": 162805
+      },
+      "cpu_cores": 0.02604244261048069,
+      "process_cpu": [
+        {
+          "pid": 7266,
+          "comm": "controller",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 7266,
+              "start_ticks": 20044,
+              "comm": "controller",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7357,
+              "start_ticks": 20062,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 7360,
+          "comm": "Zelvik-Edge",
+          "user_ticks": 9,
+          "system_ticks": 17,
+          "stable_threads": [
+            {
+              "tid": 7360,
+              "start_ticks": 20062,
+              "comm": "Zelvik-Edge",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7362,
+              "start_ticks": 20062,
+              "comm": "memgov-snapshot",
+              "user_ticks": 0,
+              "system_ticks": 6
+            },
+            {
+              "tid": 7368,
+              "start_ticks": 20063,
+              "comm": "run-log-writer",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7369,
+              "start_ticks": 20063,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 1
+            },
+            {
+              "tid": 7370,
+              "start_ticks": 20063,
+              "comm": "checkpointer",
+              "user_ticks": 1,
+              "system_ticks": 4
+            },
+            {
+              "tid": 7371,
+              "start_ticks": 20063,
+              "comm": "collector",
+              "user_ticks": 1,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7372,
+              "start_ticks": 20063,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7373,
+              "start_ticks": 20063,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7374,
+              "start_ticks": 20063,
+              "comm": "checkpointer",
+              "user_ticks": 1,
+              "system_ticks": 3
+            },
+            {
+              "tid": 7375,
+              "start_ticks": 20063,
+              "comm": "collector",
+              "user_ticks": 1,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7376,
+              "start_ticks": 20063,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7377,
+              "start_ticks": 20063,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7379,
+              "start_ticks": 20064,
+              "comm": "checkpointer",
+              "user_ticks": 1,
+              "system_ticks": 3
+            },
+            {
+              "tid": 7380,
+              "start_ticks": 20064,
+              "comm": "collector",
+              "user_ticks": 1,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7381,
+              "start_ticks": 20064,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7382,
+              "start_ticks": 20064,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7385,
+              "start_ticks": 20064,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7386,
+              "start_ticks": 20064,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7388,
+              "start_ticks": 20064,
+              "comm": "mace-cache-writ",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7394,
+              "start_ticks": 20065,
+              "comm": "memory-reclaim",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7395,
+              "start_ticks": 20065,
+              "comm": "memory-pressure",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7396,
+              "start_ticks": 20068,
+              "comm": "BG xdp-shutdown",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7397,
+              "start_ticks": 20068,
+              "comm": "Server",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7464,
+              "start_ticks": 20584,
+              "comm": "Timer thread",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [
+            [
+              7578,
+              21566
+            ]
+          ],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded": {
+      "seconds": 5.032842677,
+      "cpu_usec": {
+        "usage_usec": 4675137,
+        "user_usec": 2577888,
+        "system_usec": 2097248
+      },
+      "cpu_cores": 0.9289257185338402,
+      "process_cpu": [
+        {
+          "pid": 7266,
+          "comm": "controller",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 7266,
+              "start_ticks": 20044,
+              "comm": "controller",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7357,
+              "start_ticks": 20062,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 7360,
+          "comm": "Zelvik-Edge",
+          "user_ticks": 259,
+          "system_ticks": 209,
+          "stable_threads": [
+            {
+              "tid": 7360,
+              "start_ticks": 20062,
+              "comm": "Zelvik-Edge",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7362,
+              "start_ticks": 20062,
+              "comm": "memgov-snapshot",
+              "user_ticks": 0,
+              "system_ticks": 3
+            },
+            {
+              "tid": 7368,
+              "start_ticks": 20063,
+              "comm": "run-log-writer",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7369,
+              "start_ticks": 20063,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 252,
+              "system_ticks": 198
+            },
+            {
+              "tid": 7370,
+              "start_ticks": 20063,
+              "comm": "checkpointer",
+              "user_ticks": 1,
+              "system_ticks": 2
+            },
+            {
+              "tid": 7371,
+              "start_ticks": 20063,
+              "comm": "collector",
+              "user_ticks": 1,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7372,
+              "start_ticks": 20063,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7373,
+              "start_ticks": 20063,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7374,
+              "start_ticks": 20063,
+              "comm": "checkpointer",
+              "user_ticks": 0,
+              "system_ticks": 4
+            },
+            {
+              "tid": 7375,
+              "start_ticks": 20063,
+              "comm": "collector",
+              "user_ticks": 1,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7376,
+              "start_ticks": 20063,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7377,
+              "start_ticks": 20063,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7379,
+              "start_ticks": 20064,
+              "comm": "checkpointer",
+              "user_ticks": 1,
+              "system_ticks": 3
+            },
+            {
+              "tid": 7380,
+              "start_ticks": 20064,
+              "comm": "collector",
+              "user_ticks": 1,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7381,
+              "start_ticks": 20064,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7382,
+              "start_ticks": 20064,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7385,
+              "start_ticks": 20064,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7386,
+              "start_ticks": 20064,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7388,
+              "start_ticks": 20064,
+              "comm": "mace-cache-writ",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7394,
+              "start_ticks": 20065,
+              "comm": "memory-reclaim",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7395,
+              "start_ticks": 20065,
+              "comm": "memory-pressure",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7396,
+              "start_ticks": 20068,
+              "comm": "BG xdp-shutdown",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7397,
+              "start_ticks": 20068,
+              "comm": "Server",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7464,
+              "start_ticks": 20584,
+              "comm": "Timer thread",
+              "user_ticks": 0,
+              "system_ticks": 1
+            },
+            {
+              "tid": 7578,
+              "start_ticks": 21566,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "idle_after": {
+      "seconds": 10.001837436,
+      "cpu_usec": {
+        "usage_usec": 257665,
+        "user_usec": 90319,
+        "system_usec": 167346
+      },
+      "cpu_cores": 0.0257617664402919,
+      "process_cpu": [
+        {
+          "pid": 7266,
+          "comm": "controller",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 7266,
+              "start_ticks": 20044,
+              "comm": "controller",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7357,
+              "start_ticks": 20062,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 7360,
+          "comm": "Zelvik-Edge",
+          "user_ticks": 9,
+          "system_ticks": 16,
+          "stable_threads": [
+            {
+              "tid": 7360,
+              "start_ticks": 20062,
+              "comm": "Zelvik-Edge",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7362,
+              "start_ticks": 20062,
+              "comm": "memgov-snapshot",
+              "user_ticks": 1,
+              "system_ticks": 6
+            },
+            {
+              "tid": 7368,
+              "start_ticks": 20063,
+              "comm": "run-log-writer",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7369,
+              "start_ticks": 20063,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 1
+            },
+            {
+              "tid": 7370,
+              "start_ticks": 20063,
+              "comm": "checkpointer",
+              "user_ticks": 1,
+              "system_ticks": 4
+            },
+            {
+              "tid": 7371,
+              "start_ticks": 20063,
+              "comm": "collector",
+              "user_ticks": 1,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7372,
+              "start_ticks": 20063,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7373,
+              "start_ticks": 20063,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7374,
+              "start_ticks": 20063,
+              "comm": "checkpointer",
+              "user_ticks": 1,
+              "system_ticks": 4
+            },
+            {
+              "tid": 7375,
+              "start_ticks": 20063,
+              "comm": "collector",
+              "user_ticks": 1,
+              "system_ticks": 1
+            },
+            {
+              "tid": 7376,
+              "start_ticks": 20063,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7377,
+              "start_ticks": 20063,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7379,
+              "start_ticks": 20064,
+              "comm": "checkpointer",
+              "user_ticks": 1,
+              "system_ticks": 3
+            },
+            {
+              "tid": 7380,
+              "start_ticks": 20064,
+              "comm": "collector",
+              "user_ticks": 1,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7381,
+              "start_ticks": 20064,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7382,
+              "start_ticks": 20064,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7385,
+              "start_ticks": 20064,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7386,
+              "start_ticks": 20064,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7388,
+              "start_ticks": 20064,
+              "comm": "mace-cache-writ",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7394,
+              "start_ticks": 20065,
+              "comm": "memory-reclaim",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7395,
+              "start_ticks": 20065,
+              "comm": "memory-pressure",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7396,
+              "start_ticks": 20068,
+              "comm": "BG xdp-shutdown",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7397,
+              "start_ticks": 20068,
+              "comm": "Server",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7464,
+              "start_ticks": 20584,
+              "comm": "Timer thread",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 7578,
+              "start_ticks": 21566,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded_cpu_usec_per_response": 133.81621203881272,
+    "loaded_max_host_steal_fraction": 0.0,
+    "idle_memory_peak_bytes": 143491072,
+    "cpu_assignment": {
+      "proxy": [
+        0
+      ],
+      "client": [
+        1,
+        2
+      ],
+      "origin": [
+        3
+      ]
+    },
+    "executable_sha256": "28e988dbe83f90b9cd5e7f50f6346d0bd0293b4f320bca0a80bf0193fff4b12e",
+    "no_idle_cpu_subtraction": true,
+    "no_capacity_ranking": true
+  },
+  {
+    "round": 0,
+    "target": "pingora",
+    "successful": 73789,
+    "failed": 0,
+    "idle_before": {
+      "seconds": 10.000814077,
+      "cpu_usec": {
+        "usage_usec": 19716,
+        "user_usec": 9720,
+        "system_usec": 9995
+      },
+      "cpu_cores": 0.001971439509643831,
+      "process_cpu": [
+        {
+          "pid": 8398,
+          "comm": "bare-pingora",
+          "user_ticks": 0,
+          "system_ticks": 1,
+          "stable_threads": [
+            {
+              "tid": 8398,
+              "start_ticks": 24038,
+              "comm": "bare-pingora",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 8497,
+              "start_ticks": 24057,
+              "comm": "Pingora HTTP Pr",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 8498,
+              "start_ticks": 24057,
+              "comm": "Server",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 8500,
+              "start_ticks": 24059,
+              "comm": "Timer thread",
+              "user_ticks": 0,
+              "system_ticks": 1
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded": {
+      "seconds": 5.040055108,
+      "cpu_usec": {
+        "usage_usec": 4532842,
+        "user_usec": 1779980,
+        "system_usec": 2752861
+      },
+      "cpu_cores": 0.8993635789428356,
+      "process_cpu": [
+        {
+          "pid": 8398,
+          "comm": "bare-pingora",
+          "user_ticks": 178,
+          "system_ticks": 275,
+          "stable_threads": [
+            {
+              "tid": 8398,
+              "start_ticks": 24038,
+              "comm": "bare-pingora",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 8497,
+              "start_ticks": 24057,
+              "comm": "Pingora HTTP Pr",
+              "user_ticks": 178,
+              "system_ticks": 274
+            },
+            {
+              "tid": 8498,
+              "start_ticks": 24057,
+              "comm": "Server",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 8500,
+              "start_ticks": 24059,
+              "comm": "Timer thread",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "idle_after": {
+      "seconds": 10.000801959,
+      "cpu_usec": {
+        "usage_usec": 21180,
+        "user_usec": 9589,
+        "system_usec": 11590
+      },
+      "cpu_cores": 0.0021178301587043754,
+      "process_cpu": [
+        {
+          "pid": 8398,
+          "comm": "bare-pingora",
+          "user_ticks": 1,
+          "system_ticks": 1,
+          "stable_threads": [
+            {
+              "tid": 8398,
+              "start_ticks": 24038,
+              "comm": "bare-pingora",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 8497,
+              "start_ticks": 24057,
+              "comm": "Pingora HTTP Pr",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 8498,
+              "start_ticks": 24057,
+              "comm": "Server",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 8500,
+              "start_ticks": 24059,
+              "comm": "Timer thread",
+              "user_ticks": 1,
+              "system_ticks": 1
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded_cpu_usec_per_response": 61.4297795064305,
+    "loaded_max_host_steal_fraction": 0.0,
+    "idle_memory_peak_bytes": 21090304,
+    "cpu_assignment": {
+      "proxy": [
+        0
+      ],
+      "client": [
+        1,
+        2
+      ],
+      "origin": [
+        3
+      ]
+    },
+    "executable_sha256": "1a5439941c53dc32044b665013add230ac8a2062ab34e72f92dfde7799d093c2",
+    "no_idle_cpu_subtraction": true,
+    "no_capacity_ranking": true
+  },
+  {
+    "round": 0,
+    "target": "nginx",
+    "successful": 92826,
+    "failed": 0,
+    "idle_before": {
+      "seconds": 10.001104705,
+      "cpu_usec": {
+        "usage_usec": 70,
+        "user_usec": 48,
+        "system_usec": 22
+      },
+      "cpu_cores": 6.999226791916684e-06,
+      "process_cpu": [
+        {
+          "pid": 9421,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 9421,
+              "start_ticks": 27524,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 9517,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 9517,
+              "start_ticks": 27543,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 9520,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 9520,
+              "start_ticks": 27543,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 9522,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 9522,
+              "start_ticks": 27543,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded": {
+      "seconds": 5.049058555,
+      "cpu_usec": {
+        "usage_usec": 4311336,
+        "user_usec": 1020608,
+        "system_usec": 3290727
+      },
+      "cpu_cores": 0.8538890870517939,
+      "process_cpu": [
+        {
+          "pid": 9421,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 9421,
+              "start_ticks": 27524,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 9517,
+          "comm": "nginx",
+          "user_ticks": 102,
+          "system_ticks": 329,
+          "stable_threads": [
+            {
+              "tid": 9517,
+              "start_ticks": 27543,
+              "comm": "nginx",
+              "user_ticks": 102,
+              "system_ticks": 329
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 9520,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 9520,
+              "start_ticks": 27543,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 9522,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 9522,
+              "start_ticks": 27543,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "idle_after": {
+      "seconds": 10.00104373,
+      "cpu_usec": {
+        "usage_usec": 47,
+        "user_usec": 13,
+        "system_usec": 34
+      },
+      "cpu_cores": 4.699509498095156e-06,
+      "process_cpu": [
+        {
+          "pid": 9421,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 9421,
+              "start_ticks": 27524,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 9517,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 9517,
+              "start_ticks": 27543,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 9520,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 9520,
+              "start_ticks": 27543,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 9522,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 9522,
+              "start_ticks": 27543,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded_cpu_usec_per_response": 46.44534936332493,
+    "loaded_max_host_steal_fraction": 0.0,
+    "idle_memory_peak_bytes": 15769600,
+    "cpu_assignment": {
+      "proxy": [
+        0
+      ],
+      "client": [
+        1,
+        2
+      ],
+      "origin": [
+        3
+      ]
+    },
+    "executable_sha256": "7b9544766afdaf9674cf139bea598d5f14fae36b69182e03acb1d0f1587da9bd",
+    "no_idle_cpu_subtraction": true,
+    "no_capacity_ranking": true
+  },
+  {
+    "round": 0,
+    "target": "openresty",
+    "successful": 90450,
+    "failed": 0,
+    "idle_before": {
+      "seconds": 10.001135355,
+      "cpu_usec": {
+        "usage_usec": 493,
+        "user_usec": 333,
+        "system_usec": 161
+      },
+      "cpu_cores": 4.929440333527012e-05,
+      "process_cpu": [
+        {
+          "pid": 10479,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 10479,
+              "start_ticks": 31040,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 10579,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 10579,
+              "start_ticks": 31059,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 10580,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 10580,
+              "start_ticks": 31059,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 10581,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 10581,
+              "start_ticks": 31059,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded": {
+      "seconds": 5.054306262,
+      "cpu_usec": {
+        "usage_usec": 4186307,
+        "user_usec": 932630,
+        "system_usec": 3253676
+      },
+      "cpu_cores": 0.8282654004317239,
+      "process_cpu": [
+        {
+          "pid": 10479,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 10479,
+              "start_ticks": 31040,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 10579,
+          "comm": "openresty",
+          "user_ticks": 93,
+          "system_ticks": 325,
+          "stable_threads": [
+            {
+              "tid": 10579,
+              "start_ticks": 31059,
+              "comm": "openresty",
+              "user_ticks": 93,
+              "system_ticks": 325
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 10580,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 10580,
+              "start_ticks": 31059,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 10581,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 10581,
+              "start_ticks": 31059,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "idle_after": {
+      "seconds": 10.001118262,
+      "cpu_usec": {
+        "usage_usec": 525,
+        "user_usec": 135,
+        "system_usec": 391
+      },
+      "cpu_cores": 5.249412978094429e-05,
+      "process_cpu": [
+        {
+          "pid": 10479,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 10479,
+              "start_ticks": 31040,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 10579,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 10579,
+              "start_ticks": 31059,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 10580,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 10580,
+              "start_ticks": 31059,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 10581,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 10581,
+              "start_ticks": 31059,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded_cpu_usec_per_response": 46.28310668877833,
+    "loaded_max_host_steal_fraction": 0.0,
+    "idle_memory_peak_bytes": 16666624,
+    "cpu_assignment": {
+      "proxy": [
+        0
+      ],
+      "client": [
+        1,
+        2
+      ],
+      "origin": [
+        3
+      ]
+    },
+    "executable_sha256": "005f25b4b28324b070642e912e02352674f48be7c3d9fc1a38d0011c033e1a9f",
+    "no_idle_cpu_subtraction": true,
+    "no_capacity_ranking": true
+  },
+  {
+    "round": 1,
+    "target": "openresty",
+    "successful": 92630,
+    "failed": 0,
+    "idle_before": {
+      "seconds": 10.001091078,
+      "cpu_usec": {
+        "usage_usec": 540,
+        "user_usec": 357,
+        "system_usec": 183
+      },
+      "cpu_cores": 5.3994108821573516e-05,
+      "process_cpu": [
+        {
+          "pid": 11543,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 11543,
+              "start_ticks": 34557,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 11643,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 11643,
+              "start_ticks": 34577,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 11644,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 11644,
+              "start_ticks": 34577,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 11645,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 11645,
+              "start_ticks": 34577,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded": {
+      "seconds": 5.054883819,
+      "cpu_usec": {
+        "usage_usec": 4255881,
+        "user_usec": 1025967,
+        "system_usec": 3229914
+      },
+      "cpu_cores": 0.8419344840336874,
+      "process_cpu": [
+        {
+          "pid": 11543,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 11543,
+              "start_ticks": 34557,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 11643,
+          "comm": "openresty",
+          "user_ticks": 102,
+          "system_ticks": 323,
+          "stable_threads": [
+            {
+              "tid": 11643,
+              "start_ticks": 34577,
+              "comm": "openresty",
+              "user_ticks": 102,
+              "system_ticks": 323
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 11644,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 11644,
+              "start_ticks": 34577,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 11645,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 11645,
+              "start_ticks": 34577,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "idle_after": {
+      "seconds": 10.001091338,
+      "cpu_usec": {
+        "usage_usec": 512,
+        "user_usec": 139,
+        "system_usec": 373
+      },
+      "cpu_cores": 5.1194412959175e-05,
+      "process_cpu": [
+        {
+          "pid": 11543,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 11543,
+              "start_ticks": 34557,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 11643,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 11643,
+              "start_ticks": 34577,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 11644,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 11644,
+              "start_ticks": 34577,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 11645,
+          "comm": "openresty",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 11645,
+              "start_ticks": 34577,
+              "comm": "openresty",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded_cpu_usec_per_response": 45.94495303897226,
+    "loaded_max_host_steal_fraction": 0.0,
+    "idle_memory_peak_bytes": 16658432,
+    "cpu_assignment": {
+      "proxy": [
+        0
+      ],
+      "client": [
+        1,
+        2
+      ],
+      "origin": [
+        3
+      ]
+    },
+    "executable_sha256": "005f25b4b28324b070642e912e02352674f48be7c3d9fc1a38d0011c033e1a9f",
+    "no_idle_cpu_subtraction": true,
+    "no_capacity_ranking": true
+  },
+  {
+    "round": 1,
+    "target": "nginx",
+    "successful": 92916,
+    "failed": 0,
+    "idle_before": {
+      "seconds": 10.001161292,
+      "cpu_usec": {
+        "usage_usec": 62,
+        "user_usec": 38,
+        "system_usec": 23
+      },
+      "cpu_cores": 6.199280082563435e-06,
+      "process_cpu": [
+        {
+          "pid": 12599,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 12599,
+              "start_ticks": 38081,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 12695,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 12695,
+              "start_ticks": 38100,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 12698,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 12698,
+              "start_ticks": 38100,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 12700,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 12700,
+              "start_ticks": 38100,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded": {
+      "seconds": 5.043121932,
+      "cpu_usec": {
+        "usage_usec": 4290954,
+        "user_usec": 1046935,
+        "system_usec": 3244019
+      },
+      "cpu_cores": 0.8508527173956896,
+      "process_cpu": [
+        {
+          "pid": 12599,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 12599,
+              "start_ticks": 38081,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 12695,
+          "comm": "nginx",
+          "user_ticks": 104,
+          "system_ticks": 324,
+          "stable_threads": [
+            {
+              "tid": 12695,
+              "start_ticks": 38100,
+              "comm": "nginx",
+              "user_ticks": 104,
+              "system_ticks": 324
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 12698,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 12698,
+              "start_ticks": 38100,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 12700,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 12700,
+              "start_ticks": 38100,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "idle_after": {
+      "seconds": 10.001112348,
+      "cpu_usec": {
+        "usage_usec": 48,
+        "user_usec": 13,
+        "system_usec": 35
+      },
+      "cpu_cores": 4.799466132344662e-06,
+      "process_cpu": [
+        {
+          "pid": 12599,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 12599,
+              "start_ticks": 38081,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 12695,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 12695,
+              "start_ticks": 38100,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 12698,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 12698,
+              "start_ticks": 38100,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 12700,
+          "comm": "nginx",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 12700,
+              "start_ticks": 38100,
+              "comm": "nginx",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded_cpu_usec_per_response": 46.18100219553145,
+    "loaded_max_host_steal_fraction": 0.0,
+    "idle_memory_peak_bytes": 15781888,
+    "cpu_assignment": {
+      "proxy": [
+        0
+      ],
+      "client": [
+        1,
+        2
+      ],
+      "origin": [
+        3
+      ]
+    },
+    "executable_sha256": "7b9544766afdaf9674cf139bea598d5f14fae36b69182e03acb1d0f1587da9bd",
+    "no_idle_cpu_subtraction": true,
+    "no_capacity_ranking": true
+  },
+  {
+    "round": 1,
+    "target": "pingora",
+    "successful": 75314,
+    "failed": 0,
+    "idle_before": {
+      "seconds": 10.000795936,
+      "cpu_usec": {
+        "usage_usec": 19807,
+        "user_usec": 8115,
+        "system_usec": 11692
+      },
+      "cpu_cores": 0.0019805423615034956,
+      "process_cpu": [
+        {
+          "pid": 13654,
+          "comm": "bare-pingora",
+          "user_ticks": 1,
+          "system_ticks": 1,
+          "stable_threads": [
+            {
+              "tid": 13654,
+              "start_ticks": 41598,
+              "comm": "bare-pingora",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 13753,
+              "start_ticks": 41619,
+              "comm": "Pingora HTTP Pr",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 13754,
+              "start_ticks": 41619,
+              "comm": "Server",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 13755,
+              "start_ticks": 41620,
+              "comm": "Timer thread",
+              "user_ticks": 0,
+              "system_ticks": 1
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded": {
+      "seconds": 5.041037187,
+      "cpu_usec": {
+        "usage_usec": 4557242,
+        "user_usec": 1831033,
+        "system_usec": 2726209
+      },
+      "cpu_cores": 0.9040286415169426,
+      "process_cpu": [
+        {
+          "pid": 13654,
+          "comm": "bare-pingora",
+          "user_ticks": 183,
+          "system_ticks": 273,
+          "stable_threads": [
+            {
+              "tid": 13654,
+              "start_ticks": 41598,
+              "comm": "bare-pingora",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 13753,
+              "start_ticks": 41619,
+              "comm": "Pingora HTTP Pr",
+              "user_ticks": 183,
+              "system_ticks": 271
+            },
+            {
+              "tid": 13754,
+              "start_ticks": 41619,
+              "comm": "Server",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 13755,
+              "start_ticks": 41620,
+              "comm": "Timer thread",
+              "user_ticks": 0,
+              "system_ticks": 1
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "idle_after": {
+      "seconds": 10.000860493,
+      "cpu_usec": {
+        "usage_usec": 19750,
+        "user_usec": 8339,
+        "system_usec": 11411
+      },
+      "cpu_cores": 0.0019748300672550938,
+      "process_cpu": [
+        {
+          "pid": 13654,
+          "comm": "bare-pingora",
+          "user_ticks": 1,
+          "system_ticks": 1,
+          "stable_threads": [
+            {
+              "tid": 13654,
+              "start_ticks": 41598,
+              "comm": "bare-pingora",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 13753,
+              "start_ticks": 41619,
+              "comm": "Pingora HTTP Pr",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 13754,
+              "start_ticks": 41619,
+              "comm": "Server",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 13755,
+              "start_ticks": 41620,
+              "comm": "Timer thread",
+              "user_ticks": 1,
+              "system_ticks": 1
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded_cpu_usec_per_response": 60.50989191916509,
+    "loaded_max_host_steal_fraction": 0.0,
+    "idle_memory_peak_bytes": 21168128,
+    "cpu_assignment": {
+      "proxy": [
+        0
+      ],
+      "client": [
+        1,
+        2
+      ],
+      "origin": [
+        3
+      ]
+    },
+    "executable_sha256": "1a5439941c53dc32044b665013add230ac8a2062ab34e72f92dfde7799d093c2",
+    "no_idle_cpu_subtraction": true,
+    "no_capacity_ranking": true
+  },
+  {
+    "round": 1,
+    "target": "edge",
+    "successful": 35038,
+    "failed": 0,
+    "idle_before": {
+      "seconds": 10.002169144,
+      "cpu_usec": {
+        "usage_usec": 262001,
+        "user_usec": 86803,
+        "system_usec": 175198
+      },
+      "cpu_cores": 0.02619441805352457,
+      "process_cpu": [
+        {
+          "pid": 14586,
+          "comm": "controller",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 14586,
+              "start_ticks": 45125,
+              "comm": "controller",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14678,
+              "start_ticks": 45142,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 14679,
+          "comm": "Zelvik-Edge",
+          "user_ticks": 8,
+          "system_ticks": 18,
+          "stable_threads": [
+            {
+              "tid": 14679,
+              "start_ticks": 45142,
+              "comm": "Zelvik-Edge",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14681,
+              "start_ticks": 45142,
+              "comm": "memgov-snapshot",
+              "user_ticks": 0,
+              "system_ticks": 5
+            },
+            {
+              "tid": 14682,
+              "start_ticks": 45143,
+              "comm": "run-log-writer",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14683,
+              "start_ticks": 45143,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14688,
+              "start_ticks": 45143,
+              "comm": "checkpointer",
+              "user_ticks": 1,
+              "system_ticks": 3
+            },
+            {
+              "tid": 14689,
+              "start_ticks": 45143,
+              "comm": "collector",
+              "user_ticks": 1,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14690,
+              "start_ticks": 45143,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14691,
+              "start_ticks": 45143,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14692,
+              "start_ticks": 45143,
+              "comm": "checkpointer",
+              "user_ticks": 1,
+              "system_ticks": 4
+            },
+            {
+              "tid": 14693,
+              "start_ticks": 45143,
+              "comm": "collector",
+              "user_ticks": 1,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14694,
+              "start_ticks": 45143,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14695,
+              "start_ticks": 45143,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14696,
+              "start_ticks": 45144,
+              "comm": "checkpointer",
+              "user_ticks": 1,
+              "system_ticks": 4
+            },
+            {
+              "tid": 14697,
+              "start_ticks": 45144,
+              "comm": "collector",
+              "user_ticks": 1,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14698,
+              "start_ticks": 45144,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14699,
+              "start_ticks": 45144,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14704,
+              "start_ticks": 45144,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14705,
+              "start_ticks": 45144,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14706,
+              "start_ticks": 45144,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14707,
+              "start_ticks": 45144,
+              "comm": "mace-cache-writ",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14708,
+              "start_ticks": 45144,
+              "comm": "memory-reclaim",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14709,
+              "start_ticks": 45144,
+              "comm": "memory-pressure",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14716,
+              "start_ticks": 45147,
+              "comm": "BG xdp-shutdown",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14717,
+              "start_ticks": 45147,
+              "comm": "Server",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14782,
+              "start_ticks": 45664,
+              "comm": "Timer thread",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded": {
+      "seconds": 5.032049477,
+      "cpu_usec": {
+        "usage_usec": 4682241,
+        "user_usec": 2576099,
+        "system_usec": 2106143
+      },
+      "cpu_cores": 0.9304838955580882,
+      "process_cpu": [
+        {
+          "pid": 14586,
+          "comm": "controller",
+          "user_ticks": 0,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 14586,
+              "start_ticks": 45125,
+              "comm": "controller",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14678,
+              "start_ticks": 45142,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 14679,
+          "comm": "Zelvik-Edge",
+          "user_ticks": 259,
+          "system_ticks": 209,
+          "stable_threads": [
+            {
+              "tid": 14679,
+              "start_ticks": 45142,
+              "comm": "Zelvik-Edge",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14681,
+              "start_ticks": 45142,
+              "comm": "memgov-snapshot",
+              "user_ticks": 0,
+              "system_ticks": 3
+            },
+            {
+              "tid": 14682,
+              "start_ticks": 45143,
+              "comm": "run-log-writer",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14683,
+              "start_ticks": 45143,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 250,
+              "system_ticks": 201
+            },
+            {
+              "tid": 14688,
+              "start_ticks": 45143,
+              "comm": "checkpointer",
+              "user_ticks": 2,
+              "system_ticks": 2
+            },
+            {
+              "tid": 14689,
+              "start_ticks": 45143,
+              "comm": "collector",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14690,
+              "start_ticks": 45143,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14691,
+              "start_ticks": 45143,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14692,
+              "start_ticks": 45143,
+              "comm": "checkpointer",
+              "user_ticks": 1,
+              "system_ticks": 3
+            },
+            {
+              "tid": 14693,
+              "start_ticks": 45143,
+              "comm": "collector",
+              "user_ticks": 0,
+              "system_ticks": 1
+            },
+            {
+              "tid": 14694,
+              "start_ticks": 45143,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14695,
+              "start_ticks": 45143,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14696,
+              "start_ticks": 45144,
+              "comm": "checkpointer",
+              "user_ticks": 2,
+              "system_ticks": 2
+            },
+            {
+              "tid": 14697,
+              "start_ticks": 45144,
+              "comm": "collector",
+              "user_ticks": 1,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14698,
+              "start_ticks": 45144,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14699,
+              "start_ticks": 45144,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14704,
+              "start_ticks": 45144,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14705,
+              "start_ticks": 45144,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14706,
+              "start_ticks": 45144,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14707,
+              "start_ticks": 45144,
+              "comm": "mace-cache-writ",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14708,
+              "start_ticks": 45144,
+              "comm": "memory-reclaim",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14709,
+              "start_ticks": 45144,
+              "comm": "memory-pressure",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14716,
+              "start_ticks": 45147,
+              "comm": "BG xdp-shutdown",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14717,
+              "start_ticks": 45147,
+              "comm": "Server",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14782,
+              "start_ticks": 45664,
+              "comm": "Timer thread",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "idle_after": {
+      "seconds": 10.001843662,
+      "cpu_usec": {
+        "usage_usec": 256454,
+        "user_usec": 90505,
+        "system_usec": 165948
+      },
+      "cpu_cores": 0.02564067272660395,
+      "process_cpu": [
+        {
+          "pid": 14586,
+          "comm": "controller",
+          "user_ticks": 1,
+          "system_ticks": 0,
+          "stable_threads": [
+            {
+              "tid": 14586,
+              "start_ticks": 45125,
+              "comm": "controller",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14678,
+              "start_ticks": 45142,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        },
+        {
+          "pid": 14679,
+          "comm": "Zelvik-Edge",
+          "user_ticks": 9,
+          "system_ticks": 17,
+          "stable_threads": [
+            {
+              "tid": 14679,
+              "start_ticks": 45142,
+              "comm": "Zelvik-Edge",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14681,
+              "start_ticks": 45142,
+              "comm": "memgov-snapshot",
+              "user_ticks": 1,
+              "system_ticks": 5
+            },
+            {
+              "tid": 14682,
+              "start_ticks": 45143,
+              "comm": "run-log-writer",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14683,
+              "start_ticks": 45143,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 1,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14688,
+              "start_ticks": 45143,
+              "comm": "checkpointer",
+              "user_ticks": 1,
+              "system_ticks": 3
+            },
+            {
+              "tid": 14689,
+              "start_ticks": 45143,
+              "comm": "collector",
+              "user_ticks": 0,
+              "system_ticks": 1
+            },
+            {
+              "tid": 14690,
+              "start_ticks": 45143,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14691,
+              "start_ticks": 45143,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14692,
+              "start_ticks": 45143,
+              "comm": "checkpointer",
+              "user_ticks": 1,
+              "system_ticks": 4
+            },
+            {
+              "tid": 14693,
+              "start_ticks": 45143,
+              "comm": "collector",
+              "user_ticks": 1,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14694,
+              "start_ticks": 45143,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14695,
+              "start_ticks": 45143,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14696,
+              "start_ticks": 45144,
+              "comm": "checkpointer",
+              "user_ticks": 1,
+              "system_ticks": 4
+            },
+            {
+              "tid": 14697,
+              "start_ticks": 45144,
+              "comm": "collector",
+              "user_ticks": 1,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14698,
+              "start_ticks": 45144,
+              "comm": "garbage-collect",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14699,
+              "start_ticks": 45144,
+              "comm": "evictor",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14704,
+              "start_ticks": 45144,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14705,
+              "start_ticks": 45144,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14706,
+              "start_ticks": 45144,
+              "comm": "tokio-rt-worker",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14707,
+              "start_ticks": 45144,
+              "comm": "mace-cache-writ",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14708,
+              "start_ticks": 45144,
+              "comm": "memory-reclaim",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14709,
+              "start_ticks": 45144,
+              "comm": "memory-pressure",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14716,
+              "start_ticks": 45147,
+              "comm": "BG xdp-shutdown",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14717,
+              "start_ticks": 45147,
+              "comm": "Server",
+              "user_ticks": 0,
+              "system_ticks": 0
+            },
+            {
+              "tid": 14782,
+              "start_ticks": 45664,
+              "comm": "Timer thread",
+              "user_ticks": 0,
+              "system_ticks": 1
+            }
+          ],
+          "new_thread_identities": [],
+          "exited_thread_identities": [],
+          "thread_cpu_is_only_stable_survivors": true
+        }
+      ],
+      "clock_ticks_per_second": 100,
+      "thread_ticks_are_not_exact_cgroup_cpu": true
+    },
+    "loaded_cpu_usec_per_response": 133.6332267823506,
+    "loaded_max_host_steal_fraction": 0.0,
+    "idle_memory_peak_bytes": 144613376,
+    "cpu_assignment": {
+      "proxy": [
+        0
+      ],
+      "client": [
+        1,
+        2
+      ],
+      "origin": [
+        3
+      ]
+    },
+    "executable_sha256": "28e988dbe83f90b9cd5e7f50f6346d0bd0293b4f320bca0a80bf0193fff4b12e",
+    "no_idle_cpu_subtraction": true,
+    "no_capacity_ranking": true
+  }
+]

@@ -1,0 +1,2564 @@
+{
+  "source": "ebd34770a817b68bd833f876918fc660a0089f49",
+  "binary_sources": {
+    "before": "4613a6b8d468be8df646f7cb628a42b89bfe0e98",
+    "after": "60cf30ced5f85f68b84f27e170972ca528115434"
+  },
+  "cases": 384,
+  "statuses": {
+    "passed": 384
+  },
+  "successful": 7240745,
+  "failed_transfers": 0,
+  "wrong_ca_controls": 48,
+  "range_controls": 256,
+  "range_control_failures": 0,
+  "infrastructure_failures": [],
+  "max_host_steal_fraction": 0.0,
+  "comparisons": [
+    {
+      "protocol": "h1",
+      "cache": "hit",
+      "connection": "fresh",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 4901.59133306862,
+            "p99_ms": 15.1755,
+            "cpu_usec_per_request": 180.471923828125,
+            "client_cpu_fraction": 0.5163376975633652,
+            "origin_cpu_fraction": 0.06763818564985698,
+            "proxy_cpu_fraction": 0.8877731902078814,
+            "cgroup_peak_mib": 137.171875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 4906.004669065787,
+            "p99_ms": 16.09,
+            "cpu_usec_per_request": 200.15576171875,
+            "client_cpu_fraction": 0.5420740880885335,
+            "origin_cpu_fraction": 0.06729019434573816,
+            "proxy_cpu_fraction": 0.9806157157094384,
+            "cgroup_peak_mib": 139.07421875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 5531.129433633101,
+            "p99_ms": 13.088000000000001,
+            "cpu_usec_per_request": 144.017578125,
+            "client_cpu_fraction": 0.5534008502202182,
+            "origin_cpu_fraction": 0.07494457985306562,
+            "proxy_cpu_fraction": 0.7948061829775892,
+            "cgroup_peak_mib": 14.58203125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 5513.711284869805,
+            "p99_ms": 13.661999999999999,
+            "cpu_usec_per_request": 141.041748046875,
+            "client_cpu_fraction": 0.53749697771341,
+            "origin_cpu_fraction": 0.0747966283607048,
+            "proxy_cpu_fraction": 0.777826839019155,
+            "cgroup_peak_mib": 15.43359375
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            0.05933110938951547,
+            -0.29875481370693624,
+            13.668543765503195,
+            -0.2230279770039867
+          ],
+          "median_percent": -0.08184843380723561,
+          "min_percent": -0.29875481370693624,
+          "max_percent": 13.668543765503195
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -9.424879779692152,
+            -10.239415597810918,
+            -9.152268359093451,
+            -9.971892121818527
+          ],
+          "median_percent": -9.69838595075534,
+          "min_percent": -10.239415597810918,
+          "max_percent": -9.152268359093451
+        },
+        "p99_ms": {
+          "percent_changes": [
+            10.003007518796991,
+            -6.397090286692341,
+            7.978142076502737,
+            -20.66604237387336
+          ],
+          "median_percent": 0.7905258949051976,
+          "min_percent": -20.66604237387336,
+          "max_percent": 10.003007518796991
+        }
+      }
+    },
+    {
+      "protocol": "h1",
+      "cache": "hit",
+      "connection": "reuse",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 12271.728558436433,
+            "p99_ms": 3.933,
+            "cpu_usec_per_request": 75.55028379809298,
+            "client_cpu_fraction": 0.7091397200942328,
+            "origin_cpu_fraction": 0.005603224509915355,
+            "proxy_cpu_fraction": 0.9269405657984755,
+            "cgroup_peak_mib": 138.96484375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 10285.739159720157,
+            "p99_ms": 4.779999999999999,
+            "cpu_usec_per_request": 89.48167276556268,
+            "client_cpu_fraction": 0.6684189958598235,
+            "origin_cpu_fraction": 0.005509523424706597,
+            "proxy_cpu_fraction": 0.9214018324513229,
+            "cgroup_peak_mib": 140.0703125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 15920.55740816347,
+            "p99_ms": 3.4610000000000003,
+            "cpu_usec_per_request": 58.982775515382585,
+            "client_cpu_fraction": 0.78895134123421,
+            "origin_cpu_fraction": 0.005580646157261733,
+            "proxy_cpu_fraction": 0.9412684915778615,
+            "cgroup_peak_mib": 14.55859375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 15987.304454694382,
+            "p99_ms": 3.5385,
+            "cpu_usec_per_request": 58.38339636478341,
+            "client_cpu_fraction": 0.7718854156897073,
+            "origin_cpu_fraction": 0.00547930101133259,
+            "proxy_cpu_fraction": 0.9373637009374032,
+            "cgroup_peak_mib": 15.4296875
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            19.262119531810228,
+            18.758557463507586,
+            20.294962251846993,
+            13.059543855816912
+          ],
+          "median_percent": 19.010338497658907,
+          "min_percent": 13.059543855816912,
+          "max_percent": 20.294962251846993
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -16.335212268025114,
+            -15.079705285092725,
+            -16.07268362996448,
+            -11.287044395582967
+          ],
+          "median_percent": -15.576194457528603,
+          "min_percent": -16.335212268025114,
+          "max_percent": -11.287044395582967
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -16.68063704945515,
+            -18.755221386800326,
+            -15.142095914742459,
+            -3.8572806171649154
+          ],
+          "median_percent": -15.911366482098805,
+          "min_percent": -18.755221386800326,
+          "max_percent": -3.8572806171649154
+        }
+      }
+    },
+    {
+      "protocol": "h1",
+      "cache": "miss",
+      "connection": "fresh",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 2109.529779095309,
+            "p99_ms": 22.407,
+            "cpu_usec_per_request": 469.859375,
+            "client_cpu_fraction": 0.356831889416364,
+            "origin_cpu_fraction": 0.1702387652598069,
+            "proxy_cpu_fraction": 0.9726463052898813,
+            "cgroup_peak_mib": 162.666015625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 1961.2286480152893,
+            "p99_ms": 26.4555,
+            "cpu_usec_per_request": 497.1943359375,
+            "client_cpu_fraction": 0.3461263562047023,
+            "origin_cpu_fraction": 0.16213872679773955,
+            "proxy_cpu_fraction": 0.9693374329337939,
+            "cgroup_peak_mib": 163.33203125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 2356.4109974596477,
+            "p99_ms": 18.627499999999998,
+            "cpu_usec_per_request": 401.1884765625,
+            "client_cpu_fraction": 0.4054521280713367,
+            "origin_cpu_fraction": 0.2280202597338956,
+            "proxy_cpu_fraction": 0.9467948852659763,
+            "cgroup_peak_mib": 27.0625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 2359.428825824427,
+            "p99_ms": 14.9755,
+            "cpu_usec_per_request": 398.34716796875,
+            "client_cpu_fraction": 0.40799999826005406,
+            "origin_cpu_fraction": 0.23086993191491484,
+            "proxy_cpu_fraction": 0.9509027091379658,
+            "cgroup_peak_mib": 27.8671875
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            5.0274733433630425,
+            4.78625941071924,
+            5.12783995548991,
+            16.072746613498513
+          ],
+          "median_percent": 5.077656649426476,
+          "min_percent": 4.78625941071924,
+          "max_percent": 16.072746613498513
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -5.521109497091858,
+            -3.2417290547974376,
+            -4.543682964129891,
+            -13.03387314131701
+          ],
+          "median_percent": -5.032396230610875,
+          "min_percent": -13.03387314131701,
+          "max_percent": -3.2417290547974376
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -17.01963534361851,
+            -4.194169980730599,
+            -10.894133289014441,
+            -26.959172489382098
+          ],
+          "median_percent": -13.956884316316476,
+          "min_percent": -26.959172489382098,
+          "max_percent": -4.194169980730599
+        }
+      }
+    },
+    {
+      "protocol": "h1",
+      "cache": "miss",
+      "connection": "reuse",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 2820.5975752703425,
+            "p99_ms": 17.6205,
+            "cpu_usec_per_request": 354.04562106006097,
+            "client_cpu_fraction": 0.26431388075750306,
+            "origin_cpu_fraction": 0.1975812340053441,
+            "proxy_cpu_fraction": 0.9986631917648799,
+            "cgroup_peak_mib": 295.8828125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 2693.72200876171,
+            "p99_ms": 18.000999999999998,
+            "cpu_usec_per_request": 370.66232542714516,
+            "client_cpu_fraction": 0.2662475703380147,
+            "origin_cpu_fraction": 0.18940326138224006,
+            "proxy_cpu_fraction": 0.9984284390370519,
+            "cgroup_peak_mib": 287.359375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 3349.3942911961362,
+            "p99_ms": 11.850000000000001,
+            "cpu_usec_per_request": 296.75135868441777,
+            "client_cpu_fraction": 0.35261190655625063,
+            "origin_cpu_fraction": 0.24694951102791657,
+            "proxy_cpu_fraction": 0.9938023297002674,
+            "cgroup_peak_mib": 104.025390625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 3337.1383443571867,
+            "p99_ms": 11.8655,
+            "cpu_usec_per_request": 297.6756184353038,
+            "client_cpu_fraction": 0.3532938394906848,
+            "origin_cpu_fraction": 0.24373585653108948,
+            "proxy_cpu_fraction": 0.9933654772945222,
+            "cgroup_peak_mib": 105.0703125
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            6.51450605781323,
+            2.9270866035983722,
+            6.652834523692697,
+            -3.296986796011492
+          ],
+          "median_percent": 4.7207963307058005,
+          "min_percent": -3.296986796011492,
+          "max_percent": 6.652834523692697
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -6.029259398547437,
+            -2.919634818137762,
+            -6.353577373029928,
+            3.511376237475017
+          ],
+          "median_percent": -4.474447108342599,
+          "min_percent": -6.353577373029928,
+          "max_percent": 3.511376237475017
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -6.448045125255753,
+            2.2601707684580585,
+            -4.7436484321355055,
+            11.271708067707188
+          ],
+          "median_percent": -1.2417388318387235,
+          "min_percent": -6.448045125255753,
+          "max_percent": 11.271708067707188
+        }
+      }
+    },
+    {
+      "protocol": "h1",
+      "cache": "off",
+      "connection": "fresh",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 3770.8001980827653,
+            "p99_ms": 16.645,
+            "cpu_usec_per_request": 252.173828125,
+            "client_cpu_fraction": 0.43753759990146746,
+            "origin_cpu_fraction": 0.3063702563057872,
+            "proxy_cpu_fraction": 0.9348428347157696,
+            "cgroup_peak_mib": 135.333984375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 3459.939977023125,
+            "p99_ms": 18.491500000000002,
+            "cpu_usec_per_request": 274.17041015625,
+            "client_cpu_fraction": 0.43517279490514793,
+            "origin_cpu_fraction": 0.2773922150788738,
+            "proxy_cpu_fraction": 0.9512237050916332,
+            "cgroup_peak_mib": 136.587890625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 4864.423218985481,
+            "p99_ms": 12.578,
+            "cpu_usec_per_request": 136.663818359375,
+            "client_cpu_fraction": 0.45095262252606805,
+            "origin_cpu_fraction": 0.38585312861739435,
+            "proxy_cpu_fraction": 0.6738785735274686,
+            "cgroup_peak_mib": 14.953125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 4880.80113346061,
+            "p99_ms": 14.576,
+            "cpu_usec_per_request": 132.918701171875,
+            "client_cpu_fraction": 0.4459782431679984,
+            "origin_cpu_fraction": 0.3832932159212322,
+            "proxy_cpu_fraction": 0.6545308634626461,
+            "cgroup_peak_mib": 15.814453125
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            18.70875175950435,
+            -0.07018176369060214,
+            9.279908110156732,
+            26.136442920985225
+          ],
+          "median_percent": 13.99432993483054,
+          "min_percent": -0.07018176369060214,
+          "max_percent": 26.136442920985225
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -10.515924233439144,
+            -5.383308287638588,
+            -8.869000533490311,
+            -23.553286354599244
+          ],
+          "median_percent": -9.692462383464727,
+          "min_percent": -23.553286354599244,
+          "max_percent": -5.383308287638588
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -40.69394821172051,
+            24.176103830003814,
+            5.7409133271201895,
+            -22.10360015319801
+          ],
+          "median_percent": -8.18134341303891,
+          "min_percent": -40.69394821172051,
+          "max_percent": 24.176103830003814
+        }
+      }
+    },
+    {
+      "protocol": "h1",
+      "cache": "off",
+      "connection": "reuse",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 6383.903937502393,
+            "p99_ms": 7.192,
+            "cpu_usec_per_request": 149.35120099093888,
+            "client_cpu_fraction": 0.49323142916594676,
+            "origin_cpu_fraction": 0.4349673579185074,
+            "proxy_cpu_fraction": 0.9532951785093182,
+            "cgroup_peak_mib": 137.79296875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 5823.613996028109,
+            "p99_ms": 7.601999999999999,
+            "cpu_usec_per_request": 163.3439887576144,
+            "client_cpu_fraction": 0.4772077592268253,
+            "origin_cpu_fraction": 0.39463283011314154,
+            "proxy_cpu_fraction": 0.9511805396078248,
+            "cgroup_peak_mib": 137.064453125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 15843.842822681167,
+            "p99_ms": 2.934,
+            "cpu_usec_per_request": 54.92975284544316,
+            "client_cpu_fraction": 0.5958206029127766,
+            "origin_cpu_fraction": 0.9271078728568848,
+            "proxy_cpu_fraction": 0.8659126411277323,
+            "cgroup_peak_mib": 14.966796875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 15902.096500498767,
+            "p99_ms": 2.9065000000000003,
+            "cpu_usec_per_request": 54.525780886677644,
+            "client_cpu_fraction": 0.6021497339123607,
+            "origin_cpu_fraction": 0.9218242108453186,
+            "proxy_cpu_fraction": 0.8633406619876288,
+            "cgroup_peak_mib": 15.822265625
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            9.675805236968916,
+            8.243646480603918,
+            9.437427476185679,
+            25.816054701378665
+          ],
+          "median_percent": 9.556616356577297,
+          "min_percent": 8.243646480603918,
+          "max_percent": 25.816054701378665
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -8.704128906181364,
+            -7.014113370868569,
+            -8.154522601994806,
+            -21.79820988484873
+          ],
+          "median_percent": -8.429325754088085,
+          "min_percent": -21.79820988484873,
+          "max_percent": -7.014113370868569
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -4.452810593275336,
+            -2.8529529396080444,
+            -7.361055039698561,
+            -23.66354738087555
+          ],
+          "median_percent": -5.906932816486949,
+          "min_percent": -23.66354738087555,
+          "max_percent": -2.8529529396080444
+        }
+      }
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "connection": "fresh",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 698.6753887799268,
+            "p99_ms": 59.355000000000004,
+            "cpu_usec_per_request": 1407.16796875,
+            "client_cpu_fraction": 0.6196704109299265,
+            "origin_cpu_fraction": 0.009523818016148829,
+            "proxy_cpu_fraction": 0.9812334313688776,
+            "cgroup_peak_mib": 140.265625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 688.1539676459515,
+            "p99_ms": 60.351,
+            "cpu_usec_per_request": 1423.845947265625,
+            "client_cpu_fraction": 0.6168982955975238,
+            "origin_cpu_fraction": 0.009142532842976205,
+            "proxy_cpu_fraction": 0.9769788205967316,
+            "cgroup_peak_mib": 138.3203125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 606.6212318325865,
+            "p99_ms": 53.9885,
+            "cpu_usec_per_request": 1633.203125,
+            "client_cpu_fraction": 0.5825936591683546,
+            "origin_cpu_fraction": 0.008419111398767382,
+            "proxy_cpu_fraction": 0.9881293605821873,
+            "cgroup_peak_mib": 15.33984375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 644.9675452167439,
+            "p99_ms": 50.7915,
+            "cpu_usec_per_request": 1536.2880859375,
+            "client_cpu_fraction": 0.6008524418526284,
+            "origin_cpu_fraction": 0.008675295208457307,
+            "proxy_cpu_fraction": 0.9858328603570332,
+            "cgroup_peak_mib": 16.234375
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            1.7883140739718195,
+            1.6146345407551221,
+            3.2886456858916224,
+            1.4432619840897054
+          ],
+          "median_percent": 1.7014743073634708,
+          "min_percent": 1.4432619840897054,
+          "max_percent": 3.2886456858916224
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -1.7101684879552548,
+            -1.0958740848771131,
+            -2.7672681729427384,
+            -1.0853748660722418
+          ],
+          "median_percent": -1.403021286416184,
+          "min_percent": -2.7672681729427384,
+          "max_percent": -1.0853748660722418
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -4.313553399320613,
+            0.17597450029882555,
+            -2.9452690166975715,
+            -0.8237478038916612
+          ],
+          "median_percent": -1.8845084102946164,
+          "min_percent": -4.313553399320613,
+          "max_percent": 0.17597450029882555
+        }
+      }
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "hit",
+      "connection": "reuse",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 10415.869436005658,
+            "p99_ms": 4.478,
+            "cpu_usec_per_request": 88.76684040746659,
+            "client_cpu_fraction": 0.7782024830984207,
+            "origin_cpu_fraction": 0.005631509600732068,
+            "proxy_cpu_fraction": 0.9226545734632674,
+            "cgroup_peak_mib": 141.357421875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 8662.426401901961,
+            "p99_ms": 5.4879999999999995,
+            "cpu_usec_per_request": 106.47025605268996,
+            "client_cpu_fraction": 0.7455883223617532,
+            "origin_cpu_fraction": 0.0056727176020812155,
+            "proxy_cpu_fraction": 0.9245884158899498,
+            "cgroup_peak_mib": 139.052734375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 13252.144231271603,
+            "p99_ms": 3.3885,
+            "cpu_usec_per_request": 70.16433992267935,
+            "client_cpu_fraction": 0.8207835422623438,
+            "origin_cpu_fraction": 0.005594976703318731,
+            "proxy_cpu_fraction": 0.9334245378498501,
+            "cgroup_peak_mib": 15.302734375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 13988.330915301089,
+            "p99_ms": 3.2409999999999997,
+            "cpu_usec_per_request": 66.60787545084247,
+            "client_cpu_fraction": 0.8175319860130326,
+            "origin_cpu_fraction": 0.005493836032829526,
+            "proxy_cpu_fraction": 0.9315081491128517,
+            "cgroup_peak_mib": 16.37890625
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            22.598508225061288,
+            17.96838755738548,
+            18.766007484523772,
+            17.447605653816467
+          ],
+          "median_percent": 18.367197520954626,
+          "min_percent": 17.447605653816467,
+          "max_percent": 22.598508225061288
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -19.073363956018508,
+            -14.051717653277073,
+            -15.609953193484994,
+            -15.544178111453178
+          ],
+          "median_percent": -15.577065652469086,
+          "min_percent": -19.073363956018508,
+          "max_percent": -14.051717653277073
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -20.08375501657651,
+            -16.56816015252621,
+            -15.878508266051528,
+            -4.027292394741211
+          ],
+          "median_percent": -16.22333420928887,
+          "min_percent": -20.08375501657651,
+          "max_percent": -4.027292394741211
+        }
+      }
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "connection": "fresh",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 576.6664248336101,
+            "p99_ms": 74.9815,
+            "cpu_usec_per_request": 1711.8896484375,
+            "client_cpu_fraction": 0.5625842222927473,
+            "origin_cpu_fraction": 0.06432062687666834,
+            "proxy_cpu_fraction": 0.9864906278436992,
+            "cgroup_peak_mib": 166.908203125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 568.3212137616183,
+            "p99_ms": 75.34049999999999,
+            "cpu_usec_per_request": 1735.440185546875,
+            "client_cpu_fraction": 0.5587270150594184,
+            "origin_cpu_fraction": 0.06381670352580758,
+            "proxy_cpu_fraction": 0.985631935464452,
+            "cgroup_peak_mib": 162.09765625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 528.2859981820836,
+            "p99_ms": 62.8445,
+            "cpu_usec_per_request": 1887.186767578125,
+            "client_cpu_fraction": 0.5255516571645042,
+            "origin_cpu_fraction": 0.05684847829443447,
+            "proxy_cpu_fraction": 0.9969330639524361,
+            "cgroup_peak_mib": 27.494140625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 557.2049442107091,
+            "p99_ms": 58.825,
+            "cpu_usec_per_request": 1777.083251953125,
+            "client_cpu_fraction": 0.5436276503669797,
+            "origin_cpu_fraction": 0.05843519450068267,
+            "proxy_cpu_fraction": 0.9895350984041682,
+            "cgroup_peak_mib": 28.720703125
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            1.4862272341003235,
+            1.4444736490598853,
+            2.8400423833441435,
+            -0.8221666071407951
+          ],
+          "median_percent": 1.4653504415801044,
+          "min_percent": -0.8221666071407951,
+          "max_percent": 2.8400423833441435
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -1.1650619478029256,
+            -1.5516093669889264,
+            -2.925509381906932,
+            1.0285175240498212
+          ],
+          "median_percent": -1.358335657395926,
+          "min_percent": -2.925509381906932,
+          "max_percent": 1.0285175240498212
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -0.29584647125228125,
+            -0.6237853852112618,
+            -3.693590893036658,
+            0.5523079023470157
+          ],
+          "median_percent": -0.45981592823177153,
+          "min_percent": -3.693590893036658,
+          "max_percent": 0.5523079023470157
+        }
+      }
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "miss",
+      "connection": "reuse",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 2665.8815813745255,
+            "p99_ms": 17.884999999999998,
+            "cpu_usec_per_request": 374.05175864213913,
+            "client_cpu_fraction": 0.34035547292223683,
+            "origin_cpu_fraction": 0.19229311074896532,
+            "proxy_cpu_fraction": 0.9971799454395566,
+            "cgroup_peak_mib": 279.80859375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 2528.1047118080396,
+            "p99_ms": 19.1545,
+            "cpu_usec_per_request": 394.70016980732674,
+            "client_cpu_fraction": 0.33529370863676866,
+            "origin_cpu_fraction": 0.1825485319152855,
+            "proxy_cpu_fraction": 0.9970838996844549,
+            "cgroup_peak_mib": 278.451171875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 3186.146320268397,
+            "p99_ms": 10.9055,
+            "cpu_usec_per_request": 311.84187174801525,
+            "client_cpu_fraction": 0.4164058829948055,
+            "origin_cpu_fraction": 0.23411730121485264,
+            "proxy_cpu_fraction": 0.993573295470686,
+            "cgroup_peak_mib": 99.640625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 3282.4208338406934,
+            "p99_ms": 10.317,
+            "cpu_usec_per_request": 303.2701342080587,
+            "client_cpu_fraction": 0.42420380882958364,
+            "origin_cpu_fraction": 0.23665327309300732,
+            "proxy_cpu_fraction": 0.9949752232337095,
+            "cgroup_peak_mib": 103.2421875
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            7.568534568367036,
+            3.4168542058088835,
+            4.985947187237283,
+            6.800589083069908
+          ],
+          "median_percent": 5.893268135153596,
+          "min_percent": 3.4168542058088835,
+          "max_percent": 7.568534568367036
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -7.096031858389418,
+            -3.289263268306275,
+            -4.800747433283192,
+            -6.13536915059929
+          ],
+          "median_percent": -5.468058291941241,
+          "min_percent": -7.096031858389418,
+          "max_percent": -3.289263268306275
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -12.311955661124319,
+            -0.28175238937074853,
+            -4.299883637169611,
+            -4.388297872340408
+          ],
+          "median_percent": -4.344090754755009,
+          "min_percent": -12.311955661124319,
+          "max_percent": -0.28175238937074853
+        }
+      }
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "off",
+      "connection": "fresh",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 644.5764261676737,
+            "p99_ms": 63.953,
+            "cpu_usec_per_request": 1520.33837890625,
+            "client_cpu_fraction": 0.6111667889069747,
+            "origin_cpu_fraction": 0.07142431778290652,
+            "proxy_cpu_fraction": 0.9797919073633645,
+            "cgroup_peak_mib": 136.9765625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 649.6328398474041,
+            "p99_ms": 63.528999999999996,
+            "cpu_usec_per_request": 1500.456298828125,
+            "client_cpu_fraction": 0.6014494764334727,
+            "origin_cpu_fraction": 0.06881026914808774,
+            "proxy_cpu_fraction": 0.9742227335578104,
+            "cgroup_peak_mib": 137.89453125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 597.2705722476455,
+            "p99_ms": 56.559,
+            "cpu_usec_per_request": 1647.12548828125,
+            "client_cpu_fraction": 0.5800833556284979,
+            "origin_cpu_fraction": 0.06416769770974931,
+            "proxy_cpu_fraction": 0.9830053843573514,
+            "cgroup_peak_mib": 15.232421875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 634.8742114220039,
+            "p99_ms": 52.2315,
+            "cpu_usec_per_request": 1549.194580078125,
+            "client_cpu_fraction": 0.5999477008552451,
+            "origin_cpu_fraction": 0.06713857803049501,
+            "proxy_cpu_fraction": 0.9817820672380373,
+            "cgroup_peak_mib": 16.287109375
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            -1.6293925019980726,
+            1.6177039318109765,
+            3.387606743106275,
+            -6.224466862093925
+          ],
+          "median_percent": -0.005844285093548063,
+          "min_percent": -6.224466862093925,
+          "max_percent": 3.387606743106275
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            1.2909925666812372,
+            -0.39736402785659486,
+            -2.440163807322915,
+            7.008822279961668
+          ],
+          "median_percent": 0.44681426941232116,
+          "min_percent": -2.440163807322915,
+          "max_percent": 7.008822279961668
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -1.7665118718854456,
+            2.536515284539864,
+            -6.3341250989707,
+            12.922458549656678
+          ],
+          "median_percent": 0.3850017063272093,
+          "min_percent": -6.3341250989707,
+          "max_percent": 12.922458549656678
+        }
+      }
+    },
+    {
+      "protocol": "h1-tls",
+      "cache": "off",
+      "connection": "reuse",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 5558.901066211511,
+            "p99_ms": 7.9285,
+            "cpu_usec_per_request": 169.27686083734721,
+            "client_cpu_fraction": 0.5707188875603557,
+            "origin_cpu_fraction": 0.3923707414042574,
+            "proxy_cpu_fraction": 0.9409783949058421,
+            "cgroup_peak_mib": 137.58984375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 5122.637585389561,
+            "p99_ms": 8.375,
+            "cpu_usec_per_request": 182.56113492778422,
+            "client_cpu_fraction": 0.5563304651775087,
+            "origin_cpu_fraction": 0.3607939914003167,
+            "proxy_cpu_fraction": 0.9363882540990771,
+            "cgroup_peak_mib": 137.9453125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 11974.893670842172,
+            "p99_ms": 3.607,
+            "cpu_usec_per_request": 75.0326167263474,
+            "client_cpu_fraction": 0.6529375861527987,
+            "origin_cpu_fraction": 0.7404061735626154,
+            "proxy_cpu_fraction": 0.9015832332589491,
+            "cgroup_peak_mib": 15.546875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 12532.353163947253,
+            "p99_ms": 3.511,
+            "cpu_usec_per_request": 71.88852321723834,
+            "client_cpu_fraction": 0.6518623769734048,
+            "origin_cpu_fraction": 0.7729970483209021,
+            "proxy_cpu_fraction": 0.8995129639173611,
+            "cgroup_peak_mib": 16.677734375
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            7.93508293410794,
+            8.82128427715909,
+            12.614284574844037,
+            2.315080845988682
+          ],
+          "median_percent": 8.378183605633515,
+          "min_percent": 2.315080845988682,
+          "max_percent": 12.614284574844037
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -6.958543124593719,
+            -7.595146439057188,
+            -11.057964976259804,
+            -0.47315602906039533
+          ],
+          "median_percent": -7.276844781825453,
+          "min_percent": -11.057964976259804,
+          "max_percent": -0.47315602906039533
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -4.2056074766355085,
+            -6.102949958199,
+            -9.60964545780113,
+            1.517290049400155
+          ],
+          "median_percent": -5.154278717417254,
+          "min_percent": -9.60964545780113,
+          "max_percent": 1.517290049400155
+        }
+      }
+    },
+    {
+      "protocol": "h2",
+      "cache": "hit",
+      "connection": "fresh",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 649.6195413953712,
+            "p99_ms": 64.50450000000001,
+            "cpu_usec_per_request": 1513.82861328125,
+            "client_cpu_fraction": 0.6236519843063613,
+            "origin_cpu_fraction": 0.009031261778371779,
+            "proxy_cpu_fraction": 0.9875961708310639,
+            "cgroup_peak_mib": 139.7734375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 639.6528452679378,
+            "p99_ms": 64.81899999999999,
+            "cpu_usec_per_request": 1529.09033203125,
+            "client_cpu_fraction": 0.6206854934000245,
+            "origin_cpu_fraction": 0.008906289992534707,
+            "proxy_cpu_fraction": 0.9780368582152892,
+            "cgroup_peak_mib": 140.669921875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 588.5186578235159,
+            "p99_ms": 56.647,
+            "cpu_usec_per_request": 1675.326416015625,
+            "client_cpu_fraction": 0.5965961246812634,
+            "origin_cpu_fraction": 0.008112705457033714,
+            "proxy_cpu_fraction": 0.9877604583354334,
+            "cgroup_peak_mib": 15.17578125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 625.2660370328751,
+            "p99_ms": 52.454,
+            "cpu_usec_per_request": 1578.803466796875,
+            "client_cpu_fraction": 0.6215499155812665,
+            "origin_cpu_fraction": 0.0085436248988878,
+            "proxy_cpu_fraction": 0.9871672514381523,
+            "cgroup_peak_mib": 16.384765625
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            1.5625523504064098,
+            -1.6277942991342331,
+            3.1603346611633,
+            8.011594953896939
+          ],
+          "median_percent": 2.361443505784855,
+          "min_percent": -1.6277942991342331,
+          "max_percent": 8.011594953896939
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -0.2274816198341134,
+            0.694730113879638,
+            -2.1049089257022313,
+            -6.425411020927596
+          ],
+          "median_percent": -1.1661952727681724,
+          "min_percent": -6.425411020927596,
+          "max_percent": 0.694730113879638
+        },
+        "p99_ms": {
+          "percent_changes": [
+            2.8800075171484973,
+            -2.956067040457011,
+            -0.40582143856702224,
+            -0.8082787336966324
+          ],
+          "median_percent": -0.6070500861318273,
+          "min_percent": -2.956067040457011,
+          "max_percent": 2.8800075171484973
+        }
+      }
+    },
+    {
+      "protocol": "h2",
+      "cache": "hit",
+      "connection": "reuse",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 8899.864677816324,
+            "p99_ms": 4.9315,
+            "cpu_usec_per_request": 107.67306522187104,
+            "client_cpu_fraction": 0.6959356470051713,
+            "origin_cpu_fraction": 0.005627684322089824,
+            "proxy_cpu_fraction": 0.9605626009269284,
+            "cgroup_peak_mib": 137.85546875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 8686.43692878307,
+            "p99_ms": 5.0495,
+            "cpu_usec_per_request": 110.67539325450505,
+            "client_cpu_fraction": 0.6925811295032955,
+            "origin_cpu_fraction": 0.005430351066033245,
+            "proxy_cpu_fraction": 0.9602387581261842,
+            "cgroup_peak_mib": 139.572265625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 12056.40213754302,
+            "p99_ms": 3.595,
+            "cpu_usec_per_request": 76.98378193885466,
+            "client_cpu_fraction": 0.8284547280612952,
+            "origin_cpu_fraction": 0.005581948345904044,
+            "proxy_cpu_fraction": 0.9257937706593238,
+            "cgroup_peak_mib": 15.498046875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 12685.794745463298,
+            "p99_ms": 3.376,
+            "cpu_usec_per_request": 73.05770496708655,
+            "client_cpu_fraction": 0.8361584236415871,
+            "origin_cpu_fraction": 0.005436427771440093,
+            "proxy_cpu_fraction": 0.9258248093926426,
+            "cgroup_peak_mib": 16.599609375
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            1.4601699580459426,
+            2.7820980162056808,
+            2.1734281124766497,
+            2.1279960832508493
+          ],
+          "median_percent": 2.1507120978637495,
+          "min_percent": 1.4601699580459426,
+          "max_percent": 2.7820980162056808
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -1.7812255101278152,
+            -2.725212850573422,
+            -1.7205869308079547,
+            -2.700320355350805
+          ],
+          "median_percent": -2.24077293273931,
+          "min_percent": -2.725212850573422,
+          "max_percent": -1.7205869308079547
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -2.1679687499999933,
+            -2.510544286001204,
+            -3.385731559854921,
+            -5.2830188679245165
+          ],
+          "median_percent": -2.9481379229280624,
+          "min_percent": -5.2830188679245165,
+          "max_percent": -2.1679687499999933
+        }
+      }
+    },
+    {
+      "protocol": "h2",
+      "cache": "miss",
+      "connection": "fresh",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 542.0250347156377,
+            "p99_ms": 78.72800000000001,
+            "cpu_usec_per_request": 1808.505615234375,
+            "client_cpu_fraction": 0.5603451289770237,
+            "origin_cpu_fraction": 0.06114750678927481,
+            "proxy_cpu_fraction": 0.9758340095733463,
+            "cgroup_peak_mib": 164.7890625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 541.9656861020203,
+            "p99_ms": 76.9745,
+            "cpu_usec_per_request": 1804.02978515625,
+            "client_cpu_fraction": 0.5569562760343889,
+            "origin_cpu_fraction": 0.06107213895463498,
+            "proxy_cpu_fraction": 0.9799924108530168,
+            "cgroup_peak_mib": 165.8828125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 493.0278121715691,
+            "p99_ms": 67.50800000000001,
+            "cpu_usec_per_request": 1986.9521484375,
+            "client_cpu_fraction": 0.558116789216641,
+            "origin_cpu_fraction": 0.05431310293199591,
+            "proxy_cpu_fraction": 0.9817131242251158,
+            "cgroup_peak_mib": 27.763671875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 528.4488578362661,
+            "p99_ms": 63.582,
+            "cpu_usec_per_request": 1859.6640625,
+            "client_cpu_fraction": 0.5658162721212614,
+            "origin_cpu_fraction": 0.0556180028458903,
+            "proxy_cpu_fraction": 0.9818507171880548,
+            "cgroup_peak_mib": 28.826171875
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            -1.1869584376665854,
+            1.3430365037334635,
+            1.3449256867930304,
+            -7.412385559089407
+          ],
+          "median_percent": 0.07803903303343906,
+          "min_percent": -7.412385559089407,
+          "max_percent": 1.3449256867930304
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            0.5124042453815036,
+            -0.8901205712945393,
+            -1.8759590498711454,
+            8.191607769464039
+          ],
+          "median_percent": -0.1888581629565178,
+          "min_percent": -1.8759590498711454,
+          "max_percent": 8.191607769464039
+        },
+        "p99_ms": {
+          "percent_changes": [
+            0.37374944944317257,
+            0.5006014979238582,
+            -1.0216330471543023,
+            12.037774788071953
+          ],
+          "median_percent": 0.4371754736835154,
+          "min_percent": -1.0216330471543023,
+          "max_percent": 12.037774788071953
+        }
+      }
+    },
+    {
+      "protocol": "h2",
+      "cache": "miss",
+      "connection": "reuse",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 2806.480885752357,
+            "p99_ms": 16.682000000000002,
+            "cpu_usec_per_request": 353.59094969373336,
+            "client_cpu_fraction": 0.2776225147209197,
+            "origin_cpu_fraction": 0.19022249082695414,
+            "proxy_cpu_fraction": 0.9912936696777706,
+            "cgroup_peak_mib": 292.427734375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 2765.190991729421,
+            "p99_ms": 16.708,
+            "cpu_usec_per_request": 358.22588456437927,
+            "client_cpu_fraction": 0.27657247839359694,
+            "origin_cpu_fraction": 0.18464493321458922,
+            "proxy_cpu_fraction": 0.9902256950255162,
+            "cgroup_peak_mib": 291.25390625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 2731.1588056547807,
+            "p99_ms": 13.028,
+            "cpu_usec_per_request": 362.0848815717608,
+            "client_cpu_fraction": 0.5714552863301903,
+            "origin_cpu_fraction": 0.18000342851407067,
+            "proxy_cpu_fraction": 0.9878749849367313,
+            "cgroup_peak_mib": 88.966796875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 2785.271109565061,
+            "p99_ms": 13.011500000000002,
+            "cpu_usec_per_request": 355.3364753535594,
+            "client_cpu_fraction": 0.5809269112477679,
+            "origin_cpu_fraction": 0.1839577854883086,
+            "proxy_cpu_fraction": 0.9893517461042469,
+            "cgroup_peak_mib": 91.765625
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            -2.0460908608579964,
+            -1.1108603384637483,
+            0.07377755176933842,
+            18.33491030136962
+          ],
+          "median_percent": -0.518541393347205,
+          "min_percent": -2.0460908608579964,
+          "max_percent": 18.33491030136962
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            1.4779853486934336,
+            1.458466314686957,
+            -0.21940166627292257,
+            -15.07845949907265
+          ],
+          "median_percent": 0.6195323242070172,
+          "min_percent": -15.07845949907265,
+          "max_percent": 1.4779853486934336
+        },
+        "p99_ms": {
+          "percent_changes": [
+            2.9561254892796596,
+            4.294742008712182,
+            1.0878299029606353,
+            -20.279618082618867
+          ],
+          "median_percent": 2.0219776961201474,
+          "min_percent": -20.279618082618867,
+          "max_percent": 4.294742008712182
+        }
+      }
+    },
+    {
+      "protocol": "h2",
+      "cache": "off",
+      "connection": "fresh",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 610.8339222677364,
+            "p99_ms": 67.9085,
+            "cpu_usec_per_request": 1592.78759765625,
+            "client_cpu_fraction": 0.6047679916083301,
+            "origin_cpu_fraction": 0.06868590265527875,
+            "proxy_cpu_fraction": 0.9706477618983842,
+            "cgroup_peak_mib": 137.501953125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 610.2034572920691,
+            "p99_ms": 67.749,
+            "cpu_usec_per_request": 1595.443359375,
+            "client_cpu_fraction": 0.6083817476803739,
+            "origin_cpu_fraction": 0.06699981995881964,
+            "proxy_cpu_fraction": 0.9761196971087993,
+            "cgroup_peak_mib": 140.564453125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 572.0941570781938,
+            "p99_ms": 57.561,
+            "cpu_usec_per_request": 1700.25390625,
+            "client_cpu_fraction": 0.598562014622372,
+            "origin_cpu_fraction": 0.062461511647795065,
+            "proxy_cpu_fraction": 0.9727040771698503,
+            "cgroup_peak_mib": 15.396484375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 616.3841073361339,
+            "p99_ms": 53.757999999999996,
+            "cpu_usec_per_request": 1585.261474609375,
+            "client_cpu_fraction": 0.6059085902524387,
+            "origin_cpu_fraction": 0.06524111224344753,
+            "proxy_cpu_fraction": 0.9752918685594949,
+            "cgroup_peak_mib": 16.572265625
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            0.14045302742751176,
+            0.06679365149262484,
+            -0.03307825407472542,
+            -1.2104700650596656
+          ],
+          "median_percent": 0.01685769870894971,
+          "min_percent": -1.2104700650596656,
+          "max_percent": 0.14045302742751176
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            0.13323289231668145,
+            -0.46776063470358453,
+            -1.228008394226443,
+            0.8132790876317353
+          ],
+          "median_percent": -0.16726387119345154,
+          "min_percent": -1.228008394226443,
+          "max_percent": 0.8132790876317353
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -2.887777826939808,
+            3.363616219809451,
+            -3.658388302884774,
+            -1.1035378123985695
+          ],
+          "median_percent": -1.9956578196691888,
+          "min_percent": -3.658388302884774,
+          "max_percent": 3.363616219809451
+        }
+      }
+    },
+    {
+      "protocol": "h2",
+      "cache": "off",
+      "connection": "reuse",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 5765.515757735737,
+            "p99_ms": 7.4895,
+            "cpu_usec_per_request": 168.61189747883867,
+            "client_cpu_fraction": 0.475622753763148,
+            "origin_cpu_fraction": 0.38689446376315195,
+            "proxy_cpu_fraction": 0.9721345398320556,
+            "cgroup_peak_mib": 140.509765625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 5794.28605062726,
+            "p99_ms": 7.257,
+            "cpu_usec_per_request": 168.6250222734787,
+            "client_cpu_fraction": 0.4742873476340064,
+            "origin_cpu_fraction": 0.3892239188526976,
+            "proxy_cpu_fraction": 0.9751658701008287,
+            "cgroup_peak_mib": 138.845703125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 10837.518266030485,
+            "p99_ms": 3.953,
+            "cpu_usec_per_request": 82.836189743472,
+            "client_cpu_fraction": 0.7196310474333006,
+            "origin_cpu_fraction": 0.7056500767573781,
+            "proxy_cpu_fraction": 0.8977349866639839,
+            "cgroup_peak_mib": 16.228515625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 11083.606630505103,
+            "p99_ms": 3.8295000000000003,
+            "cpu_usec_per_request": 81.02569307620541,
+            "client_cpu_fraction": 0.7244178949869957,
+            "origin_cpu_fraction": 0.7190689808572535,
+            "proxy_cpu_fraction": 0.8947273644110554,
+            "cgroup_peak_mib": 17.388671875
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            -2.1599448203092675,
+            -0.8360678323853787,
+            1.588773818955258,
+            19.234370639966247
+          ],
+          "median_percent": 0.37635299328493965,
+          "min_percent": -2.1599448203092675,
+          "max_percent": 19.234370639966247
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            1.478478604254141,
+            0.4362356395345879,
+            -1.5642415834597245,
+            -15.00871929430836
+          ],
+          "median_percent": -0.5640029719625683,
+          "min_percent": -15.00871929430836,
+          "max_percent": 1.478478604254141
+        },
+        "p99_ms": {
+          "percent_changes": [
+            8.02494802494802,
+            1.7125633648445104,
+            -3.066966797974102,
+            -25.989420062695935
+          ],
+          "median_percent": -0.6772017165647959,
+          "min_percent": -25.989420062695935,
+          "max_percent": 8.02494802494802
+        }
+      }
+    },
+    {
+      "protocol": "h3",
+      "cache": "hit",
+      "connection": "fresh",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 542.5071542562168,
+            "p99_ms": 65.609,
+            "cpu_usec_per_request": 1823.51953125,
+            "client_cpu_fraction": 0.7080695231757208,
+            "origin_cpu_fraction": 0.007588081703390733,
+            "proxy_cpu_fraction": 0.9878787373839496,
+            "cgroup_peak_mib": 156.083984375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 560.4287057502214,
+            "p99_ms": 63.149,
+            "cpu_usec_per_request": 1760.07177734375,
+            "client_cpu_fraction": 0.6999786285228932,
+            "origin_cpu_fraction": 0.007409864308487069,
+            "proxy_cpu_fraction": 0.9863395190455524,
+            "cgroup_peak_mib": 153.8984375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 432.95769813799046,
+            "p99_ms": 75.0935,
+            "cpu_usec_per_request": 2285.24560546875,
+            "client_cpu_fraction": 0.5910947538468614,
+            "origin_cpu_fraction": 0.005672177951925907,
+            "proxy_cpu_fraction": 0.9887061839387019,
+            "cgroup_peak_mib": 30.599609375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 496.35241488549684,
+            "p99_ms": 65.71600000000001,
+            "cpu_usec_per_request": 1985.480224609375,
+            "client_cpu_fraction": 0.6581779553697724,
+            "origin_cpu_fraction": 0.006648305623627884,
+            "proxy_cpu_fraction": 0.9854977341649754,
+            "cgroup_peak_mib": 32.921875
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            -3.936256281438544,
+            0.0330227794524518,
+            1.3921850995390894,
+            -7.6602165236836495
+          ],
+          "median_percent": -1.951616750993046,
+          "min_percent": -7.6602165236836495,
+          "max_percent": 1.3921850995390894
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            3.5779634463903864,
+            0.21883872699959284,
+            -0.7801116706367295,
+            8.24278284361879
+          ],
+          "median_percent": 1.8984010866949896,
+          "min_percent": -0.7801116706367295,
+          "max_percent": 8.24278284361879
+        },
+        "p99_ms": {
+          "percent_changes": [
+            2.7079392201134977,
+            0.15518214308105627,
+            -0.6831781382995894,
+            10.357424483818534
+          ],
+          "median_percent": 1.431560681597277,
+          "min_percent": -0.6831781382995894,
+          "max_percent": 10.357424483818534
+        }
+      }
+    },
+    {
+      "protocol": "h3",
+      "cache": "hit",
+      "connection": "reuse",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 6240.554452424129,
+            "p99_ms": 6.317500000000001,
+            "cpu_usec_per_request": 145.35683858983293,
+            "client_cpu_fraction": 0.9590390558803292,
+            "origin_cpu_fraction": 0.005702357161713106,
+            "proxy_cpu_fraction": 0.9042304826843338,
+            "cgroup_peak_mib": 144.556640625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 6253.268250757879,
+            "p99_ms": 6.323,
+            "cpu_usec_per_request": 144.90905502745392,
+            "client_cpu_fraction": 0.9586650135590951,
+            "origin_cpu_fraction": 0.005656200466212672,
+            "proxy_cpu_fraction": 0.9023198638687091,
+            "cgroup_peak_mib": 147.8984375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 6145.928482729112,
+            "p99_ms": 4.930000000000001,
+            "cpu_usec_per_request": 122.24475455546482,
+            "client_cpu_fraction": 0.9673370628923722,
+            "origin_cpu_fraction": 0.005502794732680682,
+            "proxy_cpu_fraction": 0.751288622511919,
+            "cgroup_peak_mib": 18.134765625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 6280.614029975761,
+            "p99_ms": 4.8134999999999994,
+            "cpu_usec_per_request": 116.77393754657814,
+            "client_cpu_fraction": 0.9667750835100168,
+            "origin_cpu_fraction": 0.005548895192357465,
+            "proxy_cpu_fraction": 0.7277620904793037,
+            "cgroup_peak_mib": 19.283203125
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            0.46547116153283774,
+            -0.8645431656831515,
+            2.379125222753853,
+            -0.07757996527829603
+          ],
+          "median_percent": 0.19394559812727086,
+          "min_percent": -0.8645431656831515,
+          "max_percent": 2.379125222753853
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -0.888141248263008,
+            1.5291931502618095,
+            -2.2444226080286844,
+            0.3205673560856548
+          ],
+          "median_percent": -0.2837869460886766,
+          "min_percent": -2.2444226080286844,
+          "max_percent": 1.5291931502618095
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -0.07800312012480326,
+            1.0215664018161208,
+            -3.8325849903784626,
+            -3.886824807087741
+          ],
+          "median_percent": -1.955294055251633,
+          "min_percent": -3.886824807087741,
+          "max_percent": 1.0215664018161208
+        }
+      }
+    },
+    {
+      "protocol": "h3",
+      "cache": "miss",
+      "connection": "fresh",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 454.85909559547093,
+            "p99_ms": 86.538,
+            "cpu_usec_per_request": 2153.940673828125,
+            "client_cpu_fraction": 0.6939155277272329,
+            "origin_cpu_fraction": 0.04863439562648689,
+            "proxy_cpu_fraction": 0.9769584297650797,
+            "cgroup_peak_mib": 181.44921875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 445.0636974103675,
+            "p99_ms": 88.9785,
+            "cpu_usec_per_request": 2197.571044921875,
+            "client_cpu_fraction": 0.69552372156122,
+            "origin_cpu_fraction": 0.04775429828485224,
+            "proxy_cpu_fraction": 0.9777591270589538,
+            "cgroup_peak_mib": 180.412109375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 378.9263372888252,
+            "p99_ms": 86.08599999999998,
+            "cpu_usec_per_request": 2601.820556640625,
+            "client_cpu_fraction": 0.5657775254703191,
+            "origin_cpu_fraction": 0.042044570208437056,
+            "proxy_cpu_fraction": 0.985219558300169,
+            "cgroup_peak_mib": 42.275390625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 430.09226396860174,
+            "p99_ms": 76.14750000000001,
+            "cpu_usec_per_request": 2275.051025390625,
+            "client_cpu_fraction": 0.6189165646940182,
+            "origin_cpu_fraction": 0.04692844059023879,
+            "proxy_cpu_fraction": 0.979945552693282,
+            "cgroup_peak_mib": 44.435546875
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            3.328183942331475,
+            1.110037252173468,
+            -1.16453474502487,
+            9.91710748383483
+          ],
+          "median_percent": 2.2191105972524716,
+          "min_percent": -1.16453474502487,
+          "max_percent": 9.91710748383483
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -3.492303282975784,
+            -0.42111874624850554,
+            0.3569290719374729,
+            -8.459552745073362
+          ],
+          "median_percent": -1.9567110146121447,
+          "min_percent": -8.459552745073362,
+          "max_percent": 0.3569290719374729
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -3.3900190188074886,
+            -2.0818662971628488,
+            -0.2719605118129187,
+            -7.915349455328913
+          ],
+          "median_percent": -2.7359426579851687,
+          "min_percent": -7.915349455328913,
+          "max_percent": -0.2719605118129187
+        }
+      }
+    },
+    {
+      "protocol": "h3",
+      "cache": "miss",
+      "connection": "reuse",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 2127.942744060747,
+            "p99_ms": 20.628,
+            "cpu_usec_per_request": 457.5179300427725,
+            "client_cpu_fraction": 0.7533073601024312,
+            "origin_cpu_fraction": 0.1649217409728288,
+            "proxy_cpu_fraction": 0.97277513890103,
+            "cgroup_peak_mib": 266.11328125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 2154.3767958303347,
+            "p99_ms": 20.700000000000003,
+            "cpu_usec_per_request": 450.6370211958736,
+            "client_cpu_fraction": 0.7620900506550053,
+            "origin_cpu_fraction": 0.16618331925980512,
+            "proxy_cpu_fraction": 0.9723588926973488,
+            "cgroup_peak_mib": 267.26953125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 2252.298039004817,
+            "p99_ms": 15.471,
+            "cpu_usec_per_request": 415.3586227216257,
+            "client_cpu_fraction": 0.8358876844197565,
+            "origin_cpu_fraction": 0.19688039356671458,
+            "proxy_cpu_fraction": 0.9354794262911845,
+            "cgroup_peak_mib": 79.294921875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 2346.487384290539,
+            "p99_ms": 14.6545,
+            "cpu_usec_per_request": 399.2572191699054,
+            "client_cpu_fraction": 0.8535879507713605,
+            "origin_cpu_fraction": 0.19915812584129783,
+            "proxy_cpu_fraction": 0.9368242698383376,
+            "cgroup_peak_mib": 82.765625
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            -2.105735341134718,
+            0.9523556235931485,
+            2.10928364990286,
+            -10.539696145934174
+          ],
+          "median_percent": -0.5766898587707847,
+          "min_percent": -10.539696145934174,
+          "max_percent": 2.10928364990286
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            2.2471583357016156,
+            -0.9517505013806771,
+            -2.260406913509627,
+            12.661690472072152
+          ],
+          "median_percent": 0.6477039171604693,
+          "min_percent": -2.260406913509627,
+          "max_percent": 12.661690472072152
+        },
+        "p99_ms": {
+          "percent_changes": [
+            3.732020834328864,
+            -4.778605874616404,
+            -0.3777490297542041,
+            17.80460926644625
+          ],
+          "median_percent": 1.67713590228733,
+          "min_percent": -4.778605874616404,
+          "max_percent": 17.80460926644625
+        }
+      }
+    },
+    {
+      "protocol": "h3",
+      "cache": "off",
+      "connection": "fresh",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 508.3948702289423,
+            "p99_ms": 74.0725,
+            "cpu_usec_per_request": 1910.08349609375,
+            "client_cpu_fraction": 0.7301845301002328,
+            "origin_cpu_fraction": 0.05234636778191744,
+            "proxy_cpu_fraction": 0.9738852463936688,
+            "cgroup_peak_mib": 153.138671875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 505.2174153259212,
+            "p99_ms": 75.726,
+            "cpu_usec_per_request": 1921.88525390625,
+            "client_cpu_fraction": 0.7276273977961201,
+            "origin_cpu_fraction": 0.05233569888314755,
+            "proxy_cpu_fraction": 0.9682075985197045,
+            "cgroup_peak_mib": 151.07421875
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 419.13851169938965,
+            "p99_ms": 79.3355,
+            "cpu_usec_per_request": 2347.5771484375,
+            "client_cpu_fraction": 0.5971352997536381,
+            "origin_cpu_fraction": 0.04650405227252196,
+            "proxy_cpu_fraction": 0.9805536868133669,
+            "cgroup_peak_mib": 30.41015625
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 481.52894970586016,
+            "p99_ms": 68.414,
+            "cpu_usec_per_request": 2037.621337890625,
+            "client_cpu_fraction": 0.6608607638674961,
+            "origin_cpu_fraction": 0.051691445084874325,
+            "proxy_cpu_fraction": 0.9778881807202615,
+            "cgroup_peak_mib": 32.837890625
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            -2.7122852670924957,
+            -1.336475709955487,
+            1.3246093580085327,
+            15.60260254263528
+          ],
+          "median_percent": -0.0059331759734770895,
+          "min_percent": -2.7122852670924957,
+          "max_percent": 15.60260254263528
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            3.5331533159386197,
+            1.2914364464634343,
+            -0.4769722480266192,
+            -13.227724635521454
+          ],
+          "median_percent": 0.40723209921840753,
+          "min_percent": -13.227724635521454,
+          "max_percent": 3.5331533159386197
+        },
+        "p99_ms": {
+          "percent_changes": [
+            0.6980439142552308,
+            0.326788632041386,
+            1.8882515044148063,
+            -13.470627156292835
+          ],
+          "median_percent": 0.5124162731483084,
+          "min_percent": -13.470627156292835,
+          "max_percent": 1.8882515044148063
+        }
+      }
+    },
+    {
+      "protocol": "h3",
+      "cache": "off",
+      "connection": "reuse",
+      "targets": {
+        "after": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 4092.2190837332305,
+            "p99_ms": 9.996000000000002,
+            "cpu_usec_per_request": 223.96779878753773,
+            "client_cpu_fraction": 0.8977555502238035,
+            "origin_cpu_fraction": 0.3090701250315926,
+            "proxy_cpu_fraction": 0.9161695255774163,
+            "cgroup_peak_mib": 147.7734375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "before": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 4085.327552002679,
+            "p99_ms": 10.218,
+            "cpu_usec_per_request": 226.11773097988603,
+            "client_cpu_fraction": 0.9064307917435541,
+            "origin_cpu_fraction": 0.30555500513919287,
+            "proxy_cpu_fraction": 0.922097110180307,
+            "cgroup_peak_mib": 146.677734375
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "nginx": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 5038.729427866792,
+            "p99_ms": 7.38,
+            "cpu_usec_per_request": 153.59464592049025,
+            "client_cpu_fraction": 0.9249270099911179,
+            "origin_cpu_fraction": 0.39314532526436163,
+            "proxy_cpu_fraction": 0.7732980146890798,
+            "cgroup_peak_mib": 18.80078125
+          },
+          "max_host_steal_fraction": 0.0
+        },
+        "openresty": {
+          "statuses": {
+            "passed": 4
+          },
+          "rounds": 4,
+          "independent_medians": {
+            "rps": 5276.988260918004,
+            "p99_ms": 7.0685,
+            "cpu_usec_per_request": 144.93657352384395,
+            "client_cpu_fraction": 0.9200650444273515,
+            "origin_cpu_fraction": 0.40949939797112717,
+            "proxy_cpu_fraction": 0.762673678901671,
+            "cgroup_peak_mib": 19.99609375
+          },
+          "max_host_steal_fraction": 0.0
+        }
+      },
+      "paired_after_before": {
+        "rps": {
+          "percent_changes": [
+            0.2632624440319642,
+            0.07840479534415579,
+            1.3741133023310592,
+            -0.8504241817950065
+          ],
+          "median_percent": 0.17083361968806,
+          "min_percent": -0.8504241817950065,
+          "max_percent": 1.3741133023310592
+        },
+        "cpu_usec_per_request": {
+          "percent_changes": [
+            -1.6620941785001286,
+            -0.20335027089094515,
+            -1.5218820930680832,
+            -0.3471832726056556
+          ],
+          "median_percent": -0.9345326828368694,
+          "min_percent": -1.6620941785001286,
+          "max_percent": -0.20335027089094515
+        },
+        "p99_ms": {
+          "percent_changes": [
+            -1.2178877259752419,
+            -3.183558331654235,
+            -3.669724770642202,
+            0.6342324983943604
+          ],
+          "median_percent": -2.200723028814738,
+          "min_percent": -3.669724770642202,
+          "max_percent": 0.6342324983943604
+        }
+      }
+    }
+  ]
+}

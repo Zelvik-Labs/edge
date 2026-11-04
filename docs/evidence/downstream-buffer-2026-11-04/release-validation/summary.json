@@ -1,0 +1,212 @@
+{
+  "runtime_source": "2c32f2462fcc9dd4bb77ff1372706fd2047f5f42",
+  "tree": "785ab5586a3274c5e72ac6a261a5309c2d315706",
+  "ci_merge_ref": "f2ffc58225000761c2610979403c0458c090e704",
+  "ci_merge_tree": "785ab5586a3274c5e72ac6a261a5309c2d315706",
+  "ci_run": 41828592140,
+  "bounded_recovery_run": 41828592225,
+  "h3_quiche_run": 41830648938,
+  "default_tests": {
+    "cargo test": {
+      "groups": [
+        {
+          "passed": 1375,
+          "failed": 0,
+          "ignored": 5
+        },
+        {
+          "passed": 15,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "passed": 1391,
+      "ignored": 5
+    },
+    "cargo test (integration)": {
+      "groups": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "passed": 110,
+      "ignored": 0
+    },
+    "cargo test (vendored pingora)": {
+      "groups": [
+        {
+          "passed": 189,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 581,
+          "failed": 0,
+          "ignored": 2
+        },
+        {
+          "passed": 57,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "passed": 827,
+      "ignored": 2
+    }
+  },
+  "h3_quiche_tests": {
+    "lib_passed": 1383,
+    "binary_passed": 16,
+    "ignored": 5
+  },
+  "native_combinations": 32,
+  "native_all_passed_and_cleaned": true,
+  "long_soak_claim": false
+}

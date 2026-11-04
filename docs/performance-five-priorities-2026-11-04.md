@@ -4,8 +4,11 @@
 已证实的组件收益可以保留；UDP 批处理和 tokio-quiche 都没有足够证据升级为生产默认。
 Edge 的 H1/H2 每请求 CPU 差距仍存在，不能宣布整体超过 Nginx/OpenResty。
 
-实现与证据已推送 `perf/five-priorities-20261103`，未合并、发布或部署，也未接入 RKE。
-最新运行时提交为 `562d49c`；持续探针的 `1911e52` 只增加测试入口，运行时内容相同。
+本页冻结最初 `perf/five-priorities-20261103` 的实现与证据；该阶段运行时提交为
+`562d49c`，持续探针的 `1911e52` 只增加测试入口，运行时内容相同。
+随后工作及本轮整合见 [全程序进度](performance-program-wide-2026-11-04.md)、
+[发布 PR #42](https://github.com/Zelvik-Labs/edge/pull/42) 与
+[26.11.1.1 发布说明](../release-notes/v26.11.1.1.md)。未执行节点部署，也未接入 RKE。
 
 | 项目 | 实现与结果 | 验收范围 |
 |---|---|---|

@@ -1,0 +1,20 @@
+{
+  "id": 13323721133,
+  "node_id": "MDg6QXJ0aWZhY3QxMzMyMzcyMTEzMw==",
+  "name": "h3-quiche-node-2c32f2462fcc9dd4bb77ff1372706fd2047f5f42",
+  "size_in_bytes": 119670,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13323721133",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13323721133/zip",
+  "expired": false,
+  "digest": "sha256:531e16f4676eb48f57d5f52c52d88dcce2992aeedc0047faad7b161b765badb2",
+  "created_at": "2026-11-04T12:51:17Z",
+  "updated_at": "2026-11-04T12:51:17Z",
+  "expires_at": "2027-02-02T12:35:55Z",
+  "workflow_run": {
+    "id": 41830648938,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "release/26.11.1.1",
+    "head_sha": "2c32f2462fcc9dd4bb77ff1372706fd2047f5f42"
+  }
+}

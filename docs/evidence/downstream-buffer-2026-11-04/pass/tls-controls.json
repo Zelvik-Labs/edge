@@ -1,0 +1,338 @@
+[
+  {
+    "directory": "round-0-before",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-0-before",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-0-before",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-0-after",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-0-after",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-0-after",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-0-openresty",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-0-openresty",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-0-openresty",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-0-nginx",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-0-nginx",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-0-nginx",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-1-after",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-1-after",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-1-after",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-1-nginx",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-1-nginx",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-1-nginx",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-1-before",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-1-before",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-1-before",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-1-openresty",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-1-openresty",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-1-openresty",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-2-nginx",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-2-nginx",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-2-nginx",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-2-openresty",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-2-openresty",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-2-openresty",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-2-after",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-2-after",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-2-after",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-2-before",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-2-before",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-2-before",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-3-openresty",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-3-openresty",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-3-openresty",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-3-before",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-3-before",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-3-before",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-3-nginx",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) [2] send 16 bytes to QUIC, SSL error 1\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-3-nginx",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-3-nginx",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-3-after",
+    "protocol": "h3",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-3-after",
+    "protocol": "h2",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  },
+  {
+    "directory": "round-3-after",
+    "protocol": "h1-tls",
+    "exit": 60,
+    "stdout_bytes": 0,
+    "stderr": "curl: (60) SSL certificate problem: unable to get local issuer certificate\nMore details here: https://curl.se/docs/sslcerts.html\n\ncurl failed to verify the legitimacy of the server and therefore could not\nestablish a secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above.\n"
+  }
+]

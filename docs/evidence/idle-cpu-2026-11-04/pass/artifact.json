@@ -1,0 +1,20 @@
+{
+  "id": 13318731608,
+  "node_id": "MDg6QXJ0aWZhY3QxMzMxODczMTYwOA==",
+  "name": "idle-cpu-d07a4c7b29fc93e164282c3669fb9d8b3afe38a6",
+  "size_in_bytes": 15948916,
+  "url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13318731608",
+  "archive_download_url": "https://api.github.com/repos/Zelvik-Labs/edge/actions/artifacts/13318731608/zip",
+  "expired": false,
+  "digest": "sha256:48a5135a69074e91cbf7084d93c67d83c109f26affb7dcaa6944ebdf3ac87b28",
+  "created_at": "2026-11-04T11:53:37Z",
+  "updated_at": "2026-11-04T11:53:37Z",
+  "expires_at": "2027-02-02T11:47:48Z",
+  "workflow_run": {
+    "id": 41823827416,
+    "repository_id": 1343309127,
+    "head_repository_id": 1343309127,
+    "head_branch": "perf/program-wide-20261104",
+    "head_sha": "d07a4c7b29fc93e164282c3669fb9d8b3afe38a6"
+  }
+}
