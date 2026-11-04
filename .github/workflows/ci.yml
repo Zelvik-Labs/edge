@@ -564,9 +564,8 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.http_future_layout
         run: |
           mkdir -p .local/http-future-layout-ci
-          cargo build --locked --release --example http-future-layout > .local/http-future-layout-ci/build.log 2>&1
+          cargo build --locked --release --features http-layout-probe --example http-future-layout > .local/http-future-layout-ci/build.log 2>&1
           target/release/examples/http-future-layout > .local/http-future-layout-ci/layout.json
-          EDGE_HTTP_PHASE_LAYOUT_OUTPUT="$GITHUB_WORKSPACE/.local/http-future-layout-ci/phases.json" cargo test --locked --release --lib request_phase_future_layout -- --ignored --nocapture > .local/http-future-layout-ci/phases-test.log 2>&1
           python3 - <<'PY'
           import hashlib, json, os, pathlib, subprocess
           root = pathlib.Path('.local/http-future-layout-ci')
@@ -575,14 +574,15 @@ jobs:
           layout = json.loads((root / 'layout.json').read_text())
           assert len(layout['callbacks']) == 6
           assert all(row['frame_bytes'] > 0 and row['alignment'] > 0 for row in layout['callbacks'].values())
-          phases = json.loads((root / 'phases.json').read_text())
+          phases = layout['request_phases']
           assert len(phases['phases']) == 11
           assert phases['request_filter_frame_bytes'] == layout['callbacks']['request_filter']['frame_bytes']
+          (root / 'phases.json').write_text(json.dumps(phases, indent=2) + '\n')
           meta = {'source': os.environ['GITHUB_SHA'], 'rustflags': os.environ['RUSTFLAGS'],
               'rustc': subprocess.check_output(['rustc', '-vV'], text=True),
               'example_sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
               'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
-              'scope': layout['scope']}
+              'scope': layout['scope'], 'features': ['http-layout-probe']}
           (root / 'metadata.json').write_text(json.dumps(meta, indent=2) + '\n')
           PY
 

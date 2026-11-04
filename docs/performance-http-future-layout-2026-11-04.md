@@ -38,3 +38,18 @@ request_filter 显著更大；它依次 await 十个阶段，状态对象必须�
 编译结束后绑单核执行，记录宿主 steal 与全部块，保留实际 probe 二进制和源码。
 这能检验大 frame 是否连构造都很昂贵，不能覆盖首次 poll 初始化、业务执行或挂起/唤醒成本，也不直接计算节点可回收比例。
 在有这组绝对耗时之前，不把 5736 字节当成性能差距的根因。[诊断Actions41779412321](https://github.com/Zelvik-Labs/edge/actions/runs/41779412321)已启动；该工作流只验证诊断构建/Clippy和测量，不冒充完整功能CI。
+
+该诊断现已通过并核验实际二进制、全部120块、1200万次测量，零steal。request_filter构造/销毁中位29.22 ns（27.35～54.86），其他五个约5.93～10.86 ns。
+这是纯构造/销毁的绝对耗时；大frame本身尚不足以解释几十微秒的节点CPU成本，不能据尺寸把所有阶段改成额外堆分配。
+首次poll、阶段执行和挂起/唤醒仍未被这项组件测量覆盖。
+归档13298538441：6,871,255字节、9文件，SHA-256 `faaf8d25f8cb69dde91611408ffde642cd4dfa484b62777354b24bd05ce2ed5c`；[冻结复核器](evidence/http-callback-construct-2026-11-04/verify.py)保留全部原始块。
+
+## 阶段测量中的构建差异
+
+41777560016的常规测试、集成/vendor与check/Clippy通过，但布局步骤的等同断言失败：生产release回调5736字节，release测试库回调5808字节。
+测试库中body_waf为5672字节，明显大于其他阶段（context2560、protocol_policy2344）；该ignored探针实际1项通过。
+测试库含cfg(test)/测试harness，与生产构建不同；未单独证明72字节差异仅来自哪项编译条件。
+原工作流保持失败，后续32组native未执行，[失败归档复核器](evidence/http-future-layout-2026-11-04/phase-first/verify.py)保留两种布局、实际生产probe与通过的单项测试日志。
+
+已将阶段测量入口限制在显式http-layout-probe功能和测试构建中，并由生产release的同一实际可执行文件测全部阶段和外层回调，再核对两者。
+默认业务路径不启用此诊断功能。保留测试库探针，但不再把不同构建的布局直接等同；后续继续跑完整CI和32组native。

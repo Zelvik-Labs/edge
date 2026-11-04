@@ -71,9 +71,13 @@ def main(options):
                 raise RuntimeError('perf record failed; see instrumented run log')
         for label, flags in [('flat', ['--no-children', '--call-graph', 'none']),
                              ('callers', ['--children', '--call-graph', 'graph,0.5,caller'])]:
-            report = original_docker('exec', target, 'perf', 'report', '--stdio',
-                                     '--percent-limit', '0.2', *flags,
-                                     '-i', remote + '.perf.data')
+            try:
+                report = original_docker('exec', target, 'perf', 'report', '--stdio',
+                                         '--percent-limit', '0.2', *flags,
+                                         '-i', remote + '.perf.data')
+            except subprocess.CalledProcessError as error:
+                Path(str(stem) + '.perf-' + label + '-error.txt').write_text(error.output or '')
+                raise
             Path(str(stem) + '.perf-' + label + '.txt').write_text(report + '\n')
         stacks = original_docker('exec', target, 'perf', 'script', '-i', remote + '.perf.data')
         demangled = subprocess.check_output(['c++filt', '-s', 'rust'], input=stacks, text=True)

@@ -21,6 +21,8 @@ default = ["node-control"]
 node-control = []
 # Experimental opt-in; never replaces the default Quinn transport implicitly.
 h3-quiche = ["dep:zelvik-edge-h3-quiche"]
+# Explicit diagnostics only: expose unpolled request phase layouts.
+http-layout-probe = []
 
 [[bin]]
 name = "Zelvik-Edge"

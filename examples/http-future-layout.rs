@@ -57,6 +57,10 @@ async fn main() -> anyhow::Result<()> {
     let mut context = proxy.new_ctx();
     let mut response = pingora::http::ResponseHeader::build(200, Some(4))
         .expect("fixed response fixture must be valid");
+    #[cfg(feature = "http-layout-probe")]
+    let phases = proxy.inspect_unpolled_phase_layouts(&mut session, &mut context);
+    #[cfg(not(feature = "http-layout-probe"))]
+    let phases = serde_json::Value::Null;
     let mut rows = serde_json::Map::new();
     macro_rules! frame {
         ($name:literal, $future:expr) => {{
@@ -109,6 +113,7 @@ async fn main() -> anyhow::Result<()> {
             "scope": "unpolled real callback layouts and construction/drop; not request execution, allocation counts or throughput",
             "allocator": "mimalloc, as in the production executable",
             "callbacks": rows,
+            "request_phases": phases,
         }))?
     );
     Ok(())

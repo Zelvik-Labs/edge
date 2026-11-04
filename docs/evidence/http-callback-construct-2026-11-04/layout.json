@@ -1,0 +1,642 @@
+{
+  "allocator": "mimalloc, as in the production executable",
+  "callbacks": {
+    "early_request_filter": {
+      "alignment": 8,
+      "construction_drop_blocks": [
+        {
+          "block": 0,
+          "iterations": 100000,
+          "nanoseconds": 1896513
+        },
+        {
+          "block": 1,
+          "iterations": 100000,
+          "nanoseconds": 1103518
+        },
+        {
+          "block": 2,
+          "iterations": 100000,
+          "nanoseconds": 1163269
+        },
+        {
+          "block": 3,
+          "iterations": 100000,
+          "nanoseconds": 1093568
+        },
+        {
+          "block": 4,
+          "iterations": 100000,
+          "nanoseconds": 1115119
+        },
+        {
+          "block": 5,
+          "iterations": 100000,
+          "nanoseconds": 1091855
+        },
+        {
+          "block": 6,
+          "iterations": 100000,
+          "nanoseconds": 1034448
+        },
+        {
+          "block": 7,
+          "iterations": 100000,
+          "nanoseconds": 1036101
+        },
+        {
+          "block": 8,
+          "iterations": 100000,
+          "nanoseconds": 1032975
+        },
+        {
+          "block": 9,
+          "iterations": 100000,
+          "nanoseconds": 1039548
+        },
+        {
+          "block": 10,
+          "iterations": 100000,
+          "nanoseconds": 1052011
+        },
+        {
+          "block": 11,
+          "iterations": 100000,
+          "nanoseconds": 1036251
+        },
+        {
+          "block": 12,
+          "iterations": 100000,
+          "nanoseconds": 1033536
+        },
+        {
+          "block": 13,
+          "iterations": 100000,
+          "nanoseconds": 1079693
+        },
+        {
+          "block": 14,
+          "iterations": 100000,
+          "nanoseconds": 1096384
+        },
+        {
+          "block": 15,
+          "iterations": 100000,
+          "nanoseconds": 1087959
+        },
+        {
+          "block": 16,
+          "iterations": 100000,
+          "nanoseconds": 1105080
+        },
+        {
+          "block": 17,
+          "iterations": 100000,
+          "nanoseconds": 1083950
+        },
+        {
+          "block": 18,
+          "iterations": 100000,
+          "nanoseconds": 1083290
+        },
+        {
+          "block": 19,
+          "iterations": 100000,
+          "nanoseconds": 1109088
+        }
+      ],
+      "frame_bytes": 32
+    },
+    "logging": {
+      "alignment": 8,
+      "construction_drop_blocks": [
+        {
+          "block": 0,
+          "iterations": 100000,
+          "nanoseconds": 605765
+        },
+        {
+          "block": 1,
+          "iterations": 100000,
+          "nanoseconds": 606436
+        },
+        {
+          "block": 2,
+          "iterations": 100000,
+          "nanoseconds": 581109
+        },
+        {
+          "block": 3,
+          "iterations": 100000,
+          "nanoseconds": 606496
+        },
+        {
+          "block": 4,
+          "iterations": 100000,
+          "nanoseconds": 614541
+        },
+        {
+          "block": 5,
+          "iterations": 100000,
+          "nanoseconds": 588042
+        },
+        {
+          "block": 6,
+          "iterations": 100000,
+          "nanoseconds": 607659
+        },
+        {
+          "block": 7,
+          "iterations": 100000,
+          "nanoseconds": 610073
+        },
+        {
+          "block": 8,
+          "iterations": 100000,
+          "nanoseconds": 619030
+        },
+        {
+          "block": 9,
+          "iterations": 100000,
+          "nanoseconds": 611235
+        },
+        {
+          "block": 10,
+          "iterations": 100000,
+          "nanoseconds": 609522
+        },
+        {
+          "block": 11,
+          "iterations": 100000,
+          "nanoseconds": 633758
+        },
+        {
+          "block": 12,
+          "iterations": 100000,
+          "nanoseconds": 655518
+        },
+        {
+          "block": 13,
+          "iterations": 100000,
+          "nanoseconds": 633998
+        },
+        {
+          "block": 14,
+          "iterations": 100000,
+          "nanoseconds": 645049
+        },
+        {
+          "block": 15,
+          "iterations": 100000,
+          "nanoseconds": 623308
+        },
+        {
+          "block": 16,
+          "iterations": 100000,
+          "nanoseconds": 647042
+        },
+        {
+          "block": 17,
+          "iterations": 100000,
+          "nanoseconds": 623739
+        },
+        {
+          "block": 18,
+          "iterations": 100000,
+          "nanoseconds": 602569
+        },
+        {
+          "block": 19,
+          "iterations": 100000,
+          "nanoseconds": 595646
+        }
+      ],
+      "frame_bytes": 40
+    },
+    "request_filter": {
+      "alignment": 8,
+      "construction_drop_blocks": [
+        {
+          "block": 0,
+          "iterations": 100000,
+          "nanoseconds": 5432398
+        },
+        {
+          "block": 1,
+          "iterations": 100000,
+          "nanoseconds": 5486018
+        },
+        {
+          "block": 2,
+          "iterations": 100000,
+          "nanoseconds": 5450190
+        },
+        {
+          "block": 3,
+          "iterations": 100000,
+          "nanoseconds": 4583787
+        },
+        {
+          "block": 4,
+          "iterations": 100000,
+          "nanoseconds": 2767545
+        },
+        {
+          "block": 5,
+          "iterations": 100000,
+          "nanoseconds": 2789175
+        },
+        {
+          "block": 6,
+          "iterations": 100000,
+          "nanoseconds": 2808892
+        },
+        {
+          "block": 7,
+          "iterations": 100000,
+          "nanoseconds": 2762575
+        },
+        {
+          "block": 8,
+          "iterations": 100000,
+          "nanoseconds": 2771232
+        },
+        {
+          "block": 9,
+          "iterations": 100000,
+          "nanoseconds": 2749010
+        },
+        {
+          "block": 10,
+          "iterations": 100000,
+          "nanoseconds": 2848716
+        },
+        {
+          "block": 11,
+          "iterations": 100000,
+          "nanoseconds": 2922324
+        },
+        {
+          "block": 12,
+          "iterations": 100000,
+          "nanoseconds": 2922665
+        },
+        {
+          "block": 13,
+          "iterations": 100000,
+          "nanoseconds": 2997916
+        },
+        {
+          "block": 14,
+          "iterations": 100000,
+          "nanoseconds": 3387105
+        },
+        {
+          "block": 15,
+          "iterations": 100000,
+          "nanoseconds": 3506740
+        },
+        {
+          "block": 16,
+          "iterations": 100000,
+          "nanoseconds": 3285455
+        },
+        {
+          "block": 17,
+          "iterations": 100000,
+          "nanoseconds": 3153868
+        },
+        {
+          "block": 18,
+          "iterations": 100000,
+          "nanoseconds": 2914100
+        },
+        {
+          "block": 19,
+          "iterations": 100000,
+          "nanoseconds": 2734803
+        }
+      ],
+      "frame_bytes": 5736
+    },
+    "response_filter": {
+      "alignment": 8,
+      "construction_drop_blocks": [
+        {
+          "block": 0,
+          "iterations": 100000,
+          "nanoseconds": 613599
+        },
+        {
+          "block": 1,
+          "iterations": 100000,
+          "nanoseconds": 584936
+        },
+        {
+          "block": 2,
+          "iterations": 100000,
+          "nanoseconds": 610193
+        },
+        {
+          "block": 3,
+          "iterations": 100000,
+          "nanoseconds": 647513
+        },
+        {
+          "block": 4,
+          "iterations": 100000,
+          "nanoseconds": 608299
+        },
+        {
+          "block": 5,
+          "iterations": 100000,
+          "nanoseconds": 625652
+        },
+        {
+          "block": 6,
+          "iterations": 100000,
+          "nanoseconds": 621384
+        },
+        {
+          "block": 7,
+          "iterations": 100000,
+          "nanoseconds": 593542
+        },
+        {
+          "block": 8,
+          "iterations": 100000,
+          "nanoseconds": 600085
+        },
+        {
+          "block": 9,
+          "iterations": 100000,
+          "nanoseconds": 602619
+        },
+        {
+          "block": 10,
+          "iterations": 100000,
+          "nanoseconds": 602339
+        },
+        {
+          "block": 11,
+          "iterations": 100000,
+          "nanoseconds": 628738
+        },
+        {
+          "block": 12,
+          "iterations": 100000,
+          "nanoseconds": 587401
+        },
+        {
+          "block": 13,
+          "iterations": 100000,
+          "nanoseconds": 606286
+        },
+        {
+          "block": 14,
+          "iterations": 100000,
+          "nanoseconds": 603250
+        },
+        {
+          "block": 15,
+          "iterations": 100000,
+          "nanoseconds": 611195
+        },
+        {
+          "block": 16,
+          "iterations": 100000,
+          "nanoseconds": 625852
+        },
+        {
+          "block": 17,
+          "iterations": 100000,
+          "nanoseconds": 593041
+        },
+        {
+          "block": 18,
+          "iterations": 100000,
+          "nanoseconds": 605514
+        },
+        {
+          "block": 19,
+          "iterations": 100000,
+          "nanoseconds": 590977
+        }
+      ],
+      "frame_bytes": 40
+    },
+    "upstream_peer": {
+      "alignment": 8,
+      "construction_drop_blocks": [
+        {
+          "block": 0,
+          "iterations": 100000,
+          "nanoseconds": 676839
+        },
+        {
+          "block": 1,
+          "iterations": 100000,
+          "nanoseconds": 696685
+        },
+        {
+          "block": 2,
+          "iterations": 100000,
+          "nanoseconds": 645699
+        },
+        {
+          "block": 3,
+          "iterations": 100000,
+          "nanoseconds": 624509
+        },
+        {
+          "block": 4,
+          "iterations": 100000,
+          "nanoseconds": 621063
+        },
+        {
+          "block": 5,
+          "iterations": 100000,
+          "nanoseconds": 599192
+        },
+        {
+          "block": 6,
+          "iterations": 100000,
+          "nanoseconds": 583614
+        },
+        {
+          "block": 7,
+          "iterations": 100000,
+          "nanoseconds": 684082
+        },
+        {
+          "block": 8,
+          "iterations": 100000,
+          "nanoseconds": 592089
+        },
+        {
+          "block": 9,
+          "iterations": 100000,
+          "nanoseconds": 610032
+        },
+        {
+          "block": 10,
+          "iterations": 100000,
+          "nanoseconds": 602308
+        },
+        {
+          "block": 11,
+          "iterations": 100000,
+          "nanoseconds": 583143
+        },
+        {
+          "block": 12,
+          "iterations": 100000,
+          "nanoseconds": 582481
+        },
+        {
+          "block": 13,
+          "iterations": 100000,
+          "nanoseconds": 568925
+        },
+        {
+          "block": 14,
+          "iterations": 100000,
+          "nanoseconds": 581380
+        },
+        {
+          "block": 15,
+          "iterations": 100000,
+          "nanoseconds": 593482
+        },
+        {
+          "block": 16,
+          "iterations": 100000,
+          "nanoseconds": 574216
+        },
+        {
+          "block": 17,
+          "iterations": 100000,
+          "nanoseconds": 578805
+        },
+        {
+          "block": 18,
+          "iterations": 100000,
+          "nanoseconds": 581760
+        },
+        {
+          "block": 19,
+          "iterations": 100000,
+          "nanoseconds": 582682
+        }
+      ],
+      "frame_bytes": 32
+    },
+    "upstream_response_filter": {
+      "alignment": 8,
+      "construction_drop_blocks": [
+        {
+          "block": 0,
+          "iterations": 100000,
+          "nanoseconds": 607077
+        },
+        {
+          "block": 1,
+          "iterations": 100000,
+          "nanoseconds": 607718
+        },
+        {
+          "block": 2,
+          "iterations": 100000,
+          "nanoseconds": 595636
+        },
+        {
+          "block": 3,
+          "iterations": 100000,
+          "nanoseconds": 614772
+        },
+        {
+          "block": 4,
+          "iterations": 100000,
+          "nanoseconds": 627425
+        },
+        {
+          "block": 5,
+          "iterations": 100000,
+          "nanoseconds": 619079
+        },
+        {
+          "block": 6,
+          "iterations": 100000,
+          "nanoseconds": 622496
+        },
+        {
+          "block": 7,
+          "iterations": 100000,
+          "nanoseconds": 618098
+        },
+        {
+          "block": 8,
+          "iterations": 100000,
+          "nanoseconds": 571340
+        },
+        {
+          "block": 9,
+          "iterations": 100000,
+          "nanoseconds": 597219
+        },
+        {
+          "block": 10,
+          "iterations": 100000,
+          "nanoseconds": 619421
+        },
+        {
+          "block": 11,
+          "iterations": 100000,
+          "nanoseconds": 609542
+        },
+        {
+          "block": 12,
+          "iterations": 100000,
+          "nanoseconds": 621675
+        },
+        {
+          "block": 13,
+          "iterations": 100000,
+          "nanoseconds": 588572
+        },
+        {
+          "block": 14,
+          "iterations": 100000,
+          "nanoseconds": 618699
+        },
+        {
+          "block": 15,
+          "iterations": 100000,
+          "nanoseconds": 624210
+        },
+        {
+          "block": 16,
+          "iterations": 100000,
+          "nanoseconds": 591959
+        },
+        {
+          "block": 17,
+          "iterations": 100000,
+          "nanoseconds": 616224
+        },
+        {
+          "block": 18,
+          "iterations": 100000,
+          "nanoseconds": 629339
+        },
+        {
+          "block": 19,
+          "iterations": 100000,
+          "nanoseconds": 616024
+        }
+      ],
+      "frame_bytes": 40
+    }
+  },
+  "scope": "unpolled real callback layouts and construction/drop; not request execution, allocation counts or throughput"
+}

@@ -43,6 +43,16 @@ def run():
     for name, image in {**IMAGES, 'origin': 'nginx:1.28.0'}.items():
         details = json.loads(subprocess.check_output(['docker', 'image', 'inspect', image], text=True))[0]
         suite['images'][name] = {'ref': image, 'id': details['Id'], 'repo_digests': details['RepoDigests']}
+    for name, image, executable in [
+        ('nginx', 'nginx:1.28.0', '/usr/sbin/nginx'),
+        ('openresty', 'openresty/openresty:1.27.1.2-0-bookworm-fat', '/usr/local/openresty/nginx/sbin/nginx'),
+    ]:
+        details = json.loads(subprocess.check_output(['docker', 'image', 'inspect', image], text=True))[0]
+        expected = subprocess.check_output(['docker', 'run', '--rm', '--entrypoint', 'sha256sum', image, executable], text=True).split()[0]
+        actual = subprocess.check_output(['docker', 'run', '--rm', '--entrypoint', 'sha256sum', IMAGES[name], executable], text=True).split()[0]
+        assert expected == actual
+        suite['images'][name].update(base_ref=image, base_id=details['Id'], base_repo_digests=details['RepoDigests'], executable_sha256=actual)
+    (PRIVATE / 'suite.json').write_text(json.dumps(suite, indent=2) + '\n')
     for round_number, order in enumerate(ORDERS):
         for target in order:
             output = PRIVATE / f'round-{round_number}-{target}'
@@ -91,6 +101,7 @@ def verify():
                 expected = provenance['expected_binaries']['target/release/Zelvik-Edge']
             else:
                 expected = digest(path.parent / 'profile-executable')
+                assert expected == suite['images'][run_data['target']]['executable_sha256']
             assert target['target'] == run_data['target'] and target['executable_sha256'] == expected
             assert target['container_pids'] and all(pid > 0 for pid in target['container_pids'])
             data = profiles.profile(Path(str(stem) + '.stacks.txt'))
@@ -109,7 +120,8 @@ def collect():
     PUBLIC.mkdir(parents=True, exist_ok=True)
     exact = {'suite.json', 'provenance.json', 'verified-profiles.json', 'manifest.json', 'payload', 'profile-executable'}
     suffixes = ('.perf-flat.txt', '.perf-callers.txt', '.stacks.txt', '.perf-record.log', '.perf-command.json',
-                '.client.tsv.gz', '.stderr', '.command.json', '.profile-target.json', '.driver.log')
+                '.client.tsv.gz', '.stderr', '.command.json', '.profile-target.json', '.driver.log',
+                '.perf-flat-error.txt', '.perf-callers-error.txt')
     retained = []
     if PRIVATE.exists():
         for path in PRIVATE.rglob('*'):

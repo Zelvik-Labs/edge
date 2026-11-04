@@ -26,16 +26,16 @@ def build():
     OUT.mkdir(parents=True, exist_ok=False)
     source = OUT / 'source'
     source.mkdir()
-    for name in ['examples/http-future-layout.rs', 'benches/support/http_callback_construct.rs']:
+    for name in ['examples/http-future-layout.rs', 'benches/support/http_callback_construct.rs', 'src/proxy.rs', 'Cargo.toml']:
         shutil.copy2(ROOT / name, source / Path(name).name)
     metadata = {'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
                 'scope': 'unpolled real callback construction/drop only; not request execution, allocation counts or node capacity',
                 'rustc': subprocess.check_output(['rustc', '-vV'], text=True), 'rustflags': os.environ['RUSTFLAGS'],
-                'sources': {p.name: sha(p) for p in source.iterdir()}}
+                'sources': {p.name: sha(p) for p in source.iterdir()}, 'features': ['http-layout-probe']}
     (OUT / 'metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
-    for label, command in [('clippy', ['cargo', 'clippy', '--locked', '--example', 'http-future-layout',
+    for label, command in [('clippy', ['cargo', 'clippy', '--locked', '--features', 'http-layout-probe', '--example', 'http-future-layout',
                                       '--', '-D', 'clippy::correctness', '-D', 'clippy::suspicious']),
-                           ('build', ['cargo', 'build', '--locked', '--release', '--example', 'http-future-layout'])]:
+                           ('build', ['cargo', 'build', '--locked', '--release', '--features', 'http-layout-probe', '--example', 'http-future-layout'])]:
         with (OUT / (label + '.log')).open('w') as log:
             subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True)
     binary = OUT / 'probe'
@@ -70,6 +70,9 @@ def verify():
     names = ['early_request_filter', 'request_filter', 'upstream_peer',
              'upstream_response_filter', 'response_filter', 'logging']
     assert set(layout['callbacks']) == set(names)
+    phases = layout['request_phases']
+    assert len(phases['phases']) == 11
+    assert phases['request_filter_frame_bytes'] == layout['callbacks']['request_filter']['frame_bytes']
     rows = {}
     for name, data in layout['callbacks'].items():
         blocks = data['construction_drop_blocks']
@@ -81,7 +84,7 @@ def verify():
                       'median_ns': statistics.median(values), 'min_ns': min(values), 'max_ns': max(values)}
     summary = {'source': metadata['source'], 'scope': metadata['scope'], 'raw_blocks': 120,
                'measured_constructions': 12000000, 'host_steal_fraction': metadata['host_steal_fraction'],
-               'callbacks': rows}
+               'callbacks': rows, 'request_phases': phases}
     (OUT / 'verified-summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     print(json.dumps(summary, indent=2))
 
