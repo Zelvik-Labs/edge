@@ -57,7 +57,11 @@ def prepare():
             assert build['variants']['after']['binaries'][path.name]['sha256'] == EXPECTED[relative]
             shutil.copy2(path, BINARIES / relative)
     for relative, expected in EXPECTED.items():
-        assert digest(BINARIES / relative) == expected, relative
+        path = BINARIES / relative
+        assert digest(path) == expected, relative
+        # Artifact extraction does not retain executable modes. Preparation
+        # runs both on the host and in the harness; copy2 above resets modes.
+        path.chmod(path.stat().st_mode | 0o111)
     metadata = {'harness_source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
                 'binary_source': BINARY_SOURCE, 'runtime': RUNTIME,
                 'binary_run': 41757321970 if RUNTIME == 'headers' else 41665387055,

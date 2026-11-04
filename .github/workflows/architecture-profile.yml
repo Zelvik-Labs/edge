@@ -37,11 +37,7 @@ jobs:
           github-token: ${{ github.token }}
           path: .local/architecture-header-binaries
       - name: Verify executable provenance before starting containers
-        run: |
-          python3 scripts/perf/architecture-ci/evidence.py prepare
-          chmod +x .local/architecture-profile-binaries/target/release/Zelvik-Edge \
-            .local/architecture-profile-binaries/target/release/examples/issue34-controller \
-            .local/architecture-profile-binaries/.local/http-state-ci/protocol-state-client
+        run: python3 scripts/perf/architecture-ci/evidence.py prepare
       - name: Prepare diagnostic images before sampling
         run: |
           docker pull nginx:1.28.0
